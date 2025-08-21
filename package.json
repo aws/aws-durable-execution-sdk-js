@@ -23,8 +23,7 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "prettier --write . && eslint src --ext .ts --fix",
     "prepublishOnly": "npm test && npm run lint && npm run build",
-    "run-locally": "ts-node --transpile-only ./src/run-durable.ts",
-    "posttest": "generate-coverage-data"
+    "run-locally": "ts-node --transpile-only ./src/run-durable.ts"
   },
   "lint-staged": {
     "./src/**/*.ts": [
