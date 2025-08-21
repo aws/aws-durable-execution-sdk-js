@@ -1,0 +1,440 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Durable Function examples written in TypeScript.
+Transform:
+  - AWS::Serverless-2016-10-31
+Resources:
+  BlockExample:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BlockExample-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: block-example.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  ComprehensiveOperations:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ComprehensiveOperations-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: comprehensive-operations.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  ConcurrentOperations:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConcurrentOperations-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: concurrent-operations.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  CreateCallback:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CreateCallback-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: create-callback.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  HelloWorld:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: HelloWorld-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: hello-world.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  Index:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Index-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  MapBasic:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapBasic-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: map-basic.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  ParallelBasic:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelBasic-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: parallel-basic.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  ParallelWait:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelWait-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: parallel-wait.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  PromiseAll:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PromiseAll-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: promise-all.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  PromiseAllSettled:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PromiseAllSettled-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: promise-all-settled.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  PromiseAny:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PromiseAny-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: promise-any.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  PromiseCombinators:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PromiseCombinators-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: promise-combinators.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  PromiseRace:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PromiseRace-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: promise-race.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  RunInChildContext:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RunInChildContext-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: run-in-child-context.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  StepBasic:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: StepBasic-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: step-basic.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  StepNamed:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: StepNamed-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: step-named.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  StepWithRetry:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: StepWithRetry-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: step-with-retry.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  StepsWithRetry:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: StepsWithRetry-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: steps-with-retry.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 256
+      Timeout: 300
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: TEST
+    Metadata:
+      SkipBuild: 'True'
+  Wait:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Wait-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: wait.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  WaitForCallback:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitForCallback-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: wait-for-callback.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  WaitForCallbackSubmitter:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitForCallbackSubmitter-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: wait-for-callback-submitter.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  WaitForCondition:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitForCondition-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: wait-for-condition.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
+  WaitNamed:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitNamed-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: wait-named.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
