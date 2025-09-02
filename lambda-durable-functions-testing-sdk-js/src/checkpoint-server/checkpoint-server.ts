@@ -189,12 +189,8 @@ export async function startCheckpointServer(port: number) {
       return;
     }
 
-    const operations = Array.from(
-      executionData.storage.operationDataMap.values()
-    ).map((operationData) => operationData.operation);
-
     const output: GetDurableExecutionStateResponse = {
-      Operations: operations,
+      Operations: executionData.storage.getState(),
       NextMarker: undefined,
     };
 

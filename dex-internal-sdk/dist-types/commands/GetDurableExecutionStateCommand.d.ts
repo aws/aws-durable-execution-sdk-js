@@ -81,6 +81,7 @@ declare const GetDurableExecutionStateCommand_base: {
  * //         InputPayload: "STRING_VALUE",
  * //       },
  * //       ContextDetails: { // ContextDetails
+ * //         ReplayChildren: true || false,
  * //         Result: "STRING_VALUE",
  * //         Error: { // ErrorObject
  * //           ErrorMessage: "STRING_VALUE",

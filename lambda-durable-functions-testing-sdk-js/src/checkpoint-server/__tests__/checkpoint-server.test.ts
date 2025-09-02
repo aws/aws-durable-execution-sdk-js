@@ -349,10 +349,7 @@ describe("checkpoint-server", () => {
       ];
 
       const mockStorage = {
-        operationDataMap: new Map([
-          ["op1", { operation: mockOperations[0] }],
-          ["op2", { operation: mockOperations[1] }],
-        ]),
+        getState: jest.fn().mockReturnValue(mockOperations),
       };
 
       mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce({

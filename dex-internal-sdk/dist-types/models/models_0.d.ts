@@ -160,6 +160,12 @@ export type OperationAction =
 /**
  * @public
  */
+export interface ContextOptions {
+  ReplayChildren?: boolean | undefined;
+}
+/**
+ * @public
+ */
 export interface InvokeOptions {
   FunctionName?: string | undefined;
   FunctionQualifier?: string | undefined;
@@ -205,6 +211,7 @@ export interface OperationUpdate {
   Action?: OperationAction | undefined;
   Payload?: string | undefined;
   Error?: ErrorObject | undefined;
+  ContextOptions?: ContextOptions | undefined;
   StepOptions?: StepOptions | undefined;
   WaitOptions?: WaitOptions | undefined;
   CallbackOptions?: CallbackOptions | undefined;
@@ -234,6 +241,7 @@ export declare const CheckpointDurableExecutionRequestFilterSensitiveLog: (
  * @public
  */
 export interface ContextDetails {
+  ReplayChildren?: boolean | undefined;
   Result?: string | undefined;
   Error?: ErrorObject | undefined;
 }

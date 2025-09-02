@@ -8,12 +8,12 @@
     "build:es": "tsc -p tsconfig.es.json",
     "build:types": "tsc -p tsconfig.types.json",
     "build:types:downlevel": "downlevel-dts dist-types dist-types/ts3.4",
-    "clean": "node_modules/.bin/rimraf ./dist-* && rimraf *.tsbuildinfo || exit 0",
+    "clean": "rimraf ./dist-* && rimraf *.tsbuildinfo || exit 0",
     "prepack": "npm run clean && npm run build"
   },
-  "main": "dist-cjs/index.js",
+  "main": "./dist-cjs/index.js",
   "types": "./dist-types/index.d.ts",
-  "module": "dist-es/index.js",
+  "module": "./dist-es/index.js",
   "sideEffects": false,
   "dependencies": {
     "tslib": "^2.6.2",

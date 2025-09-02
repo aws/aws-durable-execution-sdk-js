@@ -78,6 +78,9 @@ declare const CheckpointDurableExecutionCommand_base: {
  *           "STRING_VALUE",
  *         ],
  *       },
+ *       ContextOptions: { // ContextOptions
+ *         ReplayChildren: true || false,
+ *       },
  *       StepOptions: { // StepOptions
  *         NextAttemptDelaySeconds: Number("int"),
  *       },
@@ -116,6 +119,7 @@ declare const CheckpointDurableExecutionCommand_base: {
  * //           InputPayload: "STRING_VALUE",
  * //         },
  * //         ContextDetails: { // ContextDetails
+ * //           ReplayChildren: true || false,
  * //           Result: "STRING_VALUE",
  * //           Error: { // ErrorObject
  * //             ErrorMessage: "STRING_VALUE",

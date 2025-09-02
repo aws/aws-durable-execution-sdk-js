@@ -32,6 +32,39 @@ export class CheckpointManager {
     this.callbackManager = new CallbackManager(executionId, this);
   }
 
+  getState(): Operation[] {
+    const excludedOperations = new Set<string>();
+    const operations: Operation[] = [];
+    for (const [id, { operation }] of this.operationDataMap.entries()) {
+      const parentId = operation.ParentId;
+      if (!parentId) {
+        operations.push(operation);
+        continue;
+      }
+
+      const parent = this.operationDataMap.get(parentId);
+      if (
+        // Parent type is valid
+        parent?.operation.Type === OperationType.CONTEXT &&
+        // Parent is completed
+        (parent.operation.Status === OperationStatus.SUCCEEDED ||
+          parent.operation.Status === OperationStatus.FAILED) &&
+        // The parent is set to not replay children
+        (!parent.operation.ContextDetails?.ReplayChildren ||
+          // If the parent was excluded, then ReplayChildren must be false for an ancestor,
+          // so this operation should also be excluded.
+          excludedOperations.has(parentId))
+      ) {
+        excludedOperations.add(id);
+        continue;
+      }
+
+      operations.push(operation);
+    }
+
+    return operations;
+  }
+
   /**
    * Initialize the checkpoint manager with the first operation
    * @returns the initial operation for an execution
@@ -186,6 +219,7 @@ export class CheckpointManager {
         break;
       case OperationType.CONTEXT:
         copied.operation.ContextDetails = {
+          ...copied.operation.ContextDetails,
           Result: inputUpdate.Payload,
           Error: inputUpdate.Error,
         };
@@ -207,7 +241,7 @@ export class CheckpointManager {
   /**
    * Registers multiple operation updates at once for a given invocation.
    * This is a batch operation that calls registerUpdate for each update.
-   * 
+   *
    * @param updates Array of operation updates to register
    * @param invocationId The invocation ID these updates belong to
    * @returns Array of checkpoint operations with their associated updates
@@ -223,7 +257,7 @@ export class CheckpointManager {
    * Updates an existing operation with new operation data.
    * This method merges the new operation properties with the existing operation
    * while preserving the original update information.
-   * 
+   *
    * @param id The operation ID to update
    * @param newOperation Partial operation data to merge with existing operation
    * @returns The updated checkpoint operation data
@@ -330,6 +364,12 @@ export class CheckpointManager {
         );
         operation.CallbackDetails = {
           CallbackId: callbackId,
+        };
+        break;
+      }
+      case OperationType.CONTEXT: {
+        operation.ContextDetails = {
+          ReplayChildren: update.ContextOptions?.ReplayChildren,
         };
         break;
       }

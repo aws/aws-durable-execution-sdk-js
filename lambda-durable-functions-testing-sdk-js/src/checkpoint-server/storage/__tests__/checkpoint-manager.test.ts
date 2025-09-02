@@ -226,6 +226,37 @@ describe("CheckpointManager", () => {
         })
       ).toThrow("Could not find operation");
     });
+
+    it("should update operation with new context details", () => {
+      // Initialize storage
+      storage.initialize();
+
+      // Register a step operation
+      storage.registerUpdate(
+        {
+          Id: "new-id",
+          Action: OperationAction.START,
+          Type: OperationType.CONTEXT,
+          ContextOptions: {
+            ReplayChildren: true,
+          },
+        },
+        mockInvocationId
+      );
+
+      // Complete the operation
+      const { operation } = storage.completeOperation({
+        Id: "new-id",
+        Action: OperationAction.SUCCEED,
+        Payload: "new payload",
+      });
+
+      expect(operation).toBeDefined();
+      expect(operation.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(operation.EndTimestamp).toBeInstanceOf(Date);
+      expect(operation.ContextDetails?.ReplayChildren).toBe(true);
+      expect(operation.ContextDetails?.Result).toEqual("new payload");
+    });
   });
 
   describe("registerUpdate", () => {
@@ -257,6 +288,30 @@ describe("CheckpointManager", () => {
       expect(result.operation.StepDetails).toBeUndefined();
 
       expect(storage.operationDataMap.get("step-id")).toBe(result);
+    });
+
+    it("should create and register a new CONTEXT operation", () => {
+      const update: OperationUpdate = {
+        Id: "CONTEXT-id",
+        Name: "test-step",
+        Type: OperationType.CONTEXT,
+        ContextOptions: {
+          ReplayChildren: true,
+        },
+      };
+
+      const result = storage.registerUpdate(update, mockInvocationId);
+
+      expect(result).toBeDefined();
+      expect(result.operation.Id).toBe("CONTEXT-id");
+      expect(result.operation.Name).toBe("test-step");
+      expect(result.operation.Type).toBe(OperationType.CONTEXT);
+      expect(result.operation.Status).toBe(OperationStatus.STARTED);
+      expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
+      expect(result.operation.StepDetails).toBeUndefined();
+      expect(result.operation.ContextDetails?.ReplayChildren).toBe(true);
+
+      expect(storage.operationDataMap.get("CONTEXT-id")).toBe(result);
     });
 
     it("should update operation with new step details", () => {
@@ -717,8 +772,10 @@ describe("CheckpointManager", () => {
         expect(result.operation.Type).toBe(OperationType.CONTEXT);
         expect(result.operation.Status).toBe(OperationStatus.STARTED);
         expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
-        // ContextDetails should not be populated in registerUpdate
-        expect(result.operation.ContextDetails).toBeUndefined();
+        // ContextDetails should be populated in registerUpdate for CONTEXT operations
+        expect(result.operation.ContextDetails).toEqual({
+          ReplayChildren: undefined,
+        });
 
         expect(storage.operationDataMap.get("context-id")).toBe(result);
       });
@@ -739,8 +796,10 @@ describe("CheckpointManager", () => {
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CONTEXT);
-        // ContextDetails should not be populated in registerUpdate
-        expect(result.operation.ContextDetails).toBeUndefined();
+        // ContextDetails should be populated in registerUpdate for CONTEXT operations
+        expect(result.operation.ContextDetails).toEqual({
+          ReplayChildren: undefined,
+        });
       });
 
       it("should create CONTEXT operation with both result and error", () => {
@@ -760,8 +819,10 @@ describe("CheckpointManager", () => {
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CONTEXT);
-        // ContextDetails should not be populated in registerUpdate
-        expect(result.operation.ContextDetails).toBeUndefined();
+        // ContextDetails should be populated in registerUpdate
+        expect(result.operation.ContextDetails).toEqual({
+          ReplayChildren: undefined,
+        });
       });
 
       it("should handle CONTEXT operation with undefined payload and error", () => {
@@ -778,8 +839,10 @@ describe("CheckpointManager", () => {
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CONTEXT);
-        // ContextDetails should not be populated in registerUpdate
-        expect(result.operation.ContextDetails).toBeUndefined();
+        // ContextDetails should be populated in registerUpdate
+        expect(result.operation.ContextDetails).toEqual({
+          ReplayChildren: undefined,
+        });
       });
 
       it.each([OperationAction.SUCCEED, OperationAction.FAIL])(
@@ -1225,7 +1288,7 @@ describe("CheckpointManager", () => {
           Payload: "result1",
         },
         {
-          Id: "batch-op-2", 
+          Id: "batch-op-2",
           Type: OperationType.WAIT,
           WaitOptions: { WaitSeconds: 5 },
         },
@@ -1287,7 +1350,11 @@ describe("CheckpointManager", () => {
 
       const updates: OperationUpdate[] = [
         { Id: "op-z", Type: OperationType.STEP },
-        { Id: "op-a", Type: OperationType.WAIT, WaitOptions: { WaitSeconds: 1 } },
+        {
+          Id: "op-a",
+          Type: OperationType.WAIT,
+          WaitOptions: { WaitSeconds: 1 },
+        },
         { Id: "op-m", Type: OperationType.STEP },
       ];
 
@@ -1308,18 +1375,25 @@ describe("CheckpointManager", () => {
         EndTimestamp: new Date(),
       };
 
-      const result = storage.updateOperation(initialOperation.Id, newOperationData);
+      const result = storage.updateOperation(
+        initialOperation.Id,
+        newOperationData
+      );
 
       // Should return the updated CheckpointOperation
       expect(result.operation.Id).toBe(initialOperation.Id);
       expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED); // Updated status
-      expect(result.operation.EndTimestamp).toEqual(newOperationData.EndTimestamp);
+      expect(result.operation.EndTimestamp).toEqual(
+        newOperationData.EndTimestamp
+      );
 
       // And the stored operation should be the same as returned
       const storedOperation = storage.operationDataMap.get(initialOperation.Id);
       expect(storedOperation).toBe(result);
       expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
-      expect(storedOperation?.operation.EndTimestamp).toEqual(newOperationData.EndTimestamp);
+      expect(storedOperation?.operation.EndTimestamp).toEqual(
+        newOperationData.EndTimestamp
+      );
     });
 
     it("should preserve existing operation properties when updating", () => {
@@ -1336,9 +1410,13 @@ describe("CheckpointManager", () => {
 
       const storedOperation = storage.operationDataMap.get(initialOperation.Id);
       expect(storedOperation?.operation.Type).toBe(originalType);
-      expect(storedOperation?.operation.ExecutionDetails).toBe(originalExecutionDetails);
+      expect(storedOperation?.operation.ExecutionDetails).toBe(
+        originalExecutionDetails
+      );
       expect(storedOperation?.operation.Status).toBe(OperationStatus.FAILED);
-      expect((storedOperation?.operation as Record<string, unknown>).SomeNewField).toBe("new-value");
+      expect(
+        (storedOperation?.operation as Record<string, unknown>).SomeNewField
+      ).toBe("new-value");
     });
 
     it("should handle partial operation updates", () => {
@@ -1373,7 +1451,9 @@ describe("CheckpointManager", () => {
       storage.initialize();
 
       expect(() => {
-        storage.updateOperation("non-existent-id", { Status: OperationStatus.SUCCEEDED });
+        storage.updateOperation("non-existent-id", {
+          Status: OperationStatus.SUCCEEDED,
+        });
       }).toThrow("Could not find operation");
     });
 
@@ -1416,7 +1496,9 @@ describe("CheckpointManager", () => {
         Result: "final-result",
         Attempt: 1,
       });
-      expect(storedOperation?.operation.EndTimestamp).toEqual(updateData.EndTimestamp);
+      expect(storedOperation?.operation.EndTimestamp).toEqual(
+        updateData.EndTimestamp
+      );
     });
 
     it("should handle updates with undefined or null values", () => {
@@ -1432,8 +1514,181 @@ describe("CheckpointManager", () => {
 
       const storedOperation = storage.operationDataMap.get(initialOperation.Id);
       expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
-      expect((storedOperation?.operation as Record<string, unknown>).SomeField).toBeUndefined();
-      expect((storedOperation?.operation as Record<string, unknown>).AnotherField).toBeNull();
+      expect(
+        (storedOperation?.operation as Record<string, unknown>).SomeField
+      ).toBeUndefined();
+      expect(
+        (storedOperation?.operation as Record<string, unknown>).AnotherField
+      ).toBeNull();
+    });
+  });
+
+  describe("getState", () => {
+    it("should return empty array when no operations exist", () => {
+      const state = storage.getState();
+      expect(state).toEqual([]);
+    });
+
+    it("should return single operation when only one exists", () => {
+      const initialOperation = storage.initialize();
+
+      const state = storage.getState();
+
+      expect(state).toHaveLength(1);
+      expect(state[0]).toEqual(initialOperation);
+    });
+
+    it("should return all operations when no parent-child relationships exist", () => {
+      storage.initialize();
+
+      // Add some operations without parent relationships
+      const update1: OperationUpdate = {
+        Id: "op1",
+        Type: OperationType.STEP,
+      };
+      const update2: OperationUpdate = {
+        Id: "op2",
+        Type: OperationType.WAIT,
+        WaitOptions: { WaitSeconds: 1 },
+      };
+
+      storage.registerUpdate(update1, mockInvocationId);
+      storage.registerUpdate(update2, mockInvocationId);
+
+      const state = storage.getState();
+
+      expect(state).toHaveLength(3); // initial + 2 registered
+      expect(state.map((op) => op.Id)).toContain("op1");
+      expect(state.map((op) => op.Id)).toContain("op2");
+    });
+
+    it("should handle comprehensive operation tree with all pruning scenarios", () => {
+      storage.initialize();
+
+      const updates: OperationUpdate[] = [
+        // Step with no parent
+        {
+          Id: "1-step",
+          Type: OperationType.STEP,
+          Action: OperationAction.SUCCEED,
+        },
+        // In-progress context
+        {
+          Id: "2-context",
+          Type: OperationType.CONTEXT,
+        },
+        // In-progress step in in-progress context
+        {
+          Id: "2.1-step",
+          ParentId: "2-context",
+          Type: OperationType.STEP,
+        },
+        // Step with non-existent parent (shouldn't happen but we handle it)
+        {
+          Id: "3-step",
+          ParentId: "does-not-exist",
+          Type: OperationType.STEP,
+          Action: OperationAction.SUCCEED,
+        },
+        // Failed context, no explicit ReplayChildren=true (defaults to false/undefined)
+        {
+          Id: "4-context",
+          Type: OperationType.CONTEXT,
+          Action: OperationAction.FAIL,
+        },
+        // Failed context, explicit ReplayChildren=true, but inside one that's already completed so should be pruned
+        {
+          Id: "4.1-context",
+          ParentId: "4-context",
+          Type: OperationType.CONTEXT,
+          ContextOptions: {
+            ReplayChildren: true,
+          },
+          Action: OperationAction.FAIL,
+        },
+        // Failed step, should get pruned as its top ancestor has ReplayChildren=false
+        {
+          Id: "4.1.1-step",
+          ParentId: "4.1-context",
+          Type: OperationType.STEP,
+          Action: OperationAction.FAIL,
+        },
+        // Failed step, should get pruned as its top ancestor has ReplayChildren=false
+        {
+          Id: "4.1.2-step",
+          ParentId: "4.1-context",
+          Type: OperationType.STEP,
+          Action: OperationAction.FAIL,
+        },
+        // Succeeded context with explicit ReplayChildren=true
+        {
+          Id: "5-context",
+          Type: OperationType.CONTEXT,
+          ContextOptions: {
+            ReplayChildren: true,
+          },
+          Action: OperationAction.SUCCEED,
+        },
+        // Should not get pruned
+        {
+          Id: "5.1-context",
+          ParentId: "5-context",
+          Type: OperationType.CONTEXT,
+          ContextOptions: {
+            ReplayChildren: false,
+          },
+          Action: OperationAction.SUCCEED,
+        },
+        // Should get pruned (inside completed context with ReplayChildren=false)
+        {
+          Id: "5.1.1-step",
+          ParentId: "5.1-context",
+          Type: OperationType.STEP,
+          Action: OperationAction.SUCCEED,
+        },
+        // Should not get pruned
+        {
+          Id: "5.1-step",
+          ParentId: "5-context",
+          Type: OperationType.STEP,
+          Action: OperationAction.SUCCEED,
+        },
+      ];
+
+      storage.registerUpdates(updates, mockInvocationId);
+
+      const state = storage.getState();
+
+      const expectedOperations = [
+        "mocked-uuid", // initial operation
+        "1-step",
+        "2-context",
+        "2.1-step",
+        "3-step", // orphan with non-existent parent gets included
+        "4-context",
+        "5-context",
+        "5.1-context",
+        "5.1-step",
+      ];
+
+      expect(state).toHaveLength(expectedOperations.length);
+
+      const stateIds = state.map((op) => op.Id);
+      // Verify expected operations are present
+      expectedOperations.forEach((expectedId) => {
+        expect(stateIds).toContain(expectedId);
+      });
+
+      // Verify pruned operations are not present
+      const prunedOperations = [
+        "4.1-context",
+        "4.1.1-step",
+        "4.1.2-step",
+        "5.1.1-step",
+      ];
+      prunedOperations.forEach((prunedId) => {
+        expect(state.find((op) => op.Id === prunedId)).toBeUndefined();
+      });
     });
   });
 
