@@ -59,5 +59,6 @@
   },
   "lint-staged": {
     "*.js": "eslint --cache --fix"
-  }
+  },
+  "private": true
 }

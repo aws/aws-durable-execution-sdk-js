@@ -84,5 +84,6 @@
   },
   "react-native": {
     "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native"
-  }
+  },
+  "private": true
 }

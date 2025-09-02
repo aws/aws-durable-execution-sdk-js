@@ -67,5 +67,6 @@
     "@aws-sdk/credential-provider-node": {
       "optional": false
     }
-  }
+  },
+  "private": true
 }
