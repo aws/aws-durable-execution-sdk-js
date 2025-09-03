@@ -158,7 +158,7 @@ export class CheckpointServerWorkerManager {
     }
     const worker = new Worker(workerPath, {
       execArgv: workerPath.endsWith(".ts")
-        ? ["--require", "ts-node/register/transpile-only"]
+        ? ["--require", "tsx/cjs"]
         : undefined,
     });
     this.worker = worker;

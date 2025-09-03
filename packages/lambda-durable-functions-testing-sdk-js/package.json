@@ -47,14 +47,13 @@
     "jest": "^30.0.3",
     "supertest": "^7.1.1",
     "ts-jest": "^29.4.0",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.20.3",
+    "tsx": "^4.20.5",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.1"
   },
   "dependencies": {
-    "@amzn/dex-internal-sdk": "file:../dex-internal-sdk",
-    "@amzn/durable-executions-language-sdk": "file:../lambda-durable-functions-sdk-js",
+    "@amzn/dex-internal-sdk": "*",
+    "@amzn/durable-executions-language-sdk": "*",
     "express": "^5.1.0"
   },
   "lint-staged": {

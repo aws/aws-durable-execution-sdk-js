@@ -3,21 +3,19 @@
   "version": "0.0.q",
   "description": "Lambda Durable Functions SDK, Testing SDK and fully functional examples",
   "workspaces": [
-    "dex-internal-sdk",
-    "lambda-durable-functions-sdk-js",
-    "lambda-durable-functions-testing-sdk-js",
-    "examples"
+    "packages/*"
   ],
   "type": "module",
   "scripts": {
-    "install-all": "npm install -w dex-internal-sdk && npm install -w lambda-durable-functions-sdk-js && npm install -w lambda-durable-functions-testing-sdk-js && npm install -w examples",
-    "test": "npm run test -w lambda-durable-functions-sdk-js -w lambda-durable-functions-testing-sdk-js -w examples",
-    "build": "npm run build -w lambda-durable-functions-sdk-js -w lambda-durable-functions-testing-sdk-js -w examples",
-    "postpublish": "git restore ."
+    "install-all": "npm install -w packages/lambda-durable-functions-sdk-js -w packages/lambda-durable-functions-testing-sdk-js -w packages/examples",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build -w packages/lambda-durable-functions-sdk-js -w packages/lambda-durable-functions-testing-sdk-js -w packages/examples",
+    "postpublish": "git restore .",
+    "clean": "npm run clean --workspaces --if-present"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aws-powertools/powertools-lambda-typescript.git"
+    "url": "git@github.com:aws/lambda-durable-functions-js.git"
   },
   "keywords": [],
   "author": {

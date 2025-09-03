@@ -134,7 +134,7 @@ describe("CheckpointServerWorkerManager", () => {
       );
 
       expect(MockWorker).toHaveBeenCalledWith(expectedDevPath, {
-        execArgv: ["--require", "ts-node/register/transpile-only"],
+        execArgv: ["--require", "tsx/cjs"],
       });
     });
 

@@ -4,7 +4,7 @@ import {
   Operation,
 } from "@amzn/dex-internal-sdk";
 import { ExecutionContext } from "../../types";
-import { log } from "../../utils/logger/logger";
+import { log } from "../logger/logger";
 import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";

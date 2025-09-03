@@ -35,8 +35,8 @@
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"
   },
   "dependencies": {
-    "@amzn/durable-executions-language-sdk": "file:../lambda-durable-functions-sdk-js",
-    "@amzn/durable-executions-type-script-testing-library": "file:../lambda-durable-functions-testing-sdk-js",
+    "@amzn/durable-executions-language-sdk": "*",
+    "@amzn/durable-executions-type-script-testing-library": "*",
     "@aws-sdk/client-dynamodb": "^3.777.0"
   },
   "devDependencies": {
