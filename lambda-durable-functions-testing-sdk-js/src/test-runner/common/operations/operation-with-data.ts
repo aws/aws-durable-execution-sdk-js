@@ -271,7 +271,7 @@ export class OperationWithData<OperationResultValue = unknown>
     return this.checkpointOperationData?.operation.EndTimestamp;
   }
 
-  sendCallbackSuccess(result: string | OperationResultValue) {
+  sendCallbackSuccess(result: string) {
     const callbackDetails = this.getCallbackDetails();
 
     if (!callbackDetails) {
@@ -282,7 +282,7 @@ export class OperationWithData<OperationResultValue = unknown>
 
     return client.send(
       new SendDurableExecutionCallbackSuccessCommand({
-        Result: typeof result === "string" ? result : JSON.stringify(result),
+        Result: result,
         CallbackId: callbackDetails.callbackId,
       })
     );

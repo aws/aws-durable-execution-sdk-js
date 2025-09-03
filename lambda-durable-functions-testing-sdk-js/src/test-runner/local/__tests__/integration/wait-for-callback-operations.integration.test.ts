@@ -48,14 +48,17 @@ describe("WaitForCallback Operations Integration", () => {
 
     // Wait for the operation to be available
     await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+    const callbackResult = JSON.stringify({
+      data: "callback_completed",
+    });
     // Simulate external system completing the callback
-    await callbackOperation.sendCallbackSuccess("callback_completed");
+    await callbackOperation.sendCallbackSuccess(callbackResult);
 
     // Now the execution should complete
     const result = await executionPromise;
 
     expect(result.getResult()).toEqual({
-      callbackResult: 'callback_completed',
+      callbackResult: callbackResult,
       submitterReceived: true,
       completed: true,
     });
@@ -94,14 +97,17 @@ describe("WaitForCallback Operations Integration", () => {
     // Wait for the operation to be available
     await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
     // Simulate external system completing the callback
-    await callbackOperation.sendCallbackSuccess("callback_completed");
+    const callbackResult = JSON.stringify({
+      data: "callback_completed",
+    });
+    await callbackOperation.sendCallbackSuccess(callbackResult);
 
     // Now the execution should complete
     const result = await executionPromise;
 
     const callbackDetails = callbackOperation.getCallbackDetails();
     expect(result.getResult()).toEqual({
-      callbackResult: 'callback_completed',
+      callbackResult,
       completed: true,
       callbackId: callbackDetails?.callbackId,
     });
@@ -335,13 +341,15 @@ describe("WaitForCallback Operations Integration", () => {
         1
       );
       await callbackOperation2.waitForData(WaitingOperationStatus.STARTED);
-      await callbackOperation2.sendCallbackSuccess({ data: "success-data" });
+
+      const callbackResult = JSON.stringify({ data: "success-data" });
+      await callbackOperation2.sendCallbackSuccess(callbackResult);
 
       const result2 = await executionPromise2;
 
       expect(result2.getResult()).toEqual({
         success: true,
-        result: '{"data":"success-data"}',
+        result: callbackResult,
         scenario: "submitter-succeeds-callback-succeeds",
       });
 
@@ -472,15 +480,16 @@ describe("WaitForCallback Operations Integration", () => {
       const callbackDetails = callbackOperation.getCallbackDetails();
       expect(callbackDetails?.callbackId).toBeDefined();
 
-      // Complete the callback successfully
-      await callbackOperation.sendCallbackSuccess({
+      const callbackResult = JSON.stringify({
         data: "heartbeat-completed",
       });
+      // Complete the callback successfully
+      await callbackOperation.sendCallbackSuccess(callbackResult);
 
       const result = await executionPromise;
 
       expect(result.getResult()).toEqual({
-        callbackResult: '{"data":"heartbeat-completed"}',
+        callbackResult: callbackResult,
         heartbeatEnabled: true,
         completed: true,
       });
@@ -551,17 +560,20 @@ describe("WaitForCallback Operations Integration", () => {
       await callbackOperation.sendCallbackHeartbeat();
 
       // Finally complete the callback
-      await callbackOperation.sendCallbackSuccess({ processed: 1000 });
+      const callbackResult = JSON.stringify({
+        processed: 1000,
+      });
+      await callbackOperation.sendCallbackSuccess(callbackResult);
 
       const result = await executionPromise;
 
       const resultData = result.getResult() as {
-        callbackResult: { processed: number };
+        callbackResult: string;
         submitterDuration: number;
         callbackId: string;
       };
 
-      expect(resultData.callbackResult).toEqual('{"processed":1000}');
+      expect(resultData.callbackResult).toEqual(callbackResult);
       expect(resultData.submitterDuration).toBeGreaterThan(50); // Should take at least 100ms
       expect(resultData.callbackId).toBeDefined();
 
@@ -692,12 +704,22 @@ describe("WaitForCallback Operations Integration", () => {
       ]);
 
       // Complete callbacks in different order to test concurrency
-      await callback2Op.sendCallbackSuccess({
+      const callback2Result = JSON.stringify({
         id: 2,
         data: "second-completed",
       });
-      await callback1Op.sendCallbackSuccess({ id: 1, data: "first-completed" });
-      await callback3Op.sendCallbackSuccess({ id: 3, data: "third-completed" });
+      const callback1Result = JSON.stringify({
+        id: 1,
+        data: "first-completed",
+      });
+      const callback3Result = JSON.stringify({
+        id: 3,
+        data: "third-completed",
+      });
+
+      await callback2Op.sendCallbackSuccess(callback2Result);
+      await callback1Op.sendCallbackSuccess(callback1Result);
+      await callback3Op.sendCallbackSuccess(callback3Result);
 
       const result = await executionPromise;
 
@@ -788,7 +810,8 @@ describe("WaitForCallback Operations Integration", () => {
       await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
 
       // Complete the callback
-      await callbackOperation.sendCallbackSuccess({ processed: true });
+      const callbackResult = JSON.stringify({ processed: true });
+      await callbackOperation.sendCallbackSuccess(callbackResult);
 
       const result = await executionPromise;
 
@@ -879,20 +902,22 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Wait for parent callback to start
       await parentCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await parentCallbackOp.sendCallbackSuccess({
+      const parentCallbackResult = JSON.stringify({
         parentData: "parent-completed",
       });
+      await parentCallbackOp.sendCallbackSuccess(parentCallbackResult);
 
       // Wait for child callback to start
       await childCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await childCallbackOp.sendCallbackSuccess({ childData: 42 });
+      const childCallbackResult = JSON.stringify({ childData: 42 });
+      await childCallbackOp.sendCallbackSuccess(childCallbackResult);
 
       const result = await executionPromise;
 
       expect(result.getResult()).toEqual({
-        parentResult: '{"parentData":"parent-completed"}',
+        parentResult: parentCallbackResult,
         childContextResult: {
-          childResult: '{"childData":42}',
+          childResult: childCallbackResult,
           childProcessed: true,
         },
         callbackIds: {
@@ -973,11 +998,13 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Wait for first callback and complete it
       await firstCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await firstCallbackOp.sendCallbackSuccess({ step: 1 });
+      const firstCallbackResult = JSON.stringify({ step: 1 });
+      await firstCallbackOp.sendCallbackSuccess(firstCallbackResult);
 
       // Wait for second callback and complete it
       await secondCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await secondCallbackOp.sendCallbackSuccess({ step: 2 });
+      const secondCallbackResult = JSON.stringify({ step: 2 });
+      await secondCallbackOp.sendCallbackSuccess(secondCallbackResult);
 
       const result = await executionPromise;
 
@@ -1107,22 +1134,27 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Complete callbacks in sequence
       await outerCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await outerCallbackOp.sendCallbackSuccess({ level: "outer-completed" });
+      const outerCallbackResult = JSON.stringify({ level: "outer-completed" });
+      await outerCallbackOp.sendCallbackSuccess(outerCallbackResult);
 
       await innerCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await innerCallbackOp.sendCallbackSuccess({ level: "inner-completed" });
+      const innerCallbackResult = JSON.stringify({ level: "inner-completed" });
+      await innerCallbackOp.sendCallbackSuccess(innerCallbackResult);
 
       await nestedCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await nestedCallbackOp.sendCallbackSuccess({ level: "nested-completed" });
+      const nestedCallbackResult = JSON.stringify({
+        level: "nested-completed",
+      });
+      await nestedCallbackOp.sendCallbackSuccess(nestedCallbackResult);
 
       const result = await executionPromise;
 
       expect(result.getResult()).toEqual({
-        outerCallback: '{"level":"outer-completed"}',
+        outerCallback: outerCallbackResult,
         nestedResults: {
-          innerCallback: '{"level":"inner-completed"}',
+          innerCallback: innerCallbackResult,
           deepNested: {
-            nestedCallback: '{"level":"nested-completed"}',
+            nestedCallback: nestedCallbackResult,
             deepLevel: "inner-child",
           },
           level: "outer-child",
@@ -1203,14 +1235,15 @@ describe("WaitForCallback Operations Integration", () => {
       expect(callbackDetails?.callbackId).toBeDefined();
 
       // Complete the callback successfully
-      await callbackOperation.sendCallbackSuccess({
+      const customTimeoutResult = JSON.stringify({
         data: "custom-timeout-completed",
       });
+      await callbackOperation.sendCallbackSuccess(customTimeoutResult);
 
       const result = await executionPromise;
 
       expect(result.getResult()).toEqual({
-        callbackResult: '{"data":"custom-timeout-completed"}',
+        callbackResult: customTimeoutResult,
         timeoutConfigured: true,
         callbackId: expect.any(String),
       });
