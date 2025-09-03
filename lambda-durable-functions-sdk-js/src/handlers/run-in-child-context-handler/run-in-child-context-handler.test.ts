@@ -202,10 +202,14 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: mockExecutionContext.parentId,
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
-        Payload: "__LARGE_PAYLOAD__",
+        Payload: "",
+        ContextOptions: {
+          ReplayChildren: true,
+        },
         Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
       },
     );
@@ -806,5 +810,57 @@ describe("Mock Integration", () => {
         Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
       },
     );
+  });
+
+  test("should use custom summaryGenerator for large payloads", async () => {
+    const largePayload = { data: "x".repeat(300000) };
+    const childFn = jest.fn().mockResolvedValue(largePayload);
+    const summaryGenerator = jest.fn().mockReturnValue("Custom summary of large data");
+
+    await runInChildContextHandler(
+      TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      childFn,
+      { summaryGenerator },
+    );
+
+    expect(summaryGenerator).toHaveBeenCalledWith(largePayload);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      2,
+      TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: mockExecutionContext.parentId,
+        Action: OperationAction.SUCCEED,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+        Payload: "Custom summary of large data",
+        ContextOptions: {
+          ReplayChildren: true,
+        },
+        Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      },
+    );
+  });
+
+  test("should re-execute child context when ReplayChildren is true", async () => {
+    const stepData = mockExecutionContext._stepData;
+    stepData[hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)] = {
+      Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      Status: OperationStatus.SUCCEEDED,
+      ContextDetails: {
+        Result: "Summary of large payload",
+        ReplayChildren: true,
+      },
+    } as any;
+
+    const childFn = jest.fn().mockResolvedValue("re-executed-result");
+
+    const result = await runInChildContextHandler(
+      TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      childFn,
+    );
+
+    expect(result).toBe("re-executed-result");
+    expect(childFn).toHaveBeenCalledTimes(1);
   });
 });

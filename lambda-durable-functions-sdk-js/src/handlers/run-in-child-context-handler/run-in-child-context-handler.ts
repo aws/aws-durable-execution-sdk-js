@@ -24,9 +24,6 @@ import { createErrorObjectFromError } from "../../utils/error-object/error-objec
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
 
-// Marker for adaptive mode when payload is too large
-const ADAPTIVE_EMPTY_RESULT = "__LARGE_PAYLOAD__";
-
 export const createRunInChildContextHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
@@ -91,14 +88,15 @@ export const handleCompletedChildContext = async <T>(
   options?: ChildConfig<T>,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
-  const result = context.getStepData(entityId)?.ContextDetails?.Result;
+  const stepData = context.getStepData(entityId);
+  const result = stepData?.ContextDetails?.Result;
 
-  // For adaptive mode, if result is empty string, we need to re-execute
-  if (result === ADAPTIVE_EMPTY_RESULT) {
+  // Check if we need to replay children due to large payload
+  if (stepData?.ContextDetails?.ReplayChildren) {
     log(
       context.isVerbose,
       "🔄",
-      "Adaptive mode: Re-executing child context due to large payload:",
+      "ReplayChildren mode: Re-executing child context due to large payload:",
       { entityId, stepName },
     );
 
@@ -182,14 +180,25 @@ export const executeChildContext = async <T>(
 
     // Check if payload is too large for adaptive mode
     let payloadToCheckpoint = serializedResult;
+    let replayChildren = false;
+    
     if (
       serializedResult &&
       Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT
     ) {
+      replayChildren = true;
+      
+      // Use summary generator if provided, otherwise use empty string
+      if (options?.summaryGenerator) {
+        payloadToCheckpoint = options.summaryGenerator(result);
+      } else {
+        payloadToCheckpoint = "";
+      }
+      
       log(
         context.isVerbose,
         "📦",
-        "Adaptive mode: Payload exceeds limit, checkpointing empty string:",
+        "Large payload detected, using ReplayChildren mode:",
         {
           entityId,
           name,
@@ -197,7 +206,6 @@ export const executeChildContext = async <T>(
           limit: CHECKPOINT_SIZE_LIMIT,
         },
       );
-      payloadToCheckpoint = ADAPTIVE_EMPTY_RESULT;
     }
 
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
@@ -208,6 +216,7 @@ export const executeChildContext = async <T>(
       SubType: subType,
       Type: OperationType.CONTEXT,
       Payload: payloadToCheckpoint,
+      ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
       Name: name,
     });
 

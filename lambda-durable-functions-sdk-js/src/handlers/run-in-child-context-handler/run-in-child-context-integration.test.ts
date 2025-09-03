@@ -298,22 +298,24 @@ describe("Run In Child Context Integration Tests", () => {
     expect(checkpointCalls[1].data.Updates[0].Name).toBe(
       "test-large-child-context",
     );
-    expect(checkpointCalls[1].data.Updates[0].Payload).toBe(
-      "__LARGE_PAYLOAD__",
-    );
+    expect(checkpointCalls[1].data.Updates[0].Payload).toBe("");
+    expect(checkpointCalls[1].data.Updates[0].ContextOptions).toEqual({
+      ReplayChildren: true,
+    });
   });
 
-  test("should re-execute on replay when adaptive mode has empty result", async () => {
+  test("should re-execute on replay when ReplayChildren is true", async () => {
     const largePayload = "x".repeat(300 * 1024); // 300KB string
     let executionCount = 0;
 
-    // Set up completed step data with empty result (simulating large payload checkpoint)
+    // Set up completed step data with ReplayChildren flag
     mockExecutionContext._stepData = {
       [hashId("1")]: {
         Id: "1",
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
-          Result: "__LARGE_PAYLOAD__", // Empty string indicates large payload in adaptive mode
+          Result: "[Large payload summary]",
+          ReplayChildren: true, // This triggers re-execution
         },
       },
     };
