@@ -2,15 +2,7 @@
   "name": "@amzn/dex-internal-sdk",
   "description": "Durable Executions Internal SDK",
   "version": "0.1.0",
-  "scripts": {
-    "build": "concurrently 'npm:build:cjs' 'npm:build:es' 'npm:build:types'",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build:es": "tsc -p tsconfig.es.json",
-    "build:types": "tsc -p tsconfig.types.json",
-    "build:types:downlevel": "downlevel-dts dist-types dist-types/ts3.4",
-    "clean": "rimraf ./dist-* && rimraf *.tsbuildinfo || exit 0",
-    "prepack": "npm run clean && npm run build"
-  },
+  "scripts": {},
   "main": "./dist-cjs/index.js",
   "types": "./dist-types/index.d.ts",
   "module": "./dist-es/index.js",

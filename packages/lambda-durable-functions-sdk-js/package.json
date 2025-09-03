@@ -23,7 +23,8 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "prettier --write . && eslint src --ext .ts --fix",
     "prepublishOnly": "npm test && npm run lint && npm run build",
-    "run-locally": "ts-node --transpile-only ./src/run-durable.ts"
+    "run-locally": "ts-node --transpile-only ./src/run-durable.ts",
+    "clean": "rm -rf node_modules dist"
   },
   "lint-staged": {
     "./src/**/*.ts": [
@@ -57,7 +58,7 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@amzn/dex-internal-sdk": "file:../dex-internal-sdk",
+    "@amzn/dex-internal-sdk": "*",
     "@aws-sdk/credential-provider-node": "^3.800.0"
   },
   "peerDependenciesMeta": {
