@@ -815,13 +815,13 @@ describe("Mock Integration", () => {
   test("should use custom summaryGenerator for large payloads", async () => {
     const largePayload = { data: "x".repeat(300000) };
     const childFn = jest.fn().mockResolvedValue(largePayload);
-    const summaryGenerator = jest.fn().mockReturnValue("Custom summary of large data");
+    const summaryGenerator = jest
+      .fn()
+      .mockReturnValue("Custom summary of large data");
 
-    await runInChildContextHandler(
-      TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-      childFn,
-      { summaryGenerator },
-    );
+    await runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
+      summaryGenerator,
+    });
 
     expect(summaryGenerator).toHaveBeenCalledWith(largePayload);
     expect(mockCheckpoint).toHaveBeenNthCalledWith(

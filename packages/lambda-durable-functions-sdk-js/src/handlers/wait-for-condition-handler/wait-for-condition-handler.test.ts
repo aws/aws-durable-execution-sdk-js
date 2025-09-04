@@ -298,7 +298,7 @@ describe("WaitForCondition Handler", () => {
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.RETRY_SCHEDULED,
-        message: "waitForCondition step-1 will retry in 30 seconds",
+        message: "Retry scheduled for step-1",
       });
     });
   });
@@ -310,6 +310,45 @@ describe("WaitForCondition Handler", () => {
       mockExecutionContext._stepData[hashedStepId] = {
         Id: hashedStepId,
         Status: OperationStatus.STARTED,
+        StepDetails: {
+          Result: '"previous-state"', // Just the serialized state, not wrapped
+          Attempt: 2, // System-provided attempt number
+        },
+      } as any;
+
+      const checkFunc: WaitForConditionCheckFunc<string> = jest
+        .fn()
+        .mockResolvedValue("ready");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: (state, attempt) => {
+          expect(state).toBe("ready");
+          expect(attempt).toBe(2); // Should use attempt from system
+          return { shouldContinue: false };
+        },
+        initialState: "initial",
+      };
+
+      // Mock the execution to call the check function with the restored state
+      mockExecutionRunner.execute.mockImplementation(
+        async (name: any, fn: any) => {
+          const result = await fn();
+          return result;
+        },
+      );
+
+      const result = await waitForConditionHandler(checkFunc, config);
+
+      expect(result).toBe("ready");
+      // Verify the execution runner was called
+      expect(mockExecutionRunner.execute).toHaveBeenCalled();
+    });
+
+    it("should restore state from valid checkpoint data when status is READY", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+      mockExecutionContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.READY,
         StepDetails: {
           Result: '"previous-state"', // Just the serialized state, not wrapped
           Attempt: 2, // System-provided attempt number
@@ -482,11 +521,45 @@ describe("WaitForCondition Handler", () => {
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.RETRY_SCHEDULED,
-        message: "waitForCondition step-1 will retry in 30 seconds",
+        message: "Retry scheduled for step-1",
       });
 
       // Verify that the promise is indeed never-resolving by checking its constructor
       expect(promise).toBeInstanceOf(Promise);
+    });
+
+    it("should wait for timer when status is PENDING", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+      mockExecutionContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.PENDING,
+      } as any;
+
+      const checkFunc: WaitForConditionCheckFunc<string> = jest
+        .fn()
+        .mockResolvedValue("ready");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      const promise = waitForConditionHandler(checkFunc, config);
+
+      // Should terminate with retry scheduled message
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.RETRY_SCHEDULED,
+        message: "Retry scheduled for step-1",
+      });
+
+      // Should return never-resolving promise
+      let resolved = false;
+      promise.then(() => {
+        resolved = true;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(resolved).toBe(false);
     });
   });
 
