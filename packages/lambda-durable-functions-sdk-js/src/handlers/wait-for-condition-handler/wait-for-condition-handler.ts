@@ -24,6 +24,20 @@ import {
 import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 
+const waitForTimer = <T>(
+  context: ExecutionContext,
+  stepId: string,
+  name: string | undefined,
+): Promise<T> => {
+  // TODO: Current implementation assumes sequential operations only
+  // Will be enhanced to handle concurrent operations in future milestone
+  context.terminationManager.terminate({
+    reason: TerminationReason.RETRY_SCHEDULED,
+    message: `Retry scheduled for ${name || stepId}`,
+  });
+  return new Promise<T>(() => { });
+};
+
 export const createWaitForConditionHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
@@ -79,6 +93,15 @@ export const createWaitForConditionHandler = (
       throw new Error(errorMessage || "waitForCondition failed");
     }
 
+    // If PENDING, wait for timer to complete
+    if (stepData?.Status === OperationStatus.PENDING) {
+      return waitForTimer(context, stepId, name);
+    }
+
+    // Execute check function for READY, STARTED, or first time (undefined)
+    // READY: Timer completed, execute check function
+    // STARTED: Retry after error, execute check function
+    // undefined: First execution, execute check function
     return executeWaitForCondition(
       context,
       checkpoint,
@@ -131,7 +154,10 @@ export const executeWaitForCondition = async <T>(
   let currentState: T;
 
   const existingOperation = context.getStepData(stepId);
-  if (existingOperation?.Status === OperationStatus.STARTED) {
+  if (
+    existingOperation?.Status === OperationStatus.STARTED ||
+    existingOperation?.Status === OperationStatus.READY
+  ) {
     // This is a retry - get state from previous checkpoint
     const checkpointData = existingOperation.StepDetails?.Result;
     if (checkpointData) {
@@ -167,6 +193,19 @@ export const executeWaitForCondition = async <T>(
   const currentAttemptForLogging = existingOperation?.StepDetails?.Attempt || 0;
   const currentAttemptForWaitStrategy =
     existingOperation?.StepDetails?.Attempt || 1;
+
+  // Checkpoint START for observability (fire and forget) - only if not already started
+  const stepData = context.getStepData(stepId);
+  if (stepData?.Status !== OperationStatus.STARTED) {
+    checkpoint(stepId, {
+      Id: stepId,
+      ParentId: context.parentId,
+      Action: OperationAction.START,
+      SubType: OperationSubType.WAIT_FOR_CONDITION,
+      Type: OperationType.STEP,
+      Name: name,
+    });
+  }
 
   try {
     // Create Telemetry with logger for the check function
@@ -223,7 +262,7 @@ export const executeWaitForCondition = async <T>(
       await checkpoint(stepId, {
         Id: stepId,
         ParentId: context.parentId,
-        Action: "SUCCEED",
+        Action: OperationAction.SUCCEED,
         SubType: OperationSubType.WAIT_FOR_CONDITION,
         Type: OperationType.STEP,
         Payload: serializedState,
@@ -244,7 +283,7 @@ export const executeWaitForCondition = async <T>(
       await checkpoint(stepId, {
         Id: stepId,
         ParentId: context.parentId,
-        Action: "RETRY",
+        Action: OperationAction.RETRY,
         SubType: OperationSubType.WAIT_FOR_CONDITION,
         Type: OperationType.STEP,
         Payload: serializedState, // Just the state, not wrapped in an object
@@ -254,13 +293,7 @@ export const executeWaitForCondition = async <T>(
         },
       });
 
-      context.terminationManager.terminate({
-        reason: TerminationReason.RETRY_SCHEDULED,
-        message: `waitForCondition ${name || stepId} will retry in ${decision.delaySeconds} seconds`,
-      });
-
-      // Return a never-resolving promise to ensure the execution doesn't continue
-      return new Promise<T>(() => {});
+      return waitForTimer(context, stepId, name);
     }
   } catch (error) {
     log(context.isVerbose, "❌", "waitForCondition check function failed:", {

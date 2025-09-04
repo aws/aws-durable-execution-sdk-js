@@ -28,6 +28,20 @@ import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { createStructuredLogger } from "../../utils/logger/structured-logger";
 
+const waitForTimer = <T>(
+  context: ExecutionContext,
+  stepId: string,
+  name: string | undefined,
+): Promise<T> => {
+  // TODO: Current implementation assumes sequential operations only
+  // Will be enhanced to handle concurrent operations in future milestone
+  context.terminationManager.terminate({
+    reason: TerminationReason.RETRY_SCHEDULED,
+    message: `Retry scheduled for ${name || stepId}`,
+  });
+  return new Promise<T>(() => { });
+};
+
 export const createStepHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
@@ -70,6 +84,11 @@ export const createStepHandler = (
     if (stepData?.Status === OperationStatus.FAILED) {
       const errorMessage = stepData?.StepDetails?.Result;
       throw new Error(errorMessage || "Unknown error");
+    }
+
+    // If PENDING, wait for timer to complete
+    if (stepData?.Status === OperationStatus.PENDING) {
+      return waitForTimer(context, stepId, name);
     }
 
     // Check for interrupted step with AT_MOST_ONCE_PER_RETRY semantics
@@ -130,17 +149,15 @@ export const createStepHandler = (
             },
           });
 
-          context.terminationManager.terminate({
-            reason: TerminationReason.RETRY_INTERRUPTED_STEP,
-            message: `Retry scheduled for interrupted step ${name || stepId}`,
-          });
-
-          // Return a never-resolving promise to ensure the execution doesn't continue
-          return new Promise<T>(() => {});
+          return waitForTimer(context, stepId, name);
         }
       }
     }
 
+    // Execute step function for READY, STARTED (AtLeastOncePerRetry), or first time (undefined)
+    // READY: Timer completed, execute step function
+    // STARTED: Retry after error (AtLeastOncePerRetry semantics), execute step function
+    // undefined: First execution, execute step function
     return executeStep(context, checkpoint, stepId, name, fn, options);
   };
 };
@@ -184,27 +201,30 @@ export const executeStep = async <T>(
   const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
   const serdes = options?.serdes || defaultSerdes;
 
-  // Checkpoint at start for both semantics
-  if (semantics === StepSemantics.AtMostOncePerRetry) {
-    // Wait for checkpoint to complete
-    await checkpoint(stepId, {
-      Id: stepId,
-      ParentId: context.parentId,
-      Action: "START",
-      SubType: OperationSubType.STEP,
-      Type: OperationType.STEP,
-      Name: name,
-    });
-  } else {
-    // Fire and forget for AtLeastOncePerRetry
-    checkpoint(stepId, {
-      Id: stepId,
-      ParentId: context.parentId,
-      Action: "START",
-      SubType: OperationSubType.STEP,
-      Type: OperationType.STEP,
-      Name: name,
-    });
+  // Checkpoint at start for both semantics (only if not already started)
+  const stepData = context.getStepData(stepId);
+  if (stepData?.Status !== OperationStatus.STARTED) {
+    if (semantics === StepSemantics.AtMostOncePerRetry) {
+      // Wait for checkpoint to complete
+      await checkpoint(stepId, {
+        Id: stepId,
+        ParentId: context.parentId,
+        Action: OperationAction.START,
+        SubType: OperationSubType.STEP,
+        Type: OperationType.STEP,
+        Name: name,
+      });
+    } else {
+      // Fire and forget for AtLeastOncePerRetry
+      checkpoint(stepId, {
+        Id: stepId,
+        ParentId: context.parentId,
+        Action: OperationAction.START,
+        SubType: OperationSubType.STEP,
+        Type: OperationType.STEP,
+        Name: name,
+      });
+    }
   }
 
   try {
@@ -241,7 +261,7 @@ export const executeStep = async <T>(
     await checkpoint(stepId, {
       Id: stepId,
       ParentId: context.parentId,
-      Action: "SUCCEED",
+      Action: OperationAction.SUCCEED,
       SubType: OperationSubType.STEP,
       Type: OperationType.STEP,
       Payload: serializedResult,
@@ -289,7 +309,7 @@ export const executeStep = async <T>(
       });
 
       // Return a never-resolving promise to ensure the execution doesn't continue
-      return new Promise<T>(() => {});
+      return new Promise<T>(() => { });
     }
 
     const stepData = context.getStepData(stepId);
@@ -349,14 +369,7 @@ export const executeStep = async <T>(
         },
       });
 
-      context.terminationManager.terminate({
-        reason: TerminationReason.RETRY_SCHEDULED,
-        message: `Retry scheduled for ${name || stepId}`,
-      });
-
-      // Return a never-resolving promise to ensure the execution doesn't continue
-      // This will be handled by Promise.race in withDurableFunctions.ts
-      return new Promise<T>(() => {});
+      return waitForTimer(context, stepId, name);
     }
   }
 };

@@ -187,9 +187,9 @@ export interface StepConfig<T> {
 export interface ChildConfig<T = any> {
   serdes?: Serdes<T>;
   subType?: string;
-  // summaryGenerator Will be used internall to create a summary for 
+  // summaryGenerator will be used internally to create a summary for
   // ctx.map and ctx.parallel when result is big
-  summaryGenerator?: (result: T) => string; 
+  summaryGenerator?: (result: T) => string;
 }
 
 export interface CreateCallbackConfig {

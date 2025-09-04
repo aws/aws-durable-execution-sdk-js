@@ -181,20 +181,20 @@ export const executeChildContext = async <T>(
     // Check if payload is too large for adaptive mode
     let payloadToCheckpoint = serializedResult;
     let replayChildren = false;
-    
+
     if (
       serializedResult &&
       Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT
     ) {
       replayChildren = true;
-      
+
       // Use summary generator if provided, otherwise use empty string
       if (options?.summaryGenerator) {
         payloadToCheckpoint = options.summaryGenerator(result);
       } else {
         payloadToCheckpoint = "";
       }
-      
+
       log(
         context.isVerbose,
         "📦",

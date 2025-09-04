@@ -206,7 +206,7 @@ describe("Step Handler", () => {
 
     // Verify terminate was called
     expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-      reason: TerminationReason.RETRY_INTERRUPTED_STEP,
+      reason: TerminationReason.RETRY_SCHEDULED,
       message: expect.stringContaining("test-step"),
     });
   }, 10000);
@@ -553,7 +553,7 @@ describe("Step Handler", () => {
 
     // Verify terminate was called
     expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-      reason: TerminationReason.RETRY_INTERRUPTED_STEP,
+      reason: TerminationReason.RETRY_SCHEDULED,
       message: expect.stringContaining("test-step"),
     });
   }, 10000);
@@ -652,9 +652,39 @@ describe("Step Handler", () => {
 
     // Verify terminate was called with stepId in the message
     expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-      reason: TerminationReason.RETRY_INTERRUPTED_STEP,
-      message: "Retry scheduled for interrupted step test-step-id",
+      reason: TerminationReason.RETRY_SCHEDULED,
+      message: "Retry scheduled for test-step-id",
     });
+  });
+
+  test("should wait for timer when status is PENDING", async () => {
+    const stepId = "test-step-id";
+    const hashedStepId = hashId(stepId);
+    mockExecutionContext._stepData = {
+      [hashedStepId]: {
+        Id: hashedStepId,
+        Status: OperationStatus.PENDING,
+      },
+    };
+
+    const stepFunction = jest.fn().mockResolvedValue("result");
+
+    const promise = stepHandler(stepId, stepFunction);
+
+    // Should terminate with retry scheduled message
+    expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
+      reason: TerminationReason.RETRY_SCHEDULED,
+      message: "Retry scheduled for test-step-id",
+    });
+
+    // Should return never-resolving promise
+    let resolved = false;
+    promise.then(() => {
+      resolved = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(resolved).toBe(false);
   });
 
   test("should handle missing attemptCount for interrupted step", async () => {
