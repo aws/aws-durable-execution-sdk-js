@@ -4,7 +4,8 @@ import {
   WaitForConditionConfig,
   WaitForConditionDecision,
   OperationSubType,
-  Telemetry,
+  WaitForConditionContext,
+  Logger,
 } from "../../types";
 import { Context } from "aws-lambda";
 import {
@@ -13,7 +14,6 @@ import {
   OperationType,
 } from "@amzn/dex-internal-sdk";
 import { log } from "../../utils/logger/logger";
-import { createStructuredLogger } from "../../utils/logger/structured-logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
 import { defaultSerdes } from "../../utils/serdes/serdes";
@@ -35,13 +35,14 @@ const waitForTimer = <T>(
     reason: TerminationReason.RETRY_SCHEDULED,
     message: `Retry scheduled for ${name || stepId}`,
   });
-  return new Promise<T>(() => { });
+  return new Promise<T>(() => {});
 };
 
 export const createWaitForConditionHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
+  createContextLogger: (stepId: string, attempt?: number) => Logger,
 ) => {
   return async <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T>,
@@ -109,6 +110,7 @@ export const createWaitForConditionHandler = (
       name,
       check,
       config,
+      createContextLogger,
     );
   };
 };
@@ -147,6 +149,7 @@ export const executeWaitForCondition = async <T>(
   name: string | undefined,
   check: WaitForConditionCheckFunc<T>,
   config: WaitForConditionConfig<T>,
+  createContextLogger: (stepId: string, attempt?: number) => Logger,
 ): Promise<T> => {
   const serdes = config.serdes || defaultSerdes;
 
@@ -189,10 +192,8 @@ export const executeWaitForCondition = async <T>(
     currentState = config.initialState;
   }
 
-  // Get the current attempt number from the system (like step-handler does)
-  const currentAttemptForLogging = existingOperation?.StepDetails?.Attempt || 0;
-  const currentAttemptForWaitStrategy =
-    existingOperation?.StepDetails?.Attempt || 1;
+  // Get the current attempt number (1-based for wait strategy consistency)
+  const currentAttempt = existingOperation?.StepDetails?.Attempt || 1;
 
   // Checkpoint START for observability (fire and forget) - only if not already started
   const stepData = context.getStepData(stepId);
@@ -208,18 +209,15 @@ export const executeWaitForCondition = async <T>(
   }
 
   try {
-    // Create Telemetry with logger for the check function
-    const logger = createStructuredLogger({
-      executionId: context.durableExecutionArn,
-      stepId,
-      attempt: currentAttemptForLogging,
-    });
-    const telemetry: Telemetry = { logger };
+    // Create WaitForConditionContext with enriched logger for the check function
+    const waitForConditionContext: WaitForConditionContext = {
+      logger: createContextLogger(stepId, currentAttempt),
+    };
 
     // Execute the check function
     const newState = await OperationInterceptor.forExecution(
       context.durableExecutionArn,
-    ).execute(name, () => check(currentState, telemetry));
+    ).execute(name, () => check(currentState, waitForConditionContext));
 
     // Serialize the new state for consistency
     const serializedState = await safeSerialize(
@@ -246,13 +244,13 @@ export const executeWaitForCondition = async <T>(
     // Check if condition is met using the wait strategy
     const decision: WaitForConditionDecision = config.waitStrategy(
       deserializedState,
-      currentAttemptForWaitStrategy,
+      currentAttempt,
     );
 
     log(context.isVerbose, "🔍", "waitForCondition check completed:", {
       stepId,
       name,
-      currentAttempt: currentAttemptForWaitStrategy,
+      currentAttempt: currentAttempt,
       shouldContinue: decision.shouldContinue,
       delaySeconds: decision.shouldContinue ? decision.delaySeconds : undefined,
     });
@@ -273,7 +271,7 @@ export const executeWaitForCondition = async <T>(
         stepId,
         name,
         result: deserializedState,
-        totalAttempts: currentAttemptForWaitStrategy,
+        totalAttempts: currentAttempt,
       });
 
       return deserializedState;
@@ -300,7 +298,7 @@ export const executeWaitForCondition = async <T>(
       stepId,
       name,
       error,
-      currentAttempt: currentAttemptForWaitStrategy,
+      currentAttempt: currentAttempt,
     });
 
     // Mark as failed - waitForCondition doesn't have its own retry logic for errors

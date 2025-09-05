@@ -5,7 +5,8 @@ import {
   RetryDecision,
   StepSemantics,
   OperationSubType,
-  Telemetry,
+  StepContext,
+  Logger,
 } from "../../types";
 import { Context } from "aws-lambda";
 import {
@@ -26,7 +27,6 @@ import {
 import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
-import { createStructuredLogger } from "../../utils/logger/structured-logger";
 
 const waitForTimer = <T>(
   context: ExecutionContext,
@@ -39,7 +39,7 @@ const waitForTimer = <T>(
     reason: TerminationReason.RETRY_SCHEDULED,
     message: `Retry scheduled for ${name || stepId}`,
   });
-  return new Promise<T>(() => { });
+  return new Promise<T>(() => {});
 };
 
 export const createStepHandler = (
@@ -47,6 +47,7 @@ export const createStepHandler = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   parentContext: Context,
   createStepId: () => string,
+  createContextLogger: (stepId: string, attempt?: number) => Logger,
 ) => {
   return async <T>(
     nameOrFn: string | undefined | StepFunc<T>,
@@ -158,7 +159,15 @@ export const createStepHandler = (
     // READY: Timer completed, execute step function
     // STARTED: Retry after error (AtLeastOncePerRetry semantics), execute step function
     // undefined: First execution, execute step function
-    return executeStep(context, checkpoint, stepId, name, fn, options);
+    return executeStep(
+      context,
+      checkpoint,
+      stepId,
+      name,
+      fn,
+      createContextLogger,
+      options,
+    );
   };
 };
 
@@ -195,6 +204,7 @@ export const executeStep = async <T>(
   stepId: string,
   name: string | undefined,
   fn: StepFunc<T>,
+  createContextLogger: (stepId: string, attempt?: number) => Logger,
   options?: StepConfig<T>,
 ): Promise<T> => {
   // Determine step semantics (default to AT_LEAST_ONCE_PER_RETRY if not specified)
@@ -228,23 +238,19 @@ export const executeStep = async <T>(
   }
 
   try {
-    // Get current attempt number for logger
+    // Get current attempt number for logger enrichment
     const stepData = context.getStepData(stepId);
     const currentAttempt = stepData?.StepDetails?.Attempt || 0;
 
-    // Create telemetry with logger
-    const telemetry: Telemetry = {
-      logger: createStructuredLogger({
-        stepId,
-        executionId: context.durableExecutionArn,
-        attempt: currentAttempt,
-      }),
+    // Create step context with enriched logger
+    const stepContext: StepContext = {
+      logger: createContextLogger(stepId, currentAttempt),
     };
 
-    // Execute the step function with stepUtil
+    // Execute the step function with stepContext
     const result = await OperationInterceptor.forExecution(
       context.durableExecutionArn,
-    ).execute(name, () => fn(telemetry));
+    ).execute(name, () => fn(stepContext));
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
@@ -309,7 +315,7 @@ export const executeStep = async <T>(
       });
 
       // Return a never-resolving promise to ensure the execution doesn't continue
-      return new Promise<T>(() => { });
+      return new Promise<T>(() => {});
     }
 
     const stepData = context.getStepData(stepId);

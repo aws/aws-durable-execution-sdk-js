@@ -67,10 +67,20 @@ describe("WaitForCondition Handler", () => {
       mockExecutionRunner,
     );
 
+    const mockLogger = {
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    };
+    const createMockEnrichedLogger = () => mockLogger;
+
     waitForConditionHandler = createWaitForConditionHandler(
       mockExecutionContext,
       mockCheckpoint,
       createStepId,
+      createMockEnrichedLogger,
     );
   });
 

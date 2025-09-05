@@ -1,5 +1,4 @@
 import { Context } from "aws-lambda";
-import { StructuredLogger } from "../utils/logger/structured-logger";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { ExecutionState } from "../storage/storage-provider";
 import { Serdes } from "../utils/serdes/serdes";
@@ -153,7 +152,7 @@ export interface DurableContext extends Context {
     executorOrConfig?: ConcurrentExecutor<TItem, TResult> | ConcurrencyConfig,
     maybeConfig?: ConcurrencyConfig,
   ) => Promise<BatchResult<TResult>>;
-  configureLogger: (logger: Logger) => void;
+  setCustomLogger: (logger: Logger) => void;
 }
 
 export interface ExecutionContext {
@@ -208,7 +207,7 @@ export interface WaitForCallbackConfig {
 export type CreateCallbackResult<T> = [Promise<T>, string]; // [promise, callbackId]
 export type WaitForCallbackSubmitterFunc = (
   callbackId: string,
-  telemetry: Telemetry,
+  context: WaitForCallbackContext,
 ) => Promise<void>;
 
 // Generic logger interface for custom logger implementations
@@ -220,11 +219,21 @@ export interface Logger {
   debug(message?: string, data?: any): void;
 }
 
-export interface Telemetry {
-  logger: StructuredLogger;
+/**
+ * Base interface for operation contexts.
+ * Do not use directly - use specific context types like StepContext, WaitForConditionContext, etc.
+ */
+export interface OperationContext {
+  logger: Logger;
 }
 
-export type StepFunc<T> = (telemetry: Telemetry) => Promise<T>;
+export type StepContext = OperationContext;
+
+export type WaitForConditionContext = OperationContext;
+
+export type WaitForCallbackContext = OperationContext;
+
+export type StepFunc<T> = (context: StepContext) => Promise<T>;
 export type ChildFunc<T> = (context: DurableContext) => Promise<T>;
 export type MapFunc<T> = (
   context: DurableContext,
@@ -237,7 +246,7 @@ export type ParallelFunc<T> = (context: DurableContext) => Promise<T>;
 // Wait for condition types
 export type WaitForConditionCheckFunc<T> = (
   state: T,
-  telemetry: Telemetry,
+  context: WaitForConditionContext,
 ) => Promise<T>;
 export type WaitForConditionWaitStrategyFunc<T> = (
   state: T,

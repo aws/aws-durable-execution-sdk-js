@@ -10,6 +10,15 @@ describe("waitForCallback handler", () => {
   let stepIdCounter: number;
   let mockRunInChildContext: jest.Mock;
 
+  const createMockLogger = () => ({
+    log: jest.fn(),
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+  });
+  const createMockEnrichedLogger = () => createMockLogger();
+
   beforeEach(() => {
     stepIdCounter = 0;
 
