@@ -67,25 +67,36 @@ describe("Step Handler", () => {
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { awsRequestId: "mock-request-id" };
     createStepId = jest.fn().mockReturnValue("test-step-id");
+
+    const mockLogger = {
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    };
+    const createMockEnrichedLogger = () => mockLogger;
+
     stepHandler = createStepHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       createStepId,
+      createMockEnrichedLogger,
     );
 
     // Reset the mock for retryPresets.default
     (retryPresets.default as jest.Mock).mockReset();
   });
 
-  test("should execute step function with Telemetry", async () => {
+  test("should execute step function with StepContext", async () => {
     const stepFn = jest.fn().mockResolvedValue("step-result");
 
     const result = await stepHandler("test-step", stepFn);
 
     expect(result).toBe("step-result");
     expect(stepFn).toHaveBeenCalledTimes(1);
-    // Verify that Telemetry was passed to the step function
+    // Verify that StepContext was passed to the step function
     expect(stepFn.mock.calls[0].length).toBe(1);
     expect(stepFn.mock.calls[0][0]).toHaveProperty("logger");
   });

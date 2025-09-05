@@ -29,7 +29,8 @@ import { createMapHandler } from "../../handlers/map-handler/map-handler";
 import { createParallelHandler } from "../../handlers/parallel-handler/parallel-handler";
 import { createPromiseHandler } from "../../handlers/promise-handler/promise-handler";
 import { createConcurrentExecutionHandler } from "../../handlers/concurrent-execution-handler/concurrent-execution-handler";
-import { setCustomLogger } from "../../utils/logger/structured-logger";
+import { createContextLoggerFactory } from "../../utils/logger/context-logger";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 export const createDurableContext = (
   executionContext: ExecutionContext,
@@ -37,6 +38,20 @@ export const createDurableContext = (
   stepPrefix?: string,
   checkpointToken?: string,
 ): DurableContext => {
+  // Local logger state for this context instance
+  let contextLogger: Logger | null = null;
+
+  // Local getter function for this context
+  const getLogger = (): Logger => {
+    return contextLogger || createDefaultLogger();
+  };
+
+  // Create context logger factory
+  const createContextLogger = createContextLoggerFactory(
+    executionContext,
+    getLogger,
+  );
+
   let stepCounter = 0;
   const checkpoint = createCheckpoint(executionContext, checkpointToken || "");
 
@@ -55,6 +70,7 @@ export const createDurableContext = (
       checkpoint,
       parentContext,
       createStepId,
+      createContextLogger,
     );
     return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
   };
@@ -153,8 +169,8 @@ export const createDurableContext = (
 
   const promise = createPromiseHandler(step);
 
-  const configureLogger = (logger: Logger): void => {
-    setCustomLogger(logger);
+  const setCustomLogger = (logger: Logger): void => {
+    contextLogger = logger;
   };
 
   return {
@@ -168,6 +184,7 @@ export const createDurableContext = (
       executionContext,
       checkpoint,
       createStepId,
+      createContextLogger,
     ),
     createCallback,
     waitForCallback,
@@ -175,6 +192,6 @@ export const createDurableContext = (
     parallel,
     executeConcurrently,
     promise,
-    configureLogger,
+    setCustomLogger,
   };
 };

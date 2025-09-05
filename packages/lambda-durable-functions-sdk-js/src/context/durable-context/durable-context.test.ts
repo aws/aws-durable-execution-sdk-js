@@ -136,7 +136,8 @@ describe("Durable Context", () => {
       mockExecutionContext,
       mockCheckpointHandler,
       mockParentContext,
-      expect.any(Function),
+      expect.any(Function), // createStepId
+      expect.any(Function), // createContextLogger
     );
     expect(mockStepHandler).toHaveBeenCalledWith("test-step", stepFn, options);
   });
@@ -428,7 +429,7 @@ describe("Durable Context", () => {
       mockExecutionContext,
       mockParentContext,
     );
-    expect(typeof durableContext.configureLogger).toBe("function");
+    expect(typeof durableContext.setCustomLogger).toBe("function");
   });
 
   it("should configure custom logger through DurableContext", () => {
@@ -446,13 +447,49 @@ describe("Durable Context", () => {
     };
 
     // Configure custom logger
-    durableContext.configureLogger(mockCustomLogger);
+    durableContext.setCustomLogger(mockCustomLogger);
 
     // Verify that the custom logger was set by checking the setCustomLogger was called
     // Since the step handler is mocked, we can't test the full integration here
     // but we can verify the method exists and doesn't throw
     expect(() =>
-      durableContext.configureLogger(mockCustomLogger),
+      durableContext.setCustomLogger(mockCustomLogger),
     ).not.toThrow();
+  });
+
+  it("should use default logger when no custom logger is set", () => {
+    const consoleSpy = jest.spyOn(console, "log").mockImplementation();
+
+    // Temporarily restore the real step handler to test actual logger usage
+    const originalCreateStepHandler = jest.requireActual(
+      "../../handlers/step-handler/step-handler",
+    ).createStepHandler;
+    (createStepHandler as jest.Mock).mockImplementationOnce(
+      originalCreateStepHandler,
+    );
+
+    const durableContext = createDurableContext(
+      mockExecutionContext,
+      mockParentContext,
+    );
+
+    // This will use the real step handler which will call the context logger
+    const stepFn = jest.fn().mockImplementation(async (ctx) => {
+      // Use all logger methods to ensure full coverage of createDefaultLogger
+      ctx.logger.log("custom", "test message");
+      ctx.logger.info("info test");
+      ctx.logger.error("error test", new Error("test"));
+      ctx.logger.warn("warn test");
+      ctx.logger.debug("debug test");
+      return "result";
+    });
+
+    // This should trigger the default logger
+    durableContext.step("test-step", stepFn);
+
+    // Verify console.log was called
+    expect(consoleSpy).toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
   });
 });
