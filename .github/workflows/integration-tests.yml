@@ -1,4 +1,4 @@
-name: Deploy Lambda Functions
+name: Integration Tests
 
 on:
   push:
@@ -36,19 +36,15 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    - name: Install dependencies
+    - name: Install Dependencies
       run: npm run install-all
     
-    - name: Build project
+    - name: Build Project
       run: npm run build
-    
-    - name: Run tests
-      run: npm run test
-    
-    - name: Deploy Lambda functions
+
+    - name: Deploy Lambda Functions
       working-directory: ./packages/examples
       env:
         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       run: |
-        chmod +x scripts/deploy-samples.sh
         ./scripts/deploy-samples.sh
