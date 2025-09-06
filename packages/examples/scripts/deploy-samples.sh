@@ -3,7 +3,7 @@
 set -e
 
 REGION=${AWS_REGION:-us-east-1}
-ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/lambda-execution-role"
+ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole"
 
 echo "Packaging Lambda functions..."
 cd dist
