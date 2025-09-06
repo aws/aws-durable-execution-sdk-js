@@ -7,6 +7,7 @@ import {
   OperationStatus,
   OperationType,
   Operation,
+  OperationAction,
 } from "@amzn/dex-internal-sdk";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -53,6 +54,7 @@ describe("Wait Handler", () => {
       mockExecutionContext,
       mockCheckpoint,
       createStepId,
+      jest.fn(() => false), // hasRunningOperations
     );
   });
 
@@ -290,6 +292,165 @@ describe("Wait Handler", () => {
         WaitOptions: {
           WaitSeconds: 5,
         },
+      });
+    });
+
+    describe("running operations awareness", () => {
+      test("should terminate immediately when no operations are running", async () => {
+        const mockHasRunningOperations = jest.fn(() => false);
+        waitHandler = createWaitHandler(
+          mockExecutionContext,
+          mockCheckpoint,
+          createStepId,
+          mockHasRunningOperations,
+        );
+
+        waitHandler("test-wait", 1000);
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockExecutionContext.terminationManager.terminate).toHaveBeenCalledWith({
+          reason: TerminationReason.WAIT_SCHEDULED,
+          message: "Operation test-wait scheduled to wait",
+        });
+        expect(mockHasRunningOperations).toHaveBeenCalled();
+      });
+
+      test("should not checkpoint START if step data already exists", async () => {
+        mockExecutionContext.getStepData.mockReturnValue({
+          Status: OperationStatus.STARTED,
+          WaitDetails: { ScheduledTimestamp: new Date(Date.now() + 5000) }
+        } as Operation);
+
+        const mockHasRunningOperations = jest.fn(() => false);
+        waitHandler = createWaitHandler(
+          mockExecutionContext,
+          mockCheckpoint,
+          createStepId,
+          mockHasRunningOperations,
+        );
+
+        waitHandler("test-wait", 1000);
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockCheckpoint).not.toHaveBeenCalled();
+      });
+
+      test("should checkpoint START only on first execution", async () => {
+        mockExecutionContext.getStepData.mockReturnValue(undefined);
+        
+        const mockHasRunningOperations = jest.fn(() => false);
+        waitHandler = createWaitHandler(
+          mockExecutionContext,
+          mockCheckpoint,
+          createStepId,
+          mockHasRunningOperations,
+        );
+
+        waitHandler("test-wait", 1000);
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(mockCheckpoint).toHaveBeenCalledWith("test-step-id", {
+          Id: "test-step-id",
+          ParentId: undefined,
+          Action: OperationAction.START,
+          SubType: OperationSubType.WAIT,
+          Type: OperationType.WAIT,
+          Name: "test-wait",
+          WaitOptions: {
+            WaitSeconds: 1,
+          },
+        });
+      });
+
+      test("should wait for operations to complete before terminating", async () => {
+        let operationsRunning = true;
+        const mockHasRunningOperations = jest.fn(() => operationsRunning);
+        
+        // Mock step data with existing wait
+        mockExecutionContext.getStepData.mockReturnValue({
+          Status: OperationStatus.STARTED,
+          WaitDetails: { ScheduledTimestamp: new Date(Date.now() + 5000) }
+        } as Operation);
+
+        waitHandler = createWaitHandler(
+          mockExecutionContext,
+          mockCheckpoint,
+          createStepId,
+          mockHasRunningOperations,
+        );
+
+        // Start the wait handler (don't await - it will wait for operations)
+        const waitPromise = waitHandler("test-wait", 1000);
+
+        // Give it time to enter the waiting logic
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // Should not terminate immediately since operations are running
+        expect(mockExecutionContext.terminationManager.terminate).not.toHaveBeenCalled();
+        expect(mockHasRunningOperations).toHaveBeenCalled();
+
+        // Simulate operations completing after 150ms
+        setTimeout(() => {
+          operationsRunning = false;
+        }, 150);
+
+        // Wait for the polling to detect the change and terminate
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Should eventually terminate when operations complete
+        expect(mockExecutionContext.terminationManager.terminate).toHaveBeenCalledWith({
+          reason: TerminationReason.WAIT_SCHEDULED,
+          message: "Operation test-wait scheduled to wait",
+        });
+      });
+
+      test("should handle wait during parallel execution with running step", async () => {
+        // This integration test simulates:
+        // ctx.parallel([
+        //   branch1: ctx.wait(2 sec),
+        //   branch2: ctx.step (that has internal wait for 3 second)
+        // ])
+        
+        let operationsRunning = true;
+        const mockHasRunningOperations = jest.fn(() => operationsRunning);
+        
+        // Mock step data for wait operation (2 second wait)
+        const waitTime = Date.now() + 2000;
+        mockExecutionContext.getStepData.mockReturnValue({
+          Status: OperationStatus.STARTED,
+          WaitDetails: { ScheduledTimestamp: new Date(waitTime) }
+        } as Operation);
+
+        waitHandler = createWaitHandler(
+          mockExecutionContext,
+          mockCheckpoint,
+          createStepId,
+          mockHasRunningOperations,
+        );
+
+        // Start wait handler - should detect running operations and wait
+        const waitPromise = waitHandler("parallel-wait", 2000);
+        
+        // Give time for wait handler to enter complex waiting logic
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // Should not terminate immediately due to running operations
+        expect(mockExecutionContext.terminationManager.terminate).not.toHaveBeenCalled();
+        expect(mockHasRunningOperations).toHaveBeenCalled();
+
+        // Simulate step operation completing (after 1 second)
+        setTimeout(() => {
+          operationsRunning = false;
+        }, 100);
+
+        // Wait for operations to complete and handler to terminate
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Should eventually terminate when operations complete
+        expect(mockExecutionContext.terminationManager.terminate).toHaveBeenCalledWith({
+          reason: TerminationReason.WAIT_SCHEDULED,
+          message: "Operation parallel-wait scheduled to wait",
+        });
       });
     });
   });
