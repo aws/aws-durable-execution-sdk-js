@@ -144,15 +144,6 @@ describe("Durable Context", () => {
     expect(mockStepHandler).toHaveBeenCalledWith("test-step", stepFn, options);
   });
 
-  test("should have hasRunningOperations method that returns false initially", () => {
-    const durableContext = createDurableContext(
-      mockExecutionContext,
-      mockParentContext,
-    );
-
-    expect(durableContext.hasRunningOperations()).toBe(false);
-  });
-
   test("should call block handler when runInChildContext method is invoked", () => {
     const durableContext = createDurableContext(
       mockExecutionContext,
@@ -187,8 +178,27 @@ describe("Durable Context", () => {
       mockExecutionContext,
       mockCheckpointHandler,
       expect.any(Function),
+      expect.any(Function), // hasRunningOperations
     );
     expect(mockWaitHandler).toHaveBeenCalledWith("test-wait", 1000);
+  });
+
+  test("should provide hasRunningOperations function that returns false when no operations", () => {
+    const durableContext = createDurableContext(
+      mockExecutionContext,
+      mockParentContext,
+    );
+
+    // Call wait to trigger the creation of wait handler with hasRunningOperations
+    durableContext.wait(1000);
+
+    // Extract hasRunningOperations function from the createWaitHandler call
+    const createWaitHandlerCall = jest.mocked(createWaitHandler).mock.calls[0];
+    const hasRunningOperations = createWaitHandlerCall[3]; // 4th parameter
+
+    // Call hasRunningOperations when no operations are running
+    const result = hasRunningOperations();
+    expect(result).toBe(false);
   });
 
   test("should call callback handler when createCallback method is invoked", () => {
