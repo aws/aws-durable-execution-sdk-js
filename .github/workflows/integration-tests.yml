@@ -78,13 +78,33 @@ jobs:
       env:
         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       run: |
-        FUNCTION_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
+        BASE_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          FUNCTION_NAME="${BASE_NAME}-PR-${{ github.event.number }}"
+        else
+          FUNCTION_NAME="${BASE_NAME}"
+        fi
+        echo "FUNCTION_NAME=$FUNCTION_NAME" >> $GITHUB_ENV
+        
         ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole"
         
         echo "Packaging Lambda function..."
-        cd dist/examples
-        zip -r ../../lambda-function.zip .
-        cd ../..
+        # Create a temporary directory for this specific function
+        mkdir -p temp-package
+        
+        # Copy the specific example file
+        HANDLER_FILE=$(echo "${{ matrix.example.handler }}" | sed 's/\.handler$//')
+        cp dist/examples/${HANDLER_FILE}.js temp-package/
+        cp dist/examples/${HANDLER_FILE}.js.map temp-package/ 2>/dev/null || true
+        
+        # Copy node_modules
+        cp -r node_modules temp-package/
+        
+        # Create zip from temp directory
+        cd temp-package
+        zip -r ../lambda-function.zip .
+        cd ..
+        rm -rf temp-package
         
         echo "Deploying function: $FUNCTION_NAME with handler: ${{ matrix.example.handler }}"
         
@@ -109,6 +129,13 @@ jobs:
     
     - name: Test Lambda function - ${{ matrix.example.name }}
       run: |
-        FUNCTION_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
         echo "Testing function: $FUNCTION_NAME"
-        # Add your test logic here
+        # TODO: Add testing logic here
+    
+    - name: Cleanup Lambda function
+      if: always()
+      run: |
+        echo "Deleting function: $FUNCTION_NAME"
+        aws lambda delete-function \
+          --function-name "$FUNCTION_NAME" \
+          --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
