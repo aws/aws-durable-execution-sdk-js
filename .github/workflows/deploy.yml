@@ -1,0 +1,60 @@
+name: Deploy Lambda Functions
+
+on:
+  push:
+    branches: [ "main", "development" ]
+    paths:
+      - 'packages/lambda-durable-functions-sdk-js/**'
+      - 'packages/examples/**'
+  pull_request:
+    branches: [ "main", "development" ]
+    paths:
+      - 'packages/lambda-durable-functions-sdk-js/**'
+      - 'packages/examples/**'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Install AWS CLI
+      run: |
+        apt-get -y update
+        apt-get -y install python3-pip
+        pip3 install awscli
+
+    - name: Install dependencies
+      run: npm run install-all
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Run tests
+      run: npm run test
+    
+    - name: Deploy Lambda functions
+      working-directory: ./packages/examples
+      env:
+        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      run: |
+        chmod +x scripts/deploy-samples.sh
+        ./scripts/deploy-samples.sh
