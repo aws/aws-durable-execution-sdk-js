@@ -14,11 +14,28 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-west-2
 
 jobs:
-  deploy:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      examples: ${{ steps.get-examples.outputs.examples }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Get examples from catalog
+      id: get-examples
+      working-directory: ./packages/examples
+      run: |
+        echo "examples=$(jq -c '.examples' examples-catalog.json)" >> $GITHUB_OUTPUT
+
+  deploy-test:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example: ${{ fromJson(needs.setup.outputs.examples) }}
+      fail-fast: false
     
     steps:
     - uses: actions/checkout@v4
@@ -35,16 +52,55 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-
-    - name: Install Dependencies
+    
+    - name: Install AWS CLI
+      run: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
+    
+    - name: Install dependencies
       run: npm run install-all
     
-    - name: Build Project
+    - name: Build project
       run: npm run build
-
-    - name: Deploy Lambda Functions
+    
+    - name: Deploy Lambda function - ${{ matrix.example.name }}
       working-directory: ./packages/examples
       env:
         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       run: |
-        ./scripts/deploy-samples.sh
+        FUNCTION_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
+        ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole"
+        
+        echo "Packaging Lambda function..."
+        cd dist/examples
+        zip -r ../../lambda-function.zip .
+        cd ../..
+        
+        echo "Deploying function: $FUNCTION_NAME with handler: ${{ matrix.example.handler }}"
+        
+        if aws lambda get-function --function-name "$FUNCTION_NAME" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+          echo "Updating existing function: $FUNCTION_NAME"
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --zip-file fileb://lambda-function.zip \
+            --region "${{ env.AWS_REGION }}"
+        else
+          echo "Creating new function: $FUNCTION_NAME"
+          aws lambda create-function \
+            --function-name "$FUNCTION_NAME" \
+            --runtime nodejs22.x \
+            --role "$ROLE_ARN" \
+            --handler "${{ matrix.example.handler }}" \
+            --zip-file fileb://lambda-function.zip \
+            --timeout 60 \
+            --memory-size 128 \
+            --region "${{ env.AWS_REGION }}"
+        fi
+    
+    - name: Test Lambda function - ${{ matrix.example.name }}
+      run: |
+        FUNCTION_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
+        echo "Testing function: $FUNCTION_NAME"
+        # Add your test logic here
