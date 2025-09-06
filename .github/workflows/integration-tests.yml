@@ -23,35 +23,12 @@ jobs:
       examples: ${{ steps.get-examples.outputs.examples }}
     steps:
     - uses: actions/checkout@v4
-    - name: Get examples from catalog
-      id: get-examples
-      working-directory: ./packages/examples
-      run: |
-        echo "examples=$(jq -c '.examples' examples-catalog.json)" >> $GITHUB_OUTPUT
-
-  deploy-test:
-    needs: setup
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        example: ${{ fromJson(needs.setup.outputs.examples) }}
-      fail-fast: false
-    
-    steps:
-    - uses: actions/checkout@v4
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22.x'
         cache: 'npm'
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
     
     - name: Install AWS CLI
       run: |
@@ -64,6 +41,43 @@ jobs:
     
     - name: Build project
       run: npm run build
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: built-examples
+        path: packages/examples/dist/
+    
+    - name: Get examples from catalog
+      id: get-examples
+      working-directory: ./packages/examples
+      run: |
+        echo "examples=$(jq -c '.examples' examples-catalog.json)" >> $GITHUB_OUTPUT
+
+  integration-test:
+    needs: setup
+    runs-on: ubuntu-latest
+    name: ${{ matrix.example.name }}
+    strategy:
+      matrix:
+        example: ${{ fromJson(needs.setup.outputs.examples) }}
+      fail-fast: false
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: built-examples
+        path: packages/examples/dist/
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
     
     - name: Deploy Lambda function - ${{ matrix.example.name }}
       working-directory: ./packages/examples
