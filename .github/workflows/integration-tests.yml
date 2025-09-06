@@ -42,7 +42,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: built-examples
-        path: packages/examples/dist/
+        path: |
+          packages/examples/dist/
+          packages/examples/node_modules/
     
     - name: Get examples from catalog
       id: get-examples
@@ -66,7 +68,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: built-examples
-        path: packages/examples/dist/
+        path: packages/examples/
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
