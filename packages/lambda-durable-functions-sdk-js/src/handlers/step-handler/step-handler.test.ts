@@ -83,6 +83,8 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createMockEnrichedLogger,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
     );
 
     // Reset the mock for retryPresets.default

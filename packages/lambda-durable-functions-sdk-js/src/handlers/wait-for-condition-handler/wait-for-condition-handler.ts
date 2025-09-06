@@ -43,6 +43,8 @@ export const createWaitForConditionHandler = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   createContextLogger: (stepId: string, attempt?: number) => Logger,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
 ) => {
   return async <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T>,
@@ -111,6 +113,8 @@ export const createWaitForConditionHandler = (
       check,
       config,
       createContextLogger,
+      addRunningOperation,
+      removeRunningOperation,
     );
   };
 };
@@ -150,6 +154,8 @@ export const executeWaitForCondition = async <T>(
   check: WaitForConditionCheckFunc<T>,
   config: WaitForConditionConfig<T>,
   createContextLogger: (stepId: string, attempt?: number) => Logger,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
 ): Promise<T> => {
   const serdes = config.serdes || defaultSerdes;
 
@@ -215,9 +221,15 @@ export const executeWaitForCondition = async <T>(
     };
 
     // Execute the check function
-    const newState = await OperationInterceptor.forExecution(
-      context.durableExecutionArn,
-    ).execute(name, () => check(currentState, waitForConditionContext));
+    addRunningOperation(stepId);
+    let newState: T;
+    try {
+      newState = await OperationInterceptor.forExecution(
+        context.durableExecutionArn,
+      ).execute(name, () => check(currentState, waitForConditionContext));
+    } finally {
+      removeRunningOperation(stepId);
+    }
 
     // Serialize the new state for consistency
     const serializedState = await safeSerialize(
