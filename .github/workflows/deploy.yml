@@ -35,12 +35,6 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Install AWS CLI
-      run: |
-        apt-get -y update
-        apt-get -y install python3-pip
-        pip3 install awscli
 
     - name: Install dependencies
       run: npm run install-all
