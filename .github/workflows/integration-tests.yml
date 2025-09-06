@@ -6,11 +6,13 @@ on:
     paths:
       - 'packages/lambda-durable-functions-sdk-js/**'
       - 'packages/examples/**'
+      - '.github/workflows/integration-tests.yml'
   pull_request:
     branches: [ "main", "development" ]
     paths:
       - 'packages/lambda-durable-functions-sdk-js/**'
       - 'packages/examples/**'
+      - '.github/workflows/integration-tests.yml'
   workflow_dispatch:
 
 env:
