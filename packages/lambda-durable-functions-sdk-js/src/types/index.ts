@@ -87,6 +87,7 @@ export type DurableExecutionInvocationOutput =
 export interface DurableContext extends Context {
   _stepPrefix?: string;
   _stepCounter: number;
+  hasRunningOperations(): boolean;
   step: <T>(
     nameOrFn: string | undefined | StepFunc<T>,
     fnOrOptions?: StepFunc<T> | StepConfig<T>,

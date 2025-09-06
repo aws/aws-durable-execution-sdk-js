@@ -81,6 +81,8 @@ describe("WaitForCondition Handler", () => {
       mockCheckpoint,
       createStepId,
       createMockEnrichedLogger,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
     );
   });
 

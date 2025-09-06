@@ -53,11 +53,25 @@ export const createDurableContext = (
   );
 
   let stepCounter = 0;
+  const runningOperations = new Set<string>();
   const checkpoint = createCheckpoint(executionContext, checkpointToken || "");
 
   const createStepId = (): string => {
     stepCounter++;
     return stepPrefix ? `${stepPrefix}-${stepCounter}` : `${stepCounter}`;
+  };
+
+  // Internal helpers for managing running operations
+  const addRunningOperation = (stepId: string): void => {
+    runningOperations.add(stepId);
+  };
+
+  const removeRunningOperation = (stepId: string): void => {
+    runningOperations.delete(stepId);
+  };
+
+  const hasRunningOperations = (): boolean => {
+    return runningOperations.size > 0;
   };
 
   const step: DurableContext["step"] = <T>(
@@ -71,6 +85,8 @@ export const createDurableContext = (
       parentContext,
       createStepId,
       createContextLogger,
+      addRunningOperation,
+      removeRunningOperation,
     );
     return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
   };
@@ -177,6 +193,7 @@ export const createDurableContext = (
     ...parentContext,
     _stepPrefix: stepPrefix,
     _stepCounter: stepCounter,
+    hasRunningOperations,
     step,
     runInChildContext,
     wait: createWaitHandler(executionContext, checkpoint, createStepId),
@@ -185,6 +202,8 @@ export const createDurableContext = (
       checkpoint,
       createStepId,
       createContextLogger,
+      addRunningOperation,
+      removeRunningOperation,
     ),
     createCallback,
     waitForCallback,

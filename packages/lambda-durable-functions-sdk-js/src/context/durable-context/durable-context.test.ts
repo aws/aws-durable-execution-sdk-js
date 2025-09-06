@@ -138,8 +138,19 @@ describe("Durable Context", () => {
       mockParentContext,
       expect.any(Function), // createStepId
       expect.any(Function), // createContextLogger
+      expect.any(Function), // addRunningOperation
+      expect.any(Function), // removeRunningOperation
     );
     expect(mockStepHandler).toHaveBeenCalledWith("test-step", stepFn, options);
+  });
+
+  test("should have hasRunningOperations method that returns false initially", () => {
+    const durableContext = createDurableContext(
+      mockExecutionContext,
+      mockParentContext,
+    );
+
+    expect(durableContext.hasRunningOperations()).toBe(false);
   });
 
   test("should call block handler when runInChildContext method is invoked", () => {

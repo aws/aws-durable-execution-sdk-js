@@ -48,6 +48,8 @@ export const createStepHandler = (
   parentContext: Context,
   createStepId: () => string,
   createContextLogger: (stepId: string, attempt?: number) => Logger,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
 ) => {
   return async <T>(
     nameOrFn: string | undefined | StepFunc<T>,
@@ -166,6 +168,8 @@ export const createStepHandler = (
       name,
       fn,
       createContextLogger,
+      addRunningOperation,
+      removeRunningOperation,
       options,
     );
   };
@@ -205,6 +209,8 @@ export const executeStep = async <T>(
   name: string | undefined,
   fn: StepFunc<T>,
   createContextLogger: (stepId: string, attempt?: number) => Logger,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
   options?: StepConfig<T>,
 ): Promise<T> => {
   // Determine step semantics (default to AT_LEAST_ONCE_PER_RETRY if not specified)
@@ -248,9 +254,15 @@ export const executeStep = async <T>(
     };
 
     // Execute the step function with stepContext
-    const result = await OperationInterceptor.forExecution(
-      context.durableExecutionArn,
-    ).execute(name, () => fn(stepContext));
+    addRunningOperation(stepId);
+    let result: T;
+    try {
+      result = await OperationInterceptor.forExecution(
+        context.durableExecutionArn,
+      ).execute(name, () => fn(stepContext));
+    } finally {
+      removeRunningOperation(stepId);
+    }
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
