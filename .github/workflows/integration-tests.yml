@@ -123,7 +123,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: built-examples
-        path: packages/
+        path: .
     
     - name: Verify downloaded artifacts
       run: |
@@ -131,12 +131,15 @@ jobs:
         echo "Current directory contents:"
         ls -la
         echo "Looking for packages directory:"
-        ls -la packages/ || echo "No packages directory"
-        echo "Looking for examples dist:"
-        ls -la packages/examples/dist/examples/ || echo "No examples dist found"
-        echo "Looking for root node_modules dependencies:"
-        ls -la node_modules/@amzn/ || echo "No @amzn in root node_modules"
-        ls -la node_modules/tslib/ || echo "No tslib in root node_modules"
+        ls -la packages/
+        echo "What's in examples?"
+        ls -la packages/examples/ || echo "No examples directory"
+        echo "What's in packages/node_modules?"
+        ls -la packages/node_modules/ || echo "No packages/node_modules"
+        echo "Looking for any dist directories:"
+        find packages -name "dist" -type d || echo "No dist directories found"
+        echo "Looking for any node_modules:"
+        find . -name "node_modules" -type d || echo "No node_modules found"
     
     - name: Install AWS CLI (for local act runs)
       run: |
