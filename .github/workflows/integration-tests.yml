@@ -65,6 +65,7 @@ jobs:
         path: |
           packages/examples/dist/
           packages/examples/node_modules/
+          node_modules/@amzn/durable-executions-language-sdk/
     
     - name: Get examples from catalog
       id: get-examples
@@ -90,14 +91,11 @@ jobs:
         node-version: '22.x'
         cache: 'npm'
     
-    - name: Install dependencies
-      run: npm run install-all
-    
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
         name: built-examples
-        path: packages/examples/
+        path: .
     
     - name: Install AWS CLI (for local act runs)
       run: |
