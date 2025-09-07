@@ -76,7 +76,8 @@ jobs:
         path: |
           packages/examples/dist/
           packages/examples/node_modules/
-          node_modules/@amzn/durable-executions-language-sdk/
+          packages/lambda-durable-functions-sdk-js/dist/
+          packages/lambda-durable-functions-sdk-js/package.json
     
     - name: Get examples from catalog
       id: get-examples
