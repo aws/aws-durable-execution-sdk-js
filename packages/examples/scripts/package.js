@@ -62,9 +62,9 @@ for (const dep of requiredDeps) {
     }
 }
 
-// Create zip file
+// Create zip file with quiet mode to avoid buffer overflow
 const zipFile = `${handlerFile}.zip`;
-execSync(`cd ${tempDir} && zip -r ../${zipFile} .`);
+execSync(`cd ${tempDir} && zip -q -r ../${zipFile} .`);
 
 // Clean up
 execSync(`rm -rf ${tempDir}`);
