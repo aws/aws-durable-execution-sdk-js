@@ -35,12 +35,11 @@ try {
 // Copy node_modules
 execSync(`cp -r node_modules ${tempDir}`);
 
-// Copy SDK from workspace root
-const sdkPath = '../lambda-durable-functions-sdk-js';
+// Copy SDK from root workspace node_modules
+const rootSdkPath = '../../node_modules/@amzn/durable-executions-language-sdk';
 const sdkNodeModulesPath = path.join(tempDir, 'node_modules/@amzn/durable-executions-language-sdk');
 fs.mkdirSync(path.dirname(sdkNodeModulesPath), { recursive: true });
-execSync(`cp -r ${sdkPath}/dist ${sdkNodeModulesPath}`);
-execSync(`cp ${sdkPath}/package.json ${sdkNodeModulesPath}/`);
+execSync(`cp -r ${rootSdkPath} ${path.dirname(sdkNodeModulesPath)}`);
 
 // Create zip
 execSync(`cd ${tempDir} && zip -r ../${example}.zip .`);
