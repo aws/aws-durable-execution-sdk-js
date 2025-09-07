@@ -42,7 +42,24 @@ fs.mkdirSync(path.dirname(sdkNodeModulesPath), { recursive: true });
 
 // Copy the entire built SDK directory
 execSync(`cp -r ${sdkSourcePath}/dist ${sdkNodeModulesPath}`);
-execSync(`cp ${sdkSourcePath}/package.json ${sdkNodeModulesPath}/`);
+
+// Copy and fix package.json to point to correct main file
+const packageJson = JSON.parse(fs.readFileSync(`${sdkSourcePath}/package.json`, 'utf8'));
+packageJson.main = 'index.js'; // Fix main field since we're copying dist contents to root
+fs.writeFileSync(path.join(sdkNodeModulesPath, 'package.json'), JSON.stringify(packageJson, null, 2));
+
+// Copy dex-internal-sdk dependency (pre-built)
+const dexSdkSourcePath = '../dex-internal-sdk';
+const dexSdkNodeModulesPath = path.join(tempDir, 'node_modules/@amzn/dex-internal-sdk');
+if (fs.existsSync(`${dexSdkSourcePath}/dist-cjs`)) {
+    fs.mkdirSync(path.dirname(dexSdkNodeModulesPath), { recursive: true });
+    execSync(`cp -r ${dexSdkSourcePath}/dist-cjs/* ${dexSdkNodeModulesPath}/`);
+    
+    // Copy and fix dex-internal-sdk package.json
+    const dexPackageJson = JSON.parse(fs.readFileSync(`${dexSdkSourcePath}/package.json`, 'utf8'));
+    dexPackageJson.main = 'index.js'; // Point to root since we copied dist-cjs contents
+    fs.writeFileSync(path.join(dexSdkNodeModulesPath, 'package.json'), JSON.stringify(dexPackageJson, null, 2));
+}
 
 // Create zip
 execSync(`cd ${tempDir} && zip -r ../${example}.zip .`);

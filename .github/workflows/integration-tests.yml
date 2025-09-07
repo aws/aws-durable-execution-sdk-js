@@ -86,6 +86,8 @@ jobs:
           packages/examples/node_modules/
           packages/lambda-durable-functions-sdk-js/dist/
           packages/lambda-durable-functions-sdk-js/package.json
+          packages/dex-internal-sdk/dist-cjs/
+          packages/dex-internal-sdk/package.json
     
     - name: Get examples from catalog
       id: get-examples
