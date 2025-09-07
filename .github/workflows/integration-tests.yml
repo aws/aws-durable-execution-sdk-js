@@ -60,11 +60,20 @@ jobs:
     - name: Verify SDK build
       run: |
         echo "Checking SDK build output..."
-        ls -la node_modules/@amzn/durable-executions-language-sdk/dist/ || echo "SDK dist directory not found"
-        if [ -f "node_modules/@amzn/durable-executions-language-sdk/dist/index.js" ]; then
-          echo "SDK index.js found ($(wc -c < node_modules/@amzn/durable-executions-language-sdk/dist/index.js) bytes)"
+        ls -la packages/lambda-durable-functions-sdk-js/dist/ || echo "SDK dist directory not found"
+        if [ -f "packages/lambda-durable-functions-sdk-js/dist/index.js" ]; then
+          echo "SDK index.js found ($(wc -c < packages/lambda-durable-functions-sdk-js/dist/index.js) bytes)"
         else
           echo "ERROR: SDK index.js not found"
+          exit 1
+        fi
+        
+        echo "Checking examples build output..."
+        ls -la packages/examples/dist/examples/ || echo "Examples dist directory not found"
+        if [ -f "packages/examples/dist/examples/hello-world.js" ]; then
+          echo "Examples hello-world.js found"
+        else
+          echo "ERROR: Examples hello-world.js not found"
           exit 1
         fi
     
@@ -112,13 +121,14 @@ jobs:
     - name: Verify downloaded artifacts
       run: |
         echo "Checking downloaded artifacts..."
-        ls -la packages/examples/dist/ || echo "Examples dist not found"
-        ls -la node_modules/@amzn/durable-executions-language-sdk/dist/ || echo "SDK dist not found"
-        if [ -f "node_modules/@amzn/durable-executions-language-sdk/dist/index.js" ]; then
-          echo "SDK index.js found ($(wc -c < node_modules/@amzn/durable-executions-language-sdk/dist/index.js) bytes)"
-        else
-          echo "ERROR: SDK index.js not found in artifacts"
-        fi
+        echo "Current directory contents:"
+        ls -la
+        echo "Looking for packages directory:"
+        ls -la packages/ || echo "No packages directory"
+        echo "Looking for any dist directories:"
+        find . -name "dist" -type d || echo "No dist directories found"
+        echo "Looking for any SDK files:"
+        find . -name "*durable*" || echo "No SDK files found"
     
     - name: Install AWS CLI (for local act runs)
       run: |
