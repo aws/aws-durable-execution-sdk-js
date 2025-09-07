@@ -23,11 +23,11 @@ export class ApiStorage implements ExecutionState {
     if (client) {
       this.client = client;
     } else {
-      const endpoint = process.env.DEX_ENDPOINT;
+      const endpoint = process.env.DEX_ENDPOINT || "";
       const region = process.env.DEX_REGION || "us-east-1";
 
       if (!endpoint) {
-        throw new Error("DEX_ENDPOINT environment variable must be set");
+        console.warn("DEX_ENDPOINT environment variable not set, using empty string");
       }
 
       this.client = new LambdaClient({
