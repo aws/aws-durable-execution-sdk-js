@@ -52,7 +52,7 @@ fs.writeFileSync(path.join(sdkNodeModulesPath, 'package.json'), JSON.stringify(p
 const dexSdkSourcePath = '../dex-internal-sdk';
 const dexSdkNodeModulesPath = path.join(tempDir, 'node_modules/@amzn/dex-internal-sdk');
 if (fs.existsSync(`${dexSdkSourcePath}/dist-cjs`)) {
-    fs.mkdirSync(path.dirname(dexSdkNodeModulesPath), { recursive: true });
+    fs.mkdirSync(dexSdkNodeModulesPath, { recursive: true });
     execSync(`cp -r ${dexSdkSourcePath}/dist-cjs/* ${dexSdkNodeModulesPath}/`);
     
     // Copy and fix dex-internal-sdk package.json
