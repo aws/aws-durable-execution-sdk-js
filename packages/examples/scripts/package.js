@@ -1,70 +1,69 @@
-#!/usr/bin/env node
-
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const example = process.argv[2];
-if (!example) {
-    console.error('Usage: node scripts/package.js <example-name>');
+const handlerFile = process.argv[2];
+if (!handlerFile) {
+    console.error('Usage: node package.js <handler-file>');
     process.exit(1);
 }
 
-console.log(`Packaging ${example}...`);
+// Extract just the file name without .handler suffix
+const fileName = handlerFile.replace('.handler', '');
 
-const handlerFile = example.replace(/\.handler$/, '');
+console.log(`Packaging ${fileName}...`);
+
 const tempDir = 'temp-package';
 
+// Clean up any existing temp directory
+if (fs.existsSync(tempDir)) {
+    execSync(`rm -rf ${tempDir}`);
+}
+
 // Create temp directory
-fs.mkdirSync(tempDir, { recursive: true });
+fs.mkdirSync(tempDir);
 
 // Copy JS file
 fs.copyFileSync(
-    path.join('dist/examples', handlerFile + '.js'), 
-    path.join(tempDir, handlerFile + '.js')
+    path.join('dist/examples', fileName + '.js'), 
+    path.join(tempDir, fileName + '.js')
 );
 
 // Copy source map if exists
 try {
     fs.copyFileSync(
-        path.join('dist/examples', handlerFile + '.js.map'), 
-        path.join(tempDir, handlerFile + '.js.map')
+        path.join('dist/examples', fileName + '.js.map'), 
+        path.join(tempDir, fileName + '.js.map')
     );
 } catch {}
 
-// Copy node_modules
-execSync(`cp -r node_modules ${tempDir}`);
+// Copy only the dependencies we need from root node_modules
+console.log('Copying required dependencies...');
+fs.mkdirSync(path.join(tempDir, 'node_modules'), { recursive: true });
 
-// Copy SDK from workspace location
-const sdkSourcePath = '../lambda-durable-functions-sdk-js';
-const sdkNodeModulesPath = path.join(tempDir, 'node_modules/@amzn/durable-executions-language-sdk');
-fs.mkdirSync(path.dirname(sdkNodeModulesPath), { recursive: true });
+// Copy the SDK dependencies
+const requiredDeps = [
+    '@amzn',
+    'tslib',
+    '@smithy',
+    '@aws-sdk'
+];
 
-// Copy the entire built SDK directory
-execSync(`cp -r ${sdkSourcePath}/dist ${sdkNodeModulesPath}`);
-
-// Copy and fix package.json to point to correct main file
-const packageJson = JSON.parse(fs.readFileSync(`${sdkSourcePath}/package.json`, 'utf8'));
-packageJson.main = 'index.js'; // Fix main field since we're copying dist contents to root
-fs.writeFileSync(path.join(sdkNodeModulesPath, 'package.json'), JSON.stringify(packageJson, null, 2));
-
-// Copy dex-internal-sdk dependency (pre-built)
-const dexSdkSourcePath = '../dex-internal-sdk';
-const dexSdkNodeModulesPath = path.join(tempDir, 'node_modules/@amzn/dex-internal-sdk');
-if (fs.existsSync(`${dexSdkSourcePath}/dist-cjs`)) {
-    fs.mkdirSync(dexSdkNodeModulesPath, { recursive: true });
-    execSync(`cp -r ${dexSdkSourcePath}/dist-cjs/* ${dexSdkNodeModulesPath}/`);
+for (const dep of requiredDeps) {
+    const srcPath = path.join('../../node_modules', dep);
+    const destPath = path.join(tempDir, 'node_modules', dep);
     
-    // Copy and fix dex-internal-sdk package.json
-    const dexPackageJson = JSON.parse(fs.readFileSync(`${dexSdkSourcePath}/package.json`, 'utf8'));
-    dexPackageJson.main = 'index.js'; // Point to root since we copied dist-cjs contents
-    fs.writeFileSync(path.join(dexSdkNodeModulesPath, 'package.json'), JSON.stringify(dexPackageJson, null, 2));
+    if (fs.existsSync(srcPath)) {
+        console.log(`Copying ${dep}...`);
+        execSync(`cp -r "${srcPath}" "${path.dirname(destPath)}"`);
+    }
 }
 
-// Create zip
-execSync(`cd ${tempDir} && zip -r ../${example}.zip .`);
+// Create zip file
+const zipFile = `${handlerFile}.zip`;
+execSync(`cd ${tempDir} && zip -r ../${zipFile} .`);
 
-// Cleanup
+// Clean up
 execSync(`rm -rf ${tempDir}`);
 
-console.log(`Created: ${example}.zip`);
+console.log(`Created: ${zipFile}`);
