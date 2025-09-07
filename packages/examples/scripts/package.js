@@ -35,7 +35,7 @@ try {
 // Copy node_modules
 execSync(`cp -r node_modules ${tempDir}`);
 
-// Copy SDK from actual source location (workspace dependency)
+// Copy SDK from workspace location
 const sdkSourcePath = '../lambda-durable-functions-sdk-js';
 const sdkNodeModulesPath = path.join(tempDir, 'node_modules/@amzn/durable-executions-language-sdk');
 fs.mkdirSync(path.dirname(sdkNodeModulesPath), { recursive: true });
