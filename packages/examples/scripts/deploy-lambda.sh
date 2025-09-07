@@ -2,15 +2,17 @@
 set -e
 
 # Deploy Lambda Function Script
-# Usage: ./deploy-lambda.sh <example-name>
+# Usage: ./deploy-lambda.sh <example-name> [function-name]
 
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <example-name>"
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+    echo "Usage: $0 <example-name> [function-name]"
     echo "Example: $0 hello-world"
+    echo "Example: $0 hello-world custom-function-name"
     exit 1
 fi
 
 EXAMPLE="$1"
+FUNCTION_NAME="${2:-$EXAMPLE}"
 
 # Source environment variables
 set -a
@@ -48,15 +50,11 @@ echo "  Handler: $HANDLER"
 echo "  Retention: $RETENTION_DAYS days"
 echo "  Timeout: $EXECUTION_TIMEOUT seconds"
 
-# Build and package
-echo "Building and packaging $EXAMPLE..."
-npm run build
-npm run package -- $EXAMPLE
-
 # Validate zip file exists
 ZIP_FILE="$EXAMPLE.zip"
 if [ ! -f "$ZIP_FILE" ]; then
-    echo "Error: $ZIP_FILE not found. Package step may have failed."
+    echo "Error: $ZIP_FILE not found. Please build and package first."
+    echo "Run: npm run build && npm run package -- $EXAMPLE"
     exit 1
 fi
 

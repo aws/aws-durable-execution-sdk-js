@@ -9,6 +9,7 @@
   "scripts": {
     "install-all": "npm install -w packages/lambda-durable-functions-sdk-js -w packages/lambda-durable-functions-testing-sdk-js -w packages/examples",
     "test": "npm run test --workspaces --if-present",
+    "test:integration": "act -W .github/workflows/integration-tests.yml --secret-file .secrets --artifact-server-path /tmp/artifacts --container-architecture linux/amd64",
     "build": "npm run build -w packages/lambda-durable-functions-sdk-js -w packages/lambda-durable-functions-testing-sdk-js -w packages/examples",
     "postpublish": "git restore .",
     "clean": "npm run clean --workspaces --if-present"

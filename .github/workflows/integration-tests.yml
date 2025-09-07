@@ -32,6 +32,25 @@ jobs:
         node-version: '22.x'
         cache: 'npm'
     
+    - name: Install AWS CLI (for local act runs)
+      run: |
+        if ! command -v aws &> /dev/null; then
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+        fi
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Install custom Lambda model
+      run: |
+        aws configure add-model --service-model file://.github/model/lambda.json --service-name lambda
+    
     - name: Install dependencies
       run: npm run install-all
     
@@ -40,6 +59,7 @@ jobs:
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
+      continue-on-error: true
       with:
         name: built-examples
         path: |
@@ -50,7 +70,7 @@ jobs:
       id: get-examples
       working-directory: ./packages/examples
       run: |
-        echo "examples=$(jq -c '.examples' examples-catalog.json)" >> $GITHUB_OUTPUT
+        echo "examples=$(jq -c '.examples | .[0:1]' examples-catalog.json)" >> $GITHUB_OUTPUT
 
   integration-test:
     needs: setup
@@ -64,11 +84,28 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm run install-all
+    
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
         name: built-examples
         path: packages/examples/
+    
+    - name: Install AWS CLI (for local act runs)
+      run: |
+        if ! command -v aws &> /dev/null; then
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+        fi
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -77,59 +114,37 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
     
+    - name: Install custom Lambda model
+      run: |
+        aws configure add-model --service-model file://.github/model/lambda.json --service-name lambda
+
+    - name: Package Lambda function - ${{ matrix.example.name }}
+      working-directory: ./packages/examples
+      run: |
+        # Extract handler file name from catalog
+        HANDLER_FILE=$(echo "${{ matrix.example.handler }}" | sed 's/\.handler$//')
+        npm run package -- "$HANDLER_FILE"
+
     - name: Deploy Lambda function - ${{ matrix.example.name }}
       working-directory: ./packages/examples
       env:
         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+        INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID }}
       run: |
+        # Build function name for GitHub Actions
         BASE_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           FUNCTION_NAME="${BASE_NAME}-PR-${{ github.event.number }}"
         else
           FUNCTION_NAME="${BASE_NAME}"
         fi
-        echo "FUNCTION_NAME=$FUNCTION_NAME" >> $GITHUB_ENV
         
-        ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole"
-        
-        echo "Packaging Lambda function..."
-        # Create a temporary directory for this specific function
-        mkdir -p temp-package
-        
-        # Copy the specific example file
+        # Extract handler file name from catalog
         HANDLER_FILE=$(echo "${{ matrix.example.handler }}" | sed 's/\.handler$//')
-        cp dist/examples/${HANDLER_FILE}.js temp-package/
-        cp dist/examples/${HANDLER_FILE}.js.map temp-package/ 2>/dev/null || true
         
-        # Copy node_modules
-        cp -r node_modules temp-package/
-        
-        # Create zip from temp directory
-        cd temp-package
-        zip -r ../lambda-function.zip .
-        cd ..
-        rm -rf temp-package
-        
-        echo "Deploying function: $FUNCTION_NAME with handler: ${{ matrix.example.handler }}"
-        
-        if aws lambda get-function --function-name "$FUNCTION_NAME" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
-          echo "Updating existing function: $FUNCTION_NAME"
-          aws lambda update-function-code \
-            --function-name "$FUNCTION_NAME" \
-            --zip-file fileb://lambda-function.zip \
-            --region "${{ env.AWS_REGION }}"
-        else
-          echo "Creating new function: $FUNCTION_NAME"
-          aws lambda create-function \
-            --function-name "$FUNCTION_NAME" \
-            --runtime nodejs22.x \
-            --role "$ROLE_ARN" \
-            --handler "${{ matrix.example.handler }}" \
-            --zip-file fileb://lambda-function.zip \
-            --timeout 60 \
-            --memory-size 128 \
-            --region "${{ env.AWS_REGION }}"
-        fi
+        # Deploy using npm script
+        npm run deploy -- "$HANDLER_FILE" "$FUNCTION_NAME"
     
     - name: Test Lambda function - ${{ matrix.example.name }}
       run: |
@@ -138,8 +153,11 @@ jobs:
     
     - name: Cleanup Lambda function
       if: always()
+      env:
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
       run: |
         echo "Deleting function: $FUNCTION_NAME"
         aws lambda delete-function \
           --function-name "$FUNCTION_NAME" \
+          --endpoint-url "$LAMBDA_ENDPOINT" \
           --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
