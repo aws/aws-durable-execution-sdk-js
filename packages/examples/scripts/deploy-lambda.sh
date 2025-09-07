@@ -49,9 +49,14 @@ fi
 HANDLER=$(echo "$EXAMPLE_CONFIG" | jq -r '.handler')
 RETENTION_DAYS=$(echo "$EXAMPLE_CONFIG" | jq -r '.durableConfig.RetentionPeriodInDays')
 EXECUTION_TIMEOUT=$(echo "$EXAMPLE_CONFIG" | jq -r '.durableConfig.ExecutionTimeout')
+DESCRIPTION=$(echo "$EXAMPLE_CONFIG" | jq -r '.description')
+EXAMPLE_NAME=$(echo "$EXAMPLE_CONFIG" | jq -r '.name')
 
 echo "Found example configuration:"
+echo "  Name: $EXAMPLE_NAME"
+echo "  Function Name: $FUNCTION_NAME"
 echo "  Handler: $HANDLER"
+echo "  Description: $DESCRIPTION"
 echo "  Retention: $RETENTION_DAYS days"
 echo "  Timeout: $EXECUTION_TIMEOUT seconds"
 
@@ -119,6 +124,7 @@ else
         --runtime nodejs22.x \
         --role "$ROLE_ARN" \
         --handler "$HANDLER" \
+        --description "$DESCRIPTION" \
         --zip-file fileb://"$ZIP_FILE" \
         --durable-config RetentionPeriodInDays=$RETENTION_DAYS,ExecutionTimeout=$EXECUTION_TIMEOUT \
         --timeout 60 \
