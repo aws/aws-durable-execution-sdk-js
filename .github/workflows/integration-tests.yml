@@ -74,6 +74,8 @@ jobs:
           echo "Examples hello-world.js found"
         else
           echo "ERROR: Examples hello-world.js not found"
+          echo "Available files in examples/dist:"
+          find packages/examples/dist -name "*.js" || echo "No JS files found"
           exit 1
         fi
     
@@ -130,10 +132,11 @@ jobs:
         ls -la
         echo "Looking for packages directory:"
         ls -la packages/ || echo "No packages directory"
-        echo "Looking for any dist directories:"
-        find . -name "dist" -type d || echo "No dist directories found"
-        echo "Looking for any SDK files:"
-        find . -name "*durable*" || echo "No SDK files found"
+        echo "Looking for examples dist:"
+        ls -la packages/examples/dist/examples/ || echo "No examples dist found"
+        echo "Looking for root node_modules dependencies:"
+        ls -la node_modules/@amzn/ || echo "No @amzn in root node_modules"
+        ls -la node_modules/tslib/ || echo "No tslib in root node_modules"
     
     - name: Install AWS CLI (for local act runs)
       run: |
