@@ -22,6 +22,8 @@
     "release": "npm run build && mkdir -p build/durable-executions-typescript-sdk-examples && npm run copy-files",
     "prebuild": "rm -rf build/durable-executions-typescript-sdk-examples",
     "build": "tsc",
+    "package": "node scripts/package.js",
+    "deploy": "bash scripts/deploy-lambda.sh",
     "prerelease": "npm run generate-template",
     "copy-files": "npm run copy-lambda && npm run copy-examples && npm run copy-source && npm run copy-catalog",
     "copy-lambda": "cp -r configuration/aws_lambda build",
