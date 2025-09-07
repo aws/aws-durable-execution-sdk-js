@@ -37,23 +37,34 @@ try {
     );
 } catch {}
 
-// Copy only the dependencies we need from root node_modules
-console.log('Copying required dependencies...');
+// Copy all dependencies from root node_modules except large unnecessary ones
+console.log('Copying dependencies from root node_modules...');
 fs.mkdirSync(path.join(tempDir, 'node_modules'), { recursive: true });
 
-// Copy the SDK dependencies
-const requiredDeps = [
-    '@amzn',
-    'tslib',
-    '@smithy',
-    '@aws-sdk'
+// Exclude large dev dependencies we don't need in Lambda
+const excludeDeps = [
+    'typescript',
+    'jest',
+    'eslint',
+    '@types',
+    'prettier',
+    'webpack',
+    'babel'
 ];
 
-for (const dep of requiredDeps) {
-    const srcPath = path.join('../../node_modules', dep);
+const rootNodeModules = '../../node_modules';
+const deps = fs.readdirSync(rootNodeModules);
+
+for (const dep of deps) {
+    // Skip if it's in our exclude list
+    if (excludeDeps.some(exclude => dep.includes(exclude))) {
+        continue;
+    }
+    
+    const srcPath = path.join(rootNodeModules, dep);
     const destPath = path.join(tempDir, 'node_modules', dep);
     
-    if (fs.existsSync(srcPath)) {
+    if (fs.statSync(srcPath).isDirectory()) {
         console.log(`Copying ${dep}...`);
         execSync(`cp -r "${srcPath}" "${path.dirname(destPath)}"`);
     }
