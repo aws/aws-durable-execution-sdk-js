@@ -5,12 +5,20 @@ import { OperationStatus, Operation } from '@amzn/dex-internal-sdk';
 describe('waitBeforeContinue', () => {
   let mockContext: jest.Mocked<ExecutionContext>;
   let mockHasRunningOperations: jest.Mock;
+  let timers: NodeJS.Timeout[] = [];
 
   beforeEach(() => {
     mockContext = {
       getStepData: jest.fn(),
     } as any;
     mockHasRunningOperations = jest.fn();
+    timers = [];
+  });
+
+  afterEach(() => {
+    // Clean up any remaining timers
+    timers.forEach(timer => clearTimeout(timer));
+    timers = [];
   });
 
   test('should resolve when operations complete', async () => {
@@ -28,9 +36,10 @@ describe('waitBeforeContinue', () => {
     });
 
     // Complete operations after 50ms
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       operationsRunning = false;
     }, 50);
+    timers.push(timer);
 
     const result = await resultPromise;
     expect(result.reason).toBe('operations');
@@ -68,9 +77,10 @@ describe('waitBeforeContinue', () => {
     });
 
     // Change status after 50ms
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       stepStatus = OperationStatus.SUCCEEDED;
     }, 50);
+    timers.push(timer);
 
     const result = await resultPromise;
     expect(result.reason).toBe('status');

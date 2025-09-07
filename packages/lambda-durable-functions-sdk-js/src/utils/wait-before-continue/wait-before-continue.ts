@@ -54,13 +54,20 @@ export async function waitBeforeContinue(
   } = options;
 
   const promises: Promise<WaitBeforeContinueResult>[] = [];
+  const timers: NodeJS.Timeout[] = [];
+
+  // Cleanup function to clear all timers
+  const cleanup = () => {
+    timers.forEach(timer => clearTimeout(timer));
+  };
 
   // Timer promise - resolves when scheduled time is reached
   if (checkTimer && scheduledTimestamp) {
     const timerPromise = new Promise<WaitBeforeContinueResult>(resolve => {
       const timeLeft = Number(scheduledTimestamp) - Date.now();
       if (timeLeft > 0) {
-        setTimeout(() => resolve({ reason: 'timer', timerExpired: true }), timeLeft);
+        const timer = setTimeout(() => resolve({ reason: 'timer', timerExpired: true }), timeLeft);
+        timers.push(timer);
       } else {
         resolve({ reason: 'timer', timerExpired: true });
       }
@@ -75,7 +82,8 @@ export async function waitBeforeContinue(
         if (!hasRunningOperations()) {
           resolve({ reason: 'operations' });
         } else {
-          setTimeout(checkOperations, pollingInterval);
+          const timer = setTimeout(checkOperations, pollingInterval);
+          timers.push(timer);
         }
       };
       checkOperations();
@@ -92,7 +100,8 @@ export async function waitBeforeContinue(
         if (originalStatus !== currentStatus) {
           resolve({ reason: 'status' });
         } else {
-          setTimeout(checkStepStatus, pollingInterval);
+          const timer = setTimeout(checkStepStatus, pollingInterval);
+          timers.push(timer);
         }
       };
       checkStepStatus();
@@ -105,8 +114,9 @@ export async function waitBeforeContinue(
     return { reason: 'timeout' };
   }
 
-  // Wait for any condition to be met
+  // Wait for any condition to be met, then cleanup timers
   const result = await Promise.race(promises);
+  cleanup();
 
   // If timer expired, force checkpoint to get fresh data from API
   if (result.reason === 'timer' && result.timerExpired && checkpoint) {
