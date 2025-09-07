@@ -35,12 +35,11 @@ try {
 // Copy node_modules
 execSync(`cp -r node_modules ${tempDir}`);
 
-// Copy SDK by following the symlink to get actual files
-const sdkSourcePath = '../lambda-durable-functions-sdk-js/dist';
+// Copy SDK from top-level node_modules (where it's actually built)
+const topLevelSdkPath = '../../node_modules/@amzn/durable-executions-language-sdk';
 const sdkNodeModulesPath = path.join(tempDir, 'node_modules/@amzn/durable-executions-language-sdk');
-fs.mkdirSync(sdkNodeModulesPath, { recursive: true });
-execSync(`cp -r ${sdkSourcePath}/* ${sdkNodeModulesPath}/`);
-execSync(`cp ../lambda-durable-functions-sdk-js/package.json ${sdkNodeModulesPath}/`);
+execSync(`rm -rf ${sdkNodeModulesPath}`); // Remove the symlink first
+execSync(`cp -r ${topLevelSdkPath} ${path.dirname(sdkNodeModulesPath)}`);
 
 // Create zip
 execSync(`cd ${tempDir} && zip -r ../${example}.zip .`);
