@@ -1,0 +1,145 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ "main", "development" ]
+    paths:
+      - 'packages/lambda-durable-functions-sdk-js/**'
+      - 'packages/examples/**'
+      - '.github/workflows/integration-tests.yml'
+  pull_request:
+    branches: [ "main", "development" ]
+    paths:
+      - 'packages/lambda-durable-functions-sdk-js/**'
+      - 'packages/examples/**'
+      - '.github/workflows/integration-tests.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      examples: ${{ steps.get-examples.outputs.examples }}
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm run install-all
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: built-examples
+        path: |
+          packages/examples/dist/
+          packages/examples/node_modules/
+    
+    - name: Get examples from catalog
+      id: get-examples
+      working-directory: ./packages/examples
+      run: |
+        echo "examples=$(jq -c '.examples' examples-catalog.json)" >> $GITHUB_OUTPUT
+
+  integration-test:
+    needs: setup
+    runs-on: ubuntu-latest
+    name: ${{ matrix.example.name }}
+    strategy:
+      matrix:
+        example: ${{ fromJson(needs.setup.outputs.examples) }}
+      fail-fast: false
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: built-examples
+        path: packages/examples/
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy Lambda function - ${{ matrix.example.name }}
+      working-directory: ./packages/examples
+      env:
+        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      run: |
+        BASE_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          FUNCTION_NAME="${BASE_NAME}-PR-${{ github.event.number }}"
+        else
+          FUNCTION_NAME="${BASE_NAME}"
+        fi
+        echo "FUNCTION_NAME=$FUNCTION_NAME" >> $GITHUB_ENV
+        
+        ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole"
+        
+        echo "Packaging Lambda function..."
+        # Create a temporary directory for this specific function
+        mkdir -p temp-package
+        
+        # Copy the specific example file
+        HANDLER_FILE=$(echo "${{ matrix.example.handler }}" | sed 's/\.handler$//')
+        cp dist/examples/${HANDLER_FILE}.js temp-package/
+        cp dist/examples/${HANDLER_FILE}.js.map temp-package/ 2>/dev/null || true
+        
+        # Copy node_modules
+        cp -r node_modules temp-package/
+        
+        # Create zip from temp directory
+        cd temp-package
+        zip -r ../lambda-function.zip .
+        cd ..
+        rm -rf temp-package
+        
+        echo "Deploying function: $FUNCTION_NAME with handler: ${{ matrix.example.handler }}"
+        
+        if aws lambda get-function --function-name "$FUNCTION_NAME" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+          echo "Updating existing function: $FUNCTION_NAME"
+          aws lambda update-function-code \
+            --function-name "$FUNCTION_NAME" \
+            --zip-file fileb://lambda-function.zip \
+            --region "${{ env.AWS_REGION }}"
+        else
+          echo "Creating new function: $FUNCTION_NAME"
+          aws lambda create-function \
+            --function-name "$FUNCTION_NAME" \
+            --runtime nodejs22.x \
+            --role "$ROLE_ARN" \
+            --handler "${{ matrix.example.handler }}" \
+            --zip-file fileb://lambda-function.zip \
+            --timeout 60 \
+            --memory-size 128 \
+            --region "${{ env.AWS_REGION }}"
+        fi
+    
+    - name: Test Lambda function - ${{ matrix.example.name }}
+      run: |
+        echo "Testing function: $FUNCTION_NAME"
+        # TODO: Add testing logic here
+    
+    - name: Cleanup Lambda function
+      if: always()
+      run: |
+        echo "Deleting function: $FUNCTION_NAME"
+        aws lambda delete-function \
+          --function-name "$FUNCTION_NAME" \
+          --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
