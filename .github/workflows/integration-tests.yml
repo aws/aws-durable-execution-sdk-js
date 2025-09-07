@@ -59,23 +59,12 @@ jobs:
     
     - name: Verify SDK build
       run: |
-        echo "Checking SDK build output..."
-        ls -la packages/lambda-durable-functions-sdk-js/dist/ || echo "SDK dist directory not found"
-        if [ -f "packages/lambda-durable-functions-sdk-js/dist/index.js" ]; then
-          echo "SDK index.js found ($(wc -c < packages/lambda-durable-functions-sdk-js/dist/index.js) bytes)"
-        else
+        if [ ! -f "packages/lambda-durable-functions-sdk-js/dist/index.js" ]; then
           echo "ERROR: SDK index.js not found"
           exit 1
         fi
-        
-        echo "Checking examples build output..."
-        ls -la packages/examples/dist/examples/ || echo "Examples dist directory not found"
-        if [ -f "packages/examples/dist/examples/hello-world.js" ]; then
-          echo "Examples hello-world.js found"
-        else
+        if [ ! -f "packages/examples/dist/examples/hello-world.js" ]; then
           echo "ERROR: Examples hello-world.js not found"
-          echo "Available files in examples/dist:"
-          find packages/examples/dist -name "*.js" || echo "No JS files found"
           exit 1
         fi
     
@@ -131,19 +120,10 @@ jobs:
     
     - name: Verify downloaded artifacts
       run: |
-        echo "Checking downloaded artifacts..."
-        echo "Current directory contents:"
-        ls -la
-        echo "Looking for packages directory:"
-        ls -la packages/
-        echo "What's in examples?"
-        ls -la packages/examples/ || echo "No examples directory"
-        echo "What's in packages/node_modules?"
-        ls -la packages/node_modules/ || echo "No packages/node_modules"
-        echo "Looking for any dist directories:"
-        find packages -name "dist" -type d || echo "No dist directories found"
-        echo "Looking for any node_modules:"
-        find . -name "node_modules" -type d || echo "No node_modules found"
+        if [ ! -f "packages/examples/dist/examples/hello-world.js" ]; then
+          echo "ERROR: Examples not found in artifacts"
+          exit 1
+        fi
     
     - name: Install AWS CLI (for local act runs)
       run: |
@@ -197,13 +177,13 @@ jobs:
         echo "Testing function: $FUNCTION_NAME"
         # TODO: Add testing logic here
     
-    # - name: Cleanup Lambda function
-    #   if: always()
-    #   env:
-    #     LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-    #   run: |
-    #     echo "Deleting function: $FUNCTION_NAME"
-    #     aws lambda delete-function \
-    #       --function-name "$FUNCTION_NAME" \
-    #       --endpoint-url "$LAMBDA_ENDPOINT" \
-    #       --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
+    - name: Cleanup Lambda function
+      if: always()
+      env:
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+      run: |
+        echo "Deleting function: $FUNCTION_NAME"
+        aws lambda delete-function \
+          --function-name "$FUNCTION_NAME" \
+          --endpoint-url "$LAMBDA_ENDPOINT" \
+          --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
