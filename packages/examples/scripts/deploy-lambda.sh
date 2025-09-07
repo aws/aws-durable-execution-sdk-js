@@ -16,7 +16,12 @@ FUNCTION_NAME="${2:-$EXAMPLE}"
 
 # Source environment variables
 set -a
-source ../../.secrets 2>/dev/null || echo "Warning: .secrets file not found"
+if [ -n "$GITHUB_ACTIONS" ]; then
+    # Running in GitHub Actions - don't source .secrets
+    :
+else
+    source ../../.secrets 2>/dev/null || echo "Warning: .secrets file not found"
+fi
 set +a
 
 # Required environment variables
@@ -58,7 +63,6 @@ if [ ! -f "$ZIP_FILE" ]; then
     exit 1
 fi
 
-FUNCTION_NAME="$EXAMPLE"
 ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole"
 
 # Verify role exists

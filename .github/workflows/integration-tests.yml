@@ -151,13 +151,13 @@ jobs:
         echo "Testing function: $FUNCTION_NAME"
         # TODO: Add testing logic here
     
-    - name: Cleanup Lambda function
-      if: always()
-      env:
-        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-      run: |
-        echo "Deleting function: $FUNCTION_NAME"
-        aws lambda delete-function \
-          --function-name "$FUNCTION_NAME" \
-          --endpoint-url "$LAMBDA_ENDPOINT" \
-          --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
+    # - name: Cleanup Lambda function
+    #   if: always()
+    #   env:
+    #     LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+    #   run: |
+    #     echo "Deleting function: $FUNCTION_NAME"
+    #     aws lambda delete-function \
+    #       --function-name "$FUNCTION_NAME" \
+    #       --endpoint-url "$LAMBDA_ENDPOINT" \
+    #       --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
