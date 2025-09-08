@@ -188,7 +188,7 @@ jobs:
         echo "Response:"
         cat /tmp/response.json
     
-    - name: List Durable Executions - ${{ matrix.example.name }}
+    - name: Find Durable Execution - ${{ matrix.example.name }}
       env:
         LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
       run: |
