@@ -188,6 +188,40 @@ jobs:
         echo "Response:"
         cat /tmp/response.json
     
+    - name: List Durable Executions - ${{ matrix.example.name }}
+      env:
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+      run: |
+        echo "Listing durable executions for function: $FUNCTION_NAME"
+        aws lambda list-durable-executions \
+          --function-name "$FUNCTION_NAME" \
+          --region "${{ env.AWS_REGION }}" \
+          --endpoint-url "$LAMBDA_ENDPOINT" \
+          --cli-binary-format raw-in-base64-out \
+          --status-filter SUCCEEDED \
+          > /tmp/executions.json
+        echo "Durable Executions:"
+        cat /tmp/executions.json
+        
+        # Extract the first execution ARN for history retrieval
+        EXECUTION_ARN=$(jq -r '.DurableExecutions[0].DurableExecutionArn // empty' /tmp/executions.json)
+        echo "EXECUTION_ARN=$EXECUTION_ARN" >> $GITHUB_ENV
+    
+    - name: Get Durable Execution History - ${{ matrix.example.name }}
+      if: env.EXECUTION_ARN != ''
+      env:
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+      run: |
+        echo "Getting execution history for: $EXECUTION_ARN"
+        aws lambda get-durable-execution-history \
+          --durable-execution-arn "$EXECUTION_ARN" \
+          --region "${{ env.AWS_REGION }}" \
+          --endpoint-url "$LAMBDA_ENDPOINT" \
+          --cli-binary-format raw-in-base64-out \
+          /tmp/history.json
+        echo "Execution History:"
+        cat /tmp/history.json
+    
     - name: Cleanup Lambda function
       if: always()
       env:
