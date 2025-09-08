@@ -218,7 +218,7 @@ jobs:
           --region "${{ env.AWS_REGION }}" \
           --endpoint-url "$LAMBDA_ENDPOINT" \
           --cli-binary-format raw-in-base64-out \
-          /tmp/history.json
+          > /tmp/history.json
         echo "Execution History:"
         cat /tmp/history.json
     
