@@ -173,10 +173,20 @@ jobs:
         # Deploy using npm script
         npm run deploy -- "$HANDLER_FILE" "$FUNCTION_NAME"
     
-    - name: Test Lambda function - ${{ matrix.example.name }}
+    - name: Invoke Lambda function - ${{ matrix.example.name }}
+      env:
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
       run: |
         echo "Testing function: $FUNCTION_NAME"
-        # TODO: Add testing logic here
+        aws lambda invoke \
+          --function-name "$FUNCTION_NAME" \
+          --cli-binary-format raw-in-base64-out \
+          --payload '{"name": "World"}' \
+          --region "${{ env.AWS_REGION }}" \
+          --endpoint-url "$LAMBDA_ENDPOINT" \
+          /tmp/response.json
+        echo "Response:"
+        cat /tmp/response.json
     
     - name: Cleanup Lambda function
       if: always()
