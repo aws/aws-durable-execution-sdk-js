@@ -475,6 +475,22 @@
       ],
       "documentation":"<p>Returns details about a Lambda function URL.</p>"
     },
+    "GetDurableExecutionHistory":{
+      "name":"GetDurableExecutionHistory",
+      "http":{
+        "method":"GET",
+        "requestUri":"/2025-12-01/durable-executions/{DurableExecutionArn}/history",
+        "responseCode":200
+      },
+      "input":{"shape":"GetDurableExecutionHistoryRequest"},
+      "output":{"shape":"GetDurableExecutionHistoryResponse"},
+      "errors":[
+        {"shape":"InvalidParameterValueException"},
+        {"shape":"TooManyRequestsException"},
+        {"shape":"ServiceException"},
+        {"shape":"ResourceNotFoundException"}
+      ]
+    },
     "GetLayerVersion":{
       "name":"GetLayerVersion",
       "http":{
@@ -666,6 +682,21 @@
         {"shape":"TooManyRequestsException"}
       ],
       "documentation":"<p>Lists event source mappings. Specify an <code>EventSourceArn</code> to show only event source mappings for a single event source.</p>"
+    },
+    "ListDurableExecutions":{
+      "name":"ListDurableExecutions",
+      "http":{
+        "method":"GET",
+        "requestUri":"/2025-12-01/durable-executions",
+        "responseCode":200
+      },
+      "input":{"shape":"ListDurableExecutionsRequest"},
+      "output":{"shape":"ListDurableExecutionsResponse"},
+      "errors":[
+        {"shape":"InvalidParameterValueException"},
+        {"shape":"TooManyRequestsException"},
+        {"shape":"ServiceException"}
+      ]
     },
     "ListFunctionEventInvokeConfigs":{
       "name":"ListFunctionEventInvokeConfigs",
@@ -2096,6 +2127,21 @@
       },
       "documentation":"<p>A configuration object that specifies the destination of an event after Lambda processes it.</p>"
     },
+    "DurableExecutionArn":{
+      "type":"string",
+      "max":1024,
+      "min":1
+    },
+    "DurableExecutionName":{
+      "type":"string",
+      "max":64,
+      "min":1,
+      "pattern":"[a-zA-Z0-9-_]+"
+    },
+    "DurableExecutions":{
+      "type":"list",
+      "member":{"shape":"Execution"}
+    },
     "EC2AccessDeniedException":{
       "type":"structure",
       "members":{
@@ -2394,6 +2440,53 @@
       "min":0,
       "pattern":"[a-zA-Z0-9._\\-]+"
     },
+    "Event":{
+      "type":"structure",
+      "members":{
+        "EventType":{"shape":"EventType"},
+        "EventId":{"shape":"EventId"},
+        "EventTimestamp":{"shape":"ExecutionTimestamp"}
+      }
+    },
+    "EventId":{
+      "type":"integer",
+      "box":true,
+      "min":1
+    },
+    "Events":{
+      "type":"list",
+      "member":{"shape":"Event"}
+    },
+    "EventType":{
+      "type":"string",
+      "enum":[
+        "ExecutionStarted",
+        "ExecutionSucceeded",
+        "ExecutionFailed"
+      ]
+    },
+    "Execution":{
+      "type":"structure",
+      "members":{
+        "DurableExecutionArn":{"shape":"DurableExecutionArn"},
+        "DurableExecutionName":{"shape":"DurableExecutionName"},
+        "FunctionArn":{"shape":"FunctionArn"},
+        "Status":{"shape":"ExecutionStatus"},
+        "StartDate":{"shape":"ExecutionTimestamp"},
+        "StopDate":{"shape":"ExecutionTimestamp"}
+      }
+    },
+    "ExecutionStatus":{
+      "type":"string",
+      "enum":[
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "TIMED_OUT",
+        "STOPPED"
+      ]
+    },
+    "ExecutionTimestamp":{"type":"timestamp"},
     "FileSystemArn":{
       "type":"string",
       "max":200,
@@ -2827,6 +2920,44 @@
           "location":"uri",
           "locationName":"UUID"
         }
+      }
+    },
+    "GetDurableExecutionHistoryRequest":{
+      "type":"structure",
+      "required":["DurableExecutionArn"],
+      "members":{
+        "DurableExecutionArn":{
+          "shape":"DurableExecutionArn",
+          "location":"uri",
+          "locationName":"DurableExecutionArn"
+        },
+        "IncludeExecutionData":{
+          "shape":"IncludeExecutionData",
+          "location":"querystring",
+          "locationName":"IncludeExecutionData"
+        },
+        "MaxItems":{
+          "shape":"ItemCount",
+          "location":"querystring",
+          "locationName":"MaxItems"
+        },
+        "Marker":{
+          "shape":"PaginationMarker",
+          "location":"querystring",
+          "locationName":"Marker"
+        },
+        "ReverseOrder":{
+          "shape":"ReverseOrder",
+          "location":"querystring",
+          "locationName":"ReverseOrder"
+        }
+      }
+    },
+    "GetDurableExecutionHistoryResponse":{
+      "type":"structure",
+      "members":{
+        "Events":{"shape":"Events"},
+        "NextMarker":{"shape":"PaginationMarker"}
       }
     },
     "GetFunctionCodeSigningConfigRequest":{
@@ -3525,6 +3656,15 @@
         "InvalidImage"
       ]
     },
+    "IncludeExecutionData":{
+      "type":"boolean",
+      "box":true
+    },
+    "Integer":{"type":"integer"},
+    "ItemCount":{
+      "type":"integer",
+      "min":0
+    },
     "Layer":{
       "type":"structure",
       "members":{
@@ -3766,6 +3906,68 @@
           "shape":"CodeSigningConfigList",
           "documentation":"<p>The code signing configurations</p>"
         }
+      }
+    },
+    "ListDurableExecutionsRequest":{
+      "type":"structure",
+      "members":{
+        "FunctionName":{
+          "shape":"FunctionName",
+          "location":"querystring",
+          "locationName":"FunctionName"
+        },
+        "FunctionVersion":{
+          "shape":"Version",
+          "location":"querystring",
+          "locationName":"FunctionVersion"
+        },
+        "DurableExecutionName":{
+          "shape":"DurableExecutionName",
+          "location":"querystring",
+          "locationName":"DurableExecutionName"
+        },
+        "StatusFilter":{
+          "shape":"ExecutionStatus",
+          "location":"querystring",
+          "locationName":"StatusFilter"
+        },
+        "TimeFilter":{
+          "shape":"TimeFilter",
+          "location":"querystring",
+          "locationName":"TimeFilter"
+        },
+        "TimeAfter":{
+          "shape":"ExecutionTimestamp",
+          "location":"querystring",
+          "locationName":"TimeAfter"
+        },
+        "TimeBefore":{
+          "shape":"ExecutionTimestamp",
+          "location":"querystring",
+          "locationName":"TimeBefore"
+        },
+        "ReverseOrder":{
+          "shape":"ReverseOrder",
+          "location":"querystring",
+          "locationName":"ReverseOrder"
+        },
+        "Marker":{
+          "shape":"PaginationMarker",
+          "location":"querystring",
+          "locationName":"Marker"
+        },
+        "MaxItems":{
+          "shape":"ItemCount",
+          "location":"querystring",
+          "locationName":"MaxItems"
+        }
+      }
+    },
+    "ListDurableExecutionsResponse":{
+      "type":"structure",
+      "members":{
+        "DurableExecutions":{"shape":"DurableExecutions"},
+        "NextMarker":{"shape":"PaginationMarker"}
       }
     },
     "ListEventSourceMappingsRequest":{
@@ -4284,6 +4486,11 @@
       "min":1,
       "pattern":".*"
     },
+    "PaginationMarker":{
+      "type":"string",
+      "max":1024,
+      "min":1
+    },
     "PackageType":{
       "type":"string",
       "enum":[
@@ -4797,6 +5004,10 @@
       "type":"string",
       "pattern":"arn:(aws[a-zA-Z-]*)?:iam::\\d{12}:role/?[a-zA-Z_0-9+=,.@\\-_/]+"
     },
+    "ReverseOrder":{
+      "type":"boolean",
+      "box":true
+    },
     "Runtime":{
       "type":"string",
       "enum":[
@@ -5023,6 +5234,13 @@
         "ReservedFunctionConcurrentInvocationLimitExceeded",
         "ReservedFunctionInvocationRateLimitExceeded",
         "CallerRateLimitExceeded"
+      ]
+    },
+    "TimeFilter":{
+      "type":"string",
+      "enum":[
+        "START",
+        "END"
       ]
     },
     "Timeout":{
