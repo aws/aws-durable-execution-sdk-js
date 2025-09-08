@@ -140,6 +140,7 @@ else
         --timeout 60 \
         --memory-size 128 \
         --environment Variables="{DEX_ENDPOINT=$LAMBDA_ENDPOINT}" \
+        --kms-key-arn "$KMS_KEY_ARN" \
         --endpoint-url "$LAMBDA_ENDPOINT" \
         --region "$AWS_REGION" \
         --output json
