@@ -92,7 +92,7 @@ jobs:
       id: get-examples
       working-directory: ./packages/examples
       run: |
-        echo "examples=$(jq -c '.examples | .[0:1]' examples-catalog.json)" >> $GITHUB_OUTPUT
+        echo "examples=$(jq -c '.examples | map(select(.integration == true))' examples-catalog.json)" >> $GITHUB_OUTPUT
 
   integration-test:
     needs: setup
