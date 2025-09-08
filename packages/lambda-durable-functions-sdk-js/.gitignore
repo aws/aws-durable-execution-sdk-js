@@ -7,3 +7,4 @@
 .aws-sam/*
 *.zip
 .DS_Store
+*.tgz

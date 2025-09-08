@@ -8,15 +8,11 @@ rimraf.sync("./dist");
 
 console.log("📦 Building library with peer dependencies as external...\n");
 
-// Step 1: Identify all dependencies that should be external
+// Identify all dependencies that should be external
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf8"));
 const externalDependencies = [
-  // Runtime dependencies (if any)
-  ...Object.keys(packageJson.dependencies || {}),
   // Peer dependencies (should always be external)
   ...Object.keys(packageJson.peerDependencies || {}),
-  // Always external
-  "aws-sdk",
 ];
 
 console.log("📋 External dependencies (not bundled):");
@@ -24,7 +20,7 @@ externalDependencies.forEach((dep) => {
   console.log(`   🚫 ${dep}`);
 });
 
-// Step 2: Build library code bundle (with all dependencies marked as external)
+// Build library code bundle (with all dependencies marked as external)
 console.log("\n📚 Building library code bundle...");
 const libResult = esbuild.buildSync({
   entryPoints: ["./src/index.ts"],
@@ -33,7 +29,6 @@ const libResult = esbuild.buildSync({
   target: "node16",
   format: "cjs",
   outfile: "./dist/index.js",
-  external: externalDependencies, // Mark all dependencies as external
   metafile: true,
 });
 
@@ -109,11 +104,9 @@ function generateBundleReport(libMetafile) {
   console.log("\n💡 Installation Instructions for Users:");
   console.log("======================================");
   console.log("Users will need to install peer dependencies separately:");
-  externalDependencies
-    .filter((dep) => dep !== "aws-sdk")
-    .forEach((dep) => {
-      console.log(`   npm install ${dep}`);
-    });
+  externalDependencies.forEach((dep) => {
+    console.log(`   npm install ${dep}`);
+  });
 
   return { libOutput, totalLibSize, totalLibOutput };
 }
