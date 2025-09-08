@@ -157,6 +157,7 @@ jobs:
         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
         INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID }}
+        KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
       run: |
         # Build function name for GitHub Actions
         BASE_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript

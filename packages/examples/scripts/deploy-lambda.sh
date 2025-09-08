@@ -103,7 +103,17 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --endpoint-url "$LAM
         --zip-file fileb://"$ZIP_FILE" \
         --endpoint-url "$LAMBDA_ENDPOINT" \
         --region "$AWS_REGION"
-    
+
+    # Update environment variables
+    echo "Updating environment variables..."
+    aws lambda update-function-configuration \
+        --function-name "$FUNCTION_NAME" \
+        --environment Variables="{DEX_ENDPOINT=$LAMBDA_ENDPOINT}" \
+        --kms-key-arn "$KMS_KEY_ARN" \
+        --endpoint-url "$LAMBDA_ENDPOINT" \
+        --region "$AWS_REGION" \
+        --output json
+
     # Check if DurableConfig needs updating
     if [ "$CURRENT_RETENTION" != "$RETENTION_DAYS" ] || [ "$CURRENT_TIMEOUT" != "$EXECUTION_TIMEOUT" ]; then
         echo "DurableConfig differs, updating configuration..."
@@ -129,6 +139,8 @@ else
         --durable-config RetentionPeriodInDays=$RETENTION_DAYS,ExecutionTimeout=$EXECUTION_TIMEOUT \
         --timeout 60 \
         --memory-size 128 \
+        --environment Variables="{DEX_ENDPOINT=$LAMBDA_ENDPOINT}" \
+        --kms-key-arn "$KMS_KEY_ARN" \
         --endpoint-url "$LAMBDA_ENDPOINT" \
         --region "$AWS_REGION" \
         --output json

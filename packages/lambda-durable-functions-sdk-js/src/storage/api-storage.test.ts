@@ -105,7 +105,7 @@ describe("ApiStorage", () => {
     }
   });
 
-  test.skip("should throw error when environment variable is missing", () => {
+  test("should throw error when environment variable is missing", () => {
     // Save original environment
     const originalEnv = process.env;
 
