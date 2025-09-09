@@ -49,7 +49,7 @@ export class OperationStorage {
     return false; // No data found
   }
 
-  getCompletedOperations(): OperationWithData[] {
+  getOperations(): OperationWithData[] {
     return (
       this.indexedOperations
         .getOperations()

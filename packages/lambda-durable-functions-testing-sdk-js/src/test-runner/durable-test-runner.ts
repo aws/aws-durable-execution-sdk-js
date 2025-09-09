@@ -70,7 +70,7 @@ export interface TestResultError {
 
 export interface TestResult<T> {
   // Returns a list of all completed operations
-  getCompletedOperations(params?: {
+  getOperations(params?: {
     // Filter by operation status (completed, failed, etc.)
     status: OperationStatus;
   }): OperationWithData[];
@@ -96,7 +96,7 @@ export interface TestResult<T> {
 export interface Invocation {
   id: string;
   // Get completed steps in this invocation
-  getCompletedOperations(params?: {
+  getOperations(params?: {
     status: OperationStatus;
   }): OperationWithData[];
 }

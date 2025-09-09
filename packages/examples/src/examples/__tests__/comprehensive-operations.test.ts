@@ -109,6 +109,6 @@ describe("comprehensive-operations", () => {
 
     // Verify execution completed successfully
     expect(execution.getResult()).toBeDefined();
-    expect(execution.getCompletedOperations().length).toBeGreaterThan(0);
+    expect(execution.getOperations().length).toBeGreaterThan(0);
   });
 });

@@ -27,13 +27,13 @@ export class ResultFormatter<ResultType> {
     invocations: Invocation[]
   ): TestResult<ResultType> {
     return {
-      getCompletedOperations: (params) => {
+      getOperations: (params) => {
         if (params) {
           return operationStorage
-            .getCompletedOperations()
+            .getOperations()
             .filter((op) => op.getStatus() === params.status);
         }
-        return operationStorage.getCompletedOperations();
+        return operationStorage.getOperations();
       },
       getInvocations() {
         return invocations;

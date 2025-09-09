@@ -71,7 +71,7 @@ describe("Callback Operations Integration", () => {
     });
 
     // Verify the callback operation was tracked
-    const completedOperations = result.getCompletedOperations();
+    const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(1);
     expect(completedOperations[0].getType()).toBe(OperationType.CALLBACK);
   });
@@ -303,7 +303,7 @@ describe("Callback Operations Integration", () => {
     });
 
     // Verify all callback operations were tracked
-    const completedOperations = result.getCompletedOperations();
+    const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(3);
     expect(
       completedOperations.every((op) => op.getType() === OperationType.CALLBACK)
@@ -362,7 +362,7 @@ describe("Callback Operations Integration", () => {
     });
 
     // Verify all operations were tracked
-    const completedOperations = result.getCompletedOperations();
+    const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(3);
 
     const operationTypes = completedOperations.map((op) => op.getType());
