@@ -37,7 +37,7 @@ describe("LocalDurableTestRunner Integration", () => {
     });
 
     // Verify operations were tracked
-    const completedOperations = result.getCompletedOperations();
+    const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(1);
 
     // Verify MockOperation data can be accessed
@@ -100,7 +100,7 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(typeof resultData.timestamp).toBe("number");
 
     // Should have no operations for simple execution
-    expect(result.getCompletedOperations()).toHaveLength(0);
+    expect(result.getOperations()).toHaveLength(0);
     // Should have exactly one invocation for simple execution
     expect(result.getInvocations()).toHaveLength(1);
   });
@@ -135,7 +135,7 @@ describe("LocalDurableTestRunner Integration", () => {
     });
 
     // Should have tracked multiple wait operations
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
     expect(operations.length).toEqual(2);
 
     // Verify MockOperation data for both wait operations
@@ -173,7 +173,7 @@ describe("LocalDurableTestRunner Integration", () => {
     });
 
     // Should have tracked step operation
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
     expect(operations.length).toEqual(1);
 
     // Verify MockOperation data for step operation
@@ -266,7 +266,7 @@ describe("LocalDurableTestRunner Integration", () => {
     });
 
     // Should have tracked step operation
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
     expect(operations.length).toEqual(2);
 
     // Verify MockOperation data for context operation
@@ -316,7 +316,7 @@ describe("LocalDurableTestRunner Integration", () => {
     });
 
     // Verify operations were tracked
-    const completedOperations = result.getCompletedOperations();
+    const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(1);
 
     // Verify retries
@@ -362,7 +362,7 @@ describe("LocalDurableTestRunner Integration", () => {
     });
 
     // Verify operations were tracked
-    const completedOperations = result.getCompletedOperations();
+    const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(1);
 
     // Verify retries
@@ -411,7 +411,7 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(result.getResult()).toEqual("parent-context");
 
     // Should have tracked step operation
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
     expect(operations.length).toEqual(6);
 
     const parentChildren = parentContextStep.getChildOperations();
@@ -475,7 +475,7 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(typeof resultData.result.timestamp).toBe("number");
 
     // Verify that operations were tracked
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
 
     // Verify the invocations were tracked - should be exactly 3 invocations
     const invocations = result.getInvocations();
@@ -504,7 +504,7 @@ describe("LocalDurableTestRunner Integration", () => {
 
     // For each invocation, get its operations
     const invocationOperations = invocations.map((inv) =>
-      inv.getCompletedOperations().map((op) => op.getOperationData()?.Id)
+      inv.getOperations().map((op) => op.getOperationData()?.Id)
     );
 
     // Verify exact operations in each invocation
@@ -556,7 +556,7 @@ describe("LocalDurableTestRunner Integration", () => {
     });
 
     // Verify all operations completed successfully
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
     console.log(operations.map((operation) => operation.getOperationData()));
     expect(operations).toHaveLength(8); // 3 parallel waits + 3 parallel contexts + 1 parallel operation + 1 step
 

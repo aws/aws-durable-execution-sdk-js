@@ -798,9 +798,9 @@ describe("TestExecutionOrchestrator", () => {
       expect(invocations[0]?.id).toBe(firstInvocationId);
       expect(invocations[1]?.id).toBe(secondInvocationId);
 
-      // Verify each invocation has the getCompletedOperations function
-      expect(typeof invocations[0]?.getCompletedOperations).toBe("function");
-      expect(typeof invocations[1]?.getCompletedOperations).toBe("function");
+      // Verify each invocation has the getOperations function
+      expect(typeof invocations[0]?.getOperations).toBe("function");
+      expect(typeof invocations[1]?.getOperations).toBe("function");
     });
 
     it("should reset invocations when starting a new execution", async () => {
@@ -895,11 +895,11 @@ describe("TestExecutionOrchestrator", () => {
       jest.spyOn(mockOperationResult, "getStatus").mockReturnValue("SUCCEEDED");
 
       jest
-        .spyOn(mockOperationStorage, "getCompletedOperations")
+        .spyOn(mockOperationStorage, "getOperations")
         .mockReturnValue([mockOperationResult]);
 
       // Now get operations for the invocation
-      const ops = invocations[0]?.getCompletedOperations();
+      const ops = invocations[0]?.getOperations();
       expect(ops).toHaveLength(1);
       expect(ops[0]?.getId()).toBe(operationId);
     });

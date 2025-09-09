@@ -60,7 +60,7 @@ describe("OperationStorage", () => {
         mockCallback
       );
 
-      expect(storage.getCompletedOperations()).toEqual([]);
+      expect(storage.getOperations()).toEqual([]);
     });
   });
 
@@ -74,7 +74,7 @@ describe("OperationStorage", () => {
 
       storage.populateOperations(sampleOperations);
 
-      expect(storage.getCompletedOperations()).toHaveLength(
+      expect(storage.getOperations()).toHaveLength(
         sampleOperations.length
       );
     });
@@ -96,7 +96,7 @@ describe("OperationStorage", () => {
         })
       );
 
-      expect(storage.getCompletedOperations()).toHaveLength(
+      expect(storage.getOperations()).toHaveLength(
         sampleOperations.length
       );
     });
@@ -112,7 +112,7 @@ describe("OperationStorage", () => {
 
       storage.populateOperations(sampleOperations);
 
-      expect(storage.getCompletedOperations()).toHaveLength(
+      expect(storage.getOperations()).toHaveLength(
         sampleOperations.length
       );
     });

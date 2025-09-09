@@ -61,7 +61,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     });
 
     // Should have tracked only parent operation since child was mocked
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
     expect(operations.length).toEqual(2);
 
     // Verify MockOperation data for context operation
@@ -107,7 +107,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
       message: "Mocked error",
     });
 
-    const operations = result.getCompletedOperations();
+    const operations = result.getOperations();
     expect(operations.length).toEqual(1);
   });
 

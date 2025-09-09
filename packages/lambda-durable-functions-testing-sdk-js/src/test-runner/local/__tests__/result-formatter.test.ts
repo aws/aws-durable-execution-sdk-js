@@ -40,7 +40,7 @@ describe("ResultFormatter", () => {
         }),
       ];
 
-      mockOperationStorage.getCompletedOperations.mockReturnValue(
+      mockOperationStorage.getOperations.mockReturnValue(
         mockOperations
       );
 
@@ -51,8 +51,8 @@ describe("ResultFormatter", () => {
 
       // Create mock invocations
       const mockInvocations = [
-        { id: "inv-1", getCompletedOperations: jest.fn() },
-        { id: "inv-2", getCompletedOperations: jest.fn() },
+        { id: "inv-1", getOperations: jest.fn() },
+        { id: "inv-2", getOperations: jest.fn() },
       ];
 
       const testResult = resultFormatter.formatTestResult(
@@ -61,7 +61,7 @@ describe("ResultFormatter", () => {
         mockInvocations
       );
 
-      expect(testResult.getCompletedOperations()).toEqual(mockOperations);
+      expect(testResult.getOperations()).toEqual(mockOperations);
       expect(testResult.getInvocations()).toEqual(mockInvocations);
       expect(testResult.getResult()).toEqual({
         success: true,
@@ -99,7 +99,7 @@ describe("ResultFormatter", () => {
       );
 
       const mockOperations = [succeededOp, failedOp];
-      mockOperationStorage.getCompletedOperations.mockReturnValue(
+      mockOperationStorage.getOperations.mockReturnValue(
         mockOperations
       );
 
@@ -115,14 +115,14 @@ describe("ResultFormatter", () => {
       );
 
       // Test filtering by SUCCEEDED status
-      const succeededOps = testResult.getCompletedOperations({
+      const succeededOps = testResult.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(succeededOps).toHaveLength(1);
       expect(succeededOps[0].getStatus()).toBe(OperationStatus.SUCCEEDED);
 
       // Test filtering by FAILED status
-      const failedOps = testResult.getCompletedOperations({
+      const failedOps = testResult.getOperations({
         status: OperationStatus.FAILED,
       });
       expect(failedOps).toHaveLength(1);
@@ -130,7 +130,7 @@ describe("ResultFormatter", () => {
     });
 
     it("should pass invocations from parameters to test result", () => {
-      mockOperationStorage.getCompletedOperations.mockReturnValue([]);
+      mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
         status: OperationStatus.SUCCEEDED,
@@ -140,15 +140,15 @@ describe("ResultFormatter", () => {
       const mockInvocations = [
         {
           id: "inv-1",
-          getCompletedOperations: jest.fn().mockReturnValue([]),
+          getOperations: jest.fn().mockReturnValue([]),
         },
         {
           id: "inv-2",
-          getCompletedOperations: jest.fn().mockReturnValue([]),
+          getOperations: jest.fn().mockReturnValue([]),
         },
         {
           id: "inv-3",
-          getCompletedOperations: jest.fn().mockReturnValue([]),
+          getOperations: jest.fn().mockReturnValue([]),
         },
       ];
 
@@ -167,7 +167,7 @@ describe("ResultFormatter", () => {
     });
 
     it("should handle undefined value", () => {
-      mockOperationStorage.getCompletedOperations.mockReturnValue([]);
+      mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
         status: OperationStatus.SUCCEEDED,
@@ -184,7 +184,7 @@ describe("ResultFormatter", () => {
     });
 
     it("should handle non-JSON value by returning raw value", () => {
-      mockOperationStorage.getCompletedOperations.mockReturnValue([]);
+      mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
         status: OperationStatus.SUCCEEDED,
@@ -201,7 +201,7 @@ describe("ResultFormatter", () => {
     });
 
     it("should handle invalid JSON by returning raw value", () => {
-      mockOperationStorage.getCompletedOperations.mockReturnValue([]);
+      mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
         status: OperationStatus.SUCCEEDED,
@@ -246,7 +246,7 @@ describe("ResultFormatter", () => {
           )
       );
 
-      mockOperationStorage.getCompletedOperations.mockReturnValue(
+      mockOperationStorage.getOperations.mockReturnValue(
         mockOperations
       );
 
@@ -261,8 +261,8 @@ describe("ResultFormatter", () => {
         []
       );
 
-      expect(testResult.getCompletedOperations()).toEqual(mockOperations);
-      expect(mockOperationStorage.getCompletedOperations).toHaveBeenCalledTimes(
+      expect(testResult.getOperations()).toEqual(mockOperations);
+      expect(mockOperationStorage.getOperations).toHaveBeenCalledTimes(
         1
       );
     });
@@ -270,7 +270,7 @@ describe("ResultFormatter", () => {
 
   describe("formatExecutionResult", () => {
     it("should handle complex nested JSON data", () => {
-      mockOperationStorage.getCompletedOperations.mockReturnValue([]);
+      mockOperationStorage.getOperations.mockReturnValue([]);
 
       const complexData = {
         success: true,

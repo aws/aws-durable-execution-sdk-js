@@ -153,7 +153,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       // Should have no succeeded operations since submitter failed before callback was created
-      const succeededOperations = result.getCompletedOperations({
+      const succeededOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(succeededOperations.length).toEqual(0);
@@ -197,7 +197,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       // Should have no succeeded operations since submitter failed
-      const succeededOperations = result.getCompletedOperations({
+      const succeededOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(succeededOperations.length).toEqual(0);
@@ -262,7 +262,7 @@ describe("WaitForCallback Operations Integration", () => {
 
       expect(receivedCallbackId).toBeDefined();
 
-      const completedOperations = result.getCompletedOperations();
+      const completedOperations = result.getOperations();
       expect(completedOperations.length).toEqual(3);
     });
 
@@ -427,7 +427,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(sideEffectCounter).toBe(9);
 
       // Should have no succeeded operations since submitter failed
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toEqual(0);
@@ -497,7 +497,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(receivedCallbackId).toBeDefined();
 
       // Should have completed operations with successful callback
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
@@ -578,7 +578,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(resultData.callbackId).toBeDefined();
 
       // Should have completed operations with successful callback
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
@@ -738,7 +738,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       // Verify all callback operations were tracked
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(2);
@@ -833,7 +833,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(typeof resultData.finalStep.timestamp).toBe("number");
 
       // Verify all operations were tracked - should have wait, step, waitForCallback, wait, step
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBe(5);
@@ -935,7 +935,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(childCallbackId).toBeDefined();
       expect(parentCallbackId).not.toBe(childCallbackId);
 
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBe(7);
@@ -1021,7 +1021,7 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Verify operations distribution across invocations
       const invocationOperations = invocations.map(
-        (inv) => inv.getCompletedOperations().length
+        (inv) => inv.getOperations().length
       );
 
       expect(invocationOperations).toHaveLength(5);
@@ -1182,7 +1182,7 @@ describe("WaitForCallback Operations Integration", () => {
       ).toBe(3);
 
       // Should have tracked all operations
-      const completedOperations = result.getCompletedOperations();
+      const completedOperations = result.getOperations();
       expect(completedOperations.length).toBe(12);
     });
   });
@@ -1251,7 +1251,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(receivedCallbackId).toBeDefined();
 
       // Should have completed operations with successful callback
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
@@ -1387,7 +1387,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(receivedCallbackId).toBeDefined();
 
       // Should have completed operations with successful callback
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
@@ -1453,7 +1453,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       // Should have completed operations since mocks were used
-      const completedOperations = result.getCompletedOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
@@ -1500,7 +1500,7 @@ describe("WaitForCallback Operations Integration", () => {
         error: "Mocked callback failure",
       });
 
-      const completedOperations = result.getCompletedOperations();
+      const completedOperations = result.getOperations();
       expect(completedOperations.length).toBeGreaterThan(0);
     });
   });

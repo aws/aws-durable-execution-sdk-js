@@ -33,7 +33,7 @@ export class InvocationTracker {
   createInvocation(invocationId: InvocationId): Invocation {
     const invocation: Invocation = {
       id: invocationId,
-      getCompletedOperations: (params?) => {
+      getOperations: (params?) => {
         return this.getOperationsForInvocation(invocationId, params?.status);
       },
     };
@@ -85,7 +85,7 @@ export class InvocationTracker {
     const opIds = this.invocationOperationsMap.get(invocationId) ?? new Set();
     // Filter by operation ID (belonging to this invocation)
     const operations = this.operationStorage
-      .getCompletedOperations()
+      .getOperations()
       .filter((op) => {
         const id = op.getId();
         return (

@@ -52,7 +52,7 @@ describe("block-example", () => {
     // Verify execution completed successfully
     expect(execution.getResult()).toBeDefined();
 
-    const completedOperations = execution.getCompletedOperations();
+    const completedOperations = execution.getOperations();
     const waitOp = completedOperations.find(
       (op) =>
         op.getType() === OperationType.WAIT &&
