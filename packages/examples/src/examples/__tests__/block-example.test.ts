@@ -7,7 +7,7 @@ import { handler } from "../block-example";
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
-describe("block-example", () => {
+describe("block-example test", () => {
   const durableTestRunner = new LocalDurableTestRunner({
     handlerFunction: handler,
     skipTime: true,

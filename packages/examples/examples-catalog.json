@@ -2,66 +2,21 @@
   "packageName": "DurableExecutionsTypeScriptExamples-1.0",
   "examples": [
     {
-      "name": "Hello World",
-      "description": "A simple hello world example with no durable operations",
-      "handler": "hello-world.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 300
-      }
-    },
-    {
-      "name": "Basic Step",
-      "description": "Basic usage of context.step() to checkpoint a simple operation",
-      "handler": "step-basic.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 300
-      }
-    },
-    {
-      "name": "Named Step",
-      "description": "Using context.step() with a custom name for better observability",
-      "handler": "step-named.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 300
-      }
-    },
-    {
-      "name": "Step with Retry",
-      "description": "Advanced step configuration with retry strategy and semantics",
-      "handler": "step-with-retry.handler",
+      "name": "Block Example",
+      "description": "Advanced child context example",
+      "handler": "block-example.handler",
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 600
       }
     },
     {
-      "name": "Wait State",
-      "description": "Basic usage of context.wait() to pause execution",
-      "handler": "wait.handler",
+      "name": "Comprehensive Operations",
+      "description": "Complex multi-operation example demonstrating all major operations",
+      "handler": "comprehensive-operations.handler",
       "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 300
-      }
-    },
-    {
-      "name": "Named Wait",
-      "description": "Using context.wait() with a custom name",
-      "handler": "wait-named.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 300
-      }
-    },
-    {
-      "name": "Wait for Condition",
-      "description": "Polling until a condition is met using context.waitForCondition()",
-      "handler": "wait-for-condition.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 600
+        "RetentionPeriodInDays": 14,
+        "ExecutionTimeout": 900
       }
     },
     {
@@ -74,36 +29,18 @@
       }
     },
     {
-      "name": "Wait for Callback",
-      "description": "Basic callback waiting",
-      "handler": "wait-for-callback.handler",
+      "name": "Hello World",
+      "description": "A simple hello world example with no durable operations",
+      "handler": "hello-world.handler",
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
       }
     },
     {
-      "name": "Wait for Callback with Submitter",
-      "description": "Waiting for callback with submitter function",
-      "handler": "wait-for-callback-submitter.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 600
-      }
-    },
-    {
-      "name": "Run in Child Context",
-      "description": "Basic usage of context.runInChildContext()",
-      "handler": "run-in-child-context.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 300
-      }
-    },
-    {
-      "name": "Concurrent Operations",
-      "description": "Complex concurrent operations using child contexts",
-      "handler": "concurrent-operations.handler",
+      "name": "Basic Map",
+      "description": "Processing arrays with concurrent operations",
+      "handler": "map-basic.handler",
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
@@ -113,15 +50,6 @@
       "name": "Basic Parallel",
       "description": "Running multiple operations in parallel",
       "handler": "parallel-basic.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 600
-      }
-    },
-    {
-      "name": "Basic Map",
-      "description": "Processing arrays with concurrent operations",
-      "handler": "map-basic.handler",
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
@@ -155,12 +83,57 @@
       }
     },
     {
+      "name": "Promise Combinators",
+      "description": "Complex promise combinator example",
+      "handler": "promise-combinators.handler",
+      "durableConfig": {
+        "RetentionPeriodInDays": 7,
+        "ExecutionTimeout": 600
+      }
+    },
+    {
       "name": "Promise Race",
       "description": "Racing promises to completion",
       "handler": "promise-race.handler",
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
+      }
+    },
+    {
+      "name": "Run in Child Context",
+      "description": "Basic usage of context.runInChildContext()",
+      "handler": "run-in-child-context.handler",
+      "durableConfig": {
+        "RetentionPeriodInDays": 7,
+        "ExecutionTimeout": 300
+      }
+    },
+    {
+      "name": "Basic Step",
+      "description": "Basic usage of context.step() to checkpoint a simple operation",
+      "handler": "step-basic.handler",
+      "durableConfig": {
+        "RetentionPeriodInDays": 7,
+        "ExecutionTimeout": 300
+      }
+    },
+    {
+      "name": "Named Step",
+      "description": "Using context.step() with a custom name for better observability",
+      "handler": "step-named.handler",
+      "durableConfig": {
+        "RetentionPeriodInDays": 7,
+        "ExecutionTimeout": 300
+      }
+    },
+    {
+      "name": "Step with Retry",
+      "description": "Advanced step configuration with retry strategy and semantics",
+      "handler": "step-with-retry.handler",
+      "durableConfig": {
+        "RetentionPeriodInDays": 14,
+        "ExecutionTimeout": 600
       }
     },
     {
@@ -173,39 +146,30 @@
       }
     },
     {
-      "name": "Block Example",
-      "description": "Advanced child context example",
-      "handler": "block-example.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 14,
-        "ExecutionTimeout": 600
-      }
-    },
-    {
-      "name": "Parallel Wait",
-      "description": "Parallel execution with wait operations",
-      "handler": "parallel-wait.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 10,
-        "ExecutionTimeout": 900
-      }
-    },
-    {
-      "name": "Comprehensive Operations",
-      "description": "Complex multi-operation example demonstrating all major operations",
-      "handler": "comprehensive-operations.handler",
-      "durableConfig": {
-        "RetentionPeriodInDays": 14,
-        "ExecutionTimeout": 900
-      }
-    },
-    {
-      "name": "Promise Combinators",
-      "description": "Complex promise combinator example",
-      "handler": "promise-combinators.handler",
+      "name": "Wait State",
+      "description": "Basic usage of context.wait() to pause execution",
+      "handler": "wait.handler",
       "durableConfig": {
         "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 600
+        "ExecutionTimeout": 300
+      }
+    },
+    {
+      "name": "Wait for Callback",
+      "description": "Basic callback waiting",
+      "handler": "wait-for-callback.handler",
+      "durableConfig": {
+        "RetentionPeriodInDays": 7,
+        "ExecutionTimeout": 300
+      }
+    },
+    {
+      "name": "Named Wait",
+      "description": "Using context.wait() with a custom name",
+      "handler": "wait-named.handler",
+      "durableConfig": {
+        "RetentionPeriodInDays": 7,
+        "ExecutionTimeout": 300
       }
     }
   ]

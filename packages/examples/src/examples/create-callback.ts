@@ -11,6 +11,5 @@ export const handler = withDurableFunctions(async (event: any, context: DurableC
     
     // The promise would be resolved by calling SendDurableExecutionCallbackSuccess
     // with the callbackId from an external system
-    
-    return { callbackId, message: "Callback created successfully" };
+    return await callbackPromise;
 });

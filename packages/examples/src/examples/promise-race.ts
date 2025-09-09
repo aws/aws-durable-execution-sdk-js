@@ -11,7 +11,7 @@ export const handler = withDurableFunctions(async (event: any, context: DurableC
         return "slower result";
     });
     
-    const result = await context.promise.race([promise1, promise2, promise3]);
+    const result = await context.promise.race("promise-race", [promise1, promise2, promise3]);
     
     return result;
 });

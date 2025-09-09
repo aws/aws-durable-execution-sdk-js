@@ -14,7 +14,6 @@ export {handler as waitForCondition} from './wait-for-condition';
 // Callback Operations
 export {handler as createCallback} from './create-callback';
 export {handler as waitForCallback} from './wait-for-callback';
-export {handler as waitForCallbackSubmitter} from './wait-for-callback-submitter';
 
 // Concurrency Operations
 export {handler as runInChildContext} from './run-in-child-context';
