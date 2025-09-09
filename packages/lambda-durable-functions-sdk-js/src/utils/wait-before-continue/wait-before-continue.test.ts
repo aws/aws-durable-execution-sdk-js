@@ -1,8 +1,8 @@
-import { waitBeforeContinue } from './wait-before-continue';
-import { ExecutionContext } from '../../types';
-import { OperationStatus, Operation } from '@amzn/dex-internal-sdk';
+import { waitBeforeContinue } from "./wait-before-continue";
+import { ExecutionContext } from "../../types";
+import { OperationStatus, Operation } from "@amzn/dex-internal-sdk";
 
-describe('waitBeforeContinue', () => {
+describe("waitBeforeContinue", () => {
   let mockContext: jest.Mocked<ExecutionContext>;
   let mockHasRunningOperations: jest.Mock;
   let timers: NodeJS.Timeout[] = [];
@@ -17,11 +17,11 @@ describe('waitBeforeContinue', () => {
 
   afterEach(() => {
     // Clean up any remaining timers
-    timers.forEach(timer => clearTimeout(timer));
+    timers.forEach((timer) => clearTimeout(timer));
     timers = [];
   });
 
-  test('should resolve when operations complete', async () => {
+  test("should resolve when operations complete", async () => {
     let operationsRunning = true;
     mockHasRunningOperations.mockImplementation(() => operationsRunning);
 
@@ -29,7 +29,7 @@ describe('waitBeforeContinue', () => {
       checkHasRunningOperations: true,
       checkStepStatus: false,
       checkTimer: false,
-      stepId: 'test-step',
+      stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       pollingInterval: 10, // Fast polling for test
@@ -42,10 +42,10 @@ describe('waitBeforeContinue', () => {
     timers.push(timer);
 
     const result = await resultPromise;
-    expect(result.reason).toBe('operations');
+    expect(result.reason).toBe("operations");
   });
 
-  test('should resolve when timer expires immediately', async () => {
+  test("should resolve when timer expires immediately", async () => {
     const expiredTime = new Date(Date.now() - 1000); // Already expired
 
     const result = await waitBeforeContinue({
@@ -53,24 +53,26 @@ describe('waitBeforeContinue', () => {
       checkStepStatus: false,
       checkTimer: true,
       scheduledTimestamp: expiredTime,
-      stepId: 'test-step',
+      stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
     });
 
-    expect(result.reason).toBe('timer');
+    expect(result.reason).toBe("timer");
     expect(result.timerExpired).toBe(true);
   });
 
-  test('should resolve when step status changes', async () => {
+  test("should resolve when step status changes", async () => {
     let stepStatus: OperationStatus = OperationStatus.STARTED;
-    mockContext.getStepData.mockImplementation(() => ({ Status: stepStatus } as Operation));
+    mockContext.getStepData.mockImplementation(
+      () => ({ Status: stepStatus }) as Operation,
+    );
 
     const resultPromise = waitBeforeContinue({
       checkHasRunningOperations: false,
       checkStepStatus: true,
       checkTimer: false,
-      stepId: 'test-step',
+      stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       pollingInterval: 10, // Fast polling for test
@@ -83,23 +85,23 @@ describe('waitBeforeContinue', () => {
     timers.push(timer);
 
     const result = await resultPromise;
-    expect(result.reason).toBe('status');
+    expect(result.reason).toBe("status");
   });
 
-  test('should return timeout when no conditions are enabled', async () => {
+  test("should return timeout when no conditions are enabled", async () => {
     const result = await waitBeforeContinue({
       checkHasRunningOperations: false,
       checkStepStatus: false,
       checkTimer: false,
-      stepId: 'test-step',
+      stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
     });
 
-    expect(result.reason).toBe('timeout');
+    expect(result.reason).toBe("timeout");
   });
 
-  test('should call checkpoint.force when timer expires', async () => {
+  test("should call checkpoint.force when timer expires", async () => {
     const expiredTime = new Date(Date.now() - 1000); // Already expired
     const mockCheckpoint = {
       force: jest.fn().mockResolvedValue(undefined),
@@ -110,13 +112,13 @@ describe('waitBeforeContinue', () => {
       checkStepStatus: false,
       checkTimer: true,
       scheduledTimestamp: expiredTime,
-      stepId: 'test-step',
+      stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       checkpoint: mockCheckpoint,
     });
 
-    expect(result.reason).toBe('timer');
+    expect(result.reason).toBe("timer");
     expect(result.timerExpired).toBe(true);
     expect(mockCheckpoint.force).toHaveBeenCalled();
   });

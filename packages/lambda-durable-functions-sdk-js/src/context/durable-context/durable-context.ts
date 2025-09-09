@@ -195,7 +195,12 @@ export const createDurableContext = (
     _stepCounter: stepCounter,
     step,
     runInChildContext,
-    wait: createWaitHandler(executionContext, checkpoint, createStepId, hasRunningOperations),
+    wait: createWaitHandler(
+      executionContext,
+      checkpoint,
+      createStepId,
+      hasRunningOperations,
+    ),
     waitForCondition: createWaitForConditionHandler(
       executionContext,
       checkpoint,
