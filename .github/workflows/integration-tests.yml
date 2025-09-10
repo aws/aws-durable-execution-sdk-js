@@ -4,14 +4,14 @@ on:
   push:
     branches: [ "main", "development" ]
     paths:
-      - 'packages/lambda-durable-functions-sdk-js/**'
-      - 'packages/examples/**'
+      - 'packages/aws-durable-functions-sdk-js/**'
+      - 'packages/aws-durable-functions-sdk-js-samples/**'
       - '.github/workflows/integration-tests.yml'
   pull_request:
     branches: [ "main", "development" ]
     paths:
-      - 'packages/lambda-durable-functions-sdk-js/**'
-      - 'packages/examples/**'
+      - 'packages/aws-durable-functions-sdk-js/**'
+      - 'packages/aws-durable-functions-sdk-js-samples/**'
       - '.github/workflows/integration-tests.yml'
   workflow_dispatch:
 
@@ -59,11 +59,11 @@ jobs:
     
     - name: Verify SDK build
       run: |
-        if [ ! -f "packages/lambda-durable-functions-sdk-js/dist/index.js" ]; then
+        if [ ! -f "packages/aws-durable-functions-sdk-js/dist/index.js" ]; then
           echo "ERROR: SDK index.js not found"
           exit 1
         fi
-        if [ ! -f "packages/examples/dist/examples/hello-world.js" ]; then
+        if [ ! -f "packages/aws-durable-functions-sdk-js-samples/dist/examples/hello-world.js" ]; then
           echo "ERROR: Examples hello-world.js not found"
           exit 1
         fi
@@ -73,10 +73,10 @@ jobs:
       with:
         name: built-examples
         path: |
-          packages/examples/dist/
-          packages/examples/node_modules/
-          packages/lambda-durable-functions-sdk-js/dist/
-          packages/lambda-durable-functions-sdk-js/package.json
+          packages/aws-durable-functions-sdk-js-samples/dist/
+          packages/aws-durable-functions-sdk-js-samples/node_modules/
+          packages/aws-durable-functions-sdk-js/dist/
+          packages/aws-durable-functions-sdk-js/package.json
           packages/dex-internal-sdk/dist-cjs/
           packages/dex-internal-sdk/package.json
           node_modules/@amzn/

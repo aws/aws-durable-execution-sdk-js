@@ -7,10 +7,10 @@
   ],
   "type": "module",
   "scripts": {
-    "install-all": "npm install -w packages/lambda-durable-functions-sdk-js -w packages/lambda-durable-functions-testing-sdk-js -w packages/examples",
+    "install-all": "npm install -w packages/aws-durable-functions-sdk-js -w packages/aws-durable-functions-sdk-js-testing -w packages/aws-durable-functions-sdk-js-samples",
     "test": "npm run test --workspaces --if-present",
     "test:integration": "act -W .github/workflows/integration-tests.yml --secret-file .secrets --artifact-server-path /tmp/artifacts --container-architecture linux/amd64",
-    "build": "npm run build -w packages/lambda-durable-functions-sdk-js -w packages/lambda-durable-functions-testing-sdk-js -w packages/examples",
+    "build": "npm run build -w packages/aws-durable-functions-sdk-js -w packages/aws-durable-functions-sdk-js-testing -w packages/aws-durable-functions-sdk-js-samples",
     "postpublish": "git restore .",
     "clean": "npm run clean --workspaces --if-present"
   },
