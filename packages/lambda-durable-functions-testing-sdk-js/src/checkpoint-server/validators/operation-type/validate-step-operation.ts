@@ -32,14 +32,9 @@ export function validateStepOperation(
   update: OperationUpdate,
   operation: Operation | undefined
 ): void {
-  if (!operation) {
-    // Always allow a transition from non-existent -> any state (at-least-once semantics).
-    return;
-  }
-
   switch (update.Action) {
     case OperationAction.START:
-      if (!allowedStatusToStart.includes(operation.Status)) {
+      if (operation && !allowedStatusToStart.includes(operation.Status)) {
         throw new InvalidParameterValueException({
           message: "Invalid current STEP state to start.",
           $metadata: {},
@@ -48,7 +43,7 @@ export function validateStepOperation(
       break;
     case OperationAction.FAIL:
     case OperationAction.SUCCEED:
-      if (!allowedStatusToClose.includes(operation.Status)) {
+      if (operation && !allowedStatusToClose.includes(operation.Status)) {
         throw new InvalidParameterValueException({
           message: "Invalid current STEP state to close.",
           $metadata: {},
@@ -68,7 +63,7 @@ export function validateStepOperation(
       }
       break;
     case OperationAction.RETRY:
-      if (!allowedStatusToReattempt.includes(operation.Status)) {
+      if (operation && !allowedStatusToReattempt.includes(operation.Status)) {
         throw new InvalidParameterValueException({
           message: "Invalid current STEP state to re-attempt.",
           $metadata: {},
