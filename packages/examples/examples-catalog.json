@@ -164,7 +164,6 @@
       "name": "Wait for Callback",
       "description": "Basic callback waiting",
       "handler": "wait-for-callback.handler",
-      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
