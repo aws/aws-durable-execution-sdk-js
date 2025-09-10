@@ -1,0 +1,48 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "named-step-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 2,
+        "Name": "process-data",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 3,
+        "Name": "process-data",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 4,
+        "Name": "history-generation-1757539029",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}

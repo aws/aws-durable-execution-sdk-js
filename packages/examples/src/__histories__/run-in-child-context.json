@@ -1,0 +1,64 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "run-in-child-context-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "RunInChildContext",
+        "EventId": 2,
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 3,
+        "ParentId": "c4ca4238a0b92382",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 4,
+        "ParentId": "c4ca4238a0b92382",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "RunInChildContext",
+        "EventId": 5,
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 6,
+        "Name": "history-generation-1757539349",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}

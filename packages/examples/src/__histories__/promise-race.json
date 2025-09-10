@@ -1,0 +1,105 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "promise-race-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 2,
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 3,
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 4,
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 5,
+        "Name": "promise-race",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 6,
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 7,
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 8,
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 9,
+        "Name": "promise-race",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 10,
+        "Name": "history-generation-1757539362",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}

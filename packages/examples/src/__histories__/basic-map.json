@@ -1,0 +1,250 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "basic-map-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "Map",
+        "EventId": 2,
+        "Name": "map",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 3,
+        "Name": "map-item-0",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 4,
+        "Name": "map-item-1",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 5,
+        "ParentId": "ea66c06c1e1c05fa",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 6,
+        "ParentId": "98c6f2c2287f4c73",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 7,
+        "ParentId": "ea66c06c1e1c05fa",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 8,
+        "ParentId": "98c6f2c2287f4c73",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 9,
+        "Name": "map-item-0",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 10,
+        "Name": "map-item-1",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 11,
+        "Name": "map-item-2",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 12,
+        "Name": "map-item-3",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 13,
+        "ParentId": "13cee27a2bd93915",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 14,
+        "ParentId": "3a170a9fe4f47efa",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 15,
+        "ParentId": "13cee27a2bd93915",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 16,
+        "ParentId": "3a170a9fe4f47efa",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 17,
+        "Name": "map-item-2",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 18,
+        "Name": "map-item-3",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 19,
+        "Name": "map-item-4",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 20,
+        "ParentId": "12426c956d1bc501",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 21,
+        "ParentId": "12426c956d1bc501",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 22,
+        "Name": "map-item-4",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "Map",
+        "EventId": 23,
+        "Name": "map",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 24,
+        "Name": "history-generation-1757539002",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}

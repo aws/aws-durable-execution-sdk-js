@@ -5,6 +5,7 @@
       "name": "Block Example",
       "description": "Advanced child context example",
       "handler": "block-example.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 600
@@ -14,6 +15,7 @@
       "name": "Comprehensive Operations",
       "description": "Complex multi-operation example demonstrating all major operations",
       "handler": "comprehensive-operations.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 900
@@ -52,6 +54,7 @@
       "name": "Basic Parallel",
       "description": "Running multiple operations in parallel",
       "handler": "parallel-basic.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
@@ -61,6 +64,7 @@
       "name": "Promise All",
       "description": "Waiting for all promises to complete",
       "handler": "promise-all.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
@@ -88,6 +92,7 @@
       "name": "Promise Combinators",
       "description": "Complex promise combinator example",
       "handler": "promise-combinators.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
@@ -106,6 +111,7 @@
       "name": "Run in Child Context",
       "description": "Basic usage of context.runInChildContext()",
       "handler": "run-in-child-context.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
@@ -135,7 +141,6 @@
       "name": "Step with Retry",
       "description": "Advanced step configuration with retry strategy and semantics",
       "handler": "step-with-retry.handler",
-      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 600

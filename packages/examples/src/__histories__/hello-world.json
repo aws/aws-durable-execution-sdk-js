@@ -15,7 +15,7 @@
       {
         "EventType": "ExecutionSucceeded",
         "EventId": 2,
-        "Name": "history-generation-1755822320",
+        "Name": "history-generation-1757538709",
         "ExecutionSucceededDetails": {
           "Result": {
             "Truncated": true
@@ -23,6 +23,5 @@
         }
       }
     ]
-  },
-  "actions": []
+  }
 }

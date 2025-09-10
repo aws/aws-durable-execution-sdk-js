@@ -1,0 +1,161 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "basic-parallel-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "Parallel",
+        "EventId": 2,
+        "Name": "parallel",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "ParallelBranch",
+        "EventId": 3,
+        "Name": "parallel-branch-0",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "ParallelBranch",
+        "EventId": 4,
+        "Name": "parallel-branch-1",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 5,
+        "ParentId": "ea66c06c1e1c05fa",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 6,
+        "ParentId": "98c6f2c2287f4c73",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 7,
+        "ParentId": "ea66c06c1e1c05fa",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 8,
+        "ParentId": "98c6f2c2287f4c73",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "ParallelBranch",
+        "EventId": 9,
+        "Name": "parallel-branch-0",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "ParallelBranch",
+        "EventId": 10,
+        "Name": "parallel-branch-1",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "ParallelBranch",
+        "EventId": 11,
+        "Name": "parallel-branch-2",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "WaitStarted",
+        "SubType": "Wait",
+        "EventId": 12,
+        "ParentId": "13cee27a2bd93915",
+        "WaitStartedDetails": {
+          "Duration": 1
+        }
+      },
+      {
+        "EventType": "WaitSucceeded",
+        "EventId": 13,
+        "WaitSucceededDetails": {}
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "ParallelBranch",
+        "EventId": 14,
+        "Name": "parallel-branch-2",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "Parallel",
+        "EventId": 15,
+        "Name": "parallel",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 16,
+        "Name": "history-generation-1757539782",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}

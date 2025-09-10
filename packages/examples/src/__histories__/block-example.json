@@ -1,0 +1,102 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "block-example-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "RunInChildContext",
+        "EventId": 2,
+        "Name": "parent_block",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 3,
+        "Name": "nested_step",
+        "ParentId": "c4ca4238a0b92382",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 4,
+        "Name": "nested_step",
+        "ParentId": "c4ca4238a0b92382",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "RunInChildContext",
+        "EventId": 5,
+        "Name": "nested_block",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "WaitStarted",
+        "SubType": "Wait",
+        "EventId": 6,
+        "ParentId": "98c6f2c2287f4c73",
+        "WaitStartedDetails": {
+          "Duration": 1
+        }
+      },
+      {
+        "EventType": "WaitSucceeded",
+        "EventId": 7,
+        "WaitSucceededDetails": {}
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "RunInChildContext",
+        "EventId": 8,
+        "Name": "nested_block",
+        "ParentId": "c4ca4238a0b92382",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "RunInChildContext",
+        "EventId": 9,
+        "Name": "parent_block",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 10,
+        "Name": "history-generation-1757540244",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}

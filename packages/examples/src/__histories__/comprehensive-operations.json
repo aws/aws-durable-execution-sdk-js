@@ -1,0 +1,439 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "comprehensive-operations-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 2,
+        "Name": "step1",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 3,
+        "Name": "step1",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "WaitStarted",
+        "SubType": "Wait",
+        "EventId": 4,
+        "WaitStartedDetails": {
+          "Duration": 5
+        }
+      },
+      {
+        "EventType": "WaitSucceeded",
+        "EventId": 5,
+        "WaitSucceededDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "Map",
+        "EventId": 6,
+        "Name": "map-numbers",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 7,
+        "Name": "map-item-0",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 8,
+        "Name": "map-item-1",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 9,
+        "Name": "map-item-2",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 10,
+        "Name": "map-item-3",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "MapIteration",
+        "EventId": 11,
+        "Name": "map-item-4",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 12,
+        "Name": "map-step-0",
+        "ParentId": "c9e6e7b69f98f516",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 13,
+        "Name": "map-step-1",
+        "ParentId": "b772d43b49bb57b5",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 14,
+        "Name": "map-step-2",
+        "ParentId": "7866cc7fb5a03c01",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 15,
+        "Name": "map-step-3",
+        "ParentId": "b7b2d5a8d1b4d64f",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 16,
+        "Name": "map-step-4",
+        "ParentId": "5aee0cc44da9dd93",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 17,
+        "Name": "map-step-0",
+        "ParentId": "c9e6e7b69f98f516",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 18,
+        "Name": "map-step-1",
+        "ParentId": "b772d43b49bb57b5",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 19,
+        "Name": "map-step-2",
+        "ParentId": "7866cc7fb5a03c01",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 20,
+        "Name": "map-step-3",
+        "ParentId": "b7b2d5a8d1b4d64f",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 21,
+        "Name": "map-step-4",
+        "ParentId": "5aee0cc44da9dd93",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 22,
+        "Name": "map-item-0",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 23,
+        "Name": "map-item-1",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 24,
+        "Name": "map-item-2",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 25,
+        "Name": "map-item-3",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "MapIteration",
+        "EventId": 26,
+        "Name": "map-item-4",
+        "ParentId": "eccbc87e4b5ce2fe",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "Map",
+        "EventId": 27,
+        "Name": "map-numbers",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "Parallel",
+        "EventId": 28,
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "ParallelBranch",
+        "EventId": 29,
+        "Name": "parallel-branch-0",
+        "ParentId": "a87ff679a2f3e71d",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "ParallelBranch",
+        "EventId": 30,
+        "Name": "parallel-branch-1",
+        "ParentId": "a87ff679a2f3e71d",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "ContextStarted",
+        "SubType": "ParallelBranch",
+        "EventId": 31,
+        "Name": "parallel-branch-2",
+        "ParentId": "a87ff679a2f3e71d",
+        "ContextStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 32,
+        "Name": "fruit-step-1",
+        "ParentId": "74bdefab9757a081",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 33,
+        "Name": "fruit-step-2",
+        "ParentId": "2f5bb7747efda054",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepStarted",
+        "SubType": "Step",
+        "EventId": 34,
+        "Name": "fruit-step-3",
+        "ParentId": "4864dafb55d05d74",
+        "StepStartedDetails": {}
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 35,
+        "Name": "fruit-step-1",
+        "ParentId": "74bdefab9757a081",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 36,
+        "Name": "fruit-step-2",
+        "ParentId": "2f5bb7747efda054",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "StepSucceeded",
+        "SubType": "Step",
+        "EventId": 37,
+        "Name": "fruit-step-3",
+        "ParentId": "4864dafb55d05d74",
+        "StepSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          },
+          "RetryDetails": {
+            "CurrentAttempt": 0
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "ParallelBranch",
+        "EventId": 38,
+        "Name": "parallel-branch-0",
+        "ParentId": "a87ff679a2f3e71d",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "ParallelBranch",
+        "EventId": 39,
+        "Name": "parallel-branch-1",
+        "ParentId": "a87ff679a2f3e71d",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "ParallelBranch",
+        "EventId": 40,
+        "Name": "parallel-branch-2",
+        "ParentId": "a87ff679a2f3e71d",
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ContextSucceeded",
+        "SubType": "Parallel",
+        "EventId": 41,
+        "ContextSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 42,
+        "Name": "history-generation-1757539809",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}

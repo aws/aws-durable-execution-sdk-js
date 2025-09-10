@@ -1,0 +1,41 @@
+{
+  "expectedHistory": {
+    "events": [
+      {
+        "EventType": "ExecutionStarted",
+        "EventId": 1,
+        "Name": "named-wait-typescript-acceptance-test",
+        "ExecutionStartedDetails": {
+          "Input": {
+            "Truncated": true
+          },
+          "ExecutionTimeout": 300
+        }
+      },
+      {
+        "EventType": "WaitStarted",
+        "SubType": "Wait",
+        "EventId": 2,
+        "Name": "wait-5-seconds",
+        "WaitStartedDetails": {
+          "Duration": 5
+        }
+      },
+      {
+        "EventType": "WaitSucceeded",
+        "EventId": 3,
+        "WaitSucceededDetails": {}
+      },
+      {
+        "EventType": "ExecutionSucceeded",
+        "EventId": 4,
+        "Name": "history-generation-1757539333",
+        "ExecutionSucceededDetails": {
+          "Result": {
+            "Truncated": true
+          }
+        }
+      }
+    ]
+  }
+}
