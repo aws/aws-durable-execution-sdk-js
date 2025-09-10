@@ -92,7 +92,6 @@
       "name": "Promise Combinators",
       "description": "Complex promise combinator example",
       "handler": "promise-combinators.handler",
-      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
@@ -102,6 +101,7 @@
       "name": "Promise Race",
       "description": "Racing promises to completion",
       "handler": "promise-race.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
