@@ -67,7 +67,7 @@ describe("LocalDurableTestRunner", () => {
 
     mockResultFormatter = {
       formatTestResult: jest.fn().mockReturnValue({
-        getCompletedOperations: jest.fn().mockReturnValue([]),
+        getOperations: jest.fn().mockReturnValue([]),
         getInvocations: jest.fn().mockReturnValue([]),
         getResult: jest.fn().mockReturnValue({ data: { success: true } }),
       }),

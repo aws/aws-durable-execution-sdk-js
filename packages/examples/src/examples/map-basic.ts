@@ -4,6 +4,7 @@ export const handler = withDurableFunctions(async (event: any, context: DurableC
     const items = [1, 2, 3, 4, 5];
     
     const results = await context.map(
+        "map",
         items,
         async (context: DurableContext, item: number, index: number) => {
             return await context.step(async () => {
@@ -15,5 +16,5 @@ export const handler = withDurableFunctions(async (event: any, context: DurableC
         }
     );
     
-    return results;
+    return results.getResults();
 });

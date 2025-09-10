@@ -72,7 +72,7 @@ describe("InvocationTracker", () => {
       const op1 = createMockOperation("op1");
       const op2 = createMockOperation("op2");
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([op1, op2]);
 
       // Verify that operation mappings are cleared
@@ -88,7 +88,7 @@ describe("InvocationTracker", () => {
       const invocation = invocationTracker.createInvocation(invocationId);
 
       expect(invocation.id).toBe(invocationId);
-      expect(typeof invocation.getCompletedOperations).toBe("function");
+      expect(typeof invocation.getOperations).toBe("function");
     });
 
     it("should add the created invocation to the invocations list", () => {
@@ -127,7 +127,7 @@ describe("InvocationTracker", () => {
       // Setup an operation in storage
       const mockOperation = createMockOperation(operationId);
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
 
       // Associate the operation with the invocation
@@ -150,7 +150,7 @@ describe("InvocationTracker", () => {
       // Setup an operation in storage
       const mockOperation = createMockOperation(operationId);
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
 
       // Associate the operation with both invocations
@@ -182,7 +182,7 @@ describe("InvocationTracker", () => {
       const mockOperation1 = createMockOperation(operationId1);
       const mockOperation2 = createMockOperation(operationId2);
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation1, mockOperation2]);
 
       // Associate both operations with the invocation
@@ -207,7 +207,7 @@ describe("InvocationTracker", () => {
       // Setup an operation in storage
       const mockOperation = createMockOperation(operationId);
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
 
       // Associate the same operation twice
@@ -238,7 +238,7 @@ describe("InvocationTracker", () => {
       const op3 = createMockOperation("op3", OperationStatus.SUCCEEDED);
 
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([op1, op2, op3]);
 
       // Associate operations with invocations
@@ -316,9 +316,9 @@ describe("InvocationTracker", () => {
       // Override the getId method to return undefined
       jest.spyOn(mockOpWithoutId, "getId").mockReturnValue(undefined);
 
-      const allOps = operationStorage.getCompletedOperations();
+      const allOps = operationStorage.getOperations();
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([...allOps, mockOpWithoutId]);
 
       // Even with the invalid operation, we should still get our valid ones
@@ -332,7 +332,7 @@ describe("InvocationTracker", () => {
     });
   });
 
-  describe("invocation.getCompletedOperations", () => {
+  describe("invocation.getOperations", () => {
     it("should return operations when called without status filter", () => {
       const invocationId = createInvocationId("test-invocation");
       const operationId = "test-operation";
@@ -340,7 +340,7 @@ describe("InvocationTracker", () => {
       // Setup an operation in storage
       const mockOperation = createMockOperation(operationId);
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
 
       // Associate operation with invocation
@@ -349,8 +349,8 @@ describe("InvocationTracker", () => {
       // Get invocation
       const invocation = invocationTracker.createInvocation(invocationId);
 
-      // Call getCompletedOperations without a status filter
-      const operations = invocation.getCompletedOperations();
+      // Call getOperations without a status filter
+      const operations = invocation.getOperations();
 
       expect(operations.length).toBe(1);
       expect(operations[0].getId()).toBe(operationId);
@@ -363,7 +363,7 @@ describe("InvocationTracker", () => {
       const successOp = createMockOperation("op1", OperationStatus.SUCCEEDED);
       const failedOp = createMockOperation("op2", OperationStatus.FAILED);
       jest
-        .spyOn(operationStorage, "getCompletedOperations")
+        .spyOn(operationStorage, "getOperations")
         .mockReturnValue([successOp, failedOp]);
 
       // Associate operations with invocation
@@ -373,11 +373,11 @@ describe("InvocationTracker", () => {
       // Get invocation
       const invocation = invocationTracker.createInvocation(invocationId);
 
-      // Call getCompletedOperations with a status filter
-      const succeededOps = invocation.getCompletedOperations({
+      // Call getOperations with a status filter
+      const succeededOps = invocation.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
-      const failedOps = invocation.getCompletedOperations({
+      const failedOps = invocation.getOperations({
         status: OperationStatus.FAILED,
       });
 

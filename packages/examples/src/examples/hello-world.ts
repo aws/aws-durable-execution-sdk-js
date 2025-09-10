@@ -2,5 +2,5 @@ import {DurableContext, withDurableFunctions} from "@amzn/durable-executions-lan
 
 export const handler = withDurableFunctions(async (event: any, context: DurableContext) => {
     console.log("Hello world from a durable function!");
-    return "Hello world"
+    return "Hello World!"
 });

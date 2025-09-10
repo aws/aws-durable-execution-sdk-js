@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "prebuild": "npm run lint:fix",
     "build": "npm run build:dev",
@@ -24,7 +27,8 @@
     "lint:fix": "prettier --write . && eslint src --ext .ts --fix",
     "prepublishOnly": "npm test && npm run lint && npm run build",
     "run-locally": "ts-node --transpile-only ./src/run-durable.ts",
-    "clean": "rm -rf node_modules dist"
+    "clean": "rm -rf node_modules dist",
+    "prepack": "npm run build"
   },
   "lint-staged": {
     "./src/**/*.ts": [
@@ -56,18 +60,9 @@
     "tsx": "^4.19.3",
     "typescript": "^5.7.3"
   },
-  "dependencies": {},
-  "peerDependencies": {
+  "dependencies": {
     "@amzn/dex-internal-sdk": "*",
     "@aws-sdk/credential-provider-node": "^3.800.0"
-  },
-  "peerDependenciesMeta": {
-    "@amzn/dex-internal-sdk": {
-      "optional": false
-    },
-    "@aws-sdk/credential-provider-node": {
-      "optional": false
-    }
   },
   "private": true
 }

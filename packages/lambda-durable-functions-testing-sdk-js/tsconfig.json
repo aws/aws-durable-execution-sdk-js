@@ -8,7 +8,9 @@
     "esModuleInterop": true,
     "noImplicitAny": true,
     "isolatedModules": true,
-    "emitDeclarationOnly": true
+    "emitDeclarationOnly": true,
+    "module": "esnext",
+    "moduleResolution": "bundler"
   },
   "include": ["src"]
 }

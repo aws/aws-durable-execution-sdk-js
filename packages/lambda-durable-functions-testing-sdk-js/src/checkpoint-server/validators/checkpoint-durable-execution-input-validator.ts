@@ -1,6 +1,7 @@
 import {
   InvalidParameterValueException,
   Operation,
+  OperationAction,
   OperationType,
   OperationUpdate,
 } from "@amzn/dex-internal-sdk";
@@ -130,7 +131,8 @@ function validateParentIdAndDuplicateId(
   operationUpdates: OperationUpdate[],
   checkpointOperations: Map<string, CheckpointOperation>
 ): void {
-  const operationActionsSeen = new Map<string, Set<string>>();
+  const operationsStarted = new Map<string, OperationUpdate>();
+  const lastUpdatesSeen = new Map<string, OperationUpdate>();
 
   for (const operationUpdate of operationUpdates) {
     const operationId = operationUpdate.Id;
@@ -141,13 +143,9 @@ function validateParentIdAndDuplicateId(
       });
     }
 
-    // Check for duplicate operation+action combination
-    const actionsForOperation = operationActionsSeen.get(operationId) ?? new Set();
-    const action = operationUpdate.Action ?? 'START'; // Default to START if no action specified
-    
-    if (actionsForOperation.has(action)) {
+    if (isInvalidDuplicateUpdate(operationUpdate, lastUpdatesSeen)) {
       throw new InvalidParameterValueException({
-        message: "Cannot update the same operation with the same action twice in a single request.",
+        message: "Cannot update the same operation twice in a single request.",
         $metadata: {},
       });
     }
@@ -155,12 +153,14 @@ function validateParentIdAndDuplicateId(
     const validParent = isValidParentForUpdate(
       checkpointOperations,
       operationUpdate,
-      operationUpdates.slice(0, operationUpdates.indexOf(operationUpdate))
+      operationsStarted
     );
 
     if (validParent) {
-      actionsForOperation.add(action);
-      operationActionsSeen.set(operationId, actionsForOperation);
+      if (OperationAction.START === operationUpdate.Action) {
+        operationsStarted.set(operationId, operationUpdate);
+      }
+      lastUpdatesSeen.set(operationId, operationUpdate);
     } else {
       // Invalid parent id.
       throw new InvalidParameterValueException({
@@ -171,19 +171,45 @@ function validateParentIdAndDuplicateId(
   }
 }
 
+function isInvalidDuplicateUpdate(
+  operationUpdate: OperationUpdate,
+  lastUpdatesSeen: Map<string, OperationUpdate>
+): boolean {
+  if (!operationUpdate.Id) {
+    throw new Error("Missing ID in operation update");
+  }
+
+  const lastUpdateSeen = lastUpdatesSeen.get(operationUpdate.Id);
+  if (lastUpdateSeen) {
+    switch (lastUpdateSeen.Type) {
+      case OperationType.STEP:
+      case OperationType.CONTEXT: {
+        const allowDuplicate =
+          OperationAction.START === lastUpdateSeen.Action &&
+          OperationAction.START !== operationUpdate.Action;
+        return !allowDuplicate;
+      }
+      default:
+        return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Determines if an operation update has a valid parent operation.
  * Only CONTEXT operations can be parents, and parents must exist either in the current batch or existing operations.
  *
  * @param checkpointOperations - Map of existing checkpoint operations by ID
  * @param operationUpdate - The operation update to validate parent for
- * @param operationIdsSeen - Map of operations already seen in this batch
+ * @param operationsStarted - Map of operations already seen in this batch
  * @returns true if parent is valid or no parent is specified, false otherwise
  */
 function isValidParentForUpdate(
   checkpointOperations: Map<string, CheckpointOperation>,
   operationUpdate: OperationUpdate,
-  previousUpdates: OperationUpdate[]
+  operationsStarted: Map<string, OperationUpdate>
 ): boolean {
   const parentId = operationUpdate.ParentId;
 
@@ -192,8 +218,8 @@ function isValidParentForUpdate(
     return true;
   }
 
-  // The parent id is part of the same update, and appears earlier in the list.
-  const parentUpdate = previousUpdates.find(update => update.Id === parentId);
+  // The parent START is part of the same update, and appears earlier in the list.
+  const parentUpdate = operationsStarted.get(parentId);
   if (parentUpdate) {
     // Only CONTEXT can be a parent
     return parentUpdate.Type === OperationType.CONTEXT;

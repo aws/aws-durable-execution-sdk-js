@@ -7,7 +7,7 @@ import { handler } from "../block-example";
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
-describe("block-example", () => {
+describe("block-example test", () => {
   const durableTestRunner = new LocalDurableTestRunner({
     handlerFunction: handler,
     skipTime: true,
@@ -52,7 +52,7 @@ describe("block-example", () => {
     // Verify execution completed successfully
     expect(execution.getResult()).toBeDefined();
 
-    const completedOperations = execution.getCompletedOperations();
+    const completedOperations = execution.getOperations();
     const waitOp = completedOperations.find(
       (op) =>
         op.getType() === OperationType.WAIT &&

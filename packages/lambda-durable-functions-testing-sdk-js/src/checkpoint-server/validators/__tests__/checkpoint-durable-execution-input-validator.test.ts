@@ -4,6 +4,7 @@ import {
   OperationStatus,
   OperationType,
   ErrorObject,
+  OperationUpdate,
 } from "@amzn/dex-internal-sdk";
 import { validateCheckpointUpdates } from "../checkpoint-durable-execution-input-validator";
 import { CheckpointOperation } from "../../storage/checkpoint-manager";
@@ -338,8 +339,8 @@ describe("validateCheckpointUpdates", () => {
     });
   });
 
-  describe("duplicate operation validation", () => {
-    it("should throw exception with duplicate operation id", () => {
+  describe("invalid operation validation", () => {
+    it("should throw exception with invalid operation id", () => {
       const update = {
         Id: "op1",
         Type: OperationType.STEP,
@@ -351,8 +352,91 @@ describe("validateCheckpointUpdates", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateCheckpointUpdates([update, update], mockOperations);
-      }).toThrow("Cannot update the same operation with the same action twice in a single request.");
+      }).toThrow("Cannot update the same operation twice in a single request.");
     });
+
+    it.each([
+      ["STEP", "START", "RETRY"],
+      ["STEP", "START", "SUCCEED"],
+      ["STEP", "START", "FAIL"],
+      ["CONTEXT", "START", "SUCCEED"],
+      ["CONTEXT", "START", "FAIL"],
+    ] satisfies [OperationType, OperationAction, OperationAction][])(
+      `should succeed with type=%s, firstUpdate=%s, secondUpdate=%s`,
+      (type, firstAction, secondAction) => {
+        const firstUpdate = {
+          Id: "op1",
+          Type: type,
+          Action: firstAction,
+        };
+        const secondUpdate: OperationUpdate = {
+          Id: "op2",
+          Type: type,
+          Action: secondAction,
+        };
+
+        if (secondAction === OperationAction.RETRY) {
+          secondUpdate.StepOptions = {
+            NextAttemptDelaySeconds: 10,
+          };
+        }
+
+        expect(() => {
+          validateCheckpointUpdates(
+            [firstUpdate, secondUpdate],
+            mockOperations
+          );
+        }).not.toThrow();
+      }
+    );
+
+    it.each([
+      ["STEP", "START", "START"],
+      ["STEP", "RETRY", "START"],
+      ["STEP", "RETRY", "RETRY"],
+      ["STEP", "RETRY", "SUCCEED"],
+      ["STEP", "RETRY", "FAIL"],
+      ["STEP", "SUCCEED", "START"],
+      ["STEP", "SUCCEED", "RETRY"],
+      ["STEP", "SUCCEED", "SUCCEED"],
+      ["STEP", "SUCCEED", "FAIL"],
+      ["STEP", "FAIL", "START"],
+      ["STEP", "FAIL", "RETRY"],
+      ["STEP", "FAIL", "SUCCEED"],
+      ["STEP", "FAIL", "FAIL"],
+      ["CONTEXT", "START", "START"],
+      ["CONTEXT", "SUCCEED", "START"],
+      ["CONTEXT", "SUCCEED", "RETRY"],
+      ["CONTEXT", "SUCCEED", "SUCCEED"],
+      ["CONTEXT", "SUCCEED", "FAIL"],
+      ["CONTEXT", "FAIL", "START"],
+      ["CONTEXT", "FAIL", "RETRY"],
+      ["CONTEXT", "FAIL", "SUCCEED"],
+      ["CONTEXT", "FAIL", "FAIL"],
+    ] satisfies [OperationType, OperationAction, OperationAction][])(
+      "should throw with type=%s, firstAction=%s, secondAction=%s",
+      (type, firstAction, secondAction) => {
+        const firstUpdate = {
+          Id: "op1",
+          Type: type,
+          Action: firstAction,
+        };
+        const secondUpdate = {
+          Id: "op1",
+          Type: type,
+          Action: secondAction,
+        };
+
+        expect(() => {
+          validateCheckpointUpdates(
+            [firstUpdate, secondUpdate],
+            mockOperations
+          );
+        }).toThrow(
+          "Cannot update the same operation twice in a single request."
+        );
+      }
+    );
   });
 
   describe("operation id validation", () => {

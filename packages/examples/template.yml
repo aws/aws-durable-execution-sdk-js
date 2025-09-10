@@ -57,6 +57,24 @@ Resources:
           DURABLE_RECORD_DEFINITION_MODE: 'true'
     Metadata:
       SkipBuild: 'True'
+  ConcurrentWait:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConcurrentWait-TypeScript
+      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      Handler: concurrent-wait.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Environment:
+        Variables:
+          DEX_ENDPOINT: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_RECORD_DEFINITION_MODE: 'true'
+    Metadata:
+      SkipBuild: 'True'
   CreateCallback:
     Type: AWS::Serverless::Function
     Properties:
@@ -372,24 +390,6 @@ Resources:
       FunctionName: WaitForCallback-TypeScript
       CodeUri: ./build/durable-executions-typescript-sdk-examples
       Handler: wait-for-callback.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      Environment:
-        Variables:
-          DEX_ENDPOINT: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
-          DURABLE_RECORD_DEFINITION_MODE: 'true'
-    Metadata:
-      SkipBuild: 'True'
-  WaitForCallbackSubmitter:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: WaitForCallbackSubmitter-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
-      Handler: wait-for-callback-submitter.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

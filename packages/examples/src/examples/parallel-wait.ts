@@ -6,13 +6,11 @@ import {
 export const handler = withDurableFunctions(
   async (event: any, context: DurableContext) => {
     console.log("Before waits");
-    await context.runInChildContext((childContext) =>
-      Promise.all([
-        childContext.wait(1000),
-        childContext.wait(5000),
-        childContext.wait(10000),
-      ])
-    );
+    await context.parallel("parent-block", [
+        async (childContext: DurableContext) => await childContext.wait("wait-1-second", 1000),
+        async (childContext: DurableContext) => await childContext.wait("wait-2-seconds", 2000),
+        async (childContext: DurableContext) => await childContext.wait("wait-5-seconds", 5000),
+    ]);
     console.log("After waits");
     return "Completed waits";
   }

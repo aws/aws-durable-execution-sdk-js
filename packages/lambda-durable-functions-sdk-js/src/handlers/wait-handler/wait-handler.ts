@@ -1,5 +1,9 @@
 import { ExecutionContext, OperationSubType } from "../../types";
-import { OperationStatus, OperationType, OperationAction } from "@amzn/dex-internal-sdk";
+import {
+  OperationStatus,
+  OperationType,
+  OperationAction,
+} from "@amzn/dex-internal-sdk";
 import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
@@ -67,9 +71,8 @@ export const createWaitHandler = (
           reason: TerminationReason.WAIT_SCHEDULED,
           message: `Operation ${actualName || stepId} scheduled to wait`,
         });
-        return new Promise(() => { });
+        return new Promise(() => {});
       }
-
 
       // There are ongoing operations - wait before continuing
       await waitBeforeContinue({
