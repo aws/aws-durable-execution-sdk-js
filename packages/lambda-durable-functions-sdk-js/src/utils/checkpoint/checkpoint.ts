@@ -241,12 +241,7 @@ class CheckpointHandler {
         // Store operation with the already-hashed ID from backend
         this.context._stepData[operation.Id] = operation;
 
-        log(this.context.isVerbose, "📝", "Updated stepData entry:", {
-          id: operation.Id,
-          status: operation.Status,
-          type: operation.Type,
-          name: operation.Name,
-        });
+        log(this.context.isVerbose, "📝", "Updated stepData entry:", operation);
       }
     });
 

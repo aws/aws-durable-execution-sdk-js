@@ -36,7 +36,7 @@ export const createWaitHandler = (
 
     // Main wait logic - can be re-executed if step data changes
     while (true) {
-      const stepData = context.getStepData(stepId);
+      let stepData = context.getStepData(stepId);
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log(context.isVerbose, "⏭️", "Wait already completed:", { stepId });
         return;
@@ -75,6 +75,8 @@ export const createWaitHandler = (
       }
 
       // There are ongoing operations - wait before continuing
+      // Refresh stepData after checkpoint to get ScheduledTimestamp
+      stepData = context.getStepData(stepId);
       await waitBeforeContinue({
         checkHasRunningOperations: true,
         checkStepStatus: true,

@@ -62,6 +62,23 @@ describe("waitBeforeContinue", () => {
     expect(result.timerExpired).toBe(true);
   });
 
+  test("should resolve when timer expires in future", async () => {
+    const futureTime = new Date(Date.now() + 50); // 50ms in future
+
+    const result = await waitBeforeContinue({
+      checkHasRunningOperations: false,
+      checkStepStatus: false,
+      checkTimer: true,
+      scheduledTimestamp: futureTime,
+      stepId: "test-step",
+      context: mockContext,
+      hasRunningOperations: mockHasRunningOperations,
+    });
+
+    expect(result.reason).toBe("timer");
+    expect(result.timerExpired).toBe(true);
+  });
+
   test("should resolve when step status changes", async () => {
     let stepStatus: OperationStatus = OperationStatus.STARTED;
     mockContext.getStepData.mockImplementation(
