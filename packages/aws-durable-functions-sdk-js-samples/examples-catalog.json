@@ -32,6 +32,7 @@
       "name": "Hello World",
       "description": "A simple hello world example with no durable operations",
       "handler": "hello-world.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
@@ -41,6 +42,7 @@
       "name": "Basic Map",
       "description": "Processing arrays with concurrent operations",
       "handler": "map-basic.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
@@ -113,6 +115,7 @@
       "name": "Basic Step",
       "description": "Basic usage of context.step() to checkpoint a simple operation",
       "handler": "step-basic.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
@@ -122,6 +125,7 @@
       "name": "Named Step",
       "description": "Using context.step() with a custom name for better observability",
       "handler": "step-named.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
@@ -131,6 +135,7 @@
       "name": "Step with Retry",
       "description": "Advanced step configuration with retry strategy and semantics",
       "handler": "step-with-retry.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 600
@@ -149,6 +154,7 @@
       "name": "Wait State",
       "description": "Basic usage of context.wait() to pause execution",
       "handler": "wait.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
@@ -167,6 +173,7 @@
       "name": "Named Wait",
       "description": "Using context.wait() with a custom name",
       "handler": "wait-named.handler",
+      "integration": true,
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
