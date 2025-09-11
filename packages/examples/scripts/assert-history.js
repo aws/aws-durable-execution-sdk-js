@@ -27,6 +27,9 @@ console.log(`Asserting history for ${fileName}...`);
 const actual = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
 const expected = JSON.parse(fs.readFileSync(expectedHistoryPath, 'utf8'));
 
+console.log('Actual history:', JSON.stringify(actual, null, 2));
+console.log('Expected history:', JSON.stringify(expected, null, 2));
+
 const actualEvents = actual.events || [];
 const expectedEvents = expected.expectedHistory?.events || [];
 
