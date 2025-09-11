@@ -2,7 +2,7 @@ name: Integration Tests
 
 on:
   push:
-    branches: [ "main", "development", "hsilan-test-publish-s3" ]
+    branches: [ "main", "development" ]
     paths:
       - 'packages/lambda-durable-functions-sdk-js/**'
       - 'packages/examples/**'
