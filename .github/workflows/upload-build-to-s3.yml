@@ -2,7 +2,7 @@ name: Upload tgz to S3
 on:
   workflow_run:
     workflows: [Unit Tests]
-    branches: [ "development", "hsilan-test-publish-s3" ]
+    branches: [development,hsilan-test-publish-s3]
     types: 
       - completed
 env:
