@@ -10,7 +10,7 @@ on:
   #     - completed
       
 env:
-  BUCKET_NAME : "github-aws-language-sdk-package-build-artifacts"
+  BUCKET_NAME : "github-language-sdk-package-build-artifacts"
   AWS_REGION : "us-west-2"
 
 # permission can be added at job level or workflow level
