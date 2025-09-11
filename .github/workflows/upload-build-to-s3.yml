@@ -57,5 +57,6 @@ jobs:
           aws lambda invoke \
             --function-name arn:aws:lambda:us-west-2:623946091065:function:gitfarm-lambda-personal-WriteFileGitFarmEB81359E-mXcLqQEGbZ8J \
             --payload '{"gitFarmRepo":"DurableExecutionsLanguageSDK","gitFarmBranch":"hsilan-test","gitFarmFilepath":"amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz","s3Bucket":"github-language-sdk-package-build-artifacts","s3FilePath":"amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz"}' \
+            --cli-binary-format raw-in-base64-out \
             output.txt
       - run: cat output.txt
