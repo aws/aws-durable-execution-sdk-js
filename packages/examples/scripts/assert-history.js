@@ -30,7 +30,7 @@ const expected = JSON.parse(fs.readFileSync(expectedHistoryPath, 'utf8'));
 console.log('Actual history:', JSON.stringify(actual, null, 2));
 console.log('Expected history:', JSON.stringify(expected, null, 2));
 
-const actualEvents = actual.events || [];
+const actualEvents = actual.Events || [];
 const expectedEvents = expected.expectedHistory?.events || [];
 
 if (actualEvents.length !== expectedEvents.length) {
