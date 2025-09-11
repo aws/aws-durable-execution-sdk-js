@@ -35,11 +35,13 @@ jobs:
           role-to-assume: arn:aws:iam::623946091065:role/GithubActionsRole
           role-session-name: samplerolesession
           aws-region: ${{ env.AWS_REGION }}
-      - name: Get Package Version
-        id: get-package-version
-        uses: stevenbenitez/get-package-version-action@v1
+      - name: get-npm-version
+          id: package-version
+          uses: martinbeentjes/npm-get-version-action@v1.3.1
+          with:
+            path: packages/lambda-durable-functions-sdk-js
       - run: npm pack
       # Upload a file to AWS s3
       - name: Copy tgz build file to s3
         run: |
-          aws s3 cp ./amzn-durable-executions-language-sdk-${{ steps.get-package-version.outputs.version }}.tgz s3://${{ env.BUCKET_NAME }}/
+          aws s3 cp ./packages/lambda-durable-functions-sdk-js/amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz s3://${{ env.BUCKET_NAME }}/
