@@ -1,4 +1,4 @@
-name: upload-build-to-s3
+name: Upload tgz to S3
 on:
   workflow_run:
     workflows: [Unit Tests]
