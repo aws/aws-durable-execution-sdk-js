@@ -1617,6 +1617,22 @@
       },
       "exception":true
     },
+    "ContextFailedDetails":{
+      "type":"structure",
+      "members":{
+        "Error":{"shape":"EventError"}
+      }
+    },
+    "ContextStartedDetails":{
+      "type":"structure",
+      "members":{}
+    },
+    "ContextSucceededDetails":{
+      "type":"structure",
+      "members":{
+        "Result":{"shape":"EventResult"}
+      }
+    },
     "CodeSigningConfig":{
       "type":"structure",
       "required":[
@@ -6349,6 +6365,16 @@
     "OperationId":{
       "type":"string",
       "max":1024,
+      "min":1
+    },
+    "OperationName":{
+      "type":"string",
+      "max":128,
+      "min":1
+    },
+    "OperationSubType":{
+      "type":"string",
+      "max":128,
       "min":1
     },
     "OperationType":{
