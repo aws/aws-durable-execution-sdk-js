@@ -1617,6 +1617,22 @@
       },
       "exception":true
     },
+    "ContextFailedDetails":{
+      "type":"structure",
+      "members":{
+        "Error":{"shape":"EventError"}
+      }
+    },
+    "ContextStartedDetails":{
+      "type":"structure",
+      "members":{}
+    },
+    "ContextSucceededDetails":{
+      "type":"structure",
+      "members":{
+        "Result":{"shape":"EventResult"}
+      }
+    },
     "CodeSigningConfig":{
       "type":"structure",
       "required":[
@@ -2614,8 +2630,35 @@
       "type":"structure",
       "members":{
         "EventType":{"shape":"EventType"},
+        "SubType":{"shape":"OperationSubType"},
         "EventId":{"shape":"EventId"},
-        "EventTimestamp":{"shape":"ExecutionTimestamp"}
+        "Id":{"shape":"OperationId"},
+        "Name":{"shape":"OperationName"},
+        "EventTimestamp":{"shape":"ExecutionTimestamp"},
+        "ParentId":{"shape":"OperationId"},
+        "ExecutionStartedDetails":{"shape":"ExecutionStartedDetails"},
+        "ExecutionSucceededDetails":{"shape":"ExecutionSucceededDetails"},
+        "ExecutionFailedDetails":{"shape":"ExecutionFailedDetails"},
+        "ExecutionTimedOutDetails":{"shape":"ExecutionTimedOutDetails"},
+        "ExecutionStoppedDetails":{"shape":"ExecutionStoppedDetails"},
+        "ContextStartedDetails":{"shape":"ContextStartedDetails"},
+        "ContextSucceededDetails":{"shape":"ContextSucceededDetails"},
+        "ContextFailedDetails":{"shape":"ContextFailedDetails"},
+        "WaitStartedDetails":{"shape":"WaitStartedDetails"},
+        "WaitSucceededDetails":{"shape":"WaitSucceededDetails"},
+        "WaitCancelledDetails":{"shape":"WaitCancelledDetails"},
+        "StepStartedDetails":{"shape":"StepStartedDetails"},
+        "StepSucceededDetails":{"shape":"StepSucceededDetails"},
+        "StepFailedDetails":{"shape":"StepFailedDetails"},
+        "InvokeStartedDetails":{"shape":"InvokeStartedDetails"},
+        "InvokeSucceededDetails":{"shape":"InvokeSucceededDetails"},
+        "InvokeFailedDetails":{"shape":"InvokeFailedDetails"},
+        "InvokeTimedOutDetails":{"shape":"InvokeTimedOutDetails"},
+        "InvokeCancelledDetails":{"shape":"InvokeCancelledDetails"},
+        "CallbackStartedDetails":{"shape":"CallbackStartedDetails"},
+        "CallbackSucceededDetails":{"shape":"CallbackSucceededDetails"},
+        "CallbackFailedDetails":{"shape":"CallbackFailedDetails"},
+        "CallbackTimedOutDetails":{"shape":"CallbackTimedOutDetails"}
       }
     },
     "EventId":{
@@ -6322,6 +6365,16 @@
     "OperationId":{
       "type":"string",
       "max":1024,
+      "min":1
+    },
+    "OperationName":{
+      "type":"string",
+      "max":128,
+      "min":1
+    },
+    "OperationSubType":{
+      "type":"string",
+      "max":128,
       "min":1
     },
     "OperationType":{
