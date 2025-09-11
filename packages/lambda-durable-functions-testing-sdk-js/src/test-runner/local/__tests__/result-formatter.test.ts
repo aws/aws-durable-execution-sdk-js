@@ -36,13 +36,11 @@ describe("ResultFormatter", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         }),
       ];
 
-      mockOperationStorage.getOperations.mockReturnValue(
-        mockOperations
-      );
+      mockOperationStorage.getOperations.mockReturnValue(mockOperations);
 
       const lambdaResponse: TestExecutionResult = {
         status: OperationStatus.SUCCEEDED,
@@ -80,7 +78,7 @@ describe("ResultFormatter", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         }
       );
 
@@ -94,14 +92,12 @@ describe("ResultFormatter", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.FAILED,
           },
-          update: {},
+          events: [],
         }
       );
 
       const mockOperations = [succeededOp, failedOp];
-      mockOperationStorage.getOperations.mockReturnValue(
-        mockOperations
-      );
+      mockOperationStorage.getOperations.mockReturnValue(mockOperations);
 
       const lambdaResponse: TestExecutionResult = {
         status: OperationStatus.SUCCEEDED,
@@ -227,6 +223,7 @@ describe("ResultFormatter", () => {
             Type: OperationType.STEP,
           },
           update: {},
+          events: [],
         },
         {
           operation: {
@@ -236,6 +233,7 @@ describe("ResultFormatter", () => {
             Type: OperationType.WAIT,
           },
           update: {},
+          events: [],
         },
       ].map(
         (checkpointOperation) =>
@@ -246,9 +244,7 @@ describe("ResultFormatter", () => {
           )
       );
 
-      mockOperationStorage.getOperations.mockReturnValue(
-        mockOperations
-      );
+      mockOperationStorage.getOperations.mockReturnValue(mockOperations);
 
       const lambdaResponse: TestExecutionResult = {
         status: OperationStatus.SUCCEEDED,
@@ -262,9 +258,7 @@ describe("ResultFormatter", () => {
       );
 
       expect(testResult.getOperations()).toEqual(mockOperations);
-      expect(mockOperationStorage.getOperations).toHaveBeenCalledTimes(
-        1
-      );
+      expect(mockOperationStorage.getOperations).toHaveBeenCalledTimes(1);
     });
   });
 

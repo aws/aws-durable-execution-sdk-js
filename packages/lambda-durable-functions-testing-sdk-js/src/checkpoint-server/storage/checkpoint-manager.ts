@@ -8,11 +8,14 @@ import {
 } from "@amzn/dex-internal-sdk";
 import { randomUUID } from "node:crypto";
 import { CallbackId, ExecutionId, InvocationId } from "../utils/tagged-strings";
-import { CallbackManager } from "./callback-manager";
+import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";
+import { EventProcessor } from "./event-processor";
+import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 
-export interface CheckpointOperation {
-  operation: Operation;
-  update: OperationUpdate;
+export interface CheckpointOperation extends OperationEvents {
+  // required for test execution orchestrator to process retries
+  // TODO: schedule the retries internally instead of polling for updates
+  update: OperationUpdate | undefined;
 }
 
 export type OperationInvocationIdMap = Record<string, InvocationId[]>;
@@ -21,12 +24,14 @@ export type OperationInvocationIdMap = Record<string, InvocationId[]>;
  * Used for managing the checkpoints of an execution.
  */
 export class CheckpointManager {
-  public readonly operationDataMap = new Map<string, CheckpointOperation>();
+  public readonly operationDataMap = new Map<string, OperationEvents>();
   private readonly pendingUpdates: CheckpointOperation[] = [];
   private resolvePendingUpdatePromise: (() => void) | undefined = undefined;
   private readonly callbackManager: CallbackManager;
   private readonly operationInvocationIdMap: Record<string, Set<InvocationId>> =
     {};
+  // TODO: add execution timeout
+  readonly eventProcessor = new EventProcessor();
 
   constructor(executionId: ExecutionId) {
     this.callbackManager = new CallbackManager(executionId, this);
@@ -79,9 +84,15 @@ export class CheckpointManager {
         InputPayload: payload,
       },
     };
+    const update = {
+      Id: initialId,
+      Type: OperationType.EXECUTION,
+      Action: OperationAction.START,
+      Payload: payload,
+    };
     this.operationDataMap.set(initialId, {
       operation: initialOperation,
-      update: {},
+      events: [this.eventProcessor.processUpdate(update, initialOperation)],
     });
 
     return initialOperation;
@@ -137,8 +148,8 @@ export class CheckpointManager {
    */
   completeCallback(
     callbackDetails: CallbackDetails,
-    status: OperationStatus
-  ): CheckpointOperation {
+    status: CompleteCallbackStatus
+  ): OperationEvents {
     const result = this.callbackManager.completeCallback(
       callbackDetails,
       status
@@ -165,7 +176,7 @@ export class CheckpointManager {
    * Used for marking an operation as complete. Can be used for wait steps.
    * @returns the updated operation data
    */
-  completeOperation(inputUpdate: OperationUpdate): CheckpointOperation {
+  completeOperation(inputUpdate: OperationUpdate): OperationEvents {
     if (!inputUpdate.Id) {
       throw new Error("Missing Id in operation");
     }
@@ -176,16 +187,16 @@ export class CheckpointManager {
       throw new Error("Could not find operation");
     }
 
-    const { operation, update } = operationData;
+    const { operation, events } = operationData;
 
-    const copied: CheckpointOperation = {
+    const copied: OperationEvents = {
       operation: {
         ...operation,
       },
-      update: {
-        ...update,
-        ...inputUpdate,
-      },
+      events: [
+        ...events,
+        this.eventProcessor.processUpdate(inputUpdate, operation),
+      ],
     };
 
     switch (inputUpdate.Action) {
@@ -249,7 +260,7 @@ export class CheckpointManager {
   registerUpdates(
     updates: OperationUpdate[],
     invocationId: InvocationId
-  ): CheckpointOperation[] {
+  ): OperationEvents[] {
     return updates.map((update) => this.registerUpdate(update, invocationId));
   }
 
@@ -263,7 +274,7 @@ export class CheckpointManager {
    * @returns The updated checkpoint operation data
    * @throws {Error} When the operation with the given ID is not found
    */
-  updateOperation(id: string, newOperation: Operation): CheckpointOperation {
+  updateOperation(id: string, newOperation: Operation): OperationEvents {
     const operationData = this.operationDataMap.get(id);
     if (!operationData) {
       throw new Error("Could not find operation");
@@ -288,7 +299,7 @@ export class CheckpointManager {
   registerUpdate(
     update: OperationUpdate,
     invocationId: InvocationId
-  ): CheckpointOperation {
+  ): OperationEvents {
     if (!update.Id) {
       throw new Error("Missing Id in update");
     }
@@ -306,12 +317,18 @@ export class CheckpointManager {
       operationInvocations.add(invocationId);
 
       if (previousOperation.operation.WaitDetails?.ScheduledTimestamp) {
-        this.addOperationUpdate(previousOperation);
+        this.addOperationUpdate({
+          ...previousOperation,
+          update,
+        });
         return previousOperation;
       }
 
       const completedOperation = this.completeOperation(update);
-      this.addOperationUpdate(completedOperation);
+      this.addOperationUpdate({
+        ...completedOperation,
+        update,
+      });
       return completedOperation;
     }
 
@@ -375,9 +392,9 @@ export class CheckpointManager {
       }
     }
 
-    const result: CheckpointOperation = {
+    const result: OperationEvents = {
       operation,
-      update,
+      events: [],
     };
 
     this.operationDataMap.set(update.Id, result);
@@ -388,9 +405,14 @@ export class CheckpointManager {
       update.Action === OperationAction.FAIL
     ) {
       updatedResult = this.completeOperation(update);
+    } else {
+      result.events = [this.eventProcessor.processUpdate(update, operation)];
     }
 
-    this.addOperationUpdate(updatedResult);
+    this.addOperationUpdate({
+      ...updatedResult,
+      update,
+    });
     return updatedResult;
   }
 

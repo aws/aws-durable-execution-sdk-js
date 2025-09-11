@@ -8,7 +8,7 @@ import {
   WaitingOperationStatus,
 } from "../../durable-test-runner";
 import { doesStatusMatch } from "./status-matcher";
-import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
+import { OperationEvents } from "../../common/operations/operation-with-data";
 
 interface WaitingOperation {
   operation: DurableOperation<unknown>;
@@ -56,7 +56,7 @@ export class OperationWaitManager {
    * @param trackedDurableOperations Operations that just got populated with data
    */
   handleCheckpointReceived(
-    checkpointOperationsReceived: CheckpointOperation[],
+    checkpointOperationsReceived: OperationEvents[],
     trackedDurableOperations: DurableOperation<unknown>[]
   ): void {
     // Handle callback operations

@@ -1,4 +1,4 @@
-import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-manager";
+import { OperationEvents } from "./operations/operation-with-data";
 
 /**
  * Optimized way of retrieving operations by id and name/index.
@@ -6,25 +6,25 @@ import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-
  * Avoids re-iterating over the operations list every time an operation needs to be fetched.
  */
 export class IndexedOperations {
-  private readonly operationsById = new Map<string, CheckpointOperation>();
+  private readonly operationsById = new Map<string, OperationEvents>();
   private readonly operationsByName = new Map<
     string,
-    Map<string, CheckpointOperation>
+    Map<string, OperationEvents>
   >();
   private readonly operationsByParentId = new Map<
     string,
-    Map<string, CheckpointOperation>
+    Map<string, OperationEvents>
   >();
 
-  constructor(operations: CheckpointOperation[]) {
+  constructor(operations: OperationEvents[]) {
     this.addOperations(operations);
   }
 
-  getOperations(): CheckpointOperation[] {
+  getOperations(): OperationEvents[] {
     return Array.from(this.operationsById.values());
   }
 
-  addOperations(checkpointOperations: CheckpointOperation[]) {
+  addOperations(checkpointOperations: OperationEvents[]) {
     for (const checkpointOperation of checkpointOperations) {
       const { operation } = checkpointOperation;
       if (operation.Id === undefined) {
@@ -50,7 +50,7 @@ export class IndexedOperations {
       if (operation.Name !== undefined) {
         const nameOps =
           this.operationsByName.get(operation.Name) ??
-          new Map<string, CheckpointOperation>();
+          new Map<string, OperationEvents>();
         nameOps.set(operation.Id, checkpointOperation);
         this.operationsByName.set(operation.Name, nameOps);
       }
@@ -58,14 +58,14 @@ export class IndexedOperations {
       if (operation.ParentId !== undefined) {
         const childOperations =
           this.operationsByParentId.get(operation.ParentId) ??
-          new Map<string, CheckpointOperation>();
+          new Map<string, OperationEvents>();
         childOperations.set(operation.Id, checkpointOperation);
         this.operationsByParentId.set(operation.ParentId, childOperations);
       }
     }
   }
 
-  getOperationChildren(id: string): CheckpointOperation[] {
+  getOperationChildren(id: string): OperationEvents[] {
     const operations = this.operationsByParentId.get(id);
     return operations ? Array.from(operations.values()) : [];
   }
@@ -75,12 +75,12 @@ export class IndexedOperations {
    * @param id The operation ID
    * @returns The operation with the matching ID
    */
-  getById(id: string): CheckpointOperation | undefined {
+  getById(id: string): OperationEvents | undefined {
     const operation = this.operationsById.get(id);
     return operation;
   }
 
-  getByIndex(index: number): CheckpointOperation | undefined {
+  getByIndex(index: number): OperationEvents | undefined {
     return this.getOperations().at(index);
   }
 
@@ -90,7 +90,7 @@ export class IndexedOperations {
    * @param index The index of the operation among operations with the same name. Defaults to 0
    * @returns The operation at the specified name and index
    */
-  getByNameAndIndex(name: string, index = 0): CheckpointOperation | undefined {
+  getByNameAndIndex(name: string, index = 0): OperationEvents | undefined {
     const operations = this.operationsByName.get(name);
     return operations ? Array.from(operations.values()).at(index) : undefined;
   }

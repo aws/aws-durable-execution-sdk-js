@@ -1,5 +1,5 @@
 import { CheckpointApiClient } from "../checkpoint-api-client";
-import { OperationAction, OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@amzn/dex-internal-sdk";
 import {
   API_PATHS,
   HTTP_METHODS,
@@ -206,34 +206,6 @@ describe("CheckpointApiClient", () => {
   });
 
   describe("updateCheckpointData", () => {
-    it("should make a POST request to the correct endpoint with action", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({}),
-      });
-
-      await apiClient.updateCheckpointData({
-        executionId: mockExecutionId,
-        operationId: mockOperationId,
-        action: OperationAction.SUCCEED,
-      });
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${mockBaseUrl}${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}`,
-        {
-          method: HTTP_METHODS.POST,
-          body: JSON.stringify({
-            action: OperationAction.SUCCEED,
-            status: undefined,
-          }),
-          headers: {
-            "Content-Type": "application/json",
-          },
-          signal: undefined,
-        }
-      );
-    });
-
     it("should make a POST request to the correct endpoint with status", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -274,7 +246,7 @@ describe("CheckpointApiClient", () => {
         apiClient.updateCheckpointData({
           executionId: mockExecutionId,
           operationId: mockOperationId,
-          action: OperationAction.SUCCEED,
+          status: OperationStatus.SUCCEEDED,
         })
       ).rejects.toThrow(
         `Error making HTTP request to ${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}: status: 404, ${errorMessage}`
