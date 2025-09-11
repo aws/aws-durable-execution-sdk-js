@@ -1,13 +1,13 @@
 name: Upload Build to S3
 
 on:
-  # push:
-  #   branches: [ "development", "hsilan-test-publish-s3" ]
-  workflow_run:
-    workflows: [Unit Tests]
-    branches: [hsilan-test-publish-s3]
-    types: 
-      - completed
+  push:
+    branches: [ "development", "hsilan-test-publish-s3" ]
+  # workflow_run:
+  #   workflows: [Unit Tests]
+  #   branches: [development,hsilan-test-publish-s3]
+  #   types: 
+  #     - completed
       
 env:
   BUCKET_NAME : "github-language-sdk-package-build-artifacts"
