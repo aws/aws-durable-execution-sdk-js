@@ -40,7 +40,9 @@ jobs:
         uses: martinbeentjes/npm-get-version-action@v1.3.1
         with:
           path: packages/lambda-durable-functions-sdk-js
-      - run: npm pack
+      - name: Navigate to package and pack
+        working-directory: packages/lambda-durable-functions-sdk-js
+        run: npm pack
       # Upload a file to AWS s3
       - name: Copy tgz build file to s3
         run: |
