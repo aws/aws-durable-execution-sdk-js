@@ -1,8 +1,8 @@
 name: upload-build-to-s3
 on:
   workflow_run:
-    workflows: ["Unit Tests"]
-    branches: [ "main", "development", "hsilan-test-publish-s3" ]
+    workflows: [Unit Tests]
+    branches: [ development, hsilan-test-publish-s3 ]
     types: 
       - completed
 env:
@@ -13,7 +13,7 @@ permissions:
   id-token: write   # This is required for requesting the JWT
   contents: read    # This is required for actions/checkout
 jobs:
-  S3PackageUpload:
+  on-success:
     runs-on: ubuntu-latest
     steps:
       - name: Git clone the repository
