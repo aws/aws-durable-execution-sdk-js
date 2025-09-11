@@ -222,6 +222,12 @@ jobs:
         echo "Execution History:"
         cat /tmp/history.json
     
+    - name: Assert History - ${{ matrix.example.name }}
+      if: env.EXECUTION_ARN != ''
+      working-directory: ./packages/examples
+      run: |
+        node scripts/assert-history.js "${{ matrix.example.handler }}" "/tmp/history.json"
+    
     - name: Cleanup Lambda function
       if: always()
       env:
