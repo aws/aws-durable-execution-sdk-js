@@ -5,9 +5,9 @@ name: Unit Tests
 
 on:
   push:
-    branches: [ "main", "development" ]
+    branches: [ "main", "development", "hsilan-test-publish-s3" ]
   pull_request:
-    branches: [ "main", "development" ]
+    branches: [ "main", "development", "hsilan-test-publish-s3" ]
 
 jobs:
   build:
