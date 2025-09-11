@@ -1,8 +1,10 @@
-# Sample workflow to access AWS resources when workflow is tied to branch
-# The workflow Creates static website using aws s3
-name: AWS example workflow
+name: upload-build-to-s3
 on:
-  push
+  workflow_run:
+    workflows: ["Integration Tests"]
+    branches: [ "main", "development" ]
+    types: 
+      - completed
 env:
   BUCKET_NAME : "github-aws-language-sdk-package-build-artifacts"
   AWS_REGION : "us-west-2"
@@ -16,13 +18,22 @@ jobs:
     steps:
       - name: Git clone the repository
         uses: actions/checkout@v5
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
         with:
           role-to-assume: arn:aws:iam::623946091065:role/GithubActionsRole
           role-session-name: samplerolesession
           aws-region: ${{ env.AWS_REGION }}
+      - name: Get Package Version
+        id: get-package-version
+        uses: stevenbenitez/get-package-version-action@v1
+      - run: npm pack
       # Upload a file to AWS s3
-      - name: Copy index.html to s3
+      - name: Copy tgz build file to s3
         run: |
-          aws s3 cp ./index.html s3://${{ env.BUCKET_NAME }}/
+          aws s3 cp ./ amzn-durable-executions-language-sdk-${{ steps.get-package-version.outputs.version }}.tgz s3://${{ env.BUCKET_NAME }}/
