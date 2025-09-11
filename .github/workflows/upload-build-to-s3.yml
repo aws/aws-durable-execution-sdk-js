@@ -50,7 +50,11 @@ jobs:
       # Upload a file to AWS s3
       - name: Copy tgz build file to s3
         run: |
-          aws s3 cp ./packages/lambda-durable-functions-sdk-js/amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz s3://${{ env.BUCKET_NAME }}/
+          aws s3 cp ./packages/lambda-durable-functions-sdk-js/amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz \
+            s3://${{ env.BUCKET_NAME }}/
       - name: commit to Gitfarm
         run: |
-          aws lambda invoke --function-name arn:aws:lambda:us-west-2:623946091065:function:gitfarm-lambda-personal-WriteFileGitFarmEB81359E-mXcLqQEGbZ8J --payload '{"gitFarmRepo":"DurableExecutionsLanguageSDK","gitFarmBranch":"hsilan-test","gitFarmFilepath":"amzn-durable-executions-language-sdk-1.0.0.tgz","s3Bucket":"github-language-sdk-package-build-artifacts","s3FilePath":"amzn-durable-executions-language-sdk-1.0.0.tgz"}'
+          aws lambda invoke \
+            --function-name arn:aws:lambda:us-west-2:623946091065:function:gitfarm-lambda-personal-WriteFileGitFarmEB81359E-mXcLqQEGbZ8J \
+            --payload '{"gitFarmRepo":"DurableExecutionsLanguageSDK","gitFarmBranch":"hsilan-test","gitFarmFilepath":"amzn-durable-executions-language-sdk-1.0.0.tgz","s3Bucket":"github-language-sdk-package-build-artifacts","s3FilePath":"amzn-durable-executions-language-sdk-1.0.0.tgz"}' \
+            output.txt
