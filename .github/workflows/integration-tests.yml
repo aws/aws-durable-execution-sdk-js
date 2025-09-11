@@ -2,13 +2,13 @@ name: Integration Tests
 
 on:
   push:
-    branches: [ "main", "development" ]
+    branches: [ "main", "development", "hsilan-test-publish-s3" ]
     paths:
       - 'packages/lambda-durable-functions-sdk-js/**'
       - 'packages/examples/**'
       - '.github/workflows/integration-tests.yml'
   pull_request:
-    branches: [ "main", "development" ]
+    branches: [ "main", "development", "hsilan-test-publish-s3" ]
     paths:
       - 'packages/lambda-durable-functions-sdk-js/**'
       - 'packages/examples/**'
