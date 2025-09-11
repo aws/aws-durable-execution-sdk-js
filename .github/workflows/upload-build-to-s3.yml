@@ -1,11 +1,13 @@
 name: Upload tgz to S3
 
 on:
-  workflow_run:
-    workflows: [Unit Tests]
-    branches: [development,hsilan-test-publish-s3]
-    types: 
-      - completed
+  push:
+    branches: [ "development", "hsilan-test-publish-s3" ]
+  # workflow_run:
+  #   workflows: [Unit Tests]
+  #   branches: [development,hsilan-test-publish-s3]
+  #   types: 
+  #     - completed
       
 env:
   BUCKET_NAME : "github-aws-language-sdk-package-build-artifacts"
