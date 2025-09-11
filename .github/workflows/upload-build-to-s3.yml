@@ -1,4 +1,4 @@
-name: Upload tgz to S3
+name: Upload Build to S3
 
 on:
   push:
