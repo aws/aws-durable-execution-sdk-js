@@ -42,4 +42,4 @@ jobs:
       # Upload a file to AWS s3
       - name: Copy tgz build file to s3
         run: |
-          aws s3 cp ./ amzn-durable-executions-language-sdk-${{ steps.get-package-version.outputs.version }}.tgz s3://${{ env.BUCKET_NAME }}/
+          aws s3 cp ./amzn-durable-executions-language-sdk-${{ steps.get-package-version.outputs.version }}.tgz s3://${{ env.BUCKET_NAME }}/
