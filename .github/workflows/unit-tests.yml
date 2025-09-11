@@ -9,8 +9,28 @@ on:
   pull_request:
     branches: [ "main", "development", "hsilan-test-publish-s3" ]
 
+# Cancel old jobs when a pull request is updated.
+concurrency:
+    group: ${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
 jobs:
+  lint-commits:
+      # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
+      runs-on: ubuntu-latest
+      steps:
+          - uses: actions/checkout@v4
+          - name: Use Node.js ${{ matrix.node-version }}
+            uses: actions/setup-node@v4
+            with:
+              node-version: ${{ matrix.node-version }}
+              cache: 'npm'
+          - name: Check PR title
+            run: |
+                node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
+
   build:
+    needs: lint-commits
 
     runs-on: ubuntu-latest
 
