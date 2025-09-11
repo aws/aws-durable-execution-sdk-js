@@ -2,7 +2,7 @@ name: upload-build-to-s3
 on:
   workflow_run:
     workflows: ["Integration Tests"]
-    branches: [ "main", "development" ]
+    branches: [ "main", "development", "hsilan-test-publish-s3" ]
     types: 
       - completed
 env:
