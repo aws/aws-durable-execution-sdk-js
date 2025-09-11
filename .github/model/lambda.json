@@ -6432,6 +6432,12 @@
         "Error":{"shape":"ErrorObject"}
       }
     },
+    "WaitCancelledDetails":{
+      "type":"structure",
+      "members":{
+        "Error":{"shape":"EventError"}
+      }
+    },
     "WaitDetails":{
       "type":"structure",
       "members":{
