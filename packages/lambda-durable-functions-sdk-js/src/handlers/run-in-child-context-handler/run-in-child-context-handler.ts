@@ -137,13 +137,13 @@ export const executeChildContext = async <T>(
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
 
-  // Checkpoint at start if not already started
+  // Checkpoint at start if not already started (fire-and-forget for performance)
   if (context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    await checkpoint(entityId, {
+    checkpoint(entityId, {
       Id: entityId,
       ParentId: context.parentId,
-      Action: "START",
+      Action: OperationAction.START,
       SubType: subType,
       Type: OperationType.CONTEXT,
       Name: name,
@@ -212,7 +212,7 @@ export const executeChildContext = async <T>(
     await checkpoint(entityId, {
       Id: entityId,
       ParentId: context.parentId,
-      Action: "SUCCEED",
+      Action: OperationAction.SUCCEED,
       SubType: subType,
       Type: OperationType.CONTEXT,
       Payload: payloadToCheckpoint,
