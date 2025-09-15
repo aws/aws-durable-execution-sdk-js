@@ -1,17 +1,7 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  SendDurableExecutionCallbackSuccessRequest,
-  SendDurableExecutionCallbackSuccessResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { SendDurableExecutionCallbackSuccessRequest, SendDurableExecutionCallbackSuccessResponse } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
-import {
-  BlobPayloadInputTypes,
-  MetadataBearer as __MetadataBearer,
-} from "@smithy/types";
+import { BlobPayloadInputTypes, MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
  * @public
  */
@@ -20,47 +10,27 @@ export { $Command };
 /**
  * @public
  */
-export type SendDurableExecutionCallbackSuccessCommandInputType = Omit<
-  SendDurableExecutionCallbackSuccessRequest,
-  "Result"
-> & {
-  Result?: BlobPayloadInputTypes;
+export type SendDurableExecutionCallbackSuccessCommandInputType = Omit<SendDurableExecutionCallbackSuccessRequest, "Result"> & {
+    Result?: BlobPayloadInputTypes;
 };
 /**
  * @public
  *
  * The input for {@link SendDurableExecutionCallbackSuccessCommand}.
  */
-export interface SendDurableExecutionCallbackSuccessCommandInput
-  extends SendDurableExecutionCallbackSuccessCommandInputType {}
+export interface SendDurableExecutionCallbackSuccessCommandInput extends SendDurableExecutionCallbackSuccessCommandInputType {
+}
 /**
  * @public
  *
  * The output of {@link SendDurableExecutionCallbackSuccessCommand}.
  */
-export interface SendDurableExecutionCallbackSuccessCommandOutput
-  extends SendDurableExecutionCallbackSuccessResponse,
-    __MetadataBearer {}
+export interface SendDurableExecutionCallbackSuccessCommandOutput extends SendDurableExecutionCallbackSuccessResponse, __MetadataBearer {
+}
 declare const SendDurableExecutionCallbackSuccessCommand_base: {
-  new (
-    input: SendDurableExecutionCallbackSuccessCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    SendDurableExecutionCallbackSuccessCommandInput,
-    SendDurableExecutionCallbackSuccessCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: SendDurableExecutionCallbackSuccessCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    SendDurableExecutionCallbackSuccessCommandInput,
-    SendDurableExecutionCallbackSuccessCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: SendDurableExecutionCallbackSuccessCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackSuccessCommandInput, SendDurableExecutionCallbackSuccessCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: SendDurableExecutionCallbackSuccessCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackSuccessCommandInput, SendDurableExecutionCallbackSuccessCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -68,8 +38,8 @@ declare const SendDurableExecutionCallbackSuccessCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, SendDurableExecutionCallbackSuccessCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, SendDurableExecutionCallbackSuccessCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, SendDurableExecutionCallbackSuccessCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, SendDurableExecutionCallbackSuccessCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // SendDurableExecutionCallbackSuccessRequest
  *   CallbackId: "STRING_VALUE", // required
@@ -101,15 +71,15 @@ declare const SendDurableExecutionCallbackSuccessCommand_base: {
  *
  */
 export declare class SendDurableExecutionCallbackSuccessCommand extends SendDurableExecutionCallbackSuccessCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: SendDurableExecutionCallbackSuccessRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: SendDurableExecutionCallbackSuccessRequest;
+            output: {};
+        };
+        sdk: {
+            input: SendDurableExecutionCallbackSuccessCommandInput;
+            output: SendDurableExecutionCallbackSuccessCommandOutput;
+        };
     };
-    sdk: {
-      input: SendDurableExecutionCallbackSuccessCommandInput;
-      output: SendDurableExecutionCallbackSuccessCommandOutput;
-    };
-  };
 }

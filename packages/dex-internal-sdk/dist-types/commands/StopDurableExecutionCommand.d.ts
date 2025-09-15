@@ -1,12 +1,5 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  StopDurableExecutionRequest,
-  StopDurableExecutionResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { StopDurableExecutionRequest, StopDurableExecutionResponse } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link StopDurableExecutionCommand}.
  */
-export interface StopDurableExecutionCommandInput
-  extends StopDurableExecutionRequest {}
+export interface StopDurableExecutionCommandInput extends StopDurableExecutionRequest {
+}
 /**
  * @public
  *
  * The output of {@link StopDurableExecutionCommand}.
  */
-export interface StopDurableExecutionCommandOutput
-  extends StopDurableExecutionResponse,
-    __MetadataBearer {}
+export interface StopDurableExecutionCommandOutput extends StopDurableExecutionResponse, __MetadataBearer {
+}
 declare const StopDurableExecutionCommand_base: {
-  new (
-    input: StopDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    StopDurableExecutionCommandInput,
-    StopDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: StopDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    StopDurableExecutionCommandInput,
-    StopDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: StopDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<StopDurableExecutionCommandInput, StopDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: StopDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<StopDurableExecutionCommandInput, StopDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -56,8 +32,8 @@ declare const StopDurableExecutionCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, StopDurableExecutionCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, StopDurableExecutionCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, StopDurableExecutionCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, StopDurableExecutionCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // StopDurableExecutionRequest
  *   DurableExecutionArn: "STRING_VALUE", // required
@@ -98,15 +74,15 @@ declare const StopDurableExecutionCommand_base: {
  *
  */
 export declare class StopDurableExecutionCommand extends StopDurableExecutionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: StopDurableExecutionRequest;
-      output: StopDurableExecutionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: StopDurableExecutionRequest;
+            output: StopDurableExecutionResponse;
+        };
+        sdk: {
+            input: StopDurableExecutionCommandInput;
+            output: StopDurableExecutionCommandOutput;
+        };
     };
-    sdk: {
-      input: StopDurableExecutionCommandInput;
-      output: StopDurableExecutionCommandOutput;
-    };
-  };
 }

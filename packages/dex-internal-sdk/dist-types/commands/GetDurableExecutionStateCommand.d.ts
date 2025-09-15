@@ -1,12 +1,5 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetDurableExecutionStateRequest,
-  GetDurableExecutionStateResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetDurableExecutionStateRequest, GetDurableExecutionStateResponse } from "../models/models_0";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetDurableExecutionStateCommand}.
  */
-export interface GetDurableExecutionStateCommandInput
-  extends GetDurableExecutionStateRequest {}
+export interface GetDurableExecutionStateCommandInput extends GetDurableExecutionStateRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetDurableExecutionStateCommand}.
  */
-export interface GetDurableExecutionStateCommandOutput
-  extends GetDurableExecutionStateResponse,
-    __MetadataBearer {}
+export interface GetDurableExecutionStateCommandOutput extends GetDurableExecutionStateResponse, __MetadataBearer {
+}
 declare const GetDurableExecutionStateCommand_base: {
-  new (
-    input: GetDurableExecutionStateCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionStateCommandInput,
-    GetDurableExecutionStateCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetDurableExecutionStateCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionStateCommandInput,
-    GetDurableExecutionStateCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetDurableExecutionStateCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionStateCommandInput, GetDurableExecutionStateCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetDurableExecutionStateCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionStateCommandInput, GetDurableExecutionStateCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -56,8 +32,8 @@ declare const GetDurableExecutionStateCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, GetDurableExecutionStateCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, GetDurableExecutionStateCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, GetDurableExecutionStateCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, GetDurableExecutionStateCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // GetDurableExecutionStateRequest
  *   CheckpointToken: "STRING_VALUE", // required
@@ -157,15 +133,15 @@ declare const GetDurableExecutionStateCommand_base: {
  *
  */
 export declare class GetDurableExecutionStateCommand extends GetDurableExecutionStateCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetDurableExecutionStateRequest;
-      output: GetDurableExecutionStateResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetDurableExecutionStateRequest;
+            output: GetDurableExecutionStateResponse;
+        };
+        sdk: {
+            input: GetDurableExecutionStateCommandInput;
+            output: GetDurableExecutionStateCommandOutput;
+        };
     };
-    sdk: {
-      input: GetDurableExecutionStateCommandInput;
-      output: GetDurableExecutionStateCommandOutput;
-    };
-  };
 }

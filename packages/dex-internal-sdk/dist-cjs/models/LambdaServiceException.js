@@ -2,16 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LambdaServiceException = exports.__ServiceException = void 0;
 const smithy_client_1 = require("@smithy/smithy-client");
-Object.defineProperty(exports, "__ServiceException", {
-  enumerable: true,
-  get: function () {
-    return smithy_client_1.ServiceException;
-  },
-});
+Object.defineProperty(exports, "__ServiceException", { enumerable: true, get: function () { return smithy_client_1.ServiceException; } });
 class LambdaServiceException extends smithy_client_1.ServiceException {
-  constructor(options) {
-    super(options);
-    Object.setPrototypeOf(this, LambdaServiceException.prototype);
-  }
+    constructor(options) {
+        super(options);
+        Object.setPrototypeOf(this, LambdaServiceException.prototype);
+    }
 }
 exports.LambdaServiceException = LambdaServiceException;

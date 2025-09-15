@@ -1,12 +1,5 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetDurableExecutionHistoryRequest,
-  GetDurableExecutionHistoryResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetDurableExecutionHistoryRequest, GetDurableExecutionHistoryResponse } from "../models/models_0";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetDurableExecutionHistoryCommand}.
  */
-export interface GetDurableExecutionHistoryCommandInput
-  extends GetDurableExecutionHistoryRequest {}
+export interface GetDurableExecutionHistoryCommandInput extends GetDurableExecutionHistoryRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetDurableExecutionHistoryCommand}.
  */
-export interface GetDurableExecutionHistoryCommandOutput
-  extends GetDurableExecutionHistoryResponse,
-    __MetadataBearer {}
+export interface GetDurableExecutionHistoryCommandOutput extends GetDurableExecutionHistoryResponse, __MetadataBearer {
+}
 declare const GetDurableExecutionHistoryCommand_base: {
-  new (
-    input: GetDurableExecutionHistoryCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionHistoryCommandInput,
-    GetDurableExecutionHistoryCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetDurableExecutionHistoryCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionHistoryCommandInput,
-    GetDurableExecutionHistoryCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetDurableExecutionHistoryCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionHistoryCommandInput, GetDurableExecutionHistoryCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetDurableExecutionHistoryCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionHistoryCommandInput, GetDurableExecutionHistoryCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -56,8 +32,8 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, GetDurableExecutionHistoryCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, GetDurableExecutionHistoryCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, GetDurableExecutionHistoryCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, GetDurableExecutionHistoryCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // GetDurableExecutionHistoryRequest
  *   DurableExecutionArn: "STRING_VALUE", // required
@@ -274,15 +250,15 @@ declare const GetDurableExecutionHistoryCommand_base: {
  *
  */
 export declare class GetDurableExecutionHistoryCommand extends GetDurableExecutionHistoryCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetDurableExecutionHistoryRequest;
-      output: GetDurableExecutionHistoryResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetDurableExecutionHistoryRequest;
+            output: GetDurableExecutionHistoryResponse;
+        };
+        sdk: {
+            input: GetDurableExecutionHistoryCommandInput;
+            output: GetDurableExecutionHistoryCommandOutput;
+        };
     };
-    sdk: {
-      input: GetDurableExecutionHistoryCommandInput;
-      output: GetDurableExecutionHistoryCommandOutput;
-    };
-  };
 }

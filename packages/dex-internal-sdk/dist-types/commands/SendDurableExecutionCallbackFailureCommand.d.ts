@@ -1,12 +1,5 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  SendDurableExecutionCallbackFailureRequest,
-  SendDurableExecutionCallbackFailureResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { SendDurableExecutionCallbackFailureRequest, SendDurableExecutionCallbackFailureResponse } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link SendDurableExecutionCallbackFailureCommand}.
  */
-export interface SendDurableExecutionCallbackFailureCommandInput
-  extends SendDurableExecutionCallbackFailureRequest {}
+export interface SendDurableExecutionCallbackFailureCommandInput extends SendDurableExecutionCallbackFailureRequest {
+}
 /**
  * @public
  *
  * The output of {@link SendDurableExecutionCallbackFailureCommand}.
  */
-export interface SendDurableExecutionCallbackFailureCommandOutput
-  extends SendDurableExecutionCallbackFailureResponse,
-    __MetadataBearer {}
+export interface SendDurableExecutionCallbackFailureCommandOutput extends SendDurableExecutionCallbackFailureResponse, __MetadataBearer {
+}
 declare const SendDurableExecutionCallbackFailureCommand_base: {
-  new (
-    input: SendDurableExecutionCallbackFailureCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    SendDurableExecutionCallbackFailureCommandInput,
-    SendDurableExecutionCallbackFailureCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: SendDurableExecutionCallbackFailureCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    SendDurableExecutionCallbackFailureCommandInput,
-    SendDurableExecutionCallbackFailureCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: SendDurableExecutionCallbackFailureCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackFailureCommandInput, SendDurableExecutionCallbackFailureCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: SendDurableExecutionCallbackFailureCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackFailureCommandInput, SendDurableExecutionCallbackFailureCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -56,8 +32,8 @@ declare const SendDurableExecutionCallbackFailureCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, SendDurableExecutionCallbackFailureCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, SendDurableExecutionCallbackFailureCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, SendDurableExecutionCallbackFailureCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, SendDurableExecutionCallbackFailureCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // SendDurableExecutionCallbackFailureRequest
  *   CallbackId: "STRING_VALUE", // required
@@ -96,15 +72,15 @@ declare const SendDurableExecutionCallbackFailureCommand_base: {
  *
  */
 export declare class SendDurableExecutionCallbackFailureCommand extends SendDurableExecutionCallbackFailureCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: SendDurableExecutionCallbackFailureRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: SendDurableExecutionCallbackFailureRequest;
+            output: {};
+        };
+        sdk: {
+            input: SendDurableExecutionCallbackFailureCommandInput;
+            output: SendDurableExecutionCallbackFailureCommandOutput;
+        };
     };
-    sdk: {
-      input: SendDurableExecutionCallbackFailureCommandInput;
-      output: SendDurableExecutionCallbackFailureCommandOutput;
-    };
-  };
 }

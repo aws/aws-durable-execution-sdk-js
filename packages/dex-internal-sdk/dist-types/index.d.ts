@@ -1,3 +1,9 @@
+/**
+ * AWS Gir API Service
+ *     - currently support GET/POST/PUT/DELETE for the Invoke API
+ *
+ * @packageDocumentation
+ */
 export * from "./LambdaClient";
 export * from "./Lambda";
 export { ClientInputEndpointParameters } from "./endpoint/EndpointParameters";

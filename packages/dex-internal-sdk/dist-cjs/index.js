@@ -8,9 +8,4 @@ tslib_1.__exportStar(require("./commands"), exports);
 tslib_1.__exportStar(require("./pagination"), exports);
 tslib_1.__exportStar(require("./models"), exports);
 var LambdaServiceException_1 = require("./models/LambdaServiceException");
-Object.defineProperty(exports, "LambdaServiceException", {
-  enumerable: true,
-  get: function () {
-    return LambdaServiceException_1.LambdaServiceException;
-  },
-});
+Object.defineProperty(exports, "LambdaServiceException", { enumerable: true, get: function () { return LambdaServiceException_1.LambdaServiceException; } });

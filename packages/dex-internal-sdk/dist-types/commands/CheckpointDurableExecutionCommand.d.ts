@@ -1,12 +1,5 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  CheckpointDurableExecutionRequest,
-  CheckpointDurableExecutionResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { CheckpointDurableExecutionRequest, CheckpointDurableExecutionResponse } from "../models/models_0";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link CheckpointDurableExecutionCommand}.
  */
-export interface CheckpointDurableExecutionCommandInput
-  extends CheckpointDurableExecutionRequest {}
+export interface CheckpointDurableExecutionCommandInput extends CheckpointDurableExecutionRequest {
+}
 /**
  * @public
  *
  * The output of {@link CheckpointDurableExecutionCommand}.
  */
-export interface CheckpointDurableExecutionCommandOutput
-  extends CheckpointDurableExecutionResponse,
-    __MetadataBearer {}
+export interface CheckpointDurableExecutionCommandOutput extends CheckpointDurableExecutionResponse, __MetadataBearer {
+}
 declare const CheckpointDurableExecutionCommand_base: {
-  new (
-    input: CheckpointDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CheckpointDurableExecutionCommandInput,
-    CheckpointDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: CheckpointDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CheckpointDurableExecutionCommandInput,
-    CheckpointDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: CheckpointDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<CheckpointDurableExecutionCommandInput, CheckpointDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: CheckpointDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<CheckpointDurableExecutionCommandInput, CheckpointDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -56,8 +32,8 @@ declare const CheckpointDurableExecutionCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, CheckpointDurableExecutionCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, CheckpointDurableExecutionCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, CheckpointDurableExecutionCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, CheckpointDurableExecutionCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // CheckpointDurableExecutionRequest
  *   CheckpointToken: "STRING_VALUE", // required
@@ -196,15 +172,15 @@ declare const CheckpointDurableExecutionCommand_base: {
  *
  */
 export declare class CheckpointDurableExecutionCommand extends CheckpointDurableExecutionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: CheckpointDurableExecutionRequest;
-      output: CheckpointDurableExecutionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: CheckpointDurableExecutionRequest;
+            output: CheckpointDurableExecutionResponse;
+        };
+        sdk: {
+            input: CheckpointDurableExecutionCommandInput;
+            output: CheckpointDurableExecutionCommandOutput;
+        };
     };
-    sdk: {
-      input: CheckpointDurableExecutionCommandInput;
-      output: CheckpointDurableExecutionCommandOutput;
-    };
-  };
 }

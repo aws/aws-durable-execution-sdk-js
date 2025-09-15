@@ -5,8 +5,5 @@ import { DefaultExtensionConfiguration } from "@smithy/types";
 /**
  * @internal
  */
-export interface LambdaExtensionConfiguration
-  extends HttpHandlerExtensionConfiguration,
-    DefaultExtensionConfiguration,
-    AwsRegionExtensionConfiguration,
-    HttpAuthExtensionConfiguration {}
+export interface LambdaExtensionConfiguration extends HttpHandlerExtensionConfiguration, DefaultExtensionConfiguration, AwsRegionExtensionConfiguration, HttpAuthExtensionConfiguration {
+}

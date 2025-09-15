@@ -1,12 +1,5 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetDurableExecutionRequest,
-  GetDurableExecutionResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetDurableExecutionRequest, GetDurableExecutionResponse } from "../models/models_0";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetDurableExecutionCommand}.
  */
-export interface GetDurableExecutionCommandInput
-  extends GetDurableExecutionRequest {}
+export interface GetDurableExecutionCommandInput extends GetDurableExecutionRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetDurableExecutionCommand}.
  */
-export interface GetDurableExecutionCommandOutput
-  extends GetDurableExecutionResponse,
-    __MetadataBearer {}
+export interface GetDurableExecutionCommandOutput extends GetDurableExecutionResponse, __MetadataBearer {
+}
 declare const GetDurableExecutionCommand_base: {
-  new (
-    input: GetDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionCommandInput,
-    GetDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionCommandInput,
-    GetDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionCommandInput, GetDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionCommandInput, GetDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -56,8 +32,8 @@ declare const GetDurableExecutionCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, GetDurableExecutionCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, GetDurableExecutionCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, GetDurableExecutionCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, GetDurableExecutionCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // GetDurableExecutionRequest
  *   DurableExecutionArn: "STRING_VALUE", // required
@@ -106,15 +82,15 @@ declare const GetDurableExecutionCommand_base: {
  *
  */
 export declare class GetDurableExecutionCommand extends GetDurableExecutionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetDurableExecutionRequest;
-      output: GetDurableExecutionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetDurableExecutionRequest;
+            output: GetDurableExecutionResponse;
+        };
+        sdk: {
+            input: GetDurableExecutionCommandInput;
+            output: GetDurableExecutionCommandOutput;
+        };
     };
-    sdk: {
-      input: GetDurableExecutionCommandInput;
-      output: GetDurableExecutionCommandOutput;
-    };
-  };
 }

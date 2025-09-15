@@ -1,12 +1,5 @@
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  ListDurableExecutionsRequest,
-  ListDurableExecutionsResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { ListDurableExecutionsRequest, ListDurableExecutionsResponse } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link ListDurableExecutionsCommand}.
  */
-export interface ListDurableExecutionsCommandInput
-  extends ListDurableExecutionsRequest {}
+export interface ListDurableExecutionsCommandInput extends ListDurableExecutionsRequest {
+}
 /**
  * @public
  *
  * The output of {@link ListDurableExecutionsCommand}.
  */
-export interface ListDurableExecutionsCommandOutput
-  extends ListDurableExecutionsResponse,
-    __MetadataBearer {}
+export interface ListDurableExecutionsCommandOutput extends ListDurableExecutionsResponse, __MetadataBearer {
+}
 declare const ListDurableExecutionsCommand_base: {
-  new (
-    input: ListDurableExecutionsCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListDurableExecutionsCommandInput,
-    ListDurableExecutionsCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    ...[input]: [] | [ListDurableExecutionsCommandInput]
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListDurableExecutionsCommandInput,
-    ListDurableExecutionsCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: ListDurableExecutionsCommandInput): import("@smithy/smithy-client").CommandImpl<ListDurableExecutionsCommandInput, ListDurableExecutionsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (...[input]: [] | [ListDurableExecutionsCommandInput]): import("@smithy/smithy-client").CommandImpl<ListDurableExecutionsCommandInput, ListDurableExecutionsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -56,15 +32,16 @@ declare const ListDurableExecutionsCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, ListDurableExecutionsCommand } from "@amzn/dex-internal-sdk"; // ES Modules import
- * // const { LambdaClient, ListDurableExecutionsCommand } = require("@amzn/dex-internal-sdk"); // CommonJS import
+ * import { LambdaClient, ListDurableExecutionsCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
+ * // const { LambdaClient, ListDurableExecutionsCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // ListDurableExecutionsRequest
  *   FunctionName: "STRING_VALUE",
  *   FunctionVersion: "STRING_VALUE",
  *   DurableExecutionName: "STRING_VALUE",
- *   StatusFilter: "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED",
- *   TimeFilter: "START" || "END",
+ *   StatusFilter: [ // ExecutionStatusList
+ *     "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED",
+ *   ],
  *   TimeAfter: new Date("TIMESTAMP"),
  *   TimeBefore: new Date("TIMESTAMP"),
  *   ReverseOrder: true || false,
@@ -107,15 +84,15 @@ declare const ListDurableExecutionsCommand_base: {
  *
  */
 export declare class ListDurableExecutionsCommand extends ListDurableExecutionsCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: ListDurableExecutionsRequest;
-      output: ListDurableExecutionsResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: ListDurableExecutionsRequest;
+            output: ListDurableExecutionsResponse;
+        };
+        sdk: {
+            input: ListDurableExecutionsCommandInput;
+            output: ListDurableExecutionsCommandOutput;
+        };
     };
-    sdk: {
-      input: ListDurableExecutionsCommandInput;
-      output: ListDurableExecutionsCommandOutput;
-    };
-  };
 }

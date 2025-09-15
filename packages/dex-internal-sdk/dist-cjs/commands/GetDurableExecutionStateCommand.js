@@ -7,31 +7,20 @@ const Aws_restJson1_1 = require("../protocols/Aws_restJson1");
 const middleware_endpoint_1 = require("@smithy/middleware-endpoint");
 const middleware_serde_1 = require("@smithy/middleware-serde");
 const smithy_client_1 = require("@smithy/smithy-client");
-Object.defineProperty(exports, "$Command", {
-  enumerable: true,
-  get: function () {
-    return smithy_client_1.Command;
-  },
-});
+Object.defineProperty(exports, "$Command", { enumerable: true, get: function () { return smithy_client_1.Command; } });
 class GetDurableExecutionStateCommand extends smithy_client_1.Command.classBuilder()
-  .ep(EndpointParameters_1.commonParams)
-  .m(function (Command, cs, config, o) {
+    .ep(EndpointParameters_1.commonParams)
+    .m(function (Command, cs, config, o) {
     return [
-      (0, middleware_serde_1.getSerdePlugin)(
-        config,
-        this.serialize,
-        this.deserialize,
-      ),
-      (0, middleware_endpoint_1.getEndpointPlugin)(
-        config,
-        Command.getEndpointParameterInstructions(),
-      ),
+        (0, middleware_serde_1.getSerdePlugin)(config, this.serialize, this.deserialize),
+        (0, middleware_endpoint_1.getEndpointPlugin)(config, Command.getEndpointParameterInstructions()),
     ];
-  })
-  .s("DurableExecutionsFrontendService", "GetDurableExecutionState", {})
-  .n("LambdaClient", "GetDurableExecutionStateCommand")
-  .f(void 0, models_0_1.GetDurableExecutionStateResponseFilterSensitiveLog)
-  .ser(Aws_restJson1_1.se_GetDurableExecutionStateCommand)
-  .de(Aws_restJson1_1.de_GetDurableExecutionStateCommand)
-  .build() {}
+})
+    .s("AWSGirApiService", "GetDurableExecutionState", {})
+    .n("LambdaClient", "GetDurableExecutionStateCommand")
+    .f(void 0, models_0_1.GetDurableExecutionStateResponseFilterSensitiveLog)
+    .ser(Aws_restJson1_1.se_GetDurableExecutionStateCommand)
+    .de(Aws_restJson1_1.de_GetDurableExecutionStateCommand)
+    .build() {
+}
 exports.GetDurableExecutionStateCommand = GetDurableExecutionStateCommand;
