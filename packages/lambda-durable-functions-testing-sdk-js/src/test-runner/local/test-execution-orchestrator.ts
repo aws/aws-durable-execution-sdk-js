@@ -23,7 +23,10 @@ import {
   OperationUpdate,
 } from "@amzn/dex-internal-sdk";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
-import { OperationInvocationIdMap } from "../../checkpoint-server/storage/checkpoint-manager";
+import {
+  CheckpointOperation,
+  OperationInvocationIdMap,
+} from "../../checkpoint-server/storage/checkpoint-manager";
 import { Scheduler } from "./orchestration/scheduler";
 
 /**
@@ -165,7 +168,7 @@ export class TestExecutionOrchestrator {
    * @param executionId The current execution ID
    */
   private processOperations(
-    operations: { update: OperationUpdate; operation: Operation }[],
+    operations: CheckpointOperation[],
     executionId: ExecutionId,
     operationInvocationIdMap: OperationInvocationIdMap = {}
   ): void {
@@ -200,7 +203,7 @@ export class TestExecutionOrchestrator {
    * @param executionId The current execution ID
    */
   private processOperation(
-    update: OperationUpdate,
+    update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId,
     invocationIds: InvocationId[]
@@ -211,7 +214,7 @@ export class TestExecutionOrchestrator {
 
     this.invocationTracker.associateOperation(invocationIds, operation.Id);
 
-    switch (update.Type) {
+    switch (operation.Type) {
       case OperationType.WAIT:
         this.handleWaitUpdate(update, operation, executionId);
         break;
@@ -240,11 +243,11 @@ export class TestExecutionOrchestrator {
    * @param executionId The current execution ID
    */
   private handleWaitUpdate(
-    update: OperationUpdate,
+    update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId
   ): void {
-    const waitSeconds = update.WaitOptions?.WaitSeconds;
+    const waitSeconds = update?.WaitOptions?.WaitSeconds;
 
     if (!waitSeconds) {
       throw new Error("Wait operation is missing waitSeconds");
@@ -260,11 +263,10 @@ export class TestExecutionOrchestrator {
       await this.checkpointApi.updateCheckpointData({
         executionId,
         operationId,
-        action: OperationAction.SUCCEED,
+        status: OperationStatus.SUCCEEDED,
       });
-      const newInvocationData = await this.checkpointApi.startInvocation(
-        executionId
-      );
+      const newInvocationData =
+        await this.checkpointApi.startInvocation(executionId);
       // Re-invoke handler after waitSeconds
       await this.invokeHandler(
         executionId,
@@ -284,11 +286,11 @@ export class TestExecutionOrchestrator {
    * @param executionId The current execution ID
    */
   private handleStepUpdate(
-    update: OperationUpdate,
+    update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId
   ): void {
-    if (update.Action === OperationAction.RETRY) {
+    if (update?.Action === OperationAction.RETRY) {
       const retryDelaySeconds = update.StepOptions?.NextAttemptDelaySeconds;
 
       if (!retryDelaySeconds) {
@@ -306,9 +308,8 @@ export class TestExecutionOrchestrator {
       this.scheduleAsyncFunction(
         retryDelaySeconds,
         async () => {
-          const newInvocationData = await this.checkpointApi.startInvocation(
-            executionId
-          );
+          const newInvocationData =
+            await this.checkpointApi.startInvocation(executionId);
           return this.invokeHandler(
             executionId,
             newInvocationData.checkpointToken,
@@ -342,9 +343,8 @@ export class TestExecutionOrchestrator {
       return;
     }
 
-    const newInvocationData = await this.checkpointApi.startInvocation(
-      executionId
-    );
+    const newInvocationData =
+      await this.checkpointApi.startInvocation(executionId);
     await this.invokeHandler(
       executionId,
       newInvocationData.checkpointToken,
@@ -354,9 +354,13 @@ export class TestExecutionOrchestrator {
   }
 
   private handleExecutionUpdate(
-    update: OperationUpdate,
+    update: OperationUpdate | undefined,
     operation: Operation
   ): void {
+    if (!update) {
+      throw new Error("Operation update is missing for execution update");
+    }
+
     if (!operation.Status) {
       throw new Error("Could not find status in execution operation");
     }

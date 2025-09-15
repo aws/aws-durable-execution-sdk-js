@@ -1,8 +1,7 @@
 import { MockOperation } from "./mock-operation";
 import { IndexedOperations } from "../../common/indexed-operations";
-import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { ExecutionId } from "../../../checkpoint-server/utils/tagged-strings";
-import { OperationWithData } from "../../common/operations/operation-with-data";
+import { OperationEvents, OperationWithData } from "../../common/operations/operation-with-data";
 import { OperationType } from "@amzn/dex-internal-sdk";
 import { DurableOperation } from "../../durable-test-runner";
 import { OperationWaitManager } from "./operation-wait-manager";
@@ -14,7 +13,7 @@ export class OperationStorage {
     private readonly waitManager: OperationWaitManager,
     private readonly indexedOperations: IndexedOperations,
     private readonly onCheckpointReceived: (
-      checkpointOperationsReceived: CheckpointOperation[],
+      checkpointOperationsReceived: OperationEvents[],
       trackedDurableOperations: DurableOperation<unknown>[]
     ) => void
   ) {}
@@ -76,7 +75,7 @@ export class OperationStorage {
    * Will be run every time checkpoint data is received.
    * @param newCheckpointOperations
    */
-  populateOperations(newCheckpointOperations: CheckpointOperation[]): void {
+  populateOperations(newCheckpointOperations: OperationEvents[]): void {
     if (!newCheckpointOperations.length) {
       return;
     }

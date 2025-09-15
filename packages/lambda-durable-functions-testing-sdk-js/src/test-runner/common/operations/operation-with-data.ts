@@ -8,8 +8,8 @@ import {
   SendDurableExecutionCallbackHeartbeatCommand,
   SendDurableExecutionCallbackFailureCommandOutput,
   SendDurableExecutionCallbackHeartbeatCommandOutput,
+  Event,
 } from "@amzn/dex-internal-sdk";
-import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import {
   DurableOperation,
   TestResultError,
@@ -43,6 +43,12 @@ export interface OperationResultCallbackDetails<ResultValue = unknown> {
 
 export interface WaitResultDetails {
   readonly waitSeconds?: number;
+  readonly scheduledEndTimestamp?: Date;
+}
+
+export interface OperationEvents {
+  operation: Operation;
+  events: Event[];
 }
 
 export class OperationWithData<OperationResultValue = unknown>
@@ -51,10 +57,10 @@ export class OperationWithData<OperationResultValue = unknown>
   constructor(
     private readonly waitManager: OperationWaitManager,
     private readonly operationIndex: IndexedOperations,
-    private checkpointOperationData?: CheckpointOperation | undefined
+    private checkpointOperationData?: OperationEvents | undefined
   ) {}
 
-  populateData(checkpointOperation: CheckpointOperation) {
+  populateData(checkpointOperation: OperationEvents) {
     this.checkpointOperationData = checkpointOperation;
   }
 
@@ -190,9 +196,18 @@ export class OperationWithData<OperationResultValue = unknown>
       throw new Error(`Operation type ${operationData.Type} is not WAIT`);
     }
 
+    const details = this.checkpointOperationData?.events[0]?.WaitStartedDetails;
+    if (!details) {
+      throw new Error("First wait event does not have WaitStartedDetails");
+    }
+
     return {
-      waitSeconds:
-        this.checkpointOperationData?.update.WaitOptions?.WaitSeconds,
+      waitSeconds: details.Duration,
+      // TODO: fix serialization of dates in API responses
+      scheduledEndTimestamp:
+        details.ScheduledEndTimestamp !== undefined
+          ? new Date(details.ScheduledEndTimestamp)
+          : undefined,
     };
   }
 
@@ -225,6 +240,10 @@ export class OperationWithData<OperationResultValue = unknown>
 
   getOperationData(): Operation | undefined {
     return this.checkpointOperationData?.operation;
+  }
+
+  getEvents(): Event[] | undefined {
+    return this.checkpointOperationData?.events;
   }
 
   getId(): string | undefined {

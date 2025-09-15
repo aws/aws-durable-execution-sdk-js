@@ -5,7 +5,7 @@ import { createInvocationId } from "../../../../checkpoint-server/utils/tagged-s
 import { OperationWaitManager } from "../operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";
 import { MockOperation } from "../mock-operation";
-import { CheckpointOperation } from "../../../../checkpoint-server/storage/checkpoint-manager";
+import { OperationEvents } from "../../../common/operations/operation-with-data";
 
 describe("InvocationTracker", () => {
   let waitManager: OperationWaitManager;
@@ -19,14 +19,14 @@ describe("InvocationTracker", () => {
     status: OperationStatus = OperationStatus.SUCCEEDED
   ): MockOperation => {
     const operation = new MockOperation({ id }, waitManager, indexedOperations);
-    const checkpointOp: CheckpointOperation = {
+    const checkpointOp: OperationEvents = {
       operation: {
         Id: id,
         Status: status,
         Type: OperationType.STEP,
         Name: `operation-${id}`,
       },
-      update: {},
+      events: [],
     };
     operation.populateData(checkpointOp);
     return operation;

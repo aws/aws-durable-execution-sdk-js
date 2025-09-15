@@ -9,6 +9,7 @@ import {
   createExecutionId,
   createInvocationId,
 } from "../../utils/tagged-strings";
+import { CompleteCallbackStatus } from "../callback-manager";
 
 // Mock crypto's randomUUID function
 jest.mock("node:crypto", () => ({
@@ -69,13 +70,14 @@ describe("CheckpointManager", () => {
       const update: OperationUpdate = {
         Id: "test-id",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
         Payload: "my-payload",
       };
       storage.registerUpdate(update, mockInvocationId);
 
       const pendingUpdates = await storage.getPendingCheckpointUpdates();
       expect(pendingUpdates).toHaveLength(1);
-      expect(pendingUpdates[0].update.Id).toBe("test-id");
+      expect(pendingUpdates[0].update?.Id).toBe("test-id");
       // StepDetails.Result should not be populated in registerUpdate, only in completeOperation
       expect(pendingUpdates[0].operation.StepDetails?.Result).toBeUndefined();
       expect(pendingUpdates[0].operation.StepDetails?.Attempt).toBeUndefined();
@@ -90,6 +92,7 @@ describe("CheckpointManager", () => {
         const update: OperationUpdate = {
           Id: "delayed-id",
           Type: OperationType.STEP,
+          Action: OperationAction.START,
         };
         storage.registerUpdate(update, mockInvocationId);
       }, 10);
@@ -97,13 +100,14 @@ describe("CheckpointManager", () => {
       // Now await the promise
       const pendingUpdates = await pendingUpdatesPromise;
       expect(pendingUpdates).toHaveLength(1);
-      expect(pendingUpdates[0].update.Id).toBe("delayed-id");
+      expect(pendingUpdates[0].update?.Id).toBe("delayed-id");
     });
 
     it("should clear pending updates after retrieving", async () => {
       const update: OperationUpdate = {
         Id: "test-id",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
       };
       storage.registerUpdate(update, mockInvocationId);
 
@@ -116,12 +120,13 @@ describe("CheckpointManager", () => {
       const update2: OperationUpdate = {
         Id: "test-id-2",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
       };
       storage.registerUpdate(update2, mockInvocationId);
 
       const secondRetrieval = await secondPromise;
       expect(secondRetrieval).toHaveLength(1);
-      expect(secondRetrieval[0].update.Id).toBe("test-id-2");
+      expect(secondRetrieval[0].update?.Id).toBe("test-id-2");
     });
   });
 
@@ -144,6 +149,7 @@ describe("CheckpointManager", () => {
       const update: OperationUpdate = {
         Id: "registered-op",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
       };
 
       storage.registerUpdate(update, mockInvocationId);
@@ -263,6 +269,7 @@ describe("CheckpointManager", () => {
     it("should throw error if id is missing", () => {
       const updateWithoutId: OperationUpdate = {
         Type: OperationType.STEP,
+        Action: OperationAction.START,
       };
 
       expect(() =>
@@ -273,6 +280,7 @@ describe("CheckpointManager", () => {
     it("should create and register a new STEP operation", () => {
       const update: OperationUpdate = {
         Id: "step-id",
+        Action: OperationAction.START,
         Name: "test-step",
         Type: OperationType.STEP,
       };
@@ -294,6 +302,7 @@ describe("CheckpointManager", () => {
       const update: OperationUpdate = {
         Id: "CONTEXT-id",
         Name: "test-step",
+        Action: OperationAction.START,
         Type: OperationType.CONTEXT,
         ContextOptions: {
           ReplayChildren: true,
@@ -349,6 +358,7 @@ describe("CheckpointManager", () => {
         Id: "step-with-payload",
         Name: "process-data",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
         Payload: JSON.stringify({ processed: true, value: 42 }),
       };
 
@@ -363,6 +373,7 @@ describe("CheckpointManager", () => {
       const update: OperationUpdate = {
         Id: "step-no-payload",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
         Payload: undefined,
       };
 
@@ -377,6 +388,7 @@ describe("CheckpointManager", () => {
         Id: "wait-id",
         Name: "test-wait",
         Type: OperationType.WAIT,
+        Action: OperationAction.START,
         WaitOptions: {
           WaitSeconds: 5,
         },
@@ -416,6 +428,7 @@ describe("CheckpointManager", () => {
       const waitUpdate: OperationUpdate = {
         Id: "wait-id",
         Type: OperationType.WAIT,
+        Action: OperationAction.START,
         WaitOptions: {
           WaitSeconds: 5,
         },
@@ -436,6 +449,7 @@ describe("CheckpointManager", () => {
       const update: OperationUpdate = {
         Id: "test-update",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
       };
       storage.registerUpdate(update, mockInvocationId);
 
@@ -443,7 +457,7 @@ describe("CheckpointManager", () => {
       const pendingUpdates = await pendingUpdatesPromise;
 
       expect(pendingUpdates).toHaveLength(1);
-      expect(pendingUpdates[0].update.Id).toBe("test-update");
+      expect(pendingUpdates[0].update?.Id).toBe("test-update");
     });
 
     it.each([OperationAction.SUCCEED, OperationAction.FAIL])(
@@ -530,6 +544,7 @@ describe("CheckpointManager", () => {
         const stepUpdate: OperationUpdate = {
           Id: "new-retry-step",
           Type: OperationType.STEP,
+          Action: OperationAction.START,
         };
         storage.registerUpdate(stepUpdate, mockInvocationId);
 
@@ -626,6 +641,7 @@ describe("CheckpointManager", () => {
         // Register a step operation
         const stepUpdate: OperationUpdate = {
           Id: "step-with-error",
+          Action: OperationAction.START,
           Type: OperationType.STEP,
         };
         storage.registerUpdate(stepUpdate, mockInvocationId);
@@ -657,6 +673,7 @@ describe("CheckpointManager", () => {
         // Register a step operation
         const stepUpdate: OperationUpdate = {
           Id: "step-partial",
+          Action: OperationAction.START,
           Type: OperationType.STEP,
         };
         storage.registerUpdate(stepUpdate, mockInvocationId);
@@ -726,8 +743,10 @@ describe("CheckpointManager", () => {
           },
           update: {
             Id: "manual-step",
+            Action: OperationAction.START,
             Type: OperationType.STEP,
           },
+          events: [],
         };
         storage.operationDataMap.set("manual-step", manualOperation);
 
@@ -760,6 +779,7 @@ describe("CheckpointManager", () => {
         const contextUpdate: OperationUpdate = {
           Id: "context-id",
           Name: "test-context",
+          Action: OperationAction.START,
           Type: OperationType.CONTEXT,
           Payload: '{"userId": 123, "name": "John Doe"}',
         };
@@ -785,6 +805,7 @@ describe("CheckpointManager", () => {
 
         const contextUpdate: OperationUpdate = {
           Id: "context-with-error",
+          Action: OperationAction.START,
           Type: OperationType.CONTEXT,
           Error: {
             ErrorMessage: "Context execution failed",
@@ -807,6 +828,7 @@ describe("CheckpointManager", () => {
 
         const contextUpdate: OperationUpdate = {
           Id: "context-result-and-error",
+          Action: OperationAction.START,
           Type: OperationType.CONTEXT,
           Payload: '{"partial": "result"}',
           Error: {
@@ -830,6 +852,7 @@ describe("CheckpointManager", () => {
 
         const contextUpdate: OperationUpdate = {
           Id: "context-empty",
+          Action: OperationAction.START,
           Type: OperationType.CONTEXT,
           Payload: undefined,
           Error: undefined,
@@ -892,6 +915,7 @@ describe("CheckpointManager", () => {
         // Register a context operation
         const contextUpdate: OperationUpdate = {
           Id: "context-to-complete",
+          Action: OperationAction.START,
           Type: OperationType.CONTEXT,
           Payload: '{"initial": "result"}',
         };
@@ -919,6 +943,7 @@ describe("CheckpointManager", () => {
         // Register a context operation
         const contextUpdate: OperationUpdate = {
           Id: "context-to-fail",
+          Action: OperationAction.START,
           Type: OperationType.CONTEXT,
           Payload: '{"initial": "result"}',
         };
@@ -950,6 +975,7 @@ describe("CheckpointManager", () => {
         // Register a context operation
         const contextUpdate: OperationUpdate = {
           Id: "context-partial",
+          Action: OperationAction.START,
           Type: OperationType.CONTEXT,
         };
         storage.registerUpdate(contextUpdate, mockInvocationId);
@@ -989,8 +1015,10 @@ describe("CheckpointManager", () => {
           },
           update: {
             Id: "manual-context",
+            Action: OperationAction.START,
             Type: OperationType.CONTEXT,
           },
+          events: [],
         };
         storage.operationDataMap.set("manual-context", manualOperation);
 
@@ -1019,6 +1047,7 @@ describe("CheckpointManager", () => {
           Id: "callback-op",
           Name: "test-callback",
           Type: OperationType.CALLBACK,
+          Action: OperationAction.START,
           CallbackOptions: {
             TimeoutSeconds: 30,
             HeartbeatTimeoutSeconds: 60,
@@ -1039,6 +1068,7 @@ describe("CheckpointManager", () => {
 
         const callbackUpdate: OperationUpdate = {
           Id: "simple-callback",
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
         };
 
@@ -1055,6 +1085,7 @@ describe("CheckpointManager", () => {
         const callbackUpdate: OperationUpdate = {
           Id: "timeout-callback",
           Type: OperationType.CALLBACK,
+          Action: OperationAction.START,
           CallbackOptions: {
             TimeoutSeconds: 30,
           },
@@ -1073,6 +1104,7 @@ describe("CheckpointManager", () => {
         const callbackUpdate: OperationUpdate = {
           Id: "heartbeat-callback",
           Type: OperationType.CALLBACK,
+          Action: OperationAction.START,
           CallbackOptions: {
             HeartbeatTimeoutSeconds: 60,
           },
@@ -1109,8 +1141,10 @@ describe("CheckpointManager", () => {
         },
         update: {
           Id: "test-callback-op",
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
         },
+        events: [],
       };
       storage.operationDataMap.set("test-callback-op", mockCallbackOperation);
     });
@@ -1133,7 +1167,10 @@ describe("CheckpointManager", () => {
       // The actual implementation will call the callback manager internally
       // and should handle the operation data map update
       expect(() => {
-        storage.completeCallback(callbackDetails, OperationStatus.SUCCEEDED);
+        storage.completeCallback(
+          callbackDetails,
+          CompleteCallbackStatus.SUCCEEDED
+        );
       }).not.toThrow();
     });
 
@@ -1156,7 +1193,10 @@ describe("CheckpointManager", () => {
       };
 
       expect(() => {
-        storage.completeCallback(callbackDetails, OperationStatus.FAILED);
+        storage.completeCallback(
+          callbackDetails,
+          CompleteCallbackStatus.FAILED
+        );
       }).not.toThrow();
     });
   });
@@ -1191,8 +1231,10 @@ describe("CheckpointManager", () => {
         },
         update: {
           Id: "test-op",
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
         },
+        events: [],
       };
       storage.operationDataMap.set("test-op", mockOperation);
 
@@ -1285,11 +1327,13 @@ describe("CheckpointManager", () => {
         {
           Id: "batch-op-1",
           Type: OperationType.STEP,
+          Action: OperationAction.START,
           Payload: "result1",
         },
         {
           Id: "batch-op-2",
           Type: OperationType.WAIT,
+          Action: OperationAction.START,
           WaitOptions: { WaitSeconds: 5 },
         },
         {
@@ -1334,6 +1378,7 @@ describe("CheckpointManager", () => {
           Id: "single-op",
           Type: OperationType.STEP,
           Payload: "single-result",
+          Action: OperationAction.START,
         },
       ];
 
@@ -1349,13 +1394,14 @@ describe("CheckpointManager", () => {
       storage.initialize();
 
       const updates: OperationUpdate[] = [
-        { Id: "op-z", Type: OperationType.STEP },
+        { Id: "op-z", Type: OperationType.STEP, Action: OperationAction.START },
         {
           Id: "op-a",
           Type: OperationType.WAIT,
+          Action: OperationAction.START,
           WaitOptions: { WaitSeconds: 1 },
         },
-        { Id: "op-m", Type: OperationType.STEP },
+        { Id: "op-m", Type: OperationType.STEP, Action: OperationAction.START },
       ];
 
       const results = storage.registerUpdates(updates, mockInvocationId);
@@ -1426,6 +1472,7 @@ describe("CheckpointManager", () => {
       const stepUpdate: OperationUpdate = {
         Id: "step-to-update",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
         Name: "test-step",
       };
       storage.registerUpdate(stepUpdate, mockInvocationId);
@@ -1463,6 +1510,7 @@ describe("CheckpointManager", () => {
       // Register a complex operation
       const complexUpdate: OperationUpdate = {
         Id: "complex-op",
+        Action: OperationAction.START,
         Type: OperationType.STEP,
         Name: "complex-step",
         Payload: "initial-payload",
@@ -1545,10 +1593,12 @@ describe("CheckpointManager", () => {
       const update1: OperationUpdate = {
         Id: "op1",
         Type: OperationType.STEP,
+        Action: OperationAction.START,
       };
       const update2: OperationUpdate = {
         Id: "op2",
         Type: OperationType.WAIT,
+        Action: OperationAction.START,
         WaitOptions: { WaitSeconds: 1 },
       };
 
@@ -1576,12 +1626,14 @@ describe("CheckpointManager", () => {
         {
           Id: "2-context",
           Type: OperationType.CONTEXT,
+          Action: OperationAction.START,
         },
         // In-progress step in in-progress context
         {
           Id: "2.1-step",
           ParentId: "2-context",
           Type: OperationType.STEP,
+          Action: OperationAction.START,
         },
         // Step with non-existent parent (shouldn't happen but we handle it)
         {
@@ -1709,6 +1761,7 @@ describe("CheckpointManager", () => {
         const update1: OperationUpdate = {
           Id: "op1",
           Type: OperationType.STEP,
+          Action: OperationAction.START,
         };
         storage.registerUpdate(update1, invocationId1);
 
@@ -1716,6 +1769,7 @@ describe("CheckpointManager", () => {
           Id: "op2",
           Type: OperationType.WAIT,
           WaitOptions: { WaitSeconds: 1 },
+          Action: OperationAction.START,
         };
         storage.registerUpdate(update2, invocationId2);
 
@@ -1735,6 +1789,7 @@ describe("CheckpointManager", () => {
         const update: OperationUpdate = {
           Id: "test-op",
           Type: OperationType.STEP,
+          Action: OperationAction.START,
         };
         storage.registerUpdate(update, invocationId);
 
@@ -1753,6 +1808,7 @@ describe("CheckpointManager", () => {
 
         const update: OperationUpdate = {
           Id: "new-tracked-op",
+          Action: OperationAction.START,
           Type: OperationType.STEP,
         };
 
@@ -1770,6 +1826,7 @@ describe("CheckpointManager", () => {
 
         const update: OperationUpdate = {
           Id: "existing-op",
+          Action: OperationAction.START,
           Type: OperationType.STEP,
         };
 

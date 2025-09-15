@@ -1,7 +1,9 @@
 import {
   CallbackDetails,
   InvalidParameterValueException,
-  OperationStatus,
+  Event,
+  EventType,
+  Operation,
 } from "@amzn/dex-internal-sdk";
 import {
   CallbackId,
@@ -9,7 +11,53 @@ import {
   ExecutionId,
 } from "../utils/tagged-strings";
 import { decodeCallbackId, encodeCallbackId } from "../utils/callback-id";
-import { CheckpointManager, CheckpointOperation } from "./checkpoint-manager";
+import { CheckpointManager } from "./checkpoint-manager";
+import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
+
+export enum CompleteCallbackStatus {
+  SUCCEEDED = "SUCCEEDED",
+  FAILED = "FAILED",
+  TIMED_OUT = "TIMED_OUT",
+}
+
+interface OperationHistoryEventDetails<T extends keyof Event> {
+  eventType: EventType;
+  detailPlace: T;
+  getDetails: (operation: Operation) => Event[T];
+}
+
+export const callbackHistoryDetails = {
+  [CompleteCallbackStatus.SUCCEEDED]: {
+    eventType: EventType.CallbackSucceeded,
+    detailPlace: "CallbackSucceededDetails",
+    getDetails: (operation: Operation) => ({
+      Result: {
+        Payload: operation.CallbackDetails?.Result,
+      },
+    }),
+  },
+  [CompleteCallbackStatus.FAILED]: {
+    eventType: EventType.CallbackFailed,
+    detailPlace: "CallbackFailedDetails",
+    getDetails: (operation: Operation) => ({
+      Error: {
+        Payload: operation.CallbackDetails?.Error,
+      },
+    }),
+  },
+  [CompleteCallbackStatus.TIMED_OUT]: {
+    eventType: EventType.CallbackTimedOut,
+    detailPlace: "CallbackTimedOutDetails",
+    getDetails: (operation: Operation) => ({
+      Error: {
+        Payload: operation.CallbackDetails?.Error,
+      },
+    }),
+  },
+} satisfies Record<
+  CompleteCallbackStatus,
+  OperationHistoryEventDetails<keyof Event>
+>;
 
 /**
  * Manages callback operations, timers, and lifecycle for an execution.
@@ -51,7 +99,7 @@ export class CallbackManager {
             {
               CallbackId: callbackId,
             },
-            OperationStatus.TIMED_OUT
+            CompleteCallbackStatus.TIMED_OUT
           );
         }, timeoutSeconds * 1000)
       );
@@ -66,7 +114,7 @@ export class CallbackManager {
             {
               CallbackId: callbackId,
             },
-            OperationStatus.TIMED_OUT
+            CompleteCallbackStatus.TIMED_OUT
           );
         }, heartbeatTimeoutSeconds * 1000)
       );
@@ -80,8 +128,8 @@ export class CallbackManager {
    */
   completeCallback(
     callbackDetails: CallbackDetails,
-    status: OperationStatus
-  ): CheckpointOperation {
+    status: CompleteCallbackStatus
+  ): OperationEvents {
     if (!callbackDetails.CallbackId) {
       throw new InvalidParameterValueException({
         message: "Missing callback Id",
@@ -101,16 +149,26 @@ export class CallbackManager {
       });
     }
 
-    const { operation, update } = operationData;
+    const { operation, events } = operationData;
 
-    const copied: CheckpointOperation = {
-      operation: {
-        ...this.checkpointManager.markOperationCompleted(operation, status),
-        CallbackDetails: callbackDetails,
-      },
-      update: {
-        ...update,
-      },
+    const newOperation = {
+      ...this.checkpointManager.markOperationCompleted(operation, status),
+      CallbackDetails: callbackDetails,
+    };
+
+    const historyDetails = callbackHistoryDetails[status];
+
+    const copied: OperationEvents = {
+      operation: newOperation,
+      events: [
+        ...events,
+        this.checkpointManager.eventProcessor.createHistoryEvent(
+          historyDetails.eventType,
+          newOperation,
+          historyDetails.detailPlace,
+          historyDetails.getDetails(newOperation)
+        ),
+      ],
     };
 
     this.checkpointManager.operationDataMap.set(operationId, copied);
@@ -120,7 +178,10 @@ export class CallbackManager {
     this.clearCallbackTimers(callbackId);
 
     // Notify CheckpointManager about the completed callback
-    this.checkpointManager.addOperationUpdate(copied);
+    this.checkpointManager.addOperationUpdate({
+      ...copied,
+      update: undefined,
+    });
 
     return copied;
   }
@@ -137,7 +198,10 @@ export class CallbackManager {
       throw new Error("Could not find operation");
     }
 
-    if (!operationData.update.CallbackOptions?.HeartbeatTimeoutSeconds) {
+    const heartbeatTimeoutSeconds = operationData.events.find((event) => {
+      return !!event.CallbackStartedDetails?.HeartbeatTimeout;
+    })?.CallbackStartedDetails?.HeartbeatTimeout;
+    if (heartbeatTimeoutSeconds === undefined) {
       throw new Error("Could not find callback that requires heartbeat");
     }
 
@@ -151,9 +215,9 @@ export class CallbackManager {
           {
             CallbackId: callbackId,
           },
-          OperationStatus.TIMED_OUT
+          CompleteCallbackStatus.TIMED_OUT
         );
-      }, operationData.update.CallbackOptions.HeartbeatTimeoutSeconds * 1000)
+      }, heartbeatTimeoutSeconds * 1000)
     );
   }
 

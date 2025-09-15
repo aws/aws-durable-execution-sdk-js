@@ -3,7 +3,7 @@ import {
   OperationInvocationIdMap,
 } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
-import { OperationAction, OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@amzn/dex-internal-sdk";
 import {
   API_PATHS,
   HTTP_METHODS,
@@ -52,32 +52,23 @@ export class CheckpointApiClient {
   }
 
   /**
-   * Update checkpoint data for a specific operation.
-   * 
-   * This method supports two types of updates:
-   * - Action-based updates: Used to complete operations with a specific action (SUCCEED, FAIL, RETRY)
-   * - Status-based updates: Used to update the operation status directly (e.g., READY, PENDING)
-   * 
-   * Exactly one of `action` or `status` must be provided in the params object.
-   * 
+   * Update checkpoint data for a specific operation with the intended status.
+   *
    * @param params Object containing update parameters
    * @param params.executionId The execution ID containing the operation
    * @param params.operationId The specific operation ID to update
-   * @param params.action Optional operation action to apply (mutually exclusive with status)
-   * @param params.status Optional operation status to set (mutually exclusive with action)
+   * @param params.status Optional operation status to set
    * @throws {Error} When the API request fails or returns a non-success status
    */
   async updateCheckpointData(params: {
     executionId: ExecutionId;
     operationId: string;
-    action?: OperationAction;
-    status?: OperationStatus;
+    status: OperationStatus;
   }): Promise<void> {
     return this.makeRequest({
       path: getUpdateCheckpointDataPath(params.executionId, params.operationId),
       method: HTTP_METHODS.POST,
       body: JSON.stringify({
-        action: params.action,
         status: params.status,
       }),
     });

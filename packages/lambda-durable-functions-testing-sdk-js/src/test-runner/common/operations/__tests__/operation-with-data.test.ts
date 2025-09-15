@@ -40,7 +40,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getOperationData()).toStrictEqual(operationData);
@@ -62,7 +62,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getContextDetails()).toThrow(
@@ -91,7 +91,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const contextDetails = operation.getContextDetails();
@@ -122,7 +122,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const contextDetails = operation.getContextDetails();
@@ -153,7 +153,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const contextDetails = operation.getContextDetails();
@@ -184,7 +184,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const contextDetails = operation.getContextDetails();
@@ -218,7 +218,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const contextDetails = operation.getContextDetails();
@@ -244,7 +244,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getStepDetails()).toThrow(
@@ -272,7 +272,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const stepDetails = operation.getStepDetails();
@@ -314,7 +314,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const result = operation.getStepDetails();
@@ -351,7 +351,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const result = operation.getStepDetails();
@@ -388,7 +388,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const result = operation.getStepDetails();
@@ -418,7 +418,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const result = operation.getStepDetails();
@@ -447,7 +447,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
@@ -472,7 +472,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
@@ -499,7 +499,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const callbackDetails = operation.getCallbackDetails();
@@ -532,7 +532,7 @@ describe("OperationWithData", () => {
               Error: { ErrorMessage: "Wait callback error" },
             },
           },
-          update: {},
+          events: [],
         },
       ];
 
@@ -555,7 +555,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const callbackDetails = operation.getCallbackDetails();
@@ -574,7 +574,7 @@ describe("OperationWithData", () => {
             Name: "child-step-op",
             Type: OperationType.STEP, // Not CALLBACK
           },
-          update: {},
+          events: [],
         },
       ];
 
@@ -597,7 +597,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
@@ -625,7 +625,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
@@ -644,7 +644,7 @@ describe("OperationWithData", () => {
               CallbackId: undefined, // Missing CallbackId
             },
           },
-          update: {},
+          events: [],
         },
       ];
 
@@ -667,7 +667,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
@@ -691,7 +691,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(() => operation.getWaitDetails()).toThrow(
@@ -713,16 +713,25 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {
-          WaitOptions: {
-            WaitSeconds: 30,
+        events: [
+          {
+            WaitStartedDetails: {
+              Duration: 30,
+              ScheduledEndTimestamp: new Date("2025-09-10T22:53:25.217Z"),
+            },
           },
-        },
+          {
+            WaitSucceededDetails: {
+              Duration: 30,
+            },
+          },
+        ],
       });
 
       const waitDetails = operation.getWaitDetails();
       expect(waitDetails).toEqual({
         waitSeconds: 30,
+        scheduledEndTimestamp: new Date("2025-09-10T22:53:25.217Z"),
       });
     });
 
@@ -750,7 +759,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getId()).toBe("test-operation-id");
@@ -777,7 +786,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getName()).toBe("test-operation-name");
@@ -805,7 +814,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getType()).toBe(OperationType.STEP);
@@ -832,7 +841,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getStatus()).toBe(OperationStatus.SUCCEEDED);
@@ -861,7 +870,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getStartTimestamp()).toBe(startTime);
@@ -890,7 +899,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getEndTimestamp()).toBe(endTime);
@@ -918,7 +927,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getParentId()).toBe("parent-123");
@@ -947,7 +956,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.getSubType()).toBe(OperationSubType.WAIT_FOR_CALLBACK);
@@ -976,7 +985,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.isWaitForCallback()).toBe(true);
@@ -996,7 +1005,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.isWaitForCallback()).toBe(false);
@@ -1016,7 +1025,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.isCallback()).toBe(true);
@@ -1036,7 +1045,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       expect(operation.isCallback()).toBe(false);
@@ -1087,7 +1096,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
 
         expect(() => operation.sendCallbackSuccess("test-result")).toThrow(
@@ -1110,7 +1119,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
 
         expect(() => operation.sendCallbackSuccess("test-result")).toThrow(
@@ -1135,7 +1144,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
 
         expect(() => operation.sendCallbackSuccess("test-result")).toThrow(
@@ -1162,7 +1171,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
         mockClient.send.mockResolvedValue({ success: true });
 
@@ -1197,7 +1206,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
         const clientError = new Error("Client error");
         mockClient.send.mockRejectedValue(clientError);
@@ -1226,7 +1235,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
         mockClient.send.mockResolvedValue({ failure: true });
 
@@ -1266,7 +1275,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
         mockClient.send.mockResolvedValue({ sent: true });
 
@@ -1303,7 +1312,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
         const clientError = new Error("Client failure error");
         mockClient.send.mockRejectedValue(clientError);
@@ -1336,7 +1345,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
         mockClient.send.mockResolvedValue({ heartbeat: true });
 
@@ -1370,7 +1379,7 @@ describe("OperationWithData", () => {
 
         operation.populateData({
           operation: operationData,
-          update: {},
+          events: [],
         });
         const clientError = new Error("Heartbeat client error");
         mockClient.send.mockRejectedValue(clientError);
@@ -1414,11 +1423,11 @@ describe("OperationWithData", () => {
 
         operation1.populateData({
           operation: operationData1,
-          update: {},
+          events: [],
         });
         operation2.populateData({
           operation: operationData2,
-          update: {},
+          events: [],
         });
 
         mockClient.send.mockResolvedValue({ success: true });
@@ -1463,7 +1472,7 @@ describe("OperationWithData", () => {
         operation: {
           Status: OperationStatus.STARTED,
         },
-        update: {},
+        events: [],
       };
 
       // Populate data first with STARTED status
@@ -1487,7 +1496,7 @@ describe("OperationWithData", () => {
         operation: {
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       // Populate data first with SUCCEEDED status (which is COMPLETED)
@@ -1511,13 +1520,13 @@ describe("OperationWithData", () => {
         operation: {
           Status: OperationStatus.STARTED, // Data exists but has STARTED status
         },
-        update: {},
+        events: [],
       };
       const finalData = {
         operation: {
           Status: OperationStatus.SUCCEEDED, // Final status is SUCCEEDED (COMPLETED)
         },
-        update: {},
+        events: [],
       };
 
       // Populate with STARTED status initially
@@ -1552,7 +1561,7 @@ describe("OperationWithData", () => {
           Name: "test-operation",
           // No Status field - should always wait
         },
-        update: {},
+        events: [],
       };
       const finalData = {
         operation: {
@@ -1560,7 +1569,7 @@ describe("OperationWithData", () => {
           Name: "test-operation",
           Status: OperationStatus.STARTED,
         },
-        update: {},
+        events: [],
       };
 
       // Populate with data that has no status
@@ -1597,7 +1606,7 @@ describe("OperationWithData", () => {
         operation: {
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       // Don't populate data initially - this will trigger wait manager call
@@ -1628,7 +1637,7 @@ describe("OperationWithData", () => {
         operation: {
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       // Don't populate data initially - this will trigger wait manager call
@@ -1669,7 +1678,7 @@ describe("OperationWithData", () => {
         operation: {
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       // Mock wait manager to simulate async population
@@ -1715,7 +1724,7 @@ describe("OperationWithData", () => {
         operation: {
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       // First call - no data, should wait
@@ -1747,11 +1756,11 @@ describe("OperationWithData", () => {
       const mockChildOperations = [
         {
           operation: { Id: "child-1", Name: "child-op-1" },
-          update: {},
+          events: [],
         },
         {
           operation: { Id: "child-2", Name: "child-op-2" },
-          update: {},
+          events: [],
         },
       ];
 
@@ -1772,7 +1781,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const childOperations = operation.getChildOperations();
@@ -1822,7 +1831,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const childOperations = operation.getChildOperations();
@@ -1841,7 +1850,7 @@ describe("OperationWithData", () => {
             Name: "step-child",
             Type: OperationType.STEP,
           },
-          update: {},
+          events: [],
         },
       ];
 
@@ -1862,7 +1871,7 @@ describe("OperationWithData", () => {
 
       operation.populateData({
         operation: operationData,
-        update: {},
+        events: [],
       });
 
       const childOperations = operation.getChildOperations();
