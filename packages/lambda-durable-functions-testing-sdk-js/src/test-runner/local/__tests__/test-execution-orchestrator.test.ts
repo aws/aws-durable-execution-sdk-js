@@ -133,6 +133,7 @@ describe("TestExecutionOrchestrator", () => {
             Payload: result,
             Error: error,
           },
+          events: [],
         },
       ] satisfies CheckpointOperation[],
       operationInvocationIdMap: {
@@ -180,6 +181,7 @@ describe("TestExecutionOrchestrator", () => {
               Payload: "execution-result",
               Action: OperationAction.SUCCEED,
             },
+            events: [],
           },
         ] satisfies CheckpointOperation[];
 
@@ -236,6 +238,7 @@ describe("TestExecutionOrchestrator", () => {
               },
               Action: OperationAction.FAIL,
             },
+            events: [],
           },
         ] satisfies CheckpointOperation[];
 
@@ -292,6 +295,7 @@ describe("TestExecutionOrchestrator", () => {
               Payload: "execution-result",
               Action: OperationAction.SUCCEED,
             },
+            events: [],
           },
         ] satisfies CheckpointOperation[];
 
@@ -347,6 +351,7 @@ describe("TestExecutionOrchestrator", () => {
               Payload: "execution-result", // this will get ignored, since invocation completed without any result
               Action: OperationAction.SUCCEED,
             },
+            events: [],
           },
         ] satisfies CheckpointOperation[];
 
@@ -413,6 +418,7 @@ describe("TestExecutionOrchestrator", () => {
               Name: "operation1",
               Payload: "execution-result",
             },
+            events: [],
           },
         ] satisfies CheckpointOperation[];
 
@@ -1382,7 +1388,7 @@ describe("TestExecutionOrchestrator", () => {
       expect(checkpointApi.updateCheckpointData).toHaveBeenCalledWith({
         executionId: mockExecutionId,
         operationId: "param-test-wait",
-        action: OperationAction.SUCCEED,
+        status: OperationStatus.SUCCEEDED,
       });
 
       // Verify new invocation was started

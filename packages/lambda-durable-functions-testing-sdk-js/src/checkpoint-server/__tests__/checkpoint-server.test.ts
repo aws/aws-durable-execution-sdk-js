@@ -153,6 +153,7 @@ describe("checkpoint-server", () => {
           {
             operation: { Id: "op1", Type: OperationType.STEP },
             update: { Id: "op1", Type: OperationType.STEP },
+            events: [],
           },
         ]);
 
@@ -172,6 +173,7 @@ describe("checkpoint-server", () => {
       expect(response.body).toEqual({
         operations: [
           {
+            events: [],
             operation: { Id: "op1", Type: OperationType.STEP },
             update: { Id: "op1", Type: OperationType.STEP },
           },
@@ -230,50 +232,6 @@ describe("checkpoint-server", () => {
       ).toHaveBeenCalledWith(executionId);
       expect(mockStorage.updateOperation).toHaveBeenCalledWith(operationId, {
         Status: status,
-      });
-    });
-
-    it("should complete operation with action and return the updated operation", async () => {
-      const executionId = "test-execution-id";
-      const operationId = "test-operation-id";
-      const action = "SUCCEED";
-
-      const mockCompletedOperation = {
-        operation: {
-          Id: operationId,
-          Status: OperationStatus.SUCCEEDED,
-        },
-        update: {
-          Id: operationId,
-          Action: action,
-        },
-      };
-
-      const mockStorage = {
-        completeOperation: jest.fn().mockReturnValue(mockCompletedOperation),
-        hasOperation: jest.fn().mockReturnValue(true),
-      } as unknown as CheckpointManager;
-
-      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage
-      );
-
-      const response = await request(server)
-        .post(
-          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`
-        )
-        .send({ action });
-
-      expect(response.body).toEqual({
-        operation: mockCompletedOperation,
-      });
-      expect(response.status).toBe(200);
-      expect(
-        mockExecutionManager.getCheckpointsByExecution
-      ).toHaveBeenCalledWith(executionId);
-      expect(mockStorage.completeOperation).toHaveBeenCalledWith({
-        Id: operationId,
-        Action: action,
       });
     });
 

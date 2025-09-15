@@ -2,7 +2,6 @@ import {
   CheckpointDurableExecutionRequest,
   GetDurableExecutionStateResponse,
   CheckpointDurableExecutionResponse,
-  OperationAction,
   InvalidParameterValueException,
   OperationStatus,
 } from "@amzn/dex-internal-sdk";
@@ -22,7 +21,6 @@ import {
   handleCallbackSuccess,
 } from "./handlers/callbacks";
 import type { Server } from "http";
-import { CheckpointOperation } from "./storage/checkpoint-manager";
 import { validateCheckpointUpdates } from "./validators/checkpoint-durable-execution-input-validator";
 
 declare global {
@@ -112,13 +110,8 @@ export async function startCheckpointServer(port: number) {
   );
 
   /**
-   * Updates the checkpoint data for a particular execution and operation ID.
+   * Updates the checkpoint data for a particular execution and operation ID with the intended status.
    *
-   * This endpoint supports two types of updates:
-   * - Action-based updates: Complete operations with specific actions (SUCCEED, FAIL, RETRY)
-   * - Status-based updates: Update operation status directly (e.g., READY, PENDING)
-   *
-   * Exactly one of `action` or `status` must be provided in the request body.
    * Used for resolving operations like wait steps, retries, and status transitions.
    */
   app.post(
@@ -128,9 +121,7 @@ export async function startCheckpointServer(port: number) {
         ParamsDictionary,
         object,
         {
-          // must be one of action or status
-          action?: OperationAction;
-          status?: OperationStatus;
+          status: OperationStatus;
         }
       >,
       res
@@ -154,17 +145,12 @@ export async function startCheckpointServer(port: number) {
         return;
       }
 
-      let operation: CheckpointOperation;
-      if (req.body.action) {
-        operation = checkpointStorage.completeOperation({
-          Id: req.params.operationId,
-          Action: req.body.action,
-        });
-      } else {
-        operation = checkpointStorage.updateOperation(req.params.operationId, {
+      const operation = checkpointStorage.updateOperation(
+        req.params.operationId,
+        {
           Status: req.body.status,
-        });
-      }
+        }
+      );
 
       res.json(
         convertDatesToTimestamps({

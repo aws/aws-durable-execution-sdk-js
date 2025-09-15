@@ -140,7 +140,13 @@ describe("LocalDurableTestRunner Integration", () => {
 
     // Verify MockOperation data for both wait operations
     expect(firstWait.getWaitDetails()?.waitSeconds).toBe(50);
+    expect(firstWait.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
+      Date
+    );
     expect(secondWait.getWaitDetails()?.waitSeconds).toBe(50);
+    expect(secondWait.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
+      Date
+    );
   });
 
   it("should handle step operations with MockOperation assertions", async () => {
@@ -277,6 +283,9 @@ describe("LocalDurableTestRunner Integration", () => {
 
     // Verify wait step
     expect(waitStep.getWaitDetails()?.waitSeconds).toEqual(1);
+    expect(waitStep.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
+      Date
+    );
   });
 
   it("should handle steps with retry and failure", async () => {

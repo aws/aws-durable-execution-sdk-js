@@ -10,7 +10,7 @@ describe("IndexedOperations", () => {
         Name: "operation1",
         Status: OperationStatus.SUCCEEDED,
       },
-      update: {},
+      events: [],
     },
     {
       operation: {
@@ -18,7 +18,7 @@ describe("IndexedOperations", () => {
         Name: "operation2",
         Status: OperationStatus.SUCCEEDED,
       },
-      update: {},
+      events: [],
     },
     {
       operation: {
@@ -26,7 +26,7 @@ describe("IndexedOperations", () => {
         Name: "operation1", // Same name as first operation
         Status: OperationStatus.FAILED,
       },
-      update: {},
+      events: [],
     },
   ];
 
@@ -64,7 +64,7 @@ describe("IndexedOperations", () => {
       indexed.addOperations([
         {
           operation: initialOperation,
-          update: {},
+          events: [],
         },
       ]);
 
@@ -83,7 +83,7 @@ describe("IndexedOperations", () => {
       indexed.addOperations([
         {
           operation: updatedOperation,
-          update: {},
+          events: [],
         },
       ]);
 
@@ -113,7 +113,7 @@ describe("IndexedOperations", () => {
             Name: "operation1",
             Status: OperationStatus.STARTED,
           },
-          update: {},
+          events: [],
         },
         {
           operation: {
@@ -121,7 +121,7 @@ describe("IndexedOperations", () => {
             Name: "operation2",
             Status: OperationStatus.STARTED,
           },
-          update: {},
+          events: [],
         },
         {
           operation: {
@@ -129,7 +129,7 @@ describe("IndexedOperations", () => {
             Name: "operation1-updated",
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         }, // Same ID as first operation
       ];
 
@@ -159,7 +159,7 @@ describe("IndexedOperations", () => {
           Name: "original-name",
           Status: OperationStatus.STARTED,
         },
-        update: {},
+        events: [],
       };
       indexed.addOperations([initialOperation]);
 
@@ -176,7 +176,7 @@ describe("IndexedOperations", () => {
           Name: "updated-name",
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
       indexed.addOperations([updatedOperation]);
 
@@ -207,7 +207,7 @@ describe("IndexedOperations", () => {
             Name: "operation1",
             Status: OperationStatus.STARTED,
           },
-          update: {},
+          events: [],
         },
         {
           operation: {
@@ -215,7 +215,7 @@ describe("IndexedOperations", () => {
             Name: "operation2",
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ];
 
@@ -240,7 +240,7 @@ describe("IndexedOperations", () => {
           Name: "operation1-updated",
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       indexed.addOperations([updatedOp1]);
@@ -268,7 +268,7 @@ describe("IndexedOperations", () => {
         indexed.addOperations([
           {
             operation: operationWithoutId,
-            update: {},
+            events: [],
           },
         ]);
       }).toThrow("Cannot add operation without an ID");
@@ -282,7 +282,7 @@ describe("IndexedOperations", () => {
           Name: undefined,
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       indexed.addOperations([operationWithEmptyId]);
@@ -299,7 +299,7 @@ describe("IndexedOperations", () => {
           Name: "",
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       };
 
       indexed.addOperations([operationWithEmptyName]);
@@ -391,7 +391,7 @@ describe("IndexedOperations", () => {
           Name: "parent-operation",
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       },
       {
         operation: {
@@ -400,16 +400,16 @@ describe("IndexedOperations", () => {
           ParentId: "parent1",
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       },
       {
         operation: {
-          Id: "child2", 
+          Id: "child2",
           Name: "child-operation-2",
           ParentId: "parent1",
           Status: OperationStatus.FAILED,
         },
-        update: {},
+        events: [],
       },
       {
         operation: {
@@ -417,16 +417,16 @@ describe("IndexedOperations", () => {
           Name: "orphan-operation",
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       },
       {
         operation: {
           Id: "child3",
-          Name: "child-operation-3", 
+          Name: "child-operation-3",
           ParentId: "different-parent",
           Status: OperationStatus.SUCCEEDED,
         },
-        update: {},
+        events: [],
       },
     ];
 
@@ -449,16 +449,16 @@ describe("IndexedOperations", () => {
       const children = indexed.getOperationChildren("parent1");
 
       expect(children).toHaveLength(2);
-      expect(children.map(c => c.operation.Id)).toContain("child1");
-      expect(children.map(c => c.operation.Id)).toContain("child2");
+      expect(children.map((c) => c.operation.Id)).toContain("child1");
+      expect(children.map((c) => c.operation.Id)).toContain("child2");
     });
 
     it("should return child operations with correct data", () => {
       const indexed = new IndexedOperations(parentChildOperations);
       const children = indexed.getOperationChildren("parent1");
 
-      const child1 = children.find(c => c.operation.Id === "child1");
-      const child2 = children.find(c => c.operation.Id === "child2");
+      const child1 = children.find((c) => c.operation.Id === "child1");
+      const child2 = children.find((c) => c.operation.Id === "child2");
 
       expect(child1).toBeDefined();
       expect(child1?.operation.Name).toBe("child-operation-1");
@@ -487,7 +487,7 @@ describe("IndexedOperations", () => {
             Name: "operation1",
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ]);
       const children = indexed.getOperationChildren("op1");
@@ -497,7 +497,7 @@ describe("IndexedOperations", () => {
 
     it("should handle parent-child relationships when operations are added later", () => {
       const indexed = new IndexedOperations([]);
-      
+
       // Initially no children
       expect(indexed.getOperationChildren("parent1")).toEqual([]);
 
@@ -511,7 +511,7 @@ describe("IndexedOperations", () => {
 
     it("should throw error when trying to change operation parent", () => {
       const indexed = new IndexedOperations(parentChildOperations);
-      
+
       // Initially child1 has parent1
       const initialChildren = indexed.getOperationChildren("parent1");
       expect(initialChildren).toHaveLength(2);
@@ -526,16 +526,18 @@ describe("IndexedOperations", () => {
               ParentId: "new-parent", // Different parent
               Status: OperationStatus.SUCCEEDED,
             },
-            update: {},
+            events: [],
           },
         ]);
-      }).toThrow("Cannot change ParentId of operation child1 from parent1 to new-parent");
+      }).toThrow(
+        "Cannot change ParentId of operation child1 from parent1 to new-parent"
+      );
 
       // parent1 should still have both children (no change)
       const parent1Children = indexed.getOperationChildren("parent1");
       expect(parent1Children).toHaveLength(2);
-      expect(parent1Children.map(c => c.operation.Id)).toContain("child1");
-      expect(parent1Children.map(c => c.operation.Id)).toContain("child2");
+      expect(parent1Children.map((c) => c.operation.Id)).toContain("child1");
+      expect(parent1Children.map((c) => c.operation.Id)).toContain("child2");
     });
 
     it("should handle operations with undefined ParentId", () => {
@@ -547,10 +549,10 @@ describe("IndexedOperations", () => {
             ParentId: undefined,
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ]);
-      
+
       // Should not crash and should return empty array for any parent
       expect(indexed.getOperationChildren("any-parent")).toEqual([]);
     });
@@ -564,10 +566,10 @@ describe("IndexedOperations", () => {
             ParentId: "", // Empty string parent ID
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ]);
-      
+
       // Should work with empty string as parent ID
       const children = indexed.getOperationChildren("");
       expect(children).toHaveLength(1);

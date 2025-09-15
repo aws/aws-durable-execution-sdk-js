@@ -2,8 +2,10 @@ import { OperationWaitManager } from "../operation-wait-manager";
 import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
 import { WaitingOperationStatus } from "../../../durable-test-runner";
 import { IndexedOperations } from "../../../common/indexed-operations";
-import { CheckpointOperation } from "../../../../checkpoint-server/storage/checkpoint-manager";
-import { OperationWithData } from "../../../common/operations/operation-with-data";
+import {
+  OperationEvents,
+  OperationWithData,
+} from "../../../common/operations/operation-with-data";
 import { OperationSubType } from "@amzn/durable-executions-language-sdk";
 
 describe("OperationWaitManager", () => {
@@ -21,10 +23,9 @@ describe("OperationWaitManager", () => {
         Type: OperationType.STEP,
         Status: OperationStatus.PENDING,
       },
-      update: {},
+      events: [],
     });
   });
-
 
   // Helper function to trigger operation resolution
   const triggerOperationResolution = (
@@ -38,7 +39,7 @@ describe("OperationWaitManager", () => {
         ...originalData,
         Status: status,
       },
-      update: {},
+      events: [],
     };
 
     // Use populateData to update the same operation object
@@ -202,7 +203,7 @@ describe("OperationWaitManager", () => {
               Type: OperationType.STEP,
               // Status is undefined
             },
-            update: {},
+            events: [],
           }
         );
 
@@ -272,7 +273,7 @@ describe("OperationWaitManager", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.PENDING,
           },
-          update: {},
+          events: [],
         }
       );
       void waitManager.waitForOperation(
@@ -310,7 +311,7 @@ describe("OperationWaitManager", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.PENDING,
           },
-          update: {},
+          events: [],
         }
       );
 
@@ -346,7 +347,7 @@ describe("OperationWaitManager", () => {
           SubType: OperationSubType.WAIT_FOR_CALLBACK,
           Status: status,
         },
-        update: {},
+        events: [],
       });
 
     // Helper function to create a regular (non-waitForCallback) operation
@@ -360,35 +361,35 @@ describe("OperationWaitManager", () => {
           Type: OperationType.STEP,
           Status: status,
         },
-        update: {},
+        events: [],
       });
 
     // Helper function to create a callback checkpoint operation
     const createCallbackCheckpointOperation = (
       parentId: string,
       status: OperationStatus = OperationStatus.SUCCEEDED
-    ): CheckpointOperation => ({
+    ): OperationEvents => ({
       operation: {
         Id: "callback-op-id",
         Type: OperationType.CALLBACK,
         ParentId: parentId,
         Status: status,
       },
-      update: {},
+      events: [],
     });
 
     // Helper function to create a non-callback checkpoint operation
     const createNonCallbackCheckpointOperation = (
       type: OperationType = OperationType.STEP,
       parentId?: string
-    ): CheckpointOperation => ({
+    ): OperationEvents => ({
       operation: {
         Id: "non-callback-op-id",
         Type: type,
         ParentId: parentId,
         Status: OperationStatus.SUCCEEDED,
       },
-      update: {},
+      events: [],
     });
 
     describe("handleCheckpointReceived with callback operations", () => {
@@ -531,14 +532,14 @@ describe("OperationWaitManager", () => {
         );
 
         // Act - Trigger callback operation without ParentId
-        const callbackWithoutParent: CheckpointOperation = {
+        const callbackWithoutParent: OperationEvents = {
           operation: {
             Id: "callback-op-id",
             Type: OperationType.CALLBACK,
             Status: OperationStatus.SUCCEEDED,
             // ParentId is undefined
           },
-          update: {},
+          events: [],
         };
         waitManager.handleCheckpointReceived([callbackWithoutParent], []);
 
@@ -592,7 +593,7 @@ describe("OperationWaitManager", () => {
               Type: OperationType.STEP,
               Status: OperationStatus.SUCCEEDED,
             },
-            update: {},
+            events: [],
           }
         );
 

@@ -1,10 +1,10 @@
 import {
-  OperationStatus,
   InvalidParameterValueException,
   ErrorObject,
 } from "@amzn/dex-internal-sdk";
 import { RequestHandler } from "express";
 import { createCallbackId } from "../utils/tagged-strings";
+import { CompleteCallbackStatus } from "../storage/callback-manager";
 
 export const handleCallbackFailure: RequestHandler<
   { callbackId: string },
@@ -29,7 +29,7 @@ export const handleCallbackFailure: RequestHandler<
         CallbackId: callbackId,
         Error: input,
       },
-      OperationStatus.FAILED
+      CompleteCallbackStatus.FAILED
     );
   } catch (err) {
     if (err instanceof InvalidParameterValueException) {
@@ -37,6 +37,7 @@ export const handleCallbackFailure: RequestHandler<
       res.status(400).json({
         message: err.message,
       });
+      return;
     } else {
       throw err;
     }
@@ -80,7 +81,7 @@ export const handleCallbackSuccess: RequestHandler<
         CallbackId: callbackId,
         Result: result,
       },
-      OperationStatus.SUCCEEDED
+      CompleteCallbackStatus.SUCCEEDED
     );
   } catch (err) {
     if (err instanceof InvalidParameterValueException) {

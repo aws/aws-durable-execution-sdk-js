@@ -2,9 +2,9 @@ import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
 import { OperationStorage } from "../operation-storage";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { MockOperation } from "../mock-operation";
-import { CheckpointOperation } from "../../../../checkpoint-server/storage/checkpoint-manager";
 import { createExecutionId } from "../../../../checkpoint-server/utils/tagged-strings";
 import { IndexedOperations } from "../../../common/indexed-operations";
+import { OperationEvents } from "../../../common/operations/operation-with-data";
 
 // Mock the OperationWaitManager
 jest.mock("../operation-wait-manager");
@@ -15,7 +15,7 @@ describe("OperationStorage", () => {
   let mockCallback: jest.Mock;
 
   // Sample operations for testing
-  const sampleOperations: CheckpointOperation[] = [
+  const sampleOperations: OperationEvents[] = [
     {
       operation: {
         Id: "op1",
@@ -23,7 +23,7 @@ describe("OperationStorage", () => {
         Type: OperationType.STEP,
         Status: OperationStatus.SUCCEEDED,
       },
-      update: {},
+      events: [],
     },
     {
       operation: {
@@ -32,7 +32,7 @@ describe("OperationStorage", () => {
         Type: OperationType.WAIT,
         Status: OperationStatus.SUCCEEDED,
       },
-      update: {},
+      events: [],
     },
     {
       operation: {
@@ -41,7 +41,7 @@ describe("OperationStorage", () => {
         Type: OperationType.CALLBACK,
         Status: OperationStatus.FAILED,
       },
-      update: {},
+      events: [],
     },
   ];
 
@@ -92,7 +92,7 @@ describe("OperationStorage", () => {
             Id: "Execution-operation-id",
             Type: OperationType.EXECUTION,
           },
-          update: {},
+          events: [],
         })
       );
 
@@ -304,7 +304,7 @@ describe("OperationStorage", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ]);
 
@@ -364,7 +364,7 @@ describe("OperationStorage", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ]);
 
@@ -400,7 +400,7 @@ describe("OperationStorage", () => {
             Name: "", // Empty string name
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ]);
 
@@ -436,7 +436,7 @@ describe("OperationStorage", () => {
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
         {
           operation: {
@@ -445,7 +445,7 @@ describe("OperationStorage", () => {
             Type: OperationType.WAIT,
             Status: OperationStatus.SUCCEEDED,
           },
-          update: {},
+          events: [],
         },
       ]);
 

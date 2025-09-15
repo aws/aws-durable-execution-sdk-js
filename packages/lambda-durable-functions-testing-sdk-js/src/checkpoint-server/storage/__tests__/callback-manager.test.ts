@@ -4,7 +4,7 @@ import {
   OperationStatus,
   OperationType,
 } from "@amzn/dex-internal-sdk";
-import { CallbackManager } from "../callback-manager";
+import { CallbackManager, CompleteCallbackStatus } from "../callback-manager";
 import { CheckpointManager } from "../checkpoint-manager";
 import {
   createExecutionId,
@@ -27,6 +27,7 @@ jest.mock("../../utils/tagged-strings", () => ({
 
 // Import the mocked functions
 import { encodeCallbackId, decodeCallbackId } from "../../utils/callback-id";
+import { OperationEvents } from "../../../test-runner/common/operations/operation-with-data";
 
 describe("CallbackManager", () => {
   let callbackManager: CallbackManager;
@@ -152,6 +153,7 @@ describe("CallbackManager", () => {
           Id: operationId,
           Type: OperationType.CALLBACK,
         },
+        events: [],
       };
       mockCheckpointManager.operationDataMap.set(
         operationId,
@@ -173,7 +175,7 @@ describe("CallbackManager", () => {
       // Verify completeCallback was called with TIMED_OUT status
       expect(completeCallbackSpy).toHaveBeenCalledWith(
         { CallbackId: "encoded-callback-id" },
-        OperationStatus.TIMED_OUT
+        CompleteCallbackStatus.TIMED_OUT
       );
     });
   });
@@ -191,6 +193,7 @@ describe("CallbackManager", () => {
           Id: "test-operation-id",
           Type: OperationType.CALLBACK,
         },
+        events: [],
       };
       mockCheckpointManager.operationDataMap.set(
         "test-operation-id",
@@ -204,7 +207,7 @@ describe("CallbackManager", () => {
       expect(() => {
         callbackManager.completeCallback(
           callbackDetails,
-          OperationStatus.SUCCEEDED
+          CompleteCallbackStatus.SUCCEEDED
         );
       }).toThrow(InvalidParameterValueException);
     });
@@ -220,7 +223,7 @@ describe("CallbackManager", () => {
       expect(() => {
         callbackManager.completeCallback(
           callbackDetails,
-          OperationStatus.SUCCEEDED
+          CompleteCallbackStatus.SUCCEEDED
         );
       }).toThrow(InvalidParameterValueException);
     });
@@ -232,13 +235,13 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        OperationStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED
       );
 
       expect(createCallbackId).toHaveBeenCalledWith("test-callback-id");
       expect(decodeCallbackId).toHaveBeenCalled();
       expect(result).toBeDefined();
-      expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.operation.Status).toBe(CompleteCallbackStatus.SUCCEEDED);
     });
 
     it("should clear timers when callback is completed", () => {
@@ -254,7 +257,7 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        OperationStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED
       );
       expect(result).toBeDefined();
 
@@ -281,7 +284,7 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        OperationStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED
       );
 
       expect(setSpy).toHaveBeenCalledWith(
@@ -300,11 +303,11 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        OperationStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED
       );
 
       expect(result.operation.CallbackDetails).toEqual(callbackDetails);
-      expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.operation.Status).toBe(CompleteCallbackStatus.SUCCEEDED);
     });
 
     it("should handle callback details with error", () => {
@@ -320,29 +323,29 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        OperationStatus.FAILED
+        CompleteCallbackStatus.FAILED
       );
 
       expect(result.operation.CallbackDetails).toEqual(callbackDetails);
-      expect(result.operation.Status).toBe(OperationStatus.FAILED);
+      expect(result.operation.Status).toBe(CompleteCallbackStatus.FAILED);
     });
   });
 
   describe("heartbeatCallback", () => {
     beforeEach(() => {
-      const mockOperationData = {
+      const mockOperationData: OperationEvents = {
         operation: {
           Id: "test-operation-id",
           Type: OperationType.CALLBACK,
           Status: OperationStatus.STARTED,
         },
-        update: {
-          Id: "test-operation-id",
-          Type: OperationType.CALLBACK,
-          CallbackOptions: {
-            HeartbeatTimeoutSeconds: 60,
+        events: [
+          {
+            CallbackStartedDetails: {
+              HeartbeatTimeout: 60,
+            },
           },
-        },
+        ],
       };
       mockCheckpointManager.operationDataMap.set(
         "test-operation-id",
@@ -375,6 +378,7 @@ describe("CallbackManager", () => {
           Type: OperationType.CALLBACK,
           CallbackOptions: {},
         },
+        events: [],
       };
       mockCheckpointManager.operationDataMap.set(
         "test-operation-id",
@@ -418,7 +422,7 @@ describe("CallbackManager", () => {
       // Verify completeCallback was called with TIMED_OUT status
       expect(completeCallbackSpy).toHaveBeenCalledWith(
         { CallbackId: "encoded-callback-id" },
-        OperationStatus.TIMED_OUT
+        CompleteCallbackStatus.TIMED_OUT
       );
     });
   });
@@ -439,6 +443,7 @@ describe("CallbackManager", () => {
           Id: operationId1,
           Type: OperationType.CALLBACK,
         },
+        events: [],
       };
       const mockOperationData2 = {
         operation: {
@@ -450,6 +455,7 @@ describe("CallbackManager", () => {
           Id: operationId2,
           Type: OperationType.CALLBACK,
         },
+        events: [],
       };
       mockCheckpointManager.operationDataMap.set(
         operationId1,
@@ -521,6 +527,7 @@ describe("CallbackManager", () => {
           Id: operationId,
           Type: OperationType.CALLBACK,
         },
+        events: [],
       };
       mockCheckpointManager.operationDataMap.set(
         operationId,
@@ -541,12 +548,12 @@ describe("CallbackManager", () => {
       // Complete callback before timeout
       const result = callbackManager.completeCallback(
         { CallbackId: callbackId },
-        OperationStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED
       );
 
       // Verify the flow
       expect(result).toBeDefined();
-      expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.operation.Status).toBe(CompleteCallbackStatus.SUCCEEDED);
 
       // Verify timeout doesn't trigger after completion
       const completeCallbackSpy = jest.spyOn(
@@ -572,6 +579,7 @@ describe("CallbackManager", () => {
             Id: id,
             Type: OperationType.CALLBACK,
           },
+          events: [],
         };
         mockCheckpointManager.operationDataMap.set(id, mockOperationData);
       });

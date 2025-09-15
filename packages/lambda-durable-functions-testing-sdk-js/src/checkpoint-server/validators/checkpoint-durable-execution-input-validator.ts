@@ -12,7 +12,7 @@ import { validateInvokeOperation } from "./operation-type/validate-invoke-operat
 import { validateStepOperation } from "./operation-type/validate-step-operation";
 import { validateWaitOperation } from "./operation-type/validate-wait-operation";
 import { validateValidActionsByOperationType } from "./valid-actions-by-operation-type-validator";
-import { CheckpointOperation } from "../storage/checkpoint-manager";
+import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 
 const MAX_ERROR_PAYLOAD_SIZE_BYTES = 32768; // 32KB
 
@@ -26,7 +26,7 @@ const MAX_ERROR_PAYLOAD_SIZE_BYTES = 32768; // 32KB
  */
 export function validateCheckpointUpdates(
   updates: OperationUpdate[] | undefined,
-  checkpointOperations: Map<string, CheckpointOperation>
+  checkpointOperations: Map<string, OperationEvents>
 ): void {
   if (!updates?.length) {
     return;
@@ -79,7 +79,7 @@ function validateConflictingExecutionUpdate(updates: OperationUpdate[]): void {
  */
 function validateOperationUpdate(
   operationUpdate: OperationUpdate,
-  checkpointOperations: Map<string, CheckpointOperation>
+  checkpointOperations: Map<string, OperationEvents>
 ): void {
   // Validates that the operation payload sizes are not too large
   validatePayloadSizes(operationUpdate);
@@ -129,7 +129,7 @@ function validatePayloadSizes(operationUpdate: OperationUpdate): void {
  */
 function validateParentIdAndDuplicateId(
   operationUpdates: OperationUpdate[],
-  checkpointOperations: Map<string, CheckpointOperation>
+  checkpointOperations: Map<string, OperationEvents>
 ): void {
   const operationsStarted = new Map<string, OperationUpdate>();
   const lastUpdatesSeen = new Map<string, OperationUpdate>();
@@ -207,7 +207,7 @@ function isInvalidDuplicateUpdate(
  * @returns true if parent is valid or no parent is specified, false otherwise
  */
 function isValidParentForUpdate(
-  checkpointOperations: Map<string, CheckpointOperation>,
+  checkpointOperations: Map<string, OperationEvents>,
   operationUpdate: OperationUpdate,
   operationsStarted: Map<string, OperationUpdate>
 ): boolean {

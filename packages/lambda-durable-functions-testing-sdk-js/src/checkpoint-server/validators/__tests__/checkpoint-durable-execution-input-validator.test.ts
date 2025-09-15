@@ -30,6 +30,7 @@ describe("validateCheckpointUpdates", () => {
       Type: type,
       Action: OperationAction.START,
     },
+    events: [],
   });
 
   describe("null/empty updates", () => {
