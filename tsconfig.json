@@ -8,6 +8,17 @@
       "@amzn/durable-executions-type-script-testing-library": [
         "./packages/lambda-durable-functions-testing-sdk-js/dist"
       ]
-    }
+    },
+    "target": "ES2022",
+    "module": "esnext",
+    "lib": ["ES2022"],
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./dist",
+    "strict": true,
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   }
 }

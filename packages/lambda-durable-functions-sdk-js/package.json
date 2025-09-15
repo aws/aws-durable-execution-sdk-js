@@ -2,18 +2,29 @@
   "name": "@amzn/durable-executions-language-sdk",
   "description": "Durable Executions Language SDK for TypeScript",
   "version": "1.0.0",
-  "main": "dist/index.js",
+  "main": "dist-cjs/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist-cjs/index.js"
+    }
+  },
   "files": [
-    "dist"
+    "dist/",
+    "dist-cjs/"
   ],
   "scripts": {
     "prebuild": "npm run lint:fix",
-    "build": "npm run build:dev",
-    "build:prod": "npx ts-node src/scripts/build-production.ts",
-    "build:dev": "node build.js",
-    "analyze": "npx esbuild-visualizer --metadata dist/library-metafile.json --filename bundle-analysis.html",
-    "analyze:track": "npx ts-node src/scripts/bundle-size-tracker.ts",
+    "build": "concurrently npm:build:esm npm:build:cjs",
+    "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
+    "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
+    "analyze:track": "tsx scripts/bundle-size-tracker.ts",
     "postbuild": "npm run analyze:track",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -27,7 +38,7 @@
     "lint:fix": "prettier --write . && eslint src --ext .ts --fix",
     "prepublishOnly": "npm test && npm run lint && npm run build",
     "run-locally": "ts-node --transpile-only ./src/run-durable.ts",
-    "clean": "rm -rf node_modules dist",
+    "clean": "rm -rf node_modules dist dist-cjs",
     "prepack": "npm run build"
   },
   "lint-staged": {
@@ -45,8 +56,6 @@
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
     "aws-lambda": "^1.0.7",
-    "esbuild": "^0.25.2",
-    "esbuild-visualizer": "^0.7.0",
     "eslint": "^9.21.0",
     "eslint-plugin-filename-convention": "file:scripts/eslint-plugin-filename-convention",
     "globals": "^14.0.0",

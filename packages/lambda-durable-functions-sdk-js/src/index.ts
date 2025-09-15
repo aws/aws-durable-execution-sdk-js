@@ -19,6 +19,7 @@ export {
   WaitForConditionDecision,
   WaitForConditionWaitStrategyFunc,
   Logger,
+  LambdaHandler,
 } from "./types";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export { InvocationDefinition } from "./storage/record-definition-storage";

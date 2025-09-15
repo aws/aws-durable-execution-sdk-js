@@ -10,7 +10,7 @@ module.exports = [
       ecmaVersion: "latest",
       sourceType: "module",
       parserOptions: {
-        tsconfigRootDir: ".",
+        tsconfigRootDir: __dirname,
       },
     },
     plugins: {

@@ -2,7 +2,9 @@
   "name": "@amzn/dex-internal-sdk",
   "description": "Durable Executions Internal SDK",
   "version": "0.1.0",
-  "scripts": {},
+  "scripts": {
+    "clean": "rm -rf node_modules"
+  },
   "main": "./dist-cjs/index.js",
   "types": "./dist-types/index.d.ts",
   "module": "./dist-es/index.js",
