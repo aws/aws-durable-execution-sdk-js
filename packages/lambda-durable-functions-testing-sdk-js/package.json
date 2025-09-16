@@ -1,6 +1,6 @@
 {
-  "name": "@aws/aws-durable-functions-sdk-js-testing",
-  "version": "0.0.1",
+  "name": "@amzn/durable-executions-type-script-testing-library",
+  "version": "0.1.0",
   "license": "UNLICENSED",
   "repository": "ssh://git.amazon.com/pkg/DurableExecutionsTypeScriptTestingLibrary",
   "homepage": "https://code.amazon.com/packages/DurableExecutionsTypeScriptTestingLibrary",
