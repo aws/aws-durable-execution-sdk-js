@@ -1,5 +1,5 @@
 {
-  "name": "@amzn/durable-executions-type-script-examples",
+  "name": "@aws/aws-durable-functions-sdk-js-examples",
   "version": "0.1.0",
   "license": "UNLICENSED",
   "repository": "ssh://git.amazon.com/pkg/DurableExecutionsTypeScriptExamples",
