@@ -4,7 +4,7 @@ on:
   # push:
   #   branches: [ "development", "hsilan-test-publish-s3" ]
   workflow_run:
-    workflows: [Unit Tests, Integration Tests]
+    workflows: [Unit Tests]
     branches: [development,hsilan-test-publish-s3]
     types: 
       - completed
