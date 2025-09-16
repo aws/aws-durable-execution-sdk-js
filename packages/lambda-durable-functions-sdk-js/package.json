@@ -1,7 +1,7 @@
 {
-  "name": "@aws/aws-durable-functions-sdk-js",
+  "name": "@amzn/durable-executions-language-sdk",
   "description": "Durable Executions Language SDK for TypeScript",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
