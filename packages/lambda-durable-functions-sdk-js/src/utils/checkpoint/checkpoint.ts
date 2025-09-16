@@ -24,6 +24,7 @@ class CheckpointHandler {
     resolve: () => void;
     reject: (error: Error) => void;
   }> = [];
+  private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
 
   constructor(
     private context: ExecutionContext,
@@ -91,12 +92,28 @@ class CheckpointHandler {
 
     this.isProcessing = true;
 
-    // Take all items from the queue for processing
-    const batch = this.queue.splice(0);
+    // Pick items from queue up to size limit
+    const batch: QueuedCheckpoint[] = [];
+    const baseSize = this.currentTaskToken.length + 100; // Base payload overhead
+    let currentSize = baseSize;
+
+    while (this.queue.length > 0) {
+      const nextItem = this.queue[0];
+      const itemSize = JSON.stringify(nextItem).length;
+
+      if (currentSize + itemSize > this.MAX_PAYLOAD_SIZE && batch.length > 0) {
+        break;
+      }
+
+      batch.push(this.queue.shift()!);
+      currentSize += itemSize;
+    }
 
     log(this.context.isVerbose, "🔄", "Processing checkpoint batch:", {
       batchSize: batch.length,
       remainingInQueue: this.queue.length,
+      estimatedSize: currentSize,
+      maxSize: this.MAX_PAYLOAD_SIZE,
     });
 
     try {
