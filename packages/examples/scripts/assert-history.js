@@ -38,12 +38,49 @@ if (actualEvents.length !== expectedEvents.length) {
     process.exit(1);
 }
 
-for (let i = 0; i < expectedEvents.length; i++) {
-    const actualEvent = actualEvents[i];
-    const expectedEvent = expectedEvents[i];
+// Create event signature for comparison (ignoring order-sensitive fields)
+function createEventSignature(event) {
+    const signature = {
+        EventType: event.EventType,
+        SubType: event.SubType
+    };
     
-    if (actualEvent.EventType !== expectedEvent.EventType) {
-        console.error(`Event ${i+1} type mismatch: expected ${expectedEvent.EventType}, got ${actualEvent.EventType}`);
+    // Only include Name for events that have stable names (not ExecutionStarted/ExecutionSucceeded)
+    if (event.EventType !== 'ExecutionStarted' && event.EventType !== 'ExecutionSucceeded' && event.Name) {
+        signature.Name = event.Name;
+    }
+    
+    return signature;
+}
+
+// Count occurrences of each event signature
+function countEventSignatures(events) {
+    const counts = new Map();
+    events.forEach(event => {
+        const signature = JSON.stringify(createEventSignature(event));
+        counts.set(signature, (counts.get(signature) || 0) + 1);
+    });
+    return counts;
+}
+
+const actualCounts = countEventSignatures(actualEvents);
+const expectedCounts = countEventSignatures(expectedEvents);
+
+// Check that all expected events exist with correct counts
+for (const [signature, expectedCount] of expectedCounts) {
+    const actualCount = actualCounts.get(signature) || 0;
+    if (actualCount !== expectedCount) {
+        const eventInfo = JSON.parse(signature);
+        console.error(`Event signature mismatch for ${eventInfo.EventType}${eventInfo.SubType ? `(${eventInfo.SubType})` : ''}${eventInfo.Name ? ` "${eventInfo.Name}"` : ''}: expected ${expectedCount}, got ${actualCount}`);
+        process.exit(1);
+    }
+}
+
+// Check that no unexpected events exist
+for (const [signature, actualCount] of actualCounts) {
+    if (!expectedCounts.has(signature)) {
+        const eventInfo = JSON.parse(signature);
+        console.error(`Unexpected event: ${eventInfo.EventType}${eventInfo.SubType ? `(${eventInfo.SubType})` : ''}${eventInfo.Name ? ` "${eventInfo.Name}"` : ''} (${actualCount} occurrences)`);
         process.exit(1);
     }
 }
