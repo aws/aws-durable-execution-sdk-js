@@ -10,7 +10,7 @@ on:
   #     - completed
       
 env:
-  BUCKET_NAME : "github-language-sdk-package-build-artifacts"
+  BUCKET_NAME : "${{ secrets.S3_BUCKET_NAME }}"
   AWS_REGION : "us-west-2"
 
 # permission can be added at job level or workflow level
@@ -32,7 +32,7 @@ jobs:
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
         with:
-          role-to-assume: arn:aws:iam::623946091065:role/GithubActionsRole
+          role-to-assume: "${{ secrets.ACTIONS_SYNC_ROLE_NAME }}"
           role-session-name: samplerolesession
           aws-region: ${{ env.AWS_REGION }}
       - name: get-npm-version
@@ -55,8 +55,8 @@ jobs:
       - name: commit to Gitfarm
         run: |
           aws lambda invoke \
-            --function-name arn:aws:lambda:us-west-2:623946091065:function:gitfarm-lambda-personal-WriteFileGitFarmEB81359E-mXcLqQEGbZ8J \
-            --payload '{"gitFarmRepo":"DurableExecutionsLanguageSDK","gitFarmBranch":"hsilan-test","gitFarmFilepath":"amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz","s3Bucket":"github-language-sdk-package-build-artifacts","s3FilePath":"amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz"}' \
+            --function-name ${{ secrets.SYNC_LAMBDA_ARN }} \
+            --payload '{"gitFarmRepo":"${{ secrets.GITFARM_LAN_SDK_REPO }}","gitFarmBranch":"{{ secrets.GITFARM_LAN_SDK_BRANCH }}","gitFarmFilepath":"amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz","s3Bucket":"${{ secrets.S3_BUCKET_NAME }}","s3FilePath":"amzn-durable-executions-language-sdk-${{ steps.package-version.outputs.current-version }}.tgz"}' \
             --cli-binary-format raw-in-base64-out \
             output.txt
       - name: Check for specific text in a file
