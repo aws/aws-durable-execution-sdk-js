@@ -5,9 +5,9 @@ name: Unit Tests
 
 on:
   push:
-    branches: [ "main", "development", "hsilan-test-publish-s3" ]
+    branches: [ "main", "development" ]
   pull_request:
-    branches: [ "main", "development", "hsilan-test-publish-s3" ]
+    branches: [ "main", "development" ]
 
 # Cancel old jobs when a pull request is updated.
 concurrency:
