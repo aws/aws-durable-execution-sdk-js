@@ -90,7 +90,9 @@ describe("Run In Child Context Integration Tests", () => {
     // The fire-and-forget optimization means we may only see the START checkpoint
     // in the test environment, but the functionality should work correctly
     expect(checkpointCalls.length).toBeGreaterThanOrEqual(1);
-    expect(checkpointCalls[0].data.Updates[0].Action).toBe(OperationAction.START);
+    expect(checkpointCalls[0].data.Updates[0].Action).toBe(
+      OperationAction.START,
+    );
     expect(checkpointCalls[0].data.Updates[0].Id).toBe(hashId("1"));
     expect(checkpointCalls[0].data.Updates[0].Type).toBe(OperationType.CONTEXT);
     expect(checkpointCalls[0].data.Updates[0].Name).toBe("test-child-context");
@@ -139,7 +141,9 @@ describe("Run In Child Context Integration Tests", () => {
 
     // Child context should create at least START checkpoint (fire-and-forget optimization)
     expect(checkpointCalls.length).toBeGreaterThanOrEqual(1);
-    expect(checkpointCalls[0].data.Updates[0].Action).toBe(OperationAction.START);
+    expect(checkpointCalls[0].data.Updates[0].Action).toBe(
+      OperationAction.START,
+    );
   });
 
   test("should support nested child contexts with deterministic IDs", async () => {
@@ -232,7 +236,9 @@ describe("Run In Child Context Integration Tests", () => {
     expect(checkpointCalls.length).toBeGreaterThanOrEqual(2);
 
     // First checkpoint should be child context START
-    expect(checkpointCalls[0].data.Updates[0].Action).toBe(OperationAction.START);
+    expect(checkpointCalls[0].data.Updates[0].Action).toBe(
+      OperationAction.START,
+    );
     expect(checkpointCalls[0].data.Updates[0].Id).toBe(hashId("1"));
 
     // If we have more than 2 checkpoints, check for child step
@@ -245,7 +251,9 @@ describe("Run In Child Context Integration Tests", () => {
     // Last checkpoint should be child context SUCCEED
     const lastCheckpoint = checkpointCalls[checkpointCalls.length - 1];
     expect(lastCheckpoint.data.Updates[0].Action).toBe(OperationAction.SUCCEED);
-    expect(lastCheckpoint.data.Updates[0].ParentId).toBe(hashId("original-parent-123"));
+    expect(lastCheckpoint.data.Updates[0].ParentId).toBe(
+      hashId("original-parent-123"),
+    );
     expect(lastCheckpoint.data.Updates[0].Name).toBe("test-child-context");
   });
 
