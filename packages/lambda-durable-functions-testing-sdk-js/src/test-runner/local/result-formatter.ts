@@ -67,6 +67,48 @@ export class ResultFormatter<ResultType> {
         }
         return this.getErrorFromResult(lambdaResponse);
       },
+      print: (config) => {
+        const operations = operationStorage.getOperations();
+        if (operations.length === 0) {
+          console.log("No operations found.");
+          return;
+        }
+
+        const defaultConfig = {
+          parentId: true,
+          name: true,
+          type: true,
+          subType: true,
+          status: true,
+          startTime: true,
+          endTime: true,
+          duration: true
+        };
+        const finalConfig = { ...defaultConfig, ...config };
+
+        const rows = operations.map((op) => {
+          const startTime = op.getStartTimestamp();
+          const endTime = op.getEndTimestamp();
+          const duration = startTime && endTime 
+            ? `${endTime.getTime() - startTime.getTime()}ms`
+            : '-';
+
+          const row: Record<string, string> = {};
+          
+          if (finalConfig.parentId) row.parentId = op.getParentId() ?? '-';
+          if (finalConfig.name) row.name = op.getName() ?? '-';
+          if (finalConfig.type) row.type = op.getType() ?? '-';
+          if (finalConfig.subType) row.subType = op.getSubType() ?? '-';
+          if (finalConfig.status) row.status = op.getStatus() ?? '-';
+          if (finalConfig.startTime) row.startTime = startTime ? startTime.toISOString() : '-';
+          if (finalConfig.endTime) row.endTime = endTime ? endTime.toISOString() : '-';
+          if (finalConfig.duration) row.duration = duration;
+
+          return row;
+        });
+
+        console.table(rows);
+      },
     };
   }
 
