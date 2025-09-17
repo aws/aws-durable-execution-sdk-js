@@ -5,7 +5,7 @@ name: Unit Tests
 
 on:
   push:
-    branches: [ "main", "development", "add-workflow-permissions-unit-tests"]
+    branches: [ "main", "development"]
   pull_request:
     branches: [ "main", "development"]
 
