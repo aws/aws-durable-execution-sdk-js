@@ -2,7 +2,7 @@ name: Integration Tests
 
 on:
   push:
-    branches: [ "main", "development" ]
+    branches: [ "main", "development", "use-short-term-credentials-for-integration-tests" ]
     paths:
       - 'packages/lambda-durable-functions-sdk-js/**'
       - 'packages/examples/**'
@@ -41,11 +41,11 @@ jobs:
           sudo ./aws/install
         fi
     
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+    - name: configure aws credentials
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+        role-session-name: githubIntegrationTest
         aws-region: ${{ env.AWS_REGION }}
     
     - name: Install custom Lambda model
