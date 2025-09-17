@@ -1,7 +1,7 @@
-import { ErrorObject, OperationStatus } from "@amzn/dex-internal-sdk";
+import { ErrorObject, ExecutionStatus } from "@amzn/dex-internal-sdk";
 
 export interface TestExecutionResult {
-  status: OperationStatus;
+  status: ExecutionStatus | undefined;
   result?: string;
   error?: ErrorObject;
 }

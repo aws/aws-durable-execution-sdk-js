@@ -1,22 +1,24 @@
 import { MockOperation } from "./mock-operation";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { ExecutionId } from "../../../checkpoint-server/utils/tagged-strings";
-import { OperationEvents, OperationWithData } from "../../common/operations/operation-with-data";
-import { OperationType } from "@amzn/dex-internal-sdk";
+import { OperationEvents } from "../../common/operations/operation-with-data";
 import { DurableOperation } from "../../durable-test-runner";
 import { OperationWaitManager } from "./operation-wait-manager";
+import { OperationStorage } from "../../common/operation-storage";
 
-export class OperationStorage {
+export class LocalOperationStorage extends OperationStorage {
   private readonly mockOperations: MockOperation[] = [];
 
   constructor(
-    private readonly waitManager: OperationWaitManager,
-    private readonly indexedOperations: IndexedOperations,
+    waitManager: OperationWaitManager,
+    indexedOperations: IndexedOperations,
     private readonly onCheckpointReceived: (
       checkpointOperationsReceived: OperationEvents[],
       trackedDurableOperations: DurableOperation<unknown>[]
     ) => void
-  ) {}
+  ) {
+    super(waitManager, indexedOperations);
+  }
 
   private populateMockOperation(mockOperation: MockOperation): boolean {
     // Strategy pattern for population
@@ -46,23 +48,6 @@ export class OperationStorage {
       }
     }
     return false; // No data found
-  }
-
-  getOperations(): OperationWithData[] {
-    return (
-      this.indexedOperations
-        .getOperations()
-        .map((data) => {
-          const operation = new OperationWithData(
-            this.waitManager,
-            this.indexedOperations
-          );
-          operation.populateData(data);
-          return operation;
-        })
-        // TODO: should we even add execution operations to the storage?
-        .filter((operation) => operation.getType() !== OperationType.EXECUTION)
-    );
   }
 
   registerMocks(executionId: ExecutionId) {

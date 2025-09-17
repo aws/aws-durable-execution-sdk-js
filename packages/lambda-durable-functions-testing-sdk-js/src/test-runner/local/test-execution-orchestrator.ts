@@ -1,4 +1,8 @@
-import { Operation, OperationStatus } from "@amzn/dex-internal-sdk";
+import {
+  ExecutionStatus,
+  Operation,
+  OperationStatus,
+} from "@amzn/dex-internal-sdk";
 import {
   withDurableFunctions,
   InvocationStatus,
@@ -10,7 +14,7 @@ import {
   InvocationId,
 } from "../../checkpoint-server/utils/tagged-strings";
 import { InvokeHandler } from "./invoke-handler";
-import { OperationStorage } from "./operations/operation-storage";
+import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { InvocationTracker } from "./operations/invocation-tracker";
 import {
   TestExecutionResult,
@@ -40,7 +44,7 @@ export class TestExecutionOrchestrator {
 
   constructor(
     private handlerFunction: ReturnType<typeof withDurableFunctions>,
-    private operationStorage: OperationStorage,
+    private operationStorage: LocalOperationStorage,
     private readonly checkpointApi: CheckpointApiClient,
     private readonly scheduler: Scheduler,
     private skipTime = false
@@ -368,7 +372,10 @@ export class TestExecutionOrchestrator {
     this.executionState.resolveWith({
       result: update.Payload,
       error: update.Error,
-      status: operation.Status,
+      status:
+        update.Action === OperationAction.SUCCEED
+          ? ExecutionStatus.SUCCEEDED
+          : ExecutionStatus.FAILED,
     });
   }
 

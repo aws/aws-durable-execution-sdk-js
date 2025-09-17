@@ -1,6 +1,6 @@
 import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
 import { InvocationTracker } from "../invocation-tracker";
-import { OperationStorage } from "../operation-storage";
+import { LocalOperationStorage } from "../local-operation-storage";
 import { createInvocationId } from "../../../../checkpoint-server/utils/tagged-strings";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";
@@ -10,7 +10,7 @@ import { OperationEvents } from "../../../common/operations/operation-with-data"
 describe("InvocationTracker", () => {
   let waitManager: OperationWaitManager;
   let indexedOperations: IndexedOperations;
-  let operationStorage: OperationStorage;
+  let operationStorage: LocalOperationStorage;
   let invocationTracker: InvocationTracker;
 
   // Helper function to create test operations
@@ -35,7 +35,7 @@ describe("InvocationTracker", () => {
   beforeEach(() => {
     waitManager = new OperationWaitManager();
     indexedOperations = new IndexedOperations([]);
-    operationStorage = new OperationStorage(
+    operationStorage = new LocalOperationStorage(
       waitManager,
       indexedOperations,
       jest.fn()

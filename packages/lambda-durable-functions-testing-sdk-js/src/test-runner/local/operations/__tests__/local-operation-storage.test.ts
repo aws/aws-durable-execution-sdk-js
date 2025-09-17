@@ -1,5 +1,5 @@
 import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
-import { OperationStorage } from "../operation-storage";
+import { LocalOperationStorage } from "../local-operation-storage";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { MockOperation } from "../mock-operation";
 import { createExecutionId } from "../../../../checkpoint-server/utils/tagged-strings";
@@ -9,7 +9,7 @@ import { OperationEvents } from "../../../common/operations/operation-with-data"
 // Mock the OperationWaitManager
 jest.mock("../operation-wait-manager");
 
-describe("OperationStorage", () => {
+describe("LocalOperationStorage", () => {
   let mockWaitManager: OperationWaitManager;
   let mockIndexedOperations: IndexedOperations;
   let mockCallback: jest.Mock;
@@ -52,73 +52,10 @@ describe("OperationStorage", () => {
     mockCallback = jest.fn();
   });
 
-  describe("constructor", () => {
-    it("should initialize with empty operations", () => {
-      const storage = new OperationStorage(
-        mockWaitManager,
-        mockIndexedOperations,
-        mockCallback
-      );
-
-      expect(storage.getOperations()).toEqual([]);
-    });
-  });
-
-  describe("getOperations", () => {
-    it("should return all operations after they have been populated", () => {
-      const storage = new OperationStorage(
-        mockWaitManager,
-        mockIndexedOperations,
-        mockCallback
-      );
-
-      storage.populateOperations(sampleOperations);
-
-      expect(storage.getOperations()).toHaveLength(
-        sampleOperations.length
-      );
-    });
-
-    it("should not return execution operations", () => {
-      const storage = new OperationStorage(
-        mockWaitManager,
-        mockIndexedOperations,
-        mockCallback
-      );
-
-      storage.populateOperations(
-        sampleOperations.concat({
-          operation: {
-            Id: "Execution-operation-id",
-            Type: OperationType.EXECUTION,
-          },
-          events: [],
-        })
-      );
-
-      expect(storage.getOperations()).toHaveLength(
-        sampleOperations.length
-      );
-    });
-  });
-
   describe("populateOperations", () => {
-    it("should add operations to storage", () => {
-      const storage = new OperationStorage(
-        mockWaitManager,
-        mockIndexedOperations,
-        mockCallback
-      );
-
-      storage.populateOperations(sampleOperations);
-
-      expect(storage.getOperations()).toHaveLength(
-        sampleOperations.length
-      );
-    });
 
     it("should update registered mock operations with matching ID", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -145,7 +82,7 @@ describe("OperationStorage", () => {
     });
 
     it("should update registered mock operations with matching name and index", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -172,7 +109,7 @@ describe("OperationStorage", () => {
     });
 
     it("should update registered mock operations with matching index only", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -199,7 +136,7 @@ describe("OperationStorage", () => {
     });
 
     it("should not throw for mock operations without matching operation data", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -224,7 +161,7 @@ describe("OperationStorage", () => {
 
     it("should notify wait manager when operations are populated", () => {
       const mockCallback = jest.fn();
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -249,7 +186,7 @@ describe("OperationStorage", () => {
 
     it("should notify wait manager for multiple populated operations", () => {
       const mockCallback = jest.fn();
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -282,7 +219,7 @@ describe("OperationStorage", () => {
 
   describe("registerOperation", () => {
     it("should register a mock operation", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -318,7 +255,7 @@ describe("OperationStorage", () => {
     });
 
     it("should populate mock operation data if matching operation exists", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -342,7 +279,7 @@ describe("OperationStorage", () => {
     });
 
     it("should handle mock operations with empty string id", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -378,7 +315,7 @@ describe("OperationStorage", () => {
     });
 
     it("should handle mock operations with empty string name", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -414,7 +351,7 @@ describe("OperationStorage", () => {
     });
 
     it("should handle mock operations with index 0", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -460,7 +397,7 @@ describe("OperationStorage", () => {
 
     it("should notify wait manager when registering operations with existing data", () => {
       const mockCallback = jest.fn();
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -486,7 +423,7 @@ describe("OperationStorage", () => {
 
   describe("registerMocks", () => {
     it("should call registerMocks on all registered mock operations", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -532,7 +469,7 @@ describe("OperationStorage", () => {
     });
 
     it("should not throw when no mock operations are registered", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -547,7 +484,7 @@ describe("OperationStorage", () => {
     });
 
     it("should handle mixed types of mock operations", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -590,7 +527,7 @@ describe("OperationStorage", () => {
     });
 
     it("should call registerMocks even if mock operations are not populated with data", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -621,7 +558,7 @@ describe("OperationStorage", () => {
 
   describe("Callback functionality edge cases", () => {
     it("should always call callback since it is required", () => {
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -642,7 +579,7 @@ describe("OperationStorage", () => {
 
     it("should call callback with empty populated operations when no operations are populated", () => {
       const mockCallback = jest.fn();
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -662,7 +599,7 @@ describe("OperationStorage", () => {
 
     it("should call callback with empty arrays when no operations provided", () => {
       const mockCallback = jest.fn();
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -677,7 +614,7 @@ describe("OperationStorage", () => {
 
     it("should call callback only for operations that actually got populated", () => {
       const mockCallback = jest.fn();
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback
@@ -706,7 +643,7 @@ describe("OperationStorage", () => {
 
     it("should call callback when registering operation with existing data", () => {
       const mockCallback = jest.fn();
-      const storage = new OperationStorage(
+      const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockCallback

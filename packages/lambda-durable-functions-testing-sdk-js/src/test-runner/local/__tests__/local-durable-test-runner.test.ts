@@ -2,7 +2,7 @@ import { LocalDurableTestRunner } from "../local-durable-test-runner";
 import { MockOperation } from "../operations/mock-operation";
 import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
 import { ResultFormatter } from "../result-formatter";
-import { OperationStorage } from "../operations/operation-storage";
+import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { InvocationStatus } from "@amzn/durable-executions-language-sdk";
 import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manager";
@@ -11,7 +11,7 @@ import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 
 jest.mock("../test-execution-orchestrator");
 jest.mock("../result-formatter");
-jest.mock("../operations/operation-storage");
+jest.mock("../operations/local-operation-storage");
 jest.mock("../operations/operation-wait-manager");
 jest.mock("../checkpoint-server-worker-manager");
 
@@ -19,7 +19,7 @@ describe("LocalDurableTestRunner", () => {
   const mockHandlerFunction = jest.fn();
   let mockOrchestrator: jest.Mocked<TestExecutionOrchestrator>;
   let mockResultFormatter: jest.Mocked<ResultFormatter<{ success: boolean }>>;
-  let mockOperationStorage: Partial<jest.Mocked<OperationStorage>>;
+  let mockOperationStorage: Partial<jest.Mocked<LocalOperationStorage>>;
   let mockWaitManager: Partial<jest.Mocked<OperationWaitManager>>;
   let mockCheckpointServerWorkerManager: jest.Mocked<CheckpointServerWorkerManager>;
 
@@ -77,7 +77,7 @@ describe("LocalDurableTestRunner", () => {
     (OperationWaitManager as jest.Mock).mockImplementation(
       () => mockWaitManager
     );
-    (OperationStorage as jest.Mock).mockImplementation(
+    (LocalOperationStorage as jest.Mock).mockImplementation(
       () => mockOperationStorage
     );
     (TestExecutionOrchestrator as unknown as jest.Mock).mockImplementation(
@@ -96,7 +96,7 @@ describe("LocalDurableTestRunner", () => {
 
       expect(runner).toBeDefined();
       expect(OperationWaitManager).toHaveBeenCalledWith();
-      expect(OperationStorage).toHaveBeenCalledWith(
+      expect(LocalOperationStorage).toHaveBeenCalledWith(
         mockWaitManager,
         expect.any(Object),
         expect.any(Function)

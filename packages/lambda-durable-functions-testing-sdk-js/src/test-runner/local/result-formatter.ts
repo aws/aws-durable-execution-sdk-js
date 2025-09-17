@@ -3,10 +3,10 @@ import {
   TestResultError,
   Invocation,
 } from "../durable-test-runner";
-import { OperationStorage } from "./operations/operation-storage";
 import { tryJsonParse } from "../common/utils";
 import { TestExecutionResult } from "./test-execution-state";
 import { OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStorage } from "../common/operation-storage";
 
 /**
  * Handles formatting and processing of execution results for LocalDurableTestRunner.

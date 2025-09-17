@@ -32,6 +32,7 @@
     "copy-catalog": "cp examples-catalog.json build/durable-executions-typescript-sdk-examples/",
     "generate-template": "node scripts/generate-template.js",
     "test": "npm run unit-test",
+    "test:integration": "jest --config jest.config.integration.js",
     "unit-test": "jest --collectCoverage",
     "unit-test-watch": "jest --watch",
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"

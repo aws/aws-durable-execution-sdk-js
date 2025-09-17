@@ -4,7 +4,7 @@ import {
   DurableTestRunner,
 } from "../durable-test-runner";
 import { withDurableFunctions } from "@amzn/durable-executions-language-sdk";
-import { OperationStorage } from "./operations/operation-storage";
+import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { OperationWaitManager } from "./operations/operation-wait-manager";
 import { MockOperation } from "./operations/mock-operation";
 import { TestExecutionOrchestrator } from "./test-execution-orchestrator";
@@ -39,7 +39,7 @@ export interface LocalDurableTestRunnerParameters {
 export class LocalDurableTestRunner<ResultType>
   implements DurableTestRunner<MockOperation, ResultType>
 {
-  private readonly operationStorage: OperationStorage;
+  private readonly operationStorage: LocalOperationStorage;
   private readonly waitManager: OperationWaitManager;
   private readonly resultFormatter: ResultFormatter<ResultType>;
   private readonly operationIndex: IndexedOperations;
@@ -59,7 +59,7 @@ export class LocalDurableTestRunner<ResultType>
   }: LocalDurableTestRunnerParameters) {
     this.waitManager = new OperationWaitManager();
     this.operationIndex = new IndexedOperations([]);
-    this.operationStorage = new OperationStorage(
+    this.operationStorage = new LocalOperationStorage(
       this.waitManager,
       this.operationIndex,
       this.waitManager.handleCheckpointReceived.bind(this.waitManager)

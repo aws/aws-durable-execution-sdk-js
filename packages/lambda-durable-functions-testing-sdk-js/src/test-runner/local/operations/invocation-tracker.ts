@@ -1,5 +1,5 @@
 import { OperationStatus } from "@amzn/dex-internal-sdk";
-import { OperationStorage } from "./operation-storage";
+import { LocalOperationStorage } from "./local-operation-storage";
 import { Invocation } from "../../durable-test-runner";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { InvocationId } from "../../../checkpoint-server/utils/tagged-strings";
@@ -13,7 +13,7 @@ export class InvocationTracker {
   private invocationOperationsMap = new Map<InvocationId, Set<string>>(); // invocationId -> Set of operationIds
   private completedInvocations = new Set<InvocationId>();
 
-  constructor(private operationStorage: OperationStorage) {}
+  constructor(private operationStorage: LocalOperationStorage) {}
 
   /**
    * Reset all invocation tracking data.

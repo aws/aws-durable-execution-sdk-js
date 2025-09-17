@@ -1,5 +1,5 @@
 import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
-import { OperationStorage } from "../operations/operation-storage";
+import { LocalOperationStorage } from "../operations/local-operation-storage";
 import {
   createCheckpointToken,
   createExecutionId,
@@ -24,7 +24,7 @@ import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 
 // Mock dependencies
-jest.mock("../operations/operation-storage");
+jest.mock("../operations/local-operation-storage");
 
 const mockInvoke = jest.fn();
 
@@ -40,7 +40,7 @@ describe("TestExecutionOrchestrator", () => {
   const mockCheckpointToken = createCheckpointToken("test-checkpoint-token");
 
   let orchestrator: TestExecutionOrchestrator;
-  let mockOperationStorage: jest.Mocked<OperationStorage>;
+  let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient;
   let mockScheduler: Scheduler;
 
@@ -54,11 +54,11 @@ describe("TestExecutionOrchestrator", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Mock OperationStorage
-    mockOperationStorage = new OperationStorage(
+    mockOperationStorage = new LocalOperationStorage(
       new OperationWaitManager(),
       new IndexedOperations([]),
       jest.fn()
-    ) as jest.Mocked<OperationStorage>;
+    ) as jest.Mocked<LocalOperationStorage>;
     mockOperationStorage.populateOperations = jest.fn();
 
     checkpointApi = new CheckpointApiClient("http://127.0.0.1:1234");

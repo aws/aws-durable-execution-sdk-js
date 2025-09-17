@@ -1,5 +1,5 @@
 import { ResultFormatter } from "../result-formatter";
-import { OperationStorage } from "../operations/operation-storage";
+import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
 import { OperationWithData } from "../../common/operations/operation-with-data";
@@ -7,21 +7,21 @@ import { IndexedOperations } from "../../common/indexed-operations";
 import { TestExecutionResult } from "../test-execution-state";
 
 // Mock OperationStorage
-jest.mock("../operations/operation-storage");
+jest.mock("../operations/local-operation-storage");
 
 describe("ResultFormatter", () => {
   let resultFormatter: ResultFormatter<{ success: boolean }>;
-  let mockOperationStorage: jest.Mocked<OperationStorage>;
+  let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
   let mockWaitManager: OperationWaitManager;
   let mockOperationIndex: IndexedOperations;
 
   beforeEach(() => {
     mockOperationIndex = new IndexedOperations([]);
-    mockOperationStorage = new OperationStorage(
+    mockOperationStorage = new LocalOperationStorage(
       new OperationWaitManager(),
       mockOperationIndex,
       jest.fn()
-    ) as jest.Mocked<OperationStorage>;
+    ) as jest.Mocked<LocalOperationStorage>;
     resultFormatter = new ResultFormatter<{ success: boolean }>();
     mockWaitManager = new OperationWaitManager();
   });
