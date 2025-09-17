@@ -2,7 +2,7 @@ name: Integration Tests
 
 on:
   push:
-    branches: [ "main", "development", "use-short-term-credentials-for-integration-tests" ]
+    branches: [ "main", "development" ]
     paths:
       - 'packages/lambda-durable-functions-sdk-js/**'
       - 'packages/examples/**'
