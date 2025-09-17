@@ -90,6 +90,20 @@ export interface TestResult<T> {
    * @throws An error if the execution succeeded.
    */
   getError(): TestResultError;
+
+  /**
+   * Prints a table of all operations to the console with their details.
+   */
+  print(config?: {
+    parentId?: boolean;
+    name?: boolean;
+    type?: boolean;
+    subType?: boolean;
+    status?: boolean;
+    startTime?: boolean;
+    endTime?: boolean;
+    duration?: boolean;
+  }): void;
 }
 
 // Tracks a single invocation of the handler function
