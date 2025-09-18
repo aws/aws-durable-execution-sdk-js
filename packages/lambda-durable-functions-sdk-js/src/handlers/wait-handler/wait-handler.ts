@@ -1,4 +1,5 @@
 import { ExecutionContext, OperationSubType } from "../../types";
+import { terminate } from "../../utils/termination-helper";
 import {
   OperationStatus,
   OperationType,
@@ -67,11 +68,11 @@ export const createWaitHandler = (
       // Check if there are any ongoing operations
       if (!hasRunningOperations()) {
         // A.1: No ongoing operations - safe to terminate
-        context.terminationManager.terminate({
-          reason: TerminationReason.WAIT_SCHEDULED,
-          message: `Operation ${actualName || stepId} scheduled to wait`,
-        });
-        return new Promise(() => {});
+        return terminate(
+          context,
+          TerminationReason.WAIT_SCHEDULED,
+          `Operation ${actualName || stepId} scheduled to wait`,
+        );
       }
 
       // There are ongoing operations - wait before continuing

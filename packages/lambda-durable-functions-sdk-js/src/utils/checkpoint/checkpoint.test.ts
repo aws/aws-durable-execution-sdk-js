@@ -1032,22 +1032,31 @@ describe("createCheckpointHandler", () => {
 
   it("should split large payloads into multiple API calls when exceeding 750KB limit", async () => {
     deleteCheckpoint();
-    const checkpoint = createCheckpoint(mockContext, TEST_CONSTANTS.CHECKPOINT_TOKEN);
-    
+    const checkpoint = createCheckpoint(
+      mockContext,
+      TEST_CONSTANTS.CHECKPOINT_TOKEN,
+    );
+
     // Create large payload data that will exceed 750KB when combined
     const largeData = "x".repeat(400000); // 400KB per item
-    
+
     // Queue two large items that together exceed 750KB
     const promises = [
-      checkpoint("large-step-1", { Action: OperationAction.START, Payload: largeData }),
-      checkpoint("large-step-2", { Action: OperationAction.START, Payload: largeData }),
+      checkpoint("large-step-1", {
+        Action: OperationAction.START,
+        Payload: largeData,
+      }),
+      checkpoint("large-step-2", {
+        Action: OperationAction.START,
+        Payload: largeData,
+      }),
     ];
 
     await Promise.all(promises);
 
     // Should make multiple API calls due to size limit
     expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
-    
+
     // First call should have one item
     expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
     // Second call should have the remaining item
@@ -1056,59 +1065,77 @@ describe("createCheckpointHandler", () => {
 
   it("should process remaining items in queue after size limit is reached", async () => {
     deleteCheckpoint();
-    const checkpoint = createCheckpoint(mockContext, TEST_CONSTANTS.CHECKPOINT_TOKEN);
-    
+    const checkpoint = createCheckpoint(
+      mockContext,
+      TEST_CONSTANTS.CHECKPOINT_TOKEN,
+    );
+
     // Create items where first is large enough to trigger size limit
     const largeData = "x".repeat(400000); // 400KB
-    
+
     // Add first large item
-    const promise1 = checkpoint("large-step", { Action: OperationAction.START, Payload: largeData });
-    
+    const promise1 = checkpoint("large-step", {
+      Action: OperationAction.START,
+      Payload: largeData,
+    });
+
     // Wait a bit then add more items
-    await new Promise(resolve => setTimeout(resolve, 10));
-    
-    const promise2 = checkpoint("small-step-1", { Action: OperationAction.START, Payload: largeData });
-    const promise3 = checkpoint("small-step-2", { Action: OperationAction.START });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const promise2 = checkpoint("small-step-1", {
+      Action: OperationAction.START,
+      Payload: largeData,
+    });
+    const promise3 = checkpoint("small-step-2", {
+      Action: OperationAction.START,
+    });
 
     await Promise.all([promise1, promise2, promise3]);
 
     // Should make multiple calls due to size limits
     expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
-    
+
     // Verify all items were processed
-    const allUpdates = mockState.checkpoint.mock.calls.flatMap((call: any) => call[1].Updates);
+    const allUpdates = mockState.checkpoint.mock.calls.flatMap(
+      (call: any) => call[1].Updates,
+    );
     expect(allUpdates).toHaveLength(3);
     expect(allUpdates.map((u: any) => u.Id)).toEqual([
       hashId("large-step"),
-      hashId("small-step-1"), 
-      hashId("small-step-2")
+      hashId("small-step-1"),
+      hashId("small-step-2"),
     ]);
   });
 
   it("should update stepData from checkpoint response operations", async () => {
     deleteCheckpoint();
-    const checkpoint = createCheckpoint(mockContext, TEST_CONSTANTS.CHECKPOINT_TOKEN);
-    
+    const checkpoint = createCheckpoint(
+      mockContext,
+      TEST_CONSTANTS.CHECKPOINT_TOKEN,
+    );
+
     // Mock checkpoint response with operations
     const mockOperations = [
       {
         Id: hashId("test-step"),
         Type: OperationType.STEP,
         Action: OperationAction.START,
-        Payload: "test-result"
-      }
+        Payload: "test-result",
+      },
     ];
-    
+
     mockState.checkpoint.mockResolvedValue({
       CheckpointToken: "new-task-token",
       NewExecutionState: {
-        Operations: mockOperations
-      }
+        Operations: mockOperations,
+      },
     });
 
     await checkpoint("test-step", { Action: OperationAction.START });
 
     // Verify stepData was updated with operations from response
-    expect(mockContext._stepData[hashId("test-step")]).toEqual(mockOperations[0]);
+    expect(mockContext._stepData[hashId("test-step")]).toEqual(
+      mockOperations[0],
+    );
   });
 });

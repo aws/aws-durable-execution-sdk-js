@@ -8,6 +8,10 @@ import {
   StepContext,
   Logger,
 } from "../../types";
+import {
+  terminate,
+  terminateForUnrecoverableError,
+} from "../../utils/termination-helper";
 import { Context } from "aws-lambda";
 import {
   OperationAction,
@@ -35,11 +39,11 @@ const waitForTimer = <T>(
 ): Promise<T> => {
   // TODO: Current implementation assumes sequential operations only
   // Will be enhanced to handle concurrent operations in future milestone
-  context.terminationManager.terminate({
-    reason: TerminationReason.RETRY_SCHEDULED,
-    message: `Retry scheduled for ${name || stepId}`,
-  });
-  return new Promise<T>(() => {});
+  return terminate(
+    context,
+    TerminationReason.RETRY_SCHEDULED,
+    `Retry scheduled for ${name || stepId}`,
+  );
 };
 
 export const createStepHandler = (
@@ -319,15 +323,7 @@ export const executeStep = async <T>(
         error: error.message,
       });
 
-      // Terminate execution with appropriate message
-      const stepIdentifier = name || stepId;
-      context.terminationManager.terminate({
-        reason: error.terminationReason,
-        message: `Unrecoverable error in step ${stepIdentifier}: ${error.message}`,
-      });
-
-      // Return a never-resolving promise to ensure the execution doesn't continue
-      return new Promise<T>(() => {});
+      return terminateForUnrecoverableError(context, error, name || stepId);
     }
 
     const stepData = context.getStepData(stepId);

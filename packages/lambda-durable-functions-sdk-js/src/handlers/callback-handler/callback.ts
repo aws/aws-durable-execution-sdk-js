@@ -4,6 +4,7 @@ import {
   CreateCallbackResult,
   OperationSubType,
 } from "../../types";
+import { terminate } from "../../utils/termination-helper";
 import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
 import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
@@ -41,13 +42,11 @@ const createTerminatingThenable = <T>(
         | null,
     ): Promise<TResult1 | TResult2> {
       // Terminate when the promise is actually awaited
-      context.terminationManager.terminate({
-        reason: TerminationReason.CALLBACK_PENDING,
+      return terminate(
+        context,
+        TerminationReason.CALLBACK_PENDING,
         message,
-      });
-
-      // Return a never-resolving promise
-      return new Promise<never>(() => {});
+      );
     }
 
     catch<TResult = never>(
@@ -56,24 +55,20 @@ const createTerminatingThenable = <T>(
         | null,
     ): Promise<T | TResult> {
       // Terminate when catch is called (which internally calls then)
-      context.terminationManager.terminate({
-        reason: TerminationReason.CALLBACK_PENDING,
+      return terminate(
+        context,
+        TerminationReason.CALLBACK_PENDING,
         message,
-      });
-
-      // Return a never-resolving promise
-      return new Promise<never>(() => {});
+      );
     }
 
     finally(_onfinally?: (() => void) | null): Promise<T> {
       // Terminate when finally is called
-      context.terminationManager.terminate({
-        reason: TerminationReason.CALLBACK_PENDING,
+      return terminate(
+        context,
+        TerminationReason.CALLBACK_PENDING,
         message,
-      });
-
-      // Return a never-resolving promise
-      return new Promise<never>(() => {});
+      );
     }
   }
 

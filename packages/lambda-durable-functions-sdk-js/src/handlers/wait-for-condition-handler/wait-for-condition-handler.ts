@@ -7,6 +7,7 @@ import {
   WaitForConditionContext,
   Logger,
 } from "../../types";
+import { terminate } from "../../utils/termination-helper";
 import { Context } from "aws-lambda";
 import {
   OperationAction,
@@ -31,11 +32,11 @@ const waitForTimer = <T>(
 ): Promise<T> => {
   // TODO: Current implementation assumes sequential operations only
   // Will be enhanced to handle concurrent operations in future milestone
-  context.terminationManager.terminate({
-    reason: TerminationReason.RETRY_SCHEDULED,
-    message: `Retry scheduled for ${name || stepId}`,
-  });
-  return new Promise<T>(() => {});
+  return terminate(
+    context,
+    TerminationReason.RETRY_SCHEDULED,
+    `Retry scheduled for ${name || stepId}`,
+  );
 };
 
 export const createWaitForConditionHandler = (
