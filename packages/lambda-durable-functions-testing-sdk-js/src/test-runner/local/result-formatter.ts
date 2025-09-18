@@ -5,7 +5,7 @@ import {
 } from "../durable-test-runner";
 import { tryJsonParse } from "../common/utils";
 import { TestExecutionResult } from "./test-execution-state";
-import { OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import { OperationStorage } from "../common/operation-storage";
 
 /**

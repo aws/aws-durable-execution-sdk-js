@@ -3,7 +3,7 @@ import {
   OperationType,
   ErrorObject,
   LambdaClient,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { OperationSubType } from "@amzn/durable-executions-language-sdk";
 
 import * as DurableExecutionsClientModule from "../../../local/api-client/durable-executions-client";

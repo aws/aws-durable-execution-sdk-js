@@ -2,7 +2,7 @@ import {
   InvalidParameterValueException,
   OperationAction,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { validateValidActionsByOperationType } from "../valid-actions-by-operation-type-validator";
 
 describe("validateValidActionsByOperationType", () => {

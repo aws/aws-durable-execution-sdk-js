@@ -1,4 +1,4 @@
-import { LambdaClient } from "@amzn/dex-internal-sdk";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 import { Sha256 } from "@aws-crypto/sha256-js";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { SignatureV4 } from "@smithy/signature-v4";

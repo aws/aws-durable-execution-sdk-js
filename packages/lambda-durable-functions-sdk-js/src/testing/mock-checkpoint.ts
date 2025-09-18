@@ -1,4 +1,4 @@
-import { OperationUpdate } from "@amzn/dex-internal-sdk";
+import { OperationUpdate } from "@aws-sdk/client-lambda";
 
 export type CheckpointFunction = {
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;

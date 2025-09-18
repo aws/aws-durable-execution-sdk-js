@@ -1,4 +1,4 @@
-import { Event, OperationType } from "@amzn/dex-internal-sdk";
+import { Event, OperationType } from "@aws-sdk/client-lambda";
 import { OperationEvents } from "../../../common/operations/operation-with-data";
 import { historyEventTypes } from "./history-event-types";
 import { createOperation, populateOperationDetails } from "./operation-factory";

@@ -1,4 +1,4 @@
-import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { LocalOperationStorage } from "../local-operation-storage";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { MockOperation } from "../mock-operation";

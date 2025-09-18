@@ -1,6 +1,6 @@
 import { createCheckpoint, deleteCheckpoint } from "./checkpoint";
 import { ExecutionContext, OperationSubType } from "../../types";
-import { OperationAction, OperationType } from "@amzn/dex-internal-sdk";
+import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { randomUUID } from "crypto";
 import { hashId } from "../step-id-utils/step-id-utils";

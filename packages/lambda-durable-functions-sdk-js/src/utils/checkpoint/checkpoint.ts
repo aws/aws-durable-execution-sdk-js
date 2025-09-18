@@ -2,7 +2,7 @@ import {
   CheckpointDurableExecutionRequest,
   OperationUpdate,
   Operation,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { ExecutionContext } from "../../types";
 import { log } from "../logger/logger";
 import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";

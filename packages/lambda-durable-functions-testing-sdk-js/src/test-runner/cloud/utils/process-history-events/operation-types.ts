@@ -1,4 +1,4 @@
-import { Operation } from "@amzn/dex-internal-sdk";
+import { Operation } from "@aws-sdk/client-lambda";
 import { historyEventTypes } from "./history-event-types";
 
 /**

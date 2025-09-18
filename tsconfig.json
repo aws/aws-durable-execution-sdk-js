@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "paths": {
-      "@amzn/dex-internal-sdk": ["./packages/dex-internal-sdk/dist-types"],
+      "@aws-sdk/client-lambda": ["./packages/client-lambda/dist-types"],
       "@amzn/durable-executions-language-sdk": [
         "./packages/lambda-durable-functions-sdk-js/dist"
       ],

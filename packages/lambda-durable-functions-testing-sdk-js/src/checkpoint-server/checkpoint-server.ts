@@ -4,7 +4,7 @@ import {
   CheckpointDurableExecutionResponse,
   InvalidParameterValueException,
   OperationStatus,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { ParamsDictionary } from "express-serve-static-core";
 import express from "express";
 import type { Request } from "express";

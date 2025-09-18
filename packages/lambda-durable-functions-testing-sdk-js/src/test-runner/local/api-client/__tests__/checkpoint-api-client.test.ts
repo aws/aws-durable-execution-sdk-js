@@ -1,5 +1,5 @@
 import { CheckpointApiClient } from "../checkpoint-api-client";
-import { OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import {
   API_PATHS,
   HTTP_METHODS,

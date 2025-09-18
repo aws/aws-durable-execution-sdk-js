@@ -5,7 +5,7 @@ import {
   OperationStatus,
   OperationType,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { validateWaitOperation } from "../validate-wait-operation";
 
 describe("validateWaitOperation", () => {

@@ -6,7 +6,7 @@ import {
   Operation,
   OperationStatus,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { randomUUID } from "crypto";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { getStepData } from "../step-id-utils/step-id-utils";

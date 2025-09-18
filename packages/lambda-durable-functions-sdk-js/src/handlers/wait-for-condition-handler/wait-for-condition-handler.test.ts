@@ -11,7 +11,7 @@ import {
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import { OperationType, OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationType, OperationStatus } from "@aws-sdk/client-lambda";
 import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";

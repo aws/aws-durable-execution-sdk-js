@@ -1,5 +1,5 @@
 {
-  "name": "@amzn/dex-internal-sdk",
+  "name": "@aws-sdk/client-lambda",
   "description": "Durable Executions Internal SDK",
   "version": "0.1.0",
   "scripts": {

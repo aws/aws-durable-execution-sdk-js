@@ -15,7 +15,7 @@ import {
   OperationAction,
   OperationStatus,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 import { IndexedOperations } from "../../common/indexed-operations";

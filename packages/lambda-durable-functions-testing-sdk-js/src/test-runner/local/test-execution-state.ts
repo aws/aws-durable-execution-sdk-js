@@ -1,4 +1,4 @@
-import { ErrorObject, ExecutionStatus } from "@amzn/dex-internal-sdk";
+import { ErrorObject, ExecutionStatus } from "@aws-sdk/client-lambda";
 
 export interface TestExecutionResult {
   status: ExecutionStatus | undefined;

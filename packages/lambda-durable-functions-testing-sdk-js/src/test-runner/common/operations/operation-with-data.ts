@@ -9,7 +9,7 @@ import {
   SendDurableExecutionCallbackFailureCommandOutput,
   SendDurableExecutionCallbackHeartbeatCommandOutput,
   Event,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   DurableOperation,
   TestResultError,

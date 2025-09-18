@@ -2,7 +2,7 @@ import {
   ExecutionStatus,
   Operation,
   OperationStatus,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   withDurableFunctions,
   InvocationStatus,
@@ -25,7 +25,7 @@ import {
   OperationAction,
   OperationType,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
 import {
   CheckpointOperation,

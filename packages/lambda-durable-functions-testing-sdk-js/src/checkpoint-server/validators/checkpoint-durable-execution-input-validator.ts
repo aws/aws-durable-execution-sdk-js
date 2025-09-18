@@ -4,7 +4,7 @@ import {
   OperationAction,
   OperationType,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { validateCallbackOperation } from "./operation-type/validate-callback-operation";
 import { validateContextOperation } from "./operation-type/validate-context-operation";
 import { validateExecutionOperation } from "./operation-type/validate-execution-operation";

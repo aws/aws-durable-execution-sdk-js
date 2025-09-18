@@ -5,7 +5,7 @@ import {
   GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
   GetDurableExecutionHistoryResponse,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { IndexedOperations } from "../common/indexed-operations";
 import { OperationStorage } from "../common/operation-storage";
 import { OperationWithData } from "../common/operations/operation-with-data";

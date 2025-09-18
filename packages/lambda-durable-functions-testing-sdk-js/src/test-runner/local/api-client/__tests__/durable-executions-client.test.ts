@@ -2,10 +2,10 @@ import {
   getDurableExecutionsClient,
   resetDurableExecutionsClient,
 } from "../durable-executions-client";
-import { LambdaClient } from "@amzn/dex-internal-sdk";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 
 // Mock the LambdaClient
-jest.mock("@amzn/dex-internal-sdk", () => ({
+jest.mock("@aws-sdk/client-lambda", () => ({
   LambdaClient: jest.fn(),
 }));
 

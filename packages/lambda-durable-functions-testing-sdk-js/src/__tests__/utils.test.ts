@@ -1,4 +1,4 @@
-import { ErrorObject } from "@amzn/dex-internal-sdk";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 import {
   convertDatesToTimestamps,
   transformErrorObjectToErrorResult,

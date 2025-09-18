@@ -1,6 +1,6 @@
 <!-- generated file, do not edit directly -->
 
-# @amzn/dex-internal-sdk
+# @aws-sdk/client-lambda
 
 ## Description
 
@@ -8,12 +8,12 @@ AWS SDK for JavaScript Lambda Client for Node.js, Browser and React Native.
 
 ## Installing
 
-To install this package, simply type add or install @amzn/dex-internal-sdk
+To install this package, simply type add or install @aws-sdk/client-lambda
 using your favorite package manager:
 
-- `npm install @amzn/dex-internal-sdk`
-- `yarn add @amzn/dex-internal-sdk`
-- `pnpm add @amzn/dex-internal-sdk`
+- `npm install @aws-sdk/client-lambda`
+- `yarn add @aws-sdk/client-lambda`
+- `pnpm add @aws-sdk/client-lambda`
 
 ## Getting Started
 
@@ -33,7 +33,7 @@ const { LambdaClient, ListDurableExecutionsCommand } = require("./index");
 import {
   LambdaClient,
   ListDurableExecutionsCommand,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 ```
 
 ### Usage
@@ -126,7 +126,7 @@ However, it results in a bigger bundle size and may be dropped in next major ver
 on [modular packages in AWS SDK for JavaScript](https://aws.amazon.com/blogs/developer/modular-packages-in-aws-sdk-for-javascript/)
 
 ```ts
-import * as AWS from "@amzn/dex-internal-sdk";
+import * as AWS from "@aws-sdk/client-lambda";
 const client = new AWS.Lambda({ region: "REGION" });
 
 // async/await.
@@ -193,7 +193,7 @@ visit our [code samples repo](https://github.com/aws-samples/aws-sdk-js-tests).
 
 ## Contributing
 
-This client code is generated automatically. Any modifications will be overwritten the next time the `@amzn/dex-internal-sdk` package is updated.
+This client code is generated automatically. Any modifications will be overwritten the next time the `@aws-sdk/client-lambda` package is updated.
 To contribute to client you can check our [generate clients scripts](https://github.com/aws/aws-sdk-js-v3/tree/main/scripts/generate-clients).
 
 ## License

@@ -4,7 +4,7 @@ import {
   Event,
   EventType,
   Operation,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   CallbackId,
   createCallbackId,

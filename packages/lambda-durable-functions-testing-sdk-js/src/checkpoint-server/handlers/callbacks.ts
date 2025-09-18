@@ -1,7 +1,7 @@
 import {
   InvalidParameterValueException,
   ErrorObject,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { RequestHandler } from "express";
 import { createCallbackId } from "../utils/tagged-strings";
 import { CompleteCallbackStatus } from "../storage/callback-manager";

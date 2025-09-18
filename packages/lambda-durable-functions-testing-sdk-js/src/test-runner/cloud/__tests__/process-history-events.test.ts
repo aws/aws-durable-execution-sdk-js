@@ -4,7 +4,7 @@ import {
   OperationType,
   OperationStatus,
   ErrorObject,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { historyEventsToOperationEvents } from "../utils/process-history-events/process-history-events";
 
 describe("historyEventsToOperationEvents", () => {

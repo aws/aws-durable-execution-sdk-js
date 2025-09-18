@@ -2,7 +2,7 @@ import {
   Operation,
   OperationStatus,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   DurableOperation,
   WaitingOperationStatus,

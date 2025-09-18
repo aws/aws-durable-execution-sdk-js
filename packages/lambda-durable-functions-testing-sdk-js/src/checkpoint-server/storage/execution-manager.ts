@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { CheckpointManager } from "./checkpoint-manager";
-import { Operation } from "@amzn/dex-internal-sdk";
+import { Operation } from "@aws-sdk/client-lambda";
 import {
   encodeCheckpointToken,
   decodeCheckpointToken,
