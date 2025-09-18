@@ -19,6 +19,11 @@ on:
 env:
   AWS_REGION: us-west-2
 
+# permission can be added at job level or workflow level
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -44,8 +49,8 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+        role-session-name: githubIntegrationTest
         aws-region: ${{ env.AWS_REGION }}
     
     - name: Install custom Lambda model
