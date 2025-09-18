@@ -25,5 +25,5 @@ jobs:
             --region us-east-1 \
             -X POST \
             -H "Content-Type: application/json" \
-            -d '{"logGroupSuffix": "-PR-${{ github.event.pull_request.number }}"}' \
+            -d '{"logGroupSuffix": "-TypeScript-PR-${{ github.event.pull_request.number }}"}' \
             "${{ secrets.LOG_GROUP_CLEANUP_WEBHOOK }}"
