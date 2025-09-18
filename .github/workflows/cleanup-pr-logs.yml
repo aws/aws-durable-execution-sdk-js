@@ -32,7 +32,7 @@ jobs:
       - name: Cleanup PR log group
         run: |
           awscurl --service execute-api \
-            --region us-east-1 \
+            --region ${{ env.AWS_REGION }} \
             -X POST \
             -H "Content-Type: application/json" \
             -d '{"logGroupSuffix": "-TypeScript-PR-${{ github.event.pull_request.number }}"}' \
