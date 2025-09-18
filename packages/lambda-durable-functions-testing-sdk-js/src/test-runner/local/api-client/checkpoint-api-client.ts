@@ -3,7 +3,7 @@ import {
   OperationInvocationIdMap,
 } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
-import { OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import {
   API_PATHS,
   HTTP_METHODS,

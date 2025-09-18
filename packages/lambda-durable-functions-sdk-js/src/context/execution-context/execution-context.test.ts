@@ -2,7 +2,7 @@ import {
   Operation,
   OperationStatus,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { ExecutionStateFactory } from "../../storage/storage-factory";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";

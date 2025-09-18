@@ -8,7 +8,7 @@ import {
   OperationType,
   Operation,
   OperationAction,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";

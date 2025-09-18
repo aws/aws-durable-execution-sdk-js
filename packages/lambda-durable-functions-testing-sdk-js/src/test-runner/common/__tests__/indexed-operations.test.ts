@@ -1,4 +1,4 @@
-import { OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import { IndexedOperations } from "../indexed-operations";
 
 describe("IndexedOperations", () => {

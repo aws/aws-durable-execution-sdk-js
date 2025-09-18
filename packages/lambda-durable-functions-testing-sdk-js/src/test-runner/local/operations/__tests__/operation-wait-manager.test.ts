@@ -1,5 +1,5 @@
 import { OperationWaitManager } from "../operation-wait-manager";
-import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { WaitingOperationStatus } from "../../../durable-test-runner";
 import { IndexedOperations } from "../../../common/indexed-operations";
 import {

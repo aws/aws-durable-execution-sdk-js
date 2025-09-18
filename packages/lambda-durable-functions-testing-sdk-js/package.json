@@ -32,7 +32,7 @@
     "!**/__tests__/**"
   ],
   "devDependencies": {
-    "@amzn/dex-internal-sdk": "*",
+    "@aws-sdk/client-lambda": "*",
     "@amzn/durable-executions-language-sdk": "*",
     "@eslint/compat": "^1.3.0",
     "@eslint/js": "^9.29.0",
@@ -56,7 +56,7 @@
     "typescript-eslint": "^8.34.1"
   },
   "peerDependencies": {
-    "@amzn/dex-internal-sdk": "*",
+    "@aws-sdk/client-lambda": "*",
     "@amzn/durable-executions-language-sdk": "*",
     "express": "^5.1.0"
   },

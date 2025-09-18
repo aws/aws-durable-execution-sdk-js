@@ -5,7 +5,7 @@ import {
   GetDurableExecutionStateCommand,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,

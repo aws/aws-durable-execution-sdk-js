@@ -4,7 +4,7 @@ import {
   OperationAction,
   OperationStatus,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 
 const allowedStatusToClose: (OperationStatus | undefined)[] = [
   OperationStatus.STARTED, // Closing an at-most-once step

@@ -1,5 +1,5 @@
 import { Context } from "aws-lambda";
-import { Operation } from "@amzn/dex-internal-sdk";
+import { Operation } from "@aws-sdk/client-lambda";
 import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,

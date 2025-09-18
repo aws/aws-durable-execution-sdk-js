@@ -5,7 +5,7 @@ import {
   OperationType,
   EventType,
   Operation,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 
 /**
  * Metadata required for generating event details.

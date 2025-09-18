@@ -5,7 +5,7 @@ import {
   GetDurableExecutionStateCommand,
   OperationAction,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
@@ -17,8 +17,8 @@ import { ApiStorage } from "./api-storage";
 import { RecordDefinitionStorage } from "./record-definition-storage";
 
 // Mock the Durable Executions Client
-jest.mock("@amzn/dex-internal-sdk", () => {
-  const originalModule = jest.requireActual("@amzn/dex-internal-sdk");
+jest.mock("@aws-sdk/client-lambda", () => {
+  const originalModule = jest.requireActual("@aws-sdk/client-lambda");
   return {
     ...originalModule,
     LambdaClient: jest.fn().mockImplementation(() => ({

@@ -7,7 +7,7 @@ import {
   SendDurableExecutionCallbackFailureCommandOutput,
   SendDurableExecutionCallbackHeartbeatCommandOutput,
   SendDurableExecutionCallbackSuccessCommandOutput,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { OperationWithData } from "./common/operations/operation-with-data";
 
 export enum WaitingOperationStatus {

@@ -1,4 +1,4 @@
-import { OperationType } from "@amzn/dex-internal-sdk";
+import { OperationType } from "@aws-sdk/client-lambda";
 import { IndexedOperations } from "./indexed-operations";
 import {
   OperationEvents,

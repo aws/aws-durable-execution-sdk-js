@@ -5,7 +5,7 @@ import {
   GetDurableExecutionStateCommand,
   GetDurableExecutionStateResponse,
   LambdaClient,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
@@ -14,7 +14,7 @@ import { getCredentialsProvider } from "./credentials-provider";
 import { ExecutionState } from "./storage-provider";
 
 /**
- * Implementation of ExecutionState that uses the new @amzn/dex-internal-sdk
+ * Implementation of ExecutionState that uses the new @aws-sdk/client-lambda
  */
 export class ApiStorage implements ExecutionState {
   protected client: LambdaClient;

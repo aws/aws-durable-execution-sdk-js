@@ -1,4 +1,4 @@
-import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { InvocationTracker } from "../invocation-tracker";
 import { LocalOperationStorage } from "../local-operation-storage";
 import { createInvocationId } from "../../../../checkpoint-server/utils/tagged-strings";

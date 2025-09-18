@@ -1,7 +1,7 @@
 import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { TestExecutionResult } from "../test-execution-state";

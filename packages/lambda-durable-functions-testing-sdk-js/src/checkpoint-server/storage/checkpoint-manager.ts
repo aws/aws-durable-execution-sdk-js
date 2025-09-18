@@ -5,7 +5,7 @@ import {
   OperationStatus,
   OperationType,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { randomUUID } from "node:crypto";
 import { CallbackId, ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";

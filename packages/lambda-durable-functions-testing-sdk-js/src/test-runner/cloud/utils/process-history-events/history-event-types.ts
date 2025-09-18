@@ -4,7 +4,7 @@ import {
   EventType,
   Event,
   Operation,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 
 /**
  * Mapping of event types to their corresponding history event type configurations.

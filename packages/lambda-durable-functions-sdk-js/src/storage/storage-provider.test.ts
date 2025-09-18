@@ -2,7 +2,7 @@ import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateResponse,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { ExecutionState } from "./storage-provider";
 
 describe("StorageProvider Interface", () => {

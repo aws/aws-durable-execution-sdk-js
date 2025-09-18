@@ -4,7 +4,7 @@ import {
   OperationAction,
   OperationStatus,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 
 const allowedStatusToCancel: (OperationStatus | undefined)[] = [
   OperationStatus.STARTED,

@@ -18,7 +18,7 @@ import {
   OperationType,
   OperationStatus,
   OperationAction,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";

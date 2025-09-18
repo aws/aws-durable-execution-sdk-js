@@ -1,4 +1,4 @@
-import { LambdaClient } from "@amzn/dex-internal-sdk";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 
 let client: LambdaClient | undefined = undefined;
 /**

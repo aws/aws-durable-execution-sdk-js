@@ -7,7 +7,7 @@ import {
   OperationUpdate,
   ErrorObject,
   StepOptions,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { validateStepOperation } from "../validate-step-operation";
 
 describe("validateStepOperation", () => {

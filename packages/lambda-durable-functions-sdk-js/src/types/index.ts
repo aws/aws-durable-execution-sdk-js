@@ -3,7 +3,7 @@ import { TerminationManager } from "../termination-manager/termination-manager";
 import { ExecutionState } from "../storage/storage-provider";
 import { Serdes } from "../utils/serdes/serdes";
 
-import { ErrorObject, Operation } from "@amzn/dex-internal-sdk";
+import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 
 // Define BatchItemStatus enum
 export enum BatchItemStatus {

@@ -5,7 +5,7 @@ import {
   OperationSubType,
 } from "../../types";
 import { terminate } from "../../utils/termination-helper";
-import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
@@ -42,11 +42,7 @@ const createTerminatingThenable = <T>(
         | null,
     ): Promise<TResult1 | TResult2> {
       // Terminate when the promise is actually awaited
-      return terminate(
-        context,
-        TerminationReason.CALLBACK_PENDING,
-        message,
-      );
+      return terminate(context, TerminationReason.CALLBACK_PENDING, message);
     }
 
     catch<TResult = never>(
@@ -55,20 +51,12 @@ const createTerminatingThenable = <T>(
         | null,
     ): Promise<T | TResult> {
       // Terminate when catch is called (which internally calls then)
-      return terminate(
-        context,
-        TerminationReason.CALLBACK_PENDING,
-        message,
-      );
+      return terminate(context, TerminationReason.CALLBACK_PENDING, message);
     }
 
     finally(_onfinally?: (() => void) | null): Promise<T> {
       // Terminate when finally is called
-      return terminate(
-        context,
-        TerminationReason.CALLBACK_PENDING,
-        message,
-      );
+      return terminate(context, TerminationReason.CALLBACK_PENDING, message);
     }
   }
 

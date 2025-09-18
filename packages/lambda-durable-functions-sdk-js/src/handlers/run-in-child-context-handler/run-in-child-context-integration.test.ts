@@ -6,7 +6,7 @@ import {
   OperationStatus,
   OperationAction,
   CheckpointDurableExecutionRequest,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { randomUUID } from "crypto";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { deleteCheckpoint } from "../../utils/checkpoint/checkpoint";

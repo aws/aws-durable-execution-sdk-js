@@ -1,4 +1,4 @@
-import { OperationType } from "@amzn/dex-internal-sdk";
+import { OperationType } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
 import { createDurableContext } from "./context/durable-context/durable-context";
 

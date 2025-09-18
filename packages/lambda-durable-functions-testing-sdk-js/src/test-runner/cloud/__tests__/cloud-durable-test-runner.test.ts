@@ -6,7 +6,7 @@ import {
   GetDurableExecutionHistoryResponse,
   LambdaClientConfig,
   EventType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { CloudDurableTestRunner } from "../cloud-durable-test-runner";
 import {
   OperationWithData,
@@ -19,7 +19,7 @@ import { ResultFormatter } from "../../local/result-formatter";
 import { historyEventsToOperationEvents } from "../utils/process-history-events/process-history-events";
 
 // Mock all dependencies
-jest.mock("@amzn/dex-internal-sdk");
+jest.mock("@aws-sdk/client-lambda");
 jest.mock("../../common/indexed-operations");
 jest.mock("../../common/operation-storage");
 jest.mock("../../local/operations/operation-wait-manager");

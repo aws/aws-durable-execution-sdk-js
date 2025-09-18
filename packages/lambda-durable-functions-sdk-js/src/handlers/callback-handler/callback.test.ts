@@ -14,7 +14,7 @@ import {
   OperationStatus,
   OperationType,
   Operation,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createMockExecutionContext } from "../../testing/mock-context";

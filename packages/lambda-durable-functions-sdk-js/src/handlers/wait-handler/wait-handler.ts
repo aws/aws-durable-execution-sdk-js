@@ -4,7 +4,7 @@ import {
   OperationStatus,
   OperationType,
   OperationAction,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";

@@ -6,7 +6,7 @@ import {
   OperationType,
   OperationUpdate,
   ErrorObject,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { validateContextOperation } from "../validate-context-operation";
 
 describe("validateContextOperation", () => {

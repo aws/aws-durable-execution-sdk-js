@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { OperationStatus, OperationType } from "@amzn/dex-internal-sdk";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { ExecutionManager, StartExecutionParams } from "../execution-manager";
 import { CheckpointManager } from "../checkpoint-manager";
 import {

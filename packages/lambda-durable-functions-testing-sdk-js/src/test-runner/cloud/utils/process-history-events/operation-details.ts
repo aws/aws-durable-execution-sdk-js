@@ -1,4 +1,4 @@
-import { Operation } from "@amzn/dex-internal-sdk";
+import { Operation } from "@aws-sdk/client-lambda";
 import { OperationDetailFields, PropertyValueMap, Entries } from "./operation-types";
 
 /**

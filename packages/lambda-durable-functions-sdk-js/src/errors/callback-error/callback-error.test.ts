@@ -1,5 +1,5 @@
 import { CallbackError } from "./callback-error";
-import { ErrorObject } from "@amzn/dex-internal-sdk";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 
 describe("CallbackError", () => {
   describe("Constructor without ErrorObject", () => {

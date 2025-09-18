@@ -3,7 +3,7 @@ import {
   InvalidParameterValueException,
   OperationStatus,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { CallbackManager, CompleteCallbackStatus } from "../callback-manager";
 import { CheckpointManager } from "../checkpoint-manager";
 import {

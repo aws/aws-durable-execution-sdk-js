@@ -2,7 +2,7 @@ import {
   InvalidParameterValueException,
   OperationAction,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 
 /**
  * Validates an EXECUTION operation update. Only allows SUCCEED and FAIL actions.

@@ -2,7 +2,7 @@ import {
   OperationAction,
   OperationType,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";

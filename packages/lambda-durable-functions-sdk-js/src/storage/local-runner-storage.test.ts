@@ -1,9 +1,9 @@
-import { LambdaClient } from "@amzn/dex-internal-sdk";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 import { PlaygroundLocalRunnerStorage } from "./local-runner-storage";
 import { getCredentialsProvider } from "./credentials-provider";
 
 // Mock dependencies
-jest.mock("@amzn/dex-internal-sdk");
+jest.mock("@aws-sdk/client-lambda");
 jest.mock("./credentials-provider");
 
 describe("PlaygroundLocalRunnerStorage", () => {

@@ -1,4 +1,4 @@
-import { ErrorObject, Event } from "@amzn/dex-internal-sdk";
+import { ErrorObject, Event } from "@aws-sdk/client-lambda";
 import { HistoryEventTypes } from "./operation-types";
 
 /**

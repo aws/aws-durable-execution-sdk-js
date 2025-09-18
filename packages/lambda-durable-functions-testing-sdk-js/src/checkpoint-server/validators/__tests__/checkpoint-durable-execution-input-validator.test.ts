@@ -5,7 +5,7 @@ import {
   OperationType,
   ErrorObject,
   OperationUpdate,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { validateCheckpointUpdates } from "../checkpoint-durable-execution-input-validator";
 import { CheckpointOperation } from "../../storage/checkpoint-manager";
 

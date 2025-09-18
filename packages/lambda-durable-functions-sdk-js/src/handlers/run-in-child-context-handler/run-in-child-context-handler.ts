@@ -9,7 +9,7 @@ import {
   OperationAction,
   OperationStatus,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { createDurableContext } from "../../context/durable-context/durable-context";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";

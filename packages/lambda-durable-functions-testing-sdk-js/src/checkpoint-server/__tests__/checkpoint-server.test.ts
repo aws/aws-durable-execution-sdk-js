@@ -12,7 +12,7 @@ import {
   SendDurableExecutionCallbackHeartbeatRequest,
   InvalidParameterValueException,
   OperationAction,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 import {
   encodeCheckpointToken,
   CheckpointTokenData,

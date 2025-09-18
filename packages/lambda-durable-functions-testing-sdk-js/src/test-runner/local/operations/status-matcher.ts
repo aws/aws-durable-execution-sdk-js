@@ -1,4 +1,4 @@
-import { OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import { WaitingOperationStatus } from "../../durable-test-runner";
 
 const STARTED_STATUSES: OperationStatus[] = Object.values(OperationStatus);

@@ -1,6 +1,6 @@
 import { waitBeforeContinue } from "./wait-before-continue";
 import { ExecutionContext } from "../../types";
-import { OperationStatus, Operation } from "@amzn/dex-internal-sdk";
+import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
 
 describe("waitBeforeContinue", () => {
   let mockContext: jest.Mocked<ExecutionContext>;

@@ -1,4 +1,4 @@
-import { OperationStatus } from "@amzn/dex-internal-sdk";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import { LocalOperationStorage } from "./local-operation-storage";
 import { Invocation } from "../../durable-test-runner";
 import { OperationWithData } from "../../common/operations/operation-with-data";

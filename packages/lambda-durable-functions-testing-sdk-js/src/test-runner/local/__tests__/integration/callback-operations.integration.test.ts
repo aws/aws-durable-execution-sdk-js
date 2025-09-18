@@ -4,7 +4,7 @@ import {
   DurableContext,
   withDurableFunctions,
 } from "@amzn/durable-executions-language-sdk";
-import { OperationType } from "@amzn/dex-internal-sdk";
+import { OperationType } from "@aws-sdk/client-lambda";
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());

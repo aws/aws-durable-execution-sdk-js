@@ -2,7 +2,7 @@ import {
   InvalidParameterValueException,
   OperationAction,
   OperationType,
-} from "@amzn/dex-internal-sdk";
+} from "@aws-sdk/client-lambda";
 
 const VALID_ACTIONS_FOR_STEP = new Set([
   OperationAction.START,
