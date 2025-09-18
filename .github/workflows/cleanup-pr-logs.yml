@@ -26,6 +26,9 @@ jobs:
           role-session-name: "GitHub-PR-${{ github.event.pull_request.number }}-Cleanup"
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Install awscurl
+        run: pip install awscurl
+
       - name: Cleanup PR log group
         run: |
           awscurl --service execute-api \
