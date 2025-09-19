@@ -31,19 +31,43 @@ import {
 import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
-const waitForTimer = <T>(
+// Special symbol to indicate that the main loop should continue
+const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
+
+const waitForContinuation = async (
   context: ExecutionContext,
   stepId: string,
   name: string | undefined,
-): Promise<T> => {
-  // TODO: Current implementation assumes sequential operations only
-  // Will be enhanced to handle concurrent operations in future milestone
-  return terminate(
+  hasRunningOperations: () => boolean,
+  checkpoint: ReturnType<typeof createCheckpoint>,
+): Promise<void> => {
+  const stepData = context.getStepData(stepId);
+
+  // Check if there are any ongoing operations
+  if (!hasRunningOperations()) {
+    // No ongoing operations - safe to terminate
+    return terminate(
+      context,
+      TerminationReason.RETRY_SCHEDULED,
+      `Retry scheduled for ${name || stepId}`,
+    );
+  }
+
+  // There are ongoing operations - wait before continuing
+  await waitBeforeContinue({
+    checkHasRunningOperations: true,
+    checkStepStatus: true,
+    checkTimer: true,
+    scheduledTimestamp: stepData?.StepDetails?.NextAttemptTimestamp,
+    stepId,
     context,
-    TerminationReason.RETRY_SCHEDULED,
-    `Retry scheduled for ${name || stepId}`,
-  );
+    hasRunningOperations,
+    checkpoint,
+  });
+
+  // Return to let the main loop re-evaluate step status
 };
 
 export const createStepHandler = (
@@ -54,6 +78,7 @@ export const createStepHandler = (
   createContextLogger: (stepId: string, attempt?: number) => Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
+  hasRunningOperations: () => boolean,
 ) => {
   return async <T>(
     nameOrFn: string | undefined | StepFunc<T>,
@@ -77,105 +102,138 @@ export const createStepHandler = (
 
     log(context.isVerbose, "▶️", "Running step:", { stepId, name, options });
 
-    const stepData = context.getStepData(stepId);
+    // Main step logic - can be re-executed if step status changes
+    while (true) {
+      try {
+        const stepData = context.getStepData(stepId);
 
-    if (stepData?.Status === OperationStatus.SUCCEEDED) {
-      return await handleCompletedStep<T>(
-        context,
-        stepId,
-        name,
-        options?.serdes,
-      );
-    }
-
-    if (stepData?.Status === OperationStatus.FAILED) {
-      const errorMessage = stepData?.StepDetails?.Result;
-      throw new Error(errorMessage || "Unknown error");
-    }
-
-    // If PENDING, wait for timer to complete
-    if (stepData?.Status === OperationStatus.PENDING) {
-      return waitForTimer(context, stepId, name);
-    }
-
-    // Check for interrupted step with AT_MOST_ONCE_PER_RETRY semantics
-    if (stepData?.Status === OperationStatus.STARTED) {
-      const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
-      if (semantics === StepSemantics.AtMostOncePerRetry) {
-        log(context.isVerbose, "⚠️", "Step was interrupted during execution:", {
-          stepId,
-          name,
-        });
-        const error = new StepInterruptedError(stepId, name);
-
-        // Handle the interrupted step as a failure
-        const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
-        let retryDecision: RetryDecision;
-
-        if (options?.retryStrategy !== undefined) {
-          retryDecision = options.retryStrategy(error, currentAttempt);
-        } else {
-          retryDecision = retryPresets.default(error, currentAttempt);
+        if (stepData?.Status === OperationStatus.SUCCEEDED) {
+          return await handleCompletedStep<T>(
+            context,
+            stepId,
+            name,
+            options?.serdes,
+          );
         }
 
-        log(context.isVerbose, "⚠️", "Should Retry Interrupted Step:", {
+        if (stepData?.Status === OperationStatus.FAILED) {
+          const errorMessage = stepData?.StepDetails?.Result;
+          throw new Error(errorMessage || "Unknown error");
+        }
+
+        // If PENDING, wait for timer to complete
+        if (stepData?.Status === OperationStatus.PENDING) {
+          await waitForContinuation(
+            context,
+            stepId,
+            name,
+            hasRunningOperations,
+            checkpoint,
+          );
+          continue; // Re-evaluate step status after waiting
+        }
+
+        // Check for interrupted step with AT_MOST_ONCE_PER_RETRY semantics
+        if (stepData?.Status === OperationStatus.STARTED) {
+          const semantics =
+            options?.semantics || StepSemantics.AtLeastOncePerRetry;
+          if (semantics === StepSemantics.AtMostOncePerRetry) {
+            log(
+              context.isVerbose,
+              "⚠️",
+              "Step was interrupted during execution:",
+              {
+                stepId,
+                name,
+              },
+            );
+            const error = new StepInterruptedError(stepId, name);
+
+            // Handle the interrupted step as a failure
+            const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
+            let retryDecision: RetryDecision;
+
+            if (options?.retryStrategy !== undefined) {
+              retryDecision = options.retryStrategy(error, currentAttempt);
+            } else {
+              retryDecision = retryPresets.default(error, currentAttempt);
+            }
+
+            log(context.isVerbose, "⚠️", "Should Retry Interrupted Step:", {
+              stepId,
+              name,
+              currentAttempt,
+              shouldRetry: retryDecision.shouldRetry,
+              delaySeconds: retryDecision.shouldRetry
+                ? retryDecision.delaySeconds
+                : undefined,
+            });
+
+            if (!retryDecision.shouldRetry) {
+              // No retry, mark as failed
+              await checkpoint(stepId, {
+                Id: stepId,
+                ParentId: context.parentId,
+                Action: OperationAction.FAIL,
+                SubType: OperationSubType.STEP,
+                Type: OperationType.STEP,
+                Error: createErrorObjectFromError(error),
+                Name: name,
+              });
+
+              throw error;
+            } else {
+              // Retry
+              await checkpoint(stepId, {
+                Id: stepId,
+                ParentId: context.parentId,
+                Action: OperationAction.RETRY,
+                SubType: OperationSubType.STEP,
+                Type: OperationType.STEP,
+                Error: createErrorObjectFromError(error),
+                Name: name,
+                StepOptions: {
+                  NextAttemptDelaySeconds: retryDecision.delaySeconds,
+                },
+              });
+
+              await waitForContinuation(
+                context,
+                stepId,
+                name,
+                hasRunningOperations,
+                checkpoint,
+              );
+              continue; // Re-evaluate step status after waiting
+            }
+          }
+        }
+
+        // Execute step function for READY, STARTED (AtLeastOncePerRetry), or first time (undefined)
+        const result = await executeStep(
+          context,
+          checkpoint,
           stepId,
           name,
-          currentAttempt,
-          shouldRetry: retryDecision.shouldRetry,
-          delaySeconds: retryDecision.shouldRetry
-            ? retryDecision.delaySeconds
-            : undefined,
-        });
+          fn,
+          createContextLogger,
+          addRunningOperation,
+          removeRunningOperation,
+          hasRunningOperations,
+          options,
+        );
 
-        if (!retryDecision.shouldRetry) {
-          // No retry, mark as failed
-          await checkpoint(stepId, {
-            Id: stepId,
-            ParentId: context.parentId,
-            Action: OperationAction.FAIL,
-            SubType: OperationSubType.STEP,
-            Type: OperationType.STEP,
-            Error: createErrorObjectFromError(error),
-            Name: name,
-          });
-
-          throw error;
-        } else {
-          // Retry
-          await checkpoint(stepId, {
-            Id: stepId,
-            ParentId: context.parentId,
-            Action: OperationAction.RETRY,
-            SubType: OperationSubType.STEP,
-            Type: OperationType.STEP,
-            Error: createErrorObjectFromError(error),
-            Name: name,
-            StepOptions: {
-              NextAttemptDelaySeconds: retryDecision.delaySeconds,
-            },
-          });
-
-          return waitForTimer(context, stepId, name);
+        // If executeStep signals to continue the main loop, do so
+        if (result === CONTINUE_MAIN_LOOP) {
+          continue;
         }
+
+        return result;
+      } catch (error) {
+        // For any error from executeStep, re-throw it
+        throw error;
       }
     }
-
-    // Execute step function for READY, STARTED (AtLeastOncePerRetry), or first time (undefined)
-    // READY: Timer completed, execute step function
-    // STARTED: Retry after error (AtLeastOncePerRetry semantics), execute step function
-    // undefined: First execution, execute step function
-    return executeStep(
-      context,
-      checkpoint,
-      stepId,
-      name,
-      fn,
-      createContextLogger,
-      addRunningOperation,
-      removeRunningOperation,
-      options,
-    );
   };
 };
 
@@ -215,8 +273,9 @@ export const executeStep = async <T>(
   createContextLogger: (stepId: string, attempt?: number) => Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
+  hasRunningOperations: () => boolean,
   options?: StepConfig<T>,
-): Promise<T> => {
+): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   // Determine step semantics (default to AT_LEAST_ONCE_PER_RETRY if not specified)
   const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
   const serdes = options?.serdes || defaultSerdes;
@@ -383,7 +442,15 @@ export const executeStep = async <T>(
         },
       });
 
-      return waitForTimer(context, stepId, name);
+      // Wait for continuation and signal main loop to continue
+      await waitForContinuation(
+        context,
+        stepId,
+        name,
+        hasRunningOperations,
+        checkpoint,
+      );
+      return CONTINUE_MAIN_LOOP;
     }
   }
 };

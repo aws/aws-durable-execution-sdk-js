@@ -87,6 +87,7 @@ export const createDurableContext = (
       createContextLogger,
       addRunningOperation,
       removeRunningOperation,
+      hasRunningOperations,
     );
     return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
   };
