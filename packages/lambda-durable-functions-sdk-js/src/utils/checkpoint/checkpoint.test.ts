@@ -79,6 +79,7 @@ describe("CheckpointHandler", () => {
       expect(mockState.checkpoint).toHaveBeenCalledWith(
         TEST_CONSTANTS.CHECKPOINT_TOKEN,
         {
+          DurableExecutionArn: "test-durable-execution-arn",
           CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
           Updates: [
             {
@@ -498,6 +499,7 @@ describe("CheckpointHandler", () => {
       expect(mockState.checkpoint).toHaveBeenCalledWith(
         TEST_CONSTANTS.CHECKPOINT_TOKEN,
         {
+          DurableExecutionArn: "test-durable-execution-arn",
           CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
           Updates: [
             {
@@ -724,6 +726,7 @@ describe("deleteCheckpointHandler", () => {
       await checkpoint.force();
 
       expect(mockState1.checkpoint).toHaveBeenCalledWith("test-token", {
+        DurableExecutionArn: "test-durable-execution-arn-1",
         CheckpointToken: "test-token",
         Updates: [],
       });
@@ -773,6 +776,7 @@ describe("deleteCheckpointHandler", () => {
       // Should still only have made one API call total (the force request piggybacked)
       expect(mockState1.checkpoint).toHaveBeenCalledTimes(1);
       expect(mockState1.checkpoint).toHaveBeenCalledWith("test-token", {
+        DurableExecutionArn: "test-durable-execution-arn-1",
         CheckpointToken: "test-token",
         Updates: [
           {

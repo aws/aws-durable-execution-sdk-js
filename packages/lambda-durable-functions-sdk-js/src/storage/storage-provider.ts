@@ -11,6 +11,7 @@ import {
 export interface ExecutionState {
   getStepData(
     taskToken: string,
+    durableExecutionArn: string,
     nextToken: string,
   ): Promise<GetDurableExecutionStateResponse>;
   checkpoint(

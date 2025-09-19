@@ -130,11 +130,13 @@ describe("ApiStorage", () => {
     // Call getStepData
     const result = await apiStorage.getStepData(
       "checkpoint-token",
+      "durable-execution-arn",
       "next-marker",
     );
 
     // Verify that GetDurableExecutionStateCommand was constructed with the correct parameters
     expect(GetDurableExecutionStateCommand).toHaveBeenCalledWith({
+      DurableExecutionArn: "durable-execution-arn",
       CheckpointToken: "checkpoint-token",
       Marker: "next-marker",
       MaxItems: 1000,
@@ -156,6 +158,7 @@ describe("ApiStorage", () => {
 
     // Create checkpoint data
     const checkpointData: CheckpointDurableExecutionRequest = {
+      DurableExecutionArn: "test-durable-execution-arn",
       CheckpointToken: "",
       Updates: [
         {
@@ -171,6 +174,7 @@ describe("ApiStorage", () => {
 
     // Verify that CheckpointDurableExecutionCommand was constructed with the correct parameters
     expect(CheckpointDurableExecutionCommand).toHaveBeenCalledWith({
+      DurableExecutionArn: "test-durable-execution-arn",
       CheckpointToken: "task-token",
       Updates: checkpointData.Updates,
     });
@@ -186,17 +190,22 @@ describe("ApiStorage", () => {
 
   test("should propagate errors from LambdaClient", async () => {
     // Setup mock error
-    const mockError = new Error("SWF client error");
+    const mockError = new Error("Lambda client error");
     mockLambdaClient.send.mockRejectedValue(mockError);
 
     // Call getStepData and expect it to throw
     await expect(
-      apiStorage.getStepData("task-token", "next-token"),
-    ).rejects.toThrow("SWF client error");
+      apiStorage.getStepData(
+        "task-token",
+        "durable-execution-arn",
+        "next-token",
+      ),
+    ).rejects.toThrow("Lambda client error");
 
     // Call checkpoint and expect it to throw
     await expect(
       apiStorage.checkpoint("task-token", {
+        DurableExecutionArn: "",
         CheckpointToken: "",
         Updates: [
           {
@@ -206,7 +215,7 @@ describe("ApiStorage", () => {
           },
         ],
       }),
-    ).rejects.toThrow("SWF client error");
+    ).rejects.toThrow("Lambda client error");
   });
 
   test("should call complete method without errors", () => {

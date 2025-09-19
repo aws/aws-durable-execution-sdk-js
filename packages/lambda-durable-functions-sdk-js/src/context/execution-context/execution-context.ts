@@ -39,7 +39,11 @@ export const initializeExecutionContext = async (
   let nextMarker = event.InitialExecutionState.NextMarker;
 
   while (nextMarker) {
-    const response = await state.getStepData(checkpointToken, nextMarker);
+    const response = await state.getStepData(
+      checkpointToken,
+      durableExecutionArn,
+      nextMarker,
+    );
     operationsArray.push(...(response.Operations || []));
     nextMarker = response.NextMarker || "";
   }

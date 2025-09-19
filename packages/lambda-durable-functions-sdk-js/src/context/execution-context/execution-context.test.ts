@@ -245,6 +245,7 @@ describe("initializeExecutionContext", () => {
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token1",
     );
     expect(result.executionContext._stepData).toEqual({
@@ -299,10 +300,12 @@ describe("initializeExecutionContext", () => {
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token1",
     );
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token2",
     );
     expect(result.executionContext._stepData).toEqual({
@@ -347,11 +350,13 @@ describe("initializeExecutionContext", () => {
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token1",
     );
 
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token2",
     );
 
@@ -382,6 +387,7 @@ describe("initializeExecutionContext", () => {
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token1",
     );
     expect(mockExecutionState.getStepData).toHaveBeenCalledTimes(1); // Should only be called once
@@ -416,6 +422,7 @@ describe("initializeExecutionContext", () => {
     // Verify - should handle undefined operations gracefully and get execution event from pagination
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token1",
     );
     expect(result.executionContext.customerHandlerEvent).toEqual(
@@ -465,6 +472,7 @@ describe("initializeExecutionContext", () => {
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
+      "test-durable-execution-arn",
       "token1",
     );
     expect(result.executionContext._stepData).toEqual({

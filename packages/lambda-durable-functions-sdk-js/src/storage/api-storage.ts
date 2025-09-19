@@ -46,10 +46,12 @@ export class ApiStorage implements ExecutionState {
    */
   async getStepData(
     checkpointToken: string,
+    durableExecutionArn: string,
     nextMarker: string,
   ): Promise<GetDurableExecutionStateResponse> {
     const response = await this.client.send(
       new GetDurableExecutionStateCommand({
+        DurableExecutionArn: durableExecutionArn,
         CheckpointToken: checkpointToken,
         Marker: nextMarker,
         MaxItems: 1000,
@@ -71,6 +73,7 @@ export class ApiStorage implements ExecutionState {
   ): Promise<CheckpointDurableExecutionResponse> {
     const response = await this.client.send(
       new CheckpointDurableExecutionCommand({
+        DurableExecutionArn: data.DurableExecutionArn,
         CheckpointToken: checkpointToken,
         ClientToken: data.ClientToken,
         Updates: data.Updates,

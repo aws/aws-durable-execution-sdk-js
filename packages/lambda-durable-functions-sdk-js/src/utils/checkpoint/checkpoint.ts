@@ -204,6 +204,7 @@ class CheckpointHandler {
     });
 
     const checkpointData: CheckpointDurableExecutionRequest = {
+      DurableExecutionArn: this.context.durableExecutionArn,
       CheckpointToken: this.currentTaskToken,
       Updates: updates,
     };

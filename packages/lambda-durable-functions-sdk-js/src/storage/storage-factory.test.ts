@@ -1,6 +1,5 @@
 import { ApiStorage } from "./api-storage";
 import { PlaygroundLocalRunnerStorage } from "./local-runner-storage";
-import { RecordDefinitionStorage } from "./record-definition-storage";
 import { ExecutionStateFactory } from "./storage-factory";
 
 describe("ExecutionStateFactory", () => {
@@ -40,34 +39,6 @@ describe("ExecutionStateFactory", () => {
 
     // Verify that it's an instance of LocalRunnerStorage
     expect(executionState).toBeInstanceOf(PlaygroundLocalRunnerStorage);
-  });
-
-  test("should create RecordDefinitionStorage when DURABLE_RECORD_DEFINITION_MODE is true", () => {
-    // Set the environment variable to true
-    process.env.DURABLE_RECORD_DEFINITION_MODE = "true";
-    // Set required environment variables for underlying ApiStorage
-    process.env.DEX_ENDPOINT = "https://test-endpoint.com";
-    process.env.DEX_REGION = "us-east-1";
-
-    // Create the execution state
-    const executionState = ExecutionStateFactory.createExecutionState();
-
-    // Verify that it's an instance of RecordDefinitionStorage
-    expect(executionState).toBeInstanceOf(RecordDefinitionStorage);
-  });
-
-  test("should prioritize RecordDefinitionStorage over LocalRunner", () => {
-    // Set both environment variable and LocalRunner flag
-    process.env.DURABLE_RECORD_DEFINITION_MODE = "true";
-    // Set required environment variables for underlying ApiStorage
-    process.env.DEX_ENDPOINT = "https://test-endpoint.com";
-    process.env.DEX_REGION = "us-east-1";
-
-    // Create the execution state with LocalRunner flag
-    const executionState = ExecutionStateFactory.createExecutionState(true);
-
-    // Verify that it's an instance of RecordDefinitionStorage (takes priority)
-    expect(executionState).toBeInstanceOf(RecordDefinitionStorage);
   });
 
   test("should create ApiStorage when isLocalRunner is false", () => {
