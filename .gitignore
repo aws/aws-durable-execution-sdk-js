@@ -16,3 +16,6 @@
 .secrets
 .env
 .env.local
+
+# Node version
+.nvmrc

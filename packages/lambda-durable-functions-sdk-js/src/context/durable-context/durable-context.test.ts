@@ -60,10 +60,10 @@ describe("Durable Context", () => {
       memoryLimitInMB: "128",
       logGroupName: "/aws/lambda/mock-function",
       logStreamName: "2023/01/01/[$LATEST]abcdef123456",
-      getRemainingTimeInMillis: () => 30000,
-      done: () => {},
-      fail: () => {},
-      succeed: () => {},
+      getRemainingTimeInMillis: (): number => 30000,
+      done: (): void => {},
+      fail: (): void => {},
+      succeed: (): void => {},
     };
 
     // Setup mocks
@@ -140,6 +140,7 @@ describe("Durable Context", () => {
       expect.any(Function), // createContextLogger
       expect.any(Function), // addRunningOperation
       expect.any(Function), // removeRunningOperation
+      expect.any(Function), // hasRunningOperations
     );
     expect(mockStepHandler).toHaveBeenCalledWith("test-step", stepFn, options);
   });
