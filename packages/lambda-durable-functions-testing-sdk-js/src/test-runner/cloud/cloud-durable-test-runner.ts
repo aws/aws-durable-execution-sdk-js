@@ -35,9 +35,12 @@ export class CloudDurableTestRunner<ResultType>
     this.waitManager,
     this.indexedOperations
   );
-  private history: GetDurableExecutionHistoryResponse | undefined = undefined;
+  private history: GetDurableExecutionHistoryResponse | undefined;
 
-  constructor({ functionName: functionArn, config }: CloudDurableTestRunnerParameters) {
+  constructor({
+    functionName: functionArn,
+    config,
+  }: CloudDurableTestRunnerParameters) {
     this.client = new LambdaClient(config ?? {});
     this.functionArn = functionArn;
   }
@@ -92,6 +95,9 @@ export class CloudDurableTestRunner<ResultType>
   getOperation<T>(name: string): OperationWithData<T> {
     return this.getOperationByNameAndIndex(name, 0);
   }
+
+  // TODO: allow calling these functions before the test runs
+  // currently, they will return undefined if you call them before the test runs
   getOperationByIndex<T>(index: number): OperationWithData<T> {
     return new OperationWithData(
       this.waitManager,

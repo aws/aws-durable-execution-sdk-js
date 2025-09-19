@@ -21,12 +21,15 @@ export function createOperation(
   historyEventType: HistoryEventType
 ): Operation {
   const operation: Operation = {
-    ...previousOperationEvents?.operation,
-    Id: event.Id,
-    ParentId: event.ParentId,
+    // Most fields are immutable, so they should get overwritten by previous events.
+    // Later events may return undefined which shouldn't overwrite the previous data.
     Name: event.Name,
+    ParentId: event.ParentId,
+    Id: event.Id,
     Type: historyEventType.operationType,
     SubType: event.SubType,
+    ...previousOperationEvents?.operation,
+    // Only the status can be overwritten from the previous operation
     Status: historyEventType.operationStatus,
   };
 

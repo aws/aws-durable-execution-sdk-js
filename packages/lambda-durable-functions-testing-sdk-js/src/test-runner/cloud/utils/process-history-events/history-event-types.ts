@@ -105,7 +105,7 @@ export const historyEventTypes = {
   ContextFailed: {
     operationType: OperationType.CONTEXT,
     operationStatus: OperationStatus.FAILED,
-    operationDetailPlace: "CallbackDetails",
+    operationDetailPlace: "ContextDetails",
     detailPlace: "ContextFailedDetails",
     isStartEvent: false,
     isEndEvent: true,
@@ -114,7 +114,7 @@ export const historyEventTypes = {
   ContextSucceeded: {
     operationType: OperationType.CONTEXT,
     operationStatus: OperationStatus.SUCCEEDED,
-    operationDetailPlace: "CallbackDetails",
+    operationDetailPlace: "ContextDetails",
     detailPlace: "ContextSucceededDetails",
     isStartEvent: false,
     isEndEvent: true,
