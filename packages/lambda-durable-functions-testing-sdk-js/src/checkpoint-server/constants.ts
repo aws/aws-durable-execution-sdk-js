@@ -4,8 +4,8 @@ export const API_PATHS = {
   START_INVOCATION: "/start-invocation",
   POLL_CHECKPOINT_DATA: "/poll-checkpoint-data",
   UPDATE_CHECKPOINT_DATA: "/update-checkpoint-data",
-  GET_STATE: "/2025-12-01/durable-execution-state",
-  CHECKPOINT: "/2025-12-01/durable-execution-state",
+  GET_STATE: "/2025-12-01/durable-executions",
+  CHECKPOINT: "/2025-12-01/durable-executions",
   CALLBACKS: "/2025-12-01/durable-execution-callbacks",
 } as const;
 

@@ -18,7 +18,6 @@ import {
   CheckpointTokenData,
 } from "../utils/checkpoint-token";
 import {
-  CheckpointToken,
   createExecutionId,
   createInvocationId,
   ExecutionId,
@@ -284,14 +283,14 @@ describe("checkpoint-server", () => {
     });
   });
 
-  describe(`${API_PATHS.GET_STATE}/:checkpointToken/getState`, () => {
+  describe(`${API_PATHS.GET_STATE}/:durableExecutionArn/getState`, () => {
     it("should return operations when execution exists", async () => {
       const tokenData: CheckpointTokenData = {
         executionId: "test-execution-id" as unknown as ExecutionId,
         invocationId: "test-invocation-id" as unknown as InvocationId,
         token: "test-token",
       };
-      const checkpointToken = encodeCheckpointToken(tokenData);
+      const durableExecutionArn = tokenData.executionId;
 
       const mockOperations: Operation[] = [
         {
@@ -310,19 +309,18 @@ describe("checkpoint-server", () => {
         getState: jest.fn().mockReturnValue(mockOperations),
       };
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce({
-        storage: mockStorage as unknown as CheckpointManager,
-        data: tokenData,
-      });
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage as unknown as CheckpointManager
+      );
 
       const response = await request(server).get(
-        `${API_PATHS.GET_STATE}/${checkpointToken}/getState`
+        `${API_PATHS.GET_STATE}/${durableExecutionArn}/state`
       );
 
       expect(response.status).toBe(200);
-      expect(mockExecutionManager.getCheckpointsByToken).toHaveBeenCalledWith(
-        checkpointToken
-      );
+      expect(
+        mockExecutionManager.getCheckpointsByExecution
+      ).toHaveBeenCalledWith(durableExecutionArn);
       expect(response.body).toEqual({
         Operations: mockOperations,
         NextMarker: undefined,
@@ -330,12 +328,14 @@ describe("checkpoint-server", () => {
     });
 
     it("should return 404 when execution does not exist", async () => {
-      const invalidToken = "invalid-token" as CheckpointToken;
+      const invalidExecutionId = "invalid-id" as ExecutionId;
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce(undefined);
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        undefined
+      );
 
       const response = await request(server).get(
-        `${API_PATHS.GET_STATE}/${invalidToken}/getState`
+        `${API_PATHS.GET_STATE}/${invalidExecutionId}/state`
       );
 
       expect(response.status).toBe(404);
@@ -343,13 +343,14 @@ describe("checkpoint-server", () => {
     });
   });
 
-  describe(`${API_PATHS.CHECKPOINT}/:checkpointToken/checkpoint`, () => {
+  describe(`${API_PATHS.CHECKPOINT}/:durableExecutionArn/checkpoint`, () => {
     it("should handle undefined updates array", async () => {
       const tokenData: CheckpointTokenData = {
         executionId: createExecutionId("test-execution-id"),
         invocationId: createInvocationId("test-invocation-id"),
         token: "test-token",
       };
+      const durableExecutionArn = tokenData.executionId;
       const checkpointToken = encodeCheckpointToken(tokenData);
 
       const mockOperations: Operation[] = [
@@ -365,10 +366,9 @@ describe("checkpoint-server", () => {
         operationDataMap: new Map([["op1", { operation: mockOperations[0] }]]),
       };
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce({
-        storage: mockStorage as unknown as CheckpointManager,
-        data: tokenData,
-      });
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage as unknown as CheckpointManager
+      );
 
       // Send request with no updates field
       const input: Partial<CheckpointDurableExecutionRequest> = {
@@ -376,13 +376,13 @@ describe("checkpoint-server", () => {
       };
 
       const response = await request(server)
-        .post(`${API_PATHS.CHECKPOINT}/${checkpointToken}/checkpoint`)
+        .post(`${API_PATHS.CHECKPOINT}/${durableExecutionArn}/checkpoint`)
         .send(input);
 
       expect(response.status).toBe(200);
-      expect(mockExecutionManager.getCheckpointsByToken).toHaveBeenCalledWith(
-        checkpointToken
-      );
+      expect(
+        mockExecutionManager.getCheckpointsByExecution
+      ).toHaveBeenCalledWith(durableExecutionArn);
       // registerUpdates should be called with empty array when no Updates field is provided
       expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
         [],
@@ -403,6 +403,7 @@ describe("checkpoint-server", () => {
         invocationId: createInvocationId("test-invocation-id"),
         token: "test-token",
       };
+      const durableExecutionArn = tokenData.executionId;
       const checkpointToken = encodeCheckpointToken(tokenData);
 
       const mockOperations: Operation[] = [
@@ -426,12 +427,12 @@ describe("checkpoint-server", () => {
         ]),
       };
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce({
-        storage: mockStorage as unknown as CheckpointManager,
-        data: tokenData,
-      });
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage as unknown as CheckpointManager
+      );
 
       const input: CheckpointDurableExecutionRequest = {
+        DurableExecutionArn: durableExecutionArn,
         CheckpointToken: checkpointToken,
         Updates: [
           {
@@ -443,13 +444,13 @@ describe("checkpoint-server", () => {
       };
 
       const response = await request(server)
-        .post(`${API_PATHS.CHECKPOINT}/${checkpointToken}/checkpoint`)
+        .post(`${API_PATHS.CHECKPOINT}/${durableExecutionArn}/checkpoint`)
         .send(input);
 
       expect(response.status).toBe(200);
-      expect(mockExecutionManager.getCheckpointsByToken).toHaveBeenCalledWith(
-        checkpointToken
-      );
+      expect(
+        mockExecutionManager.getCheckpointsByExecution
+      ).toHaveBeenCalledWith(durableExecutionArn);
       expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
         input.Updates,
         "test-invocation-id"
@@ -469,6 +470,7 @@ describe("checkpoint-server", () => {
         invocationId: createInvocationId("test-invocation-id"),
         token: "test-token",
       };
+      const durableExecutionArn = tokenData.executionId;
       const checkpointToken = encodeCheckpointToken(tokenData);
 
       const mockOperations: Operation[] = [
@@ -490,12 +492,12 @@ describe("checkpoint-server", () => {
         ]),
       };
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce({
-        storage: mockStorage as unknown as CheckpointManager,
-        data: tokenData,
-      });
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage as unknown as CheckpointManager
+      );
 
       const input: CheckpointDurableExecutionRequest = {
+        DurableExecutionArn: durableExecutionArn,
         CheckpointToken: checkpointToken,
         Updates: [
           {
@@ -508,7 +510,7 @@ describe("checkpoint-server", () => {
       };
 
       const response = await request(server)
-        .post(`${API_PATHS.CHECKPOINT}/${checkpointToken}/checkpoint`)
+        .post(`${API_PATHS.CHECKPOINT}/${durableExecutionArn}/checkpoint`)
         .send(input);
 
       expect(response.status).toBe(200);
@@ -531,6 +533,7 @@ describe("checkpoint-server", () => {
         invocationId: createInvocationId("test-invocation-id"),
         token: "test-token",
       };
+      const durableExecutionArn = tokenData.executionId;
       const checkpointToken = encodeCheckpointToken(tokenData);
 
       const mockOperations: Operation[] = [
@@ -554,12 +557,12 @@ describe("checkpoint-server", () => {
         ]),
       };
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce({
-        storage: mockStorage as unknown as CheckpointManager,
-        data: tokenData,
-      });
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage as unknown as CheckpointManager
+      );
 
       const input: CheckpointDurableExecutionRequest = {
+        DurableExecutionArn: durableExecutionArn,
         CheckpointToken: checkpointToken,
         Updates: [
           {
@@ -578,7 +581,7 @@ describe("checkpoint-server", () => {
       };
 
       const response = await request(server)
-        .post(`${API_PATHS.CHECKPOINT}/${checkpointToken}/checkpoint`)
+        .post(`${API_PATHS.CHECKPOINT}/${durableExecutionArn}/checkpoint`)
         .send(input);
 
       expect(response.status).toBe(200);
@@ -589,12 +592,14 @@ describe("checkpoint-server", () => {
     });
 
     it("should return 404 when execution does not exist", async () => {
-      const invalidToken = "invalid-token" as CheckpointToken;
+      const invalidExecutionId = "invalid-id" as ExecutionId;
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce(undefined);
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        undefined
+      );
 
       const response = await request(server)
-        .post(`${API_PATHS.CHECKPOINT}/${invalidToken}/checkpoint`)
+        .post(`${API_PATHS.CHECKPOINT}/${invalidExecutionId}/checkpoint`)
         .send({});
 
       expect(response.status).toBe(404);
@@ -607,6 +612,7 @@ describe("checkpoint-server", () => {
         invocationId: createInvocationId("test-invocation-id"),
         token: "test-token",
       };
+      const durableExecutionArn = tokenData.executionId;
       const checkpointToken = encodeCheckpointToken(tokenData);
 
       const mockOperations: Operation[] = [
@@ -630,12 +636,12 @@ describe("checkpoint-server", () => {
         ]),
       };
 
-      mockExecutionManager.getCheckpointsByToken.mockReturnValueOnce({
-        storage: mockStorage as unknown as CheckpointManager,
-        data: tokenData,
-      });
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage as unknown as CheckpointManager
+      );
 
       const input: CheckpointDurableExecutionRequest = {
+        DurableExecutionArn: durableExecutionArn,
         CheckpointToken: checkpointToken,
         Updates: [
           {
@@ -648,7 +654,7 @@ describe("checkpoint-server", () => {
       };
 
       const response = await request(server)
-        .post(`${API_PATHS.CHECKPOINT}/${checkpointToken}/checkpoint`)
+        .post(`${API_PATHS.CHECKPOINT}/${durableExecutionArn}/checkpoint`)
         .send(input);
 
       expect(response.status).toBe(400);

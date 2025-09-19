@@ -10,7 +10,10 @@ import express from "express";
 import type { Request } from "express";
 import { convertDatesToTimestamps } from "../utils";
 import { createCheckpointToken } from "./utils/tagged-strings";
-import { encodeCheckpointToken } from "./utils/checkpoint-token";
+import {
+  decodeCheckpointToken,
+  encodeCheckpointToken,
+} from "./utils/checkpoint-token";
 import { API_PATHS } from "./constants";
 import { handleCheckpointServerError } from "./middleware/handle-checkpoint-server-error";
 import { ExecutionManager } from "./storage/execution-manager";
@@ -22,6 +25,7 @@ import {
 } from "./handlers/callbacks";
 import type { Server } from "http";
 import { validateCheckpointUpdates } from "./validators/checkpoint-durable-execution-input-validator";
+import { randomUUID } from "crypto";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -163,9 +167,9 @@ export async function startCheckpointServer(port: number) {
   /**
    * The API for GetDurableExecutionState used by the Language SDK and DEX service model.
    */
-  app.get(`${API_PATHS.GET_STATE}/:checkpointToken/getState`, (req, res) => {
-    const executionData = executionManager.getCheckpointsByToken(
-      createCheckpointToken(req.params.checkpointToken)
+  app.get(`${API_PATHS.GET_STATE}/:durableExecutionArn/state`, (req, res) => {
+    const executionData = executionManager.getCheckpointsByExecution(
+      createExecutionId(req.params.durableExecutionArn)
     );
 
     if (!executionData) {
@@ -176,7 +180,7 @@ export async function startCheckpointServer(port: number) {
     }
 
     const output: GetDurableExecutionStateResponse = {
-      Operations: executionData.storage.getState(),
+      Operations: executionData.getState(),
       NextMarker: undefined,
     };
 
@@ -187,28 +191,37 @@ export async function startCheckpointServer(port: number) {
    * The API for CheckpointDurableExecution used by the Language SDK and DEX service model.
    */
   app.post(
-    `${API_PATHS.CHECKPOINT}/:checkpointToken/checkpoint`,
+    `${API_PATHS.CHECKPOINT}/:durableExecutionArn/checkpoint`,
     (req, res) => {
-      const checkpointInfo = executionManager.getCheckpointsByToken(
-        createCheckpointToken(req.params.checkpointToken)
+      const storage = executionManager.getCheckpointsByExecution(
+        createExecutionId(req.params.durableExecutionArn)
       );
-      if (!checkpointInfo) {
+      if (!storage) {
         res.status(404).json({
           message: "Execution not found",
         });
         return;
       }
 
-      const { data, storage } = checkpointInfo;
-
       // TODO: validate the body instead of casting
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       const input = req.body as CheckpointDurableExecutionRequest;
       const updates = input.Updates ?? [];
 
+      if (!input.CheckpointToken) {
+        throw new InvalidParameterValueException({
+          message: "Checkpoint token is required",
+          $metadata: {},
+        });
+      }
+
+      const data = decodeCheckpointToken(
+        createCheckpointToken(input.CheckpointToken)
+      );
+
       try {
         validateCheckpointUpdates(updates, storage.operationDataMap);
-        storage.registerUpdates(updates, checkpointInfo.data.invocationId);
+        storage.registerUpdates(updates, data.invocationId);
       } catch (err: unknown) {
         if (err instanceof InvalidParameterValueException) {
           res.setHeaders(
@@ -229,7 +242,7 @@ export async function startCheckpointServer(port: number) {
         CheckpointToken: encodeCheckpointToken({
           executionId: data.executionId,
           invocationId: data.invocationId,
-          token: "",
+          token: randomUUID(),
         }),
         NewExecutionState: {
           // TODO: implement pagination
