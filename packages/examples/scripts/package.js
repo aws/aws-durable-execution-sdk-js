@@ -25,42 +25,17 @@ fs.mkdirSync(tempDir);
 
 // Copy JS file
 fs.copyFileSync(
-    path.join('dist/examples', fileName + '.js'), 
+    path.join('dist', fileName + '.js'), 
     path.join(tempDir, fileName + '.js')
 );
 
 // Copy source map if exists
 try {
     fs.copyFileSync(
-        path.join('dist/examples', fileName + '.js.map'), 
+        path.join('dist', fileName + '.js.map'), 
         path.join(tempDir, fileName + '.js.map')
     );
 } catch {}
-
-// Copy required dependencies from root node_modules
-console.log('Copying required dependencies...');
-fs.mkdirSync(path.join(tempDir, 'node_modules'), { recursive: true });
-
-const requiredDeps = [
-    '@amzn',
-    'tslib',
-    '@smithy',
-    '@aws-sdk',
-    'uuid',
-    'fast-xml-parser',
-    '@aws-crypto',
-    'bowser'
-];
-
-for (const dep of requiredDeps) {
-    const srcPath = path.join('../../node_modules', dep);
-    const destPath = path.join(tempDir, 'node_modules', dep);
-    
-    if (fs.existsSync(srcPath)) {
-        console.log(`Copying ${dep}...`);
-        execSync(`cp -r "${srcPath}" "${path.dirname(destPath)}"`);
-    }
-}
 
 // Create zip file with quiet mode to avoid buffer overflow
 const zipFile = `${handlerFile}.zip`;

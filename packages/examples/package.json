@@ -21,8 +21,8 @@
     "clean": "rm -rf build/ build coverage node_modules/ dist/",
     "release": "npm run build && mkdir -p build/durable-executions-typescript-sdk-examples && npm run copy-files",
     "prebuild": "rm -rf build/durable-executions-typescript-sdk-examples",
-    "build": "tsc",
     "package": "node scripts/package.js",
+    "build": "rollup --config rollup.config.mjs",
     "deploy": "bash scripts/deploy-lambda.sh",
     "prerelease": "npm run generate-template",
     "copy-files": "npm run copy-lambda && npm run copy-examples && npm run copy-source && npm run copy-catalog",
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.23.0",
+    "@rollup/plugin-commonjs": "^28.0.6",
     "@tsconfig/node22": "^22.0.1",
     "@types/aws-lambda": "^8.10.145",
     "@types/jest": "^29.5.14",

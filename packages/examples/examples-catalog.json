@@ -9,7 +9,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 600
-      }
+      },
+      "path": "./src/examples/block-example.ts"
     },
     {
       "name": "Comprehensive Operations",
@@ -19,7 +20,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 900
-      }
+      },
+      "path": "./src/examples/comprehensive-operations.ts"
     },
     {
       "name": "Create Callback",
@@ -28,7 +30,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/create-callback.ts"
     },
     {
       "name": "Hello World",
@@ -38,7 +41,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/hello-world.ts"
     },
     {
       "name": "Basic Map",
@@ -48,7 +52,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
-      }
+      },
+      "path": "./src/examples/map-basic.ts"
     },
     {
       "name": "Basic Parallel",
@@ -58,7 +63,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
-      }
+      },
+      "path": "./src/examples/parallel-basic.ts"
     },
     {
       "name": "Promise All",
@@ -68,7 +74,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/promise-all.ts"
     },
     {
       "name": "Promise All Settled",
@@ -77,7 +84,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/promise-all-settled.ts"
     },
     {
       "name": "Promise Any",
@@ -86,7 +94,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/promise-any.ts"
     },
     {
       "name": "Promise Combinators",
@@ -95,7 +104,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 600
-      }
+      },
+      "path": "./src/examples/promise-combinators.ts"
     },
     {
       "name": "Promise Race",
@@ -105,7 +115,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/promise-race.ts"
     },
     {
       "name": "Run in Child Context",
@@ -115,7 +126,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/run-in-child-context.ts"
     },
     {
       "name": "Basic Step",
@@ -125,7 +137,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/step-basic.ts"
     },
     {
       "name": "Named Step",
@@ -135,7 +148,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/step-named.ts"
     },
     {
       "name": "Step with Retry",
@@ -144,7 +158,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 600
-      }
+      },
+      "path": "./src/examples/step-with-retry.ts"
     },
     {
       "name": "Steps With Retry",
@@ -153,7 +168,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 14,
         "ExecutionTimeout": 600
-      }
+      },
+      "path": "./src/examples/steps-with-retry.ts"
     },
     {
       "name": "Wait State",
@@ -163,7 +179,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/wait.ts"
     },
     {
       "name": "Wait for Callback",
@@ -172,7 +189,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/wait-for-callback.ts"
     },
     {
       "name": "Named Wait",
@@ -182,7 +200,8 @@
       "durableConfig": {
         "RetentionPeriodInDays": 7,
         "ExecutionTimeout": 300
-      }
+      },
+      "path": "./src/examples/wait-named.ts"
     }
   ]
 }
