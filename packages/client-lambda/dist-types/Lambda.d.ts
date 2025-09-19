@@ -27,7 +27,6 @@ import { DeleteFunctionVersionResourcesInternalCommandInput, DeleteFunctionVersi
 import { DeleteLayerVersion20181031CommandInput, DeleteLayerVersion20181031CommandOutput } from "./commands/DeleteLayerVersion20181031Command";
 import { DeleteMigratedLayerVersionCommandInput, DeleteMigratedLayerVersionCommandOutput } from "./commands/DeleteMigratedLayerVersionCommand";
 import { DeleteProvisionedConcurrencyConfigCommandInput, DeleteProvisionedConcurrencyConfigCommandOutput } from "./commands/DeleteProvisionedConcurrencyConfigCommand";
-import { DeleteProvisionedConcurrencyConfigInternalCommandInput, DeleteProvisionedConcurrencyConfigInternalCommandOutput } from "./commands/DeleteProvisionedConcurrencyConfigInternalCommand";
 import { DeleteResourcePolicyCommandInput, DeleteResourcePolicyCommandOutput } from "./commands/DeleteResourcePolicyCommand";
 import { DisableFunctionCommandInput, DisableFunctionCommandOutput } from "./commands/DisableFunctionCommand";
 import { DisablePublicAccessBlockConfigCommandInput, DisablePublicAccessBlockConfigCommandOutput } from "./commands/DisablePublicAccessBlockConfigCommand";
@@ -342,12 +341,6 @@ export interface Lambda {
     deleteProvisionedConcurrencyConfig(args: DeleteProvisionedConcurrencyConfigCommandInput, options?: __HttpHandlerOptions): Promise<DeleteProvisionedConcurrencyConfigCommandOutput>;
     deleteProvisionedConcurrencyConfig(args: DeleteProvisionedConcurrencyConfigCommandInput, cb: (err: any, data?: DeleteProvisionedConcurrencyConfigCommandOutput) => void): void;
     deleteProvisionedConcurrencyConfig(args: DeleteProvisionedConcurrencyConfigCommandInput, options: __HttpHandlerOptions, cb: (err: any, data?: DeleteProvisionedConcurrencyConfigCommandOutput) => void): void;
-    /**
-     * @see {@link DeleteProvisionedConcurrencyConfigInternalCommand}
-     */
-    deleteProvisionedConcurrencyConfigInternal(args: DeleteProvisionedConcurrencyConfigInternalCommandInput, options?: __HttpHandlerOptions): Promise<DeleteProvisionedConcurrencyConfigInternalCommandOutput>;
-    deleteProvisionedConcurrencyConfigInternal(args: DeleteProvisionedConcurrencyConfigInternalCommandInput, cb: (err: any, data?: DeleteProvisionedConcurrencyConfigInternalCommandOutput) => void): void;
-    deleteProvisionedConcurrencyConfigInternal(args: DeleteProvisionedConcurrencyConfigInternalCommandInput, options: __HttpHandlerOptions, cb: (err: any, data?: DeleteProvisionedConcurrencyConfigInternalCommandOutput) => void): void;
     /**
      * @see {@link DeleteResourcePolicyCommand}
      */

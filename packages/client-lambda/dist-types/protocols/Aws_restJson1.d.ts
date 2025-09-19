@@ -26,7 +26,6 @@ import { DeleteFunctionVersionResourcesInternalCommandInput, DeleteFunctionVersi
 import { DeleteLayerVersion20181031CommandInput, DeleteLayerVersion20181031CommandOutput } from "../commands/DeleteLayerVersion20181031Command";
 import { DeleteMigratedLayerVersionCommandInput, DeleteMigratedLayerVersionCommandOutput } from "../commands/DeleteMigratedLayerVersionCommand";
 import { DeleteProvisionedConcurrencyConfigCommandInput, DeleteProvisionedConcurrencyConfigCommandOutput } from "../commands/DeleteProvisionedConcurrencyConfigCommand";
-import { DeleteProvisionedConcurrencyConfigInternalCommandInput, DeleteProvisionedConcurrencyConfigInternalCommandOutput } from "../commands/DeleteProvisionedConcurrencyConfigInternalCommand";
 import { DeleteResourcePolicyCommandInput, DeleteResourcePolicyCommandOutput } from "../commands/DeleteResourcePolicyCommand";
 import { DisableFunctionCommandInput, DisableFunctionCommandOutput } from "../commands/DisableFunctionCommand";
 import { DisablePublicAccessBlockConfigCommandInput, DisablePublicAccessBlockConfigCommandOutput } from "../commands/DisablePublicAccessBlockConfigCommand";
@@ -285,10 +284,6 @@ export declare const se_DeleteMigratedLayerVersionCommand: (input: DeleteMigrate
  * serializeAws_restJson1DeleteProvisionedConcurrencyConfigCommand
  */
 export declare const se_DeleteProvisionedConcurrencyConfigCommand: (input: DeleteProvisionedConcurrencyConfigCommandInput, context: __SerdeContext) => Promise<__HttpRequest>;
-/**
- * serializeAws_restJson1DeleteProvisionedConcurrencyConfigInternalCommand
- */
-export declare const se_DeleteProvisionedConcurrencyConfigInternalCommand: (input: DeleteProvisionedConcurrencyConfigInternalCommandInput, context: __SerdeContext) => Promise<__HttpRequest>;
 /**
  * serializeAws_restJson1DeleteResourcePolicyCommand
  */
@@ -977,10 +972,6 @@ export declare const de_DeleteMigratedLayerVersionCommand: (output: __HttpRespon
  * deserializeAws_restJson1DeleteProvisionedConcurrencyConfigCommand
  */
 export declare const de_DeleteProvisionedConcurrencyConfigCommand: (output: __HttpResponse, context: __SerdeContext) => Promise<DeleteProvisionedConcurrencyConfigCommandOutput>;
-/**
- * deserializeAws_restJson1DeleteProvisionedConcurrencyConfigInternalCommand
- */
-export declare const de_DeleteProvisionedConcurrencyConfigInternalCommand: (output: __HttpResponse, context: __SerdeContext) => Promise<DeleteProvisionedConcurrencyConfigInternalCommandOutput>;
 /**
  * deserializeAws_restJson1DeleteResourcePolicyCommand
  */

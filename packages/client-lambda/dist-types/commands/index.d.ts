@@ -26,7 +26,6 @@ export * from "./DeleteFunctionVersionResourcesInternalCommand";
 export * from "./DeleteLayerVersion20181031Command";
 export * from "./DeleteMigratedLayerVersionCommand";
 export * from "./DeleteProvisionedConcurrencyConfigCommand";
-export * from "./DeleteProvisionedConcurrencyConfigInternalCommand";
 export * from "./DeleteResourcePolicyCommand";
 export * from "./DisableFunctionCommand";
 export * from "./DisablePublicAccessBlockConfigCommand";

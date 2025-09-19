@@ -454,6 +454,7 @@ export declare const OperationUpdateFilterSensitiveLog: (obj: OperationUpdate) =
  * @public
  */
 export interface CheckpointDurableExecutionRequest {
+    DurableExecutionArn: string | undefined;
     CheckpointToken: string | undefined;
     Updates?: (OperationUpdate)[] | undefined;
     ClientToken?: string | undefined;
@@ -1760,13 +1761,6 @@ export interface DeleteProvisionedConcurrencyConfigRequest {
 /**
  * @public
  */
-export interface DeleteProvisionedConcurrencyConfigInternalRequest {
-    FunctionName: string | undefined;
-    Qualifier: string | undefined;
-}
-/**
- * @public
- */
 export interface DeleteResourcePolicyRequest {
     ResourceArn: string | undefined;
     RevisionId?: string | undefined;
@@ -2752,6 +2746,7 @@ export declare const GetDurableExecutionHistoryResponseFilterSensitiveLog: (obj:
  * @public
  */
 export interface GetDurableExecutionStateRequest {
+    DurableExecutionArn: string | undefined;
     CheckpointToken: string | undefined;
     Marker?: string | undefined;
     MaxItems?: number | undefined;
@@ -3244,4 +3239,11 @@ export interface ImportAccountSettingsResponse {
     CodeStorageTableEntry?: CodeStorageTableEntry | undefined;
     CustomerConfig?: CustomerConfigInternal | undefined;
     RiskSettings?: MigrationAccountRiskSettings | undefined;
+}
+/**
+ * @public
+ */
+export interface ImportAliasRequest {
+    AliasArn: string | undefined;
+    MigrationAlias: MigrationAlias | undefined;
 }

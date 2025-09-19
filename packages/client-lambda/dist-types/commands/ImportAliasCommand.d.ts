@@ -1,5 +1,6 @@
 import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { ImportAliasRequest, ImportAliasResponse } from "../models/models_1";
+import { ImportAliasRequest } from "../models/models_0";
+import { ImportAliasResponse } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
 /**

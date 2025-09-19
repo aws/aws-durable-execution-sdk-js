@@ -36,6 +36,7 @@ declare const GetDurableExecutionStateCommand_base: {
  * // const { LambdaClient, GetDurableExecutionStateCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // GetDurableExecutionStateRequest
+ *   DurableExecutionArn: "STRING_VALUE", // required
  *   CheckpointToken: "STRING_VALUE", // required
  *   Marker: "STRING_VALUE",
  *   MaxItems: Number("int"),

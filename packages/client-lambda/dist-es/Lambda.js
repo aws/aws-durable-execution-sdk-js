@@ -27,7 +27,6 @@ import { DeleteFunctionVersionResourcesInternalCommand, } from "./commands/Delet
 import { DeleteLayerVersion20181031Command, } from "./commands/DeleteLayerVersion20181031Command";
 import { DeleteMigratedLayerVersionCommand, } from "./commands/DeleteMigratedLayerVersionCommand";
 import { DeleteProvisionedConcurrencyConfigCommand, } from "./commands/DeleteProvisionedConcurrencyConfigCommand";
-import { DeleteProvisionedConcurrencyConfigInternalCommand, } from "./commands/DeleteProvisionedConcurrencyConfigInternalCommand";
 import { DeleteResourcePolicyCommand, } from "./commands/DeleteResourcePolicyCommand";
 import { DisableFunctionCommand, } from "./commands/DisableFunctionCommand";
 import { DisablePublicAccessBlockConfigCommand, } from "./commands/DisablePublicAccessBlockConfigCommand";
@@ -202,7 +201,6 @@ const commands = {
     DeleteLayerVersion20181031Command,
     DeleteMigratedLayerVersionCommand,
     DeleteProvisionedConcurrencyConfigCommand,
-    DeleteProvisionedConcurrencyConfigInternalCommand,
     DeleteResourcePolicyCommand,
     DisableFunctionCommand,
     DisablePublicAccessBlockConfigCommand,

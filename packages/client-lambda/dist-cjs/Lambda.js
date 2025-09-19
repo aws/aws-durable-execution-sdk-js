@@ -30,7 +30,6 @@ const DeleteFunctionVersionResourcesInternalCommand_1 = require("./commands/Dele
 const DeleteLayerVersion20181031Command_1 = require("./commands/DeleteLayerVersion20181031Command");
 const DeleteMigratedLayerVersionCommand_1 = require("./commands/DeleteMigratedLayerVersionCommand");
 const DeleteProvisionedConcurrencyConfigCommand_1 = require("./commands/DeleteProvisionedConcurrencyConfigCommand");
-const DeleteProvisionedConcurrencyConfigInternalCommand_1 = require("./commands/DeleteProvisionedConcurrencyConfigInternalCommand");
 const DeleteResourcePolicyCommand_1 = require("./commands/DeleteResourcePolicyCommand");
 const DisableFunctionCommand_1 = require("./commands/DisableFunctionCommand");
 const DisablePublicAccessBlockConfigCommand_1 = require("./commands/DisablePublicAccessBlockConfigCommand");
@@ -205,7 +204,6 @@ const commands = {
     DeleteLayerVersion20181031Command: DeleteLayerVersion20181031Command_1.DeleteLayerVersion20181031Command,
     DeleteMigratedLayerVersionCommand: DeleteMigratedLayerVersionCommand_1.DeleteMigratedLayerVersionCommand,
     DeleteProvisionedConcurrencyConfigCommand: DeleteProvisionedConcurrencyConfigCommand_1.DeleteProvisionedConcurrencyConfigCommand,
-    DeleteProvisionedConcurrencyConfigInternalCommand: DeleteProvisionedConcurrencyConfigInternalCommand_1.DeleteProvisionedConcurrencyConfigInternalCommand,
     DeleteResourcePolicyCommand: DeleteResourcePolicyCommand_1.DeleteResourcePolicyCommand,
     DisableFunctionCommand: DisableFunctionCommand_1.DisableFunctionCommand,
     DisablePublicAccessBlockConfigCommand: DisablePublicAccessBlockConfigCommand_1.DisablePublicAccessBlockConfigCommand,

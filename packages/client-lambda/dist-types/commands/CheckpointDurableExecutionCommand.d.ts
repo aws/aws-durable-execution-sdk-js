@@ -36,6 +36,7 @@ declare const CheckpointDurableExecutionCommand_base: {
  * // const { LambdaClient, CheckpointDurableExecutionCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
  * const client = new LambdaClient(config);
  * const input = { // CheckpointDurableExecutionRequest
+ *   DurableExecutionArn: "STRING_VALUE", // required
  *   CheckpointToken: "STRING_VALUE", // required
  *   Updates: [ // OperationUpdates
  *     { // OperationUpdate

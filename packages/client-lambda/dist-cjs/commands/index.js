@@ -29,7 +29,6 @@ tslib_1.__exportStar(require("./DeleteFunctionVersionResourcesInternalCommand"),
 tslib_1.__exportStar(require("./DeleteLayerVersion20181031Command"), exports);
 tslib_1.__exportStar(require("./DeleteMigratedLayerVersionCommand"), exports);
 tslib_1.__exportStar(require("./DeleteProvisionedConcurrencyConfigCommand"), exports);
-tslib_1.__exportStar(require("./DeleteProvisionedConcurrencyConfigInternalCommand"), exports);
 tslib_1.__exportStar(require("./DeleteResourcePolicyCommand"), exports);
 tslib_1.__exportStar(require("./DisableFunctionCommand"), exports);
 tslib_1.__exportStar(require("./DisablePublicAccessBlockConfigCommand"), exports);

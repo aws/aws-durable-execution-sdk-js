@@ -5,13 +5,6 @@ import { StreamingBlobTypes } from "@smithy/types";
 /**
  * @public
  */
-export interface ImportAliasRequest {
-    AliasArn: string | undefined;
-    MigrationAlias: MigrationAlias | undefined;
-}
-/**
- * @public
- */
 export interface ImportAliasResponse {
     MigrationAlias?: MigrationAlias | undefined;
 }

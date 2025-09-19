@@ -110,10 +110,11 @@ export const se_CheckpointDurableExecutionCommand = async (input, context) => {
     const headers = {
         'content-type': 'application/json',
     };
-    b.bp("/2025-12-01/durable-execution-state/{CheckpointToken}/checkpoint");
-    b.p('CheckpointToken', () => input.CheckpointToken, '{CheckpointToken}', false);
+    b.bp("/2025-12-01/durable-executions/{DurableExecutionArn}/checkpoint");
+    b.p('DurableExecutionArn', () => input.DurableExecutionArn, '{DurableExecutionArn}', false);
     let body;
     body = JSON.stringify(take(input, {
+        'CheckpointToken': [],
         'ClientToken': [],
         'Updates': _ => _json(_),
     }));
@@ -510,21 +511,6 @@ export const se_DeleteProvisionedConcurrencyConfigCommand = async (input, contex
         .b(body);
     return b.build();
 };
-export const se_DeleteProvisionedConcurrencyConfigInternalCommand = async (input, context) => {
-    const b = rb(input, context);
-    const headers = {};
-    b.bp("/cellmigration/functions/{FunctionName}/provisioned-concurrency");
-    b.p('FunctionName', () => input.FunctionName, '{FunctionName}', false);
-    const query = map({
-        [_Q]: [, __expectNonNull(input[_Q], `Qualifier`)],
-    });
-    let body;
-    b.m("DELETE")
-        .h(headers)
-        .q(query)
-        .b(body);
-    return b.build();
-};
 export const se_DeleteResourcePolicyCommand = async (input, context) => {
     const b = rb(input, context);
     const headers = {};
@@ -810,9 +796,10 @@ export const se_GetDurableExecutionHistoryCommand = async (input, context) => {
 export const se_GetDurableExecutionStateCommand = async (input, context) => {
     const b = rb(input, context);
     const headers = {};
-    b.bp("/2025-12-01/durable-execution-state/{CheckpointToken}/getState");
-    b.p('CheckpointToken', () => input.CheckpointToken, '{CheckpointToken}', false);
+    b.bp("/2025-12-01/durable-executions/{DurableExecutionArn}/state");
+    b.p('DurableExecutionArn', () => input.DurableExecutionArn, '{DurableExecutionArn}', false);
     const query = map({
+        [_CT]: [, __expectNonNull(input[_CT], `CheckpointToken`)],
         [_M]: [, input[_M]],
         [_MI]: [() => input.MaxItems !== void 0, () => (input[_MI].toString())],
     });
@@ -1349,7 +1336,7 @@ export const se_InformTagrisAfterResourceCreationCommand = async (input, context
 export const se_Invoke20150331Command = async (input, context) => {
     const b = rb(input, context);
     const headers = map({}, isSerializableHeaderValue, {
-        [_ct]: input[_CT] || 'application/octet-stream',
+        [_ct]: input[_CTo] || 'application/octet-stream',
         [_xait]: input[_IT],
         [_xasa]: input[_SA],
         [_xalt]: input[_LT],
@@ -1401,7 +1388,7 @@ export const se_InvokeAsyncCommand = async (input, context) => {
 export const se_InvokeWithResponseStreamCommand = async (input, context) => {
     const b = rb(input, context);
     const headers = map({}, isSerializableHeaderValue, {
-        [_ct]: input[_CT] || 'application/octet-stream',
+        [_ct]: input[_CTo] || 'application/octet-stream',
         [_xait]: input[_IT],
         [_xalt]: input[_LT],
         [_xacc]: input[_CC],
@@ -3341,16 +3328,6 @@ export const de_DeleteProvisionedConcurrencyConfigCommand = async (output, conte
     await collectBody(output.body, context);
     return contents;
 };
-export const de_DeleteProvisionedConcurrencyConfigInternalCommand = async (output, context) => {
-    if (output.statusCode !== 204 && output.statusCode >= 300) {
-        return de_CommandError(output, context);
-    }
-    const contents = map({
-        $metadata: deserializeMetadata(output),
-    });
-    await collectBody(output.body, context);
-    return contents;
-};
 export const de_DeleteResourcePolicyCommand = async (output, context) => {
     if (output.statusCode !== 204 && output.statusCode >= 300) {
         return de_CommandError(output, context);
@@ -4451,7 +4428,7 @@ export const de_Invoke20150331Command = async (output, context) => {
         $metadata: deserializeMetadata(output),
         [_FE]: [, output.headers[_xafe]],
         [_LR]: [, output.headers[_xalr]],
-        [_CT]: [, output.headers[_ct]],
+        [_CTo]: [, output.headers[_ct]],
         [_FRM]: [, output.headers[_xasf]],
         [_CL]: [() => void 0 !== output.headers[_cl], () => __strictParseInt32(output.headers[_cl])],
         [_TF]: [, output.headers[_xati]],
@@ -4488,7 +4465,7 @@ export const de_InvokeWithResponseStreamCommand = async (output, context) => {
         $metadata: deserializeMetadata(output),
         [_EV]: [, output.headers[_xaev]],
         [_TF]: [, output.headers[_xati]],
-        [_CT]: [, output.headers[_ct]],
+        [_CTo]: [, output.headers[_ct]],
         [_DEA]: [, output.headers[_xadea]],
     });
     const data = output.body;
@@ -7442,7 +7419,8 @@ const _CC = "ClientContext";
 const _CE = "ConcurrentExecutions";
 const _CL = "ContentLength";
 const _CR = "CompatibleRuntime";
-const _CT = "ContentType";
+const _CT = "CheckpointToken";
+const _CTo = "ContentType";
 const _D = "Description";
 const _DEA = "DurableExecutionArn";
 const _DEN = "DurableExecutionName";
