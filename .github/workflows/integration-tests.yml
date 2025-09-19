@@ -69,7 +69,7 @@ jobs:
           echo "ERROR: SDK index.js not found"
           exit 1
         fi
-        if [ ! -f "packages/examples/dist/examples/hello-world.js" ]; then
+        if [ ! -f "packages/examples/dist/hello-world.js" ]; then
           echo "ERROR: Examples hello-world.js not found"
           exit 1
         fi
@@ -79,20 +79,8 @@ jobs:
       with:
         name: built-examples
         path: |
-          packages/examples/dist/
-          packages/examples/node_modules/
-          packages/lambda-durable-functions-sdk-js/dist/
-          packages/lambda-durable-functions-sdk-js/package.json
-          packages/dex-internal-sdk/dist-cjs/
-          packages/dex-internal-sdk/package.json
-          node_modules/@amzn/
-          node_modules/tslib/
-          node_modules/@smithy/
-          node_modules/@aws-sdk/
-          node_modules/uuid/
-          node_modules/fast-xml-parser/
-          node_modules/@aws-crypto/
-          node_modules/bowser/
+          packages/examples/dist
+          package.json
     
     - name: Get examples from catalog
       id: get-examples
@@ -126,7 +114,7 @@ jobs:
     
     - name: Verify downloaded artifacts
       run: |
-        if [ ! -f "packages/examples/dist/examples/hello-world.js" ]; then
+        if [ ! -f "packages/examples/dist/hello-world.js" ]; then
           echo "ERROR: Examples not found in artifacts"
           exit 1
         fi
