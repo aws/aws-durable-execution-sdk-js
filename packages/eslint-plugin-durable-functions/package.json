@@ -1,0 +1,38 @@
+{
+  "name": "@amzn/lambda-durable-functions-eslint-js",
+  "version": "1.0.0",
+  "description": "ESLint plugin for AWS Lambda Durable Functions best practices",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "clean": "rm -rf dist node_modules"
+  },
+  "keywords": [
+    "eslint",
+    "eslint-plugin",
+    "durable-functions",
+    "aws-lambda"
+  ],
+  "peerDependencies": {
+    "eslint": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@types/eslint": "^8.56.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.0.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.6",
+    "typescript": "^5.8.2"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "private": true
+}
