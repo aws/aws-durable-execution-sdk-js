@@ -17,7 +17,7 @@ jobs:
   sync-aws-durable-execution-sdk-js:
     uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
     with:
-      package-name: aws-durable-execution-sdk-js
+      package_name: aws-durable-execution-sdk-js
     secrets:
       S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
       SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
@@ -27,7 +27,7 @@ jobs:
   sync-aws-durable-execution-sdk-js-testing:
     uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
     with:
-      package-name: aws-durable-execution-sdk-js
+      package_name: aws-durable-execution-sdk-js
     secrets:
       S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
       SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
@@ -37,7 +37,7 @@ jobs:
   sync-aws-durable-execution-sdk-js-examples:
     uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
     with:
-      package-name: aws-durable-execution-sdk-js-examples
+      package_name: aws-durable-execution-sdk-js-examples
     secrets:
       S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
       SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
