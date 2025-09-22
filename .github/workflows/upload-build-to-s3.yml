@@ -51,7 +51,7 @@ jobs:
       # Upload a file to AWS s3
       - name: Copy tgz build file to s3
         run: |
-          aws s3 cp ./packages/aws-durable-execution-sdk-js/aws-durable-execution-sdk-js${{ steps.package-version.outputs.current-version }}.tgz \
+          aws s3 cp ./packages/aws-durable-execution-sdk-js/aws-durable-execution-sdk-js-${{ steps.package-version.outputs.current-version }}.tgz \
             s3://${{ env.BUCKET_NAME }}/
       - name: commit to Gitfarm
         run: |
