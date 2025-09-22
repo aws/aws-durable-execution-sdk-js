@@ -1,11 +1,11 @@
-import { OperationType, OperationStatus, EventType } from "@aws-sdk/client-lambda";
+import { OperationType, OperationStatus } from "@aws-sdk/client-lambda";
 import { historyEventTypes } from "../history-event-types";
 
 describe("historyEventTypes", () => {
   describe("ExecutionStarted", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ExecutionStarted;
-      
+
       expect(config).toEqual({
         operationType: OperationType.EXECUTION,
         operationStatus: OperationStatus.STARTED,
@@ -21,7 +21,7 @@ describe("historyEventTypes", () => {
   describe("ExecutionFailed", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ExecutionFailed;
-      
+
       expect(config).toEqual({
         operationType: OperationType.EXECUTION,
         operationStatus: OperationStatus.FAILED,
@@ -37,7 +37,7 @@ describe("historyEventTypes", () => {
   describe("ExecutionStopped", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ExecutionStopped;
-      
+
       expect(config).toEqual({
         operationType: OperationType.EXECUTION,
         operationStatus: OperationStatus.STOPPED,
@@ -53,7 +53,7 @@ describe("historyEventTypes", () => {
   describe("ExecutionSucceeded", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ExecutionSucceeded;
-      
+
       expect(config).toEqual({
         operationType: OperationType.EXECUTION,
         operationStatus: OperationStatus.SUCCEEDED,
@@ -69,7 +69,7 @@ describe("historyEventTypes", () => {
   describe("ExecutionTimedOut", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ExecutionTimedOut;
-      
+
       expect(config).toEqual({
         operationType: OperationType.EXECUTION,
         operationStatus: OperationStatus.TIMED_OUT,
@@ -85,7 +85,7 @@ describe("historyEventTypes", () => {
   describe("CallbackStarted", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.CallbackStarted;
-      
+
       expect(config).toEqual({
         operationType: OperationType.CALLBACK,
         operationStatus: OperationStatus.STARTED,
@@ -101,7 +101,7 @@ describe("historyEventTypes", () => {
   describe("CallbackFailed", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.CallbackFailed;
-      
+
       expect(config).toEqual({
         operationType: OperationType.CALLBACK,
         operationStatus: OperationStatus.FAILED,
@@ -117,7 +117,7 @@ describe("historyEventTypes", () => {
   describe("CallbackSucceeded", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.CallbackSucceeded;
-      
+
       expect(config).toEqual({
         operationType: OperationType.CALLBACK,
         operationStatus: OperationStatus.SUCCEEDED,
@@ -133,7 +133,7 @@ describe("historyEventTypes", () => {
   describe("CallbackTimedOut", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.CallbackTimedOut;
-      
+
       expect(config).toEqual({
         operationType: OperationType.CALLBACK,
         operationStatus: OperationStatus.TIMED_OUT,
@@ -149,7 +149,7 @@ describe("historyEventTypes", () => {
   describe("ContextStarted", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ContextStarted;
-      
+
       expect(config).toEqual({
         operationType: OperationType.CONTEXT,
         operationStatus: OperationStatus.STARTED,
@@ -165,7 +165,7 @@ describe("historyEventTypes", () => {
   describe("ContextFailed", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ContextFailed;
-      
+
       expect(config).toEqual({
         operationType: OperationType.CONTEXT,
         operationStatus: OperationStatus.FAILED,
@@ -181,7 +181,7 @@ describe("historyEventTypes", () => {
   describe("ContextSucceeded", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.ContextSucceeded;
-      
+
       expect(config).toEqual({
         operationType: OperationType.CONTEXT,
         operationStatus: OperationStatus.SUCCEEDED,
@@ -197,7 +197,7 @@ describe("historyEventTypes", () => {
   describe("InvokeStarted", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.InvokeStarted;
-      
+
       expect(config).toEqual({
         operationType: OperationType.INVOKE,
         operationStatus: OperationStatus.STARTED,
@@ -213,7 +213,7 @@ describe("historyEventTypes", () => {
   describe("InvokeFailed", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.InvokeFailed;
-      
+
       expect(config).toEqual({
         operationType: OperationType.INVOKE,
         operationStatus: OperationStatus.FAILED,
@@ -229,7 +229,7 @@ describe("historyEventTypes", () => {
   describe("InvokeSucceeded", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.InvokeSucceeded;
-      
+
       expect(config).toEqual({
         operationType: OperationType.INVOKE,
         operationStatus: OperationStatus.SUCCEEDED,
@@ -245,7 +245,7 @@ describe("historyEventTypes", () => {
   describe("InvokeTimedOut", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.InvokeTimedOut;
-      
+
       expect(config).toEqual({
         operationType: OperationType.INVOKE,
         operationStatus: OperationStatus.TIMED_OUT,
@@ -261,7 +261,7 @@ describe("historyEventTypes", () => {
   describe("InvokeCancelled", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.InvokeCancelled;
-      
+
       expect(config).toEqual({
         operationType: OperationType.INVOKE,
         operationStatus: OperationStatus.CANCELLED,
@@ -277,7 +277,7 @@ describe("historyEventTypes", () => {
   describe("StepStarted", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.StepStarted;
-      
+
       expect(config).toEqual({
         operationType: OperationType.STEP,
         operationStatus: OperationStatus.STARTED,
@@ -293,7 +293,7 @@ describe("historyEventTypes", () => {
   describe("StepFailed", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.StepFailed;
-      
+
       expect(config).toEqual({
         operationType: OperationType.STEP,
         operationStatus: OperationStatus.FAILED,
@@ -309,7 +309,7 @@ describe("historyEventTypes", () => {
   describe("StepSucceeded", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.StepSucceeded;
-      
+
       expect(config).toEqual({
         operationType: OperationType.STEP,
         operationStatus: OperationStatus.SUCCEEDED,
@@ -325,7 +325,7 @@ describe("historyEventTypes", () => {
   describe("WaitStarted", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.WaitStarted;
-      
+
       expect(config).toEqual({
         operationType: OperationType.WAIT,
         operationStatus: OperationStatus.STARTED,
@@ -341,7 +341,7 @@ describe("historyEventTypes", () => {
   describe("WaitSucceeded", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.WaitSucceeded;
-      
+
       expect(config).toEqual({
         operationType: OperationType.WAIT,
         operationStatus: OperationStatus.SUCCEEDED,
@@ -357,7 +357,7 @@ describe("historyEventTypes", () => {
   describe("WaitCancelled", () => {
     it("should have correct configuration", () => {
       const config = historyEventTypes.WaitCancelled;
-      
+
       expect(config).toEqual({
         operationType: OperationType.WAIT,
         operationStatus: OperationStatus.CANCELLED,
@@ -367,74 +367,6 @@ describe("historyEventTypes", () => {
         operationDetailPlace: undefined,
         hasResult: true,
       });
-    });
-  });
-
-  describe("Type coverage", () => {
-    it("should have configurations for all event types", () => {
-      const eventTypes = Object.keys(historyEventTypes) as EventType[];
-      
-      // Verify we have a reasonable number of event types covered
-      expect(eventTypes.length).toBeGreaterThan(20);
-      
-      // Verify each configuration has required properties
-      eventTypes.forEach(eventType => {
-        const config = historyEventTypes[eventType];
-        expect(config).toHaveProperty('operationType');
-        expect(config).toHaveProperty('operationStatus');
-        expect(config).toHaveProperty('detailPlace');
-        expect(config).toHaveProperty('operationDetailPlace');
-        expect(config).toHaveProperty('hasResult');
-        expect(config).toHaveProperty('isStartEvent');
-        expect(config).toHaveProperty('isEndEvent');
-      });
-    });
-
-    it("should have consistent start/end event patterns", () => {
-      const eventTypes = Object.keys(historyEventTypes) as EventType[];
-      
-      const startEvents = eventTypes.filter(eventType => {
-        const config = historyEventTypes[eventType];
-        return config.isStartEvent && !config.isEndEvent;
-      });
-      
-      const endEvents = eventTypes.filter(eventType => {
-        const config = historyEventTypes[eventType];
-        return config.isEndEvent && !config.isStartEvent;
-      });
-      
-      // Start events should have STARTED status
-      startEvents.forEach(eventType => {
-        const config = historyEventTypes[eventType];
-        expect(config.operationStatus).toBe(OperationStatus.STARTED);
-      });
-      
-      // End events should not have STARTED status
-      endEvents.forEach(eventType => {
-        const config = historyEventTypes[eventType];
-        expect(config.operationStatus).not.toBe(OperationStatus.STARTED);
-      });
-    });
-
-    it("should have consistent result patterns", () => {
-      // Test specific known patterns
-      expect(historyEventTypes.StepStarted.hasResult).toBe(false);
-      expect(historyEventTypes.CallbackStarted.hasResult).toBe(false);
-      expect(historyEventTypes.InvokeStarted.hasResult).toBe(false);
-      expect(historyEventTypes.ContextStarted.hasResult).toBe(false);
-      
-      // WaitStarted is an exception - it has results
-      expect(historyEventTypes.WaitStarted.hasResult).toBe(true);
-      
-      // Most end events should have results
-      expect(historyEventTypes.StepSucceeded.hasResult).toBe(true);
-      expect(historyEventTypes.StepFailed.hasResult).toBe(true);
-      expect(historyEventTypes.CallbackSucceeded.hasResult).toBe(true);
-      expect(historyEventTypes.CallbackFailed.hasResult).toBe(true);
-      
-      // Execution events are exceptions - they don't have results
-      expect(historyEventTypes.ExecutionSucceeded.hasResult).toBe(false);
-      expect(historyEventTypes.ExecutionFailed.hasResult).toBe(false);
     });
   });
 });

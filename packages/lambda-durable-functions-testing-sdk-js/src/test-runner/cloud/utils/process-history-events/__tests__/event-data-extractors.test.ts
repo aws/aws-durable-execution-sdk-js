@@ -1,5 +1,8 @@
 import { Event, ErrorObject } from "@aws-sdk/client-lambda";
-import { getErrorFromEvent, getPayloadFromEvent } from "../event-data-extractors";
+import {
+  getErrorFromEvent,
+  getPayloadFromEvent,
+} from "../event-data-extractors";
 
 describe("getErrorFromEvent", () => {
   it("should return error payload when error exists in details", () => {
@@ -70,7 +73,6 @@ describe("getErrorFromEvent", () => {
     const result = getErrorFromEvent(event, "CallbackFailedDetails");
     expect(result).toEqual(errorPayload);
   });
-
 });
 
 describe("getPayloadFromEvent", () => {
@@ -147,10 +149,10 @@ describe("getPayloadFromEvent", () => {
     expect(result).toBeUndefined();
   });
 
-  it("should prioritize input over result when both exist", () => {
+  it("should throw error when both input and result exist", () => {
     const inputPayload = '{"input": "data"}';
     const resultPayload = '{"result": "data"}';
-    
+
     const event: Event = {
       StepStartedDetails: {
         Input: {
@@ -162,8 +164,9 @@ describe("getPayloadFromEvent", () => {
       },
     };
 
-    const result = getPayloadFromEvent(event, "StepStartedDetails");
-    expect(result).toBe(inputPayload);
+    expect(() => getPayloadFromEvent(event, "StepStartedDetails")).toThrow(
+      "Event contains both Input and Result"
+    );
   });
 
   it("should handle different detail places", () => {
@@ -179,7 +182,6 @@ describe("getPayloadFromEvent", () => {
     const result = getPayloadFromEvent(event, "CallbackSucceededDetails");
     expect(result).toBe(payload);
   });
-
 
   it("should handle empty string payloads", () => {
     const event: Event = {

@@ -1,4 +1,10 @@
-import { Event, EventType, OperationType, OperationStatus, ErrorObject } from "@aws-sdk/client-lambda";
+import {
+  Event,
+  EventType,
+  OperationType,
+  OperationStatus,
+  ErrorObject,
+} from "@aws-sdk/client-lambda";
 import { historyEventsToOperationEvents } from "../process-history-events";
 
 describe("historyEventsToOperationEvents", () => {
@@ -151,6 +157,7 @@ describe("historyEventsToOperationEvents", () => {
         Name: "test-step",
         EventType: EventType.StepStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
+        StepStartedDetails: {},
       },
       {
         Id: "step-id",
@@ -210,6 +217,7 @@ describe("historyEventsToOperationEvents", () => {
         Id: "wait-id",
         EventType: EventType.WaitSucceeded,
         EventTimestamp: new Date("2023-01-01T13:00:00Z"),
+        WaitSucceededDetails: {},
       },
     ];
 
@@ -278,6 +286,7 @@ describe("historyEventsToOperationEvents", () => {
         Name: "test-context",
         EventType: EventType.ContextStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
+        ContextStartedDetails: {},
       },
       {
         Id: "context-id",
@@ -316,6 +325,7 @@ describe("historyEventsToOperationEvents", () => {
         Name: "first-step",
         EventType: EventType.StepStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
+        StepStartedDetails: {},
       },
       {
         Id: "callback-1",
@@ -353,8 +363,12 @@ describe("historyEventsToOperationEvents", () => {
     expect(result).toHaveLength(2);
 
     // Find step and callback operations
-    const stepOperation = result.find(op => op.operation.Type === OperationType.STEP);
-    const callbackOperation = result.find(op => op.operation.Type === OperationType.CALLBACK);
+    const stepOperation = result.find(
+      (op) => op.operation.Type === OperationType.STEP
+    );
+    const callbackOperation = result.find(
+      (op) => op.operation.Type === OperationType.CALLBACK
+    );
 
     expect(stepOperation).toBeDefined();
     expect(stepOperation!.operation.Id).toBe("step-1");
@@ -382,17 +396,20 @@ describe("historyEventsToOperationEvents", () => {
         Id: "execution-id",
         EventType: EventType.ExecutionStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
+        ExecutionStartedDetails: {},
       },
       {
         Id: "step-id",
         Name: "test-step",
         EventType: EventType.StepStarted,
         EventTimestamp: new Date("2023-01-01T12:01:00Z"),
+        StepStartedDetails: {},
       },
       {
         Id: "execution-id",
         EventType: EventType.ExecutionSucceeded,
         EventTimestamp: new Date("2023-01-01T12:02:00Z"),
+        ExecutionSucceededDetails: {},
       },
       {
         Id: "step-id",
@@ -422,6 +439,7 @@ describe("historyEventsToOperationEvents", () => {
         Name: "test-step",
         EventType: EventType.StepStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
+        StepStartedDetails: {},
       },
       {
         Id: "step-id",
@@ -438,6 +456,7 @@ describe("historyEventsToOperationEvents", () => {
         Id: "step-id",
         EventType: EventType.StepStarted,
         EventTimestamp: new Date("2023-01-01T12:01:10Z"),
+        StepStartedDetails: {},
       },
       {
         Id: "step-id",
@@ -459,7 +478,6 @@ describe("historyEventsToOperationEvents", () => {
     expect(result[0].operation.StepDetails?.Result).toBe('{"final": "result"}');
   });
 
-  // Additional test scenarios from the old file
   it.each([
     EventType.ExecutionStarted,
     EventType.ExecutionFailed,
@@ -669,10 +687,7 @@ describe("historyEventsToOperationEvents", () => {
       StepStartedDetails: {},
     };
 
-    const result = historyEventsToOperationEvents([
-      executionEvent,
-      stepEvent,
-    ]);
+    const result = historyEventsToOperationEvents([executionEvent, stepEvent]);
 
     expect(result).toHaveLength(1);
     expect(result[0].operation.Id).toBe("step-1");
@@ -688,9 +703,8 @@ describe("historyEventsToOperationEvents", () => {
       StepSucceededDetails: undefined,
     };
 
-    const result = historyEventsToOperationEvents([event]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].operation.Status).toBe(OperationStatus.SUCCEEDED);
+    expect(() => historyEventsToOperationEvents([event])).toThrow(
+      `Details missing for event "step-1"`
+    );
   });
 });

@@ -32,6 +32,10 @@ export function historyEventsToOperationEvents(
       continue;
     }
 
+    if (!event[historyEventType.detailPlace]) {
+      throw new Error(`Details missing for event "${event.Id}"`);
+    }
+
     const previousOperationEvents = operationEvents.get(event.Id);
 
     const operation = createOperation(

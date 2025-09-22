@@ -77,6 +77,7 @@ describe("addOperationDetails", () => {
 
     addOperationDetails(operation, "StepDetails", {
       Result: "test result",
+      Attempt: undefined,
       Error: undefined,
       NextAttemptTimestamp: undefined,
     });

@@ -42,6 +42,10 @@ export function getPayloadFromEvent(
     return undefined;
   }
 
+  if ("Input" in details && "Result" in details) {
+    throw new Error("Event contains both Input and Result");
+  }
+
   if ("Input" in details) {
     return details.Input?.Payload;
   }
