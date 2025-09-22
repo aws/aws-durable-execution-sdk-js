@@ -1,6 +1,6 @@
 {
-  "name": "aws-lambda-durable-functions-js",
-  "version": "0.0.q",
+  "name": "aws-durable-execution-sdk-js",
+  "version": "0.0.1",
   "description": "Lambda Durable Functions SDK, Testing SDK and fully functional examples",
   "workspaces": [
     "packages/*"
@@ -10,27 +10,28 @@
     "install-all": "npm install && npm install --workspaces",
     "test": "npm run test --workspaces --if-present",
     "test:integration": "act -W .github/workflows/integration-tests.yml --secret-file .secrets --artifact-server-path /tmp/artifacts --container-architecture linux/amd64",
-    "build": "npm run build -w packages/lambda-durable-functions-sdk-js -w packages/lambda-durable-functions-testing-sdk-js -w packages/examples",
+    "build": "npm run build -w packages/aws-durable-execution-sdk-js -w packages/aws-durable-execution-sdk-js-testing -w packages/aws-durable-execution-sdk-js-examples",
     "postpublish": "git restore .",
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present"
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:aws/lambda-durable-functions-js.git"
+    "url": "git@github.com:aws/aws-durable-execution-sdk-js.git"
   },
   "keywords": [],
   "author": {
     "name": "Amazon Web Services",
     "url": "https://aws.amazon.com"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/aws/lambda-durable-functions-js/issues"
+    "url": "https://github.com/aws/aws-durable-execution-sdk-js/issues"
   },
-  "homepage": "https://github.com/aws/lambda-durable-functions-js/blob/test-hsilan/README.md",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/blob/development/README.md",
   "devDependencies": {
     "@eslint/compat": "^1.3.0",
     "@eslint/js": "^9.29.0",
+    "@rollup/plugin-commonjs": "^28.0.6",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.1",
     "@rollup/plugin-terser": "^0.4.4",

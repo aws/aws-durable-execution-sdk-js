@@ -1,0 +1,80 @@
+{
+  "name": "aws-durable-execution-sdk-js",
+  "description": "Durable Executions Language SDK for TypeScript",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js",
+  "main": "dist-cjs/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist-cjs/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "dist-cjs/"
+  ],
+  "scripts": {
+    "prebuild": "npm run lint:fix",
+    "build": "concurrently npm:build:esm npm:build:cjs",
+    "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
+    "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
+    "analyze:track": "tsx scripts/bundle-size-tracker.ts",
+    "postbuild": "npm run analyze:track",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:scripts": "jest --config jest.scripts.config.js",
+    "test:scripts:watch": "jest --config jest.scripts.config.js --watch",
+    "test:scripts:coverage": "jest --config jest.scripts.config.js --coverage",
+    "test:all": "jest --config jest.all.config.js",
+    "test:all:coverage": "jest --config jest.all.config.js --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "prettier --write . && eslint src --ext .ts --fix",
+    "prepublishOnly": "npm test && npm run lint && npm run build",
+    "run-locally": "ts-node --transpile-only ./src/run-durable.ts",
+    "clean": "rm -rf node_modules dist dist-cjs",
+    "prepack": "npm run build"
+  },
+  "lint-staged": {
+    "./src/**/*.ts": [
+      "prettier --write",
+      "eslint --fix"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/js": "^9.29.0",
+    "@types/aws-lambda": "^8.10.147",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.25.0",
+    "@typescript-eslint/parser": "^8.25.0",
+    "aws-lambda": "^1.0.7",
+    "eslint": "^9.21.0",
+    "eslint-plugin-filename-convention": "file:scripts/eslint-plugin-filename-convention",
+    "globals": "^14.0.0",
+    "husky": "^9.1.7",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.5.1",
+    "prettier": "^3.5.2",
+    "rimraf": "^5.0.10",
+    "ts-jest": "^29.2.6",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@aws-sdk/client-lambda": "*",
+    "@aws-sdk/credential-provider-node": "^3.800.0"
+  },
+  "private": true
+}

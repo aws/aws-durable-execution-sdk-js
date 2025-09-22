@@ -1,0 +1,75 @@
+import { LocalDurableTestRunner } from "aws-durable-execution-sdk-js-testing";
+import { handler } from "../promise-combinators";
+
+beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+
+describe("promise-combinators", () => {
+  const durableTestRunner = new LocalDurableTestRunner({
+    handlerFunction: handler,
+    skipTime: true,
+  });
+
+  it("should execute all promise combinators successfully", async () => {
+    const execution = await durableTestRunner.run();
+    const result = execution.getResult() as any;
+
+    // Verify the structure of the result
+    expect(result).toEqual({
+      message: "Promise combinators example completed successfully",
+      allResults: ["Result from step 1", "Result from step 2", "Result from step 3"],
+      raceResult: "Fast result", // The fast result should win the race
+      settledResults: [
+        { status: "fulfilled", value: "Success!" },
+        { status: "rejected", reason: expect.any(Error) }
+      ],
+      anyResult: "First success!", // The successful promise should be returned
+    });
+
+    // Verify that the settled results contain the expected error
+    expect(result.settledResults[1].reason.message).toBe("This step failed");
+  });
+
+  it("should handle promise.all correctly", async () => {
+    const execution = await durableTestRunner.run();
+    const result = execution.getResult() as any;
+
+    // Promise.all should return all results in order
+    expect(result.allResults).toHaveLength(3);
+    expect(result.allResults).toContain("Result from step 1");
+    expect(result.allResults).toContain("Result from step 2");
+    expect(result.allResults).toContain("Result from step 3");
+  });
+
+  it("should handle promise.race correctly", async () => {
+    const execution = await durableTestRunner.run();
+    const result = execution.getResult() as any;
+
+    // Promise.race should return the fastest result
+    expect(result.raceResult).toBe("Fast result");
+  });
+
+  it("should handle promise.allSettled correctly", async () => {
+    const execution = await durableTestRunner.run();
+    const result = execution.getResult() as any;
+
+    // Promise.allSettled should return both fulfilled and rejected results
+    expect(result.settledResults).toHaveLength(2);
+    expect(result.settledResults[0]).toEqual({
+      status: "fulfilled",
+      value: "Success!"
+    });
+    expect(result.settledResults[1]).toEqual({
+      status: "rejected",
+      reason: expect.any(Error)
+    });
+  });
+
+  it("should handle promise.any correctly", async () => {
+    const execution = await durableTestRunner.run();
+    const result = execution.getResult() as any;
+
+    // Promise.any should return the first successful result
+    expect(result.anyResult).toBe("First success!");
+  });
+});

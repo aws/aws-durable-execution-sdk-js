@@ -4,14 +4,14 @@ on:
   push:
     branches: [ "main", "development" ]
     paths:
-      - 'packages/lambda-durable-functions-sdk-js/**'
-      - 'packages/examples/**'
+      - 'packages/aws-durable-execution-sdk-js/**'
+      - 'packages/aws-durable-execution-sdk-js-examples/**'
       - '.github/workflows/integration-tests.yml'
   pull_request:
     branches: [ "main", "development"]
     paths:
-      - 'packages/lambda-durable-functions-sdk-js/**'
-      - 'packages/examples/**'
+      - 'packages/aws-durable-execution-sdk-js/**'
+      - 'packages/aws-durable-execution-sdk-js-examples/**'
       - '.github/workflows/integration-tests.yml'
       - '.github/model/**'
   workflow_dispatch:
@@ -65,11 +65,11 @@ jobs:
     
     - name: Verify SDK build
       run: |
-        if [ ! -f "packages/lambda-durable-functions-sdk-js/dist/index.js" ]; then
+        if [ ! -f "packages/aws-durable-execution-sdk-js/dist/index.js" ]; then
           echo "ERROR: SDK index.js not found"
           exit 1
         fi
-        if [ ! -f "packages/examples/dist/hello-world.js" ]; then
+        if [ ! -f "packages/aws-durable-execution-sdk-js-examples/dist/hello-world.js" ]; then
           echo "ERROR: Examples hello-world.js not found"
           exit 1
         fi
@@ -79,12 +79,12 @@ jobs:
       with:
         name: built-examples
         path: |
-          packages/examples/dist
+          packages/aws-durable-execution-sdk-js-examples/dist
           package.json
     
     - name: Get examples from catalog
       id: get-examples
-      working-directory: ./packages/examples
+      working-directory: ./packages/aws-durable-execution-sdk-js-examples
       run: |
         echo "examples=$(jq -c '.examples | map(select(.integration == true))' examples-catalog.json)" >> $GITHUB_OUTPUT
 
@@ -114,7 +114,7 @@ jobs:
     
     - name: Verify downloaded artifacts
       run: |
-        if [ ! -f "packages/examples/dist/hello-world.js" ]; then
+        if [ ! -f "packages/aws-durable-execution-sdk-js-examples/dist/hello-world.js" ]; then
           echo "ERROR: Examples not found in artifacts"
           exit 1
         fi
@@ -139,14 +139,14 @@ jobs:
         aws configure add-model --service-model file://.github/model/lambda.json --service-name lambda
 
     - name: Package Lambda function - ${{ matrix.example.name }}
-      working-directory: ./packages/examples
+      working-directory: ./packages/aws-durable-execution-sdk-js-examples
       run: |
         # Extract handler file name from catalog
         HANDLER_FILE=$(echo "${{ matrix.example.handler }}" | sed 's/\.handler$//')
         npm run package -- "$HANDLER_FILE"
 
     - name: Deploy Lambda function - ${{ matrix.example.name }}
-      working-directory: ./packages/examples
+      working-directory: ./packages/aws-durable-execution-sdk-js-examples
       env:
         AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
@@ -218,7 +218,7 @@ jobs:
     
     - name: Assert History - ${{ matrix.example.name }}
       if: env.EXECUTION_ARN != ''
-      working-directory: ./packages/examples
+      working-directory: ./packages/aws-durable-execution-sdk-js-examples
       run: |
         node scripts/assert-history.js "${{ matrix.example.handler }}" "/tmp/history.json"
     

@@ -2,11 +2,11 @@
   "compilerOptions": {
     "paths": {
       "@aws-sdk/client-lambda": ["./packages/client-lambda/dist-types"],
-      "@amzn/durable-executions-language-sdk": [
-        "./packages/lambda-durable-functions-sdk-js/dist"
+      "aws-durable-execution-sdk-js": [
+        "./packages/aws-durable-execution-sdk-js/dist"
       ],
-      "@amzn/durable-executions-type-script-testing-library": [
-        "./packages/lambda-durable-functions-testing-sdk-js/dist"
+      "aws-durable-execution-sdk-js-testing": [
+        "./packages/aws-durable-execution-sdk-js-testing/dist"
       ]
     },
     "target": "ES2022",

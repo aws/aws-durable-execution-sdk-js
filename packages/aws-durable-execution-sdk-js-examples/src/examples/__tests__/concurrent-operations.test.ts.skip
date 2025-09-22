@@ -1,0 +1,43 @@
+import {LocalDurableTestRunner} from "aws-durable-execution-sdk-js-testing";
+import {handler} from "../concurrent-operations";
+
+// TODO: enable test when SDK lib supports waiting in concurrent operations
+
+const RESULT_1: string = "1";
+const RESULT_2: string = "2";
+
+beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+
+describe("concurrent-operations test", () => {
+    const durableTestRunner = new LocalDurableTestRunner({
+        handlerFunction: handler,
+        skipTime: true,
+    });
+
+    it("should handle promise.all correctly", async () => {
+        durableTestRunner.getOperation("block-1").mockResolvedValue(RESULT_1);
+        durableTestRunner.getOperation("block-2").mockResolvedValue(RESULT_2);
+
+        const execution = await durableTestRunner.run();
+
+        expect(execution.getResult()).toEqual([RESULT_1, RESULT_2]);
+    });
+
+    it("should complete nested durable operations correctly", async () => {
+        durableTestRunner.getOperation("step-1").mockResolvedValue(RESULT_1);
+        durableTestRunner.getOperation("step-2").mockResolvedValue(RESULT_2);
+
+        const execution = await durableTestRunner.run();
+
+        expect(execution.getCompletedOperations()).toHaveLength(3);
+
+        const block1 = durableTestRunner.getOperation("block-1");
+        expect(block1.getContextDetails()?.result).toStrictEqual(RESULT_1);
+        expect(block1.getChildOperations()).toHaveLength(2);
+
+        const block2 = durableTestRunner.getOperation("block-2");
+        expect(block2.getContextDetails()?.result).toStrictEqual(RESULT_2);
+        expect(block2.getChildOperations()).toHaveLength(2);
+    });
+})
