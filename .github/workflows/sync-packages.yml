@@ -34,14 +34,4 @@ jobs:
       GITFARM_LAN_SDK_REPO: ${{ secrets.GITFARM_TESTING_SDK_REPO }}
       GITFARM_LAN_SDK_BRANCH: ${{ secrets.GITFARM_LAN_SDK_BRANCH }}
       ACTIONS_SYNC_ROLE_NAME: ${{ secrets.ACTIONS_SYNC_ROLE_NAME }}
-  sync-aws-durable-execution-sdk-js-examples:
-    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
-    with:
-      package_name: aws-durable-execution-sdk-js-examples
-    secrets:
-      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-      SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
-      GITFARM_LAN_SDK_REPO: ${{ secrets.GITFARM_EXAMPLES_REPO }}
-      GITFARM_LAN_SDK_BRANCH: ${{ secrets.GITFARM_LAN_SDK_BRANCH }}
-      ACTIONS_SYNC_ROLE_NAME: ${{ secrets.ACTIONS_SYNC_ROLE_NAME }}
       
