@@ -1,14 +1,8 @@
-name: Upload Build to S3
+name: Sync packages to Gitfarm
 
 on:
   push:
-    branches: [ "development"]
-  # uncomment when integration tests are passing
-  # workflow_run:
-  #   workflows: [Unit Tests,Integration Tests]
-  #   branches: [development]
-  #   types: 
-  #     - completed
+    branches: [ "development", "sync-testing-library"]
       
 env:
   BUCKET_NAME : "${{ secrets.S3_BUCKET_NAME }}"
@@ -20,50 +14,34 @@ permissions:
   contents: read    # This is required for actions/checkout
 
 jobs:
-  on-success:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Git clone the repository
-        uses: actions/checkout@v5
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-      - name: configure aws credentials
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
-        with:
-          role-to-assume: "${{ secrets.ACTIONS_SYNC_ROLE_NAME }}"
-          role-session-name: samplerolesession
-          aws-region: ${{ env.AWS_REGION }}
-      - name: get-npm-version
-        id: package-version
-        uses: martinbeentjes/npm-get-version-action@v1.3.1
-        with:
-          path: packages/aws-durable-execution-sdk-js
-      # need this while workflow_run isn't working as expected
-      - run: npm run install-all
-      - run: npm run build
-      #####
-      - name: Navigate to package and pack
-        working-directory: packages/aws-durable-execution-sdk-js
-        run: npm pack
-      # Upload a file to AWS s3
-      - name: Copy tgz build file to s3
-        run: |
-          aws s3 cp ./packages/aws-durable-execution-sdk-js/aws-durable-execution-sdk-js-${{ steps.package-version.outputs.current-version }}.tgz \
-            s3://${{ env.BUCKET_NAME }}/
-      - name: commit to Gitfarm
-        run: |
-          aws lambda invoke \
-            --function-name ${{ secrets.SYNC_LAMBDA_ARN }} \
-            --payload '{"gitFarmRepo":"${{ secrets.GITFARM_LAN_SDK_REPO }}","gitFarmBranch":"${{ secrets.GITFARM_LAN_SDK_BRANCH }}","gitFarmFilepath":"aws-durable-execution-sdk-js-${{ steps.package-version.outputs.current-version }}.tgz","s3Bucket":"${{ secrets.S3_BUCKET_NAME }}","s3FilePath":"aws-durable-execution-sdk-js-${{ steps.package-version.outputs.current-version }}.tgz"}' \
-            --cli-binary-format raw-in-base64-out \
-            output.txt
-      - name: Check for specific text in a file
-        id: check_text
-        run: |
-          if grep -q "Error" output.txt; then
-            cat output.txt
-            exit 1
-          fi
+  sync-aws-durable-execution-sdk-js:
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-build.yml@development
+    with:
+      package-name: aws-durable-execution-sdk-js
+    secrets:
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
+      GITFARM_LAN_SDK_REPO: ${{ secrets.GITFARM_LAN_SDK_REPO }}
+      GITFARM_LAN_SDK_BRANCH: ${{ secrets.GITFARM_LAN_SDK_BRANCH }}
+      ACTIONS_SYNC_ROLE_NAME: ${{ secrets.ACTIONS_SYNC_ROLE_NAME }}
+  sync-aws-durable-execution-sdk-js-testing:
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-build.yml@development
+    with:
+      package-name: aws-durable-execution-sdk-js
+    secrets:
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
+      GITFARM_LAN_SDK_REPO: ${{ secrets.GITFARM_TESTING_SDK_REPO }}
+      GITFARM_LAN_SDK_BRANCH: ${{ secrets.GITFARM_LAN_SDK_BRANCH }}
+      ACTIONS_SYNC_ROLE_NAME: ${{ secrets.ACTIONS_SYNC_ROLE_NAME }}
+  sync-aws-durable-execution-sdk-js-examples:
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-build.yml@development
+    with:
+      package-name: aws-durable-execution-sdk-js-examples
+    secrets:
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
+      GITFARM_LAN_SDK_REPO: ${{ secrets.GITFARM_EXAMPLES_REPO }}
+      GITFARM_LAN_SDK_BRANCH: ${{ secrets.GITFARM_LAN_SDK_BRANCH }}
+      ACTIONS_SYNC_ROLE_NAME: ${{ secrets.ACTIONS_SYNC_ROLE_NAME }}
+      
