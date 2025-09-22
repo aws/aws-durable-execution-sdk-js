@@ -1,4 +1,4 @@
-name: Reusable workflow example
+name: Sync package
 
 env:
   AWS_REGION : "us-west-2"
