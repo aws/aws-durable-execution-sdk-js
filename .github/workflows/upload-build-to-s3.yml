@@ -1,4 +1,4 @@
-name: Sync packages to Gitfarm
+name: Upload build to S3
 
 on:
   push:
