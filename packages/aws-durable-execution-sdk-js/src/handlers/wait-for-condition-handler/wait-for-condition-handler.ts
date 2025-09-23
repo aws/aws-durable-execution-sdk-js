@@ -24,19 +24,43 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
-const waitForTimer = <T>(
+// Special symbol to indicate that the main loop should continue
+const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
+
+const waitForContinuation = async (
   context: ExecutionContext,
   stepId: string,
   name: string | undefined,
-): Promise<T> => {
-  // TODO: Current implementation assumes sequential operations only
-  // Will be enhanced to handle concurrent operations in future milestone
-  return terminate(
+  hasRunningOperations: () => boolean,
+  checkpoint: ReturnType<typeof createCheckpoint>,
+): Promise<void> => {
+  const stepData = context.getStepData(stepId);
+
+  // Check if there are any ongoing operations
+  if (!hasRunningOperations()) {
+    // No ongoing operations - safe to terminate
+    return terminate(
+      context,
+      TerminationReason.RETRY_SCHEDULED,
+      `Retry scheduled for ${name || stepId}`,
+    );
+  }
+
+  // There are ongoing operations - wait before continuing
+  await waitBeforeContinue({
+    checkHasRunningOperations: true,
+    checkStepStatus: true,
+    checkTimer: true,
+    scheduledTimestamp: stepData?.StepDetails?.NextAttemptTimestamp,
+    stepId,
     context,
-    TerminationReason.RETRY_SCHEDULED,
-    `Retry scheduled for ${name || stepId}`,
-  );
+    hasRunningOperations,
+    checkpoint,
+  });
+
+  // Return to let the main loop re-evaluate step status
 };
 
 export const createWaitForConditionHandler = (
@@ -46,6 +70,7 @@ export const createWaitForConditionHandler = (
   createContextLogger: (stepId: string, attempt?: number) => Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
+  hasRunningOperations: () => boolean,
 ) => {
   return async <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T>,
@@ -80,43 +105,63 @@ export const createWaitForConditionHandler = (
       config,
     });
 
-    const stepData = context.getStepData(stepId);
+    // Main waitForCondition logic - can be re-executed if step status changes
+    while (true) {
+      try {
+        const stepData = context.getStepData(stepId);
 
-    // Check if already completed
-    if (stepData?.Status === OperationStatus.SUCCEEDED) {
-      return await handleCompletedWaitForCondition<T>(
-        context,
-        stepId,
-        name,
-        config.serdes,
-      );
+        // Check if already completed
+        if (stepData?.Status === OperationStatus.SUCCEEDED) {
+          return await handleCompletedWaitForCondition<T>(
+            context,
+            stepId,
+            name,
+            config.serdes,
+          );
+        }
+
+        if (stepData?.Status === OperationStatus.FAILED) {
+          const errorMessage = stepData?.StepDetails?.Result;
+          throw new Error(errorMessage || "waitForCondition failed");
+        }
+
+        // If PENDING, wait for timer to complete
+        if (stepData?.Status === OperationStatus.PENDING) {
+          await waitForContinuation(
+            context,
+            stepId,
+            name,
+            hasRunningOperations,
+            checkpoint,
+          );
+          continue; // Re-evaluate step status after waiting
+        }
+
+        // Execute check function for READY, STARTED, or first time (undefined)
+        const result = await executeWaitForCondition(
+          context,
+          checkpoint,
+          stepId,
+          name,
+          check,
+          config,
+          createContextLogger,
+          addRunningOperation,
+          removeRunningOperation,
+          hasRunningOperations,
+        );
+
+        // If executeWaitForCondition signals to continue the main loop, do so
+        if (result === CONTINUE_MAIN_LOOP) {
+          continue;
+        }
+
+        return result;
+      } catch (error) {
+        // For any error from executeWaitForCondition, re-throw it
+        throw error;
+      }
     }
-
-    if (stepData?.Status === OperationStatus.FAILED) {
-      const errorMessage = stepData?.StepDetails?.Result;
-      throw new Error(errorMessage || "waitForCondition failed");
-    }
-
-    // If PENDING, wait for timer to complete
-    if (stepData?.Status === OperationStatus.PENDING) {
-      return waitForTimer(context, stepId, name);
-    }
-
-    // Execute check function for READY, STARTED, or first time (undefined)
-    // READY: Timer completed, execute check function
-    // STARTED: Retry after error, execute check function
-    // undefined: First execution, execute check function
-    return executeWaitForCondition(
-      context,
-      checkpoint,
-      stepId,
-      name,
-      check,
-      config,
-      createContextLogger,
-      addRunningOperation,
-      removeRunningOperation,
-    );
   };
 };
 
@@ -157,7 +202,8 @@ export const executeWaitForCondition = async <T>(
   createContextLogger: (stepId: string, attempt?: number) => Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
-): Promise<T> => {
+  hasRunningOperations: () => boolean,
+): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   const serdes = config.serdes || defaultSerdes;
 
   // Get current state from previous checkpoint or use initial state
@@ -304,7 +350,15 @@ export const executeWaitForCondition = async <T>(
         },
       });
 
-      return waitForTimer(context, stepId, name);
+      // Wait for continuation and signal main loop to continue
+      await waitForContinuation(
+        context,
+        stepId,
+        name,
+        hasRunningOperations,
+        checkpoint,
+      );
+      return CONTINUE_MAIN_LOOP;
     }
   } catch (error) {
     log(context.isVerbose, "❌", "waitForCondition check function failed:", {
