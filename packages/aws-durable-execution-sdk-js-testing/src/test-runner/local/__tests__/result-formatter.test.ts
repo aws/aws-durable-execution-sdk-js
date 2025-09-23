@@ -1,7 +1,7 @@
 import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType, Event } from "@aws-sdk/client-lambda";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { TestExecutionResult } from "../test-execution-state";
@@ -55,6 +55,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         mockInvocations
       );
@@ -106,6 +107,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -150,6 +152,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         mockInvocations
       );
@@ -172,6 +175,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -189,6 +193,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -206,6 +211,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -253,6 +259,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -281,6 +288,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -296,6 +304,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -311,6 +320,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -339,6 +349,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -356,6 +367,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -373,6 +385,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -390,6 +403,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -413,6 +427,7 @@ describe("ResultFormatter", () => {
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
+        [],
         mockOperationStorage,
         []
       );
@@ -423,6 +438,57 @@ describe("ResultFormatter", () => {
         errorType: "my-error-type",
         stackTrace: ["my-stack-trace"],
       });
+    });
+  });
+
+  describe("getHistoryEvents", () => {
+    it("should return events passed to formatTestResult", () => {
+      mockOperationStorage.getOperations.mockReturnValue([]);
+
+      const mockEvents: Event[] = [
+        {
+          Id: "event-1",
+          Name: "TestEvent1",
+          EventTimestamp: new Date("2023-01-01T00:00:00Z"),
+        },
+        {
+          Id: "event-2",
+          Name: "TestEvent2",
+          EventTimestamp: new Date("2023-01-01T00:01:00Z"),
+        },
+      ];
+
+      const lambdaResponse: TestExecutionResult = {
+        status: OperationStatus.SUCCEEDED,
+        result: JSON.stringify({ success: true }),
+      };
+
+      const testResult = resultFormatter.formatTestResult(
+        lambdaResponse,
+        mockEvents,
+        mockOperationStorage,
+        []
+      );
+
+      expect(testResult.getHistoryEvents()).toEqual(mockEvents);
+    });
+
+    it("should return empty array when no events provided", () => {
+      mockOperationStorage.getOperations.mockReturnValue([]);
+
+      const lambdaResponse: TestExecutionResult = {
+        status: OperationStatus.SUCCEEDED,
+        result: JSON.stringify({ success: true }),
+      };
+
+      const testResult = resultFormatter.formatTestResult(
+        lambdaResponse,
+        [],
+        mockOperationStorage,
+        []
+      );
+
+      expect(testResult.getHistoryEvents()).toEqual([]);
     });
   });
 });

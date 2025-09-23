@@ -70,10 +70,9 @@ export class CloudDurableTestRunner<ResultType>
     );
 
     this.history = history;
+    const events = this.history.Events ?? [];
 
-    const operationEvents = historyEventsToOperationEvents(
-      this.history.Events ?? []
-    );
+    const operationEvents = historyEventsToOperationEvents(events);
     this.operationStorage.populateOperations(operationEvents);
 
     const lambdaResponse = {
@@ -84,14 +83,12 @@ export class CloudDurableTestRunner<ResultType>
 
     return this.formatter.formatTestResult(
       lambdaResponse,
+      events,
       this.operationStorage,
       []
     );
   }
 
-  getHistory() {
-    return this.history;
-  }
   getOperation<T>(name: string): OperationWithData<T> {
     return this.getOperationByNameAndIndex(name, 0);
   }

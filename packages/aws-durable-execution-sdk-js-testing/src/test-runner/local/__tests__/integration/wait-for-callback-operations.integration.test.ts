@@ -938,7 +938,7 @@ describe("WaitForCallback Operations Integration", () => {
       const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
-      expect(completedOperations.length).toBe(7);
+      expect(completedOperations.length).toBe(8);
     });
 
     it("should handle multiple invocations tracking with waitForCallback operations", async () => {

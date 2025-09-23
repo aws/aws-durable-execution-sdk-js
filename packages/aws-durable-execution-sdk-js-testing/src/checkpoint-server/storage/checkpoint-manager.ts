@@ -11,6 +11,7 @@ import { CallbackId, ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";
 import { EventProcessor } from "./event-processor";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
+import { waitHistoryDetails } from "./wait-details";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -279,6 +280,11 @@ export class CheckpointManager {
     if (!operationData) {
       throw new Error("Could not find operation");
     }
+
+    if (!newOperation.Status) {
+      throw new Error("Missing Status in operation");
+    }
+
     const newOperationData = {
       ...operationData,
       operation: {
@@ -286,7 +292,35 @@ export class CheckpointManager {
         ...newOperation,
       },
     };
+
+    switch (newOperationData.operation.Type) {
+      case OperationType.WAIT: {
+        const historyEventType = waitHistoryDetails[newOperation.Status];
+        if (!historyEventType) {
+          throw new Error(
+            `Invalid status update for ${OperationType.WAIT}: ${newOperation.Status}`
+          );
+        }
+        const historyEvent = this.eventProcessor.createHistoryEvent(
+          historyEventType.eventType,
+          newOperationData.operation,
+          historyEventType.detailPlace,
+          {
+            Duration:
+              newOperationData.events.at(0)?.WaitStartedDetails?.Duration,
+            // TODO: populate error details from WaitCancelled event
+          }
+        );
+        newOperationData.events.push(historyEvent);
+        break;
+      }
+    }
     this.operationDataMap.set(id, newOperationData);
+
+    this.addOperationUpdate({
+      ...newOperationData,
+      update: undefined,
+    });
     return newOperationData;
   }
 

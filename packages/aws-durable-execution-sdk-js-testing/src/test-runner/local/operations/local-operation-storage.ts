@@ -5,9 +5,11 @@ import { OperationEvents } from "../../common/operations/operation-with-data";
 import { DurableOperation } from "../../durable-test-runner";
 import { OperationWaitManager } from "./operation-wait-manager";
 import { OperationStorage } from "../../common/operation-storage";
+import { Event } from "@aws-sdk/client-lambda";
 
 export class LocalOperationStorage extends OperationStorage {
   private readonly mockOperations: MockOperation[] = [];
+  private readonly events: Event[] = [];
 
   constructor(
     waitManager: OperationWaitManager,
@@ -18,6 +20,13 @@ export class LocalOperationStorage extends OperationStorage {
     ) => void
   ) {
     super(waitManager, indexedOperations);
+    this.events.push(
+      ...indexedOperations.getOperations().flatMap((op) => op.events)
+    );
+  }
+
+  getHistoryEvents(): Event[] {
+    return this.events;
   }
 
   private populateMockOperation(mockOperation: MockOperation): boolean {
@@ -66,6 +75,10 @@ export class LocalOperationStorage extends OperationStorage {
     }
 
     this.indexedOperations.addOperations(newCheckpointOperations);
+
+    // TODO: don't iterate through all history events on each operation update
+    this.events.length = 0;
+    this.events.push(...this.indexedOperations.getHistoryEvents());
 
     // Track which operations actually got populated
     const trackedOperations: DurableOperation<unknown>[] = [];

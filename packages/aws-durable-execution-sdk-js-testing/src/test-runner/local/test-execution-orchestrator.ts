@@ -251,7 +251,11 @@ export class TestExecutionOrchestrator {
     operation: Operation,
     executionId: ExecutionId
   ): void {
-    const waitSeconds = update?.WaitOptions?.WaitSeconds;
+    if (update?.Action !== OperationAction.START) {
+      return;
+    }
+
+    const waitSeconds = update.WaitOptions?.WaitSeconds;
 
     if (!waitSeconds) {
       throw new Error("Wait operation is missing waitSeconds");

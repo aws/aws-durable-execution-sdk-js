@@ -57,6 +57,7 @@ describe("CloudDurableTestRunner", () => {
         getInvocations: jest.fn().mockReturnValue([]),
         getResult: jest.fn().mockReturnValue({ data: { success: true } }),
         getError: jest.fn(),
+        getHistoryEvents: jest.fn(),
       }),
     } as unknown as jest.Mocked<ResultFormatter<{ success: boolean }>>;
 
@@ -213,6 +214,7 @@ describe("CloudDurableTestRunner", () => {
           result: JSON.stringify({ success: true }),
           error: undefined,
         },
+        mockHistoryResult.Events,
         mockOperationStorage,
         []
       );
@@ -313,6 +315,7 @@ describe("CloudDurableTestRunner", () => {
             errorType: "RuntimeError",
           },
         },
+        mockHistoryResult.Events,
         mockOperationStorage,
         []
       );
@@ -364,40 +367,6 @@ describe("CloudDurableTestRunner", () => {
       await runner.run();
 
       expect(historyEventsToOperationEvents).toHaveBeenCalledWith([]);
-    });
-  });
-
-  describe("getHistory", () => {
-    it("should return undefined before run is called", () => {
-      const runner = new CloudDurableTestRunner<{ success: boolean }>({
-        functionName: mockFunctionArn,
-      });
-
-      expect(runner.getHistory()).toBeUndefined();
-    });
-
-    it("should return history after successful run", async () => {
-      const runner = new CloudDurableTestRunner<{ success: boolean }>({
-        functionName: mockFunctionArn,
-      });
-
-      const mockHistoryResult: GetDurableExecutionHistoryResponse = {
-        Events: [
-          {
-            EventType: EventType.ExecutionStarted,
-            EventTimestamp: new Date(),
-          },
-        ],
-      };
-
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce({ DurableExecutionArn: mockExecutionArn })
-        .mockResolvedValueOnce({ Status: "SUCCEEDED", Result: "{}" })
-        .mockResolvedValueOnce(mockHistoryResult);
-
-      await runner.run();
-
-      expect(runner.getHistory()).toBe(mockHistoryResult);
     });
   });
 

@@ -1,4 +1,5 @@
 import { OperationEvents } from "./operations/operation-with-data";
+import { Event } from "@aws-sdk/client-lambda";
 
 /**
  * Optimized way of retrieving operations by id and name/index.
@@ -18,6 +19,10 @@ export class IndexedOperations {
 
   constructor(operations: OperationEvents[]) {
     this.addOperations(operations);
+  }
+
+  getHistoryEvents(): Event[] {
+    return this.getOperations().flatMap((op) => op.events);
   }
 
   getOperations(): OperationEvents[] {

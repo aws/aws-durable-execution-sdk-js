@@ -13,17 +13,12 @@ import {
 import { decodeCallbackId, encodeCallbackId } from "../utils/callback-id";
 import { CheckpointManager } from "./checkpoint-manager";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
+import { OperationHistoryEventDetails } from "./types";
 
 export enum CompleteCallbackStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
   TIMED_OUT = "TIMED_OUT",
-}
-
-interface OperationHistoryEventDetails<T extends keyof Event> {
-  eventType: EventType;
-  detailPlace: T;
-  getDetails: (operation: Operation) => Event[T];
 }
 
 export const callbackHistoryDetails = {

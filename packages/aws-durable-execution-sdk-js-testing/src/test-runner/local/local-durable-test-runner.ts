@@ -99,6 +99,7 @@ export class LocalDurableTestRunner<ResultType>
       const lambdaResponse = await orchestrator.executeHandler(params);
       return this.resultFormatter.formatTestResult(
         lambdaResponse,
+        this.operationStorage.getHistoryEvents(),
         this.operationStorage,
         orchestrator.getInvocations()
       );

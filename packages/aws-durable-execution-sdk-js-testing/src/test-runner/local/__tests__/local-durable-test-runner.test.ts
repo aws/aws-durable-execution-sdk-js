@@ -55,6 +55,7 @@ describe("LocalDurableTestRunner", () => {
     mockOperationStorage = {
       registerOperation: jest.fn(),
       populateOperations: jest.fn(),
+      getHistoryEvents: jest.fn().mockReturnValue([]),
     };
 
     mockOrchestrator = {
@@ -70,6 +71,7 @@ describe("LocalDurableTestRunner", () => {
         getOperations: jest.fn().mockReturnValue([]),
         getInvocations: jest.fn().mockReturnValue([]),
         getResult: jest.fn().mockReturnValue({ data: { success: true } }),
+        getHistoryEvents: jest.fn(),
       }),
     } as unknown as jest.Mocked<ResultFormatter<{ success: boolean }>>;
 
@@ -141,6 +143,7 @@ describe("LocalDurableTestRunner", () => {
           Status: InvocationStatus.SUCCEEDED,
           Result: JSON.stringify({ success: true }),
         }),
+        [],
         mockOperationStorage,
         []
       );

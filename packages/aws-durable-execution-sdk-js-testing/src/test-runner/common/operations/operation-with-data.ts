@@ -283,10 +283,26 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   getStartTimestamp(): Date | undefined {
+    // TODO: remove this when the local runner converts to Date correctly
+    if (
+      typeof this.checkpointOperationData?.operation.StartTimestamp === "number"
+    ) {
+      return new Date(
+        this.checkpointOperationData.operation.StartTimestamp * 1000
+      );
+    }
     return this.checkpointOperationData?.operation.StartTimestamp;
   }
 
   getEndTimestamp(): Date | undefined {
+    // TODO: remove this when the local runner converts to Date correctly
+    if (
+      typeof this.checkpointOperationData?.operation.EndTimestamp === "number"
+    ) {
+      return new Date(
+        this.checkpointOperationData.operation.EndTimestamp * 1000
+      );
+    }
     return this.checkpointOperationData?.operation.EndTimestamp;
   }
 

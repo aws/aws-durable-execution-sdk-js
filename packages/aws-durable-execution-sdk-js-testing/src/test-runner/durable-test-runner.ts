@@ -7,6 +7,7 @@ import {
   SendDurableExecutionCallbackFailureCommandOutput,
   SendDurableExecutionCallbackHeartbeatCommandOutput,
   SendDurableExecutionCallbackSuccessCommandOutput,
+  Event,
 } from "@aws-sdk/client-lambda";
 import { OperationWithData } from "./common/operations/operation-with-data";
 
@@ -90,6 +91,11 @@ export interface TestResult<T> {
    * @throws An error if the execution succeeded.
    */
   getError(): TestResultError;
+
+  /**
+   * Returns the history events for the execution.
+   */
+  getHistoryEvents(): Event[]
 
   /**
    * Prints a table of all operations to the console with their details.

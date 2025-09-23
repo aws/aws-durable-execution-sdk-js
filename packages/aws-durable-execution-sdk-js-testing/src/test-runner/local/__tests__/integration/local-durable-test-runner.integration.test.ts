@@ -525,6 +525,79 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(invocationOperations[1]).toEqual([stepOpId, secondWaitId]);
     // - Invocation 2: no checkpoints performed
     expect(invocationOperations[2]).toEqual([]);
+
+    // Assert history events
+    // TODO: update timestamps to Date objects
+    expect(result.getHistoryEvents()).toEqual([
+      {
+        EventType: "WaitStarted",
+        SubType: "Wait",
+        EventId: 2,
+        Id: "c4ca4238a0b92382",
+        Name: "wait-invocation-1",
+        EventTimestamp: expect.any(Number),
+        WaitStartedDetails: {
+          Duration: 1,
+          ScheduledEndTimestamp: expect.any(Number),
+        },
+      },
+      {
+        EventType: "WaitSucceeded",
+        SubType: "Wait",
+        EventId: 3,
+        Id: "c4ca4238a0b92382",
+        Name: "wait-invocation-1",
+        EventTimestamp: expect.any(Number),
+        WaitSucceededDetails: { Duration: 1 },
+      },
+      {
+        EventType: "StepStarted",
+        SubType: "Step",
+        EventId: 4,
+        Id: "c81e728d9d4c2f63",
+        Name: "process-data-step",
+        EventTimestamp: expect.any(Number),
+        StepStartedDetails: {},
+      },
+      {
+        EventType: "StepSucceeded",
+        SubType: "Step",
+        EventId: 5,
+        Id: "c81e728d9d4c2f63",
+        Name: "process-data-step",
+        EventTimestamp: expect.any(Number),
+        StepSucceededDetails: {
+          Result: {
+            Payload: JSON.stringify({
+              processed: true,
+              timestamp: resultData.result.timestamp,
+            }),
+          },
+          RetryDetails: {},
+        },
+      },
+      {
+        EventType: "WaitStarted",
+        SubType: "Wait",
+        EventId: 6,
+        Id: "eccbc87e4b5ce2fe",
+        Name: "wait-invocation-2",
+        EventTimestamp: expect.any(Number),
+        WaitStartedDetails: {
+          Duration: 1,
+          ScheduledEndTimestamp: expect.any(Number),
+        },
+      },
+      {
+        EventType: "WaitSucceeded",
+        SubType: "Wait",
+        EventId: 7,
+        Id: "eccbc87e4b5ce2fe",
+        Name: "wait-invocation-2",
+        EventTimestamp: expect.any(Number),
+        WaitSucceededDetails: { Duration: 1 },
+      },
+    ]);
   });
 
   // enable when language SDK supports concurrent waits

@@ -5,7 +5,7 @@ import {
 } from "../durable-test-runner";
 import { tryJsonParse } from "../common/utils";
 import { TestExecutionResult } from "./test-execution-state";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus, Event } from "@aws-sdk/client-lambda";
 import { OperationStorage } from "../common/operation-storage";
 
 /**
@@ -23,6 +23,7 @@ export class ResultFormatter<ResultType> {
    */
   formatTestResult(
     lambdaResponse: TestExecutionResult,
+    events: Event[],
     operationStorage: OperationStorage,
     invocations: Invocation[]
   ): TestResult<ResultType> {
@@ -37,6 +38,9 @@ export class ResultFormatter<ResultType> {
       },
       getInvocations() {
         return invocations;
+      },
+      getHistoryEvents() {
+        return events;
       },
       getResult: () => {
         if (lambdaResponse.status === OperationStatus.FAILED) {

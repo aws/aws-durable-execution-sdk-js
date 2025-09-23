@@ -1,4 +1,8 @@
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import {
+  EventType,
+  OperationStatus,
+  OperationType,
+} from "@aws-sdk/client-lambda";
 import { LocalOperationStorage } from "../local-operation-storage";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { MockOperation } from "../mock-operation";
@@ -23,7 +27,28 @@ describe("LocalOperationStorage", () => {
         Type: OperationType.STEP,
         Status: OperationStatus.SUCCEEDED,
       },
-      events: [],
+      events: [
+        {
+          EventId: 1,
+          EventType: EventType.StepStarted,
+          EventTimestamp: new Date("2026-01-01"),
+          StepStartedDetails: {},
+          Name: "operation1",
+          Id: "op1",
+        },
+        {
+          EventId: 1,
+          EventType: EventType.StepSucceeded,
+          EventTimestamp: new Date("2026-01-01"),
+          StepSucceededDetails: {
+            Result: {
+              Payload: "",
+            },
+          },
+          Name: "operation1",
+          Id: "op1",
+        },
+      ],
     },
     {
       operation: {
@@ -32,7 +57,26 @@ describe("LocalOperationStorage", () => {
         Type: OperationType.WAIT,
         Status: OperationStatus.SUCCEEDED,
       },
-      events: [],
+      events: [
+        {
+          EventId: 2,
+          EventType: EventType.WaitStarted,
+          EventTimestamp: new Date("2026-01-01"),
+          WaitStartedDetails: {
+            Duration: 10,
+          },
+          Name: "operation2",
+          Id: "op2",
+        },
+        {
+          EventId: 3,
+          EventType: EventType.WaitSucceeded,
+          EventTimestamp: new Date("2026-01-02"),
+          WaitSucceededDetails: {},
+          Name: "operation2",
+          Id: "op2",
+        },
+      ],
     },
     {
       operation: {
@@ -41,7 +85,24 @@ describe("LocalOperationStorage", () => {
         Type: OperationType.CALLBACK,
         Status: OperationStatus.FAILED,
       },
-      events: [],
+      events: [
+        {
+          EventId: 4,
+          EventType: EventType.CallbackStarted,
+          EventTimestamp: new Date("2026-01-02"),
+          StepSucceededDetails: {},
+          Name: "operation1",
+          Id: "op3",
+        },
+        {
+          EventId: 5,
+          EventType: EventType.CallbackSucceeded,
+          EventTimestamp: new Date("2026-01-03"),
+          StepSucceededDetails: {},
+          Name: "operation1",
+          Id: "op3",
+        },
+      ],
     },
   ];
 
@@ -53,7 +114,6 @@ describe("LocalOperationStorage", () => {
   });
 
   describe("populateOperations", () => {
-
     it("should update registered mock operations with matching ID", () => {
       const storage = new LocalOperationStorage(
         mockWaitManager,
@@ -667,6 +727,63 @@ describe("LocalOperationStorage", () => {
       });
       // Callback should not be called during registration
       expect(mockCallback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getHistoryEvents", () => {
+    it("should return history events from populated operations", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockCallback
+      );
+
+      storage.populateOperations(sampleOperations);
+      expect(storage.getHistoryEvents()).toEqual(
+        sampleOperations.flatMap((op) => op.events)
+      );
+    });
+
+    it("should return history events from indexed operations", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        new IndexedOperations(sampleOperations),
+        mockCallback
+      );
+
+      expect(storage.getHistoryEvents()).toEqual(
+        sampleOperations.flatMap((op) => op.events)
+      );
+    });
+
+    it("should return history events from both indexed operations and populated operations", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        new IndexedOperations(sampleOperations),
+        mockCallback
+      );
+
+      const populatedOperations = sampleOperations.concat([
+        {
+          operation: {
+            Id: "op4",
+            Status: "STARTED",
+            Type: "CALLBACK",
+          },
+          events: [
+            {
+              EventId: 5,
+              EventType: EventType.CallbackStarted,
+            },
+          ],
+        },
+      ]);
+
+      storage.populateOperations(populatedOperations);
+
+      const historyEvents = populatedOperations.flatMap((op) => op.events);
+
+      expect(storage.getHistoryEvents()).toEqual(historyEvents);
     });
   });
 });

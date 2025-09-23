@@ -1413,6 +1413,56 @@ describe("CheckpointManager", () => {
   });
 
   describe("updateOperation", () => {
+    it("should update operation for WAIT and update history", () => {
+      const initialOperation = storage.initialize();
+
+      const newOperationData = {
+        Type: OperationType.WAIT,
+        Status: OperationStatus.SUCCEEDED,
+        EndTimestamp: new Date(),
+      };
+
+      const result = storage.updateOperation(
+        initialOperation.Id,
+        newOperationData
+      );
+
+      // Should return the updated CheckpointOperation
+      expect(result.operation.Id).toBe(initialOperation.Id);
+      expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED); // Updated status
+      expect(result.operation.EndTimestamp).toEqual(
+        newOperationData.EndTimestamp
+      );
+
+      expect(result.events).toEqual([
+        {
+          EventType: "ExecutionStarted",
+          SubType: undefined,
+          EventId: 1,
+          Id: "mocked-uuid",
+          Name: undefined,
+          EventTimestamp: expect.any(Date),
+          ParentId: undefined,
+          ExecutionStartedDetails: {
+            Input: {
+              Payload: "{}",
+            },
+            ExecutionTimeout: undefined,
+          },
+        },
+        {
+          EventType: "WaitSucceeded",
+          SubType: undefined,
+          EventId: 2,
+          Id: "mocked-uuid",
+          Name: undefined,
+          EventTimestamp: expect.any(Date),
+          ParentId: undefined,
+          WaitSucceededDetails: { Duration: undefined },
+        },
+      ]);
+    });
+
     it("should update existing operation and return the updated CheckpointOperation", () => {
       const initialOperation = storage.initialize();
 

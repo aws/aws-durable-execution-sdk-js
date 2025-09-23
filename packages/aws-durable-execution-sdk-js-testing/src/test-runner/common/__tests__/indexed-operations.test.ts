@@ -10,7 +10,11 @@ describe("IndexedOperations", () => {
         Name: "operation1",
         Status: OperationStatus.SUCCEEDED,
       },
-      events: [],
+      events: [
+        {
+          EventId: 1,
+        },
+      ],
     },
     {
       operation: {
@@ -18,7 +22,11 @@ describe("IndexedOperations", () => {
         Name: "operation2",
         Status: OperationStatus.SUCCEEDED,
       },
-      events: [],
+      events: [
+        {
+          EventId: 2,
+        },
+      ],
     },
     {
       operation: {
@@ -26,7 +34,11 @@ describe("IndexedOperations", () => {
         Name: "operation1", // Same name as first operation
         Status: OperationStatus.FAILED,
       },
-      events: [],
+      events: [
+        {
+          EventId: 3,
+        },
+      ],
     },
   ];
 
@@ -306,6 +318,22 @@ describe("IndexedOperations", () => {
 
       expect(indexed.getOperations()).toHaveLength(1);
       expect(indexed.getByNameAndIndex("", 0)).toBe(operationWithEmptyName);
+    });
+  });
+
+  describe("getHistoryEvents", () => {
+    it("should return history events", () => {
+      const indexed = new IndexedOperations(sampleOperations);
+      const historyEvents = indexed.getHistoryEvents();
+
+      expect(historyEvents).toHaveLength(3);
+    });
+
+    it("should return empty list if no operations exist", () => {
+      const indexed = new IndexedOperations([]);
+      const historyEvents = indexed.getHistoryEvents();
+
+      expect(historyEvents).toHaveLength(0);
     });
   });
 
