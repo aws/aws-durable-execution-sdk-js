@@ -7,7 +7,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: BlockExample-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: block-example.handler
       Runtime: nodejs22.x
       Architectures:
@@ -25,7 +25,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: ComprehensiveOperations-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: comprehensive-operations.handler
       Runtime: nodejs22.x
       Architectures:
@@ -43,7 +43,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: ConcurrentOperations-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: concurrent-operations.handler
       Runtime: nodejs22.x
       Architectures:
@@ -61,7 +61,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: ConcurrentWait-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: concurrent-wait.handler
       Runtime: nodejs22.x
       Architectures:
@@ -79,7 +79,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: CreateCallback-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: create-callback.handler
       Runtime: nodejs22.x
       Architectures:
@@ -97,7 +97,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: HelloWorld-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: hello-world.handler
       Runtime: nodejs22.x
       Architectures:
@@ -115,7 +115,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: Index-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: index.handler
       Runtime: nodejs22.x
       Architectures:
@@ -133,7 +133,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: MapBasic-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: map-basic.handler
       Runtime: nodejs22.x
       Architectures:
@@ -151,7 +151,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: ParallelBasic-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: parallel-basic.handler
       Runtime: nodejs22.x
       Architectures:
@@ -169,7 +169,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: ParallelWait-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: parallel-wait.handler
       Runtime: nodejs22.x
       Architectures:
@@ -187,7 +187,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: PromiseAll-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: promise-all.handler
       Runtime: nodejs22.x
       Architectures:
@@ -205,7 +205,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: PromiseAllSettled-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: promise-all-settled.handler
       Runtime: nodejs22.x
       Architectures:
@@ -223,7 +223,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: PromiseAny-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: promise-any.handler
       Runtime: nodejs22.x
       Architectures:
@@ -241,7 +241,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: PromiseCombinators-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: promise-combinators.handler
       Runtime: nodejs22.x
       Architectures:
@@ -259,7 +259,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: PromiseRace-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: promise-race.handler
       Runtime: nodejs22.x
       Architectures:
@@ -277,7 +277,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: RunInChildContext-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: run-in-child-context.handler
       Runtime: nodejs22.x
       Architectures:
@@ -295,7 +295,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: StepBasic-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: step-basic.handler
       Runtime: nodejs22.x
       Architectures:
@@ -313,7 +313,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: StepNamed-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: step-named.handler
       Runtime: nodejs22.x
       Architectures:
@@ -331,7 +331,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: StepWithRetry-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: step-with-retry.handler
       Runtime: nodejs22.x
       Architectures:
@@ -349,7 +349,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: StepsWithRetry-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: steps-with-retry.handler
       Runtime: nodejs22.x
       Architectures:
@@ -370,7 +370,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: Wait-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: wait.handler
       Runtime: nodejs22.x
       Architectures:
@@ -388,7 +388,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: WaitForCallback-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: wait-for-callback.handler
       Runtime: nodejs22.x
       Architectures:
@@ -406,7 +406,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: WaitForCondition-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: wait-for-condition.handler
       Runtime: nodejs22.x
       Architectures:
@@ -424,7 +424,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: WaitNamed-TypeScript
-      CodeUri: ./build/durable-executions-typescript-sdk-examples
+      CodeUri: ./dist
       Handler: wait-named.handler
       Runtime: nodejs22.x
       Architectures:
