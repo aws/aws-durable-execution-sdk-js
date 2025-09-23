@@ -63,7 +63,7 @@ function createFunctionResource(filename) {
     Type: 'AWS::Serverless::Function',
     Properties: {
       FunctionName: `${resourceName}-TypeScript`,
-      CodeUri: './build/durable-executions-typescript-sdk-examples',
+      CodeUri: './dist',
       Handler: `${filename}.handler`,
       Runtime: 'nodejs22.x',
       Architectures: ['x86_64'],
