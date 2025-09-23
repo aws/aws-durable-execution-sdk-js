@@ -5,7 +5,6 @@ const defaultPreset = createDefaultPreset();
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
   ...defaultPreset,
-  testMatch: ["**/__tests__/integration/**.test.ts"],
-  coverageReporters: ["cobertura", "html", "text"],
+  testMatch: ["**/__tests__/**.test.ts"],
   testTimeout: 30000,
 };

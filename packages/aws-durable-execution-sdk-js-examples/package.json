@@ -8,8 +8,7 @@
     "node": ">=18"
   },
   "files": [
-    "dist",
-    "build/source"
+    "dist"
   ],
   "exports": {
     "./*": {
@@ -32,7 +31,7 @@
     "copy-catalog": "cp examples-catalog.json build/aws-durable-execution-sdk-js-examples/",
     "generate-template": "node scripts/generate-template.js",
     "test": "npm run unit-test",
-    "test:integration": "jest --config jest.config.integration.js",
+    "test:integration": "NODE_ENV=integration jest --config jest.config.integration.js --testNamePattern=cloud",
     "unit-test": "jest --collectCoverage",
     "unit-test-watch": "jest --watch",
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"

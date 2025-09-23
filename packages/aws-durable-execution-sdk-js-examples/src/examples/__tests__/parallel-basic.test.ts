@@ -1,26 +1,25 @@
-import {LocalDurableTestRunner} from "aws-durable-execution-sdk-js-testing";
-import {handler} from "../parallel-basic";
+import { handler } from "../parallel-basic";
+import { createTests } from "./shared/test-helper";
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
-afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-
-describe("parallel-basic test", () => {
-    const durableTestRunner = new LocalDurableTestRunner({
-        handlerFunction: handler,
-        skipTime: true,
-    })
-
+createTests({
+  name: "parallel-basic test",
+  functionName: "parallel-basic",
+  handler,
+  tests: (runner) => {
     it("should run correct number of durable steps", async () => {
-       const execution = await durableTestRunner.run();
+      const execution = await runner.run();
 
-       expect(durableTestRunner.getOperation("parallel").getChildOperations()).toHaveLength(3);
+      expect(runner.getOperation("parallel").getChildOperations()).toHaveLength(
+        3
+      );
     });
 
     it("should return correct result", async () => {
-        const execution = await durableTestRunner.run();
+      const execution = await runner.run();
 
-        const result = execution.getResult();
+      const result = execution.getResult();
 
-        expect(execution.getResult()).toBeDefined();
+      expect(execution.getResult()).toBeDefined();
     });
-})
+  },
+});

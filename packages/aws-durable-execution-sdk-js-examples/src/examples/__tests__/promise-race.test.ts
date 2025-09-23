@@ -1,38 +1,31 @@
-import {LocalDurableTestRunner, OperationStatus} from "aws-durable-execution-sdk-js-testing";
-import { handler } from '../promise-race';
+import {
+  LocalDurableTestRunner,
+  OperationStatus,
+} from "aws-durable-execution-sdk-js-testing";
+import { handler } from "../promise-race";
+import { createTests } from "./shared/test-helper";
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
-afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+createTests({
+  name: "promise-race test",
+  functionName: "promise-race",
+  handler,
+  tests: (runner) => {
+    it("should complete all promises", async () => {
+      await runner.run();
 
-describe("promise-race test", () => {
-    const durableTestRunner = new LocalDurableTestRunner({
-        handlerFunction: handler,
-        skipTime: true,
-    });
-
-    it("should complete all promises", async() => {
-        await durableTestRunner.run();
-
-        // we can't expect all promises to complete here as promise race will resolve
-        // as soon as one of the promises resolves
-        const promiseRaceOp = durableTestRunner.getOperation("promise-race");
-        expect(promiseRaceOp.getStatus()).toStrictEqual(OperationStatus.SUCCEEDED);
-        expect(promiseRaceOp.getStepDetails()?.result).toBeDefined();
+      // we can't expect all promises to complete here as promise race will resolve
+      // as soon as one of the promises resolves
+      const promiseRaceOp = runner.getOperation("promise-race");
+      expect(promiseRaceOp.getStatus()).toStrictEqual(
+        OperationStatus.SUCCEEDED
+      );
+      expect(promiseRaceOp.getStepDetails()?.result).toBeDefined();
     });
 
     it("should return expected result", async () => {
-        const execution = await durableTestRunner.run();
+      const execution = await runner.run();
 
-        expect(execution.getResult()).toStrictEqual("fast result");
+      expect(execution.getResult()).toStrictEqual("fast result");
     });
-
-    // TODO: enable following test once SDK/testing lib is fixed to handle concurrent retries
-    // it("should fail if a promise fails - failure case", async () => {
-    //     // reject the fastest promise
-    //     durableTestRunner.getOperationByIndex(1).mockRejectedValue(new Error("ERROR"));
-    //
-    //     const execution = await durableTestRunner.run();
-    //
-    //     expect(execution.getError()).toBeDefined();
-    // });
+  },
 });

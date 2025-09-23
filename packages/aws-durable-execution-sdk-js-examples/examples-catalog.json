@@ -202,6 +202,17 @@
         "ExecutionTimeout": 300
       },
       "path": "./src/examples/wait-named.ts"
+    },
+    {
+      "name": "Wait for Condition",
+      "description": "Basic waitForCondition usage",
+      "handler": "wait-for-condition.handler",
+      "integration": true,
+      "durableConfig": {
+        "RetentionPeriodInDays": 7,
+        "ExecutionTimeout": 300
+      },
+      "path": "./src/examples/wait-for-condition.ts"
     }
   ]
 }

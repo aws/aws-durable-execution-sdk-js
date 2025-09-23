@@ -13,7 +13,7 @@ const fileName = handlerFile.replace('.handler', '');
 
 console.log(`Packaging ${fileName}...`);
 
-const tempDir = 'temp-package';
+const tempDir = path.resolve(__dirname, '../temp-package');
 
 // Clean up any existing temp directory
 if (fs.existsSync(tempDir)) {

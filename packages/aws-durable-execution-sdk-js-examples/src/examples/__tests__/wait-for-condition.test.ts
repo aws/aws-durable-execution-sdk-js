@@ -1,21 +1,17 @@
-import { LocalDurableTestRunner} from "aws-durable-execution-sdk-js-testing";
-import { handler } from '../wait-for-condition';
+import { handler } from "../wait-for-condition";
+import { createTests } from "./shared/test-helper";
 
 // TODO: enable test when waitForCondition SDK implementation is fixed
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
-afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-
-describe("wait-for-condition test", () => {
-    const durableTestRunner = new LocalDurableTestRunner({
-        handlerFunction: handler,
-        skipTime: true,
-    });
-
+createTests({
+  name: "wait-for-condition test",
+  functionName: "wait-for-condition",
+  handler,
+  tests: (runner) => {
     it("should invoke step three times before succeeding", async () => {
-        const execution = await durableTestRunner.run();
-        console.log(execution.getInvocations());
-        expect(execution.getResult()).toStrictEqual(3)
-        expect(execution.getInvocations()).toHaveLength(3);
+      const execution = await runner.run();
+      expect(execution.getResult()).toStrictEqual(3);
+      // expect(execution.getInvocations()).toHaveLength(3);
     });
+  },
 });

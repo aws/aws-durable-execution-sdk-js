@@ -1,21 +1,18 @@
-import { LocalDurableTestRunner } from "aws-durable-execution-sdk-js-testing";
 import { handler } from "../wait";
+import { createTests } from "./shared/test-helper";
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
-afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+createTests({
+  name: "wait",
+  functionName: "wait",
+  handler,
+  tests: (runner) => {
+    it("should call wait for 10 seconds", async () => {
+      const waitStep = runner.getOperationByIndex(0);
 
-describe("wait", () => {
-  const durableTestRunner = new LocalDurableTestRunner({
-    handlerFunction: handler,
-    skipTime: true,
-  });
+      const execution = await runner.run();
 
-  it("should call wait for 10 seconds", async () => {
-    const waitStep = durableTestRunner.getOperationByIndex(0);
-
-    const execution = await durableTestRunner.run();
-
-    expect(execution.getResult()).toBe("Function Completed");
-    expect(waitStep.getWaitDetails()?.waitSeconds).toEqual(10);
-  });
+      expect(execution.getResult()).toBe("Function Completed");
+      expect(waitStep.getWaitDetails()?.waitSeconds).toEqual(10);
+    });
+  },
 });

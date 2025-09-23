@@ -39,10 +39,10 @@ export interface LocalDurableTestRunnerParameters {
 export class LocalDurableTestRunner<ResultType>
   implements DurableTestRunner<MockOperation, ResultType>
 {
-  private readonly operationStorage: LocalOperationStorage;
+  private operationStorage: LocalOperationStorage;
   private readonly waitManager: OperationWaitManager;
   private readonly resultFormatter: ResultFormatter<ResultType>;
-  private readonly operationIndex: IndexedOperations;
+  private operationIndex: IndexedOperations;
   private readonly skipTime: boolean;
   private readonly handlerFunction: LocalDurableTestRunnerParameters["handlerFunction"];
 
@@ -166,6 +166,15 @@ export class LocalDurableTestRunner<ResultType>
     );
     this.operationStorage.registerOperation(mockOperation);
     return mockOperation;
+  }
+
+  reset() {
+    this.operationIndex = new IndexedOperations([]);
+    this.operationStorage = new LocalOperationStorage(
+      this.waitManager,
+      this.operationIndex,
+      this.waitManager.handleCheckpointReceived.bind(this.waitManager)
+    );
   }
 
   static async setupTestEnvironment() {

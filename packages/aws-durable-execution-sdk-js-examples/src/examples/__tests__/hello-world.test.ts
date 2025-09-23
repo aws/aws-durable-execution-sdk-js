@@ -1,18 +1,15 @@
-import {LocalDurableTestRunner} from "aws-durable-execution-sdk-js-testing";
-import {handler} from "../hello-world";
+import { handler } from "../hello-world";
+import { createTests } from "./shared/test-helper";
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
-afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-
-describe("hello-world test", () => {
-    const durableTestRunner = new LocalDurableTestRunner({
-        handlerFunction: handler,
-        skipTime: true,
-    });
-
+createTests({
+  name: "hello-world test",
+  functionName: "hello-world",
+  handler,
+  tests: (runner) => {
     it("should return as expected", async () => {
-        const execution = await durableTestRunner.run();
+      const execution = await runner.run();
 
-        expect(execution.getResult()).toEqual("Hello World!");
+      expect(execution.getResult()).toEqual("Hello World!");
     });
+  },
 });
