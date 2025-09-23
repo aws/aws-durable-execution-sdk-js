@@ -2,7 +2,7 @@ name: Sync Testing
 
 on:
   push:
-    branches: [ "development", "sync-testing-library"]
+    branches: [ "development"]
     paths:
       - 'packages/aws-durable-execution-sdk-js-testing/**'
       
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   sync-aws-durable-execution-sdk-js-testing:
-    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@development
     with:
       package_name: aws-durable-execution-sdk-js
     secrets:
