@@ -1,0 +1,26 @@
+name: Sync SDK
+on:
+  push:
+    branches: [ "development", "sync-testing-library"]
+    paths:
+      - 'packages/aws-durable-execution-sdk-js/**'
+
+env:
+  AWS_REGION : "us-west-2"
+
+# permission can be added at job level or workflow level
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
+jobs:
+  sync-aws-durable-execution-sdk-js:
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
+    with:
+      package_name: aws-durable-execution-sdk-js
+    secrets:
+      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      SYNC_LAMBDA_ARN: ${{ secrets.SYNC_LAMBDA_ARN }}
+      GITFARM_LAN_SDK_REPO: ${{ secrets.GITFARM_LAN_SDK_REPO }}
+      GITFARM_LAN_SDK_BRANCH: ${{ secrets.GITFARM_LAN_SDK_BRANCH }}
+      ACTIONS_SYNC_ROLE_NAME: ${{ secrets.ACTIONS_SYNC_ROLE_NAME }}
