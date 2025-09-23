@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   sync-aws-durable-execution-sdk-js:
-    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@development
     with:
       package_name: aws-durable-execution-sdk-js
     secrets:
@@ -25,7 +25,7 @@ jobs:
       GITFARM_LAN_SDK_BRANCH: ${{ secrets.GITFARM_LAN_SDK_BRANCH }}
       ACTIONS_SYNC_ROLE_NAME: ${{ secrets.ACTIONS_SYNC_ROLE_NAME }}
   sync-aws-durable-execution-sdk-js-testing:
-    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@sync-testing-library
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@development
     with:
       package_name: aws-durable-execution-sdk-js
     secrets:
