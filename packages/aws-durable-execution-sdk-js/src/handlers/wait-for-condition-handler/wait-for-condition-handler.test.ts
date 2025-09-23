@@ -83,6 +83,7 @@ describe("WaitForCondition Handler", () => {
       createMockEnrichedLogger,
       jest.fn(), // addRunningOperation
       jest.fn(), // removeRunningOperation
+      jest.fn(() => false), // hasRunningOperations
     );
   });
 

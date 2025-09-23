@@ -209,6 +209,7 @@ export const createDurableContext = (
       createContextLogger,
       addRunningOperation,
       removeRunningOperation,
+      hasRunningOperations,
     ),
     createCallback,
     waitForCallback,
