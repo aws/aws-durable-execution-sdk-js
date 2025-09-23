@@ -4,15 +4,18 @@ on:
   push:
     branches: [ "main", "development" ]
     paths:
-      - 'packages/aws-durable-execution-sdk-js/**'
-      - 'packages/aws-durable-execution-sdk-js-examples/**'
+      - 'packages/aws-durable-execution-**'
+      - 'packages/client-lambda/**'
       - '.github/workflows/integration-tests.yml'
+      - '.github/workflows/scripts/integration-test/**'
+      - '.github/model/**'
   pull_request:
     branches: [ "main", "development"]
     paths:
-      - 'packages/aws-durable-execution-sdk-js/**'
-      - 'packages/aws-durable-execution-sdk-js-examples/**'
+      - 'packages/aws-durable-execution-**'
+      - 'packages/client-lambda/**'
       - '.github/workflows/integration-tests.yml'
+      - '.github/workflows/scripts/integration-test/**'
       - '.github/model/**'
   workflow_dispatch:
 
@@ -28,7 +31,7 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
-      examples: ${{ steps.get-examples.outputs.examples }}
+      function-name-map: ${{ steps.deploy-functions.outputs.function-name-map }}
     steps:
     - uses: actions/checkout@v4
     
@@ -37,65 +40,51 @@ jobs:
       with:
         node-version: '22.x'
         cache: 'npm'
-    
-    - name: Install AWS CLI (for local act runs)
-      run: |
-        if ! command -v aws &> /dev/null; then
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
-        fi
-    
-    - name: Configure AWS credentials
+
+    - name: Configure AWS credentials (OIDC for main workflow)
+      if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
         role-session-name: githubIntegrationTest
         aws-region: ${{ env.AWS_REGION }}
-    
+
     - name: Install custom Lambda model
       run: |
         aws configure add-model --service-model file://.github/model/lambda.json --service-name lambda
-    
+
     - name: Install dependencies
-      run: npm run install-all
-    
+      run:
+        npm run install-all
+
     - name: Build project
-      run: npm run build
-    
-    - name: Verify SDK build
-      run: |
-        if [ ! -f "packages/aws-durable-execution-sdk-js/dist/index.js" ]; then
-          echo "ERROR: SDK index.js not found"
-          exit 1
-        fi
-        if [ ! -f "packages/aws-durable-execution-sdk-js-examples/dist/hello-world.js" ]; then
-          echo "ERROR: Examples hello-world.js not found"
-          exit 1
-        fi
-    
+      run:
+        npm run build
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: built-examples
+        name: built-artifacts
         path: |
-          packages/aws-durable-execution-sdk-js-examples/dist
+          packages/**/dist/*
+          packages/**/dist-cjs/*
           package.json
     
-    - name: Get examples from catalog
-      id: get-examples
-      working-directory: ./packages/aws-durable-execution-sdk-js-examples
-      run: |
-        echo "examples=$(jq -c '.examples | map(select(.integration == true))' examples-catalog.json)" >> $GITHUB_OUTPUT
+    - name: Deploy functions
+      env:
+        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+        INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID }}
+        KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+      run:
+        node .github/workflows/scripts/integration-test/integration-test.js --deploy-only
 
-  integration-test:
+  jest-integration-test:
     needs: setup
     runs-on: ubuntu-latest
-    name: ${{ matrix.example.name }}
-    strategy:
-      matrix:
-        example: ${{ fromJson(needs.setup.outputs.examples) }}
-      fail-fast: false
+    name: Jest Integration Tests
     
     steps:
     - uses: actions/checkout@v4
@@ -106,129 +95,70 @@ jobs:
         node-version: '22.x'
         cache: 'npm'
     
+    - name: Configure AWS credentials (OIDC for main workflow)
+      if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+        role-session-name: githubIntegrationTest
+        aws-region: ${{ env.AWS_REGION }}
+
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: built-examples
+        name: built-artifacts
         path: .
-    
-    - name: Verify downloaded artifacts
+
+    - name: Install dependencies
       run: |
-        if [ ! -f "packages/aws-durable-execution-sdk-js-examples/dist/hello-world.js" ]; then
-          echo "ERROR: Examples not found in artifacts"
-          exit 1
-        fi
+        npm run install-all
     
-    - name: Install AWS CLI (for local act runs)
+    - name: Run Jest integration tests
+      env:
+        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+        FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        GITHUB_EVENT_NUMBER: ${{ github.event.number }}
       run: |
-        if ! command -v aws &> /dev/null; then
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
-        fi
+         node .github/workflows/scripts/integration-test/integration-test.js --test-only
+
+  cleanup:
+    needs: [setup, jest-integration-test]
+    runs-on: ubuntu-latest
+    if: always()
     
-    - name: Configure AWS credentials
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: built-artifacts
+        path: .
+
+    - name: Install dependencies
+      run: |
+        npm run install-all
+    
+    - name: Configure AWS credentials (OIDC for main workflow)
+      if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+        role-session-name: githubIntegrationTest
         aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Install custom Lambda model
-      run: |
-        aws configure add-model --service-model file://.github/model/lambda.json --service-name lambda
 
-    - name: Package Lambda function - ${{ matrix.example.name }}
-      working-directory: ./packages/aws-durable-execution-sdk-js-examples
-      run: |
-        # Extract handler file name from catalog
-        HANDLER_FILE=$(echo "${{ matrix.example.handler }}" | sed 's/\.handler$//')
-        npm run package -- "$HANDLER_FILE"
-
-    - name: Deploy Lambda function - ${{ matrix.example.name }}
-      working-directory: ./packages/aws-durable-execution-sdk-js-examples
-      env:
-        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-        INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID }}
-        KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
-      run: |
-        # Build function name for GitHub Actions
-        BASE_NAME=$(echo "${{ matrix.example.name }}" | sed 's/ //g')-TypeScript
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          FUNCTION_NAME="${BASE_NAME}-PR-${{ github.event.number }}"
-        else
-          FUNCTION_NAME="${BASE_NAME}"
-        fi
-        
-        # Extract handler file name from catalog
-        HANDLER_FILE=$(echo "${{ matrix.example.handler }}" | sed 's/\.handler$//')
-        
-        # Deploy using npm script
-        npm run deploy -- "$HANDLER_FILE" "$FUNCTION_NAME"
-    
-    - name: Invoke Lambda function - ${{ matrix.example.name }}
+    - name: Cleanup Lambda functions
       env:
         LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+        FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        GITHUB_EVENT_NUMBER: ${{ github.event.number }}
       run: |
-        echo "Testing function: $FUNCTION_NAME"
-        aws lambda invoke \
-          --function-name "$FUNCTION_NAME" \
-          --cli-binary-format raw-in-base64-out \
-          --payload '{"name": "World"}' \
-          --region "${{ env.AWS_REGION }}" \
-          --endpoint-url "$LAMBDA_ENDPOINT" \
-          /tmp/response.json
-        echo "Response:"
-        cat /tmp/response.json
-    
-    - name: Find Durable Execution - ${{ matrix.example.name }}
-      env:
-        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-      run: |
-        echo "Listing durable executions for function: $FUNCTION_NAME"
-        aws lambda list-durable-executions \
-          --function-name "$FUNCTION_NAME" \
-          --region "${{ env.AWS_REGION }}" \
-          --endpoint-url "$LAMBDA_ENDPOINT" \
-          --cli-binary-format raw-in-base64-out \
-          --status-filter SUCCEEDED \
-          > /tmp/executions.json
-        echo "Durable Executions:"
-        cat /tmp/executions.json
-        
-        # Extract the first execution ARN for history retrieval
-        EXECUTION_ARN=$(jq -r '.DurableExecutions[0].DurableExecutionArn // empty' /tmp/executions.json)
-        echo "EXECUTION_ARN=$EXECUTION_ARN" >> $GITHUB_ENV
-    
-    - name: Get Durable Execution History - ${{ matrix.example.name }}
-      if: env.EXECUTION_ARN != ''
-      env:
-        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-      run: |
-        echo "Getting execution history for: $EXECUTION_ARN"
-        aws lambda get-durable-execution-history \
-          --durable-execution-arn "$EXECUTION_ARN" \
-          --region "${{ env.AWS_REGION }}" \
-          --endpoint-url "$LAMBDA_ENDPOINT" \
-          --cli-binary-format raw-in-base64-out \
-          > /tmp/history.json
-        echo "Execution History:"
-        cat /tmp/history.json
-    
-    - name: Assert History - ${{ matrix.example.name }}
-      if: env.EXECUTION_ARN != ''
-      working-directory: ./packages/aws-durable-execution-sdk-js-examples
-      run: |
-        node scripts/assert-history.js "${{ matrix.example.handler }}" "/tmp/history.json"
-    
-    - name: Cleanup Lambda function
-      if: always()
-      env:
-        LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-      run: |
-        echo "Deleting function: $FUNCTION_NAME"
-        aws lambda delete-function \
-          --function-name "$FUNCTION_NAME" \
-          --endpoint-url "$LAMBDA_ENDPOINT" \
-          --region "${{ env.AWS_REGION }}" || echo "Function already deleted or doesn't exist"
+        node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only

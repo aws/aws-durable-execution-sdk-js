@@ -37,31 +37,16 @@ createTests({
       expect(
         result.summary.fruitsSelected.all.map((item: any) => item.result)
       ).toEqual(["apple", "banana", "orange"]);
-    });
 
-    it("should execute step1 operation correctly", async () => {
       const step1Op = runner.getOperation("step1");
-
-      await runner.run();
 
       expect(step1Op).toBeDefined();
       expect(step1Op.getStepDetails()?.result).toBe(
         "Step 1 completed successfully"
       );
-    });
-
-    it("should execute wait operation for 5 seconds", async () => {
       const waitOp = runner.getOperationByIndex(1); // Wait should be the second operation
 
-      await runner.run();
-
       expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(5);
-    });
-
-    it("should execute map operation with detailed steps", async () => {
-      const execution = await runner.run();
-      const result = execution.getResult() as any;
-
       // Verify map results - now BatchResult object
       expect(result.mapResults.all).toHaveLength(5);
       expect(result.mapResults.all.map((item: any) => item.result)).toEqual([
@@ -74,11 +59,6 @@ createTests({
         expect(mapStepOp).toBeDefined();
         expect(mapStepOp.getStepDetails()?.result).toBe(i + 1);
       }
-    });
-
-    it("should execute parallel operations with fruit names", async () => {
-      const execution = await runner.run();
-      const result = execution.getResult() as any;
 
       // Verify parallel results - now BatchResult object
       expect(result.parallelResults.all).toHaveLength(3);
@@ -98,11 +78,6 @@ createTests({
       expect(fruitStep1Op.getStepDetails()?.result).toBe("apple");
       expect(fruitStep2Op.getStepDetails()?.result).toBe("banana");
       expect(fruitStep3Op.getStepDetails()?.result).toBe("orange");
-    });
-
-    it("should create comprehensive summary object", async () => {
-      const execution = await runner.run();
-      const result = execution.getResult() as any;
 
       // Verify summary structure - now using BatchResult objects
       expect(result.summary).toBeDefined();
@@ -114,10 +89,6 @@ createTests({
       expect(
         result.summary.fruitsSelected.all.map((item: any) => item.result)
       ).toEqual(["apple", "banana", "orange"]);
-    });
-
-    it("should complete execution without errors", async () => {
-      const execution = await runner.run();
 
       // Verify execution completed successfully
       expect(execution.getResult()).toBeDefined();
