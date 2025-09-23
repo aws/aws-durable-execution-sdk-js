@@ -2,7 +2,7 @@ name: Sync packages
 
 on:
   push:
-    branches: [ "development", "sync-testing-library"]
+    branches: [ "development"]
       
 env:
   BUCKET_NAME : "${{ secrets.S3_BUCKET_NAME }}"
