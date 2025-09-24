@@ -265,7 +265,7 @@ describe("historyEventTypes", () => {
       expect(config).toEqual({
         operationType: OperationType.INVOKE,
         operationStatus: OperationStatus.CANCELLED,
-        detailPlace: "InvokeCancelledDetails",
+        detailPlace: "InvokeStoppedDetails",
         isStartEvent: false,
         isEndEvent: true,
         operationDetailPlace: undefined,

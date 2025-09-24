@@ -695,16 +695,6 @@ export const CallbackFailedDetailsFilterSensitiveLog = (obj) => ({
     ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
     }),
 });
-export const EventInputFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Payload && { Payload: SENSITIVE_STRING
-    }),
-});
-export const CallbackStartedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input)
-    }),
-});
 export const EventResultFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Payload && { Payload: SENSITIVE_STRING
@@ -760,6 +750,11 @@ export const ExecutionFailedDetailsFilterSensitiveLog = (obj) => ({
     ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
     }),
 });
+export const EventInputFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING
+    }),
+});
 export const ExecutionStartedDetailsFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input)
@@ -780,11 +775,6 @@ export const ExecutionTimedOutDetailsFilterSensitiveLog = (obj) => ({
     ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
     }),
 });
-export const InvokeCancelledDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
 export const InvokeFailedDetailsFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
@@ -793,6 +783,11 @@ export const InvokeFailedDetailsFilterSensitiveLog = (obj) => ({
 export const InvokeStartedDetailsFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input)
+    }),
+});
+export const InvokeStoppedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
     }),
 });
 export const InvokeSucceededDetailsFilterSensitiveLog = (obj) => ({
@@ -850,9 +845,7 @@ export const EventFilterSensitiveLog = (obj) => ({
     }),
     ...(obj.InvokeTimedOutDetails && { InvokeTimedOutDetails: InvokeTimedOutDetailsFilterSensitiveLog(obj.InvokeTimedOutDetails)
     }),
-    ...(obj.InvokeCancelledDetails && { InvokeCancelledDetails: InvokeCancelledDetailsFilterSensitiveLog(obj.InvokeCancelledDetails)
-    }),
-    ...(obj.CallbackStartedDetails && { CallbackStartedDetails: CallbackStartedDetailsFilterSensitiveLog(obj.CallbackStartedDetails)
+    ...(obj.InvokeStoppedDetails && { InvokeStoppedDetails: InvokeStoppedDetailsFilterSensitiveLog(obj.InvokeStoppedDetails)
     }),
     ...(obj.CallbackSucceededDetails && { CallbackSucceededDetails: CallbackSucceededDetailsFilterSensitiveLog(obj.CallbackSucceededDetails)
     }),

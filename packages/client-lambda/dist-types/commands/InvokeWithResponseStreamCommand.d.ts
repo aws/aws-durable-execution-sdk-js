@@ -46,7 +46,6 @@ declare const InvokeWithResponseStreamCommand_base: {
  *   InvocationType: "Event" || "RequestResponse" || "DryRun",
  *   LogType: "None" || "Tail",
  *   ClientContext: "STRING_VALUE",
- *   DurableExecutionName: "STRING_VALUE",
  *   ContentType: "STRING_VALUE",
  *   SourceOwner: "STRING_VALUE",
  *   SourceArn: "STRING_VALUE",
@@ -57,7 +56,6 @@ declare const InvokeWithResponseStreamCommand_base: {
  *   InternalLambda: "STRING_VALUE",
  *   Payload: new Uint8Array(), // e.g. Buffer.from("") or new TextEncoder().encode("")
  *   TenantId: "STRING_VALUE",
- *   DurableFunctionInvokeExecution: true || false,
  * };
  * const command = new InvokeWithResponseStreamCommand(input);
  * const response = await client.send(command);
@@ -76,7 +74,6 @@ declare const InvokeWithResponseStreamCommand_base: {
  * //       LogResult: "STRING_VALUE",
  * //     },
  * //   },
- * //   DurableExecutionArn: "STRING_VALUE",
  * // };
  *
  * ```

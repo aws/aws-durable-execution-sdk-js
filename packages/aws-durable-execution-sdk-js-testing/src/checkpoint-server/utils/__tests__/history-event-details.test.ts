@@ -31,7 +31,6 @@ describe("history-event-details", () => {
     },
     InvokeOptions: {
       FunctionName: "test-function",
-      DurableExecutionName: "test-execution",
     },
     StepOptions: {
       NextAttemptDelaySeconds: 5,
@@ -266,7 +265,7 @@ describe("history-event-details", () => {
             Payload: "test-payload",
           },
           FunctionArn: "test-function",
-          DurableExecutionArn: "test-execution",
+          DurableExecutionArn: undefined,
         });
       });
 

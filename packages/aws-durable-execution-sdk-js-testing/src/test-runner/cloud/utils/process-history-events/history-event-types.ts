@@ -159,7 +159,7 @@ export const historyEventTypes = {
   InvokeCancelled: {
     operationType: OperationType.INVOKE,
     operationStatus: OperationStatus.CANCELLED,
-    detailPlace: "InvokeCancelledDetails",
+    detailPlace: "InvokeStoppedDetails",
     isStartEvent: false,
     isEndEvent: true,
     operationDetailPlace: undefined,
@@ -219,11 +219,12 @@ export const historyEventTypes = {
     operationDetailPlace: undefined,
     hasResult: true,
   },
-} as const satisfies Record<EventType, HistoryEventType>; /**
+} as const satisfies Record<EventType, HistoryEventType>;
+
+/**
  * Defines the structure and properties of a history event type.
  * This interface maps event types to their corresponding operation characteristics.
  */
-
 export interface HistoryEventType {
   /** The type of operation this event represents */
   operationType: OperationType;

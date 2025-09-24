@@ -1392,7 +1392,6 @@ export const se_InvokeWithResponseStreamCommand = async (input, context) => {
         [_xait]: input[_IT],
         [_xalt]: input[_LT],
         [_xacc]: input[_CC],
-        [_xaden]: input[_DEN],
         [_xaso]: input[_SO],
         [_xasa]: input[_SA],
         [_xasa_]: input[_SAo],
@@ -1400,7 +1399,6 @@ export const se_InvokeWithResponseStreamCommand = async (input, context) => {
         [_xati]: input[_TF],
         [_xail]: input[_IL],
         [_xati_]: input[_TI],
-        [_xadi]: [() => isSerializableHeaderValue(input[_DFIE]), () => input[_DFIE].toString()],
     });
     b.bp("/2021-11-15/functions/{FunctionName}/response-streaming-invocations");
     b.p('FunctionName', () => input.FunctionName, '{FunctionName}', false);
@@ -4466,7 +4464,6 @@ export const de_InvokeWithResponseStreamCommand = async (output, context) => {
         [_EV]: [, output.headers[_xaev]],
         [_TF]: [, output.headers[_xati]],
         [_CTo]: [, output.headers[_ct]],
-        [_DEA]: [, output.headers[_xadea]],
     });
     const data = output.body;
     contents.EventStream = de_InvokeWithResponseStreamResponseEvent(data, context);
@@ -7100,9 +7097,9 @@ const de_Event = (output, context) => {
         'ExecutionSucceededDetails': _json,
         'ExecutionTimedOutDetails': _json,
         'Id': __expectString,
-        'InvokeCancelledDetails': _json,
         'InvokeFailedDetails': _json,
         'InvokeStartedDetails': _json,
+        'InvokeStoppedDetails': _json,
         'InvokeSucceededDetails': _json,
         'InvokeTimedOutDetails': _json,
         'Name': __expectString,

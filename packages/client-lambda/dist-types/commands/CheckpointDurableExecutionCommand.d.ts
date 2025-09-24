@@ -70,8 +70,7 @@ declare const CheckpointDurableExecutionCommand_base: {
  *       },
  *       InvokeOptions: { // InvokeOptions
  *         FunctionName: "STRING_VALUE",
- *         FunctionQualifier: "STRING_VALUE",
- *         DurableExecutionName: "STRING_VALUE",
+ *         TimeoutSeconds: Number("int"),
  *       },
  *     },
  *   ],
@@ -136,7 +135,6 @@ declare const CheckpointDurableExecutionCommand_base: {
  * //           },
  * //         },
  * //         InvokeDetails: { // InvokeDetails
- * //           DurableExecutionArn: "STRING_VALUE",
  * //           Result: "STRING_VALUE",
  * //           Error: {
  * //             ErrorMessage: "STRING_VALUE",

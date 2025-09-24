@@ -585,7 +585,6 @@ export interface InvokeWithResponseStreamRequest {
     InvocationType?: InvocationType | undefined;
     LogType?: LogType | undefined;
     ClientContext?: string | undefined;
-    DurableExecutionName?: string | undefined;
     ContentType?: string | undefined;
     SourceOwner?: string | undefined;
     SourceArn?: string | undefined;
@@ -596,7 +595,6 @@ export interface InvokeWithResponseStreamRequest {
     InternalLambda?: string | undefined;
     Payload?: Uint8Array | undefined;
     TenantId?: string | undefined;
-    DurableFunctionInvokeExecution?: boolean | undefined;
 }
 /**
  * @internal
@@ -666,7 +664,6 @@ export interface InvokeWithResponseStreamResponse {
     TraceFields?: string | undefined;
     ContentType?: string | undefined;
     EventStream?: AsyncIterable<InvokeWithResponseStreamResponseEvent> | undefined;
-    DurableExecutionArn?: string | undefined;
 }
 /**
  * @internal

@@ -397,8 +397,7 @@ export declare const ErrorObjectFilterSensitiveLog: (obj: ErrorObject) => any;
  */
 export interface InvokeOptions {
     FunctionName?: string | undefined;
-    FunctionQualifier?: string | undefined;
-    DurableExecutionName?: string | undefined;
+    TimeoutSeconds?: number | undefined;
 }
 /**
  * @public
@@ -501,7 +500,6 @@ export declare const ExecutionDetailsFilterSensitiveLog: (obj: ExecutionDetails)
  * @public
  */
 export interface InvokeDetails {
-    DurableExecutionArn?: string | undefined;
     Result?: string | undefined;
     Error?: ErrorObject | undefined;
 }
@@ -2406,16 +2404,8 @@ export declare const EventErrorFilterSensitiveLog: (obj: EventError) => any;
 /**
  * @public
  */
-export interface RetryDetails {
-    CurrentAttempt?: number | undefined;
-    NextAttemptDelaySeconds?: number | undefined;
-}
-/**
- * @public
- */
 export interface CallbackFailedDetails {
     Error?: EventError | undefined;
-    RetryDetails?: RetryDetails | undefined;
 }
 /**
  * @internal
@@ -2424,27 +2414,11 @@ export declare const CallbackFailedDetailsFilterSensitiveLog: (obj: CallbackFail
 /**
  * @public
  */
-export interface EventInput {
-    Payload?: string | undefined;
-    Truncated?: boolean | undefined;
-}
-/**
- * @internal
- */
-export declare const EventInputFilterSensitiveLog: (obj: EventInput) => any;
-/**
- * @public
- */
 export interface CallbackStartedDetails {
     CallbackId?: string | undefined;
-    Input?: EventInput | undefined;
     HeartbeatTimeout?: number | undefined;
     Timeout?: number | undefined;
 }
-/**
- * @internal
- */
-export declare const CallbackStartedDetailsFilterSensitiveLog: (obj: CallbackStartedDetails) => any;
 /**
  * @public
  */
@@ -2461,7 +2435,6 @@ export declare const EventResultFilterSensitiveLog: (obj: EventResult) => any;
  */
 export interface CallbackSucceededDetails {
     Result?: EventResult | undefined;
-    RetryDetails?: RetryDetails | undefined;
 }
 /**
  * @internal
@@ -2472,7 +2445,6 @@ export declare const CallbackSucceededDetailsFilterSensitiveLog: (obj: CallbackS
  */
 export interface CallbackTimedOutDetails {
     Error?: EventError | undefined;
-    RetryDetails?: RetryDetails | undefined;
 }
 /**
  * @internal
@@ -2549,6 +2521,17 @@ export declare const ExecutionFailedDetailsFilterSensitiveLog: (obj: ExecutionFa
 /**
  * @public
  */
+export interface EventInput {
+    Payload?: string | undefined;
+    Truncated?: boolean | undefined;
+}
+/**
+ * @internal
+ */
+export declare const EventInputFilterSensitiveLog: (obj: EventInput) => any;
+/**
+ * @public
+ */
 export interface ExecutionStartedDetails {
     Input?: EventInput | undefined;
     ExecutionTimeout?: number | undefined;
@@ -2590,19 +2573,8 @@ export declare const ExecutionTimedOutDetailsFilterSensitiveLog: (obj: Execution
 /**
  * @public
  */
-export interface InvokeCancelledDetails {
-    Error?: EventError | undefined;
-}
-/**
- * @internal
- */
-export declare const InvokeCancelledDetailsFilterSensitiveLog: (obj: InvokeCancelledDetails) => any;
-/**
- * @public
- */
 export interface InvokeFailedDetails {
     Error?: EventError | undefined;
-    RetryDetails?: RetryDetails | undefined;
 }
 /**
  * @internal
@@ -2623,9 +2595,18 @@ export declare const InvokeStartedDetailsFilterSensitiveLog: (obj: InvokeStarted
 /**
  * @public
  */
+export interface InvokeStoppedDetails {
+    Error?: EventError | undefined;
+}
+/**
+ * @internal
+ */
+export declare const InvokeStoppedDetailsFilterSensitiveLog: (obj: InvokeStoppedDetails) => any;
+/**
+ * @public
+ */
 export interface InvokeSucceededDetails {
     Result?: EventResult | undefined;
-    RetryDetails?: RetryDetails | undefined;
 }
 /**
  * @internal
@@ -2636,12 +2617,18 @@ export declare const InvokeSucceededDetailsFilterSensitiveLog: (obj: InvokeSucce
  */
 export interface InvokeTimedOutDetails {
     Error?: EventError | undefined;
-    RetryDetails?: RetryDetails | undefined;
 }
 /**
  * @internal
  */
 export declare const InvokeTimedOutDetailsFilterSensitiveLog: (obj: InvokeTimedOutDetails) => any;
+/**
+ * @public
+ */
+export interface RetryDetails {
+    CurrentAttempt?: number | undefined;
+    NextAttemptDelaySeconds?: number | undefined;
+}
 /**
  * @public
  */
@@ -2721,7 +2708,7 @@ export interface Event {
     InvokeSucceededDetails?: InvokeSucceededDetails | undefined;
     InvokeFailedDetails?: InvokeFailedDetails | undefined;
     InvokeTimedOutDetails?: InvokeTimedOutDetails | undefined;
-    InvokeCancelledDetails?: InvokeCancelledDetails | undefined;
+    InvokeStoppedDetails?: InvokeStoppedDetails | undefined;
     CallbackStartedDetails?: CallbackStartedDetails | undefined;
     CallbackSucceededDetails?: CallbackSucceededDetails | undefined;
     CallbackFailedDetails?: CallbackFailedDetails | undefined;

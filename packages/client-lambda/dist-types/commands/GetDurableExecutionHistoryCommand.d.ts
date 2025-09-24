@@ -177,34 +177,18 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //           Payload: "STRING_VALUE",
  * //           Truncated: true || false,
  * //         },
- * //         RetryDetails: {
- * //           CurrentAttempt: Number("int"),
- * //           NextAttemptDelaySeconds: Number("int"),
- * //         },
  * //       },
  * //       InvokeFailedDetails: { // InvokeFailedDetails
  * //         Error: "<EventError>",
- * //         RetryDetails: {
- * //           CurrentAttempt: Number("int"),
- * //           NextAttemptDelaySeconds: Number("int"),
- * //         },
  * //       },
  * //       InvokeTimedOutDetails: { // InvokeTimedOutDetails
  * //         Error: "<EventError>",
- * //         RetryDetails: {
- * //           CurrentAttempt: Number("int"),
- * //           NextAttemptDelaySeconds: Number("int"),
- * //         },
  * //       },
- * //       InvokeCancelledDetails: { // InvokeCancelledDetails
+ * //       InvokeStoppedDetails: { // InvokeStoppedDetails
  * //         Error: "<EventError>",
  * //       },
  * //       CallbackStartedDetails: { // CallbackStartedDetails
  * //         CallbackId: "STRING_VALUE",
- * //         Input: {
- * //           Payload: "STRING_VALUE",
- * //           Truncated: true || false,
- * //         },
  * //         HeartbeatTimeout: Number("int"),
  * //         Timeout: Number("int"),
  * //       },
@@ -213,15 +197,12 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //           Payload: "STRING_VALUE",
  * //           Truncated: true || false,
  * //         },
- * //         RetryDetails: "<RetryDetails>",
  * //       },
  * //       CallbackFailedDetails: { // CallbackFailedDetails
  * //         Error: "<EventError>",
- * //         RetryDetails: "<RetryDetails>",
  * //       },
  * //       CallbackTimedOutDetails: { // CallbackTimedOutDetails
  * //         Error: "<EventError>",
- * //         RetryDetails: "<RetryDetails>",
  * //       },
  * //     },
  * //   ],

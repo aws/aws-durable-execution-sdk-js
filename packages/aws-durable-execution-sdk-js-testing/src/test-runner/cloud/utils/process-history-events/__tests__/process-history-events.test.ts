@@ -510,9 +510,6 @@ describe("historyEventsToOperationEvents", () => {
       EventTimestamp: mockTimestamp,
       CallbackStartedDetails: {
         CallbackId: "callback-123",
-        Input: {
-          Payload: '{"input": "data"}',
-        },
         HeartbeatTimeout: 60,
         Timeout: 300,
       },

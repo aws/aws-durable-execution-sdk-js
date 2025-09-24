@@ -98,7 +98,6 @@ declare const GetDurableExecutionStateCommand_base: {
  * //         },
  * //       },
  * //       InvokeDetails: { // InvokeDetails
- * //         DurableExecutionArn: "STRING_VALUE",
  * //         Result: "STRING_VALUE",
  * //         Error: {
  * //           ErrorMessage: "STRING_VALUE",

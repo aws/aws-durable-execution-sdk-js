@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FunctionVersionLatestPublished = exports.ProgrammingModel = exports.PackageType = exports.SystemLogLevel = exports.LogFormat = exports.UserOverride = exports.ConcurrencyMode = exports.EnvironmentFilterSensitiveLog = exports.FunctionCodeFilterSensitiveLog = exports.S3ObjectStorageMode = exports.CodeVerificationFailedException = exports.CodeStorageExceededException = exports.CodeSigningConfigNotFoundException = exports.EventSourcePosition = exports.SourceAccessType = exports.EndPointType = exports.EventSourceMappingMetric = exports.FunctionResponseType = exports.FullDocument = exports.CodeSigningPolicy = exports.CheckpointDurableExecutionResponseFilterSensitiveLog = exports.CheckpointUpdatedExecutionStateFilterSensitiveLog = exports.OperationFilterSensitiveLog = exports.StepDetailsFilterSensitiveLog = exports.OperationStatus = exports.InvokeDetailsFilterSensitiveLog = exports.ExecutionDetailsFilterSensitiveLog = exports.ContextDetailsFilterSensitiveLog = exports.CallbackDetailsFilterSensitiveLog = exports.CheckpointDurableExecutionRequestFilterSensitiveLog = exports.OperationUpdateFilterSensitiveLog = exports.OperationType = exports.ErrorObjectFilterSensitiveLog = exports.OperationAction = exports.Architecture = exports.ApplicationLogLevel = exports.KafkaSchemaValidationAttribute = exports.SchemaRegistryEventRecordFormat = exports.KafkaSchemaRegistryAuthType = exports.AliasLimitExceededException = exports.PublicPolicyException = exports.FunctionUrlAuthType = exports.TooManyRequestsException = exports.ThrottleReason = exports.PreconditionFailedException = exports.PolicyLengthExceededException = exports.ServiceException = exports.ResourceNotFoundException = exports.ResourceConflictException = exports.InvalidParameterValueException = void 0;
-exports.InvokeStartedDetailsFilterSensitiveLog = exports.InvokeFailedDetailsFilterSensitiveLog = exports.InvokeCancelledDetailsFilterSensitiveLog = exports.ExecutionTimedOutDetailsFilterSensitiveLog = exports.ExecutionSucceededDetailsFilterSensitiveLog = exports.ExecutionStoppedDetailsFilterSensitiveLog = exports.ExecutionStartedDetailsFilterSensitiveLog = exports.ExecutionFailedDetailsFilterSensitiveLog = exports.EventType = exports.ContextSucceededDetailsFilterSensitiveLog = exports.ContextFailedDetailsFilterSensitiveLog = exports.CallbackTimedOutDetailsFilterSensitiveLog = exports.CallbackSucceededDetailsFilterSensitiveLog = exports.EventResultFilterSensitiveLog = exports.CallbackStartedDetailsFilterSensitiveLog = exports.EventInputFilterSensitiveLog = exports.CallbackFailedDetailsFilterSensitiveLog = exports.EventErrorFilterSensitiveLog = exports.GetDurableExecutionResponseFilterSensitiveLog = exports.ExecutionStatus = exports.ProvisionedConcurrencyStatusEnum = exports.ResourceNotReadyException = exports.ExportFunctionVersionResponseFilterSensitiveLog = exports.MigrationFunctionVersionFilterSensitiveLog = exports.VmSelectorPreference = exports.RuntimeUpdateReason = exports.ProvisionedConcurrencyState = exports.Mode = exports.CodeSignatureStatus = exports.FeatureStatus = exports.FunctionResourceType = exports.ResourceType = exports.ResourceInUseException = exports.InvokeMode = exports.InvalidCodeSignatureException = exports.FunctionConfiguration20150331FilterSensitiveLog = exports.StateReasonCode = exports.State = exports.SnapStartOptimizationStatus = exports.LastUpdateStatusReasonCode = exports.LastUpdateStatus = exports.ImageConfigResponseFilterSensitiveLog = exports.ImageConfigErrorFilterSensitiveLog = exports.EnvironmentResponseFilterSensitiveLog = exports.EnvironmentErrorFilterSensitiveLog = exports.CreateFunctionRequestFilterSensitiveLog = exports.TracingMode = exports.TenantIsolationMode = exports.SnapStartApplyOn = exports.Runtime = void 0;
-exports.GetVersionSandboxSpecResponseFilterSensitiveLog = exports.UpdateRuntimeOn = exports.ProvisionedConcurrencyConfigNotFoundException = exports.RecursiveLoop = exports.GetFunctionInternalResponseFilterSensitiveLog = exports.InternalLambdaAccountDisabledException = exports.GetFunctionResponse20150331FilterSensitiveLog = exports.GetDurableExecutionStateResponseFilterSensitiveLog = exports.GetDurableExecutionHistoryResponseFilterSensitiveLog = exports.EventFilterSensitiveLog = exports.WaitCancelledDetailsFilterSensitiveLog = exports.StepSucceededDetailsFilterSensitiveLog = exports.StepFailedDetailsFilterSensitiveLog = exports.InvokeTimedOutDetailsFilterSensitiveLog = exports.InvokeSucceededDetailsFilterSensitiveLog = void 0;
+exports.InvokeSucceededDetailsFilterSensitiveLog = exports.InvokeStoppedDetailsFilterSensitiveLog = exports.InvokeStartedDetailsFilterSensitiveLog = exports.InvokeFailedDetailsFilterSensitiveLog = exports.ExecutionTimedOutDetailsFilterSensitiveLog = exports.ExecutionSucceededDetailsFilterSensitiveLog = exports.ExecutionStoppedDetailsFilterSensitiveLog = exports.ExecutionStartedDetailsFilterSensitiveLog = exports.EventInputFilterSensitiveLog = exports.ExecutionFailedDetailsFilterSensitiveLog = exports.EventType = exports.ContextSucceededDetailsFilterSensitiveLog = exports.ContextFailedDetailsFilterSensitiveLog = exports.CallbackTimedOutDetailsFilterSensitiveLog = exports.CallbackSucceededDetailsFilterSensitiveLog = exports.EventResultFilterSensitiveLog = exports.CallbackFailedDetailsFilterSensitiveLog = exports.EventErrorFilterSensitiveLog = exports.GetDurableExecutionResponseFilterSensitiveLog = exports.ExecutionStatus = exports.ProvisionedConcurrencyStatusEnum = exports.ResourceNotReadyException = exports.ExportFunctionVersionResponseFilterSensitiveLog = exports.MigrationFunctionVersionFilterSensitiveLog = exports.VmSelectorPreference = exports.RuntimeUpdateReason = exports.ProvisionedConcurrencyState = exports.Mode = exports.CodeSignatureStatus = exports.FeatureStatus = exports.FunctionResourceType = exports.ResourceType = exports.ResourceInUseException = exports.InvokeMode = exports.InvalidCodeSignatureException = exports.FunctionConfiguration20150331FilterSensitiveLog = exports.StateReasonCode = exports.State = exports.SnapStartOptimizationStatus = exports.LastUpdateStatusReasonCode = exports.LastUpdateStatus = exports.ImageConfigResponseFilterSensitiveLog = exports.ImageConfigErrorFilterSensitiveLog = exports.EnvironmentResponseFilterSensitiveLog = exports.EnvironmentErrorFilterSensitiveLog = exports.CreateFunctionRequestFilterSensitiveLog = exports.TracingMode = exports.TenantIsolationMode = exports.SnapStartApplyOn = exports.Runtime = void 0;
+exports.GetVersionSandboxSpecResponseFilterSensitiveLog = exports.UpdateRuntimeOn = exports.ProvisionedConcurrencyConfigNotFoundException = exports.RecursiveLoop = exports.GetFunctionInternalResponseFilterSensitiveLog = exports.InternalLambdaAccountDisabledException = exports.GetFunctionResponse20150331FilterSensitiveLog = exports.GetDurableExecutionStateResponseFilterSensitiveLog = exports.GetDurableExecutionHistoryResponseFilterSensitiveLog = exports.EventFilterSensitiveLog = exports.WaitCancelledDetailsFilterSensitiveLog = exports.StepSucceededDetailsFilterSensitiveLog = exports.StepFailedDetailsFilterSensitiveLog = exports.InvokeTimedOutDetailsFilterSensitiveLog = void 0;
 const LambdaServiceException_1 = require("./LambdaServiceException");
 const smithy_client_1 = require("@smithy/smithy-client");
 class InvalidParameterValueException extends LambdaServiceException_1.LambdaServiceException {
@@ -739,18 +739,6 @@ const CallbackFailedDetailsFilterSensitiveLog = (obj) => ({
     }),
 });
 exports.CallbackFailedDetailsFilterSensitiveLog = CallbackFailedDetailsFilterSensitiveLog;
-const EventInputFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Payload && { Payload: smithy_client_1.SENSITIVE_STRING
-    }),
-});
-exports.EventInputFilterSensitiveLog = EventInputFilterSensitiveLog;
-const CallbackStartedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Input && { Input: (0, exports.EventInputFilterSensitiveLog)(obj.Input)
-    }),
-});
-exports.CallbackStartedDetailsFilterSensitiveLog = CallbackStartedDetailsFilterSensitiveLog;
 const EventResultFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Payload && { Payload: smithy_client_1.SENSITIVE_STRING
@@ -812,6 +800,12 @@ const ExecutionFailedDetailsFilterSensitiveLog = (obj) => ({
     }),
 });
 exports.ExecutionFailedDetailsFilterSensitiveLog = ExecutionFailedDetailsFilterSensitiveLog;
+const EventInputFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: smithy_client_1.SENSITIVE_STRING
+    }),
+});
+exports.EventInputFilterSensitiveLog = EventInputFilterSensitiveLog;
 const ExecutionStartedDetailsFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Input && { Input: (0, exports.EventInputFilterSensitiveLog)(obj.Input)
@@ -836,12 +830,6 @@ const ExecutionTimedOutDetailsFilterSensitiveLog = (obj) => ({
     }),
 });
 exports.ExecutionTimedOutDetailsFilterSensitiveLog = ExecutionTimedOutDetailsFilterSensitiveLog;
-const InvokeCancelledDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: (0, exports.EventErrorFilterSensitiveLog)(obj.Error)
-    }),
-});
-exports.InvokeCancelledDetailsFilterSensitiveLog = InvokeCancelledDetailsFilterSensitiveLog;
 const InvokeFailedDetailsFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Error && { Error: (0, exports.EventErrorFilterSensitiveLog)(obj.Error)
@@ -854,6 +842,12 @@ const InvokeStartedDetailsFilterSensitiveLog = (obj) => ({
     }),
 });
 exports.InvokeStartedDetailsFilterSensitiveLog = InvokeStartedDetailsFilterSensitiveLog;
+const InvokeStoppedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: (0, exports.EventErrorFilterSensitiveLog)(obj.Error)
+    }),
+});
+exports.InvokeStoppedDetailsFilterSensitiveLog = InvokeStoppedDetailsFilterSensitiveLog;
 const InvokeSucceededDetailsFilterSensitiveLog = (obj) => ({
     ...obj,
     ...(obj.Result && { Result: (0, exports.EventResultFilterSensitiveLog)(obj.Result)
@@ -914,9 +908,7 @@ const EventFilterSensitiveLog = (obj) => ({
     }),
     ...(obj.InvokeTimedOutDetails && { InvokeTimedOutDetails: (0, exports.InvokeTimedOutDetailsFilterSensitiveLog)(obj.InvokeTimedOutDetails)
     }),
-    ...(obj.InvokeCancelledDetails && { InvokeCancelledDetails: (0, exports.InvokeCancelledDetailsFilterSensitiveLog)(obj.InvokeCancelledDetails)
-    }),
-    ...(obj.CallbackStartedDetails && { CallbackStartedDetails: (0, exports.CallbackStartedDetailsFilterSensitiveLog)(obj.CallbackStartedDetails)
+    ...(obj.InvokeStoppedDetails && { InvokeStoppedDetails: (0, exports.InvokeStoppedDetailsFilterSensitiveLog)(obj.InvokeStoppedDetails)
     }),
     ...(obj.CallbackSucceededDetails && { CallbackSucceededDetails: (0, exports.CallbackSucceededDetailsFilterSensitiveLog)(obj.CallbackSucceededDetails)
     }),

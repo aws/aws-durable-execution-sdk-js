@@ -158,7 +158,7 @@ const historyEventDetailMap = {
         Payload: update.Payload,
       },
       FunctionArn: update.InvokeOptions?.FunctionName,
-      DurableExecutionArn: update.InvokeOptions?.DurableExecutionName,
+      // DurableExecutionArn: "" // TODO: add the execution ARN
     })
   ),
 
