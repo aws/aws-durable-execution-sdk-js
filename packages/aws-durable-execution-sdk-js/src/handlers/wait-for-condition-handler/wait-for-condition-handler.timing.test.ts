@@ -3,7 +3,11 @@ import {
   CheckpointFunction,
 } from "../../testing/mock-checkpoint";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
-import { ExecutionContext, WaitForConditionCheckFunc, WaitForConditionConfig } from "../../types";
+import {
+  ExecutionContext,
+  WaitForConditionCheckFunc,
+  WaitForConditionConfig,
+} from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
@@ -54,7 +58,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
       const checkFn: WaitForConditionCheckFunc<{ complete: boolean }> = jest
         .fn()
         .mockReturnValue({ complete: false });
-      
+
       const config: WaitForConditionConfig<{ complete: boolean }> = {
         initialState: { complete: false },
         waitStrategy: () => ({ shouldContinue: true, delaySeconds: 1 }),
@@ -109,7 +113,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
       const checkFn: WaitForConditionCheckFunc<{ complete: boolean }> = jest
         .fn()
         .mockReturnValue({ complete: true });
-      
+
       const config: WaitForConditionConfig<{ complete: boolean }> = {
         initialState: { complete: false },
         waitStrategy: () => ({ shouldContinue: false, delaySeconds: 0 }),
@@ -167,7 +171,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         .mockReturnValueOnce({
           Id: hashedStepId,
           Status: OperationStatus.PENDING,
-          StepDetails: { 
+          StepDetails: {
             Attempt: 1,
             Result: JSON.stringify({ count: 1 }),
           },
@@ -277,10 +281,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
       expect(checkFn).toHaveBeenCalledTimes(2);
     });
 
-
-
-
-
     test("should handle concurrent operations during retry with main loop", async () => {
       const stepId = "test-step-id";
       const hashedStepId = hashId(stepId);
@@ -353,7 +353,5 @@ describe("WaitForCondition Handler Timing Tests", () => {
       expect(mockHasRunningOperations).toHaveBeenCalled();
       expect(checkFn).toHaveBeenCalledTimes(3); // Check function called 3 times
     });
-
-
   });
 });

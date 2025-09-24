@@ -16,10 +16,12 @@ import {
   ConcurrentExecutor,
   ConcurrencyConfig,
   Logger,
+  InvokeOptions,
 } from "../../types";
 import { Context } from "aws-lambda";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
+import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
 import { createRunInChildContextHandler } from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
 import { createWaitHandler } from "../../handlers/wait-handler/wait-handler";
 import { createWaitForConditionHandler } from "../../handlers/wait-for-condition-handler/wait-for-condition-handler";
@@ -90,6 +92,26 @@ export const createDurableContext = (
       hasRunningOperations,
     );
     return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
+  };
+
+  const invoke: DurableContext["invoke"] = <I, O>(
+    nameOrFuncId: string,
+    funcIdOrInput?: string | I,
+    inputOrOptions?: I | InvokeOptions,
+    maybeOptions?: InvokeOptions,
+  ) => {
+    const invokeHandler = createInvokeHandler(
+      executionContext,
+      checkpoint,
+      createStepId,
+      hasRunningOperations,
+    );
+    return invokeHandler<I, O>(
+      nameOrFuncId,
+      funcIdOrInput as any,
+      inputOrOptions as any,
+      maybeOptions,
+    );
   };
 
   const runInChildContext: DurableContext["runInChildContext"] = <T>(
@@ -195,6 +217,7 @@ export const createDurableContext = (
     _stepPrefix: stepPrefix,
     _stepCounter: stepCounter,
     step,
+    invoke,
     runInChildContext,
     wait: createWaitHandler(
       executionContext,
