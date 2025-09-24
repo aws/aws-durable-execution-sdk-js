@@ -6,14 +6,5 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/SilanHe/test-publish-npm-silanhe.git"
-  },
-  "author": "SilanHe",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/SilanHe/test-publish-npm-silanhe/issues"
-  },
-  "homepage": "https://github.com/SilanHe/test-publish-npm-silanhe#readme"
+  "license": "Apache-2.0"
 }
