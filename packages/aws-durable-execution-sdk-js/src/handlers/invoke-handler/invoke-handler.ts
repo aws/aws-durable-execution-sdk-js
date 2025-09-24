@@ -1,4 +1,4 @@
-import { ExecutionContext, InvokeOptions, OperationSubType } from "../../types";
+import { ExecutionContext, InvokeConfig, OperationSubType } from "../../types";
 import { terminate } from "../../utils/termination-helper";
 import {
   OperationAction,
@@ -24,27 +24,27 @@ export const createInvokeHandler = (
   function invokeHandler<I, O>(
     funcId: string,
     input: I,
-    options?: InvokeOptions,
+    config?: InvokeConfig,
   ): Promise<O>;
   function invokeHandler<I, O>(
     name: string,
     funcId: string,
     input: I,
-    options?: InvokeOptions,
+    config?: InvokeConfig,
   ): Promise<O>;
   async function invokeHandler<I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
-    inputOrOptions?: I | InvokeOptions,
-    maybeOptions?: InvokeOptions,
+    inputOrConfig?: I | InvokeConfig,
+    maybeConfig?: InvokeConfig,
   ): Promise<O> {
     const isNameFirst = typeof funcIdOrInput === "string";
     const name = isNameFirst ? nameOrFuncId : undefined;
     const funcId = isNameFirst ? (funcIdOrInput as string) : nameOrFuncId;
-    const input = isNameFirst ? (inputOrOptions as I) : (funcIdOrInput as I);
-    const options = isNameFirst
-      ? maybeOptions
-      : (inputOrOptions as InvokeOptions);
+    const input = isNameFirst ? (inputOrConfig as I) : (funcIdOrInput as I);
+    const config = isNameFirst
+      ? maybeConfig
+      : (inputOrConfig as InvokeConfig);
 
     const stepId = createStepId();
 
@@ -57,7 +57,7 @@ export const createInvokeHandler = (
       // Return cached result - no need to check for errors in successful operations
       const invokeDetails = stepData.InvokeDetails;
       return await safeDeserialize(
-        defaultSerdes,
+        config?.serdes || defaultSerdes,
         invokeDetails?.Result,
         stepId,
         name,
@@ -94,7 +94,7 @@ export const createInvokeHandler = (
     ).execute(name, async (): Promise<O> => {
       // Serialize the input payload
       const serializedPayload = await safeSerialize(
-        defaultSerdes,
+        config?.serdes || defaultSerdes,
         input,
         stepId,
         name,
@@ -112,7 +112,9 @@ export const createInvokeHandler = (
         Type: OperationType.INVOKE,
         Name: name,
         Payload: serializedPayload,
-        InvokeOptions: options || {},
+        InvokeOptions: {
+          FunctionName: funcId,
+        },
       });
 
       log(

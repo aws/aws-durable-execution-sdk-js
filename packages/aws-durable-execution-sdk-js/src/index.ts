@@ -20,7 +20,7 @@ export {
   WaitForConditionWaitStrategyFunc,
   Logger,
   LambdaHandler,
-  InvokeOptions,
+  InvokeConfig,
 } from "./types";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export {

@@ -158,9 +158,9 @@ describe("Durable Context", () => {
     );
     const funcId = "arn:aws:lambda:us-east-1:123456789012:function:test";
     const input = { test: "data" };
-    const options = { FunctionQualifier: "LATEST" };
+    const config = { serdes: { serialize: async () => "test", deserialize: async () => ({}) } };
 
-    durableContext.invoke("test-invoke", funcId, input, options);
+    durableContext.invoke("test-invoke", funcId, input, config);
 
     expect(createInvokeHandler).toHaveBeenCalledWith(
       mockExecutionContext,
@@ -172,7 +172,7 @@ describe("Durable Context", () => {
       "test-invoke",
       funcId,
       input,
-      options,
+      config,
     );
   });
 

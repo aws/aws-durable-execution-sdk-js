@@ -290,7 +290,9 @@ describe("InvokeHandler", () => {
         Type: OperationType.INVOKE,
         Name: undefined,
         Payload: '{"serialized":"data"}',
-        InvokeOptions: {},
+        InvokeOptions: {
+          FunctionName: "test-function",
+        },
       });
 
       expect(mockLog).toHaveBeenCalledWith(
@@ -326,7 +328,9 @@ describe("InvokeHandler", () => {
         Type: OperationType.INVOKE,
         Name: "my-invoke",
         Payload: '{"serialized":"data"}',
-        InvokeOptions: {},
+        InvokeOptions: {
+          FunctionName: "test-function",
+        },
       });
     });
 
@@ -344,10 +348,10 @@ describe("InvokeHandler", () => {
         mockHasRunningOperations,
       );
 
-      const options = { FunctionQualifier: "LATEST" };
+      const config = { serdes: { serialize: async () => "custom", deserialize: async () => ({}) } };
 
       await expect(
-        invokeHandler("test-function", { test: "data" }, options),
+        invokeHandler("test-function", { test: "data" }, config),
       ).rejects.toThrow("Execution terminated");
 
       expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
@@ -358,7 +362,9 @@ describe("InvokeHandler", () => {
         Type: OperationType.INVOKE,
         Name: undefined,
         Payload: '{"serialized":"data"}',
-        InvokeOptions: options,
+        InvokeOptions: {
+          FunctionName: "test-function",
+        },
       });
     });
 

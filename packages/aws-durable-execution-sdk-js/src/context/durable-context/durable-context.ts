@@ -16,7 +16,7 @@ import {
   ConcurrentExecutor,
   ConcurrencyConfig,
   Logger,
-  InvokeOptions,
+  InvokeConfig,
 } from "../../types";
 import { Context } from "aws-lambda";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
@@ -97,8 +97,8 @@ export const createDurableContext = (
   const invoke: DurableContext["invoke"] = <I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
-    inputOrOptions?: I | InvokeOptions,
-    maybeOptions?: InvokeOptions,
+    inputOrConfig?: I | InvokeConfig,
+    maybeConfig?: InvokeConfig,
   ) => {
     const invokeHandler = createInvokeHandler(
       executionContext,
@@ -109,8 +109,8 @@ export const createDurableContext = (
     return invokeHandler<I, O>(
       nameOrFuncId,
       funcIdOrInput as any,
-      inputOrOptions as any,
-      maybeOptions,
+      inputOrConfig as any,
+      maybeConfig,
     );
   };
 
