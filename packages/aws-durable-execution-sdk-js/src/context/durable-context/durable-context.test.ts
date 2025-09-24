@@ -1,5 +1,6 @@
 import { createDurableContext } from "./durable-context";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
+import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
 import { createRunInChildContextHandler } from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
 import { createWaitHandler } from "../../handlers/wait-handler/wait-handler";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
@@ -15,6 +16,7 @@ import { createMockExecutionContext } from "../../testing/mock-context";
 // Mock the handlers
 jest.mock("../../utils/checkpoint/checkpoint");
 jest.mock("../../handlers/step-handler/step-handler");
+jest.mock("../../handlers/invoke-handler/invoke-handler");
 jest.mock(
   "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
 );
@@ -32,6 +34,7 @@ describe("Durable Context", () => {
   let mockParentContext: Context;
   let mockCheckpointHandler: jest.Mock;
   let mockStepHandler: jest.Mock;
+  let mockInvokeHandler: jest.Mock;
   let mockRunInChildContextHandler: jest.Mock;
   let mockWaitHandler: jest.Mock;
   let mockCallbackHandler: jest.Mock;
@@ -69,6 +72,7 @@ describe("Durable Context", () => {
     // Setup mocks
     mockCheckpointHandler = jest.fn();
     mockStepHandler = jest.fn();
+    mockInvokeHandler = jest.fn();
     mockRunInChildContextHandler = jest.fn();
     mockWaitHandler = jest.fn();
     mockCallbackHandler = jest.fn();
@@ -79,6 +83,7 @@ describe("Durable Context", () => {
 
     (createCheckpoint as jest.Mock).mockReturnValue(mockCheckpointHandler);
     (createStepHandler as jest.Mock).mockReturnValue(mockStepHandler);
+    (createInvokeHandler as jest.Mock).mockReturnValue(mockInvokeHandler);
     (createRunInChildContextHandler as jest.Mock).mockReturnValue(
       mockRunInChildContextHandler,
     );
@@ -94,13 +99,14 @@ describe("Durable Context", () => {
     );
   });
 
-  test("should create a durable context with step, runInChildContext, wait, createCallback, waitForCallback, map, parallel, and executeConcurrently methods", () => {
+  test("should create a durable context with step, invoke, runInChildContext, wait, createCallback, waitForCallback, map, parallel, and executeConcurrently methods", () => {
     const durableContext = createDurableContext(
       mockExecutionContext,
       mockParentContext,
     );
 
     expect(durableContext).toHaveProperty("step");
+    expect(durableContext).toHaveProperty("invoke");
     expect(durableContext).toHaveProperty("runInChildContext");
     expect(durableContext).toHaveProperty("wait");
     expect(durableContext).toHaveProperty("createCallback");
@@ -143,6 +149,31 @@ describe("Durable Context", () => {
       expect.any(Function), // hasRunningOperations
     );
     expect(mockStepHandler).toHaveBeenCalledWith("test-step", stepFn, options);
+  });
+
+  test("should call invoke handler when invoke method is invoked", () => {
+    const durableContext = createDurableContext(
+      mockExecutionContext,
+      mockParentContext,
+    );
+    const funcId = "arn:aws:lambda:us-east-1:123456789012:function:test";
+    const input = { test: "data" };
+    const options = { FunctionQualifier: "LATEST" };
+
+    durableContext.invoke("test-invoke", funcId, input, options);
+
+    expect(createInvokeHandler).toHaveBeenCalledWith(
+      mockExecutionContext,
+      mockCheckpointHandler,
+      expect.any(Function), // createStepId
+      expect.any(Function), // hasRunningOperations
+    );
+    expect(mockInvokeHandler).toHaveBeenCalledWith(
+      "test-invoke",
+      funcId,
+      input,
+      options,
+    );
   });
 
   test("should call block handler when runInChildContext method is invoked", () => {

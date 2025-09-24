@@ -63,6 +63,7 @@ export enum OperationSubType {
   PARALLEL_BRANCH = "ParallelBranch",
   WAIT_FOR_CALLBACK = "WaitForCallback",
   WAIT_FOR_CONDITION = "WaitForCondition",
+  INVOKE = "Invoke",
 }
 
 interface DurableExecutionInvocationOutputFailed {
@@ -92,6 +93,12 @@ export interface DurableContext extends Context {
     fnOrOptions?: StepFunc<T> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
   ) => Promise<T>;
+  invoke: <I, O>(
+    nameOrFuncId: string,
+    funcIdOrInput?: string | I,
+    inputOrOptions?: I | InvokeOptions,
+    maybeOptions?: InvokeOptions,
+  ) => Promise<O>;
   runInChildContext: <T>(
     nameOrFn: string | undefined | ChildFunc<T>,
     fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
@@ -202,6 +209,12 @@ export interface WaitForCallbackConfig {
   heartbeatTimeout?: number; // seconds
   retryStrategy?: (error: Error, attemptCount: number) => RetryDecision;
   serdes?: Serdes<any>;
+}
+
+export interface InvokeOptions {
+  FunctionName?: string | undefined;
+  FunctionQualifier?: string | undefined;
+  DurableExecutionName?: string | undefined;
 }
 
 export type CreateCallbackResult<T> = [Promise<T>, string]; // [promise, callbackId]
