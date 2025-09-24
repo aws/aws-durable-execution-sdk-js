@@ -213,6 +213,7 @@ export interface WaitForCallbackConfig {
 
 export interface InvokeConfig {
   serdes?: Serdes<any>;
+  TimeoutSeconds?: number | undefined;
 }
 
 export type CreateCallbackResult<T> = [Promise<T>, string]; // [promise, callbackId]

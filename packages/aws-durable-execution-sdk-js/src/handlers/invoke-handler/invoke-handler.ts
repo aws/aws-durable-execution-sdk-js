@@ -42,9 +42,7 @@ export const createInvokeHandler = (
     const name = isNameFirst ? nameOrFuncId : undefined;
     const funcId = isNameFirst ? (funcIdOrInput as string) : nameOrFuncId;
     const input = isNameFirst ? (inputOrConfig as I) : (funcIdOrInput as I);
-    const config = isNameFirst
-      ? maybeConfig
-      : (inputOrConfig as InvokeConfig);
+    const config = isNameFirst ? maybeConfig : (inputOrConfig as InvokeConfig);
 
     const stepId = createStepId();
 
@@ -114,6 +112,7 @@ export const createInvokeHandler = (
         Payload: serializedPayload,
         InvokeOptions: {
           FunctionName: funcId,
+          ...(config?.TimeoutSeconds && { TimeoutSeconds: config.TimeoutSeconds }),
         },
       });
 

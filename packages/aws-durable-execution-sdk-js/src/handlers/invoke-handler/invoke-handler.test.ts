@@ -17,12 +17,19 @@ jest.mock("../../errors/serdes-errors/serdes-errors");
 
 import { terminate } from "../../utils/termination-helper";
 import { log } from "../../utils/logger/logger";
-import { safeSerialize, safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
+import {
+  safeSerialize,
+  safeDeserialize,
+} from "../../errors/serdes-errors/serdes-errors";
 
 const mockTerminate = terminate as jest.MockedFunction<typeof terminate>;
 const mockLog = log as jest.MockedFunction<typeof log>;
-const mockSafeSerialize = safeSerialize as jest.MockedFunction<typeof safeSerialize>;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<typeof safeDeserialize>;
+const mockSafeSerialize = safeSerialize as jest.MockedFunction<
+  typeof safeSerialize
+>;
+const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+  typeof safeDeserialize
+>;
 
 describe("InvokeHandler", () => {
   let mockContext: ExecutionContext;
@@ -348,7 +355,13 @@ describe("InvokeHandler", () => {
         mockHasRunningOperations,
       );
 
-      const config = { serdes: { serialize: async () => "custom", deserialize: async () => ({}) } };
+      const config = {
+        serdes: {
+          serialize: async () => "custom",
+          deserialize: async () => ({}),
+        },
+        TimeoutSeconds: 30,
+      };
 
       await expect(
         invokeHandler("test-function", { test: "data" }, config),
@@ -364,6 +377,7 @@ describe("InvokeHandler", () => {
         Payload: '{"serialized":"data"}',
         InvokeOptions: {
           FunctionName: "test-function",
+          TimeoutSeconds: 30,
         },
       });
     });
