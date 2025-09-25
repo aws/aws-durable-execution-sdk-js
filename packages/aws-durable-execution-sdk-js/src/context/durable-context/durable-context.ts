@@ -97,8 +97,8 @@ export const createDurableContext = (
   const invoke: DurableContext["invoke"] = <I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
-    inputOrConfig?: I | InvokeConfig,
-    maybeConfig?: InvokeConfig,
+    inputOrConfig?: I | InvokeConfig<I, O>,
+    maybeConfig?: InvokeConfig<I, O>,
   ) => {
     const invokeHandler = createInvokeHandler(
       executionContext,

@@ -356,11 +356,11 @@ describe("InvokeHandler", () => {
       );
 
       const config = {
-        serdes: {
+        payloadSerdes: {
           serialize: async () => "custom",
           deserialize: async () => ({}),
         },
-        TimeoutSeconds: 30,
+        timeoutSeconds: 30,
       };
 
       await expect(
