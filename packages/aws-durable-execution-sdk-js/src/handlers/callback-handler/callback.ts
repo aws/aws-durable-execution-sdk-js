@@ -12,6 +12,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/callback-error/callback-error";
+import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
 const passThroughSerdes: Serdes<any> = {
   serialize: async (value: any) => value,
@@ -19,7 +20,7 @@ const passThroughSerdes: Serdes<any> = {
 };
 
 /**
- * Creates a thenable that terminates only when awaited (when .then() is called)
+ * Creates a thenable that checks status and running operations before terminating
  * Properly implements Promise interface including instanceof Promise support
  */
 const createTerminatingThenable = <T>(
@@ -27,6 +28,8 @@ const createTerminatingThenable = <T>(
   stepId: string,
   stepName: string | undefined,
   message: string,
+  hasRunningOperations: () => boolean,
+  serdes: Serdes<T>,
 ): Promise<T> => {
   // Create a class that extends Promise to support instanceof checks
   class TerminatingPromise extends Promise<T> {
@@ -35,13 +38,47 @@ const createTerminatingThenable = <T>(
       super(() => {});
     }
 
-    then<TResult1 = T, TResult2 = never>(
+    async then<TResult1 = T, TResult2 = never>(
       _onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
       _onrejected?:
         | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
         | null,
     ): Promise<TResult1 | TResult2> {
-      // Terminate when the promise is actually awaited
+      // Wait for EITHER operations to complete OR status to change
+      if (hasRunningOperations()) {
+        await waitBeforeContinue({
+          checkHasRunningOperations: true,
+          checkStepStatus: true, // ✅ Check status changes too
+          checkTimer: false,
+          stepId,
+          context,
+          hasRunningOperations,
+          pollingInterval: 1000,
+        });
+      }
+
+      // Check final status after waiting
+      const finalStepData = context.getStepData(stepId);
+      if (finalStepData?.Status === OperationStatus.SUCCEEDED) {
+        const result = await handleCompletedCallback<T>(
+          context,
+          stepId,
+          stepName,
+          serdes,
+        );
+        return result[0] as Promise<TResult1 | TResult2>;
+      }
+      if (finalStepData?.Status === OperationStatus.FAILED) {
+        const result = await handleFailedCallback<T>(
+          context,
+          stepId,
+          stepName,
+          serdes,
+        );
+        return result[0] as Promise<TResult1 | TResult2>;
+      }
+
+      // Only terminate if still pending
       return terminate(context, TerminationReason.CALLBACK_PENDING, message);
     }
 
@@ -50,13 +87,22 @@ const createTerminatingThenable = <T>(
         | ((reason: unknown) => TResult | PromiseLike<TResult>)
         | null,
     ): Promise<T | TResult> {
-      // Terminate when catch is called (which internally calls then)
-      return terminate(context, TerminationReason.CALLBACK_PENDING, message);
+      // Delegate to then() which handles the status checking
+      return this.then(undefined, _onrejected);
     }
 
     finally(_onfinally?: (() => void) | null): Promise<T> {
-      // Terminate when finally is called
-      return terminate(context, TerminationReason.CALLBACK_PENDING, message);
+      // Delegate to then() which handles the status checking
+      return this.then(
+        (value) => {
+          _onfinally?.();
+          return value;
+        },
+        (reason) => {
+          _onfinally?.();
+          throw reason;
+        },
+      );
     }
   }
 
@@ -67,6 +113,7 @@ export const createCallback = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
+  hasRunningOperations: () => boolean,
 ) => {
   return async <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig,
@@ -104,7 +151,13 @@ export const createCallback = (
 
     // Check if callback is already started (has callbackId)
     if (stepData?.Status === OperationStatus.STARTED) {
-      return await handleStartedCallback<T>(context, stepId, name, serdes);
+      return await handleStartedCallback<T>(
+        context,
+        stepId,
+        name,
+        serdes,
+        hasRunningOperations,
+      );
     }
 
     // Create new callback
@@ -115,6 +168,7 @@ export const createCallback = (
       name,
       config,
       serdes,
+      hasRunningOperations,
     );
   };
 };
@@ -187,8 +241,9 @@ const handleFailedCallback = async <T>(
 const handleStartedCallback = async <T>(
   context: ExecutionContext,
   stepId: string,
-  _stepName: string | undefined,
-  _serdes: Serdes<T>,
+  stepName: string | undefined,
+  serdes: Serdes<T>,
+  hasRunningOperations: () => boolean,
 ): Promise<CreateCallbackResult<T>> => {
   log(
     context.isVerbose,
@@ -203,12 +258,14 @@ const handleStartedCallback = async <T>(
     throw new Error(`No callback ID found for started callback: ${stepId}`);
   }
 
-  // Create a thenable that terminates only when awaited
+  // Create a thenable that checks status and operations before terminating
   const callbackPromise = createTerminatingThenable<T>(
     context,
     stepId,
-    _stepName,
-    `Callback ${_stepName || stepId} is pending external completion`,
+    stepName,
+    `Callback ${stepName || stepId} is pending external completion`,
+    hasRunningOperations,
+    serdes,
   );
 
   return [callbackPromise, callbackData.CallbackId];
@@ -220,7 +277,8 @@ const createNewCallback = async <T>(
   stepId: string,
   name: string | undefined,
   config: CreateCallbackConfig | undefined,
-  _serdes: Serdes<T>,
+  serdes: Serdes<T>,
+  hasRunningOperations: () => boolean,
 ): Promise<CreateCallbackResult<T>> => {
   log(context.isVerbose, "🆕", "Creating new callback:", {
     stepId,
@@ -253,12 +311,14 @@ const createNewCallback = async <T>(
 
   const callbackId = callbackData.CallbackId;
 
-  // Create a thenable that terminates only when awaited
+  // Create a thenable that checks status and operations before terminating
   const callbackPromise = createTerminatingThenable<T>(
     context,
     stepId,
     name,
     `Callback ${name || stepId} created and pending external completion`,
+    hasRunningOperations,
+    serdes,
   );
 
   log(context.isVerbose, "✅", "Callback created successfully:", {

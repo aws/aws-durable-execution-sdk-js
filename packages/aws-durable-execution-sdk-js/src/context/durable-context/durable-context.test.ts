@@ -252,6 +252,7 @@ describe("Durable Context", () => {
       mockExecutionContext,
       mockCheckpointHandler,
       expect.any(Function),
+      expect.any(Function), // hasRunningOperations
     );
     expect(mockCallbackHandler).toHaveBeenCalledWith(
       callbackName,
@@ -272,6 +273,7 @@ describe("Durable Context", () => {
       mockExecutionContext,
       mockCheckpointHandler,
       expect.any(Function),
+      expect.any(Function), // hasRunningOperations
     );
     expect(mockCallbackHandler).toHaveBeenCalledWith(callbackConfig, undefined);
   });

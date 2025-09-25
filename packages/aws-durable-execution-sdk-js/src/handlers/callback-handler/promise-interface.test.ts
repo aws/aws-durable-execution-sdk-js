@@ -10,10 +10,12 @@ describe("Callback Handler Promise Interface", () => {
   let mockCheckpoint: ReturnType<typeof createCheckpoint>;
   let createStepId: () => string;
   let stepIdCounter: number;
+  let mockHasRunningOperations: jest.Mock;
 
   beforeEach(() => {
     stepIdCounter = 0;
     createStepId = () => `step-${++stepIdCounter}`;
+    mockHasRunningOperations = jest.fn().mockReturnValue(false);
 
     mockContext = createMockExecutionContext();
 
@@ -39,6 +41,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -52,6 +55,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -77,6 +81,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -102,6 +107,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -127,6 +133,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -145,6 +152,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -196,6 +204,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       // Force the step ID to be "step-1" to match our mock
@@ -210,6 +219,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       stepIdCounter = 0;
@@ -226,6 +236,7 @@ describe("Callback Handler Promise Interface", () => {
         mockContext,
         mockCheckpoint,
         createStepId,
+        mockHasRunningOperations,
       );
 
       stepIdCounter = 0;
