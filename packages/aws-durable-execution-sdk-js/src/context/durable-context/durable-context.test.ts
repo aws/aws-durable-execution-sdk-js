@@ -159,7 +159,7 @@ describe("Durable Context", () => {
     const funcId = "arn:aws:lambda:us-east-1:123456789012:function:test";
     const input = { test: "data" };
     const config = {
-      serdes: { serialize: async () => "test", deserialize: async () => ({}) },
+      payloadSerdes: { serialize: async () => "test", deserialize: async () => ({}) },
     };
 
     durableContext.invoke("test-invoke", funcId, input, config);

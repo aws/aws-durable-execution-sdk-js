@@ -24,25 +24,25 @@ export const createInvokeHandler = (
   function invokeHandler<I, O>(
     funcId: string,
     input: I,
-    config?: InvokeConfig,
+    config?: InvokeConfig<I, O>,
   ): Promise<O>;
   function invokeHandler<I, O>(
     name: string,
     funcId: string,
     input: I,
-    config?: InvokeConfig,
+    config?: InvokeConfig<I, O>,
   ): Promise<O>;
   async function invokeHandler<I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
-    inputOrConfig?: I | InvokeConfig,
-    maybeConfig?: InvokeConfig,
+    inputOrConfig?: I | InvokeConfig<I, O>,
+    maybeConfig?: InvokeConfig<I, O>,
   ): Promise<O> {
     const isNameFirst = typeof funcIdOrInput === "string";
     const name = isNameFirst ? nameOrFuncId : undefined;
     const funcId = isNameFirst ? (funcIdOrInput as string) : nameOrFuncId;
     const input = isNameFirst ? (inputOrConfig as I) : (funcIdOrInput as I);
-    const config = isNameFirst ? maybeConfig : (inputOrConfig as InvokeConfig);
+    const config = isNameFirst ? maybeConfig : (inputOrConfig as InvokeConfig<I, O>);
 
     const stepId = createStepId();
 
@@ -55,7 +55,7 @@ export const createInvokeHandler = (
       // Return cached result - no need to check for errors in successful operations
       const invokeDetails = stepData.InvokeDetails;
       return await safeDeserialize(
-        config?.serdes || defaultSerdes,
+        config?.resultSerdes || defaultSerdes,
         invokeDetails?.Result,
         stepId,
         name,
@@ -92,7 +92,7 @@ export const createInvokeHandler = (
     ).execute(name, async (): Promise<O> => {
       // Serialize the input payload
       const serializedPayload = await safeSerialize(
-        config?.serdes || defaultSerdes,
+        config?.payloadSerdes || defaultSerdes,
         input,
         stepId,
         name,
@@ -112,7 +112,7 @@ export const createInvokeHandler = (
         Payload: serializedPayload,
         InvokeOptions: {
           FunctionName: funcId,
-          ...(config?.TimeoutSeconds && { TimeoutSeconds: config.TimeoutSeconds }),
+          ...(config?.timeoutSeconds && { TimeoutSeconds: config.timeoutSeconds }),
         },
       });
 

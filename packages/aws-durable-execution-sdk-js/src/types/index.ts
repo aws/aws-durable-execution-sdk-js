@@ -96,8 +96,8 @@ export interface DurableContext extends Context {
   invoke: <I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
-    inputOrConfig?: I | InvokeConfig,
-    maybeConfig?: InvokeConfig,
+    inputOrConfig?: I | InvokeConfig<I, O>,
+    maybeConfig?: InvokeConfig<I, O>,
   ) => Promise<O>;
   runInChildContext: <T>(
     nameOrFn: string | undefined | ChildFunc<T>,
@@ -211,9 +211,10 @@ export interface WaitForCallbackConfig {
   serdes?: Serdes<any>;
 }
 
-export interface InvokeConfig {
-  serdes?: Serdes<any>;
-  TimeoutSeconds?: number | undefined;
+export interface InvokeConfig<I = any, O = any> {
+  payloadSerdes?: Serdes<I>;
+  resultSerdes?: Serdes<O>;
+  timeoutSeconds?: number | undefined;
 }
 
 export type CreateCallbackResult<T> = [Promise<T>, string]; // [promise, callbackId]
