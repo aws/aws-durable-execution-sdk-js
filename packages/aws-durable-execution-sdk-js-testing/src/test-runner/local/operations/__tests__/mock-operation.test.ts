@@ -1,5 +1,5 @@
 import { MockOperation, MockOperationParameters } from "../mock-operation";
-import { OperationInterceptor } from "aws-durable-execution-sdk-js";
+import { OperationInterceptor } from "@aws/durable-execution-sdk-js";
 import { createExecutionId } from "../../../../checkpoint-server/utils/tagged-strings";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";

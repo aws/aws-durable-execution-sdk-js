@@ -1,4 +1,4 @@
-import {LocalDurableTestRunner, WaitingOperationStatus} from "aws-durable-execution-sdk-js-testing";
+import {LocalDurableTestRunner, WaitingOperationStatus} from "@aws/durable-execution-sdk-js-testing";
 import {handler} from '../wait-for-callback';
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());

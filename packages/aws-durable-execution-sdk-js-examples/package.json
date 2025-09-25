@@ -1,5 +1,5 @@
 {
-  "name": "aws-durable-execution-sdk-js-examples",
+  "name": "@aws/durable-execution-sdk-js-examples",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-examples",
@@ -37,8 +37,8 @@
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"
   },
   "dependencies": {
-    "aws-durable-execution-sdk-js": "*",
-    "aws-durable-execution-sdk-js-testing": "*",
+    "@aws/durable-execution-sdk-js": "*",
+    "@aws/durable-execution-sdk-js-testing": "*",
     "@aws-sdk/client-dynamodb": "^3.777.0"
   },
   "devDependencies": {

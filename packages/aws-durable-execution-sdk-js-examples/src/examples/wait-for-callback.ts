@@ -1,4 +1,4 @@
-import {DurableContext, withDurableFunctions} from "aws-durable-execution-sdk-js";
+import {DurableContext, withDurableFunctions} from "@aws/durable-execution-sdk-js";
 
 const mySubmitterFunction = async (callbackId: string): Promise<void> => {
     console.log(`Calling my external system with callback id: ${callbackId}`);

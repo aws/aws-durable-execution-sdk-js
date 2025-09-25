@@ -1,4 +1,4 @@
-import {DurableContext, withDurableFunctions} from "aws-durable-execution-sdk-js";
+import {DurableContext, withDurableFunctions} from "@aws/durable-execution-sdk-js";
 
 export const handler = withDurableFunctions(async (event: any, context: DurableContext) => {
     const results = await context.parallel("parallel", [

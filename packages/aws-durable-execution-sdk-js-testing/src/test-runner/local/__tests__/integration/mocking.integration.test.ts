@@ -2,7 +2,7 @@ import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import {
   DurableContext,
   withDurableFunctions,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());

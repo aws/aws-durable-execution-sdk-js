@@ -1,4 +1,4 @@
-import { LocalDurableTestRunner} from "aws-durable-execution-sdk-js-testing";
+import { LocalDurableTestRunner} from "@aws/durable-execution-sdk-js-testing";
 import { handler } from '../promise-all';
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());

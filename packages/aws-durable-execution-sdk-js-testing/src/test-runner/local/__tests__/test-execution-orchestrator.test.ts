@@ -8,7 +8,7 @@ import {
 import {
   DurableExecutionInvocationOutput,
   InvocationStatus,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 import {
   ErrorObject,
   Operation,

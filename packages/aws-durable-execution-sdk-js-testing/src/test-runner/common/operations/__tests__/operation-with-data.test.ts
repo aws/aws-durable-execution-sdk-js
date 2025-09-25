@@ -4,7 +4,7 @@ import {
   ErrorObject,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
-import { OperationSubType } from "aws-durable-execution-sdk-js";
+import { OperationSubType } from "@aws/durable-execution-sdk-js";
 
 import * as DurableExecutionsClientModule from "../../../local/api-client/durable-executions-client";
 import { WaitingOperationStatus } from "../../../durable-test-runner";

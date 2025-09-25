@@ -1,6 +1,6 @@
 import {
   OperationType,
-} from "aws-durable-execution-sdk-js-testing";
+} from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "../block-example";
 import { createTests } from "./shared/test-helper";
 

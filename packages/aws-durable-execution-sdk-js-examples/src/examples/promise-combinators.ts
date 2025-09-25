@@ -1,7 +1,7 @@
 import {
   DurableContext,
   withDurableFunctions,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 
 interface PromiseCombinatorsInput {
   message?: string;

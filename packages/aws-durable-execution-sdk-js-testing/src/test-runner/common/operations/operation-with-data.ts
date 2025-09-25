@@ -21,7 +21,7 @@ import { doesStatusMatch } from "../../local/operations/status-matcher";
 import { tryJsonParse } from "../utils";
 import { IndexedOperations } from "../indexed-operations";
 import { transformErrorObjectToErrorResult } from "../../../utils";
-import { OperationSubType } from "aws-durable-execution-sdk-js";
+import { OperationSubType } from "@aws/durable-execution-sdk-js";
 
 export interface OperationResultContextDetails<ResultValue = unknown> {
   readonly result: ResultValue | undefined;

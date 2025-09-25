@@ -3,7 +3,7 @@ import { Context } from "aws-lambda";
 import {
   withDurableFunctions,
   DurableExecutionInvocationOutput,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 import { randomUUID } from "node:crypto";
 
 export interface HandlerParameters {

@@ -4,7 +4,7 @@ import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
 import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import { InvocationStatus } from "aws-durable-execution-sdk-js";
+import { InvocationStatus } from "@aws/durable-execution-sdk-js";
 import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manager";
 import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
