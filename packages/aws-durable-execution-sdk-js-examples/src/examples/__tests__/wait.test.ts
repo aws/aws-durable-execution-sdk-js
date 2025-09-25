@@ -7,10 +7,10 @@ createTests({
   handler,
   tests: (runner) => {
     it("should call wait for 10 seconds", async () => {
-      const waitStep = runner.getOperationByIndex(0);
-
+      
       const execution = await runner.run();
-
+      
+      const waitStep = runner.getOperationByIndex(0);
       expect(execution.getResult()).toBe("Function Completed");
       expect(waitStep.getWaitDetails()?.waitSeconds).toEqual(10);
     });

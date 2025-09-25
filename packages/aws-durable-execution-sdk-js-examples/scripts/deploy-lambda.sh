@@ -70,13 +70,6 @@ fi
 
 ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole"
 
-# Verify role exists
-echo "Verifying IAM role exists..."
-if ! aws iam get-role --role-name DurableFunctionsIntegrationTestRole >/dev/null 2>&1; then
-    echo "Error: IAM role 'DurableFunctionsIntegrationTestRole' does not exist in account ${AWS_ACCOUNT_ID}"
-    exit 1
-fi
-
 echo "Checking if function exists..."
 
 if aws lambda get-function --function-name "$FUNCTION_NAME" --endpoint-url "$LAMBDA_ENDPOINT" --region "$AWS_REGION" >/dev/null 2>&1; then
