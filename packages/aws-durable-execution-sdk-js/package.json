@@ -1,4 +1,4 @@
 {
-  "name": "aws-durable-execution-sdk-js",
+  "name": "@aws/durable-execution-sdk-js",
   "version": "0.0.0"
 }

@@ -2,3 +2,6 @@ node_modules
 *.iml
 .idea
 .DS_STORE
+coverage
+dist
+dist-cjs
