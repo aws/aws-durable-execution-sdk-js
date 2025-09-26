@@ -22,6 +22,8 @@ import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
+import { FunctionStorage } from "../operations/function-storage";
+import { IDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -43,6 +45,7 @@ describe("TestExecutionOrchestrator", () => {
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient;
   let mockScheduler: Scheduler;
+  let mockFunctionStorage: FunctionStorage;
 
   const mockOperation: Operation = {
     Id: "op1",
@@ -64,6 +67,18 @@ describe("TestExecutionOrchestrator", () => {
     checkpointApi = new CheckpointApiClient("http://127.0.0.1:1234");
 
     mockScheduler = new Scheduler();
+
+    // Create a mock factory for FunctionStorage
+    const mockFactory: IDurableTestRunnerFactory = {
+      createRunner: jest.fn().mockReturnValue({
+        run: jest.fn().mockResolvedValue({
+          getStatus: () => 'SUCCEEDED',
+          getResult: () => ({}),
+        }),
+      }),
+    };
+
+    mockFunctionStorage = new FunctionStorage(mockFactory);
 
     jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
       executionId: mockExecutionId,
@@ -100,6 +115,7 @@ describe("TestExecutionOrchestrator", () => {
       mockOperationStorage,
       checkpointApi,
       mockScheduler,
+      mockFunctionStorage,
       false // skipTime
     );
   });
@@ -718,6 +734,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockScheduler,
+        mockFunctionStorage,
         true
       );
 
@@ -730,6 +747,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockScheduler,
+        mockFunctionStorage,
         true
       );
 
@@ -1031,6 +1049,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockScheduler,
+        mockFunctionStorage,
         true // skipTime = true
       );
 
@@ -1320,7 +1339,9 @@ describe("TestExecutionOrchestrator", () => {
       expect(checkpointApi.updateCheckpointData).toHaveBeenCalledWith({
         executionId: mockExecutionId,
         operationId: "status-ready-retry",
-        status: OperationStatus.READY,
+        operationData: {
+          Status: OperationStatus.READY,
+        }
       });
 
       // Verify new invocation was started after status update
@@ -1388,7 +1409,9 @@ describe("TestExecutionOrchestrator", () => {
       expect(checkpointApi.updateCheckpointData).toHaveBeenCalledWith({
         executionId: mockExecutionId,
         operationId: "param-test-wait",
-        status: OperationStatus.SUCCEEDED,
+        operationData: {
+          Status: OperationStatus.SUCCEEDED,
+        },
       });
 
       // Verify new invocation was started
@@ -1844,6 +1867,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockScheduler,
+        mockFunctionStorage,
         true
       );
 

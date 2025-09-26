@@ -200,7 +200,7 @@ async function runHandler<Input, Output>(
   }
 }
 
-export const withDurableFunctions = <Input, Output>(
+export const withDurableFunctions = <Input = any, Output = any>(
   handler: DurableHandler<Input, Output>,
 ): LambdaHandler<DurableExecutionInvocationInput> => {
   return async (

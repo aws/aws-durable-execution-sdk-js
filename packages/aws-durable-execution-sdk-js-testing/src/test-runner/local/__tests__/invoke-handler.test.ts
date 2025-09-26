@@ -140,4 +140,84 @@ describe("invoke-handler", () => {
       ).rejects.toThrow(mockError);
     });
   });
+
+  describe("buildContext method", () => {
+    let invokeHandlerInstance: InvokeHandler;
+
+    beforeEach(() => {
+      invokeHandlerInstance = new InvokeHandler();
+    });
+
+    it("should return default context when no contextValues provided", () => {
+      const context = invokeHandlerInstance.buildContext();
+
+      expect(context).toMatchObject({
+        callbackWaitsForEmptyEventLoop: false,
+        functionName: "my-function-name",
+        functionVersion: "1",
+        memoryLimitInMB: "1024",
+        awsRequestId: "00000000-0000-0000-0000-000000000000",
+        logGroupName: "MyLogGroupName",
+        logStreamName: "MyLogStreamName",
+      });
+      expect(typeof context.getRemainingTimeInMillis).toBe("function");
+    });
+
+    it("should merge custom context values with defaults", () => {
+      const customContextValues: Partial<Context> = {
+        functionName: "custom-function-name",
+        memoryLimitInMB: "512",
+        awsRequestId: "custom-request-id",
+      };
+
+      const context = invokeHandlerInstance.buildContext(customContextValues);
+
+      expect(context).toMatchObject({
+        functionName: "custom-function-name",
+        memoryLimitInMB: "512",
+        awsRequestId: "custom-request-id",
+        // Defaults should still be present
+        callbackWaitsForEmptyEventLoop: false,
+        functionVersion: "1",
+        logGroupName: "MyLogGroupName",
+        logStreamName: "MyLogStreamName",
+      });
+    });
+
+    it("should override function implementations in context", () => {
+      const customGetRemainingTime = jest.fn().mockReturnValue(5000);
+
+      const customContextValues: Partial<Context> = {
+        getRemainingTimeInMillis: customGetRemainingTime,
+      };
+
+      const context = invokeHandlerInstance.buildContext(customContextValues);
+
+      expect(context.getRemainingTimeInMillis).toBe(customGetRemainingTime);
+      expect(context.getRemainingTimeInMillis()).toBe(5000);
+      expect(customGetRemainingTime).toHaveBeenCalled();
+    });
+
+    it("should handle constructor defaults and runtime overrides together", () => {
+      const constructorDefaults: Partial<Context> = {
+        functionName: "constructor-function",
+        memoryLimitInMB: "256",
+      };
+
+      const handlerWithDefaults = new InvokeHandler(constructorDefaults);
+
+      const runtimeOverrides: Partial<Context> = {
+        functionName: "runtime-function", // Should override constructor default
+        awsRequestId: "runtime-request-id",
+      };
+
+      const context = handlerWithDefaults.buildContext(runtimeOverrides);
+
+      expect(context).toMatchObject({
+        functionName: "runtime-function", // Runtime override wins
+        memoryLimitInMB: "256", // Constructor default preserved
+        awsRequestId: "runtime-request-id", // Runtime override
+      });
+    });
+  });
 });

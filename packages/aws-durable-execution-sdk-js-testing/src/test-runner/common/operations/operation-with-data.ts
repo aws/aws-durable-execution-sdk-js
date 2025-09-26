@@ -41,6 +41,11 @@ export interface OperationResultCallbackDetails<ResultValue = unknown> {
   readonly result?: ResultValue;
 }
 
+export interface OperationResultInvokeDetails<ResultValue = unknown> {
+  readonly error?: TestResultError;
+  readonly result?: ResultValue;
+}
+
 export interface WaitResultDetails {
   readonly waitSeconds?: number;
   readonly scheduledEndTimestamp?: Date;
@@ -157,6 +162,39 @@ export class OperationWithData<OperationResultValue = unknown>
       callbackId: callbackDetails.CallbackId,
       error: transformErrorObjectToErrorResult(callbackDetails.Error),
       result: tryJsonParse(callbackDetails.Result),
+    };
+  }
+
+  getInvokeDetails():
+    | OperationResultInvokeDetails<OperationResultValue>
+    | undefined {
+    const operationData = this.getOperationData();
+
+    if (!operationData) {
+      return undefined;
+    }
+
+    if (operationData.Type !== OperationType.INVOKE) {
+      throw new Error(`Operation type ${operationData.Type} is not INVOKE`);
+    }
+
+    const invokeDetails = operationData.InvokeDetails;
+
+    let result: OperationResultValue | undefined;
+    try {
+      result = invokeDetails?.Result
+        ? // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+          (JSON.parse(invokeDetails.Result) as unknown as OperationResultValue)
+        : undefined;
+    } catch (err) {
+      throw new Error("Could not parse result for invoke details", {
+        cause: err,
+      });
+    }
+
+    return {
+      error: transformErrorObjectToErrorResult(invokeDetails?.Error),
+      result,
     };
   }
 

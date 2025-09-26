@@ -215,7 +215,12 @@ describe("CheckpointApiClient", () => {
       await apiClient.updateCheckpointData({
         executionId: mockExecutionId,
         operationId: mockOperationId,
-        status: OperationStatus.READY,
+        operationData: {
+          Status: OperationStatus.SUCCEEDED,
+          StepDetails: {
+            Result: "hello world",
+          },
+        },
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -224,7 +229,12 @@ describe("CheckpointApiClient", () => {
           method: HTTP_METHODS.POST,
           body: JSON.stringify({
             action: undefined,
-            status: OperationStatus.READY,
+            operationData: {
+              Status: OperationStatus.SUCCEEDED,
+              StepDetails: {
+                Result: "hello world",
+              },
+            },
           }),
           headers: {
             "Content-Type": "application/json",
@@ -246,7 +256,12 @@ describe("CheckpointApiClient", () => {
         apiClient.updateCheckpointData({
           executionId: mockExecutionId,
           operationId: mockOperationId,
-          status: OperationStatus.SUCCEEDED,
+          operationData: {
+            Status: OperationStatus.SUCCEEDED,
+            StepDetails: {
+              Result: "hello world",
+            },
+          },
         })
       ).rejects.toThrow(
         `Error making HTTP request to ${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}: status: 404, ${errorMessage}`

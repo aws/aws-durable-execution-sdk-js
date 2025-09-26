@@ -28,6 +28,7 @@ export class ResultFormatter<ResultType> {
     invocations: Invocation[]
   ): TestResult<ResultType> {
     return {
+      getStatus: () => lambdaResponse.status,
       getOperations: (params) => {
         if (params) {
           return operationStorage

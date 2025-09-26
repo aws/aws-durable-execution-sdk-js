@@ -676,6 +676,154 @@ describe("OperationWithData", () => {
     });
   });
 
+  describe("getInvokeDetails", () => {
+    it("should throw error when operation type is not INVOKE", () => {
+      const operation = new OperationWithData(
+        waitManager,
+        mockIndexedOperations
+      );
+      const operationData = {
+        Id: "test-id",
+        Name: "test-operation",
+        Status: OperationStatus.SUCCEEDED,
+        Type: OperationType.STEP, // Not INVOKE
+      };
+
+      operation.populateData({
+        operation: operationData,
+        events: [],
+      });
+
+      expect(() => operation.getInvokeDetails()).toThrow(
+        "Operation type STEP is not INVOKE"
+      );
+    });
+
+    it("should return invoke details with only result", () => {
+      const operation = new OperationWithData(
+        waitManager,
+        mockIndexedOperations
+      );
+      const operationData = {
+        Id: "test-id",
+        Name: "test-invoke",
+        Status: OperationStatus.SUCCEEDED,
+        Type: OperationType.INVOKE,
+        InvokeDetails: {
+          Result: '{"functionResult": "success", "executionTime": 250}',
+          Error: undefined,
+        },
+      };
+
+      operation.populateData({
+        operation: operationData,
+        events: [],
+      });
+
+      const invokeDetails = operation.getInvokeDetails();
+      expect(invokeDetails).toEqual({
+        result: { functionResult: "success", executionTime: 250 },
+        error: undefined,
+      });
+    });
+
+    it("should return invoke details with only error", () => {
+      const operation = new OperationWithData(
+        waitManager,
+        mockIndexedOperations
+      );
+      const operationData = {
+        Id: "test-id",
+        Name: "test-invoke",
+        Status: OperationStatus.FAILED,
+        Type: OperationType.INVOKE,
+        InvokeDetails: {
+          Result: undefined,
+          Error: {
+            ErrorMessage: "Function invocation failed",
+            ErrorType: "InvocationError",
+            StackTrace: ["Error at line 1", "Error at line 2"],
+          },
+        },
+      };
+
+      operation.populateData({
+        operation: operationData,
+        events: [],
+      });
+
+      const invokeDetails = operation.getInvokeDetails();
+      expect(invokeDetails).toEqual({
+        result: undefined,
+        error: {
+          errorMessage: "Function invocation failed",
+          errorType: "InvocationError",
+          stackTrace: ["Error at line 1", "Error at line 2"],
+        },
+      });
+    });
+
+    it("should not handle unparseable JSON in Result field", () => {
+      const operation = new OperationWithData(
+        waitManager,
+        mockIndexedOperations
+      );
+      const operationData = {
+        Id: "test-id",
+        Name: "test-invoke",
+        Status: OperationStatus.SUCCEEDED,
+        Type: OperationType.INVOKE,
+        InvokeDetails: {
+          Result: "invalid-json{",
+          Error: undefined,
+        },
+      };
+
+      operation.populateData({
+        operation: operationData,
+        events: [],
+      });
+
+      expect(() => operation.getInvokeDetails()).toThrow(
+        "Could not parse result for invoke details"
+      );
+    });
+
+    it("should return undefined when no data is populated", () => {
+      const operation = new OperationWithData(
+        waitManager,
+        mockIndexedOperations
+      );
+      const invokeDetails = operation.getInvokeDetails();
+      expect(invokeDetails).toBeUndefined();
+    });
+
+    it("should handle missing InvokeDetails", () => {
+      const operation = new OperationWithData(
+        waitManager,
+        mockIndexedOperations
+      );
+      const operationData = {
+        Id: "test-id",
+        Name: "test-invoke",
+        Status: OperationStatus.SUCCEEDED,
+        Type: OperationType.INVOKE,
+        // InvokeDetails is missing
+      };
+
+      operation.populateData({
+        operation: operationData,
+        events: [],
+      });
+
+      const invokeDetails = operation.getInvokeDetails();
+      expect(invokeDetails).toEqual({
+        result: undefined,
+        error: undefined,
+      });
+    });
+  });
+
   describe("getWaitDetails", () => {
     it("should throw error when operation type is not WAIT", () => {
       const operation = new OperationWithData(

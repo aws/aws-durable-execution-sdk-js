@@ -3,7 +3,7 @@ import {
   OperationInvocationIdMap,
 } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { Operation } from "@aws-sdk/client-lambda";
 import {
   API_PATHS,
   HTTP_METHODS,
@@ -63,13 +63,13 @@ export class CheckpointApiClient {
   async updateCheckpointData(params: {
     executionId: ExecutionId;
     operationId: string;
-    status: OperationStatus;
+    operationData: Operation;
   }): Promise<void> {
     return this.makeRequest({
       path: getUpdateCheckpointDataPath(params.executionId, params.operationId),
       method: HTTP_METHODS.POST,
       body: JSON.stringify({
-        status: params.status,
+        operationData: params.operationData,
       }),
     });
   }

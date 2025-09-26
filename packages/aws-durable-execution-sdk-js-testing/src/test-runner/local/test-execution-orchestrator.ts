@@ -32,6 +32,7 @@ import {
   OperationInvocationIdMap,
 } from "../../checkpoint-server/storage/checkpoint-manager";
 import { Scheduler } from "./orchestration/scheduler";
+import { FunctionStorage } from "./operations/function-storage";
 
 /**
  * Orchestrates test execution lifecycle, polling, and handler invocation for LocalDurableTestRunner.
@@ -47,6 +48,7 @@ export class TestExecutionOrchestrator {
     private operationStorage: LocalOperationStorage,
     private readonly checkpointApi: CheckpointApiClient,
     private readonly scheduler: Scheduler,
+    private readonly functionStorage: FunctionStorage,
     private skipTime = false
   ) {
     this.executionState = new TestExecutionState();
@@ -232,7 +234,63 @@ export class TestExecutionOrchestrator {
       case OperationType.EXECUTION:
         this.handleExecutionUpdate(update, operation);
         break;
+      case OperationType.INVOKE:
+        // todo: handle errors
+        void this.handleInvokeUpdate(update, executionId);
+        break;
     }
+  }
+
+  private async handleInvokeUpdate(
+    update: OperationUpdate | undefined,
+    executionId: ExecutionId
+  ) {
+    if (update?.Action !== OperationAction.START) {
+      return;
+    }
+
+    const functionName = update.InvokeOptions?.FunctionName;
+    // TODO: invoke nested execution with timeout
+    // const timeoutSeconds = update?.InvokeOptions?.TimeoutSeconds
+
+    if (!functionName) {
+      throw new Error(
+        `FunctionName is required for ${OperationType.INVOKE} updates`
+      );
+    }
+
+    const { result, error } = await this.functionStorage.runHandler(
+      functionName,
+      update.Payload,
+      this.skipTime
+    );
+
+    if (update.Id === undefined) {
+      throw new Error("Missing operation id");
+    }
+
+    await this.checkpointApi.updateCheckpointData({
+      executionId,
+      operationId: update.Id,
+      operationData: {
+        // todo: handle other operation types as well
+        Status: result ? OperationStatus.SUCCEEDED : OperationStatus.FAILED,
+        InvokeDetails: {
+          Result: result,
+          Error: error,
+        },
+      },
+    });
+
+    const newInvocationData =
+      await this.checkpointApi.startInvocation(executionId);
+
+    await this.invokeHandler(
+      executionId,
+      newInvocationData.checkpointToken,
+      newInvocationData.invocationId,
+      newInvocationData.operations
+    );
   }
 
   /**
@@ -271,7 +329,9 @@ export class TestExecutionOrchestrator {
       await this.checkpointApi.updateCheckpointData({
         executionId,
         operationId,
-        status: OperationStatus.SUCCEEDED,
+        operationData: {
+          Status: OperationStatus.SUCCEEDED,
+        },
       });
       const newInvocationData =
         await this.checkpointApi.startInvocation(executionId);
@@ -329,7 +389,9 @@ export class TestExecutionOrchestrator {
           await this.checkpointApi.updateCheckpointData({
             executionId,
             operationId,
-            status: OperationStatus.READY,
+            operationData: {
+              Status: OperationStatus.READY,
+            },
           });
         }
       );

@@ -8,6 +8,7 @@ import {
   SendDurableExecutionCallbackHeartbeatCommandOutput,
   SendDurableExecutionCallbackSuccessCommandOutput,
   Event,
+  ExecutionStatus,
 } from "@aws-sdk/client-lambda";
 import { OperationWithData } from "./common/operations/operation-with-data";
 
@@ -80,6 +81,11 @@ export interface TestResult<T> {
   // Can be used to assert on the data for a specific invocation and validate
   // the number of invocations that were run.
   getInvocations(): Invocation[];
+
+  /**
+   * Gets the status of the execution.
+   */
+  getStatus(): ExecutionStatus | undefined;
 
   /**
    * Gets the result of the execution.

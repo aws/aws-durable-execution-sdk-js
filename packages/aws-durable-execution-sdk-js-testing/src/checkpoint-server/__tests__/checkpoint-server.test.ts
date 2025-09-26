@@ -220,10 +220,17 @@ describe("checkpoint-server", () => {
         .post(
           `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`
         )
-        .send({ status });
+        .send({
+          operationData: {
+            Status: status,
+            StepDetails: {
+              Result: "hello world",
+            },
+          },
+        });
 
       expect(response.body).toEqual({
-        operation: { Id: operationId, Status: OperationStatus.SUCCEEDED },
+        operation: mockUpdatedOperation,
       });
       expect(response.status).toBe(200);
       expect(
@@ -231,15 +238,15 @@ describe("checkpoint-server", () => {
       ).toHaveBeenCalledWith(executionId);
       expect(mockStorage.updateOperation).toHaveBeenCalledWith(operationId, {
         Status: status,
+        StepDetails: {
+          Result: "hello world",
+        },
       });
     });
 
     it("should return 404 when execution does not exist", async () => {
       const executionId = "non-existent-id";
       const operationId = "test-operation-id";
-      const update = {
-        Id: operationId,
-      };
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
         undefined
@@ -249,7 +256,14 @@ describe("checkpoint-server", () => {
         .post(
           `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`
         )
-        .send({ update });
+        .send({
+          operationData: {
+            Status: OperationStatus.SUCCEEDED,
+            StepDetails: {
+              Result: "hello world",
+            },
+          },
+        });
 
       expect(response.status).toBe(404);
       expect(response.body).toEqual({ message: "Execution not found" });
@@ -276,7 +290,11 @@ describe("checkpoint-server", () => {
         .post(
           `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`
         )
-        .send({ status: OperationStatus.SUCCEEDED });
+        .send({
+          operationData: {
+            Status: OperationStatus.SUCCEEDED,
+          },
+        });
 
       expect(response.body).toEqual({ message: "Operation not found" });
       expect(response.status).toBe(404);

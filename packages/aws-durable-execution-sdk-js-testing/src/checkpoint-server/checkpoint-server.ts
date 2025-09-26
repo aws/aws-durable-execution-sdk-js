@@ -3,7 +3,7 @@ import {
   GetDurableExecutionStateResponse,
   CheckpointDurableExecutionResponse,
   InvalidParameterValueException,
-  OperationStatus,
+  Operation,
 } from "@aws-sdk/client-lambda";
 import { ParamsDictionary } from "express-serve-static-core";
 import express from "express";
@@ -125,7 +125,7 @@ export async function startCheckpointServer(port: number) {
         ParamsDictionary,
         object,
         {
-          status: OperationStatus;
+          operationData: Operation;
         }
       >,
       res
@@ -151,9 +151,7 @@ export async function startCheckpointServer(port: number) {
 
       const operation = checkpointStorage.updateOperation(
         req.params.operationId,
-        {
-          Status: req.body.status,
-        }
+        req.body.operationData
       );
 
       res.json(

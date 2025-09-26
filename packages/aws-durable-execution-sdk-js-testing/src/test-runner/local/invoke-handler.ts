@@ -87,7 +87,7 @@ export class InvokeHandler {
    * @param contextValues Optional context value overrides
    * @returns Complete Lambda context object
    */
-  private buildContext(contextValues?: Partial<Context>): Context {
+  buildContext(contextValues?: Partial<Context>): Context {
     return {
       ...this.defaultContextValues,
       ...contextValues,

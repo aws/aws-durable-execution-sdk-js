@@ -491,4 +491,24 @@ describe("ResultFormatter", () => {
       expect(testResult.getHistoryEvents()).toEqual([]);
     });
   });
+
+  describe("getStatus", () => {
+    it("should return status from lambda response", () => {
+      mockOperationStorage.getOperations.mockReturnValue([]);
+
+      const lambdaResponse: TestExecutionResult = {
+        status: OperationStatus.SUCCEEDED,
+        result: JSON.stringify({ success: true }),
+      };
+
+      const testResult = resultFormatter.formatTestResult(
+        lambdaResponse,
+        [],
+        mockOperationStorage,
+        []
+      );
+
+      expect(testResult.getStatus()).toBe(OperationStatus.SUCCEEDED);
+    });
+  });
 });

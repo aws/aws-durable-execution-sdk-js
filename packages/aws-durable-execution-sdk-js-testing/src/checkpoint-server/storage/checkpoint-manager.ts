@@ -12,6 +12,7 @@ import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";
 import { EventProcessor } from "./event-processor";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 import { waitHistoryDetails } from "./wait-details";
+import { invokeHistoryDetails } from "./invoke-details";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -313,6 +314,44 @@ export class CheckpointManager {
         );
         newOperationData.events.push(historyEvent);
         break;
+      }
+      case OperationType.INVOKE: {
+        const historyEventType = invokeHistoryDetails[newOperation.Status];
+        if (!historyEventType) {
+          throw new Error(
+            `Invalid status update for ${OperationType.INVOKE}: ${newOperation.Status}`
+          );
+        }
+
+        if (
+          newOperationData.operation.InvokeDetails?.Result &&
+          newOperationData.operation.InvokeDetails.Error
+        ) {
+          throw new Error(
+            `Could not update operation with both Result and Error in details.`
+          );
+        }
+
+        const historyEvent = this.eventProcessor.createHistoryEvent(
+          historyEventType.eventType,
+          newOperationData.operation,
+          historyEventType.detailPlace,
+          {
+            Result:
+              newOperationData.operation.InvokeDetails?.Result !== undefined
+                ? {
+                    Payload: newOperationData.operation.InvokeDetails.Result,
+                  }
+                : undefined,
+            Error:
+              newOperationData.operation.InvokeDetails?.Error !== undefined
+                ? {
+                    Payload: newOperationData.operation.InvokeDetails.Error,
+                  }
+                : undefined,
+          }
+        );
+        newOperationData.events.push(historyEvent);
       }
     }
     this.operationDataMap.set(id, newOperationData);

@@ -8,12 +8,14 @@ import { InvocationStatus } from "@aws/durable-execution-sdk-js";
 import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manager";
 import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { FunctionStorage } from "../operations/function-storage";
 
 jest.mock("../test-execution-orchestrator");
 jest.mock("../result-formatter");
 jest.mock("../operations/local-operation-storage");
 jest.mock("../operations/operation-wait-manager");
 jest.mock("../checkpoint-server-worker-manager");
+jest.mock("../operations/function-storage");
 
 describe("LocalDurableTestRunner", () => {
   const mockHandlerFunction = jest.fn();
@@ -22,6 +24,7 @@ describe("LocalDurableTestRunner", () => {
   let mockOperationStorage: Partial<jest.Mocked<LocalOperationStorage>>;
   let mockWaitManager: Partial<jest.Mocked<OperationWaitManager>>;
   let mockCheckpointServerWorkerManager: jest.Mocked<CheckpointServerWorkerManager>;
+  let mockFunctionStorage: jest.Mocked<FunctionStorage>;
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -58,6 +61,12 @@ describe("LocalDurableTestRunner", () => {
       getHistoryEvents: jest.fn().mockReturnValue([]),
     };
 
+    mockFunctionStorage = {
+      registerFunction: jest.fn().mockReturnValue(mockFunctionStorage),
+      registerDurableFunction: jest.fn().mockReturnValue(mockFunctionStorage),
+      runHandler: jest.fn(),
+    } as unknown as jest.Mocked<FunctionStorage>;
+
     mockOrchestrator = {
       executeHandler: jest.fn().mockResolvedValue({
         Status: InvocationStatus.SUCCEEDED,
@@ -81,6 +90,9 @@ describe("LocalDurableTestRunner", () => {
     );
     (LocalOperationStorage as jest.Mock).mockImplementation(
       () => mockOperationStorage
+    );
+    (FunctionStorage as jest.Mock).mockImplementation(
+      () => mockFunctionStorage
     );
     (TestExecutionOrchestrator as unknown as jest.Mock).mockImplementation(
       () => mockOrchestrator
@@ -199,6 +211,7 @@ describe("LocalDurableTestRunner", () => {
         mockOperationStorage,
         expect.any(CheckpointApiClient), // CheckpointApiClient created with server URL
         expect.any(Scheduler), // Scheduler
+        mockFunctionStorage,
         false // skipTime default
       );
     });
@@ -216,6 +229,7 @@ describe("LocalDurableTestRunner", () => {
         mockOperationStorage,
         expect.any(CheckpointApiClient), // CheckpointApiClient created with server URL
         expect.any(Scheduler), // Scheduler
+        mockFunctionStorage,
         true // skipTime
       );
     });
@@ -293,6 +307,30 @@ describe("LocalDurableTestRunner", () => {
       expect(operation._mockId).toBe("op-123");
       expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith(
         operation
+      );
+    });
+  });
+
+  describe("registerFunctions", () => {
+    it("should register functions with function storage", () => {
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: mockHandlerFunction,
+      });
+
+      const mockDurableHandler = jest.fn();
+      const mockNonDurableHandler = jest.fn();
+
+      runner
+        .registerFunction("nonDurableFunction", mockNonDurableHandler)
+        .registerDurableFunction("durableFunction", mockDurableHandler);
+
+      expect(mockFunctionStorage.registerDurableFunction).toHaveBeenCalledWith(
+        "durableFunction",
+        mockDurableHandler
+      );
+      expect(mockFunctionStorage.registerFunction).toHaveBeenCalledWith(
+        "nonDurableFunction",
+        mockNonDurableHandler
       );
     });
   });
