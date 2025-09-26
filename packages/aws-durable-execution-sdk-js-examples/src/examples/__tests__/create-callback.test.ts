@@ -1,7 +1,7 @@
 import {
     LocalDurableTestRunner,
     WaitingOperationStatus
-} from "aws-durable-execution-sdk-js-testing";
+} from "@aws/durable-execution-sdk-js-testing";
 import {handler} from '../create-callback';
 
 let durableTestRunner: LocalDurableTestRunner<string>;

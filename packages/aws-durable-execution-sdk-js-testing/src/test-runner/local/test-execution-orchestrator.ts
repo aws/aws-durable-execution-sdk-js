@@ -6,7 +6,7 @@ import {
 import {
   withDurableFunctions,
   InvocationStatus,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 import { InvocationResult } from "../../checkpoint-server/storage/execution-manager";
 import {
   CheckpointToken,

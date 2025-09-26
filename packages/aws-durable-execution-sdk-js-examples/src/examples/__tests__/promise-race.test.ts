@@ -1,7 +1,7 @@
 import {
   LocalDurableTestRunner,
   OperationStatus,
-} from "aws-durable-execution-sdk-js-testing";
+} from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "../promise-race";
 import { createTests } from "./shared/test-helper";
 

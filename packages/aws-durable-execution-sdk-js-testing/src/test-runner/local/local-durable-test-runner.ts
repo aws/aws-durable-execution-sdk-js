@@ -3,7 +3,7 @@ import {
   InvokeRequest,
   DurableTestRunner,
 } from "../durable-test-runner";
-import { withDurableFunctions } from "aws-durable-execution-sdk-js";
+import { withDurableFunctions } from "@aws/durable-execution-sdk-js";
 import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { OperationWaitManager } from "./operations/operation-wait-manager";
 import { MockOperation } from "./operations/mock-operation";

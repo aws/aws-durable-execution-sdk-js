@@ -6,7 +6,7 @@ import {
   OperationEvents,
   OperationWithData,
 } from "../../../common/operations/operation-with-data";
-import { OperationSubType } from "aws-durable-execution-sdk-js";
+import { OperationSubType } from "@aws/durable-execution-sdk-js";
 
 describe("OperationWaitManager", () => {
   let waitManager: OperationWaitManager;

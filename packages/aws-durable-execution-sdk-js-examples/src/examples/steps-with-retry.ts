@@ -1,4 +1,4 @@
-import {DurableContext, withDurableFunctions} from "aws-durable-execution-sdk-js";
+import {DurableContext, withDurableFunctions} from "@aws/durable-execution-sdk-js";
 import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
 
 const ddbClient = new DynamoDBClient();

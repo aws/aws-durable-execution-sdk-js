@@ -4,7 +4,7 @@ import {
   DurableTestRunner,
   DurableOperation,
   LocalTestRunnerHandlerFunction,
-} from "aws-durable-execution-sdk-js-testing";
+} from "@aws/durable-execution-sdk-js-testing";
 
 export interface TestDefinition<ResultType> {
   name: string;

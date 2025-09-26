@@ -1,4 +1,4 @@
-import { OperationInterceptor } from "aws-durable-execution-sdk-js";
+import { OperationInterceptor } from "@aws/durable-execution-sdk-js";
 import { ExecutionId } from "../../../checkpoint-server/utils/tagged-strings";
 import { OperationWaitManager } from "./operation-wait-manager";
 import { OperationWithData } from "../../common/operations/operation-with-data";

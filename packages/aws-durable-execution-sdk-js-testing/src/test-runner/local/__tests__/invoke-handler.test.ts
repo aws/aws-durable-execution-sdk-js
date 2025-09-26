@@ -4,7 +4,7 @@ import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
   InvocationStatus,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 import { HandlerParameters, InvokeHandler } from "../invoke-handler";
 
 // Mock crypto

@@ -1,5 +1,5 @@
 {
-  "name": "aws-durable-execution-sdk-js",
+  "name": "@aws/durable-execution-sdk-js",
   "description": "Durable Executions Language SDK for TypeScript",
   "license": "Apache-2.0",
   "version": "0.1.0",
