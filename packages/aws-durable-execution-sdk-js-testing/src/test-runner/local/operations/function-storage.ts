@@ -111,7 +111,6 @@ export class FunctionStorage {
     const { isDurable, handler } = functionData;
 
     if (isDurable) {
-      // Use the factory instead of direct instantiation
       const invokeRunner = this.runnerFactory.createRunner({
         handlerFunction: handler,
         skipTime,

@@ -318,19 +318,12 @@ describe("LocalDurableTestRunner", () => {
       });
 
       const mockDurableHandler = jest.fn();
-      const mockNonDurableHandler = jest.fn();
 
-      runner
-        .registerFunction("nonDurableFunction", mockNonDurableHandler)
-        .registerDurableFunction("durableFunction", mockDurableHandler);
+      runner.registerDurableFunction("durableFunction", mockDurableHandler);
 
       expect(mockFunctionStorage.registerDurableFunction).toHaveBeenCalledWith(
         "durableFunction",
         mockDurableHandler
-      );
-      expect(mockFunctionStorage.registerFunction).toHaveBeenCalledWith(
-        "nonDurableFunction",
-        mockNonDurableHandler
       );
     });
   });

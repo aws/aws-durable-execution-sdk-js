@@ -18,7 +18,6 @@ import { CheckpointServerWorkerManager } from "./checkpoint-server-worker-manage
 import { IndexedOperations } from "../common/indexed-operations";
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
-import { Handler } from "aws-lambda";
 import {
   ILocalDurableTestRunnerExecutor,
   ILocalDurableTestRunnerFactory,
@@ -127,41 +126,7 @@ export class LocalDurableTestRunner<ResultType>
   }
 
   /**
-   * Registers a standard Lambda function handler that can be invoked during durable execution testing.
-   * Non-durable functions are executed directly without durable execution capabilities.
-   *
-   * @param functionName - The name/ARN of the function that will be used in context.invoke() calls
-   * @param handler - The standard Lambda function handler
-   * @returns This LocalDurableTestRunner instance for method chaining
-   *
-   * @example
-   * ```typescript
-   * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';
-   * import { withDurableFunctions } from '@aws/durable-execution-sdk-js';
-   *
-   * const testRunner = new LocalDurableTestRunner({
-   *   handlerFunction: mainHandler
-   * });
-   *
-   * // Register a non-durable function
-   * testRunner.registerFunction('user-service', async (event) => {
-   *   return { userId: event.id, name: 'John Doe' };
-   * });
-   *
-   * // Chain multiple registrations
-   * testRunner
-   *   .registerFunction('email-service', emailHandler)
-   *   .registerFunction('notification-service', notificationHandler);
-   * ```
-   */
-  registerFunction(functionName: string, handler: Handler): this {
-    this.functionStorage.registerFunction(functionName, handler);
-    return this;
-  }
-
-  /**
    * Registers a durable function handler that can be invoked during durable execution testing.
-   * Durable functions can use durable execution features like steps, waits, and retries.
    *
    * @param functionName - The name/ARN of the function that will be used in context.invoke() calls
    * @param durableHandler - The durable function handler created with withDurableFunctions
@@ -189,7 +154,6 @@ export class LocalDurableTestRunner<ResultType>
    * testRunner
    *   .registerDurableFunction('workflow-a', workflowAHandler)
    *   .registerDurableFunction('workflow-b', workflowBHandler)
-   *   .registerFunction('helper-function', helperHandler);
    * ```
    */
   registerDurableFunction(
