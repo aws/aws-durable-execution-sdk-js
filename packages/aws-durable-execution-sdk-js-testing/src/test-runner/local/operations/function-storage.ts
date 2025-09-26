@@ -5,7 +5,7 @@ import {
 } from "aws-durable-execution-sdk-js";
 import { Handler } from "aws-lambda";
 import { InvokeHandler } from "../invoke-handler";
-import { IDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
+import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 
 /**
  * Configuration for a durable function handler.
@@ -48,7 +48,7 @@ export class FunctionStorage {
   /**
    * @param runnerFactory Factory for creating durable test runner instances
    */
-  constructor(private readonly runnerFactory: IDurableTestRunnerFactory) {}
+  constructor(private readonly runnerFactory: ILocalDurableTestRunnerFactory) {}
 
   /**
    * Registers a durable function handler that can be invoked during test execution.
@@ -112,7 +112,10 @@ export class FunctionStorage {
 
     if (isDurable) {
       // Use the factory instead of direct instantiation
-      const invokeRunner = this.runnerFactory.createRunner(handler, skipTime);
+      const invokeRunner = this.runnerFactory.createRunner({
+        handlerFunction: handler,
+        skipTime,
+      });
 
       const execution = await invokeRunner.run({
         payload: payload ? JSON.parse(payload) : undefined,

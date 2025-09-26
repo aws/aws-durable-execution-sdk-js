@@ -20,42 +20,27 @@ import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
 import { Handler } from "aws-lambda";
 import {
-  IDurableTestRunnerExecutor,
-  IDurableTestRunnerFactory,
+  ILocalDurableTestRunnerExecutor,
+  ILocalDurableTestRunnerFactory,
+  LocalDurableTestRunnerParameters,
 } from "./interfaces/durable-test-runner-factory";
 
 export type LocalTestRunnerHandlerFunction = ReturnType<
   typeof withDurableFunctions
 >;
 
-/**
- * Configuration parameters for LocalDurableTestRunner.
- */
-export interface LocalDurableTestRunnerParameters {
-  /** The handler function to run the execution on */
-  handlerFunction: LocalTestRunnerHandlerFunction;
-  /**
-   * Whether to skip wait/retry intervals by using minimal delays.
-   * Will be overridden by calling `skipTime` on individual mocked steps.
-   * @default false
-   */
-  skipTime?: boolean;
-}
+export type { LocalDurableTestRunnerParameters };
 
 export class LocalDurableTestRunnerFactory
-  implements IDurableTestRunnerFactory
+  implements ILocalDurableTestRunnerFactory
 {
   /**
    * Creates new runner instances for nested function execution
    */
   createRunner<T>(
-    handlerFunction: LambdaHandler<DurableExecutionInvocationInput>,
-    skipTime: boolean
-  ): IDurableTestRunnerExecutor<T> {
-    return new LocalDurableTestRunner<T>({
-      handlerFunction,
-      skipTime,
-    });
+    params: LocalDurableTestRunnerParameters
+  ): ILocalDurableTestRunnerExecutor<T> {
+    return new LocalDurableTestRunner<T>(params);
   }
 }
 

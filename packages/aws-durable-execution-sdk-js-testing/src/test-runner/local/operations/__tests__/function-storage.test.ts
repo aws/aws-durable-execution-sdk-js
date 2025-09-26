@@ -9,22 +9,26 @@ import {
   HandlerData,
   FunctionNameMap,
 } from "../function-storage";
-import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import { InvokeHandler } from "../../invoke-handler";
-import { IDurableTestRunnerFactory } from "../../interfaces/durable-test-runner-factory";
+import {
+  ILocalDurableTestRunnerExecutor,
+  ILocalDurableTestRunnerFactory,
+} from "../../interfaces/durable-test-runner-factory";
 
 // Mock dependencies
-jest.mock("../../local-durable-test-runner");
 jest.mock("../../invoke-handler");
 
 describe("FunctionStorage", () => {
   let functionStorage: FunctionStorage;
-  let mockLocalDurableTestRunner: jest.Mocked<LocalDurableTestRunner<unknown>>;
+  let mockLocalDurableTestRunner: jest.Mocked<
+    ILocalDurableTestRunnerExecutor<unknown>
+  >;
   let mockInvokeHandler: jest.Mocked<InvokeHandler>;
   let mockDurableHandler: jest.MockedFunction<
     LambdaHandler<DurableExecutionInvocationInput>
   >;
   let mockNonDurableHandler: jest.MockedFunction<Handler>;
+  let mockFactory: jest.Mocked<ILocalDurableTestRunnerFactory>;
 
   // Helper function to create mock execution objects
   const createMockExecution = (
@@ -58,22 +62,16 @@ describe("FunctionStorage", () => {
   beforeEach(() => {
     jest.resetAllMocks();
 
+    mockLocalDurableTestRunner = {
+      run: jest.fn().mockResolvedValue(createMockExecution()),
+    };
+
     // Create a mock factory for FunctionStorage
-    const mockFactory: IDurableTestRunnerFactory = {
-      createRunner: jest.fn().mockReturnValue({
-        run: jest.fn().mockResolvedValue(createMockExecution()),
-      }),
+    mockFactory = {
+      createRunner: jest.fn().mockReturnValue(mockLocalDurableTestRunner),
     };
 
     functionStorage = new FunctionStorage(mockFactory);
-
-    mockLocalDurableTestRunner = {
-      run: jest.fn().mockResolvedValue(createMockExecution()),
-    } as unknown as jest.Mocked<LocalDurableTestRunner<unknown>>;
-
-    (LocalDurableTestRunner as unknown as jest.Mock).mockImplementation(
-      () => mockLocalDurableTestRunner
-    );
 
     // Mock InvokeHandler
     mockInvokeHandler = {
@@ -115,7 +113,7 @@ describe("FunctionStorage", () => {
 
       await functionStorage.runHandler("test-function", "{}", false);
 
-      expect(LocalDurableTestRunner).toHaveBeenCalledWith({
+      expect(mockFactory.createRunner).toHaveBeenCalledWith({
         handlerFunction: newHandler,
         skipTime: false,
       });
@@ -141,7 +139,11 @@ describe("FunctionStorage", () => {
       setupNonDurableFunction("test-function");
       functionStorage.registerFunction("test-function", newHandler);
 
-      const result = await functionStorage.runHandler("test-function", "{}", false);
+      const result = await functionStorage.runHandler(
+        "test-function",
+        "{}",
+        false
+      );
 
       expect(newHandler).toHaveBeenCalled();
       expect(result).toEqual({
@@ -170,7 +172,7 @@ describe("FunctionStorage", () => {
         false
       );
 
-      expect(LocalDurableTestRunner).toHaveBeenCalledWith({
+      expect(mockFactory.createRunner).toHaveBeenCalledWith({
         handlerFunction: mockDurableHandler,
         skipTime: false,
       });
@@ -193,7 +195,7 @@ describe("FunctionStorage", () => {
         true
       );
 
-      expect(LocalDurableTestRunner).toHaveBeenCalledWith({
+      expect(mockFactory.createRunner).toHaveBeenCalledWith({
         handlerFunction: mockDurableHandler,
         skipTime: true,
       });

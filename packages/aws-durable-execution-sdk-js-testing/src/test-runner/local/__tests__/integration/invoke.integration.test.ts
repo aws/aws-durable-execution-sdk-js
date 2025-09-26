@@ -153,13 +153,16 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
       skipTime: true,
     });
 
-    runner.registerFunction("myFunctionArn", async ({ nonDurableInput }) => {
-      return Promise.resolve({
-        type: "non-durable",
-        input: nonDurableInput,
-        message: "non-durable test result",
-      });
-    });
+    runner.registerDurableFunction(
+      "myFunctionArn",
+      withDurableFunctions(async ({ nonDurableInput }) => {
+        return Promise.resolve({
+          type: "non-durable",
+          input: nonDurableInput,
+          message: "non-durable test result",
+        });
+      })
+    );
 
     const execution = await runner.run();
 

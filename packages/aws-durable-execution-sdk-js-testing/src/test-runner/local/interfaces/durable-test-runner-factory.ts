@@ -5,9 +5,23 @@ import {
 import { InvokeRequest, TestResult } from "../../durable-test-runner";
 
 /**
- * Factory interface for creating durable test runner instances.
+ * Configuration parameters for LocalDurableTestRunner.
  */
-export interface IDurableTestRunnerFactory {
+export interface LocalDurableTestRunnerParameters {
+  /** The handler function to run the execution on */
+  handlerFunction: LambdaHandler<DurableExecutionInvocationInput>;
+  /**
+   * Whether to skip wait/retry intervals by using minimal delays.
+   * Will be overridden by calling `skipTime` on individual mocked steps.
+   * @default false
+   */
+  skipTime?: boolean;
+}
+
+/**
+ * Factory interface for creating local durable test runner instances.
+ */
+export interface ILocalDurableTestRunnerFactory {
   /**
    * Creates a new durable test runner instance for executing a durable function.
    *
@@ -16,15 +30,11 @@ export interface IDurableTestRunnerFactory {
    * @returns A new test runner instance
    */
   createRunner<ResultType>(
-    handlerFunction: LambdaHandler<DurableExecutionInvocationInput>,
-    skipTime: boolean
-  ): IDurableTestRunnerExecutor<ResultType>;
+    params: LocalDurableTestRunnerParameters
+  ): ILocalDurableTestRunnerExecutor<ResultType>;
 }
 
-/**
- * Minimal interface for executing durable functions.
- */
-export interface IDurableTestRunnerExecutor<ResultType> {
+export interface ILocalDurableTestRunnerExecutor<ResultType> {
   /**
    * Executes the durable function and returns the result.
    *

@@ -23,7 +23,7 @@ import { OperationWithData } from "../../common/operations/operation-with-data";
 import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { FunctionStorage } from "../operations/function-storage";
-import { IDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
+import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -69,7 +69,7 @@ describe("TestExecutionOrchestrator", () => {
     mockScheduler = new Scheduler();
 
     // Create a mock factory for FunctionStorage
-    const mockFactory: IDurableTestRunnerFactory = {
+    const mockFactory: ILocalDurableTestRunnerFactory = {
       createRunner: jest.fn().mockReturnValue({
         run: jest.fn().mockResolvedValue({
           getStatus: () => 'SUCCEEDED',
