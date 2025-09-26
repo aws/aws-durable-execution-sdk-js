@@ -136,6 +136,7 @@ export const createDurableContext = (
       executionContext,
       checkpoint,
       createStepId,
+      hasRunningOperations,
     );
     return callbackFactory(nameOrConfig, maybeConfig);
   };
