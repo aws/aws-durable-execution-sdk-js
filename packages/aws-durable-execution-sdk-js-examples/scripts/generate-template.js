@@ -41,7 +41,7 @@ function toPascalCase(filename) {
  */
 function getExampleFiles() {
   const examplesDir = path.join(__dirname, '../src/examples');
-  
+
   if (!fs.existsSync(examplesDir)) {
     throw new Error(`Examples directory not found: ${examplesDir}`);
   }
@@ -58,7 +58,7 @@ function getExampleFiles() {
 function createFunctionResource(filename) {
   const resourceName = toPascalCase(filename);
   const config = EXAMPLE_CONFIGS[filename] || DEFAULT_CONFIG;
-  
+
   const functionResource = {
     Type: 'AWS::Serverless::Function',
     Properties: {
@@ -69,11 +69,14 @@ function createFunctionResource(filename) {
       Architectures: ['x86_64'],
       MemorySize: config.memorySize,
       Timeout: config.timeout,
+      DurableConfig: {
+        ExecutionTimeout: 3600,
+        RetentionPeriodInDays: 7
+      },
       Environment: {
         Variables: {
           DEX_ENDPOINT: 'http://host.docker.internal:5000',
           DURABLE_VERBOSE_MODE: 'true',
-          DURABLE_RECORD_DEFINITION_MODE: 'true'
         }
       }
     },
@@ -95,7 +98,7 @@ function createFunctionResource(filename) {
  */
 function generateTemplate() {
   const exampleFiles = getExampleFiles();
-  
+
   if (exampleFiles.length === 0) {
     throw new Error('No TypeScript example files found in src/examples');
   }
@@ -122,10 +125,10 @@ function generateTemplate() {
 function main() {
   try {
     console.log('🔍 Scanning src/examples for TypeScript files...');
-    
+
     const template = generateTemplate();
     const exampleCount = Object.keys(template.Resources).length;
-    
+
     console.log(`📝 Found ${exampleCount} example files:`);
     Object.keys(template.Resources).forEach(resourceName => {
       const handler = template.Resources[resourceName].Properties.Handler;
@@ -143,10 +146,10 @@ function main() {
     // Write to template.yml
     const templatePath = path.join(__dirname, '../template.yml');
     fs.writeFileSync(templatePath, yamlContent, 'utf8');
-    
+
     console.log(`✅ Generated template.yml with ${exampleCount} Lambda functions`);
     console.log(`📄 Template written to: ${templatePath}`);
-    
+
   } catch (error) {
     console.error('❌ Error generating template.yml:', error.message);
     process.exit(1);

@@ -49,7 +49,6 @@ describe('generate-template', () => {
       expect(resource.Properties.Environment.Variables).toEqual({
         DEX_ENDPOINT: 'http://host.docker.internal:5000',
         DURABLE_VERBOSE_MODE: 'true',
-        DURABLE_RECORD_DEFINITION_MODE: 'true'
       });
     });
   });
