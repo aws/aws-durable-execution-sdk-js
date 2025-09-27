@@ -159,7 +159,7 @@ export const createDurableContext = (
 
   const map: DurableContext["map"] = <T>(
     nameOrItems: string | undefined | any[],
-    itemsOrMapFunc?: any[] | MapFunc<T>,
+    itemsOrMapFunc: any[] | MapFunc<T>,
     mapFuncOrConfig?: MapFunc<T> | MapConfig,
     maybeConfig?: MapConfig,
   ) => {

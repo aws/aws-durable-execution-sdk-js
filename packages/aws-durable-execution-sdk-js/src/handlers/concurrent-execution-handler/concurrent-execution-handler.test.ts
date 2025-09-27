@@ -271,14 +271,21 @@ describe("Concurrent Execution Handler", () => {
 
       // Mock the executeOperation function to capture the actual execution
       let capturedExecuteOperation: any;
-      mockRunInChildContext.mockImplementation((name, executeOp, options) => {
-        capturedExecuteOperation = executeOp;
-        return Promise.resolve(
-          new MockBatchResult([
-            { index: 0, result: "result", status: BatchItemStatus.SUCCEEDED },
-          ]) as any,
-        );
-      });
+      mockRunInChildContext.mockImplementation(
+        (nameOrFn: any, fnOrConfig?: any, maybeConfig?: any) => {
+          // Handle the overloaded signature
+          if (typeof nameOrFn === "string" || nameOrFn === undefined) {
+            capturedExecuteOperation = fnOrConfig;
+          } else {
+            capturedExecuteOperation = nameOrFn;
+          }
+          return Promise.resolve(
+            new MockBatchResult([
+              { index: 0, result: "result", status: BatchItemStatus.SUCCEEDED },
+            ]) as any,
+          );
+        },
+      );
 
       await concurrentExecutionHandler(items, executor, config);
 
@@ -295,15 +302,22 @@ describe("Concurrent Execution Handler", () => {
       // Create a real execution context that will execute the actual path
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
-        async (name, executeOp, options) => {
-          actualExecuteOperation = executeOp;
+        async (nameOrFn: any, fnOrConfig?: any, maybeConfig?: any) => {
+          // Handle the overloaded signature
+          let actualFn;
+          if (typeof nameOrFn === "string" || nameOrFn === undefined) {
+            actualFn = fnOrConfig;
+          } else {
+            actualFn = nameOrFn;
+          }
+          actualExecuteOperation = actualFn;
           // Execute the actual operation to cover the executeOperation function
-          if (typeof executeOp === "function") {
+          if (typeof actualFn === "function") {
             const mockDurableContext = {
               runInChildContext: jest.fn().mockResolvedValue("test-result"),
             } as any;
 
-            return await executeOp(mockDurableContext);
+            return await actualFn(mockDurableContext);
           }
           return new MockBatchResult([]) as any;
         },
@@ -322,14 +336,21 @@ describe("Concurrent Execution Handler", () => {
       // Test with undefined config to cover the config || {} branch
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
-        async (name, executeOp, options) => {
-          actualExecuteOperation = executeOp;
-          if (typeof executeOp === "function") {
+        async (nameOrFn: any, fnOrConfig?: any, maybeConfig?: any) => {
+          // Handle the overloaded signature
+          let actualFn;
+          if (typeof nameOrFn === "string" || nameOrFn === undefined) {
+            actualFn = fnOrConfig;
+          } else {
+            actualFn = nameOrFn;
+          }
+          actualExecuteOperation = actualFn;
+          if (typeof actualFn === "function") {
             const mockDurableContext = {
               runInChildContext: jest.fn().mockResolvedValue("test-result"),
             } as any;
 
-            return await executeOp(mockDurableContext);
+            return await actualFn(mockDurableContext);
           }
           return new MockBatchResult([]) as any;
         },

@@ -180,8 +180,18 @@ describe("Parallel Handler", () => {
     // Mock the executor being called
     let capturedExecutor: any;
     mockExecuteConcurrently.mockImplementation(
-      async (name, items, executor, config) => {
-        capturedExecutor = executor;
+      async (
+        nameOrItems: any,
+        itemsOrExecutor?: any,
+        executorOrConfig?: any,
+        maybeConfig?: any,
+      ) => {
+        // Handle the overloaded signature
+        if (typeof nameOrItems === "string" || nameOrItems === undefined) {
+          capturedExecutor = executorOrConfig;
+        } else {
+          capturedExecutor = itemsOrExecutor;
+        }
         return new MockBatchResult([
           { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
         ]) as any;

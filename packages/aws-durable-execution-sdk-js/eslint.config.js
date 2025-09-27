@@ -1,6 +1,7 @@
 const tsParser = require("@typescript-eslint/parser");
 const typescriptEslint = require("@typescript-eslint/eslint-plugin");
 const filenameConvention = require("eslint-plugin-filename-convention");
+const tsdoc = require("eslint-plugin-tsdoc");
 
 module.exports = [
   {
@@ -16,6 +17,7 @@ module.exports = [
     plugins: {
       "@typescript-eslint": typescriptEslint,
       "filename-convention": filenameConvention,
+      "tsdoc": tsdoc,
     },
     rules: {
       ...typescriptEslint.configs.recommended.rules,
@@ -26,6 +28,7 @@ module.exports = [
       "no-debugger": "warn",
       "no-duplicate-imports": "error",
       "filename-convention/kebab-case": "error",
+      "tsdoc/syntax": "warn",
     },
   },
   {

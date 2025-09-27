@@ -12,7 +12,11 @@ const STEP_CONFIG_WITH_RETRY_FAILURES_AFTER_1_SECOND_5_TIMES = {
       error,
       `. Retry? ${shouldRetry}. `,
     );
-    return { shouldRetry, delaySeconds: 1 };
+    if (shouldRetry) {
+      return { shouldRetry: true, delaySeconds: 1 };
+    } else {
+      return { shouldRetry: false };
+    }
   },
 };
 
