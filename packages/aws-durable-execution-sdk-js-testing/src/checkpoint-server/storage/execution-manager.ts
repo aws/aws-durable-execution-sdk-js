@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { CheckpointManager } from "./checkpoint-manager";
-import { Operation } from "@aws-sdk/client-lambda";
 import {
   encodeCheckpointToken,
   decodeCheckpointToken,
@@ -13,12 +12,13 @@ import {
   createInvocationId,
 } from "../utils/tagged-strings";
 import { decodeCallbackId } from "../utils/callback-id";
+import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 
 export interface InvocationResult {
   checkpointToken: CheckpointToken;
   executionId: ExecutionId;
   invocationId: InvocationId;
-  operations: Operation[];
+  operationEvents: OperationEvents[];
 }
 
 export interface StartExecutionParams {
@@ -57,7 +57,7 @@ export class ExecutionManager {
       checkpointToken,
       executionId,
       invocationId,
-      operations: [initialOperation],
+      operationEvents: [initialOperation],
     };
   }
 
@@ -84,9 +84,7 @@ export class ExecutionManager {
       checkpointToken,
       executionId,
       invocationId,
-      operations: Array.from(checkpointStorage.operationDataMap.values()).map(
-        (operationData) => operationData.operation
-      ),
+      operationEvents: Array.from(checkpointStorage.operationDataMap.values()),
     };
   }
 

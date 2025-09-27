@@ -53,23 +53,44 @@ describe("historyEventsToOperationEvents", () => {
     expect(historyEventsToOperationEvents(events)).toEqual([]);
   });
 
-  it("should skip EXECUTION operation types", () => {
+  it("should handle EXECUTION operation types", () => {
     const events: Event[] = [
       {
         Id: "execution-id",
         EventType: EventType.ExecutionStarted,
+        ExecutionStartedDetails: {
+          Input: {
+            Payload: '{"input": "data"}',
+          },
+        },
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
       },
       {
         Id: "execution-id",
         EventType: EventType.ExecutionSucceeded,
         EventTimestamp: new Date("2023-01-01T12:01:00Z"),
+        ExecutionSucceededDetails: {
+          Result: {
+            Payload: "result",
+          },
+        },
       },
     ];
 
     const result = historyEventsToOperationEvents(events);
 
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].events).toHaveLength(2);
+    expect(result[0].operation).toEqual({
+      Id: "execution-id",
+      Type: OperationType.EXECUTION,
+      Status: OperationStatus.SUCCEEDED,
+      StartTimestamp: new Date("2023-01-01T12:00:00Z"),
+      EndTimestamp: new Date("2023-01-01T12:01:00Z"),
+      ExecutionDetails: {
+        InputPayload: '{"input": "data"}',
+      },
+    });
   });
 
   it("should process single STEP operation", () => {
@@ -434,11 +455,11 @@ describe("historyEventsToOperationEvents", () => {
 
     const result = historyEventsToOperationEvents(events);
 
-    // Only the step operation should be included, execution events should be skipped
-    expect(result).toHaveLength(1);
-    expect(result[0].operation.Type).toBe(OperationType.STEP);
-    expect(result[0].operation.Id).toBe("step-id");
-    expect(result[0].events).toHaveLength(2);
+    expect(result).toHaveLength(2);
+    expect(result[0].operation.Type).toBe(OperationType.EXECUTION);
+    expect(result[1].operation.Type).toBe(OperationType.STEP);
+    expect(result[1].operation.Id).toBe("step-id");
+    expect(result[1].events).toHaveLength(2);
   });
 
   it("should accumulate events for the same operation ID", () => {
@@ -485,30 +506,6 @@ describe("historyEventsToOperationEvents", () => {
     expect(result[0].operation.Status).toBe(OperationStatus.SUCCEEDED);
     expect(result[0].events).toHaveLength(4);
     expect(result[0].operation.StepDetails?.Result).toBe('{"final": "result"}');
-  });
-
-  it.each([
-    EventType.ExecutionStarted,
-    EventType.ExecutionFailed,
-    EventType.ExecutionStopped,
-    EventType.ExecutionSucceeded,
-    EventType.ExecutionTimedOut,
-  ])("should not process %s event", (eventType) => {
-    const event: Event = {
-      EventType: eventType,
-      Id: "execution-1",
-      Name: "test-execution",
-      EventTimestamp: mockTimestamp,
-      ExecutionFailedDetails: {
-        Error: {
-          Payload: mockError,
-        },
-      },
-    };
-
-    const result = historyEventsToOperationEvents([event]);
-
-    expect(result).toHaveLength(0);
   });
 
   it("should process CallbackStarted event with additional details", () => {
@@ -685,15 +682,14 @@ describe("historyEventsToOperationEvents", () => {
       Id: "step-1",
       Name: "test-step",
       EventTimestamp: mockTimestamp,
-      ParentId: "execution-1",
       StepStartedDetails: {},
     };
 
     const result = historyEventsToOperationEvents([executionEvent, stepEvent]);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].operation.Id).toBe("step-1");
-    expect(result[0].operation.ParentId).toBe("execution-1");
+    expect(result).toHaveLength(2);
+    expect(result[0].operation.Id).toBe("execution-1");
+    expect(result[1].operation.Id).toBe("step-1");
   });
 
   it("should handle events with undefined detail fields", () => {

@@ -50,7 +50,7 @@ describe("CheckpointApiClient", () => {
             "Content-Type": "application/json",
           },
           signal: undefined,
-        }
+        },
       );
       expect(result).toEqual(mockInvocationResult);
     });
@@ -73,7 +73,7 @@ describe("CheckpointApiClient", () => {
             "Content-Type": "application/json",
           },
           signal: undefined,
-        }
+        },
       );
       expect(result).toEqual(mockInvocationResult);
     });
@@ -87,7 +87,7 @@ describe("CheckpointApiClient", () => {
       });
 
       await expect(apiClient.startDurableExecution()).rejects.toThrow(
-        `Error making HTTP request to ${API_PATHS.START_DURABLE_EXECUTION}: status: 400, ${errorMessage}`
+        `Error making HTTP request to ${API_PATHS.START_DURABLE_EXECUTION}: status: 400, ${errorMessage}`,
       );
     });
   });
@@ -115,7 +115,7 @@ describe("CheckpointApiClient", () => {
             "Content-Type": "application/json",
           },
           signal: undefined,
-        }
+        },
       );
       expect(result).toEqual(mockResponseData);
     });
@@ -145,7 +145,7 @@ describe("CheckpointApiClient", () => {
             "Content-Type": "application/json",
           },
           signal,
-        }
+        },
       );
     });
 
@@ -198,15 +198,15 @@ describe("CheckpointApiClient", () => {
       });
 
       await expect(
-        apiClient.pollCheckpointData(mockExecutionId)
+        apiClient.pollCheckpointData(mockExecutionId),
       ).rejects.toThrow(
-        `Error making HTTP request to ${API_PATHS.POLL_CHECKPOINT_DATA}/${mockExecutionId}: status: 404, ${errorMessage}`
+        `Error making HTTP request to ${API_PATHS.POLL_CHECKPOINT_DATA}/${mockExecutionId}: status: 404, ${errorMessage}`,
       );
     });
   });
 
   describe("updateCheckpointData", () => {
-    it("should make a POST request to the correct endpoint with status", async () => {
+    it("should make a POST request to the correct endpoint with operation data only", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({}),
@@ -228,19 +228,151 @@ describe("CheckpointApiClient", () => {
         {
           method: HTTP_METHODS.POST,
           body: JSON.stringify({
-            action: undefined,
             operationData: {
               Status: OperationStatus.SUCCEEDED,
               StepDetails: {
                 Result: "hello world",
               },
             },
+            payload: undefined,
+            error: undefined,
           }),
           headers: {
             "Content-Type": "application/json",
           },
           signal: undefined,
-        }
+        },
+      );
+    });
+
+    it("should include payload in the request body when provided", async () => {
+      const payload = JSON.stringify({ result: "test payload data" });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({}),
+      });
+
+      await apiClient.updateCheckpointData({
+        executionId: mockExecutionId,
+        operationId: mockOperationId,
+        operationData: {
+          Status: OperationStatus.SUCCEEDED,
+          StepDetails: {
+            Result: "hello world",
+          },
+        },
+        payload: payload,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}`,
+        {
+          method: HTTP_METHODS.POST,
+          body: JSON.stringify({
+            operationData: {
+              Status: OperationStatus.SUCCEEDED,
+              StepDetails: {
+                Result: "hello world",
+              },
+            },
+            payload: payload,
+            error: undefined,
+          }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: undefined,
+        },
+      );
+    });
+
+    it("should include error in the request body when provided", async () => {
+      const errorObject = {
+        ErrorType: "ServiceException",
+        ErrorMessage: "Operation failed",
+        ErrorData: "Additional error data",
+        StackTrace: ["line1", "line2"],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({}),
+      });
+
+      await apiClient.updateCheckpointData({
+        executionId: mockExecutionId,
+        operationId: mockOperationId,
+        operationData: {
+          Status: OperationStatus.FAILED,
+          StepDetails: {
+            Error: errorObject,
+          },
+        },
+        error: errorObject,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}`,
+        {
+          method: HTTP_METHODS.POST,
+          body: JSON.stringify({
+            operationData: {
+              Status: OperationStatus.FAILED,
+              StepDetails: {
+                Error: errorObject,
+              },
+            },
+            payload: undefined,
+            error: errorObject,
+          }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: undefined,
+        },
+      );
+    });
+
+    it("should include both payload and error in the request body when both are provided", async () => {
+      const payload = JSON.stringify({ attemptedValue: "some data" });
+      const errorObject = {
+        ErrorType: "ValidationException",
+        ErrorMessage: "Invalid input data",
+        ErrorData: "Validation failed",
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({}),
+      });
+
+      await apiClient.updateCheckpointData({
+        executionId: mockExecutionId,
+        operationId: mockOperationId,
+        operationData: {
+          Status: OperationStatus.FAILED,
+        },
+        payload: payload,
+        error: errorObject,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${mockBaseUrl}${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}`,
+        {
+          method: HTTP_METHODS.POST,
+          body: JSON.stringify({
+            operationData: {
+              Status: OperationStatus.FAILED,
+            },
+            payload: payload,
+            error: errorObject,
+          }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: undefined,
+        },
       );
     });
 
@@ -262,9 +394,9 @@ describe("CheckpointApiClient", () => {
               Result: "hello world",
             },
           },
-        })
+        }),
       ).rejects.toThrow(
-        `Error making HTTP request to ${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}: status: 404, ${errorMessage}`
+        `Error making HTTP request to ${API_PATHS.UPDATE_CHECKPOINT_DATA}/${mockExecutionId}/${mockOperationId}: status: 404, ${errorMessage}`,
       );
     });
   });
@@ -287,7 +419,7 @@ describe("CheckpointApiClient", () => {
             "Content-Type": "application/json",
           },
           signal: undefined,
-        }
+        },
       );
       expect(result).toEqual(mockInvocationResult);
     });
@@ -301,7 +433,7 @@ describe("CheckpointApiClient", () => {
       });
 
       await expect(apiClient.startInvocation(mockExecutionId)).rejects.toThrow(
-        `Error making HTTP request to ${API_PATHS.START_INVOCATION}/${mockExecutionId}: status: 404, ${errorMessage}`
+        `Error making HTTP request to ${API_PATHS.START_INVOCATION}/${mockExecutionId}: status: 404, ${errorMessage}`,
       );
     });
   });

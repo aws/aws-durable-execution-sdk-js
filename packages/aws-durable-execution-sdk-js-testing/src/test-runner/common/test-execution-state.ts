@@ -1,7 +1,7 @@
 import { ErrorObject, ExecutionStatus } from "@aws-sdk/client-lambda";
 
 export interface TestExecutionResult {
-  status: ExecutionStatus | undefined;
+  status?: ExecutionStatus;
   result?: string;
   error?: ErrorObject;
 }

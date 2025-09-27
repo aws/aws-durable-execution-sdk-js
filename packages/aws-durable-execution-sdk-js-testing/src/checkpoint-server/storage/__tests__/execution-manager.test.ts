@@ -36,7 +36,7 @@ jest.mock("../../utils/checkpoint-token", () => {
       .fn()
       .mockImplementation(
         (data): CheckpointToken =>
-          `encoded-${JSON.stringify(data)}` as CheckpointToken
+          `encoded-${JSON.stringify(data)}` as CheckpointToken,
       ),
     decodeCheckpointToken: jest
       .fn()
@@ -127,7 +127,10 @@ describe("execution-manager", () => {
         // Mock the initialize method of CheckpointStorage
         const initializeSpy = jest
           .spyOn(CheckpointManager.prototype, "initialize")
-          .mockReturnValue(mockInitialOperation);
+          .mockReturnValue({
+            operation: mockInitialOperation,
+            events: [],
+          });
 
         // Call the method
         const result = executionManager.startExecution(params);
@@ -137,7 +140,12 @@ describe("execution-manager", () => {
           checkpointToken: `encoded-{"executionId":"test-execution-id","token":"mocked-uuid","invocationId":"mocked-uuid"}`,
           executionId,
           invocationId: "mocked-uuid",
-          operations: [mockInitialOperation],
+          operationEvents: [
+            {
+              operation: mockInitialOperation,
+              events: [],
+            },
+          ],
         });
 
         // Verify CheckpointStorage was initialized with correct payload
@@ -159,7 +167,7 @@ describe("execution-manager", () => {
 
         const initializeSpy = jest.spyOn(
           CheckpointManager.prototype,
-          "initialize"
+          "initialize",
         );
 
         executionManager.startExecution(params);
@@ -195,7 +203,7 @@ describe("execution-manager", () => {
         expect(result).toBeDefined();
         expect(result?.executionId).toBe(executionId);
         expect(result?.invocationId).toBe("new-invocation-uuid");
-        expect(result?.operations).toBeInstanceOf(Array);
+        expect(result?.operationEvents).toBeInstanceOf(Array);
         expect(encodeCheckpointToken).toHaveBeenCalledWith({
           executionId,
           token: "new-invocation-uuid",
@@ -232,7 +240,7 @@ describe("execution-manager", () => {
             new Map([
               ["op1", { operation: mockOps[0], update: {} }],
               ["op2", { operation: mockOps[1], update: {} }],
-            ])
+            ]),
           ),
         });
 
@@ -240,16 +248,22 @@ describe("execution-manager", () => {
         const result = executionManager.startInvocation(executionId);
 
         // Check that we got all operations
-        expect(result?.operations).toHaveLength(2);
-        expect(result?.operations[0]).toBe(mockOps[0]);
-        expect(result?.operations[1]).toBe(mockOps[1]);
+        expect(result?.operationEvents).toHaveLength(2);
+        expect(result?.operationEvents[0]).toEqual({
+          operation: mockOps[0],
+          update: {},
+        });
+        expect(result?.operationEvents[1]).toEqual({
+          operation: mockOps[1],
+          update: {},
+        });
       });
     });
 
     describe("getCheckpointsByExecution", () => {
       it("should return undefined for non-existent execution ID", () => {
         const result = executionManager.getCheckpointsByExecution(
-          createExecutionId("non-existent")
+          createExecutionId("non-existent"),
         );
         expect(result).toBeUndefined();
       });
@@ -274,7 +288,7 @@ describe("execution-manager", () => {
         });
 
         const result = executionManager.getCheckpointsByToken(
-          "valid-token" as CheckpointToken
+          "valid-token" as CheckpointToken,
         );
 
         expect(result).toBeUndefined();
@@ -282,7 +296,7 @@ describe("execution-manager", () => {
 
       it("should return undefined when token decoding fails", () => {
         const result = executionManager.getCheckpointsByToken(
-          "invalid-token" as CheckpointToken
+          "invalid-token" as CheckpointToken,
         );
 
         expect(result).toBeUndefined();
@@ -305,7 +319,7 @@ describe("execution-manager", () => {
 
         // Get checkpoints by token
         const result = executionManager.getCheckpointsByToken(
-          "valid-token" as CheckpointToken
+          "valid-token" as CheckpointToken,
         );
 
         expect(result).toBeDefined();
@@ -317,7 +331,7 @@ describe("execution-manager", () => {
     describe("getCheckpointsByCallbackId", () => {
       it("should return undefined when callback ID decoding fails", () => {
         const callbackId = createCallbackId("invalid-callback-id");
-        
+
         // Mock decodeCallbackId to throw an error
         (decodeCallbackId as jest.Mock).mockImplementationOnce(() => {
           throw new Error("Invalid callback ID format");
@@ -331,7 +345,7 @@ describe("execution-manager", () => {
 
       it("should return undefined for non-existent execution ID in callback", () => {
         const callbackId = createCallbackId("valid-callback-id");
-        
+
         // Mock decodeCallbackId to return callback data with non-existent execution ID
         (decodeCallbackId as jest.Mock).mockReturnValueOnce({
           executionId: createExecutionId("non-existent-execution"),
@@ -351,7 +365,7 @@ describe("execution-manager", () => {
         executionManager.startExecution({ executionId });
 
         const callbackId = createCallbackId("valid-callback-id");
-        
+
         // Mock decodeCallbackId to return callback data with existing execution ID
         (decodeCallbackId as jest.Mock).mockReturnValueOnce({
           executionId,
@@ -371,7 +385,7 @@ describe("execution-manager", () => {
         executionManager.startExecution({ executionId });
 
         const callbackId = createCallbackId("valid-callback-id");
-        
+
         // Mock decodeCallbackId to return callback data with existing execution ID
         (decodeCallbackId as jest.Mock).mockReturnValueOnce({
           executionId,
@@ -379,8 +393,10 @@ describe("execution-manager", () => {
           token: "test-token",
         });
 
-        const resultByCallback = executionManager.getCheckpointsByCallbackId(callbackId);
-        const resultByExecution = executionManager.getCheckpointsByExecution(executionId);
+        const resultByCallback =
+          executionManager.getCheckpointsByCallbackId(callbackId);
+        const resultByExecution =
+          executionManager.getCheckpointsByExecution(executionId);
 
         expect(resultByCallback).toBe(resultByExecution);
         expect(resultByCallback).toBeInstanceOf(CheckpointManager);
@@ -388,7 +404,7 @@ describe("execution-manager", () => {
 
       it("should handle malformed callback ID gracefully", () => {
         const callbackId = createCallbackId("malformed-callback-id");
-        
+
         // Mock decodeCallbackId to throw a specific error
         (decodeCallbackId as jest.Mock).mockImplementationOnce(() => {
           throw new Error("Failed to decode CallbackIdData");

@@ -1,4 +1,4 @@
-import { Event, EventType, OperationType } from "@aws-sdk/client-lambda";
+import { Event, EventType } from "@aws-sdk/client-lambda";
 import { OperationEvents } from "../../../common/operations/operation-with-data";
 import { historyEventTypes } from "./history-event-types";
 import { createOperation, populateOperationDetails } from "./operation-factory";
@@ -35,11 +35,6 @@ export function historyEventsToOperationEvents(
     }
 
     const historyEventType = historyEventTypes[event.EventType];
-
-    if (historyEventType.operationType === OperationType.EXECUTION) {
-      // Skip populating the EXECUTION operation type
-      continue;
-    }
 
     if (!event[historyEventType.detailPlace]) {
       throw new Error(`Details missing for event "${event.Id}"`);

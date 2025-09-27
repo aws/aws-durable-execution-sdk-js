@@ -21,18 +21,18 @@ describe("LocalDurableTestRunner mocking Integration", () => {
             await childContext.wait("child-wait", 1000);
 
             return Promise.resolve({ userId: 123, name: "John Doe" });
-          }
+          },
         );
 
         await context.step("failing-step", () =>
-          Promise.reject(new Error("there was an error"))
+          Promise.reject(new Error("there was an error")),
         );
 
         return {
           user: stepResult,
           final: "processed",
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -80,7 +80,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
       async (event: unknown, context: DurableContext) => {
         try {
           await context.step("error-step", () =>
-            Promise.resolve({ success: true })
+            Promise.resolve({ success: true }),
           );
           return { status: "success" };
         } catch (error) {
@@ -89,7 +89,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
             message: error instanceof Error ? error.message : "Unknown error",
           };
         }
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -124,7 +124,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
             },
             {
               retryStrategy: () => ({ shouldRetry: false }),
-            }
+            },
           );
           results.push(result1);
         } catch (error) {
@@ -145,7 +145,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
         }
 
         return { results };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -173,15 +173,15 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {
         const result1 = await context.step("custom-step", () =>
-          Promise.resolve({ default: "implementation" })
+          Promise.resolve({ default: "implementation" }),
         );
 
         const result2 = await context.step("custom-step-2", () =>
-          Promise.resolve({ default: "implementation" })
+          Promise.resolve({ default: "implementation" }),
         );
 
         return { first: result1, second: result2 };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -193,7 +193,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     const customStep2 = runner.getOperation("custom-step-2");
 
     customStep.mockImplementationOnce(() =>
-      Promise.resolve({ custom: "once-implementation" })
+      Promise.resolve({ custom: "once-implementation" }),
     );
     customStep2.mockResolvedValue({ standard: "mock" });
 
@@ -211,15 +211,15 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {
         const result1 = await context.step("step-name", () =>
-          Promise.resolve({ order: 1 })
+          Promise.resolve({ order: 1 }),
         );
 
         const result2 = await context.step("step-name", () =>
-          Promise.resolve({ order: 2 })
+          Promise.resolve({ order: 2 }),
         );
 
         return { results: [result1, result2] };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -265,19 +265,19 @@ describe("LocalDurableTestRunner mocking Integration", () => {
               async (innerChildContext) => {
                 await innerChildContext.wait("deep-wait", 5000);
                 return { level: "inner", data: "deep-data" };
-              }
+              },
             );
 
             const stepResult = await outerChildContext.step("outer-step", () =>
-              Promise.resolve({ level: "outer", inner: innerResult })
+              Promise.resolve({ level: "outer", inner: innerResult }),
             );
 
             return stepResult;
-          }
+          },
         );
 
         return { final: outerResult };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -320,13 +320,13 @@ describe("LocalDurableTestRunner mocking Integration", () => {
 
         for (let i = 0; i < 3; i++) {
           const result = await context.step("repeated-step", () =>
-            Promise.resolve({ iteration: i, original: true })
+            Promise.resolve({ iteration: i, original: true }),
           );
           results.push(result);
         }
 
         return { results };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -365,17 +365,17 @@ describe("LocalDurableTestRunner mocking Integration", () => {
         await context.step("before-wait", () =>
           Promise.resolve({
             completed: "before-wait",
-          })
+          }),
         );
 
         await context.wait("wait", 10000);
 
         const stepResult = await context.step("after-wait", () =>
-          Promise.resolve({ completed: "after-wait" })
+          Promise.resolve({ completed: "after-wait" }),
         );
 
         return { waitCompleted: true, step: stepResult };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -390,7 +390,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     wait.mockResolvedValue({ completed: "mocked-after-wait" });
 
     await expect(
-      runner.run({ payload: { test: "wait-mocking" } })
+      runner.run({ payload: { test: "wait-mocking" } }),
     ).rejects.toThrow("Wait step cannot be mocked");
 
     expect(beforeWait.getStepDetails()?.result).toEqual({
@@ -404,11 +404,11 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {
         await context.step("executed-step", () =>
-          Promise.resolve({ executed: true })
+          Promise.resolve({ executed: true }),
         );
 
         return { success: true };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -417,7 +417,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     });
 
     const executedStep = runner.getOperation<{ executed: string }>(
-      "executed-step"
+      "executed-step",
     );
     const nonExecutedStep = runner.getOperation<never>("non-executed-step");
 
@@ -438,15 +438,15 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {
         const stepByName = await context.step("named-step", () =>
-          Promise.resolve({ type: "named" })
+          Promise.resolve({ type: "named" }),
         );
 
         const stepByIndex = await context.step("indexed-step", () =>
-          Promise.resolve({ type: "indexed" })
+          Promise.resolve({ type: "indexed" }),
         );
 
         return { named: stepByName, indexed: stepByIndex };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -469,7 +469,11 @@ describe("LocalDurableTestRunner mocking Integration", () => {
     });
 
     // Verify both operations have results
-    expect(namedStep.getStepDetails()).toBeDefined();
-    expect(indexedStep.getStepDetails()).toBeDefined();
+    expect(namedStep.getStepDetails()?.result).toEqual({
+      type: "mocked-named",
+    });
+    expect(indexedStep.getStepDetails()?.result).toEqual({
+      type: "mocked-indexed",
+    });
   });
 });
