@@ -14,7 +14,7 @@ import { getCredentialsProvider } from "./credentials-provider";
 import { ExecutionState } from "./storage-provider";
 
 /**
- * Implementation of ExecutionState that uses the new @aws-sdk/client-lambda
+ * Implementation of ExecutionState that uses the new \@aws-sdk/client-lambda
  */
 export class ApiStorage implements ExecutionState {
   protected client: LambdaClient;
@@ -40,8 +40,8 @@ export class ApiStorage implements ExecutionState {
 
   /**
    * Gets step data from the durable execution
-   * @param checkpointToken The checkpoint token
-   * @param nextMarker The pagination token
+   * @param checkpointToken - The checkpoint token
+   * @param nextMarker - The pagination token
    * @returns Response with operations data
    */
   async getStepData(
@@ -63,8 +63,8 @@ export class ApiStorage implements ExecutionState {
 
   /**
    * Checkpoints the durable execution with operation updates
-   * @param checkpointToken The checkpoint token
-   * @param data The checkpoint data
+   * @param checkpointToken - The checkpoint token
+   * @param data - The checkpoint data
    * @returns Checkpoint response
    */
   async checkpoint(

@@ -7,7 +7,6 @@ import {
   OperationSubType,
   WaitForCallbackContext,
   StepContext,
-  Logger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 
@@ -51,7 +50,7 @@ export const createWaitForCallbackHandler = (
     });
 
     // Use runInChildContext to ensure proper ID generation and isolation
-    const childFunction = async (childCtx: DurableContext) => {
+    const childFunction = async (childCtx: DurableContext): Promise<T> => {
       // Convert WaitForCallbackConfig to CreateCallbackConfig
       const createCallbackConfig: CreateCallbackConfig | undefined = config
         ? {

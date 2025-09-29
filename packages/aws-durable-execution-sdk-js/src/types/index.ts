@@ -20,10 +20,7 @@ import type {
 } from "../handlers/concurrent-execution-handler/concurrent-execution-handler";
 
 // Import BatchResult types
-import type {
-  BatchResult,
-  BatchItem,
-} from "../handlers/concurrent-execution-handler/batch-result";
+import type { BatchResult } from "../handlers/concurrent-execution-handler/batch-result";
 
 export interface LambdaHandler<T> {
   (event: T, context: Context): Promise<DurableExecutionInvocationOutput>;
@@ -90,7 +87,7 @@ export interface DurableContext extends Context {
   _stepCounter: number;
   /**
    * Executes a function as a durable step with automatic retry and state persistence
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param fn - Function to execute as a durable step
    * @param config - Optional configuration for retry strategy, semantics, and serialization
    * @example
@@ -169,7 +166,7 @@ export interface DurableContext extends Context {
 
   /**
    * Runs a function in a child context with isolated state and execution tracking
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param fn - Function to execute in the child context
    * @param config - Optional configuration for serialization and sub-typing
    * @example
@@ -234,7 +231,7 @@ export interface DurableContext extends Context {
 
   /**
    * Waits for a condition to be met by periodically checking state
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param checkFunc - Function that checks the current state and returns updated state
    * @param config - Configuration for initial state, wait strategy, and serialization
    * @example
@@ -289,7 +286,7 @@ export interface DurableContext extends Context {
 
   /**
    * Creates a callback that external systems can complete
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param config - Optional configuration for timeout and serialization
    * @returns Tuple of [promise that resolves when callback is submitted, callback ID]
    * @example
@@ -329,7 +326,7 @@ export interface DurableContext extends Context {
   ): Promise<CreateCallbackResult<T>>;
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param submitter - Function that receives the callback ID and submits the callback
    * @param config - Optional configuration for timeout and retry behavior
    * @example
@@ -369,7 +366,7 @@ export interface DurableContext extends Context {
   ): Promise<T>;
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param items - Array of items to process
    * @param mapFunc - Function to apply to each item (context, item, index, array) => Promise<T>
    * @param config - Optional configuration for concurrency and completion behavior
@@ -410,7 +407,7 @@ export interface DurableContext extends Context {
   ): Promise<BatchResult<T>>;
   /**
    * Executes multiple functions in parallel with optional concurrency control
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param branches - Array of functions to execute in parallel
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
@@ -452,7 +449,7 @@ export interface DurableContext extends Context {
   promise: {
     /**
      * Waits for all promises to resolve and returns an array of all results
-     * @param name - Step name for tracking and debugging 
+     * @param name - Step name for tracking and debugging
      * @param promises - Array of promises to wait for
      * @example
      * ```typescript
@@ -483,7 +480,7 @@ export interface DurableContext extends Context {
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
-     * @param name - Step name for tracking and debugging 
+     * @param name - Step name for tracking and debugging
      * @param promises - Array of promises to wait for
      * @example
      * ```typescript
@@ -525,7 +522,7 @@ export interface DurableContext extends Context {
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
-     * @param name - Step name for tracking and debugging 
+     * @param name - Step name for tracking and debugging
      * @param promises - Array of promises to race
      * @example
      * ```typescript
@@ -557,7 +554,7 @@ export interface DurableContext extends Context {
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
-     * @param name - Step name for tracking and debugging 
+     * @param name - Step name for tracking and debugging
      * @param promises - Array of promises to race
      * @example
      * ```typescript
@@ -589,7 +586,7 @@ export interface DurableContext extends Context {
 
   /**
    * Executes items concurrently with fine-grained control over execution strategy
-   * @param name - Step name for tracking and debugging 
+   * @param name - Step name for tracking and debugging
    * @param items - Array of items to execute concurrently
    * @param executor - Function that processes each item
    * @param config - Optional configuration for concurrency and completion behavior

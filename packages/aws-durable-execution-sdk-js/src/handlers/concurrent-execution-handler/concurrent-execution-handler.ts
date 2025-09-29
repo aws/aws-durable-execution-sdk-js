@@ -122,7 +122,7 @@ export class ConcurrencyController {
         return "FAILURE_TOLERANCE_EXCEEDED";
       };
 
-      const tryStartNext = () => {
+      const tryStartNext = (): void => {
         while (
           activeCount < maxConcurrency &&
           currentIndex < items.length &&
@@ -192,7 +192,7 @@ export class ConcurrencyController {
         }
       };
 
-      const onComplete = () => {
+      const onComplete = (): void => {
         activeCount--;
         completedCount++;
 
@@ -282,7 +282,7 @@ export const createConcurrentExecutionHandler = (
       );
     }
 
-    const executeOperation = async (executionContext: DurableContext) => {
+    const executeOperation = async (executionContext: DurableContext): Promise<BatchResult<TResult>> => {
       const concurrencyController = new ConcurrencyController(
         context.isVerbose,
         "concurrent-execution",

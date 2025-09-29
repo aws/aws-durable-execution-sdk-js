@@ -36,7 +36,7 @@ export class ExecutionMockHandler {
 
   /**
    * Records an operation and returns a mock callback if one is registered
-   * Priority order: Index-based > Name-based > Name+Index-based
+   * Priority order: Index-based \> Name-based \> Name+Index-based
    */
   recordOperation(name?: string): MockCallback | undefined {
     const globalIndex = this.operationTracker.incrementGlobal();

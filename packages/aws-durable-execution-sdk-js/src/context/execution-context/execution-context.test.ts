@@ -438,7 +438,7 @@ describe("initializeExecutionContext", () => {
     };
 
     // Execute
-    const result = await initializeExecutionContext(eventWithLocalRunner);
+    await initializeExecutionContext(eventWithLocalRunner);
 
     // Verify
     expect(ExecutionStateFactory.createExecutionState).toHaveBeenCalledWith(
@@ -509,7 +509,7 @@ describe("initializeExecutionContext", () => {
 
     // Test that it calls the utility function correctly
     // Since the step is stored with ID "step1", the getStepData should find it
-    const stepData = result.executionContext.getStepData(stepId);
+    result.executionContext.getStepData(stepId);
     // The actual behavior depends on the hash function, but we can verify the method exists and returns something
     expect(result.executionContext.getStepData).toBeDefined();
   });

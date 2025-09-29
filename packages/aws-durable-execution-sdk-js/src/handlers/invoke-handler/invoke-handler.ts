@@ -19,8 +19,16 @@ export const createInvokeHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
-  hasRunningOperations: () => boolean,
-) => {
+  _hasRunningOperations: () => boolean,
+): {
+  <I, O>(funcId: string, input: I, config?: InvokeConfig<I, O>): Promise<O>;
+  <I, O>(
+    name: string,
+    funcId: string,
+    input: I,
+    config?: InvokeConfig<I, O>,
+  ): Promise<O>;
+} => {
   function invokeHandler<I, O>(
     funcId: string,
     input: I,

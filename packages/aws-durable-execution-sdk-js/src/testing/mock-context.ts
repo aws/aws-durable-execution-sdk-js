@@ -4,7 +4,7 @@ import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-u
 
 /**
  * Creates a mock ExecutionContext for testing purposes
- * @param overrides Optional overrides for specific properties
+ * @param overrides - Optional overrides for specific properties
  * @returns A mocked ExecutionContext
  */
 export const createMockExecutionContext = (

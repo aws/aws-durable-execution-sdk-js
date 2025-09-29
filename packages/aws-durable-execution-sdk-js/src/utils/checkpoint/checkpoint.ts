@@ -239,7 +239,7 @@ class CheckpointHandler {
   /**
    * Updates context.stepData with operations returned from checkpoint API
    * Operations from API already have hashed IDs, so we store them as-is
-   * @param operations Array of operations from checkpoint response
+   * @param operations - Array of operations from checkpoint response
    */
   private updateStepDataFromCheckpointResponse(operations: Operation[]): void {
     log(
@@ -286,7 +286,10 @@ let singletonCheckpointHandler: CheckpointHandler | null = null;
 export const createCheckpoint = (
   context: ExecutionContext,
   taskToken: string,
-) => {
+): {
+  (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
+  force(): Promise<void>;
+} => {
   // Return existing handler if it exists, otherwise create new one
   if (!singletonCheckpointHandler) {
     singletonCheckpointHandler = new CheckpointHandler(context, taskToken);

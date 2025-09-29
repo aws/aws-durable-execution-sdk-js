@@ -25,9 +25,6 @@ describe("PlaygroundLocalRunnerStorage", () => {
 
       new PlaygroundLocalRunnerStorage();
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Initializing local runner DAR client with endpoint: https://local-endpoint.com, region: us-west-2",
-      );
       expect(LambdaClient).toHaveBeenCalledWith({
         endpoint: "https://local-endpoint.com",
         region: "us-west-2",

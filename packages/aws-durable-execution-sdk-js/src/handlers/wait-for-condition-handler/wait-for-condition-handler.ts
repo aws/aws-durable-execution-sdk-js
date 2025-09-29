@@ -8,7 +8,6 @@ import {
   Logger,
 } from "../../types";
 import { terminate } from "../../utils/termination-helper";
-import { Context } from "aws-lambda";
 import {
   OperationAction,
   OperationStatus,

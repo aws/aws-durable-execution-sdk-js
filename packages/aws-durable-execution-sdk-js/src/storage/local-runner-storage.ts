@@ -32,7 +32,7 @@ class LocalRunnerSigV4Handler extends NodeHttpHandler {
 
   public async handle(
     request: HttpRequest,
-    handlerOptions?: HttpHandlerOptions | undefined,
+    _handlerOptions?: HttpHandlerOptions | undefined,
   ): Promise<{ response: HttpResponse }> {
     const signedRequest: HttpRequest = await this.signer.sign(request);
     // @ts-expect-error - The handle method signature doesn't match exactly but works correctly
@@ -45,9 +45,7 @@ export class PlaygroundLocalRunnerStorage extends ApiStorage {
     const endpoint = process.env.LOCAL_RUNNER_ENDPOINT;
     const region = process.env.LOCAL_RUNNER_REGION;
 
-    console.log(
-      `Initializing local runner DAR client with endpoint: ${endpoint}, region: ${region}`,
-    );
+    // Initializing local runner DAR client with endpoint and region
 
     const credentials = getCredentialsProvider();
     const client = new LambdaClient({
