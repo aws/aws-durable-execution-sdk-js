@@ -17,7 +17,10 @@ export const createWaitHandler = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
-) => {
+): {
+  (name: string, millis: number): Promise<void>;
+  (millis: number): Promise<void>;
+} => {
   function waitHandler(name: string, millis: number): Promise<void>;
   function waitHandler(millis: number): Promise<void>;
   async function waitHandler(

@@ -17,7 +17,6 @@ describe("Checkpoint Integration Tests", () => {
   let mockState: any;
   let mockContext: ExecutionContext;
 
-  const mockTaskToken = TEST_CONSTANTS.CHECKPOINT_TOKEN;
   const mockNewTaskToken = "new-task-token";
 
   beforeEach(() => {

@@ -14,7 +14,7 @@ describe("Callback Handler Promise Interface", () => {
 
   beforeEach(() => {
     stepIdCounter = 0;
-    createStepId = () => `step-${++stepIdCounter}`;
+    createStepId = (): string => `step-${++stepIdCounter}`;
     mockHasRunningOperations = jest.fn().mockReturnValue(false);
 
     mockContext = createMockExecutionContext();
@@ -158,10 +158,10 @@ describe("Callback Handler Promise Interface", () => {
       const [promise] = await callbackHandler<string>("test-callback");
 
       // This should not throw a compilation error and should trigger termination
-      const asyncFunction = async () => {
+      const asyncFunction = async (): Promise<void> => {
         try {
           await promise; // This should trigger termination
-        } catch (error) {
+        } catch (_error) {
           // Handle error
         }
       };

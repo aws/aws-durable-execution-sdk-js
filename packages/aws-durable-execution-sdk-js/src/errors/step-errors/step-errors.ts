@@ -3,7 +3,7 @@
  * before completion.
  */
 export class StepInterruptedError extends Error {
-  constructor(stepId: string, stepName?: string) {
+  constructor(_stepId: string, _stepName?: string) {
     super(
       `The step execution process was initiated but failed to reach completion due to an interruption.`,
     );

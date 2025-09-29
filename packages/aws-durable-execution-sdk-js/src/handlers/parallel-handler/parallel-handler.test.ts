@@ -5,7 +5,6 @@ import {
   ParallelFunc,
   BatchItemStatus,
 } from "../../types";
-import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { MockBatchResult } from "../../testing/mock-batch-result";
 
 describe("Parallel Handler", () => {
@@ -184,7 +183,7 @@ describe("Parallel Handler", () => {
         nameOrItems: any,
         itemsOrExecutor?: any,
         executorOrConfig?: any,
-        maybeConfig?: any,
+        _maybeConfig?: any,
       ) => {
         // Handle the overloaded signature
         if (typeof nameOrItems === "string" || nameOrItems === undefined) {

@@ -160,8 +160,8 @@ describe("Durable Context", () => {
     const input = { test: "data" };
     const config = {
       payloadSerdes: {
-        serialize: async () => "test",
-        deserialize: async () => ({}),
+        serialize: async (): Promise<string> => "test",
+        deserialize: async (): Promise<object> => ({}),
       },
     };
 

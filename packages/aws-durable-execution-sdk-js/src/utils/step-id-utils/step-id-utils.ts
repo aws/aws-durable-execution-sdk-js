@@ -1,10 +1,11 @@
 import { createHash } from "crypto";
+import { Operation } from "@aws-sdk/client-lambda";
 
 const HASH_LENGTH = 16;
 
 /**
  * Creates an MD5 hash of the input string for better performance than SHA-256
- * @param input The string to hash
+ * @param input - The string to hash
  * @returns The truncated hexadecimal hash string
  */
 export const hashId = (input: string): string => {
@@ -17,11 +18,14 @@ export const hashId = (input: string): string => {
 /**
  * Helper function to get step data using the original stepId
  * This function handles the hashing internally so callers don't need to worry about it
- * @param stepData The stepData record from context
- * @param stepId The original stepId (will be hashed internally)
+ * @param stepData - The stepData record from context
+ * @param stepId - The original stepId (will be hashed internally)
  * @returns The operation data or undefined if not found
  */
-export const getStepData = (stepData: Record<string, any>, stepId: string) => {
+export const getStepData = (
+  stepData: Record<string, Operation>,
+  stepId: string,
+): Operation | undefined => {
   const hashedId = hashId(stepId);
   return stepData[hashedId];
 };

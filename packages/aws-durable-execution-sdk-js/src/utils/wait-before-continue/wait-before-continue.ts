@@ -57,7 +57,7 @@ export async function waitBeforeContinue(
   const timers: NodeJS.Timeout[] = [];
 
   // Cleanup function to clear all timers
-  const cleanup = () => {
+  const cleanup = (): void => {
     timers.forEach((timer) => clearTimeout(timer));
   };
 
@@ -82,7 +82,7 @@ export async function waitBeforeContinue(
   if (checkHasRunningOperations) {
     const operationsPromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
-        const checkOperations = () => {
+        const checkOperations = (): void => {
           if (!hasRunningOperations()) {
             resolve({ reason: "operations" });
           } else {
@@ -101,7 +101,7 @@ export async function waitBeforeContinue(
     const originalStatus = context.getStepData(stepId)?.Status;
     const stepStatusPromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
-        const checkStepStatus = () => {
+        const checkStepStatus = (): void => {
           const currentStatus = context.getStepData(stepId)?.Status;
           if (originalStatus !== currentStatus) {
             resolve({ reason: "status" });

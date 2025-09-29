@@ -357,8 +357,8 @@ describe("InvokeHandler", () => {
 
       const config = {
         payloadSerdes: {
-          serialize: async () => "custom",
-          deserialize: async () => ({}),
+          serialize: async (): Promise<string> => "custom",
+          deserialize: async (): Promise<object> => ({}),
         },
         timeoutSeconds: 30,
       };

@@ -1,5 +1,6 @@
 import { hashId, getStepData } from "./step-id-utils";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
+import { Operation } from "@aws-sdk/client-lambda";
 
 describe("Hash Utility", () => {
   describe("hashId", () => {
@@ -29,7 +30,10 @@ describe("Hash Utility", () => {
     it("should retrieve data using original stepId", () => {
       const stepId = TEST_CONSTANTS.STEP;
       const hashedId = hashId(stepId);
-      const mockData = { Status: "SUCCEEDED", Result: TEST_CONSTANTS.RESULT };
+      const mockData = {
+        Status: "SUCCEEDED",
+        Result: TEST_CONSTANTS.RESULT,
+      } as Operation;
 
       const stepData = {
         [hashedId]: mockData,
@@ -54,7 +58,7 @@ describe("Hash Utility", () => {
         StepDetails: {
           Result: "complex-result",
         },
-      };
+      } as Operation;
 
       const stepData = {
         [hashedId]: mockOperation,
@@ -62,7 +66,7 @@ describe("Hash Utility", () => {
 
       const result = getStepData(stepData, stepId);
       expect(result).toBe(mockOperation);
-      expect(result.StepDetails?.Result).toBe("complex-result");
+      expect(result?.StepDetails?.Result).toBe("complex-result");
     });
   });
 });

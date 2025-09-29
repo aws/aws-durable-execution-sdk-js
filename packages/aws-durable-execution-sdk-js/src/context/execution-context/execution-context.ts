@@ -78,7 +78,7 @@ export const initializeExecutionContext = async (
       isLocalMode,
       isVerbose,
       durableExecutionArn,
-      getStepData(stepId: string) {
+      getStepData(stepId: string): Operation | undefined {
         return getStepDataUtil(stepData, stepId);
       },
     },

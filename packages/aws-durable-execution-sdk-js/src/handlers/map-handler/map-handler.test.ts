@@ -211,10 +211,8 @@ describe("Map Handler", () => {
         .mockResolvedValueOnce("result1")
         .mockResolvedValueOnce("result2");
 
-      let capturedExecutor: any;
       mockExecuteConcurrently.mockImplementation(async (...args: any[]) => {
         const [, executionItems, executor] = args;
-        capturedExecutor = executor;
 
         // Simulate calling the executor for each item
         const results = [];
