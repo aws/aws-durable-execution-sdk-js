@@ -1,5 +1,3 @@
-import { createDurableContext } from "../../context/durable-context/durable-context";
-import { createMockExecutionContext } from "../../testing/mock-context";
 import { Context } from "aws-lambda";
 import { hashId } from "../step-id-utils/step-id-utils";
 
@@ -15,11 +13,7 @@ describe("Structured Logger Integration", () => {
   });
 
   it("should use correct stepId for step logger", async () => {
-    const mockExecutionContext = createMockExecutionContext({
-      durableExecutionArn: "test-execution-arn",
-    });
-
-    const mockLambdaContext = {
+    const _mockLambdaContext = {
       callbackWaitsForEmptyEventLoop: false,
       functionName: "test-function",
       functionVersion: "1",
@@ -37,7 +31,7 @@ describe("Structured Logger Integration", () => {
     // Simulate step execution with stepUtil
     const stepUtil = {
       logger: {
-        info: (message: string) => {
+        info: (message: string): void => {
           const logEntry = {
             timestamp: new Date().toISOString(),
             level: "info",
@@ -46,6 +40,7 @@ describe("Structured Logger Integration", () => {
             stepId: hashId("test-step"),
             attempt: 0,
           };
+          // eslint-disable-next-line no-console
           console.log(JSON.stringify(logEntry));
         },
       },

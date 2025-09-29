@@ -272,7 +272,7 @@ describe("Concurrent Execution Handler", () => {
       // Mock the executeOperation function to capture the actual execution
       let capturedExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
-        (nameOrFn: any, fnOrConfig?: any, maybeConfig?: any) => {
+        (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
           // Handle the overloaded signature
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
             capturedExecuteOperation = fnOrConfig;
@@ -302,7 +302,7 @@ describe("Concurrent Execution Handler", () => {
       // Create a real execution context that will execute the actual path
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
-        async (nameOrFn: any, fnOrConfig?: any, maybeConfig?: any) => {
+        async (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
           // Handle the overloaded signature
           let actualFn;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
@@ -336,7 +336,7 @@ describe("Concurrent Execution Handler", () => {
       // Test with undefined config to cover the config || {} branch
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
-        async (nameOrFn: any, fnOrConfig?: any, maybeConfig?: any) => {
+        async (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
           // Handle the overloaded signature
           let actualFn;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
@@ -632,12 +632,7 @@ describe("ConcurrencyController", () => {
       // For empty arrays, the promise should resolve immediately
       // but the current implementation has a bug where it doesn't
       // Let's test what actually happens
-      const promise = controller.executeItems(
-        [],
-        jest.fn(),
-        mockParentContext,
-        {},
-      );
+      controller.executeItems([], jest.fn(), mockParentContext, {});
 
       // Since the implementation has a bug with empty arrays, let's skip this test for now
       // and focus on the coverage we've achieved

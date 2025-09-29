@@ -17,7 +17,7 @@ describe("WaitForCallback Operations Integration", () => {
   it("should handle basic waitForCallback with anonymous submitter", async () => {
     let receivedCallbackId: string | undefined;
 
-    const handler = withDurableFunctions(
+    const handler = withDurableFunctions<unknown, unknown>(
       async (_event: unknown, context: DurableContext) => {
         const result = await context.waitForCallback<{ data: string }>(
           async (callbackId) => {
@@ -67,7 +67,7 @@ describe("WaitForCallback Operations Integration", () => {
 
   it("should handle basic waitForCallback with named submitter", async () => {
     let receivedCallbackId: string | undefined; // simulates a side-effect since it's outside the handler
-    const handler = withDurableFunctions(
+    const handler = withDurableFunctions<unknown, unknown>(
       async (_event: unknown, context: DurableContext) => {
         const result = await context.waitForCallback<{ data: string }>(
           async (callbackId) => {
@@ -116,7 +116,7 @@ describe("WaitForCallback Operations Integration", () => {
   // Error Handling & Submitter Function Variants Category
   describe("Error Handling & Submitter Function Variants", () => {
     it("should handle waitForCallback with submitter function synchronous errors", async () => {
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(
@@ -160,7 +160,7 @@ describe("WaitForCallback Operations Integration", () => {
     });
 
     it("should handle waitForCallback with submitter function returning rejected promises", async () => {
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(
@@ -206,7 +206,7 @@ describe("WaitForCallback Operations Integration", () => {
     it("should handle waitForCallback with callback failure scenarios", async () => {
       let receivedCallbackId: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(
@@ -271,7 +271,7 @@ describe("WaitForCallback Operations Integration", () => {
       let scenario2CallbackId: string | undefined;
 
       // Test scenario where submitter fails but callback would have succeeded
-      const handler1 = withDurableFunctions(
+      const handler1 = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(
@@ -310,7 +310,7 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Test scenario where submitter succeeds but callback fails (covered in previous test)
       // This test demonstrates the contrast between the two scenarios
-      const handler2 = withDurableFunctions(
+      const handler2 = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const result = await context.waitForCallback<{ data: string }>(
             (callbackId) => {
@@ -361,7 +361,7 @@ describe("WaitForCallback Operations Integration", () => {
       let callbackId: string | undefined;
       let sideEffectCounter = 0;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(
@@ -439,7 +439,7 @@ describe("WaitForCallback Operations Integration", () => {
     it("should handle waitForCallback with heartbeat timeout configuration", async () => {
       let receivedCallbackId: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const result = await context.waitForCallback<{ data: string }>(
             async (callbackId) => {
@@ -508,7 +508,7 @@ describe("WaitForCallback Operations Integration", () => {
       let submitterStartTime: number;
       let submitterEndTime: number;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const result = await context.waitForCallback<{ processed: number }>(
             async (callbackId) => {
@@ -586,7 +586,7 @@ describe("WaitForCallback Operations Integration", () => {
 
     // Skip timeout scenarios until SDK properly supports them (similar to callback-operations.integration.test.ts)
     it.skip("should handle waitForCallback timeout scenarios", async () => {
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(
@@ -636,7 +636,7 @@ describe("WaitForCallback Operations Integration", () => {
       let callback2Id: string | undefined;
       let callback3Id: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           // Start multiple waitForCallback operations concurrently
           const [result1, result2, result3] = await Promise.all([
@@ -756,7 +756,7 @@ describe("WaitForCallback Operations Integration", () => {
     it.skip("should handle waitForCallback mixed with steps, waits, and other operations", async () => {
       let callbackId: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           // Mix waitForCallback with other operation types
           await context.wait("initial-wait", 50);
@@ -843,7 +843,7 @@ describe("WaitForCallback Operations Integration", () => {
       let parentCallbackId: string | undefined;
       let childCallbackId: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const parentResult = await context.waitForCallback<{
             parentData: string;
@@ -945,7 +945,7 @@ describe("WaitForCallback Operations Integration", () => {
       let firstCallbackId: string | undefined;
       let secondCallbackId: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           await context.wait("wait-invocation-1", 1000);
 
@@ -1048,7 +1048,7 @@ describe("WaitForCallback Operations Integration", () => {
       let innerCallbackId: string | undefined;
       let nestedCallbackId: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const outerResult = await context.waitForCallback<{ level: string }>(
             "outer-callback-op",
@@ -1192,7 +1192,7 @@ describe("WaitForCallback Operations Integration", () => {
     it("should handle waitForCallback with custom timeout settings", async () => {
       let receivedCallbackId: string | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const result = await context.waitForCallback<{ data: string }>(
             "custom-timeout-callback",
@@ -1307,7 +1307,7 @@ describe("WaitForCallback Operations Integration", () => {
       let receivedCallbackId: string | undefined;
       let submitterData: CustomData | undefined;
 
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const result = await context.waitForCallback<CustomData>(
             "custom-serdes-callback",
@@ -1396,7 +1396,7 @@ describe("WaitForCallback Operations Integration", () => {
 
   describe("Mocking Tests", () => {
     it("should handle basic waitForCallback mocking functionality", async () => {
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           const result1 = await context.waitForCallback<{ data: string }>(
             "mock-callback-1",
@@ -1460,7 +1460,7 @@ describe("WaitForCallback Operations Integration", () => {
     });
 
     it("should handle waitForCallback error mocking", async () => {
-      const handler = withDurableFunctions(
+      const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(

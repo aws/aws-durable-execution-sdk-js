@@ -19,8 +19,8 @@ export interface SerdesContext {
 export interface Serdes<T> {
   /**
    * Serializes a value to a string representation
-   * @param value The value to serialize
-   * @param context Context information for external storage (entityId, durableExecutionArn)
+   * @param value - The value to serialize
+   * @param context - Context information for external storage (entityId, durableExecutionArn)
    * @returns A Promise that resolves to a string representation of the value or pointer
    */
   serialize: (
@@ -30,8 +30,8 @@ export interface Serdes<T> {
 
   /**
    * Deserializes a string back to the original value
-   * @param data The string to deserialize (could be actual data or a pointer)
-   * @param context Context information for external storage (entityId, durableExecutionArn)
+   * @param data - The string to deserialize (could be actual data or a pointer)
+   * @param context - Context information for external storage (entityId, durableExecutionArn)
    * @returns A Promise that resolves to the deserialized value
    */
   deserialize: (
@@ -59,7 +59,7 @@ export const defaultSerdes: Serdes<any> = {
 
 /**
  * Creates a Serdes for a specific class that preserves the class type
- * @param cls The class constructor
+ * @param cls - The class constructor
  * @returns A Serdes that maintains the class type during serialization/deserialization
  *
  * Note: This basic implementation doesn't handle special types like Date objects.
@@ -87,8 +87,8 @@ export function createClassSerdes<T extends object>(
 
 /**
  * Creates a custom Serdes for a class with special handling for Date properties
- * @param cls The class constructor
- * @param dateProps Array of property names that should be converted to Date objects
+ * @param cls - The class constructor
+ * @param dateProps - Array of property names that should be converted to Date objects
  * @returns A Serdes that maintains the class type and converts specified properties to Date objects
  */
 export function createClassSerdesWithDates<T extends object>(

@@ -368,7 +368,7 @@ export interface DurableContext extends Context {
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
    * @param name - Step name for tracking and debugging
    * @param items - Array of items to process
-   * @param mapFunc - Function to apply to each item (context, item, index, array) => Promise<T>
+   * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise<T>
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
@@ -390,7 +390,7 @@ export interface DurableContext extends Context {
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
    * @param items - Array of items to process
-   * @param mapFunc - Function to apply to each item (context, item, index, array) => Promise<T>
+   * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise<T>
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
@@ -763,11 +763,11 @@ export type WaitForCallbackSubmitterFunc = (
  */
 export interface Logger {
   /** Generic log method with configurable level */
-  log(level: string, message?: string, data?: any, error?: Error): void;
+  log(level: string, message?: string, data?: unknown, error?: Error): void;
   /** Log error messages with optional error object and additional data */
-  error(message?: string, error?: Error, data?: any): void;
+  error(message?: string, error?: Error, data?: unknown): void;
   /** Log warning messages with optional additional data */
-  warn(message?: string, data?: any): void;
+  warn(message?: string, data?: unknown): void;
   /** Log informational messages with optional additional data */
   info(message?: string, data?: any): void;
   /** Log debug messages with optional additional data */

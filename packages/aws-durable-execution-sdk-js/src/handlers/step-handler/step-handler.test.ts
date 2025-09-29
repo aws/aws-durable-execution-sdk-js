@@ -3,7 +3,7 @@ import {
   CheckpointFunction,
 } from "../../testing/mock-checkpoint";
 import { createStepHandler } from "./step-handler";
-import { ExecutionContext, StepSemantics, OperationSubType } from "../../types";
+import { ExecutionContext, StepSemantics, Logger } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -14,11 +14,7 @@ import {
   UnrecoverableExecutionError,
   UnrecoverableInvocationError,
 } from "../../errors/unrecoverable-error/unrecoverable-error";
-import {
-  OperationType,
-  OperationStatus,
-  OperationAction,
-} from "@aws-sdk/client-lambda";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
@@ -75,7 +71,7 @@ describe("Step Handler", () => {
       warn: jest.fn(),
       debug: jest.fn(),
     };
-    const createMockEnrichedLogger = () => mockLogger;
+    const createMockEnrichedLogger = (): Logger => mockLogger;
 
     stepHandler = createStepHandler(
       mockExecutionContext,
@@ -184,7 +180,7 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics
-    const stepPromise = stepHandler("test-step", stepFn, {
+    stepHandler("test-step", stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
       retryStrategy: mockRetryStrategy,
     });
@@ -351,7 +347,7 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
 
     // Call the step handler but don't await it (it will never resolve)
-    const stepPromise = stepHandler("test-step", stepFn, {
+    stepHandler("test-step", stepFn, {
       retryStrategy: mockRetryStrategy,
     });
 
@@ -387,7 +383,7 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler but don't await it (it will never resolve)
-    const stepPromise = stepHandler("test-step", stepFn);
+    stepHandler("test-step", stepFn);
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -421,8 +417,7 @@ describe("Step Handler", () => {
 
     // Verify the default retry strategy was called with an Error wrapper
     expect(retryPresets.default).toHaveBeenCalledTimes(1);
-    const [error, attemptCount] = (retryPresets.default as jest.Mock).mock
-      .calls[0];
+    const [error] = (retryPresets.default as jest.Mock).mock.calls[0];
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("Unknown Error");
 
@@ -531,7 +526,7 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics but no custom retry strategy
-    const stepPromise = stepHandler("test-step", stepFn, {
+    stepHandler("test-step", stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
     });
 
@@ -622,7 +617,7 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler without a name
-    const stepPromise = stepHandler(stepFn);
+    stepHandler(stepFn);
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -657,7 +652,7 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics but no name
-    const stepPromise = stepHandler(stepFn, {
+    stepHandler(stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
     });
 
@@ -719,7 +714,7 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics
-    const stepPromise = stepHandler("test-step", stepFn, {
+    stepHandler("test-step", stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
       retryStrategy: mockRetryStrategy,
     });
@@ -729,7 +724,7 @@ describe("Step Handler", () => {
 
     // Verify the retry strategy was called with attempt count 1 (default)
     expect(mockRetryStrategy).toHaveBeenCalledTimes(1);
-    const [error, attemptCount] = mockRetryStrategy.mock.calls[0];
+    const [, attemptCount] = mockRetryStrategy.mock.calls[0];
     expect(attemptCount).toBe(1);
   });
 
@@ -741,7 +736,7 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
 
     // Call the step handler with custom retry strategy
-    const stepPromise = stepHandler("test-step", stepFn, {
+    stepHandler("test-step", stepFn, {
       retryStrategy: mockRetryStrategy,
     });
 
@@ -750,7 +745,7 @@ describe("Step Handler", () => {
 
     // Verify the retry strategy was called with an Error wrapper
     expect(mockRetryStrategy).toHaveBeenCalledTimes(1);
-    const [error, attemptCount] = mockRetryStrategy.mock.calls[0];
+    const [error] = mockRetryStrategy.mock.calls[0];
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("Unknown Error");
 
@@ -774,15 +769,14 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler with default retry strategy
-    const stepPromise = stepHandler("test-step", stepFn);
+    stepHandler("test-step", stepFn);
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Verify the default retry strategy was called with an Error wrapper
     expect(retryPresets.default).toHaveBeenCalledTimes(1);
-    const [error, attemptCount] = (retryPresets.default as jest.Mock).mock
-      .calls[0];
+    const [error] = (retryPresets.default as jest.Mock).mock.calls[0];
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("Unknown Error");
 
@@ -832,7 +826,7 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      const stepPromise = stepHandler("test-step", stepFn);
+      stepHandler("test-step", stepFn);
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -852,7 +846,7 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      const stepPromise = stepHandler("test-step", stepFn);
+      stepHandler("test-step", stepFn);
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -872,7 +866,7 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      const stepPromise = stepHandler("test-step", stepFn);
+      stepHandler("test-step", stepFn);
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -891,7 +885,7 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      const stepPromise = stepHandler(stepFn);
+      stepHandler(stepFn);
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -911,7 +905,7 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      const stepPromise = stepHandler(stepFn);
+      stepHandler(stepFn);
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -936,7 +930,7 @@ describe("Step Handler", () => {
       };
 
       // Call the step handler but don't await it (it will never resolve due to termination)
-      const stepPromise = stepHandler("test-step", stepFn, {
+      stepHandler("test-step", stepFn, {
         serdes: mockSerdes,
       });
 
@@ -963,7 +957,7 @@ describe("Step Handler", () => {
       };
 
       // Call the step handler but don't await it (it will never resolve due to termination)
-      const stepPromise = stepHandler("test-step", stepFn, {
+      stepHandler("test-step", stepFn, {
         serdes: mockSerdes,
       });
 
@@ -1129,7 +1123,7 @@ describe("Step Handler", () => {
         .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
 
       // Call the step handler but don't await it (it will never resolve)
-      const stepPromise = stepHandler("test-step", stepFn, {
+      stepHandler("test-step", stepFn, {
         retryStrategy: mockRetryStrategy,
       });
 

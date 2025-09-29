@@ -146,19 +146,24 @@ describe("Context Logger", () => {
     // Create a default logger that mimics the one in durable-context
     const createDefaultLogger = (): Logger => ({
       log: (level: string, message?: string, data?: any, error?: Error) =>
+        // eslint-disable-next-line no-console
         console.log(level, message, data, error),
       info: (message?: string, data?: any) =>
+        // eslint-disable-next-line no-console
         console.log("info", message, data),
       error: (message?: string, error?: Error, data?: any) =>
+        // eslint-disable-next-line no-console
         console.log("error", message, error, data),
       warn: (message?: string, data?: any) =>
+        // eslint-disable-next-line no-console
         console.log("warn", message, data),
       debug: (message?: string, data?: any) =>
+        // eslint-disable-next-line no-console
         console.log("debug", message, data),
     });
 
     const defaultLogger = createDefaultLogger();
-    const getDefaultLogger = () => defaultLogger;
+    const getDefaultLogger = (): Logger => defaultLogger;
 
     const factory = createContextLoggerFactory(
       mockExecutionContext,
