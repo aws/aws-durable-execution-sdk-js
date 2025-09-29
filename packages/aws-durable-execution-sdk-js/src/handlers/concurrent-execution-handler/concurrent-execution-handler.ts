@@ -282,7 +282,9 @@ export const createConcurrentExecutionHandler = (
       );
     }
 
-    const executeOperation = async (executionContext: DurableContext): Promise<BatchResult<TResult>> => {
+    const executeOperation = async (
+      executionContext: DurableContext,
+    ): Promise<BatchResult<TResult>> => {
       const concurrencyController = new ConcurrencyController(
         context.isVerbose,
         "concurrent-execution",

@@ -16,9 +16,11 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 describe("WaitForCondition Handler Timing Tests", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
   let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
-  let mockParentContext: any;
+  let _mockParentContext: any;
   let createStepId: jest.Mock;
-  let waitForConditionHandler: ReturnType<typeof createWaitForConditionHandler>;
+  let _waitForConditionHandler: ReturnType<
+    typeof createWaitForConditionHandler
+  >;
   let mockTerminationManager: jest.Mocked<TerminationManager>;
 
   beforeEach(() => {
@@ -39,10 +41,10 @@ describe("WaitForCondition Handler Timing Tests", () => {
     } as unknown as jest.Mocked<ExecutionContext>;
 
     mockCheckpoint = createMockCheckpoint();
-    mockParentContext = { getRemainingTimeInMillis: () => 30000 };
+    _mockParentContext = { getRemainingTimeInMillis: (): number => 30000 };
     createStepId = jest.fn().mockReturnValue("test-step-id");
 
-    waitForConditionHandler = createWaitForConditionHandler(
+    _waitForConditionHandler = createWaitForConditionHandler(
       mockExecutionContext,
       mockCheckpoint,
       createStepId,
@@ -76,11 +78,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         mockHasRunningOperations,
       );
 
-      const waitPromise = waitForConditionHandlerWithMocks(
-        "test-wait",
-        checkFn,
-        config,
-      );
+      waitForConditionHandlerWithMocks("test-wait", checkFn, config);
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -158,7 +156,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
 
       const config: WaitForConditionConfig<{ count: number }> = {
         initialState: { count: 0 },
-        waitStrategy: (state, attempt) => ({
+        waitStrategy: (state, _attempt) => ({
           shouldContinue: state.count < 2, // Continue until count reaches 2
           delaySeconds: 1,
         }),
@@ -230,7 +228,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
 
       const config: WaitForConditionConfig<{ progress: number }> = {
         initialState: { progress: 0 },
-        waitStrategy: (state, attempt) => ({
+        waitStrategy: (state, _attempt) => ({
           shouldContinue: state.progress < 100,
           delaySeconds: 2,
         }),

@@ -248,7 +248,7 @@ describe("Serdes Errors", () => {
       });
 
       // Call safeSerialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeSerialize(
+      safeSerialize(
         mockSerdes,
         value,
         TEST_CONSTANTS.STEP_ID_1,
@@ -276,7 +276,7 @@ describe("Serdes Errors", () => {
       });
 
       // Call safeSerialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeSerialize(
+      safeSerialize(
         mockSerdes,
         value,
         TEST_CONSTANTS.STEP_ID_1,
@@ -304,7 +304,7 @@ describe("Serdes Errors", () => {
       });
 
       // Call safeSerialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeSerialize(
+      safeSerialize(
         mockSerdes,
         value,
         TEST_CONSTANTS.STEP_ID_1,
@@ -331,7 +331,7 @@ describe("Serdes Errors", () => {
       mockSerdes.serialize.mockRejectedValue(originalError);
 
       // Call safeSerialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeSerialize(
+      safeSerialize(
         mockSerdes,
         value,
         TEST_CONSTANTS.STEP_ID_1,
@@ -357,7 +357,7 @@ describe("Serdes Errors", () => {
       mockSerdes.serialize.mockRejectedValue("Async string error");
 
       // Call safeSerialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeSerialize(
+      safeSerialize(
         mockSerdes,
         value,
         TEST_CONSTANTS.STEP_ID_1,
@@ -383,7 +383,7 @@ describe("Serdes Errors", () => {
       mockSerdes.serialize.mockRejectedValue("Async string error");
 
       // Call safeSerialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeSerialize(
+      safeSerialize(
         mockSerdes,
         value,
         TEST_CONSTANTS.STEP_ID_1,
@@ -469,7 +469,7 @@ describe("Serdes Errors", () => {
       });
 
       // Call safeDeserialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeDeserialize(
+      safeDeserialize(
         mockSerdes,
         data,
         TEST_CONSTANTS.STEP_ID_1,
@@ -497,7 +497,7 @@ describe("Serdes Errors", () => {
       });
 
       // Call safeDeserialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeDeserialize(
+      safeDeserialize(
         mockSerdes,
         data,
         TEST_CONSTANTS.STEP_ID_1,
@@ -525,7 +525,7 @@ describe("Serdes Errors", () => {
       });
 
       // Call safeDeserialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeDeserialize(
+      safeDeserialize(
         mockSerdes,
         data,
         TEST_CONSTANTS.STEP_ID_1,
@@ -552,7 +552,7 @@ describe("Serdes Errors", () => {
       mockSerdes.deserialize.mockRejectedValue(originalError);
 
       // Call safeDeserialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeDeserialize(
+      safeDeserialize(
         mockSerdes,
         data,
         TEST_CONSTANTS.STEP_ID_1,
@@ -578,7 +578,7 @@ describe("Serdes Errors", () => {
       mockSerdes.deserialize.mockRejectedValue("Async string error");
 
       // Call safeDeserialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeDeserialize(
+      safeDeserialize(
         mockSerdes,
         data,
         TEST_CONSTANTS.STEP_ID_1,
@@ -604,7 +604,7 @@ describe("Serdes Errors", () => {
       mockSerdes.deserialize.mockRejectedValue("Async string error");
 
       // Call safeDeserialize but don't await it (it will never resolve due to termination)
-      const resultPromise = safeDeserialize(
+      safeDeserialize(
         mockSerdes,
         data,
         TEST_CONSTANTS.STEP_ID_1,

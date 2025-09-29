@@ -27,7 +27,6 @@ describe("CheckpointHandler", () => {
   let mockContext: ExecutionContext;
   let checkpointHandler: CheckpointHandler;
 
-  const mockTaskToken = TEST_CONSTANTS.CHECKPOINT_TOKEN;
   const mockNewTaskToken = "new-task-token";
 
   beforeEach(() => {
@@ -72,7 +71,7 @@ describe("CheckpointHandler", () => {
         Type: OperationType.STEP,
       };
 
-      const result = await checkpointHandler.checkpoint(stepId, data);
+      await checkpointHandler.checkpoint(stepId, data);
 
       // Should be processed immediately
       expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
@@ -805,7 +804,6 @@ describe("deleteCheckpointHandler", () => {
 describe("createCheckpointHandler", () => {
   // Setup common test variables
   const mockStepId = "test-step-id";
-  const mockTaskToken = TEST_CONSTANTS.CHECKPOINT_TOKEN;
 
   const mockCheckpointResponse = {
     CheckpointToken: "new-task-token",
@@ -856,7 +854,7 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
     );
-    const result = await checkpoint(mockStepId, checkpointData);
+    await checkpoint(mockStepId, checkpointData);
 
     // Verify
     expect(mockState.checkpoint).toHaveBeenCalledWith(

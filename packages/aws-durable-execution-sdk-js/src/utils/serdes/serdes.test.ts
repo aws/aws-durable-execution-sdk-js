@@ -81,7 +81,7 @@ describe("Serdes", () => {
         if (value !== undefined) this.value = value;
       }
 
-      getFullName() {
+      getFullName(): string {
         return `${this.name}-${this.value}`;
       }
     }
@@ -136,7 +136,7 @@ describe("Serdes", () => {
           this.createdAt = new Date();
         }
 
-        getAge() {
+        getAge(): number {
           return Date.now() - this.createdAt.getTime();
         }
       }
@@ -175,11 +175,11 @@ describe("Serdes", () => {
         this.createdAt = new Date();
       }
 
-      getAge() {
+      getAge(): number {
         return Date.now() - this.createdAt.getTime();
       }
 
-      update() {
+      update(): void {
         this.updatedAt = new Date();
       }
     }

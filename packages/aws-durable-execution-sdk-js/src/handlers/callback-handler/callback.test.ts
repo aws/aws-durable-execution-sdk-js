@@ -437,8 +437,7 @@ describe("Callback Handler", () => {
       };
 
       // Call callbackHandler but don't await the returned promise
-      const [promise, callbackId] =
-        await callbackHandler<string>("started-callback");
+      const [, callbackId] = await callbackHandler<string>("started-callback");
 
       // Verify the callback ID is returned immediately
       expect(callbackId).toBe("started-callback-123");
@@ -467,7 +466,7 @@ describe("Callback Handler", () => {
       const [promise] = await callbackHandler<string>();
 
       // Await the promise to trigger termination
-      const promiseResult = promise.then(() => "should-never-resolve");
+      promise.then(() => "should-never-resolve");
 
       // Verify terminate was called with stepId in message
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
@@ -544,7 +543,7 @@ describe("Callback Handler", () => {
   describe("New Callback Creation Scenarios", () => {
     test("should create new callback and return never-resolving promise", async () => {
       // Mock the checkpoint to simulate callback creation
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         // Simulate the API updating stepData with callback ID after checkpoint
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
@@ -579,7 +578,7 @@ describe("Callback Handler", () => {
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
 
       // Now await the promise, which should trigger termination
-      const promiseResult = promise.then(() => "should-never-resolve");
+      promise.then(() => "should-never-resolve");
 
       // Verify terminate was called when the promise was awaited
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
@@ -590,7 +589,7 @@ describe("Callback Handler", () => {
     });
 
     test("should create new callback with timeout configuration", async () => {
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -606,7 +605,7 @@ describe("Callback Handler", () => {
         heartbeatTimeout: 60,
       };
 
-      const [promise, callbackId] = await callbackHandler<string>(
+      const [, callbackId] = await callbackHandler<string>(
         "timeout-callback",
         config,
       );
@@ -627,7 +626,7 @@ describe("Callback Handler", () => {
     });
 
     test("should create new callback without name", async () => {
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -658,7 +657,7 @@ describe("Callback Handler", () => {
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
 
       // Now await the promise, which should trigger termination
-      const promiseResult = promise.then(() => "should-never-resolve");
+      promise.then(() => "should-never-resolve");
 
       // Verify termination message uses stepId when name is undefined
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
@@ -680,7 +679,7 @@ describe("Callback Handler", () => {
     });
 
     test("should throw error if CallbackDetails missing after checkpoint", async () => {
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -699,7 +698,7 @@ describe("Callback Handler", () => {
 
   describe("Configuration Parameter Handling", () => {
     test("should handle string name as first parameter", async () => {
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -714,7 +713,7 @@ describe("Callback Handler", () => {
         timeout: 120,
       };
 
-      const [promise, callbackId] = await callbackHandler<string>(
+      const [, callbackId] = await callbackHandler<string>(
         "string-name",
         config,
       );
@@ -735,7 +734,7 @@ describe("Callback Handler", () => {
     });
 
     test("should handle config object as first parameter", async () => {
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -751,7 +750,7 @@ describe("Callback Handler", () => {
         heartbeatTimeout: 30,
       };
 
-      const [promise, callbackId] = await callbackHandler<string>(config);
+      const [, callbackId] = await callbackHandler<string>(config);
 
       expect(mockCheckpoint).toHaveBeenCalledWith(TEST_CONSTANTS.CALLBACK_ID, {
         Id: TEST_CONSTANTS.CALLBACK_ID,
@@ -774,7 +773,7 @@ describe("Callback Handler", () => {
       mockExecutionContext._stepData = {};
 
       // Mock the checkpoint to simulate callback creation
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -854,7 +853,7 @@ describe("Callback Handler", () => {
     test("should include ParentId in checkpoint when creating new callback with defined parentId", async () => {
       mockExecutionContext.parentId = "parent-step-123";
 
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -884,7 +883,7 @@ describe("Callback Handler", () => {
     test("should include ParentId as undefined in checkpoint when creating new callback with undefined parentId", async () => {
       mockExecutionContext.parentId = undefined;
 
-      mockCheckpoint.mockImplementation(async (stepId, operation) => {
+      mockCheckpoint.mockImplementation(async (stepId, _operation) => {
         const hashedStepId = hashId(stepId);
         mockExecutionContext._stepData[hashedStepId] = {
           Id: hashedStepId,
@@ -1328,9 +1327,9 @@ describe("Callback Handler", () => {
           // Manually execute the success callback (lines 89-91)
           if (onFulfilled) {
             try {
-              const result = onFulfilled("test-value");
+              onFulfilled("test-value");
               // This should call _onfinally?.() and return value
-            } catch (e) {
+            } catch (_e) {
               // Ignore errors for this test
             }
           }
@@ -1340,7 +1339,7 @@ describe("Callback Handler", () => {
             try {
               onRejected(new Error("test-error"));
               // This should call _onfinally?.() and throw reason
-            } catch (e) {
+            } catch (_e) {
               // Expected to throw
             }
           }
