@@ -1,7 +1,7 @@
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { GetDurableExecutionStateRequest, GetDurableExecutionStateResponse } from "../models/models_0";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetDurableExecutionStateRequest, GetDurableExecutionStateResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -32,8 +32,10 @@ declare const GetDurableExecutionStateCommand_base: {
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, GetDurableExecutionStateCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
- * // const { LambdaClient, GetDurableExecutionStateCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
+ * import { LambdaClient, GetDurableExecutionStateCommand } from "@aws-sdk/client-lambda"; // ES Modules import
+ * // const { LambdaClient, GetDurableExecutionStateCommand } = require("@aws-sdk/client-lambda"); // CommonJS import
+ * // import type { LambdaClientConfig } from "@aws-sdk/client-lambda";
+ * const config = {}; // type is LambdaClientConfig
  * const client = new LambdaClient(config);
  * const input = { // GetDurableExecutionStateRequest
  *   DurableExecutionArn: "STRING_VALUE", // required
@@ -122,10 +124,13 @@ declare const GetDurableExecutionStateCommand_base: {
  * @see {@link LambdaClientResolvedConfig | config} for LambdaClient's `config` shape.
  *
  * @throws {@link InvalidParameterValueException} (client fault)
- *
- * @throws {@link TooManyRequestsException} (client fault)
+ *  <p>One of the parameters in the request is not valid.</p>
  *
  * @throws {@link ServiceException} (server fault)
+ *  <p>The Lambda service encountered an internal error.</p>
+ *
+ * @throws {@link TooManyRequestsException} (client fault)
+ *  <p>The request throughput limit was exceeded. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#api-requests">Lambda quotas</a>.</p>
  *
  * @throws {@link LambdaServiceException}
  * <p>Base exception class for all service exceptions from Lambda service.</p>

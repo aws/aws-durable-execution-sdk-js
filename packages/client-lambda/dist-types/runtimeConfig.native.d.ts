@@ -29,7 +29,6 @@ export declare const getRuntimeConfig: (config: LambdaClientConfig) => {
     extensions: import("./runtimeExtensions").RuntimeExtension[];
     eventStreamSerdeProvider: import("@smithy/types").EventStreamSerdeProvider;
     defaultsMode: import("@smithy/smithy-client").DefaultsMode | import("@smithy/types").Provider<import("@smithy/smithy-client").DefaultsMode>;
-    sdkStreamMixin: import("@smithy/types").SdkStreamMixinInjector;
     customUserAgent?: string | import("@smithy/types").UserAgent;
     userAgentAppId?: string | undefined | import("@smithy/types").Provider<string | undefined>;
     retryStrategy?: import("@smithy/types").RetryStrategy | import("@smithy/types").RetryStrategyV2;

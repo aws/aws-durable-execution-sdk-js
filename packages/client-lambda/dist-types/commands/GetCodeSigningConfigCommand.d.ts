@@ -1,7 +1,7 @@
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { GetCodeSigningConfigRequest, GetCodeSigningConfigResponse } from "../models/models_0";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetCodeSigningConfigRequest, GetCodeSigningConfigResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -27,13 +27,14 @@ declare const GetCodeSigningConfigCommand_base: {
     getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Returns information about the specified code signing configuration.</p>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, GetCodeSigningConfigCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
- * // const { LambdaClient, GetCodeSigningConfigCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
+ * import { LambdaClient, GetCodeSigningConfigCommand } from "@aws-sdk/client-lambda"; // ES Modules import
+ * // const { LambdaClient, GetCodeSigningConfigCommand } = require("@aws-sdk/client-lambda"); // CommonJS import
+ * // import type { LambdaClientConfig } from "@aws-sdk/client-lambda";
+ * const config = {}; // type is LambdaClientConfig
  * const client = new LambdaClient(config);
  * const input = { // GetCodeSigningConfigRequest
  *   CodeSigningConfigArn: "STRING_VALUE", // required
@@ -51,7 +52,7 @@ declare const GetCodeSigningConfigCommand_base: {
  * //       ],
  * //     },
  * //     CodeSigningPolicies: { // CodeSigningPolicies
- * //       UntrustedArtifactOnDeployment: "Warn" || "Enforce", // required
+ * //       UntrustedArtifactOnDeployment: "Warn" || "Enforce",
  * //     },
  * //     LastModified: "STRING_VALUE", // required
  * //   },
@@ -66,15 +67,19 @@ declare const GetCodeSigningConfigCommand_base: {
  * @see {@link LambdaClientResolvedConfig | config} for LambdaClient's `config` shape.
  *
  * @throws {@link InvalidParameterValueException} (client fault)
+ *  <p>One of the parameters in the request is not valid.</p>
  *
  * @throws {@link ResourceNotFoundException} (client fault)
+ *  <p>The resource specified in the request does not exist.</p>
  *
  * @throws {@link ServiceException} (server fault)
+ *  <p>The Lambda service encountered an internal error.</p>
  *
  * @throws {@link LambdaServiceException}
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @public
  */
 export declare class GetCodeSigningConfigCommand extends GetCodeSigningConfigCommand_base {
     /** @internal type navigation helper, not in runtime. */

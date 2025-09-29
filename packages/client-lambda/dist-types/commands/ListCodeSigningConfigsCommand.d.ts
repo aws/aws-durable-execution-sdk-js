@@ -1,7 +1,7 @@
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { ListCodeSigningConfigsRequest, ListCodeSigningConfigsResponse } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { ListCodeSigningConfigsRequest, ListCodeSigningConfigsResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -27,13 +27,14 @@ declare const ListCodeSigningConfigsCommand_base: {
     getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Returns a list of <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuring-codesigning.html">code signing configurations</a>. A request returns up to 10,000 configurations per call. You can use the <code>MaxItems</code> parameter to return fewer configurations per call. </p>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, ListCodeSigningConfigsCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
- * // const { LambdaClient, ListCodeSigningConfigsCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
+ * import { LambdaClient, ListCodeSigningConfigsCommand } from "@aws-sdk/client-lambda"; // ES Modules import
+ * // const { LambdaClient, ListCodeSigningConfigsCommand } = require("@aws-sdk/client-lambda"); // CommonJS import
+ * // import type { LambdaClientConfig } from "@aws-sdk/client-lambda";
+ * const config = {}; // type is LambdaClientConfig
  * const client = new LambdaClient(config);
  * const input = { // ListCodeSigningConfigsRequest
  *   Marker: "STRING_VALUE",
@@ -54,7 +55,7 @@ declare const ListCodeSigningConfigsCommand_base: {
  * //         ],
  * //       },
  * //       CodeSigningPolicies: { // CodeSigningPolicies
- * //         UntrustedArtifactOnDeployment: "Warn" || "Enforce", // required
+ * //         UntrustedArtifactOnDeployment: "Warn" || "Enforce",
  * //       },
  * //       LastModified: "STRING_VALUE", // required
  * //     },
@@ -70,13 +71,16 @@ declare const ListCodeSigningConfigsCommand_base: {
  * @see {@link LambdaClientResolvedConfig | config} for LambdaClient's `config` shape.
  *
  * @throws {@link InvalidParameterValueException} (client fault)
+ *  <p>One of the parameters in the request is not valid.</p>
  *
  * @throws {@link ServiceException} (server fault)
+ *  <p>The Lambda service encountered an internal error.</p>
  *
  * @throws {@link LambdaServiceException}
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @public
  */
 export declare class ListCodeSigningConfigsCommand extends ListCodeSigningConfigsCommand_base {
     /** @internal type navigation helper, not in runtime. */

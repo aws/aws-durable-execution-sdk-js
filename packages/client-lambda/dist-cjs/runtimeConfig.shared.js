@@ -1,14 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRuntimeConfig = void 0;
-const httpAuthSchemeProvider_1 = require("./auth/httpAuthSchemeProvider");
-const endpointResolver_1 = require("./endpoint/endpointResolver");
 const core_1 = require("@aws-sdk/core");
 const smithy_client_1 = require("@smithy/smithy-client");
 const url_parser_1 = require("@smithy/url-parser");
 const util_base64_1 = require("@smithy/util-base64");
-const util_stream_1 = require("@smithy/util-stream");
 const util_utf8_1 = require("@smithy/util-utf8");
+const httpAuthSchemeProvider_1 = require("./auth/httpAuthSchemeProvider");
+const endpointResolver_1 = require("./endpoint/endpointResolver");
 const getRuntimeConfig = (config) => {
     return {
         apiVersion: "2015-03-31",
@@ -18,13 +17,14 @@ const getRuntimeConfig = (config) => {
         endpointProvider: config?.endpointProvider ?? endpointResolver_1.defaultEndpointResolver,
         extensions: config?.extensions ?? [],
         httpAuthSchemeProvider: config?.httpAuthSchemeProvider ?? httpAuthSchemeProvider_1.defaultLambdaHttpAuthSchemeProvider,
-        httpAuthSchemes: config?.httpAuthSchemes ?? [{
+        httpAuthSchemes: config?.httpAuthSchemes ?? [
+            {
                 schemeId: "aws.auth#sigv4",
                 identityProvider: (ipc) => ipc.getIdentityProvider("aws.auth#sigv4"),
                 signer: new core_1.AwsSdkSigV4Signer(),
-            }],
+            },
+        ],
         logger: config?.logger ?? new smithy_client_1.NoOpLogger(),
-        sdkStreamMixin: config?.sdkStreamMixin ?? util_stream_1.sdkStreamMixin,
         serviceId: config?.serviceId ?? "Lambda",
         urlParser: config?.urlParser ?? url_parser_1.parseUrl,
         utf8Decoder: config?.utf8Decoder ?? util_utf8_1.fromUtf8,

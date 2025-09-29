@@ -1,5 +1,5 @@
 import {
-  Invoke20150331Command,
+  InvokeCommand,
   LambdaClientConfig,
   LambdaClient,
   GetDurableExecutionCommand,
@@ -47,7 +47,7 @@ export class CloudDurableTestRunner<ResultType>
 
   async run(params?: InvokeRequest): Promise<TestResult<ResultType>> {
     const invokeResult = await this.client.send(
-      new Invoke20150331Command({
+      new InvokeCommand({
         FunctionName: this.functionArn,
         Payload: params?.payload ? JSON.stringify(params.payload) : undefined,
       })

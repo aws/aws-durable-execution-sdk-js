@@ -1,10 +1,12 @@
-import { commonParams } from "../endpoint/EndpointParameters";
-import { de_ListFunctionsCommand, se_ListFunctionsCommand, } from "../protocols/Aws_restJson1";
 import { getEndpointPlugin } from "@smithy/middleware-endpoint";
 import { getSerdePlugin } from "@smithy/middleware-serde";
 import { Command as $Command } from "@smithy/smithy-client";
+import { commonParams } from "../endpoint/EndpointParameters";
+import { ListFunctionsResponseFilterSensitiveLog, } from "../models/models_0";
+import { de_ListFunctionsCommand, se_ListFunctionsCommand } from "../protocols/Aws_restJson1";
 export { $Command };
-export class ListFunctionsCommand extends $Command.classBuilder()
+export class ListFunctionsCommand extends $Command
+    .classBuilder()
     .ep(commonParams)
     .m(function (Command, cs, config, o) {
     return [
@@ -14,7 +16,7 @@ export class ListFunctionsCommand extends $Command.classBuilder()
 })
     .s("AWSGirApiService", "ListFunctions", {})
     .n("LambdaClient", "ListFunctionsCommand")
-    .f(void 0, void 0)
+    .f(void 0, ListFunctionsResponseFilterSensitiveLog)
     .ser(se_ListFunctionsCommand)
     .de(de_ListFunctionsCommand)
     .build() {

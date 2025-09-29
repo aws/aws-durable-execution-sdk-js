@@ -1,5 +1,5 @@
-import { LambdaClient } from "../LambdaClient";
 import { PaginationConfiguration } from "@smithy/types";
+import { LambdaClient } from "../LambdaClient";
 /**
  * @public
  */

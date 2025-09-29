@@ -1,6 +1,6 @@
+import { Paginator } from "@smithy/types";
 import { GetDurableExecutionStateCommandInput, GetDurableExecutionStateCommandOutput } from "../commands/GetDurableExecutionStateCommand";
 import { LambdaPaginationConfiguration } from "./Interfaces";
-import { Paginator } from "@smithy/types";
 /**
  * @public
  */

@@ -1,5 +1,5 @@
-import { LambdaHttpAuthSchemeProvider } from "./httpAuthSchemeProvider";
 import { AwsCredentialIdentity, AwsCredentialIdentityProvider, HttpAuthScheme } from "@smithy/types";
+import { LambdaHttpAuthSchemeProvider } from "./httpAuthSchemeProvider";
 /**
  * @internal
  */

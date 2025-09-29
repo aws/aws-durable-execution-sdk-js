@@ -30,7 +30,6 @@ export declare const getRuntimeConfig: (config: LambdaClientConfig) => {
     profile?: string;
     logger: import("@smithy/types").Logger;
     extensions: import("./runtimeExtensions").RuntimeExtension[];
-    sdkStreamMixin: import("@smithy/types").SdkStreamMixinInjector;
     customUserAgent?: string | import("@smithy/types").UserAgent;
     userAgentAppId?: string | undefined | import("@smithy/types").Provider<string | undefined>;
     retryStrategy?: import("@smithy/types").RetryStrategy | import("@smithy/types").RetryStrategyV2;

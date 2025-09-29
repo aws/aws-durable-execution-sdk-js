@@ -1,6 +1,6 @@
 import {
   LambdaClient,
-  Invoke20150331Command,
+  InvokeCommand,
   GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
   GetDurableExecutionHistoryResponse,
@@ -184,7 +184,7 @@ describe("CloudDurableTestRunner", () => {
       };
 
       (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce(mockInvokeResult) // Invoke20150331Command
+        .mockResolvedValueOnce(mockInvokeResult) // InvokeCommand
         .mockResolvedValueOnce(mockExecutionResult) // GetDurableExecutionCommand
         .mockResolvedValueOnce(mockHistoryResult); // GetDurableExecutionHistoryCommand
 
@@ -193,7 +193,7 @@ describe("CloudDurableTestRunner", () => {
       expect(mockLambdaClient.send).toHaveBeenCalledTimes(3);
       expect(mockLambdaClient.send).toHaveBeenNthCalledWith(
         1,
-        expect.any(Invoke20150331Command)
+        expect.any(InvokeCommand)
       );
       expect(mockLambdaClient.send).toHaveBeenNthCalledWith(
         2,
@@ -245,8 +245,8 @@ describe("CloudDurableTestRunner", () => {
 
       await runner.run({ payload: testPayload });
 
-      // Verify that Invoke20150331Command was called with correct parameters
-      expect(Invoke20150331Command).toHaveBeenCalledWith({
+      // Verify that InvokeCommand was called with correct parameters
+      expect(InvokeCommand).toHaveBeenCalledWith({
         FunctionName: mockFunctionArn,
         Payload: JSON.stringify(testPayload),
       });
@@ -274,8 +274,8 @@ describe("CloudDurableTestRunner", () => {
 
       await runner.run();
 
-      // Verify that Invoke20150331Command was called with correct parameters
-      expect(Invoke20150331Command).toHaveBeenCalledWith({
+      // Verify that InvokeCommand was called with correct parameters
+      expect(InvokeCommand).toHaveBeenCalledWith({
         FunctionName: mockFunctionArn,
         Payload: undefined,
       });

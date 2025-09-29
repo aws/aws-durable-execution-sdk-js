@@ -1,5 +1,5 @@
+import { SENSITIVE_STRING } from "@smithy/smithy-client";
 import { LambdaServiceException as __BaseException } from "./LambdaServiceException";
-import { SENSITIVE_STRING, } from "@smithy/smithy-client";
 export class InvalidParameterValueException extends __BaseException {
     name = "InvalidParameterValueException";
     $fault = "client";
@@ -8,9 +8,37 @@ export class InvalidParameterValueException extends __BaseException {
         super({
             name: "InvalidParameterValueException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, InvalidParameterValueException.prototype);
+        this.Type = opts.Type;
+    }
+}
+export class PolicyLengthExceededException extends __BaseException {
+    name = "PolicyLengthExceededException";
+    $fault = "client";
+    Type;
+    constructor(opts) {
+        super({
+            name: "PolicyLengthExceededException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, PolicyLengthExceededException.prototype);
+        this.Type = opts.Type;
+    }
+}
+export class PreconditionFailedException extends __BaseException {
+    name = "PreconditionFailedException";
+    $fault = "client";
+    Type;
+    constructor(opts) {
+        super({
+            name: "PreconditionFailedException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, PreconditionFailedException.prototype);
         this.Type = opts.Type;
     }
 }
@@ -22,7 +50,7 @@ export class ResourceConflictException extends __BaseException {
         super({
             name: "ResourceConflictException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, ResourceConflictException.prototype);
         this.Type = opts.Type;
@@ -37,7 +65,7 @@ export class ResourceNotFoundException extends __BaseException {
         super({
             name: "ResourceNotFoundException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, ResourceNotFoundException.prototype);
         this.Type = opts.Type;
@@ -53,39 +81,11 @@ export class ServiceException extends __BaseException {
         super({
             name: "ServiceException",
             $fault: "server",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, ServiceException.prototype);
         this.Type = opts.Type;
         this.Message = opts.Message;
-    }
-}
-export class PolicyLengthExceededException extends __BaseException {
-    name = "PolicyLengthExceededException";
-    $fault = "client";
-    Type;
-    constructor(opts) {
-        super({
-            name: "PolicyLengthExceededException",
-            $fault: "client",
-            ...opts
-        });
-        Object.setPrototypeOf(this, PolicyLengthExceededException.prototype);
-        this.Type = opts.Type;
-    }
-}
-export class PreconditionFailedException extends __BaseException {
-    name = "PreconditionFailedException";
-    $fault = "client";
-    Type;
-    constructor(opts) {
-        super({
-            name: "PreconditionFailedException",
-            $fault: "client",
-            ...opts
-        });
-        Object.setPrototypeOf(this, PreconditionFailedException.prototype);
-        this.Type = opts.Type;
     }
 }
 export const ThrottleReason = {
@@ -106,7 +106,7 @@ export class TooManyRequestsException extends __BaseException {
         super({
             name: "TooManyRequestsException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, TooManyRequestsException.prototype);
         this.retryAfterSeconds = opts.retryAfterSeconds;
@@ -118,36 +118,6 @@ export const FunctionUrlAuthType = {
     AWS_IAM: "AWS_IAM",
     NONE: "NONE",
 };
-export class PublicPolicyException extends __BaseException {
-    name = "PublicPolicyException";
-    $fault = "client";
-    Type;
-    Message;
-    constructor(opts) {
-        super({
-            name: "PublicPolicyException",
-            $fault: "client",
-            ...opts
-        });
-        Object.setPrototypeOf(this, PublicPolicyException.prototype);
-        this.Type = opts.Type;
-        this.Message = opts.Message;
-    }
-}
-export class AliasLimitExceededException extends __BaseException {
-    name = "AliasLimitExceededException";
-    $fault = "client";
-    Type;
-    constructor(opts) {
-        super({
-            name: "AliasLimitExceededException",
-            $fault: "client",
-            ...opts
-        });
-        Object.setPrototypeOf(this, AliasLimitExceededException.prototype);
-        this.Type = opts.Type;
-    }
-}
 export const KafkaSchemaRegistryAuthType = {
     BASIC_AUTH: "BASIC_AUTH",
     CLIENT_CERTIFICATE_TLS_AUTH: "CLIENT_CERTIFICATE_TLS_AUTH",
@@ -180,17 +150,6 @@ export const OperationAction = {
     START: "START",
     SUCCEED: "SUCCEED",
 };
-export const ErrorObjectFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.ErrorMessage && { ErrorMessage: SENSITIVE_STRING
-    }),
-    ...(obj.ErrorType && { ErrorType: SENSITIVE_STRING
-    }),
-    ...(obj.ErrorData && { ErrorData: SENSITIVE_STRING
-    }),
-    ...(obj.StackTrace && { StackTrace: SENSITIVE_STRING
-    }),
-});
 export const OperationType = {
     CALLBACK: "CALLBACK",
     CONTEXT: "CONTEXT",
@@ -199,44 +158,6 @@ export const OperationType = {
     STEP: "STEP",
     WAIT: "WAIT",
 };
-export const OperationUpdateFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Payload && { Payload: SENSITIVE_STRING
-    }),
-    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error)
-    }),
-});
-export const CheckpointDurableExecutionRequestFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Updates && { Updates: obj.Updates.map(item => OperationUpdateFilterSensitiveLog(item))
-    }),
-});
-export const CallbackDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: SENSITIVE_STRING
-    }),
-    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error)
-    }),
-});
-export const ContextDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: SENSITIVE_STRING
-    }),
-    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error)
-    }),
-});
-export const ExecutionDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.InputPayload && { InputPayload: SENSITIVE_STRING
-    }),
-});
-export const InvokeDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: SENSITIVE_STRING
-    }),
-    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error)
-    }),
-});
 export const OperationStatus = {
     CANCELLED: "CANCELLED",
     FAILED: "FAILED",
@@ -247,36 +168,6 @@ export const OperationStatus = {
     SUCCEEDED: "SUCCEEDED",
     TIMED_OUT: "TIMED_OUT",
 };
-export const StepDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: SENSITIVE_STRING
-    }),
-    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error)
-    }),
-});
-export const OperationFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.ExecutionDetails && { ExecutionDetails: ExecutionDetailsFilterSensitiveLog(obj.ExecutionDetails)
-    }),
-    ...(obj.ContextDetails && { ContextDetails: ContextDetailsFilterSensitiveLog(obj.ContextDetails)
-    }),
-    ...(obj.StepDetails && { StepDetails: StepDetailsFilterSensitiveLog(obj.StepDetails)
-    }),
-    ...(obj.CallbackDetails && { CallbackDetails: CallbackDetailsFilterSensitiveLog(obj.CallbackDetails)
-    }),
-    ...(obj.InvokeDetails && { InvokeDetails: InvokeDetailsFilterSensitiveLog(obj.InvokeDetails)
-    }),
-});
-export const CheckpointUpdatedExecutionStateFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Operations && { Operations: obj.Operations.map(item => OperationFilterSensitiveLog(item))
-    }),
-});
-export const CheckpointDurableExecutionResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.NewExecutionState && { NewExecutionState: CheckpointUpdatedExecutionStateFilterSensitiveLog(obj.NewExecutionState)
-    }),
-});
 export const CodeSigningPolicy = {
     Enforce: "Enforce",
     Warn: "Warn",
@@ -309,6 +200,22 @@ export const EventSourcePosition = {
     LATEST: "LATEST",
     TRIM_HORIZON: "TRIM_HORIZON",
 };
+export class ResourceInUseException extends __BaseException {
+    name = "ResourceInUseException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "ResourceInUseException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, ResourceInUseException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
 export class CodeSigningConfigNotFoundException extends __BaseException {
     name = "CodeSigningConfigNotFoundException";
     $fault = "client";
@@ -318,7 +225,7 @@ export class CodeSigningConfigNotFoundException extends __BaseException {
         super({
             name: "CodeSigningConfigNotFoundException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, CodeSigningConfigNotFoundException.prototype);
         this.Type = opts.Type;
@@ -333,7 +240,7 @@ export class CodeStorageExceededException extends __BaseException {
         super({
             name: "CodeStorageExceededException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, CodeStorageExceededException.prototype);
         this.Type = opts.Type;
@@ -348,36 +255,13 @@ export class CodeVerificationFailedException extends __BaseException {
         super({
             name: "CodeVerificationFailedException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, CodeVerificationFailedException.prototype);
         this.Type = opts.Type;
         this.Message = opts.Message;
     }
 }
-export const S3ObjectStorageMode = {
-    Copy: "COPY",
-    Reference: "REFERENCE",
-};
-export const FunctionCodeFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.ZipFile && { ZipFile: SENSITIVE_STRING
-    }),
-});
-export const EnvironmentFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Variables && { Variables: SENSITIVE_STRING
-    }),
-});
-export const ConcurrencyMode = {
-    MULTI: "MULTI",
-    SINGLE: "SINGLE",
-};
-export const UserOverride = {
-    AllowRoot: "AllowRoot",
-    AllowUnprivileged: "AllowUnprivileged",
-    Deny: "Deny",
-};
 export const LogFormat = {
     Json: "JSON",
     Text: "Text",
@@ -391,28 +275,17 @@ export const PackageType = {
     Image: "Image",
     Zip: "Zip",
 };
-export const ProgrammingModel = {
-    HANDLER: "HANDLER",
-    WEB: "WEB",
-};
-export const FunctionVersionLatestPublished = {
-    LATEST_PUBLISHED: "LATEST_PUBLISHED",
-};
 export const Runtime = {
-    byol: "byol",
-    dotnet10: "dotnet10",
     dotnet6: "dotnet6",
     dotnet8: "dotnet8",
     dotnetcore10: "dotnetcore1.0",
     dotnetcore20: "dotnetcore2.0",
     dotnetcore21: "dotnetcore2.1",
     dotnetcore31: "dotnetcore3.1",
-    go19: "go1.9",
     go1x: "go1.x",
     java11: "java11",
     java17: "java17",
     java21: "java21",
-    java25: "java25",
     java8: "java8",
     java8al2: "java8.al2",
     nodejs: "nodejs",
@@ -423,7 +296,6 @@ export const Runtime = {
     nodejs18x: "nodejs18.x",
     nodejs20x: "nodejs20.x",
     nodejs22x: "nodejs22.x",
-    nodejs24x: "nodejs24.x",
     nodejs43: "nodejs4.3",
     nodejs43edge: "nodejs4.3-edge",
     nodejs610: "nodejs6.10",
@@ -432,12 +304,10 @@ export const Runtime = {
     providedal2: "provided.al2",
     providedal2023: "provided.al2023",
     python27: "python2.7",
-    python27greengrass: "python2.7-greengrass",
     python310: "python3.10",
     python311: "python3.11",
     python312: "python3.12",
     python313: "python3.13",
-    python314: "python3.14",
     python36: "python3.6",
     python37: "python3.7",
     python38: "python3.8",
@@ -452,43 +322,10 @@ export const SnapStartApplyOn = {
     None: "None",
     PublishedVersions: "PublishedVersions",
 };
-export const TenantIsolationMode = {
-    PER_INVOKE: "PER_INVOKE",
-    PER_TENANT: "PER_TENANT",
-};
 export const TracingMode = {
     Active: "Active",
     PassThrough: "PassThrough",
 };
-export const CreateFunctionRequestFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Code && { Code: FunctionCodeFilterSensitiveLog(obj.Code)
-    }),
-    ...(obj.Environment && { Environment: EnvironmentFilterSensitiveLog(obj.Environment)
-    }),
-});
-export const EnvironmentErrorFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Message && { Message: SENSITIVE_STRING
-    }),
-});
-export const EnvironmentResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Variables && { Variables: SENSITIVE_STRING
-    }),
-    ...(obj.Error && { Error: EnvironmentErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const ImageConfigErrorFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Message && { Message: SENSITIVE_STRING
-    }),
-});
-export const ImageConfigResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: ImageConfigErrorFilterSensitiveLog(obj.Error)
-    }),
-});
 export const LastUpdateStatus = {
     Failed: "Failed",
     InProgress: "InProgress",
@@ -523,10 +360,6 @@ export const SnapStartOptimizationStatus = {
 };
 export const State = {
     Active: "Active",
-    ActiveNonInvocable: "ActiveNonInvocable",
-    Deactivated: "Deactivated",
-    Deactivating: "Deactivating",
-    Deleting: "Deleting",
     Failed: "Failed",
     Inactive: "Inactive",
     Pending: "Pending",
@@ -557,13 +390,6 @@ export const StateReasonCode = {
     Restoring: "Restoring",
     SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
 };
-export const FunctionConfiguration20150331FilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Environment && { Environment: EnvironmentResponseFilterSensitiveLog(obj.Environment)
-    }),
-    ...(obj.ImageConfigResponse && { ImageConfigResponse: ImageConfigResponseFilterSensitiveLog(obj.ImageConfigResponse)
-    }),
-});
 export class InvalidCodeSignatureException extends __BaseException {
     name = "InvalidCodeSignatureException";
     $fault = "client";
@@ -573,7 +399,7 @@ export class InvalidCodeSignatureException extends __BaseException {
         super({
             name: "InvalidCodeSignatureException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, InvalidCodeSignatureException.prototype);
         this.Type = opts.Type;
@@ -584,72 +410,342 @@ export const InvokeMode = {
     BUFFERED: "BUFFERED",
     RESPONSE_STREAM: "RESPONSE_STREAM",
 };
-export class ResourceInUseException extends __BaseException {
-    name = "ResourceInUseException";
+export const RecursiveLoop = {
+    Allow: "Allow",
+    Terminate: "Terminate",
+};
+export const UpdateRuntimeOn = {
+    Auto: "Auto",
+    FunctionUpdate: "FunctionUpdate",
+    Manual: "Manual",
+};
+export class DurableExecutionAlreadyStartedException extends __BaseException {
+    name = "DurableExecutionAlreadyStartedException";
     $fault = "client";
     Type;
     Message;
     constructor(opts) {
         super({
-            name: "ResourceInUseException",
+            name: "DurableExecutionAlreadyStartedException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
-        Object.setPrototypeOf(this, ResourceInUseException.prototype);
+        Object.setPrototypeOf(this, DurableExecutionAlreadyStartedException.prototype);
         this.Type = opts.Type;
         this.Message = opts.Message;
     }
 }
-export const ResourceType = {
-    CODE_ARTIFACT: "CODE_ARTIFACT",
-    PROVISIONED_CONCURRENCY: "PROVISIONED_CONCURRENCY",
+export class EC2AccessDeniedException extends __BaseException {
+    name = "EC2AccessDeniedException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "EC2AccessDeniedException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, EC2AccessDeniedException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class EC2ThrottledException extends __BaseException {
+    name = "EC2ThrottledException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "EC2ThrottledException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, EC2ThrottledException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class EC2UnexpectedException extends __BaseException {
+    name = "EC2UnexpectedException";
+    $fault = "server";
+    Type;
+    Message;
+    EC2ErrorCode;
+    constructor(opts) {
+        super({
+            name: "EC2UnexpectedException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, EC2UnexpectedException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+        this.EC2ErrorCode = opts.EC2ErrorCode;
+    }
+}
+export class EFSIOException extends __BaseException {
+    name = "EFSIOException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "EFSIOException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, EFSIOException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class EFSMountConnectivityException extends __BaseException {
+    name = "EFSMountConnectivityException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "EFSMountConnectivityException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, EFSMountConnectivityException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class EFSMountFailureException extends __BaseException {
+    name = "EFSMountFailureException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "EFSMountFailureException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, EFSMountFailureException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class EFSMountTimeoutException extends __BaseException {
+    name = "EFSMountTimeoutException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "EFSMountTimeoutException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, EFSMountTimeoutException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class ENILimitReachedException extends __BaseException {
+    name = "ENILimitReachedException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "ENILimitReachedException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, ENILimitReachedException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class InvalidRequestContentException extends __BaseException {
+    name = "InvalidRequestContentException";
+    $fault = "client";
+    Type;
+    constructor(opts) {
+        super({
+            name: "InvalidRequestContentException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, InvalidRequestContentException.prototype);
+        this.Type = opts.Type;
+    }
+}
+export class InvalidRuntimeException extends __BaseException {
+    name = "InvalidRuntimeException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "InvalidRuntimeException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, InvalidRuntimeException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class InvalidSecurityGroupIDException extends __BaseException {
+    name = "InvalidSecurityGroupIDException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "InvalidSecurityGroupIDException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, InvalidSecurityGroupIDException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class InvalidSubnetIDException extends __BaseException {
+    name = "InvalidSubnetIDException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "InvalidSubnetIDException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, InvalidSubnetIDException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class InvalidZipFileException extends __BaseException {
+    name = "InvalidZipFileException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "InvalidZipFileException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, InvalidZipFileException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export const InvocationType = {
+    DryRun: "DryRun",
+    Event: "Event",
+    RequestResponse: "RequestResponse",
 };
-export const FunctionResourceType = {
-    PER_FUNCTION_CONCURRENCY: "PER_FUNCTION_CONCURRENCY",
+export const LogType = {
+    None: "None",
+    Tail: "Tail",
 };
-export const FeatureStatus = {
-    Accessible: "Accessible",
-    Inaccessible: "Inaccessible",
-};
-export const CodeSignatureStatus = {
-    CORRUPT: "CORRUPT",
-    EXPIRED: "EXPIRED",
-    MISMATCH: "MISMATCH",
-    REVOKED: "REVOKED",
-    VALID: "VALID",
-};
-export const Mode = {
-    event: "event",
-    http: "http",
-};
-export const ProvisionedConcurrencyState = {
-    Active: "Active",
-    Inactive: "Inactive",
-};
-export const RuntimeUpdateReason = {
-    PINNED: "PINNED",
-    PRERELEASE: "PRERELEASE",
-    RELEASE: "RELEASE",
-    ROLLOUT: "ROLLOUT",
-};
-export const VmSelectorPreference = {
-    k5brave: "k5brave",
-    k5preview: "k5preview",
-    sbxv2brave: "sbxv2brave",
-    sbxv2preview: "sbxv2preview",
-};
-export const MigrationFunctionVersionFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.MergedLayersUri && { MergedLayersUri: SENSITIVE_STRING
-    }),
-    ...(obj.CodeMergedWithLayersUri && { CodeMergedWithLayersUri: SENSITIVE_STRING
-    }),
-});
-export const ExportFunctionVersionResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.MigrationFunctionVersion && { MigrationFunctionVersion: MigrationFunctionVersionFilterSensitiveLog(obj.MigrationFunctionVersion)
-    }),
-});
+export class KMSAccessDeniedException extends __BaseException {
+    name = "KMSAccessDeniedException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "KMSAccessDeniedException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, KMSAccessDeniedException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class KMSDisabledException extends __BaseException {
+    name = "KMSDisabledException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "KMSDisabledException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, KMSDisabledException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class KMSInvalidStateException extends __BaseException {
+    name = "KMSInvalidStateException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "KMSInvalidStateException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, KMSInvalidStateException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class KMSNotFoundException extends __BaseException {
+    name = "KMSNotFoundException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "KMSNotFoundException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, KMSNotFoundException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class RecursiveInvocationException extends __BaseException {
+    name = "RecursiveInvocationException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "RecursiveInvocationException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, RecursiveInvocationException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class RequestTooLargeException extends __BaseException {
+    name = "RequestTooLargeException";
+    $fault = "client";
+    Type;
+    constructor(opts) {
+        super({
+            name: "RequestTooLargeException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, RequestTooLargeException.prototype);
+        this.Type = opts.Type;
+    }
+}
 export class ResourceNotReadyException extends __BaseException {
     name = "ResourceNotReadyException";
     $fault = "server";
@@ -658,12 +754,107 @@ export class ResourceNotReadyException extends __BaseException {
         super({
             name: "ResourceNotReadyException",
             $fault: "server",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, ResourceNotReadyException.prototype);
         this.Type = opts.Type;
     }
 }
+export class SnapStartException extends __BaseException {
+    name = "SnapStartException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "SnapStartException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, SnapStartException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class SnapStartNotReadyException extends __BaseException {
+    name = "SnapStartNotReadyException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "SnapStartNotReadyException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, SnapStartNotReadyException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class SnapStartTimeoutException extends __BaseException {
+    name = "SnapStartTimeoutException";
+    $fault = "client";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "SnapStartTimeoutException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, SnapStartTimeoutException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class SubnetIPAddressLimitReachedException extends __BaseException {
+    name = "SubnetIPAddressLimitReachedException";
+    $fault = "server";
+    Type;
+    Message;
+    constructor(opts) {
+        super({
+            name: "SubnetIPAddressLimitReachedException",
+            $fault: "server",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, SubnetIPAddressLimitReachedException.prototype);
+        this.Type = opts.Type;
+        this.Message = opts.Message;
+    }
+}
+export class UnsupportedMediaTypeException extends __BaseException {
+    name = "UnsupportedMediaTypeException";
+    $fault = "client";
+    Type;
+    constructor(opts) {
+        super({
+            name: "UnsupportedMediaTypeException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, UnsupportedMediaTypeException.prototype);
+        this.Type = opts.Type;
+    }
+}
+export const ResponseStreamingInvocationType = {
+    DryRun: "DryRun",
+    RequestResponse: "RequestResponse",
+};
+export var InvokeWithResponseStreamResponseEvent;
+(function (InvokeWithResponseStreamResponseEvent) {
+    InvokeWithResponseStreamResponseEvent.visit = (value, visitor) => {
+        if (value.PayloadChunk !== undefined)
+            return visitor.PayloadChunk(value.PayloadChunk);
+        if (value.InvokeComplete !== undefined)
+            return visitor.InvokeComplete(value.InvokeComplete);
+        return visitor._(value.$unknown[0], value.$unknown[1]);
+    };
+})(InvokeWithResponseStreamResponseEvent || (InvokeWithResponseStreamResponseEvent = {}));
+export const FunctionVersion = {
+    ALL: "ALL",
+};
 export const ProvisionedConcurrencyStatusEnum = {
     FAILED: "FAILED",
     IN_PROGRESS: "IN_PROGRESS",
@@ -676,50 +867,6 @@ export const ExecutionStatus = {
     SUCCEEDED: "SUCCEEDED",
     TIMED_OUT: "TIMED_OUT",
 };
-export const GetDurableExecutionResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.InputPayload && { InputPayload: SENSITIVE_STRING
-    }),
-    ...(obj.Result && { Result: SENSITIVE_STRING
-    }),
-    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error)
-    }),
-});
-export const EventErrorFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Payload && { Payload: ErrorObjectFilterSensitiveLog(obj.Payload)
-    }),
-});
-export const CallbackFailedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const EventResultFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Payload && { Payload: SENSITIVE_STRING
-    }),
-});
-export const CallbackSucceededDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result)
-    }),
-});
-export const CallbackTimedOutDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const ContextFailedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const ContextSucceededDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result)
-    }),
-});
 export const EventType = {
     CallbackFailed: "CallbackFailed",
     CallbackStarted: "CallbackStarted",
@@ -745,155 +892,6 @@ export const EventType = {
     WaitStarted: "WaitStarted",
     WaitSucceeded: "WaitSucceeded",
 };
-export const ExecutionFailedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const EventInputFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Payload && { Payload: SENSITIVE_STRING
-    }),
-});
-export const ExecutionStartedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input)
-    }),
-});
-export const ExecutionStoppedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const ExecutionSucceededDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result)
-    }),
-});
-export const ExecutionTimedOutDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const InvokeFailedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const InvokeStartedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input)
-    }),
-});
-export const InvokeStoppedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const InvokeSucceededDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result)
-    }),
-});
-export const InvokeTimedOutDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const StepFailedDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const StepSucceededDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result)
-    }),
-});
-export const WaitCancelledDetailsFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error)
-    }),
-});
-export const EventFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.ExecutionStartedDetails && { ExecutionStartedDetails: ExecutionStartedDetailsFilterSensitiveLog(obj.ExecutionStartedDetails)
-    }),
-    ...(obj.ExecutionSucceededDetails && { ExecutionSucceededDetails: ExecutionSucceededDetailsFilterSensitiveLog(obj.ExecutionSucceededDetails)
-    }),
-    ...(obj.ExecutionFailedDetails && { ExecutionFailedDetails: ExecutionFailedDetailsFilterSensitiveLog(obj.ExecutionFailedDetails)
-    }),
-    ...(obj.ExecutionTimedOutDetails && { ExecutionTimedOutDetails: ExecutionTimedOutDetailsFilterSensitiveLog(obj.ExecutionTimedOutDetails)
-    }),
-    ...(obj.ExecutionStoppedDetails && { ExecutionStoppedDetails: ExecutionStoppedDetailsFilterSensitiveLog(obj.ExecutionStoppedDetails)
-    }),
-    ...(obj.ContextSucceededDetails && { ContextSucceededDetails: ContextSucceededDetailsFilterSensitiveLog(obj.ContextSucceededDetails)
-    }),
-    ...(obj.ContextFailedDetails && { ContextFailedDetails: ContextFailedDetailsFilterSensitiveLog(obj.ContextFailedDetails)
-    }),
-    ...(obj.WaitCancelledDetails && { WaitCancelledDetails: WaitCancelledDetailsFilterSensitiveLog(obj.WaitCancelledDetails)
-    }),
-    ...(obj.StepSucceededDetails && { StepSucceededDetails: StepSucceededDetailsFilterSensitiveLog(obj.StepSucceededDetails)
-    }),
-    ...(obj.StepFailedDetails && { StepFailedDetails: StepFailedDetailsFilterSensitiveLog(obj.StepFailedDetails)
-    }),
-    ...(obj.InvokeStartedDetails && { InvokeStartedDetails: InvokeStartedDetailsFilterSensitiveLog(obj.InvokeStartedDetails)
-    }),
-    ...(obj.InvokeSucceededDetails && { InvokeSucceededDetails: InvokeSucceededDetailsFilterSensitiveLog(obj.InvokeSucceededDetails)
-    }),
-    ...(obj.InvokeFailedDetails && { InvokeFailedDetails: InvokeFailedDetailsFilterSensitiveLog(obj.InvokeFailedDetails)
-    }),
-    ...(obj.InvokeTimedOutDetails && { InvokeTimedOutDetails: InvokeTimedOutDetailsFilterSensitiveLog(obj.InvokeTimedOutDetails)
-    }),
-    ...(obj.InvokeStoppedDetails && { InvokeStoppedDetails: InvokeStoppedDetailsFilterSensitiveLog(obj.InvokeStoppedDetails)
-    }),
-    ...(obj.CallbackSucceededDetails && { CallbackSucceededDetails: CallbackSucceededDetailsFilterSensitiveLog(obj.CallbackSucceededDetails)
-    }),
-    ...(obj.CallbackFailedDetails && { CallbackFailedDetails: CallbackFailedDetailsFilterSensitiveLog(obj.CallbackFailedDetails)
-    }),
-    ...(obj.CallbackTimedOutDetails && { CallbackTimedOutDetails: CallbackTimedOutDetailsFilterSensitiveLog(obj.CallbackTimedOutDetails)
-    }),
-});
-export const GetDurableExecutionHistoryResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Events && { Events: obj.Events.map(item => EventFilterSensitiveLog(item))
-    }),
-});
-export const GetDurableExecutionStateResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Operations && { Operations: obj.Operations.map(item => OperationFilterSensitiveLog(item))
-    }),
-});
-export const GetFunctionResponse20150331FilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Configuration && { Configuration: FunctionConfiguration20150331FilterSensitiveLog(obj.Configuration)
-    }),
-});
-export class InternalLambdaAccountDisabledException extends __BaseException {
-    name = "InternalLambdaAccountDisabledException";
-    $fault = "client";
-    Type;
-    Message;
-    constructor(opts) {
-        super({
-            name: "InternalLambdaAccountDisabledException",
-            $fault: "client",
-            ...opts
-        });
-        Object.setPrototypeOf(this, InternalLambdaAccountDisabledException.prototype);
-        this.Type = opts.Type;
-        this.Message = opts.Message;
-    }
-}
-export const GetFunctionInternalResponseFilterSensitiveLog = (obj) => ({
-    ...obj,
-    ...(obj.Configuration && { Configuration: FunctionConfiguration20150331FilterSensitiveLog(obj.Configuration)
-    }),
-});
-export const RecursiveLoop = {
-    Allow: "Allow",
-    Terminate: "Terminate",
-};
 export class ProvisionedConcurrencyConfigNotFoundException extends __BaseException {
     name = "ProvisionedConcurrencyConfigNotFoundException";
     $fault = "client";
@@ -902,21 +900,339 @@ export class ProvisionedConcurrencyConfigNotFoundException extends __BaseExcepti
         super({
             name: "ProvisionedConcurrencyConfigNotFoundException",
             $fault: "client",
-            ...opts
+            ...opts,
         });
         Object.setPrototypeOf(this, ProvisionedConcurrencyConfigNotFoundException.prototype);
         this.Type = opts.Type;
     }
 }
-export const UpdateRuntimeOn = {
-    Auto: "Auto",
-    FunctionUpdate: "FunctionUpdate",
-    Manual: "Manual",
-};
-export const GetVersionSandboxSpecResponseFilterSensitiveLog = (obj) => ({
+export class CallbackTimeoutException extends __BaseException {
+    name = "CallbackTimeoutException";
+    $fault = "client";
+    constructor(opts) {
+        super({
+            name: "CallbackTimeoutException",
+            $fault: "client",
+            ...opts,
+        });
+        Object.setPrototypeOf(this, CallbackTimeoutException.prototype);
+    }
+}
+export const ErrorObjectFilterSensitiveLog = (obj) => ({
     ...obj,
-    ...(obj.SandboxSpec && { SandboxSpec: SENSITIVE_STRING
+    ...(obj.ErrorMessage && { ErrorMessage: SENSITIVE_STRING }),
+    ...(obj.ErrorType && { ErrorType: SENSITIVE_STRING }),
+    ...(obj.ErrorData && { ErrorData: SENSITIVE_STRING }),
+    ...(obj.StackTrace && { StackTrace: SENSITIVE_STRING }),
+});
+export const OperationUpdateFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING }),
+    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
+export const CheckpointDurableExecutionRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Updates && { Updates: obj.Updates.map((item) => OperationUpdateFilterSensitiveLog(item)) }),
+});
+export const CallbackDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: SENSITIVE_STRING }),
+    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
+export const ContextDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: SENSITIVE_STRING }),
+    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
+export const ExecutionDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.InputPayload && { InputPayload: SENSITIVE_STRING }),
+});
+export const InvokeDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: SENSITIVE_STRING }),
+    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
+export const StepDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: SENSITIVE_STRING }),
+    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
+export const OperationFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.ExecutionDetails && { ExecutionDetails: ExecutionDetailsFilterSensitiveLog(obj.ExecutionDetails) }),
+    ...(obj.ContextDetails && { ContextDetails: ContextDetailsFilterSensitiveLog(obj.ContextDetails) }),
+    ...(obj.StepDetails && { StepDetails: StepDetailsFilterSensitiveLog(obj.StepDetails) }),
+    ...(obj.CallbackDetails && { CallbackDetails: CallbackDetailsFilterSensitiveLog(obj.CallbackDetails) }),
+    ...(obj.InvokeDetails && { InvokeDetails: InvokeDetailsFilterSensitiveLog(obj.InvokeDetails) }),
+});
+export const CheckpointUpdatedExecutionStateFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Operations && { Operations: obj.Operations.map((item) => OperationFilterSensitiveLog(item)) }),
+});
+export const CheckpointDurableExecutionResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.NewExecutionState && {
+        NewExecutionState: CheckpointUpdatedExecutionStateFilterSensitiveLog(obj.NewExecutionState),
     }),
-    ...(obj.PendingConfigSandboxSpec && { PendingConfigSandboxSpec: SENSITIVE_STRING
+});
+export const FunctionCodeFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.ZipFile && { ZipFile: SENSITIVE_STRING }),
+});
+export const EnvironmentFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Variables && { Variables: SENSITIVE_STRING }),
+});
+export const CreateFunctionRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Code && { Code: FunctionCodeFilterSensitiveLog(obj.Code) }),
+    ...(obj.Environment && { Environment: EnvironmentFilterSensitiveLog(obj.Environment) }),
+});
+export const EnvironmentErrorFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Message && { Message: SENSITIVE_STRING }),
+});
+export const EnvironmentResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Variables && { Variables: SENSITIVE_STRING }),
+    ...(obj.Error && { Error: EnvironmentErrorFilterSensitiveLog(obj.Error) }),
+});
+export const ImageConfigErrorFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Message && { Message: SENSITIVE_STRING }),
+});
+export const ImageConfigResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: ImageConfigErrorFilterSensitiveLog(obj.Error) }),
+});
+export const RuntimeVersionErrorFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Message && { Message: SENSITIVE_STRING }),
+});
+export const RuntimeVersionConfigFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: RuntimeVersionErrorFilterSensitiveLog(obj.Error) }),
+});
+export const FunctionConfigurationFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Environment && { Environment: EnvironmentResponseFilterSensitiveLog(obj.Environment) }),
+    ...(obj.ImageConfigResponse && {
+        ImageConfigResponse: ImageConfigResponseFilterSensitiveLog(obj.ImageConfigResponse),
     }),
+    ...(obj.RuntimeVersionConfig && {
+        RuntimeVersionConfig: RuntimeVersionConfigFilterSensitiveLog(obj.RuntimeVersionConfig),
+    }),
+});
+export const GetFunctionResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Configuration && { Configuration: FunctionConfigurationFilterSensitiveLog(obj.Configuration) }),
+});
+export const InvocationRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING }),
+});
+export const InvocationResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING }),
+});
+export const InvokeAsyncRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+});
+export const InvokeWithResponseStreamRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING }),
+});
+export const InvokeResponseStreamUpdateFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING }),
+});
+export const InvokeWithResponseStreamResponseEventFilterSensitiveLog = (obj) => {
+    if (obj.PayloadChunk !== undefined)
+        return { PayloadChunk: InvokeResponseStreamUpdateFilterSensitiveLog(obj.PayloadChunk) };
+    if (obj.InvokeComplete !== undefined)
+        return { InvokeComplete: obj.InvokeComplete };
+    if (obj.$unknown !== undefined)
+        return { [obj.$unknown[0]]: "UNKNOWN" };
+};
+export const InvokeWithResponseStreamResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.EventStream && { EventStream: "STREAMING_CONTENT" }),
+});
+export const ListFunctionsResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Functions && { Functions: obj.Functions.map((item) => FunctionConfigurationFilterSensitiveLog(item)) }),
+});
+export const UpdateFunctionCodeRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.ZipFile && { ZipFile: SENSITIVE_STRING }),
+});
+export const UpdateFunctionConfigurationRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Environment && { Environment: EnvironmentFilterSensitiveLog(obj.Environment) }),
+});
+export const ListVersionsByFunctionResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Versions && { Versions: obj.Versions.map((item) => FunctionConfigurationFilterSensitiveLog(item)) }),
+});
+export const GetDurableExecutionResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.InputPayload && { InputPayload: SENSITIVE_STRING }),
+    ...(obj.Result && { Result: SENSITIVE_STRING }),
+    ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
+export const EventErrorFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: ErrorObjectFilterSensitiveLog(obj.Payload) }),
+});
+export const CallbackFailedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const EventResultFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING }),
+});
+export const CallbackSucceededDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
+});
+export const CallbackTimedOutDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const ContextFailedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const ContextSucceededDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
+});
+export const ExecutionFailedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const EventInputFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Payload && { Payload: SENSITIVE_STRING }),
+});
+export const ExecutionStartedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input) }),
+});
+export const ExecutionStoppedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const ExecutionSucceededDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
+});
+export const ExecutionTimedOutDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const InvokeFailedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const InvokeStartedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input) }),
+});
+export const InvokeStoppedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const InvokeSucceededDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
+});
+export const InvokeTimedOutDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const StepFailedDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const StepSucceededDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
+});
+export const WaitCancelledDetailsFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
+});
+export const EventFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.ExecutionStartedDetails && {
+        ExecutionStartedDetails: ExecutionStartedDetailsFilterSensitiveLog(obj.ExecutionStartedDetails),
+    }),
+    ...(obj.ExecutionSucceededDetails && {
+        ExecutionSucceededDetails: ExecutionSucceededDetailsFilterSensitiveLog(obj.ExecutionSucceededDetails),
+    }),
+    ...(obj.ExecutionFailedDetails && {
+        ExecutionFailedDetails: ExecutionFailedDetailsFilterSensitiveLog(obj.ExecutionFailedDetails),
+    }),
+    ...(obj.ExecutionTimedOutDetails && {
+        ExecutionTimedOutDetails: ExecutionTimedOutDetailsFilterSensitiveLog(obj.ExecutionTimedOutDetails),
+    }),
+    ...(obj.ExecutionStoppedDetails && {
+        ExecutionStoppedDetails: ExecutionStoppedDetailsFilterSensitiveLog(obj.ExecutionStoppedDetails),
+    }),
+    ...(obj.ContextSucceededDetails && {
+        ContextSucceededDetails: ContextSucceededDetailsFilterSensitiveLog(obj.ContextSucceededDetails),
+    }),
+    ...(obj.ContextFailedDetails && {
+        ContextFailedDetails: ContextFailedDetailsFilterSensitiveLog(obj.ContextFailedDetails),
+    }),
+    ...(obj.WaitCancelledDetails && {
+        WaitCancelledDetails: WaitCancelledDetailsFilterSensitiveLog(obj.WaitCancelledDetails),
+    }),
+    ...(obj.StepSucceededDetails && {
+        StepSucceededDetails: StepSucceededDetailsFilterSensitiveLog(obj.StepSucceededDetails),
+    }),
+    ...(obj.StepFailedDetails && { StepFailedDetails: StepFailedDetailsFilterSensitiveLog(obj.StepFailedDetails) }),
+    ...(obj.InvokeStartedDetails && {
+        InvokeStartedDetails: InvokeStartedDetailsFilterSensitiveLog(obj.InvokeStartedDetails),
+    }),
+    ...(obj.InvokeSucceededDetails && {
+        InvokeSucceededDetails: InvokeSucceededDetailsFilterSensitiveLog(obj.InvokeSucceededDetails),
+    }),
+    ...(obj.InvokeFailedDetails && {
+        InvokeFailedDetails: InvokeFailedDetailsFilterSensitiveLog(obj.InvokeFailedDetails),
+    }),
+    ...(obj.InvokeTimedOutDetails && {
+        InvokeTimedOutDetails: InvokeTimedOutDetailsFilterSensitiveLog(obj.InvokeTimedOutDetails),
+    }),
+    ...(obj.InvokeStoppedDetails && {
+        InvokeStoppedDetails: InvokeStoppedDetailsFilterSensitiveLog(obj.InvokeStoppedDetails),
+    }),
+    ...(obj.CallbackSucceededDetails && {
+        CallbackSucceededDetails: CallbackSucceededDetailsFilterSensitiveLog(obj.CallbackSucceededDetails),
+    }),
+    ...(obj.CallbackFailedDetails && {
+        CallbackFailedDetails: CallbackFailedDetailsFilterSensitiveLog(obj.CallbackFailedDetails),
+    }),
+    ...(obj.CallbackTimedOutDetails && {
+        CallbackTimedOutDetails: CallbackTimedOutDetailsFilterSensitiveLog(obj.CallbackTimedOutDetails),
+    }),
+});
+export const GetDurableExecutionHistoryResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Events && { Events: obj.Events.map((item) => EventFilterSensitiveLog(item)) }),
+});
+export const GetDurableExecutionStateResponseFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Operations && { Operations: obj.Operations.map((item) => OperationFilterSensitiveLog(item)) }),
+});
+export const LayerVersionContentInputFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.ZipFile && { ZipFile: SENSITIVE_STRING }),
+});
+export const PublishLayerVersionRequestFilterSensitiveLog = (obj) => ({
+    ...obj,
+    ...(obj.Content && { Content: LayerVersionContentInputFilterSensitiveLog(obj.Content) }),
 });

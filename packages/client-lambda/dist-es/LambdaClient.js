@@ -1,34 +1,34 @@
-import { defaultLambdaHttpAuthSchemeParametersProvider, resolveHttpAuthSchemeConfig, } from "./auth/httpAuthSchemeProvider";
-import { resolveClientEndpointParameters, } from "./endpoint/EndpointParameters";
-import { getRuntimeConfig as __getRuntimeConfig } from "./runtimeConfig";
-import { resolveRuntimeExtensions, } from "./runtimeExtensions";
 import { getHostHeaderPlugin, resolveHostHeaderConfig, } from "@aws-sdk/middleware-host-header";
 import { getLoggerPlugin } from "@aws-sdk/middleware-logger";
 import { getRecursionDetectionPlugin } from "@aws-sdk/middleware-recursion-detection";
 import { getUserAgentPlugin, resolveUserAgentConfig, } from "@aws-sdk/middleware-user-agent";
-import { resolveRegionConfig, } from "@smithy/config-resolver";
+import { resolveRegionConfig } from "@smithy/config-resolver";
 import { DefaultIdentityProviderConfig, getHttpAuthSchemeEndpointRuleSetPlugin, getHttpSigningPlugin, } from "@smithy/core";
 import { resolveEventStreamSerdeConfig, } from "@smithy/eventstream-serde-config-resolver";
 import { getContentLengthPlugin } from "@smithy/middleware-content-length";
-import { resolveEndpointConfig, } from "@smithy/middleware-endpoint";
-import { getRetryPlugin, resolveRetryConfig, } from "@smithy/middleware-retry";
+import { resolveEndpointConfig } from "@smithy/middleware-endpoint";
+import { getRetryPlugin, resolveRetryConfig } from "@smithy/middleware-retry";
 import { Client as __Client, } from "@smithy/smithy-client";
+import { defaultLambdaHttpAuthSchemeParametersProvider, resolveHttpAuthSchemeConfig, } from "./auth/httpAuthSchemeProvider";
+import { resolveClientEndpointParameters, } from "./endpoint/EndpointParameters";
+import { getRuntimeConfig as __getRuntimeConfig } from "./runtimeConfig";
+import { resolveRuntimeExtensions } from "./runtimeExtensions";
 export { __Client };
 export class LambdaClient extends __Client {
     config;
     constructor(...[configuration]) {
-        let _config_0 = __getRuntimeConfig(configuration || {});
+        const _config_0 = __getRuntimeConfig(configuration || {});
         super(_config_0);
         this.initConfig = _config_0;
-        let _config_1 = resolveClientEndpointParameters(_config_0);
-        let _config_2 = resolveUserAgentConfig(_config_1);
-        let _config_3 = resolveRetryConfig(_config_2);
-        let _config_4 = resolveRegionConfig(_config_3);
-        let _config_5 = resolveHostHeaderConfig(_config_4);
-        let _config_6 = resolveEndpointConfig(_config_5);
-        let _config_7 = resolveEventStreamSerdeConfig(_config_6);
-        let _config_8 = resolveHttpAuthSchemeConfig(_config_7);
-        let _config_9 = resolveRuntimeExtensions(_config_8, configuration?.extensions || []);
+        const _config_1 = resolveClientEndpointParameters(_config_0);
+        const _config_2 = resolveUserAgentConfig(_config_1);
+        const _config_3 = resolveRetryConfig(_config_2);
+        const _config_4 = resolveRegionConfig(_config_3);
+        const _config_5 = resolveHostHeaderConfig(_config_4);
+        const _config_6 = resolveEndpointConfig(_config_5);
+        const _config_7 = resolveEventStreamSerdeConfig(_config_6);
+        const _config_8 = resolveHttpAuthSchemeConfig(_config_7);
+        const _config_9 = resolveRuntimeExtensions(_config_8, configuration?.extensions || []);
         this.config = _config_9;
         this.middlewareStack.use(getUserAgentPlugin(this.config));
         this.middlewareStack.use(getRetryPlugin(this.config));
@@ -37,7 +37,8 @@ export class LambdaClient extends __Client {
         this.middlewareStack.use(getLoggerPlugin(this.config));
         this.middlewareStack.use(getRecursionDetectionPlugin(this.config));
         this.middlewareStack.use(getHttpAuthSchemeEndpointRuleSetPlugin(this.config, {
-            httpAuthSchemeParametersProvider: defaultLambdaHttpAuthSchemeParametersProvider, identityProviderConfigProvider: async (config) => new DefaultIdentityProviderConfig({
+            httpAuthSchemeParametersProvider: defaultLambdaHttpAuthSchemeParametersProvider,
+            identityProviderConfigProvider: async (config) => new DefaultIdentityProviderConfig({
                 "aws.auth#sigv4": config.credentials,
             }),
         }));
