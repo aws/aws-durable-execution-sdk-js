@@ -25,7 +25,8 @@ const getRuntimeConfig = (config) => {
         defaultsMode,
         bodyLengthChecker: config?.bodyLengthChecker ?? util_body_length_browser_1.calculateBodyLength,
         credentialDefaultProvider: config?.credentialDefaultProvider ?? ((_) => () => Promise.reject(new Error("Credential is missing"))),
-        defaultUserAgentProvider: config?.defaultUserAgentProvider ?? (0, util_user_agent_browser_1.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_json_1.default.version }),
+        defaultUserAgentProvider: config?.defaultUserAgentProvider ??
+            (0, util_user_agent_browser_1.createDefaultUserAgentProvider)({ serviceId: clientSharedValues.serviceId, clientVersion: package_json_1.default.version }),
         eventStreamSerdeProvider: config?.eventStreamSerdeProvider ?? eventstream_serde_browser_1.eventStreamSerdeProvider,
         maxAttempts: config?.maxAttempts ?? util_retry_1.DEFAULT_MAX_ATTEMPTS,
         region: config?.region ?? (0, invalid_dependency_1.invalidProvider)("Region is missing"),

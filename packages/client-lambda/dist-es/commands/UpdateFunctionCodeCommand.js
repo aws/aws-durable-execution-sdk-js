@@ -1,11 +1,12 @@
-import { commonParams } from "../endpoint/EndpointParameters";
-import { UpdateFunctionCodeRequestFilterSensitiveLog, } from "../models/models_1";
-import { de_UpdateFunctionCodeCommand, se_UpdateFunctionCodeCommand, } from "../protocols/Aws_restJson1";
 import { getEndpointPlugin } from "@smithy/middleware-endpoint";
 import { getSerdePlugin } from "@smithy/middleware-serde";
 import { Command as $Command } from "@smithy/smithy-client";
+import { commonParams } from "../endpoint/EndpointParameters";
+import { FunctionConfigurationFilterSensitiveLog, UpdateFunctionCodeRequestFilterSensitiveLog, } from "../models/models_0";
+import { de_UpdateFunctionCodeCommand, se_UpdateFunctionCodeCommand } from "../protocols/Aws_restJson1";
 export { $Command };
-export class UpdateFunctionCodeCommand extends $Command.classBuilder()
+export class UpdateFunctionCodeCommand extends $Command
+    .classBuilder()
     .ep(commonParams)
     .m(function (Command, cs, config, o) {
     return [
@@ -15,7 +16,7 @@ export class UpdateFunctionCodeCommand extends $Command.classBuilder()
 })
     .s("AWSGirApiService", "UpdateFunctionCode", {})
     .n("LambdaClient", "UpdateFunctionCodeCommand")
-    .f(UpdateFunctionCodeRequestFilterSensitiveLog, void 0)
+    .f(UpdateFunctionCodeRequestFilterSensitiveLog, FunctionConfigurationFilterSensitiveLog)
     .ser(se_UpdateFunctionCodeCommand)
     .de(de_UpdateFunctionCodeCommand)
     .build() {

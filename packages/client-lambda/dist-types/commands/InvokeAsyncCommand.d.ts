@@ -1,7 +1,7 @@
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { InvokeAsyncRequest, InvokeAsyncResponse } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
-import { BlobPayloadInputTypes, StreamingBlobPayloadOutputTypes, MetadataBearer as __MetadataBearer } from "@smithy/types";
+import { MetadataBearer as __MetadataBearer, StreamingBlobPayloadInputTypes } from "@smithy/types";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { InvokeAsyncRequest, InvokeAsyncResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -9,24 +9,18 @@ export type { __MetadataBearer };
 export { $Command };
 /**
  * @public
- */
-export type InvokeAsyncCommandInputType = Omit<InvokeAsyncRequest, "InvokeArgs"> & {
-    InvokeArgs: BlobPayloadInputTypes;
-};
-/**
- * @public
  *
  * The input for {@link InvokeAsyncCommand}.
  */
-export interface InvokeAsyncCommandInput extends InvokeAsyncCommandInputType {
+export interface InvokeAsyncCommandInput extends Omit<InvokeAsyncRequest, "InvokeArgs"> {
+    InvokeArgs: StreamingBlobPayloadInputTypes;
 }
 /**
  * @public
  *
  * The output of {@link InvokeAsyncCommand}.
  */
-export interface InvokeAsyncCommandOutput extends Omit<InvokeAsyncResponse, "Body">, __MetadataBearer {
-    Body?: StreamingBlobPayloadOutputTypes;
+export interface InvokeAsyncCommandOutput extends InvokeAsyncResponse, __MetadataBearer {
 }
 declare const InvokeAsyncCommand_base: {
     new (input: InvokeAsyncCommandInput): import("@smithy/smithy-client").CommandImpl<InvokeAsyncCommandInput, InvokeAsyncCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
@@ -34,32 +28,25 @@ declare const InvokeAsyncCommand_base: {
     getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- * @deprecated
+ * <important> <p>For asynchronous function invocation, use <a>Invoke</a>.</p> </important> <p>Invokes a function asynchronously.</p> <note> <p>If you do use the InvokeAsync action, note that it doesn't support the use of X-Ray active tracing. Trace ID is not propagated to the function, even if X-Ray active tracing is turned on.</p> </note>
  *
+ * @deprecated
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, InvokeAsyncCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
- * // const { LambdaClient, InvokeAsyncCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
+ * import { LambdaClient, InvokeAsyncCommand } from "@aws-sdk/client-lambda"; // ES Modules import
+ * // const { LambdaClient, InvokeAsyncCommand } = require("@aws-sdk/client-lambda"); // CommonJS import
+ * // import type { LambdaClientConfig } from "@aws-sdk/client-lambda";
+ * const config = {}; // type is LambdaClientConfig
  * const client = new LambdaClient(config);
  * const input = { // InvokeAsyncRequest
  *   FunctionName: "STRING_VALUE", // required
- *   InternalLambda: "STRING_VALUE",
- *   DryRun: true || false,
- *   InvokeArgs: new Uint8Array(), // e.g. Buffer.from("") or new TextEncoder().encode("")   // required
- *   SourceArn: "STRING_VALUE",
+ *   InvokeArgs: "MULTIPLE_TYPES_ACCEPTED", // see \@smithy/types -> StreamingBlobPayloadInputTypes // required
  * };
  * const command = new InvokeAsyncCommand(input);
  * const response = await client.send(command);
- * // consume or destroy the stream to free the socket.
- * const bytes = await response.Body.transformToByteArray();
- * // const str = await response.Body.transformToString();
- * // response.Body.destroy(); // only applicable to Node.js Readable streams.
- *
  * // { // InvokeAsyncResponse
  * //   Status: Number("int"),
- * //   Body: "<SdkStream>", // see \@smithy/types -> StreamingBlobPayloadOutputTypes
  * // };
  *
  * ```
@@ -70,64 +57,42 @@ declare const InvokeAsyncCommand_base: {
  * @see {@link InvokeAsyncCommandOutput} for command's `response` shape.
  * @see {@link LambdaClientResolvedConfig | config} for LambdaClient's `config` shape.
  *
- * @throws {@link EC2AccessDeniedException} (server fault)
- *
- * @throws {@link EC2ThrottledException} (server fault)
- *
- * @throws {@link EC2UnexpectedException} (server fault)
- *
- * @throws {@link EFSIOException} (client fault)
- *
- * @throws {@link EFSMountConnectivityException} (client fault)
- *
- * @throws {@link EFSMountFailureException} (client fault)
- *
- * @throws {@link EFSMountTimeoutException} (client fault)
- *
- * @throws {@link ENILimitReachedException} (server fault)
- *
  * @throws {@link InvalidRequestContentException} (client fault)
+ *  <p>The request body could not be parsed as JSON, or a request header is invalid. For example, the 'x-amzn-RequestId' header is not a valid UUID string.</p>
  *
  * @throws {@link InvalidRuntimeException} (server fault)
- *
- * @throws {@link InvalidSecurityGroupIDException} (server fault)
- *
- * @throws {@link InvalidSubnetIDException} (server fault)
- *
- * @throws {@link KMSAccessDeniedException} (server fault)
- *
- * @throws {@link KMSDisabledException} (server fault)
- *
- * @throws {@link KMSInvalidStateException} (server fault)
- *
- * @throws {@link KMSNotFoundException} (server fault)
- *
- * @throws {@link ModeNotSupportedException} (client fault)
+ *  <p>The runtime or runtime version specified is not supported.</p>
  *
  * @throws {@link ResourceConflictException} (client fault)
+ *  <p>The resource already exists, or another operation is in progress.</p>
  *
  * @throws {@link ResourceNotFoundException} (client fault)
+ *  <p>The resource specified in the request does not exist.</p>
  *
  * @throws {@link ServiceException} (server fault)
- *
- * @throws {@link SnapRestoreException} (client fault)
- *
- * @throws {@link SnapRestoreTimeoutException} (client fault)
- *
- * @throws {@link SnapStartException} (client fault)
- *
- * @throws {@link SnapStartNotReadyException} (client fault)
- *
- * @throws {@link SnapStartRegenerationFailureException} (client fault)
- *
- * @throws {@link SnapStartTimeoutException} (client fault)
- *
- * @throws {@link SubnetIPAddressLimitReachedException} (server fault)
+ *  <p>The Lambda service encountered an internal error.</p>
  *
  * @throws {@link LambdaServiceException}
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @example To invoke a Lambda function asynchronously
+ * ```javascript
+ * // The following example invokes a Lambda function asynchronously
+ * const input = {
+ *   FunctionName: "my-function",
+ *   InvokeArgs: "{}"
+ * };
+ * const command = new InvokeAsyncCommand(input);
+ * const response = await client.send(command);
+ * /* response is
+ * {
+ *   Status: 202
+ * }
+ * *\/
+ * ```
+ *
+ * @public
  */
 export declare class InvokeAsyncCommand extends InvokeAsyncCommand_base {
     /** @internal type navigation helper, not in runtime. */

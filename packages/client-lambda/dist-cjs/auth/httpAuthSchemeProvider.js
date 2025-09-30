@@ -6,9 +6,10 @@ const util_middleware_1 = require("@smithy/util-middleware");
 const defaultLambdaHttpAuthSchemeParametersProvider = async (config, context, input) => {
     return {
         operation: (0, util_middleware_1.getSmithyContext)(context).operation,
-        region: await (0, util_middleware_1.normalizeProvider)(config.region)() || (() => {
-            throw new Error("expected `region` to be configured for `aws.auth#sigv4`");
-        })(),
+        region: (await (0, util_middleware_1.normalizeProvider)(config.region)()) ||
+            (() => {
+                throw new Error("expected `region` to be configured for `aws.auth#sigv4`");
+            })(),
     };
 };
 exports.defaultLambdaHttpAuthSchemeParametersProvider = defaultLambdaHttpAuthSchemeParametersProvider;
@@ -27,17 +28,13 @@ function createAwsAuthSigv4HttpAuthOption(authParameters) {
         }),
     };
 }
-;
 const defaultLambdaHttpAuthSchemeProvider = (authParameters) => {
     const options = [];
     switch (authParameters.operation) {
-        default:
-            {
-                options.push(createAwsAuthSigv4HttpAuthOption(authParameters));
-            }
-            ;
+        default: {
+            options.push(createAwsAuthSigv4HttpAuthOption(authParameters));
+        }
     }
-    ;
     return options;
 };
 exports.defaultLambdaHttpAuthSchemeProvider = defaultLambdaHttpAuthSchemeProvider;

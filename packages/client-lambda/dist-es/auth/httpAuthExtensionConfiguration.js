@@ -1,10 +1,10 @@
 export const getHttpAuthExtensionConfiguration = (runtimeConfig) => {
-    let _httpAuthSchemes = runtimeConfig.httpAuthSchemes;
+    const _httpAuthSchemes = runtimeConfig.httpAuthSchemes;
     let _httpAuthSchemeProvider = runtimeConfig.httpAuthSchemeProvider;
     let _credentials = runtimeConfig.credentials;
     return {
         setHttpAuthScheme(httpAuthScheme) {
-            const index = _httpAuthSchemes.findIndex(scheme => scheme.schemeId === httpAuthScheme.schemeId);
+            const index = _httpAuthSchemes.findIndex((scheme) => scheme.schemeId === httpAuthScheme.schemeId);
             if (index === -1) {
                 _httpAuthSchemes.push(httpAuthScheme);
             }

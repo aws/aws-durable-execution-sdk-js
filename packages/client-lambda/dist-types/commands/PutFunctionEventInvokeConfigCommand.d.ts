@@ -1,8 +1,7 @@
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { FunctionEventInvokeConfig } from "../models/models_0";
-import { PutFunctionEventInvokeConfigRequest } from "../models/models_1";
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { FunctionEventInvokeConfig, PutFunctionEventInvokeConfigRequest } from "../models/models_0";
 /**
  * @public
  */
@@ -28,13 +27,14 @@ declare const PutFunctionEventInvokeConfigCommand_base: {
     getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Configures options for <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html">asynchronous invocation</a> on a function, version, or alias. If a configuration already exists for a function, version, or alias, this operation overwrites it. If you exclude any settings, they are removed. To set one option without affecting existing settings for other options, use <a>UpdateFunctionEventInvokeConfig</a>.</p> <p>By default, Lambda retries an asynchronous invocation twice if the function returns an error. It retains events in a queue for up to six hours. When an event fails all processing attempts or stays in the asynchronous invocation queue for too long, Lambda discards it. To retain discarded events, configure a dead-letter queue with <a>UpdateFunctionConfiguration</a>.</p> <p>To send an invocation record to a queue, topic, S3 bucket, function, or event bus, specify a <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html#invocation-async-destinations">destination</a>. You can configure separate destinations for successful invocations (on-success) and events that fail all processing attempts (on-failure). You can configure destinations in addition to or instead of a dead-letter queue.</p> <note> <p>S3 buckets are supported only for on-failure destinations. To retain records of successful invocations, use another destination type.</p> </note>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
- * import { LambdaClient, PutFunctionEventInvokeConfigCommand } from "@amzn/lambda-console-sdk-client-lambda"; // ES Modules import
- * // const { LambdaClient, PutFunctionEventInvokeConfigCommand } = require("@amzn/lambda-console-sdk-client-lambda"); // CommonJS import
+ * import { LambdaClient, PutFunctionEventInvokeConfigCommand } from "@aws-sdk/client-lambda"; // ES Modules import
+ * // const { LambdaClient, PutFunctionEventInvokeConfigCommand } = require("@aws-sdk/client-lambda"); // CommonJS import
+ * // import type { LambdaClientConfig } from "@aws-sdk/client-lambda";
+ * const config = {}; // type is LambdaClientConfig
  * const client = new LambdaClient(config);
  * const input = { // PutFunctionEventInvokeConfigRequest
  *   FunctionName: "STRING_VALUE", // required
@@ -76,17 +76,49 @@ declare const PutFunctionEventInvokeConfigCommand_base: {
  * @see {@link LambdaClientResolvedConfig | config} for LambdaClient's `config` shape.
  *
  * @throws {@link InvalidParameterValueException} (client fault)
+ *  <p>One of the parameters in the request is not valid.</p>
  *
  * @throws {@link ResourceConflictException} (client fault)
+ *  <p>The resource already exists, or another operation is in progress.</p>
+ *
+ * @throws {@link ResourceNotFoundException} (client fault)
+ *  <p>The resource specified in the request does not exist.</p>
  *
  * @throws {@link ServiceException} (server fault)
+ *  <p>The Lambda service encountered an internal error.</p>
  *
  * @throws {@link TooManyRequestsException} (client fault)
+ *  <p>The request throughput limit was exceeded. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#api-requests">Lambda quotas</a>.</p>
  *
  * @throws {@link LambdaServiceException}
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @example To configure error handling for asynchronous invocation
+ * ```javascript
+ * // The following example sets a maximum event age of one hour and disables retries for the specified function.
+ * const input = {
+ *   FunctionName: "my-function",
+ *   MaximumEventAgeInSeconds: 3600,
+ *   MaximumRetryAttempts: 0
+ * };
+ * const command = new PutFunctionEventInvokeConfigCommand(input);
+ * const response = await client.send(command);
+ * /* response is
+ * {
+ *   DestinationConfig: {
+ *     OnFailure:     { /* empty *\/ },
+ *     OnSuccess:     { /* empty *\/ }
+ *   },
+ *   FunctionArn: "arn:aws:lambda:us-east-2:123456789012:function:my-function:$LATEST",
+ *   LastModified: "2016-11-21T19:49:20.006Z",
+ *   MaximumEventAgeInSeconds: 3600,
+ *   MaximumRetryAttempts: 0
+ * }
+ * *\/
+ * ```
+ *
+ * @public
  */
 export declare class PutFunctionEventInvokeConfigCommand extends PutFunctionEventInvokeConfigCommand_base {
     /** @internal type navigation helper, not in runtime. */

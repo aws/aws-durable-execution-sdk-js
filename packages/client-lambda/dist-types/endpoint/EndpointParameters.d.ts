@@ -1,4 +1,4 @@
-import { Endpoint, EndpointV2, Provider, EndpointParameters as __EndpointParameters } from "@smithy/types";
+import { Endpoint, EndpointParameters as __EndpointParameters, EndpointV2, Provider } from "@smithy/types";
 /**
  * @public
  */

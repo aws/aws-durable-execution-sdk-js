@@ -1,11 +1,12 @@
-import { commonParams } from "../endpoint/EndpointParameters";
-import { StopDurableExecutionRequestFilterSensitiveLog, } from "../models/models_1";
-import { de_StopDurableExecutionCommand, se_StopDurableExecutionCommand, } from "../protocols/Aws_restJson1";
 import { getEndpointPlugin } from "@smithy/middleware-endpoint";
 import { getSerdePlugin } from "@smithy/middleware-serde";
 import { Command as $Command } from "@smithy/smithy-client";
+import { commonParams } from "../endpoint/EndpointParameters";
+import { StopDurableExecutionRequestFilterSensitiveLog, } from "../models/models_1";
+import { de_StopDurableExecutionCommand, se_StopDurableExecutionCommand } from "../protocols/Aws_restJson1";
 export { $Command };
-export class StopDurableExecutionCommand extends $Command.classBuilder()
+export class StopDurableExecutionCommand extends $Command
+    .classBuilder()
     .ep(commonParams)
     .m(function (Command, cs, config, o) {
     return [

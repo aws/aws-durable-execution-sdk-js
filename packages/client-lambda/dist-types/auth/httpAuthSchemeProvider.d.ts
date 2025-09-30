@@ -1,6 +1,6 @@
-import { LambdaClientResolvedConfig } from "../LambdaClient";
 import { AwsSdkSigV4AuthInputConfig, AwsSdkSigV4AuthResolvedConfig, AwsSdkSigV4PreviouslyResolved } from "@aws-sdk/core";
 import { HandlerExecutionContext, HttpAuthScheme, HttpAuthSchemeParameters, HttpAuthSchemeParametersProvider, HttpAuthSchemeProvider, Provider } from "@smithy/types";
+import { LambdaClientResolvedConfig } from "../LambdaClient";
 /**
  * @internal
  */
