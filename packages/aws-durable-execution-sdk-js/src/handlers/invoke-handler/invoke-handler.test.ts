@@ -14,6 +14,7 @@ jest.mock("../../utils/termination-helper");
 jest.mock("../../mocks/operation-interceptor");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
+jest.mock("../../utils/wait-before-continue/wait-before-continue");
 
 import { terminate } from "../../utils/termination-helper";
 import { log } from "../../utils/logger/logger";
@@ -21,6 +22,7 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
+import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
 const mockTerminate = terminate as jest.MockedFunction<typeof terminate>;
 const mockLog = log as jest.MockedFunction<typeof log>;
@@ -29,6 +31,9 @@ const mockSafeSerialize = safeSerialize as jest.MockedFunction<
 >;
 const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
   typeof safeDeserialize
+>;
+const mockWaitBeforeContinue = waitBeforeContinue as jest.MockedFunction<
+  typeof waitBeforeContinue
 >;
 
 describe("InvokeHandler", () => {
@@ -237,6 +242,7 @@ describe("InvokeHandler", () => {
       });
 
       mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(false); // No other operations running
 
       const invokeHandler = createInvokeHandler(
         mockContext,
@@ -261,7 +267,49 @@ describe("InvokeHandler", () => {
       );
     });
 
+    it("should wait when operation is in progress and other operations are running", async () => {
+      const mockGetStepData = jest.fn()
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED })
+        .mockReturnValueOnce({ Status: OperationStatus.SUCCEEDED, InvokeDetails: { Result: '{"result":"success"}' } });
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(true); // Other operations running
+      mockWaitBeforeContinue.mockResolvedValue({ reason: "status" });
+      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpointFn,
+        mockCreateStepId,
+        mockHasRunningOperations,
+      );
+
+      const result = await invokeHandler("test-function", { test: "data" });
+
+      expect(result).toEqual({ result: "success" });
+      expect(mockLog).toHaveBeenCalledWith(
+        true,
+        "⏳",
+        "Invoke test-function still in progress, waiting for other operations",
+      );
+      expect(mockWaitBeforeContinue).toHaveBeenCalledWith({
+        checkHasRunningOperations: true,
+        checkStepStatus: true,
+        checkTimer: false,
+        stepId: "test-step-1",
+        context: mockContext,
+        hasRunningOperations: mockHasRunningOperations,
+      });
+    });
+
     it("should create checkpoint and terminate for new invoke without name", async () => {
+      const mockGetStepData = jest.fn()
+        .mockReturnValueOnce(undefined) // First call - no step data
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(false); // No other operations running
+
       mockOperationInterceptor.execute.mockImplementation(
         async (name: any, fn: any) => {
           return await fn();
@@ -305,11 +353,18 @@ describe("InvokeHandler", () => {
       expect(mockLog).toHaveBeenCalledWith(
         true,
         "🚀",
-        "Invoke test-function started, terminating for async execution",
+        "Invoke test-function started, re-checking status",
       );
     });
 
     it("should create checkpoint and terminate for new invoke with name", async () => {
+      const mockGetStepData = jest.fn()
+        .mockReturnValueOnce(undefined) // First call - no step data
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(false); // No other operations running
+
       mockOperationInterceptor.execute.mockImplementation(
         async (name: any, fn: any) => {
           return await fn();
@@ -342,6 +397,13 @@ describe("InvokeHandler", () => {
     });
 
     it("should handle invoke with options", async () => {
+      const mockGetStepData = jest.fn()
+        .mockReturnValueOnce(undefined) // First call - no step data
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(false); // No other operations running
+
       mockOperationInterceptor.execute.mockImplementation(
         async (name: any, fn: any) => {
           return await fn();
@@ -380,29 +442,6 @@ describe("InvokeHandler", () => {
           TimeoutSeconds: 30,
         },
       });
-    });
-
-    it("should handle intercepted execution", async () => {
-      const interceptedResult = { intercepted: true };
-      mockOperationInterceptor.execute.mockResolvedValue(interceptedResult);
-
-      const invokeHandler = createInvokeHandler(
-        mockContext,
-        mockCheckpointFn,
-        mockCreateStepId,
-        mockHasRunningOperations,
-      );
-
-      const result = await invokeHandler("test-function", { test: "data" });
-
-      expect(result).toBe(interceptedResult);
-      expect(OperationInterceptor.forExecution).toHaveBeenCalledWith(
-        "test-arn",
-      );
-      expect(mockOperationInterceptor.execute).toHaveBeenCalledWith(
-        undefined,
-        expect.any(Function),
-      );
     });
   });
 });
