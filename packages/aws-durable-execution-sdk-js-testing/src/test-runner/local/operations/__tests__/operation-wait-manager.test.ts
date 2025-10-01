@@ -7,6 +7,7 @@ import {
   OperationWithData,
 } from "../../../common/operations/operation-with-data";
 import { OperationSubType } from "@aws/durable-execution-sdk-js";
+import { DurableApiClient } from "../../../common/create-durable-api-client";
 
 describe("OperationWaitManager", () => {
   let waitManager: OperationWaitManager;
@@ -16,15 +17,20 @@ describe("OperationWaitManager", () => {
   beforeEach(() => {
     waitManager = new OperationWaitManager();
     operationIndex = new IndexedOperations([]);
-    testOperation = new OperationWithData(waitManager, operationIndex, {
-      operation: {
-        Id: "test-op-id",
-        Name: "test-operation",
-        Type: OperationType.STEP,
-        Status: OperationStatus.PENDING,
-      },
-      events: [],
-    });
+    testOperation = new OperationWithData(
+      waitManager,
+      operationIndex,
+      {} as DurableApiClient,
+      {
+        operation: {
+          Id: "test-op-id",
+          Name: "test-operation",
+          Type: OperationType.STEP,
+          Status: OperationStatus.PENDING,
+        },
+        events: [],
+      }
+    );
   });
 
   // Helper function to trigger operation resolution
@@ -197,6 +203,7 @@ describe("OperationWaitManager", () => {
         const operationWithoutStatus = new OperationWithData(
           waitManager,
           operationIndex,
+          {} as DurableApiClient,
           {
             operation: {
               Id: "no-status-op",
@@ -266,6 +273,7 @@ describe("OperationWaitManager", () => {
       const testOperation2 = new OperationWithData(
         waitManager,
         operationIndex,
+        {} as DurableApiClient,
         {
           operation: {
             Id: "test-op-2-id",
@@ -304,6 +312,7 @@ describe("OperationWaitManager", () => {
       const testOperation2 = new OperationWithData(
         waitManager,
         operationIndex,
+        {} as DurableApiClient,
         {
           operation: {
             Id: "test-op-2-id",
@@ -340,29 +349,39 @@ describe("OperationWaitManager", () => {
       id: string,
       status: OperationStatus = OperationStatus.PENDING
     ) =>
-      new OperationWithData(waitManager, operationIndex, {
-        operation: {
-          Id: id,
-          Type: OperationType.CONTEXT,
-          SubType: OperationSubType.WAIT_FOR_CALLBACK,
-          Status: status,
-        },
-        events: [],
-      });
+      new OperationWithData(
+        waitManager,
+        operationIndex,
+        {} as DurableApiClient,
+        {
+          operation: {
+            Id: id,
+            Type: OperationType.CONTEXT,
+            SubType: OperationSubType.WAIT_FOR_CALLBACK,
+            Status: status,
+          },
+          events: [],
+        }
+      );
 
     // Helper function to create a regular (non-waitForCallback) operation
     const createRegularOperation = (
       id: string,
       status: OperationStatus = OperationStatus.PENDING
     ) =>
-      new OperationWithData(waitManager, operationIndex, {
-        operation: {
-          Id: id,
-          Type: OperationType.STEP,
-          Status: status,
-        },
-        events: [],
-      });
+      new OperationWithData(
+        waitManager,
+        operationIndex,
+        {} as DurableApiClient,
+        {
+          operation: {
+            Id: id,
+            Type: OperationType.STEP,
+            Status: status,
+          },
+          events: [],
+        }
+      );
 
     // Helper function to create a callback checkpoint operation
     const createCallbackCheckpointOperation = (
@@ -587,6 +606,7 @@ describe("OperationWaitManager", () => {
         const directOperation = new OperationWithData(
           waitManager,
           operationIndex,
+          {} as DurableApiClient,
           {
             operation: {
               Id: "direct-op-id",

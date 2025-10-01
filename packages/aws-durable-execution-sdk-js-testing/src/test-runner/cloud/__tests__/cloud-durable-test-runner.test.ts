@@ -149,7 +149,8 @@ describe("CloudDurableTestRunner", () => {
       expect(IndexedOperations).toHaveBeenCalledWith([]);
       expect(OperationStorage).toHaveBeenCalledWith(
         mockWaitManager,
-        mockIndexedOperations
+        mockIndexedOperations,
+        expect.any(Object)
       );
     });
   });
@@ -396,6 +397,7 @@ describe("CloudDurableTestRunner", () => {
         expect(OperationWithData).toHaveBeenCalledWith(
           mockWaitManager,
           mockIndexedOperations,
+          expect.any(Object),
           mockOperation
         );
         expect(result).toBe(mockOperationWithData);
@@ -416,6 +418,7 @@ describe("CloudDurableTestRunner", () => {
         expect(OperationWithData).toHaveBeenCalledWith(
           mockWaitManager,
           mockIndexedOperations,
+          expect.any(Object),
           mockOperation
         );
         expect(result).toBe(mockOperationWithData);
@@ -439,6 +442,7 @@ describe("CloudDurableTestRunner", () => {
         expect(OperationWithData).toHaveBeenCalledWith(
           mockWaitManager,
           mockIndexedOperations,
+          expect.any(Object),
           mockOperation
         );
         expect(result).toBe(mockOperationWithData);
@@ -459,6 +463,7 @@ describe("CloudDurableTestRunner", () => {
         expect(OperationWithData).toHaveBeenCalledWith(
           mockWaitManager,
           mockIndexedOperations,
+          expect.any(Object),
           mockOperation
         );
         expect(result).toBe(mockOperationWithData);

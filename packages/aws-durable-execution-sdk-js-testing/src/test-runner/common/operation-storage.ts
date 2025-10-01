@@ -5,12 +5,59 @@ import {
   OperationWithData,
 } from "./operations/operation-with-data";
 import { OperationWaitManager } from "../local/operations/operation-wait-manager";
+import { DurableApiClient } from "./create-durable-api-client";
 
-export class OperationStorage {
+export interface TrackedOperation<Operation extends OperationWithData> {
+  operation: Operation;
+  params: {
+    id?: string;
+    index?: number;
+    name?: string;
+  };
+}
+
+export class OperationStorage<
+  Operation extends OperationWithData = OperationWithData,
+> {
+  private readonly trackedOperations: TrackedOperation<Operation>[] = [];
+
   constructor(
     private readonly waitManager: OperationWaitManager,
-    protected readonly indexedOperations: IndexedOperations
+    protected readonly indexedOperations: IndexedOperations,
+    private readonly apiClient: DurableApiClient
   ) {}
+
+  private populateOperation(trackedOperation: TrackedOperation<Operation>) {
+    const strategies = [
+      () =>
+        trackedOperation.params.id !== undefined
+          ? this.indexedOperations.getById(trackedOperation.params.id)
+          : null,
+      () =>
+        trackedOperation.params.name !== undefined
+          ? this.indexedOperations.getByNameAndIndex(
+              trackedOperation.params.name,
+              trackedOperation.params.index
+            )
+          : null,
+      () =>
+        trackedOperation.params.index !== undefined
+          ? this.indexedOperations.getByIndex(trackedOperation.params.index)
+          : null,
+    ];
+
+    for (const strategy of strategies) {
+      const data = strategy();
+      if (data) {
+        trackedOperation.operation.populateData(data);
+        break;
+      }
+    }
+  }
+
+  getTrackedOperations(): Operation[] {
+    return this.trackedOperations.map((op) => op.operation);
+  }
 
   getOperations(): OperationWithData[] {
     return (
@@ -19,7 +66,8 @@ export class OperationStorage {
         .map((data) => {
           const operation = new OperationWithData(
             this.waitManager,
-            this.indexedOperations
+            this.indexedOperations,
+            this.apiClient
           );
           operation.populateData(data);
           return operation;
@@ -29,7 +77,19 @@ export class OperationStorage {
     );
   }
 
+  registerOperation(trackedOperation: TrackedOperation<Operation>) {
+    this.trackedOperations.push(trackedOperation);
+    this.populateOperation(trackedOperation);
+  }
+
   populateOperations(newCheckpointOperations: OperationEvents[]): void {
+    if (!newCheckpointOperations.length) {
+      return;
+    }
+
     this.indexedOperations.addOperations(newCheckpointOperations);
+    for (const trackedOperation of this.trackedOperations) {
+      this.populateOperation(trackedOperation);
+    }
   }
 }

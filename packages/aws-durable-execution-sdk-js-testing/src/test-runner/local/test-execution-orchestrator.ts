@@ -19,7 +19,7 @@ import { InvocationTracker } from "./operations/invocation-tracker";
 import {
   TestExecutionResult,
   TestExecutionState,
-} from "./test-execution-state";
+} from "../common/test-execution-state";
 import { InvokeRequest, Invocation } from "../durable-test-runner";
 import {
   OperationAction,
@@ -75,9 +75,6 @@ export class TestExecutionOrchestrator {
   async executeHandler(params?: InvokeRequest): Promise<TestExecutionResult> {
     // Reset invocations tracking when starting a new execution
     this.invocationTracker.reset();
-
-    process.env.DURABLE_LOCAL_MODE = "true";
-    process.env.DEX_ENDPOINT = this.checkpointApi.getServerUrl();
 
     // Abort controller aborts polling when any invocation returns with 'SUCCEEDED/FAILED'
     const abortController = new AbortController();

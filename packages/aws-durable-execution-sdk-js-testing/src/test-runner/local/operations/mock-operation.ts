@@ -3,6 +3,7 @@ import { ExecutionId } from "../../../checkpoint-server/utils/tagged-strings";
 import { OperationWaitManager } from "./operation-wait-manager";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
+import { DurableApiClient } from "../../common/create-durable-api-client";
 
 export interface MockOperationParameters {
   name?: string;
@@ -25,20 +26,21 @@ interface RegisterNameMockParameters extends RegisterMockParameters {
 }
 
 export class MockOperation<
-  OperationResultValue = unknown
+  OperationResultValue = unknown,
 > extends OperationWithData<OperationResultValue> {
-  public readonly _mockName?: string;
-  public readonly _mockIndex?: number;
-  public readonly _mockId?: string;
+  private readonly _mockName?: string;
+  private readonly _mockIndex?: number;
+  private readonly _mockId?: string;
   private readonly nameMocks: RegisterNameMockParameters[] = [];
   private readonly indexMocks: RegisterIndexMockParameters[] = [];
 
   constructor(
     params: MockOperationParameters,
     waitManager: OperationWaitManager,
-    operationIndex: IndexedOperations
+    operationIndex: IndexedOperations,
+    apiClient: DurableApiClient
   ) {
-    super(waitManager, operationIndex);
+    super(waitManager, operationIndex, apiClient);
     this._mockName = params.name;
     this._mockIndex = params.index;
     this._mockId = params.id;
@@ -135,6 +137,14 @@ export class MockOperation<
 
   hasMocks(): boolean {
     return this.nameMocks.length > 0 || this.indexMocks.length > 0;
+  }
+
+  getMockParameters(): MockOperationParameters {
+    return {
+      name: this._mockName,
+      index: this._mockIndex,
+      id: this._mockId,
+    };
   }
 
   getNameMockCount(): number {

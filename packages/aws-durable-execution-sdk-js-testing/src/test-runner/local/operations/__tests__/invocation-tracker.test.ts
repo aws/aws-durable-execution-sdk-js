@@ -6,19 +6,30 @@ import { OperationWaitManager } from "../operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";
 import { MockOperation } from "../mock-operation";
 import { OperationEvents } from "../../../common/operations/operation-with-data";
+import { DurableApiClient } from "../../../common/create-durable-api-client";
 
 describe("InvocationTracker", () => {
   let waitManager: OperationWaitManager;
   let indexedOperations: IndexedOperations;
   let operationStorage: LocalOperationStorage;
   let invocationTracker: InvocationTracker;
+  const durableApiClient: DurableApiClient = {
+    sendCallbackFailure: jest.fn(),
+    sendCallbackHeartbeat: jest.fn(),
+    sendCallbackSuccess: jest.fn(),
+  };
 
   // Helper function to create test operations
   const createMockOperation = (
     id: string,
     status: OperationStatus = OperationStatus.SUCCEEDED
   ): MockOperation => {
-    const operation = new MockOperation({ id }, waitManager, indexedOperations);
+    const operation = new MockOperation(
+      { id },
+      waitManager,
+      indexedOperations,
+      durableApiClient
+    );
     const checkpointOp: OperationEvents = {
       operation: {
         Id: id,
@@ -38,6 +49,11 @@ describe("InvocationTracker", () => {
     operationStorage = new LocalOperationStorage(
       waitManager,
       indexedOperations,
+      {
+        sendCallbackFailure: jest.fn(),
+        sendCallbackHeartbeat: jest.fn(),
+        sendCallbackSuccess: jest.fn(),
+      },
       jest.fn()
     );
     invocationTracker = new InvocationTracker(operationStorage);
@@ -71,9 +87,7 @@ describe("InvocationTracker", () => {
       // Set up operations in storage
       const op1 = createMockOperation("op1");
       const op2 = createMockOperation("op2");
-      jest
-        .spyOn(operationStorage, "getOperations")
-        .mockReturnValue([op1, op2]);
+      jest.spyOn(operationStorage, "getOperations").mockReturnValue([op1, op2]);
 
       // Verify that operation mappings are cleared
       const ops = invocationTracker.getOperationsForInvocation(invocationId1);

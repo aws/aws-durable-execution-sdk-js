@@ -11,15 +11,11 @@ jest.mock("@aws-sdk/client-lambda", () => ({
 
 describe("getDurableExecutionsClient", () => {
   const mockClient = {} as LambdaClient;
-  let mockLambdaClient: jest.MockedClass<
-    typeof LambdaClient
-  >;
+  let mockLambdaClient: jest.MockedClass<typeof LambdaClient>;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockLambdaClient = LambdaClient as jest.MockedClass<
-      typeof LambdaClient
-    >;
+    mockLambdaClient = LambdaClient as jest.MockedClass<typeof LambdaClient>;
     mockLambdaClient.mockImplementation(() => mockClient);
   });
 
@@ -27,22 +23,19 @@ describe("getDurableExecutionsClient", () => {
     // Clear the singleton instance between tests
     jest.resetModules();
     resetDurableExecutionsClient();
-    delete process.env.DEX_ENDPOINT;
   });
 
   it("should return the same instance on multiple calls", () => {
-    const client1 = getDurableExecutionsClient();
-    const client2 = getDurableExecutionsClient();
+    const client1 = getDurableExecutionsClient("");
+    const client2 = getDurableExecutionsClient("");
 
     expect(client1).toBe(client2);
     expect(client1).toBe(mockClient);
     expect(mockLambdaClient).toHaveBeenCalledTimes(1);
   });
 
-  it("should initialize client with mock credentials and endpoint from environment", () => {
-    process.env.DEX_ENDPOINT = "https://test-endpoint.example.com";
-
-    getDurableExecutionsClient();
+  it("should initialize client with mock credentials and endpoint from parameters", () => {
+    getDurableExecutionsClient("https://test-endpoint.example.com");
 
     expect(mockLambdaClient).toHaveBeenCalledWith({
       credentials: {

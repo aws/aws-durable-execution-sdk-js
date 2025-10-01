@@ -23,6 +23,11 @@ import {
   ILocalDurableTestRunnerFactory,
   LocalDurableTestRunnerParameters,
 } from "./interfaces/durable-test-runner-factory";
+import {
+  createDurableApiClient,
+  DurableApiClient,
+} from "../common/create-durable-api-client";
+import { getDurableExecutionsClient } from "./api-client/durable-executions-client";
 
 export type LocalTestRunnerHandlerFunction = ReturnType<
   typeof withDurableFunctions
@@ -57,6 +62,7 @@ export class LocalDurableTestRunner<ResultType>
   private readonly skipTime: boolean;
   private readonly handlerFunction: LocalDurableTestRunnerParameters["handlerFunction"];
   private readonly functionStorage: FunctionStorage;
+  private readonly durableApi: DurableApiClient;
 
   /**
    * Creates a new LocalDurableTestRunner instance and starts the checkpoint server.
@@ -71,11 +77,6 @@ export class LocalDurableTestRunner<ResultType>
   }: LocalDurableTestRunnerParameters) {
     this.waitManager = new OperationWaitManager();
     this.operationIndex = new IndexedOperations([]);
-    this.operationStorage = new LocalOperationStorage(
-      this.waitManager,
-      this.operationIndex,
-      this.waitManager.handleCheckpointReceived.bind(this.waitManager)
-    );
     this.resultFormatter = new ResultFormatter<ResultType>();
 
     this.skipTime = skipTime;
@@ -84,6 +85,29 @@ export class LocalDurableTestRunner<ResultType>
     this.functionStorage = new FunctionStorage(
       new LocalDurableTestRunnerFactory()
     );
+
+    this.durableApi = createDurableApiClient(() => {
+      const serverInfo = LocalDurableTestRunner.getCheckpointServerInfo();
+      return getDurableExecutionsClient(serverInfo.url);
+    });
+
+    this.operationStorage = new LocalOperationStorage(
+      this.waitManager,
+      this.operationIndex,
+      this.durableApi,
+      this.waitManager.handleCheckpointReceived.bind(this.waitManager)
+    );
+  }
+
+  private static getCheckpointServerInfo() {
+    const serverInfo =
+      CheckpointServerWorkerManager.getInstance().getServerInfo();
+    if (!serverInfo) {
+      throw new Error(
+        "Could not find checkpoint server info. Did you call LocalDurableTestRunner.setupTestEnvironment()?"
+      );
+    }
+    return serverInfo;
   }
 
   /**
@@ -96,13 +120,10 @@ export class LocalDurableTestRunner<ResultType>
    */
   async run(params?: InvokeRequest): Promise<TestResult<ResultType>> {
     try {
-      const serverInfo =
-        CheckpointServerWorkerManager.getInstance().getServerInfo();
-      if (!serverInfo) {
-        throw new Error(
-          "Could not find checkpoint server info. Did you call LocalDurableTestRunner.setupTestEnvironment()?"
-        );
-      }
+      const serverInfo = LocalDurableTestRunner.getCheckpointServerInfo();
+
+      process.env.DURABLE_LOCAL_MODE = "true";
+      process.env.DEX_ENDPOINT = serverInfo.url;
 
       const orchestrator = new TestExecutionOrchestrator(
         this.handlerFunction,
@@ -175,9 +196,16 @@ export class LocalDurableTestRunner<ResultType>
         index,
       },
       this.waitManager,
-      this.operationIndex
+      this.operationIndex,
+      this.durableApi
     );
-    this.operationStorage.registerOperation(mockOperation);
+    this.operationStorage.registerOperation({
+      operation: mockOperation,
+      params: {
+        name,
+        index,
+      },
+    });
     return mockOperation;
   }
 
@@ -189,9 +217,15 @@ export class LocalDurableTestRunner<ResultType>
         index,
       },
       this.waitManager,
-      this.operationIndex
+      this.operationIndex,
+      this.durableApi
     );
-    this.operationStorage.registerOperation(mockOperation);
+    this.operationStorage.registerOperation({
+      operation: mockOperation,
+      params: {
+        index,
+      },
+    });
     return mockOperation;
   }
 
@@ -205,9 +239,16 @@ export class LocalDurableTestRunner<ResultType>
         index,
       },
       this.waitManager,
-      this.operationIndex
+      this.operationIndex,
+      this.durableApi
     );
-    this.operationStorage.registerOperation(mockOperation);
+    this.operationStorage.registerOperation({
+      operation: mockOperation,
+      params: {
+        name,
+        index,
+      },
+    });
     return mockOperation;
   }
 
@@ -219,9 +260,15 @@ export class LocalDurableTestRunner<ResultType>
         id,
       },
       this.waitManager,
-      this.operationIndex
+      this.operationIndex,
+      this.durableApi
     );
-    this.operationStorage.registerOperation(mockOperation);
+    this.operationStorage.registerOperation({
+      operation: mockOperation,
+      params: {
+        id,
+      },
+    });
     return mockOperation;
   }
 
@@ -230,6 +277,7 @@ export class LocalDurableTestRunner<ResultType>
     this.operationStorage = new LocalOperationStorage(
       this.waitManager,
       this.operationIndex,
+      this.durableApi,
       this.waitManager.handleCheckpointReceived.bind(this.waitManager)
     );
   }

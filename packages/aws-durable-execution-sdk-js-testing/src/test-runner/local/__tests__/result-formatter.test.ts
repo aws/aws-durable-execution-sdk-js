@@ -4,7 +4,8 @@ import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { OperationStatus, OperationType, Event } from "@aws-sdk/client-lambda";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
-import { TestExecutionResult } from "../test-execution-state";
+import { TestExecutionResult } from "../../common/test-execution-state";
+import { DurableApiClient } from "../../common/create-durable-api-client";
 
 // Mock OperationStorage
 jest.mock("../operations/local-operation-storage");
@@ -14,30 +15,38 @@ describe("ResultFormatter", () => {
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
   let mockWaitManager: OperationWaitManager;
   let mockOperationIndex: IndexedOperations;
+  let mockApiClient: DurableApiClient;
 
   beforeEach(() => {
     mockOperationIndex = new IndexedOperations([]);
     mockOperationStorage = new LocalOperationStorage(
       new OperationWaitManager(),
       mockOperationIndex,
+      mockApiClient,
       jest.fn()
     ) as jest.Mocked<LocalOperationStorage>;
     resultFormatter = new ResultFormatter<{ success: boolean }>();
     mockWaitManager = new OperationWaitManager();
+    mockApiClient = {} as DurableApiClient;
   });
 
   describe("formatTestResult", () => {
     it("should format a successful lambda response with JSON data", () => {
       const mockOperations = [
-        new OperationWithData(mockWaitManager, mockOperationIndex, {
-          operation: {
-            Id: "op1",
-            Name: "operation1",
-            Type: OperationType.STEP,
-            Status: OperationStatus.SUCCEEDED,
-          },
-          events: [],
-        }),
+        new OperationWithData(
+          mockWaitManager,
+          mockOperationIndex,
+          mockApiClient,
+          {
+            operation: {
+              Id: "op1",
+              Name: "operation1",
+              Type: OperationType.STEP,
+              Status: OperationStatus.SUCCEEDED,
+            },
+            events: [],
+          }
+        ),
       ];
 
       mockOperationStorage.getOperations.mockReturnValue(mockOperations);
@@ -72,6 +81,7 @@ describe("ResultFormatter", () => {
       const succeededOp = new OperationWithData(
         mockWaitManager,
         mockOperationIndex,
+        mockApiClient,
         {
           operation: {
             Id: "op1",
@@ -86,6 +96,7 @@ describe("ResultFormatter", () => {
       const failedOp = new OperationWithData(
         mockWaitManager,
         mockOperationIndex,
+        mockApiClient,
         {
           operation: {
             Id: "op2",
@@ -246,6 +257,7 @@ describe("ResultFormatter", () => {
           new OperationWithData(
             mockWaitManager,
             mockOperationIndex,
+            mockApiClient,
             checkpointOperation
           )
       );
