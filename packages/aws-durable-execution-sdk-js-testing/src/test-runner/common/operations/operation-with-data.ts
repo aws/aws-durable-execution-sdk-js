@@ -74,21 +74,11 @@ export class OperationWithData<OperationResultValue = unknown>
     if (
       doesStatusMatch(this.checkpointOperationData?.operation.Status, status)
     ) {
-      return new OperationWithData(
-        this.waitManager,
-        this.operationIndex,
-        this.apiClient,
-        this.checkpointOperationData
-      );
+      return this;
     }
 
     await this.waitManager.waitForOperation(this, status);
-    return new OperationWithData(
-      this.waitManager,
-      this.operationIndex,
-      this.apiClient,
-      this.checkpointOperationData
-    );
+    return this;
   }
 
   getContextDetails():

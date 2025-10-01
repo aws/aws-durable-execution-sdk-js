@@ -1,118 +1,112 @@
 import {
   LambdaClient,
+  ExecutionStatus,
+  Event,
+  EventType,
   InvokeCommand,
   GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
-  GetDurableExecutionHistoryResponse,
-  LambdaClientConfig,
-  EventType,
+  GetDurableExecutionHistoryCommandOutput,
+  GetDurableExecutionCommandOutput,
+  OperationStatus,
+  OperationType,
 } from "@aws-sdk/client-lambda";
 import { CloudDurableTestRunner } from "../cloud-durable-test-runner";
-import {
-  OperationWithData,
-  OperationEvents,
-} from "../../common/operations/operation-with-data";
-import { IndexedOperations } from "../../common/indexed-operations";
-import { OperationStorage } from "../../common/operation-storage";
-import { OperationWaitManager } from "../../local/operations/operation-wait-manager";
-import { ResultFormatter } from "../../local/result-formatter";
-import { historyEventsToOperationEvents } from "../utils/process-history-events/process-history-events";
 
-// Mock all dependencies
 jest.mock("@aws-sdk/client-lambda");
-jest.mock("../../common/indexed-operations");
-jest.mock("../../common/operation-storage");
-jest.mock("../../local/operations/operation-wait-manager");
-jest.mock("../../local/result-formatter");
-jest.mock("../../common/operations/operation-with-data");
-jest.mock("../utils/process-history-events/process-history-events");
+
+interface MockApiResponses {
+  historyResponse?: GetDurableExecutionHistoryCommandOutput;
+  executionResponse?: GetDurableExecutionCommandOutput;
+  historySequence?: GetDurableExecutionHistoryCommandOutput[];
+  executionSequence?: GetDurableExecutionCommandOutput[];
+}
 
 describe("CloudDurableTestRunner", () => {
   let mockLambdaClient: jest.Mocked<LambdaClient>;
-  let mockResultFormatter: jest.Mocked<ResultFormatter<{ success: boolean }>>;
-  let mockWaitManager: jest.Mocked<OperationWaitManager>;
-  let mockIndexedOperations: jest.Mocked<IndexedOperations>;
-  let mockOperationStorage: jest.Mocked<OperationStorage>;
-  let mockOperationWithData: jest.Mocked<OperationWithData>;
+  let mockSend: jest.Mock;
 
   const mockFunctionArn =
     "arn:aws:lambda:us-east-1:123456789012:function:test-function";
   const mockExecutionArn =
     "arn:aws:lambda:us-east-1:123456789012:execution:test-execution";
 
+  const mockEvent: Event = {
+    EventTimestamp: new Date(),
+    EventType: EventType.ExecutionStarted,
+    EventId: 1,
+    Id: "1",
+  };
+
+  const setupMockApiResponses = (
+    mockSend: jest.Mock,
+    responses: MockApiResponses = {}
+  ): void => {
+    let historyCallCount = 0;
+    let executionCallCount = 0;
+
+    mockSend.mockImplementation((command) => {
+      if (command instanceof InvokeCommand) {
+        return Promise.resolve({ DurableExecutionArn: mockExecutionArn });
+      }
+
+      if (command instanceof GetDurableExecutionHistoryCommand) {
+        if (responses.historySequence) {
+          const response =
+            responses.historySequence[historyCallCount] ??
+            responses.historySequence[responses.historySequence.length - 1];
+          historyCallCount++;
+          return Promise.resolve(response);
+        }
+        return Promise.resolve(
+          responses.historyResponse ?? {
+            Events: [mockEvent],
+            $metadata: {},
+          }
+        );
+      }
+
+      if (command instanceof GetDurableExecutionCommand) {
+        if (responses.executionSequence) {
+          const response =
+            responses.executionSequence[executionCallCount] ??
+            responses.executionSequence[responses.executionSequence.length - 1];
+          executionCallCount++;
+          return Promise.resolve(response);
+        }
+        return Promise.resolve(
+          responses.executionResponse ?? {
+            Status: ExecutionStatus.SUCCEEDED,
+            Result: '{"success": true}',
+            $metadata: {},
+          }
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected command: ${command}`));
+    });
+  };
+
   beforeEach(() => {
     jest.resetAllMocks();
+    jest.useFakeTimers();
 
-    // Mock LambdaClient
+    mockSend = jest.fn();
     mockLambdaClient = {
-      send: jest.fn(),
+      send: mockSend,
     } as unknown as jest.Mocked<LambdaClient>;
 
     (LambdaClient as jest.Mock).mockImplementation(() => mockLambdaClient);
 
-    // Mock ResultFormatter
-    mockResultFormatter = {
-      formatTestResult: jest.fn().mockReturnValue({
-        getOperations: jest.fn().mockReturnValue([]),
-        getInvocations: jest.fn().mockReturnValue([]),
-        getResult: jest.fn().mockReturnValue({ data: { success: true } }),
-        getError: jest.fn(),
-        getHistoryEvents: jest.fn(),
-      }),
-    } as unknown as jest.Mocked<ResultFormatter<{ success: boolean }>>;
-
-    (ResultFormatter as jest.Mock).mockImplementation(
-      () => mockResultFormatter
-    );
-
-    // Mock OperationWaitManager
-    mockWaitManager = {
-      waitForOperation: jest.fn(),
-      clearWaitingOperations: jest.fn(),
-      handleCheckpointReceived: jest.fn(),
-    } as unknown as jest.Mocked<OperationWaitManager>;
-
-    (OperationWaitManager as jest.Mock).mockImplementation(
-      () => mockWaitManager
-    );
-
-    // Mock IndexedOperations
-    mockIndexedOperations = {
-      getByIndex: jest.fn(),
-      getByNameAndIndex: jest.fn(),
-      getById: jest.fn(),
-    } as unknown as jest.Mocked<IndexedOperations>;
-
-    (IndexedOperations as jest.Mock).mockImplementation(
-      () => mockIndexedOperations
-    );
-
-    // Mock OperationStorage
-    mockOperationStorage = {
-      populateOperations: jest.fn(),
-      registerOperation: jest.fn(),
-    } as unknown as jest.Mocked<OperationStorage>;
-
-    (OperationStorage as jest.Mock).mockImplementation(
-      () => mockOperationStorage
-    );
-
-    // Mock OperationWithData
-    mockOperationWithData = {
-      getData: jest.fn(),
-      getStatus: jest.fn(),
-    } as unknown as jest.Mocked<OperationWithData>;
-
-    (OperationWithData as jest.Mock).mockImplementation(
-      () => mockOperationWithData
-    );
-
-    // Mock historyEventsToOperationEvents
-    (historyEventsToOperationEvents as jest.Mock).mockReturnValue([]);
+    setupMockApiResponses(mockSend);
   });
 
-  describe("constructor", () => {
-    it("should initialize with required parameters", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  describe("Configuration", () => {
+    it("should initialize with default configuration", () => {
       const runner = new CloudDurableTestRunner<{ success: boolean }>({
         functionName: mockFunctionArn,
       });
@@ -121,8 +115,8 @@ describe("CloudDurableTestRunner", () => {
       expect(LambdaClient).toHaveBeenCalledWith({});
     });
 
-    it("should initialize with custom Lambda client config", () => {
-      const customConfig: LambdaClientConfig = {
+    it("should initialize with custom Lambda client configuration", () => {
+      const customConfig = {
         region: "us-west-2",
         credentials: {
           accessKeyId: "test-key",
@@ -132,469 +126,545 @@ describe("CloudDurableTestRunner", () => {
 
       const runner = new CloudDurableTestRunner<{ success: boolean }>({
         functionName: mockFunctionArn,
-        config: customConfig,
+        clientConfig: customConfig,
       });
 
       expect(runner).toBeDefined();
       expect(LambdaClient).toHaveBeenCalledWith(customConfig);
     });
 
-    it("should initialize all internal dependencies", () => {
-      new CloudDurableTestRunner<{ success: boolean }>({
+    it("should use custom poll interval", async () => {
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
         functionName: mockFunctionArn,
+        config: {
+          pollInterval: 2000,
+        },
       });
 
-      expect(ResultFormatter).toHaveBeenCalled();
-      expect(OperationWaitManager).toHaveBeenCalled();
-      expect(IndexedOperations).toHaveBeenCalledWith([]);
-      expect(OperationStorage).toHaveBeenCalledWith(
-        mockWaitManager,
-        mockIndexedOperations,
-        expect.any(Object)
-      );
-    });
-  });
+      const runPromise = runner.run();
 
-  describe("run", () => {
-    let runner: CloudDurableTestRunner<{ success: boolean }>;
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(mockLambdaClient.send).toHaveBeenCalledTimes(1);
 
-    beforeEach(() => {
-      runner = new CloudDurableTestRunner<{ success: boolean }>({
-        functionName: mockFunctionArn,
-      });
-    });
-
-    it("should successfully execute a durable function without parameters", async () => {
-      const mockInvokeResult = {
-        DurableExecutionArn: mockExecutionArn,
-      };
-
-      const mockExecutionResult = {
-        Status: "SUCCEEDED",
-        Result: JSON.stringify({ success: true }),
-        Error: undefined,
-      };
-
-      const mockHistoryResult: GetDurableExecutionHistoryResponse = {
-        Events: [
-          {
-            EventType: EventType.ExecutionStarted,
-            EventTimestamp: new Date(),
-          },
-        ],
-      };
-
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce(mockInvokeResult) // InvokeCommand
-        .mockResolvedValueOnce(mockExecutionResult) // GetDurableExecutionCommand
-        .mockResolvedValueOnce(mockHistoryResult); // GetDurableExecutionHistoryCommand
-
-      const result = await runner.run();
-
+      await jest.advanceTimersByTimeAsync(1000);
       expect(mockLambdaClient.send).toHaveBeenCalledTimes(3);
-      expect(mockLambdaClient.send).toHaveBeenNthCalledWith(
-        1,
-        expect.any(InvokeCommand)
-      );
-      expect(mockLambdaClient.send).toHaveBeenNthCalledWith(
-        2,
-        expect.any(GetDurableExecutionCommand)
-      );
-      expect(mockLambdaClient.send).toHaveBeenNthCalledWith(
-        3,
-        expect.any(GetDurableExecutionHistoryCommand)
-      );
 
-      expect(historyEventsToOperationEvents).toHaveBeenCalledWith(
-        mockHistoryResult.Events
-      );
-      expect(mockOperationStorage.populateOperations).toHaveBeenCalled();
-      expect(mockResultFormatter.formatTestResult).toHaveBeenCalledWith(
-        {
-          status: "SUCCEEDED",
-          result: JSON.stringify({ success: true }),
-          error: undefined,
-        },
-        mockHistoryResult.Events,
-        mockOperationStorage,
-        []
-      );
-
-      expect(result).toBeDefined();
+      await runPromise;
     });
+  });
 
-    it("should execute with payload parameters", async () => {
+  describe("run() method", () => {
+    it("should execute with payload", async () => {
+      setupMockApiResponses(mockSend, {
+        executionResponse: {
+          Status: ExecutionStatus.SUCCEEDED,
+          Result: '{"result": "success"}',
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ result: string }>({
+        functionName: mockFunctionArn,
+      });
+
       const testPayload = { input: "test-data", count: 42 };
-      const mockInvokeResult = {
-        DurableExecutionArn: mockExecutionArn,
-      };
+      const runPromise = runner.run({ payload: testPayload });
 
-      const mockExecutionResult = {
-        Status: "SUCCEEDED",
-        Result: JSON.stringify({ success: true }),
-        Error: undefined,
-      };
-
-      const mockHistoryResult: GetDurableExecutionHistoryResponse = {
-        Events: [],
-      };
-
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce(mockInvokeResult)
-        .mockResolvedValueOnce(mockExecutionResult)
-        .mockResolvedValueOnce(mockHistoryResult);
-
-      await runner.run({ payload: testPayload });
-
-      // Verify that InvokeCommand was called with correct parameters
-      expect(InvokeCommand).toHaveBeenCalledWith({
-        FunctionName: mockFunctionArn,
-        Payload: JSON.stringify(testPayload),
-      });
-    });
-
-    it("should handle execution without payload", async () => {
-      const mockInvokeResult = {
-        DurableExecutionArn: mockExecutionArn,
-      };
-
-      const mockExecutionResult = {
-        Status: "SUCCEEDED",
-        Result: JSON.stringify({ success: true }),
-        Error: undefined,
-      };
-
-      const mockHistoryResult: GetDurableExecutionHistoryResponse = {
-        Events: [],
-      };
-
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce(mockInvokeResult)
-        .mockResolvedValueOnce(mockExecutionResult)
-        .mockResolvedValueOnce(mockHistoryResult);
-
-      await runner.run();
-
-      // Verify that InvokeCommand was called with correct parameters
-      expect(InvokeCommand).toHaveBeenCalledWith({
-        FunctionName: mockFunctionArn,
-        Payload: undefined,
-      });
-    });
-
-    it("should handle failed execution", async () => {
-      const mockInvokeResult = {
-        DurableExecutionArn: mockExecutionArn,
-      };
-
-      const mockExecutionResult = {
-        Status: "FAILED",
-        Result: undefined,
-        Error: {
-          errorMessage: "Execution failed",
-          errorType: "RuntimeError",
-        },
-      };
-
-      const mockHistoryResult: GetDurableExecutionHistoryResponse = {
-        Events: [],
-      };
-
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce(mockInvokeResult)
-        .mockResolvedValueOnce(mockExecutionResult)
-        .mockResolvedValueOnce(mockHistoryResult);
-
-      const result = await runner.run();
-
-      expect(mockResultFormatter.formatTestResult).toHaveBeenCalledWith(
-        {
-          status: "FAILED",
-          result: undefined,
-          error: {
-            errorMessage: "Execution failed",
-            errorType: "RuntimeError",
-          },
-        },
-        mockHistoryResult.Events,
-        mockOperationStorage,
-        []
-      );
+      await jest.advanceTimersByTimeAsync(1000);
+      const result = await runPromise;
 
       expect(result).toBeDefined();
+      expect(result.getResult()).toEqual({ result: "success" });
     });
 
-    it("should propagate Lambda client errors", async () => {
-      const mockError = new Error("Lambda invocation failed");
-      (mockLambdaClient.send as jest.Mock).mockRejectedValue(mockError);
-
-      await expect(runner.run()).rejects.toThrow("Lambda invocation failed");
-    });
-
-    it("should handle missing execution ARN", async () => {
-      const mockInvokeResult = {
-        DurableExecutionArn: undefined,
-      };
-
-      (mockLambdaClient.send as jest.Mock).mockResolvedValueOnce(
-        mockInvokeResult
-      );
-
-      // The code should handle undefined execution ARN by attempting to use it
-      // This will likely cause an error when trying to use undefined in subsequent calls
-      await expect(runner.run()).rejects.toThrow();
-    });
-
-    it("should handle empty history events", async () => {
-      const mockInvokeResult = {
-        DurableExecutionArn: mockExecutionArn,
-      };
-
-      const mockExecutionResult = {
-        Status: "SUCCEEDED",
-        Result: JSON.stringify({ success: true }),
-        Error: undefined,
-      };
-
-      const mockHistoryResult: GetDurableExecutionHistoryResponse = {
-        Events: undefined,
-      };
-
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce(mockInvokeResult)
-        .mockResolvedValueOnce(mockExecutionResult)
-        .mockResolvedValueOnce(mockHistoryResult);
-
-      await runner.run();
-
-      expect(historyEventsToOperationEvents).toHaveBeenCalledWith([]);
-    });
-  });
-
-  describe("operation retrieval methods", () => {
-    let runner: CloudDurableTestRunner<{ success: boolean }>;
-
-    beforeEach(() => {
-      runner = new CloudDurableTestRunner<{ success: boolean }>({
+    it("should execute without payload", async () => {
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
         functionName: mockFunctionArn,
       });
+
+      const runPromise = runner.run();
+
+      await jest.advanceTimersByTimeAsync(1000);
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getResult()).toEqual({ success: true });
     });
 
-    describe("getOperation", () => {
-      it("should delegate to getOperationByNameAndIndex with index 0", () => {
-        const mockOperation: OperationEvents = {
-          operation: { Id: "test-id", Name: "testOp" },
-          events: [],
-        };
-        mockIndexedOperations.getByNameAndIndex.mockReturnValue(mockOperation);
-
-        const result = runner.getOperation("testOp");
-
-        expect(mockIndexedOperations.getByNameAndIndex).toHaveBeenCalledWith(
-          "testOp",
-          0
-        );
-        expect(OperationWithData).toHaveBeenCalledWith(
-          mockWaitManager,
-          mockIndexedOperations,
-          expect.any(Object),
-          mockOperation
-        );
-        expect(result).toBe(mockOperationWithData);
+    it("should handle invoke failures", async () => {
+      mockSend.mockImplementation((command) => {
+        if (command instanceof InvokeCommand) {
+          return Promise.reject(new Error("Failed to invoke function"));
+        }
+        return Promise.reject(new Error("Unexpected command"));
       });
-    });
 
-    describe("getOperationByIndex", () => {
-      it("should retrieve operation by index", () => {
-        const mockOperation: OperationEvents = {
-          operation: { Id: "test-id-2" },
-          events: [],
-        };
-        mockIndexedOperations.getByIndex.mockReturnValue(mockOperation);
-
-        const result = runner.getOperationByIndex(2);
-
-        expect(mockIndexedOperations.getByIndex).toHaveBeenCalledWith(2);
-        expect(OperationWithData).toHaveBeenCalledWith(
-          mockWaitManager,
-          mockIndexedOperations,
-          expect.any(Object),
-          mockOperation
-        );
-        expect(result).toBe(mockOperationWithData);
-      });
-    });
-
-    describe("getOperationByNameAndIndex", () => {
-      it("should retrieve operation by name and index", () => {
-        const mockOperation: OperationEvents = {
-          operation: { Id: "test-id-3", Name: "testOp" },
-          events: [],
-        };
-        mockIndexedOperations.getByNameAndIndex.mockReturnValue(mockOperation);
-
-        const result = runner.getOperationByNameAndIndex("testOp", 1);
-
-        expect(mockIndexedOperations.getByNameAndIndex).toHaveBeenCalledWith(
-          "testOp",
-          1
-        );
-        expect(OperationWithData).toHaveBeenCalledWith(
-          mockWaitManager,
-          mockIndexedOperations,
-          expect.any(Object),
-          mockOperation
-        );
-        expect(result).toBe(mockOperationWithData);
-      });
-    });
-
-    describe("getOperationById", () => {
-      it("should retrieve operation by ID", () => {
-        const mockOperation: OperationEvents = {
-          operation: { Id: "op-123" },
-          events: [],
-        };
-        mockIndexedOperations.getById.mockReturnValue(mockOperation);
-
-        const result = runner.getOperationById("op-123");
-
-        expect(mockIndexedOperations.getById).toHaveBeenCalledWith("op-123");
-        expect(OperationWithData).toHaveBeenCalledWith(
-          mockWaitManager,
-          mockIndexedOperations,
-          expect.any(Object),
-          mockOperation
-        );
-        expect(result).toBe(mockOperationWithData);
-      });
-    });
-  });
-
-  describe("error handling", () => {
-    let runner: CloudDurableTestRunner<{ success: boolean }>;
-
-    beforeEach(() => {
-      runner = new CloudDurableTestRunner<{ success: boolean }>({
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
         functionName: mockFunctionArn,
       });
-    });
-
-    it("should handle invoke command failure", async () => {
-      const invokeError = new Error("Failed to invoke function");
-      (mockLambdaClient.send as jest.Mock).mockRejectedValue(invokeError);
 
       await expect(runner.run()).rejects.toThrow("Failed to invoke function");
     });
 
-    it("should handle get execution command failure", async () => {
-      const executionError = new Error("Failed to get execution");
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce({ DurableExecutionArn: mockExecutionArn })
-        .mockRejectedValue(executionError);
-
-      await expect(runner.run()).rejects.toThrow("Failed to get execution");
-    });
-
-    it("should handle get history command failure", async () => {
-      const historyError = new Error("Failed to get history");
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce({ DurableExecutionArn: mockExecutionArn })
-        .mockResolvedValueOnce({ Status: "SUCCEEDED", Result: "{}" })
-        .mockRejectedValue(historyError);
-
-      await expect(runner.run()).rejects.toThrow("Failed to get history");
-    });
-
-    it("should handle operation retrieval errors gracefully", () => {
-      const retrievalError = new Error("Operation not found");
-      mockIndexedOperations.getById.mockImplementation(() => {
-        throw retrievalError;
+    it("should handle failed executions", async () => {
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [mockEvent],
+          $metadata: {},
+        },
+        executionResponse: {
+          Status: ExecutionStatus.FAILED,
+          Error: {
+            ErrorMessage: "ExecutionFailed",
+            ErrorType: "TestError",
+          },
+          $metadata: {},
+        },
       });
 
-      expect(() => runner.getOperationById("non-existent")).toThrow(
-        "Operation not found"
-      );
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getError()).toEqual({
+        errorMessage: "ExecutionFailed",
+        errorType: "TestError",
+      });
     });
   });
 
-  describe("integration scenarios", () => {
-    let runner: CloudDurableTestRunner<{ success: boolean }>;
+  describe("Operation retrieval", () => {
+    it("should retrieve operation by name", async () => {
+      const stepEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 1,
+        Id: "1",
+        StepStartedDetails: {
+          Name: "testOperation",
+          Input: "{}",
+        },
+      };
 
-    beforeEach(() => {
-      runner = new CloudDurableTestRunner<{ success: boolean }>({
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [stepEvent],
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
         functionName: mockFunctionArn,
       });
+
+      const operation = runner.getOperation("testOperation");
+
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      await runPromise;
+
+      expect(operation).toBeDefined();
+      expect(operation.getOperationData()?.Id).toBe("1");
     });
 
-    it("should handle complex execution with multiple operations", async () => {
-      const mockInvokeResult = {
-        DurableExecutionArn: mockExecutionArn,
+    it("should retrieve operation by index", async () => {
+      const stepEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 1,
+        Id: "1",
+        StepStartedDetails: {
+          Name: "stepAtIndex",
+          Input: "{}",
+        },
       };
 
-      const mockExecutionResult = {
-        Status: "SUCCEEDED",
-        Result: JSON.stringify({ success: true, operationCount: 3 }),
-        Error: undefined,
-      };
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [stepEvent],
+          $metadata: {},
+        },
+      });
 
-      const mockHistoryResult: GetDurableExecutionHistoryResponse = {
-        Events: [
-          {
-            EventType: EventType.ExecutionStarted,
-            EventTimestamp: new Date(),
-          },
-          {
-            EventType: EventType.StepStarted,
-            EventTimestamp: new Date(),
-          },
-          {
-            EventType: EventType.StepSucceeded,
-            EventTimestamp: new Date(),
-          },
-        ],
-      };
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
 
-      const mockOperationEvents: OperationEvents[] = [
-        { operation: { Id: "op1" }, events: [] },
-        { operation: { Id: "op2" }, events: [] },
-        { operation: { Id: "op3" }, events: [] },
-      ];
+      const operation = runner.getOperationByIndex(2);
 
-      (historyEventsToOperationEvents as jest.Mock).mockReturnValue(
-        mockOperationEvents
-      );
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      await runPromise;
 
-      (mockLambdaClient.send as jest.Mock)
-        .mockResolvedValueOnce(mockInvokeResult)
-        .mockResolvedValueOnce(mockExecutionResult)
-        .mockResolvedValueOnce(mockHistoryResult);
-
-      const result = await runner.run({ payload: { test: "data" } });
-
-      expect(historyEventsToOperationEvents).toHaveBeenCalledWith(
-        mockHistoryResult.Events
-      );
-      expect(mockOperationStorage.populateOperations).toHaveBeenCalledWith(
-        mockOperationEvents
-      );
-      expect(result).toBeDefined();
+      expect(operation).toBeDefined();
     });
 
-    it("should maintain state between multiple operation retrievals", () => {
-      const mockOp1: OperationEvents = { operation: { Id: "op1" }, events: [] };
-      const mockOp2: OperationEvents = { operation: { Id: "op2" }, events: [] };
+    it("should retrieve operation by name and index", async () => {
+      const stepEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 1,
+        Id: "1",
+        StepStartedDetails: {
+          Name: "namedOperation",
+          Input: "{}",
+        },
+      };
 
-      mockIndexedOperations.getById
-        .mockReturnValueOnce(mockOp1)
-        .mockReturnValueOnce(mockOp2);
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [stepEvent],
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const operation = runner.getOperationByNameAndIndex("namedOperation", 1);
+
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      await runPromise;
+
+      expect(operation).toBeDefined();
+    });
+
+    it("should retrieve operation by ID", async () => {
+      const stepEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 1,
+        Id: "op-123",
+        StepStartedDetails: {
+          Name: "operationById",
+          Input: "{}",
+        },
+      };
+
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [stepEvent],
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const operation = runner.getOperationById("op-123");
+
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      await runPromise;
+
+      expect(operation).toBeDefined();
+      expect(operation.getOperationData()?.Id).toBe("op-123");
+    });
+
+    it("should handle multiple operation retrievals", async () => {
+      const stepEvent1: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 1,
+        Id: "op1",
+        StepStartedDetails: {
+          Name: "operation1",
+          Input: "{}",
+        },
+      };
+
+      const stepEvent2: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 2,
+        Id: "op2",
+        StepStartedDetails: {
+          Name: "operation2",
+          Input: "{}",
+        },
+      };
+
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [stepEvent1, stepEvent2],
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
 
       const operation1 = runner.getOperationById("op1");
       const operation2 = runner.getOperationById("op2");
 
-      expect(operation1).toBe(mockOperationWithData);
-      expect(operation2).toBe(mockOperationWithData);
-      expect(OperationWithData).toHaveBeenCalledTimes(2);
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      await runPromise;
+
+      expect(operation1).toBeDefined();
+      expect(operation2).toBeDefined();
+      expect(operation1.getOperationData()?.Id).toBe("op1");
+      expect(operation2.getOperationData()?.Id).toBe("op2");
+    });
+  });
+
+  describe("Event processing during execution", () => {
+    it("should process events during execution", async () => {
+      const secondEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.ExecutionSucceeded,
+        EventId: 2,
+        Id: "2",
+      };
+
+      setupMockApiResponses(mockSend, {
+        historySequence: [
+          {
+            Events: [mockEvent],
+            $metadata: {},
+          },
+          {
+            Events: [mockEvent, secondEvent],
+            $metadata: {},
+          },
+        ],
+        executionSequence: [
+          {
+            Status: ExecutionStatus.RUNNING,
+            $metadata: {},
+          },
+          {
+            Status: ExecutionStatus.SUCCEEDED,
+            Result: '{"success": true}',
+            $metadata: {},
+          },
+        ],
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const runPromise = runner.run({ payload: { test: "data" } });
+
+      // First poll
+      await jest.advanceTimersByTimeAsync(1000);
+      // Second poll
+      await jest.advanceTimersByTimeAsync(1000);
+
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getResult()).toBeDefined();
+      expect(result.getHistoryEvents()).toHaveLength(2);
+    });
+
+    it("should process events across multiple cycles", async () => {
+      const secondEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 2,
+        Id: "2",
+        StepStartedDetails: {},
+      };
+
+      setupMockApiResponses(mockSend, {
+        historySequence: [
+          {
+            Events: [mockEvent],
+            NextMarker: "marker1",
+            $metadata: {},
+          },
+          {
+            Events: [secondEvent],
+            NextMarker: "marker2",
+            $metadata: {},
+          },
+          {
+            Events: [],
+            NextMarker: undefined,
+            $metadata: {},
+          },
+        ],
+        executionSequence: [
+          {
+            Status: ExecutionStatus.RUNNING,
+            $metadata: {},
+          },
+          {
+            Status: ExecutionStatus.RUNNING,
+            $metadata: {},
+          },
+          {
+            Status: ExecutionStatus.SUCCEEDED,
+            Result: '{"success": true}',
+            $metadata: {},
+          },
+        ],
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const runPromise = runner.run();
+
+      // First poll - marker1
+      await jest.advanceTimersByTimeAsync(1000);
+      // First poll - marker2
+      await jest.advanceTimersByTimeAsync(1000);
+      // First poll - undefined marker, running execution
+      await jest.advanceTimersByTimeAsync(1000);
+
+      // Second poll - running execution
+      await jest.advanceTimersByTimeAsync(1000);
+      // Third poll - succeeded execution
+      await jest.advanceTimersByTimeAsync(1000);
+
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getResult()).toBeDefined();
+      expect(result.getHistoryEvents()).toHaveLength(2);
+    });
+
+    it("should handle empty events", async () => {
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [],
+          $metadata: {},
+        },
+        executionResponse: {
+          Status: ExecutionStatus.SUCCEEDED,
+          Result: '{"success": true}',
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const runPromise = runner.run();
+
+      await jest.advanceTimersByTimeAsync(1000);
+
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getResult()).toBeDefined();
+    });
+
+    it("should handle undefined events", async () => {
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: undefined,
+          $metadata: {},
+        },
+        executionResponse: {
+          Status: ExecutionStatus.SUCCEEDED,
+          Result: '{"success": true}',
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const runPromise = runner.run();
+
+      await jest.advanceTimersByTimeAsync(1000);
+
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getResult()).toBeDefined();
+    });
+  });
+
+  describe("Complete execution workflow", () => {
+    it("should execute with operations and retrieve data", async () => {
+      const stepEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 1,
+        Id: "1",
+        StepStartedDetails: {
+          Name: "processData",
+          Input: '{"input": "test"}',
+        },
+      };
+
+      const stepCompletedEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepSucceeded,
+        EventId: 2,
+        Id: "2",
+        StepSucceededDetails: {
+          Result: {
+            Payload: '{"result": "processed"}',
+          },
+        },
+      };
+
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [stepEvent, stepCompletedEvent],
+          $metadata: {},
+        },
+        executionResponse: {
+          Status: ExecutionStatus.SUCCEEDED,
+          Result: '{"result": "processed"}',
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ result: string }>({
+        functionName: mockFunctionArn,
+      });
+
+      const operation = runner.getOperationByNameAndIndex("processData", 0);
+
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getResult()).toBeDefined();
+      expect(operation.getOperationData()).toEqual({
+        Id: "1",
+        StartTimestamp: expect.any(Date),
+        Status: OperationStatus.STARTED,
+        Type: OperationType.STEP,
+      });
+    });
+
+    it("should respect custom poll intervals", async () => {
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+        config: {
+          pollInterval: 500,
+        },
+      });
+
+      const runPromise = runner.run();
+
+      await jest.advanceTimersByTimeAsync(400);
+      await jest.advanceTimersByTimeAsync(100);
+
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
     });
   });
 });

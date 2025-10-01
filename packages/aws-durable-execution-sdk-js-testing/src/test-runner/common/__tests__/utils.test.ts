@@ -1,4 +1,5 @@
-import { tryJsonParse } from "../utils";
+import { ExecutionStatus } from "@aws-sdk/client-lambda";
+import { tryJsonParse, isClosedExecution } from "../utils";
 
 describe("tryJsonParse", () => {
   describe("valid JSON parsing", () => {
@@ -274,5 +275,19 @@ describe("tryJsonParse", () => {
         expect(result).toBe(pattern);
       });
     });
+  });
+});
+
+describe("isClosedExecution", () => {
+  it.each([
+    [ExecutionStatus.RUNNING, false],
+    [ExecutionStatus.FAILED, true],
+    [ExecutionStatus.STOPPED, true],
+    [ExecutionStatus.SUCCEEDED, true],
+    [ExecutionStatus.TIMED_OUT, true],
+    [undefined, true],
+  ])("should return %s when status is %p", (status, expected) => {
+    const result = isClosedExecution(status);
+    expect(result).toBe(expected);
   });
 });

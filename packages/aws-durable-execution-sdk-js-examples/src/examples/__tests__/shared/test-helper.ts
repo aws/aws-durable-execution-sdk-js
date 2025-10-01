@@ -4,6 +4,7 @@ import {
   DurableTestRunner,
   DurableOperation,
   LocalTestRunnerHandlerFunction,
+  InvocationType,
 } from "@aws/durable-execution-sdk-js-testing";
 
 export interface TestDefinition<ResultType> {
@@ -13,6 +14,7 @@ export interface TestDefinition<ResultType> {
   tests: (
     runner: DurableTestRunner<DurableOperation<unknown>, ResultType>
   ) => void;
+  invocationType?: InvocationType;
 }
 
 /**
@@ -36,9 +38,18 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
 
     const runner = new CloudDurableTestRunner<ResultType>({
       functionName,
-      config: {
+      clientConfig: {
         endpoint: process.env.LAMBDA_ENDPOINT,
       },
+      config: {
+        invocationType: testDef.invocationType,
+      },
+    });
+
+    beforeEach(() => {
+      // TODO: fix the testing library to allow the same runner to run multiple times on the same handler
+      // instead of needing to reset the operation storage
+      runner.reset();
     });
 
     describe(`${testDef.name} (cloud)`, () => {
