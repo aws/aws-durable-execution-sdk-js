@@ -17,6 +17,10 @@ import {
 import { OperationWaitManager } from "../local/operations/operation-wait-manager";
 import { ResultFormatter } from "../local/result-formatter";
 import { historyEventsToOperationEvents } from "./utils/process-history-events/process-history-events";
+import {
+  createDurableApiClient,
+  DurableApiClient,
+} from "../common/create-durable-api-client";
 
 export interface CloudDurableTestRunnerParameters {
   functionName: string;
@@ -31,10 +35,8 @@ export class CloudDurableTestRunner<ResultType>
   private readonly formatter = new ResultFormatter<ResultType>();
   private readonly waitManager = new OperationWaitManager();
   private readonly indexedOperations = new IndexedOperations([]);
-  private readonly operationStorage = new OperationStorage(
-    this.waitManager,
-    this.indexedOperations
-  );
+  private readonly operationStorage: OperationStorage;
+  private readonly durableApiClient: DurableApiClient;
   private history: GetDurableExecutionHistoryResponse | undefined;
 
   constructor({
@@ -42,6 +44,12 @@ export class CloudDurableTestRunner<ResultType>
     config,
   }: CloudDurableTestRunnerParameters) {
     this.client = new LambdaClient(config ?? {});
+    this.durableApiClient = createDurableApiClient(() => this.client);
+    this.operationStorage = new OperationStorage(
+      this.waitManager,
+      this.indexedOperations,
+      this.durableApiClient
+    );
     this.functionArn = functionArn;
   }
 
@@ -99,6 +107,7 @@ export class CloudDurableTestRunner<ResultType>
     return new OperationWithData(
       this.waitManager,
       this.indexedOperations,
+      this.durableApiClient,
       this.indexedOperations.getByIndex(index)
     );
   }
@@ -109,6 +118,7 @@ export class CloudDurableTestRunner<ResultType>
     return new OperationWithData(
       this.waitManager,
       this.indexedOperations,
+      this.durableApiClient,
       this.indexedOperations.getByNameAndIndex(name, index)
     );
   }
@@ -116,6 +126,7 @@ export class CloudDurableTestRunner<ResultType>
     return new OperationWithData(
       this.waitManager,
       this.indexedOperations,
+      this.durableApiClient,
       this.indexedOperations.getById(id)
     );
   }

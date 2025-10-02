@@ -6,20 +6,21 @@ import { DurableOperation } from "../../durable-test-runner";
 import { OperationWaitManager } from "./operation-wait-manager";
 import { OperationStorage } from "../../common/operation-storage";
 import { Event } from "@aws-sdk/client-lambda";
+import { DurableApiClient } from "../../common/create-durable-api-client";
 
-export class LocalOperationStorage extends OperationStorage {
-  private readonly mockOperations: MockOperation[] = [];
+export class LocalOperationStorage extends OperationStorage<MockOperation> {
   private readonly events: Event[] = [];
 
   constructor(
     waitManager: OperationWaitManager,
     indexedOperations: IndexedOperations,
+    apiClient: DurableApiClient,
     private readonly onCheckpointReceived: (
       checkpointOperationsReceived: OperationEvents[],
       trackedDurableOperations: DurableOperation<unknown>[]
     ) => void
   ) {
-    super(waitManager, indexedOperations);
+    super(waitManager, indexedOperations, apiClient);
     this.events.push(
       ...indexedOperations.getOperations().flatMap((op) => op.events)
     );
@@ -29,38 +30,8 @@ export class LocalOperationStorage extends OperationStorage {
     return this.events;
   }
 
-  private populateMockOperation(mockOperation: MockOperation): boolean {
-    // Strategy pattern for population
-    const strategies = [
-      () =>
-        mockOperation._mockId !== undefined
-          ? this.indexedOperations.getById(mockOperation._mockId)
-          : null,
-      () =>
-        mockOperation._mockName !== undefined
-          ? this.indexedOperations.getByNameAndIndex(
-              mockOperation._mockName,
-              mockOperation._mockIndex
-            )
-          : null,
-      () =>
-        mockOperation._mockIndex !== undefined
-          ? this.indexedOperations.getByIndex(mockOperation._mockIndex)
-          : null,
-    ];
-
-    for (const strategy of strategies) {
-      const data = strategy();
-      if (data) {
-        mockOperation.populateData(data);
-        return true; // Indicates operation was populated
-      }
-    }
-    return false; // No data found
-  }
-
   registerMocks(executionId: ExecutionId) {
-    for (const mockOperation of this.mockOperations) {
+    for (const mockOperation of this.getTrackedOperations()) {
       mockOperation.registerMocks(executionId);
     }
   }
@@ -70,32 +41,20 @@ export class LocalOperationStorage extends OperationStorage {
    * @param newCheckpointOperations
    */
   populateOperations(newCheckpointOperations: OperationEvents[]): void {
+    super.populateOperations(newCheckpointOperations);
+
     if (!newCheckpointOperations.length) {
       return;
     }
-
-    this.indexedOperations.addOperations(newCheckpointOperations);
 
     // TODO: don't iterate through all history events on each operation update
     this.events.length = 0;
     this.events.push(...this.indexedOperations.getHistoryEvents());
 
-    // Track which operations actually got populated
-    const trackedOperations: DurableOperation<unknown>[] = [];
-
-    for (const mockOperation of this.mockOperations) {
-      const wasPopulated = this.populateMockOperation(mockOperation);
-      if (wasPopulated) {
-        trackedOperations.push(mockOperation);
-      }
-    }
-
     // Notify via callback
-    this.onCheckpointReceived(newCheckpointOperations, trackedOperations);
-  }
-
-  registerOperation(operation: MockOperation) {
-    this.mockOperations.push(operation);
-    this.populateMockOperation(operation);
+    this.onCheckpointReceived(
+      newCheckpointOperations,
+      this.getTrackedOperations()
+    );
   }
 }

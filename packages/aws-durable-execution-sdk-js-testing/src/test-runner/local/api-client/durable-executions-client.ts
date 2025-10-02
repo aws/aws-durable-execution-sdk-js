@@ -4,14 +4,14 @@ let client: LambdaClient | undefined = undefined;
 /**
  * Gets an instance of the durable executions client.
  */
-export function getDurableExecutionsClient() {
+export function getDurableExecutionsClient(endpoint: string) {
   client ??= new LambdaClient({
     credentials: {
       secretAccessKey: "mock-secretAccessKey",
       accessKeyId: "mock-accessKeyId",
     },
     region: "us-east-1",
-    endpoint: process.env.DEX_ENDPOINT,
+    endpoint
   });
 
   return client;

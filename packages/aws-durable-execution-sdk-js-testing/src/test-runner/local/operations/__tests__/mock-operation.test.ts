@@ -3,38 +3,62 @@ import { OperationInterceptor } from "@aws/durable-execution-sdk-js";
 import { createExecutionId } from "../../../../checkpoint-server/utils/tagged-strings";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";
+import { DurableApiClient } from "../../../common/create-durable-api-client";
 
 describe("MockOperation", () => {
+  // Common test dependencies
   const waitManager = new OperationWaitManager();
   const mockIndexedOperations = new IndexedOperations([]);
+  const mockDurableApi: DurableApiClient = {
+    sendCallbackFailure: jest.fn(),
+    sendCallbackSuccess: jest.fn(),
+    sendCallbackHeartbeat: jest.fn(),
+  };
   jest.spyOn(waitManager, "waitForOperation");
+
+  const createMockOperation = (
+    params: MockOperationParameters
+  ): MockOperation => {
+    return new MockOperation(
+      params,
+      waitManager,
+      mockIndexedOperations,
+      mockDurableApi
+    );
+  };
 
   describe("constructor", () => {
     it("should initialize with name", () => {
       const params: MockOperationParameters = { name: "test-operation" };
-      const operation = new MockOperation(params, waitManager, mockIndexedOperations);
+      const operation = createMockOperation(params);
 
-      expect(operation._mockName).toBe(params.name);
-      expect(operation._mockIndex).toBeUndefined();
-      expect(operation._mockId).toBeUndefined();
+      const parameters = operation.getMockParameters();
+
+      expect(parameters.name).toBe(params.name);
+      expect(parameters.index).toBeUndefined();
+      expect(parameters.id).toBeUndefined();
     });
 
     it("should initialize with index", () => {
       const params: MockOperationParameters = { index: 5 };
-      const operation = new MockOperation(params, waitManager, mockIndexedOperations);
+      const operation = createMockOperation(params);
 
-      expect(operation._mockName).toBeUndefined();
-      expect(operation._mockIndex).toBe(params.index);
-      expect(operation._mockId).toBeUndefined();
+      const parameters = operation.getMockParameters();
+
+      expect(parameters.name).toBeUndefined();
+      expect(parameters.index).toBe(params.index);
+      expect(parameters.id).toBeUndefined();
     });
 
     it("should initialize with id", () => {
       const params: MockOperationParameters = { id: "op-123" };
-      const operation = new MockOperation(params, waitManager, mockIndexedOperations);
+      const operation = createMockOperation(params);
 
-      expect(operation._mockName).toBeUndefined();
-      expect(operation._mockIndex).toBeUndefined();
-      expect(operation._mockId).toBe(params.id);
+      const parameters = operation.getMockParameters();
+
+      expect(parameters.name).toBeUndefined();
+      expect(parameters.index).toBeUndefined();
+      expect(parameters.id).toBe(params.id);
     });
 
     it("should initialize with all parameters", () => {
@@ -43,25 +67,23 @@ describe("MockOperation", () => {
         index: 5,
         id: "op-123",
       };
-      const operation = new MockOperation(params, waitManager, mockIndexedOperations);
+      const operation = createMockOperation(params);
 
-      expect(operation._mockName).toBe(params.name);
-      expect(operation._mockIndex).toBe(params.index);
-      expect(operation._mockId).toBe(params.id);
+      const parameters = operation.getMockParameters();
+
+      expect(parameters.name).toBe(params.name);
+      expect(parameters.index).toBe(params.index);
+      expect(parameters.id).toBe(params.id);
     });
   });
 
   describe("mocking functionality", () => {
     describe("mockImplementation", () => {
       it("should register name-based mock with custom implementation", () => {
-        const operation = new MockOperation(
-          {
-            name: "test-operation",
-            index: 2,
-          },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({
+          name: "test-operation",
+          index: 2,
+        });
         const mockFn = jest.fn(() => Promise.resolve({ custom: "result" }));
 
         const result = operation.mockImplementation(mockFn);
@@ -73,7 +95,7 @@ describe("MockOperation", () => {
       });
 
       it("should register index-based mock with custom implementation", () => {
-        const operation = new MockOperation({ index: 5 }, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({ index: 5 });
         const mockFn = jest.fn(() => Promise.resolve({ custom: "result" }));
 
         const result = operation.mockImplementation(mockFn);
@@ -85,7 +107,7 @@ describe("MockOperation", () => {
       });
 
       it("should throw error when trying to mock with ID", () => {
-        const operation = new MockOperation({ id: "op-123" }, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({ id: "op-123" });
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementation(mockFn)).toThrow(
@@ -94,7 +116,7 @@ describe("MockOperation", () => {
       });
 
       it("should throw error when missing name and index", () => {
-        const operation = new MockOperation({}, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({});
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementation(mockFn)).toThrow(
@@ -103,11 +125,7 @@ describe("MockOperation", () => {
       });
 
       it("should prefer name over index when both are provided", () => {
-        const operation = new MockOperation(
-          { name: "test-op", index: 3 },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-op", index: 3 });
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         operation.mockImplementation(mockFn);
@@ -119,11 +137,7 @@ describe("MockOperation", () => {
 
     describe("mockImplementationOnce", () => {
       it("should register name-based mock with count=1", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
         const mockFn = jest.fn(() => Promise.resolve({ once: "result" }));
 
         const result = operation.mockImplementationOnce(mockFn);
@@ -134,7 +148,7 @@ describe("MockOperation", () => {
       });
 
       it("should register index-based mock with count=1", () => {
-        const operation = new MockOperation({ index: 7 }, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({ index: 7 });
         const mockFn = jest.fn(() => Promise.resolve({ once: "result" }));
 
         const result = operation.mockImplementationOnce(mockFn);
@@ -145,7 +159,7 @@ describe("MockOperation", () => {
       });
 
       it("should throw error when trying to mock with ID", () => {
-        const operation = new MockOperation({ id: "op-456" }, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({ id: "op-456" });
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementationOnce(mockFn)).toThrow(
@@ -154,7 +168,7 @@ describe("MockOperation", () => {
       });
 
       it("should throw error when missing name and index", () => {
-        const operation = new MockOperation({}, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({});
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementationOnce(mockFn)).toThrow(
@@ -165,11 +179,7 @@ describe("MockOperation", () => {
 
     describe("mockResolvedValue", () => {
       it("should create mock that resolves to specified value", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
         const testValue = { data: "test-result" };
 
         const result = operation.mockResolvedValue(testValue);
@@ -180,11 +190,7 @@ describe("MockOperation", () => {
       });
 
       it("should work with primitive values", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
 
         const result = operation.mockResolvedValue("simple string");
 
@@ -193,12 +199,8 @@ describe("MockOperation", () => {
       });
 
       it("should work with null and undefined", () => {
-        const operation1 = new MockOperation({ name: "null-op" }, waitManager, mockIndexedOperations);
-        const operation2 = new MockOperation(
-          { name: "undefined-op" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation1 = createMockOperation({ name: "null-op" });
+        const operation2 = createMockOperation({ name: "undefined-op" });
 
         operation1.mockResolvedValue(null);
         operation2.mockResolvedValue(undefined);
@@ -210,11 +212,7 @@ describe("MockOperation", () => {
 
     describe("mockRejectedValue", () => {
       it("should create mock that rejects with specified error", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
         const testError = new Error("Test error message");
 
         const result = operation.mockRejectedValue(testError);
@@ -225,11 +223,7 @@ describe("MockOperation", () => {
       });
 
       it("should work with string errors", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
 
         const result = operation.mockRejectedValue("String error");
 
@@ -238,11 +232,7 @@ describe("MockOperation", () => {
       });
 
       it("should work with any error type", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
         const customError = { code: 500, message: "Custom error" };
 
         const result = operation.mockRejectedValue(customError);
@@ -254,11 +244,7 @@ describe("MockOperation", () => {
 
     describe("mockRejectedValueOnce", () => {
       it("should create single-use mock that rejects with specified error", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
         const testError = new Error("Once error");
 
         const result = operation.mockRejectedValueOnce(testError);
@@ -294,11 +280,7 @@ describe("MockOperation", () => {
       });
 
       it("should register name-based mocks with Mock system", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
         const mockFn = jest.fn(() => Promise.resolve({}));
         const executionId = createExecutionId();
 
@@ -314,7 +296,7 @@ describe("MockOperation", () => {
       });
 
       it("should register index-based mocks with Mock system", () => {
-        const operation = new MockOperation({ index: 5 }, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({ index: 5 });
         const mockFn = jest.fn(() => Promise.resolve({}));
         const executionId = createExecutionId();
 
@@ -327,7 +309,7 @@ describe("MockOperation", () => {
       });
 
       it("should register multiple mocks", () => {
-        const operation = new MockOperation({ name: "multi-op" }, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({ name: "multi-op" });
         const mockFn1 = jest.fn(() => Promise.resolve("first"));
         const mockFn2 = jest.fn(() => Promise.resolve("second"));
         const executionId = createExecutionId();
@@ -343,11 +325,7 @@ describe("MockOperation", () => {
       });
 
       it("should handle name-based mock with index", () => {
-        const operation = new MockOperation(
-          { name: "test-op", index: 3 },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-op", index: 3 });
         const mockFn = jest.fn(() => Promise.resolve({}));
         const executionId = createExecutionId();
 
@@ -361,7 +339,7 @@ describe("MockOperation", () => {
 
     describe("method chaining", () => {
       it("should support chaining multiple mock methods", () => {
-        const operation = new MockOperation({ name: "chain-op" }, waitManager, mockIndexedOperations);
+        const operation = createMockOperation({ name: "chain-op" });
 
         const result = operation
           .mockResolvedValue("first")
@@ -375,11 +353,7 @@ describe("MockOperation", () => {
 
     describe("skipTime", () => {
       it("should throw 'Not implemented' error", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
 
         expect(() => operation.skipTime()).toThrow("Not implemented");
       });
@@ -387,11 +361,7 @@ describe("MockOperation", () => {
 
     describe("testing helper methods", () => {
       it("should report correct mock counts", () => {
-        const operation = new MockOperation(
-          { name: "test-operation" },
-          waitManager,
-          mockIndexedOperations
-        );
+        const operation = createMockOperation({ name: "test-operation" });
 
         expect(operation.getMockCount()).toBe(0);
         expect(operation.hasMocks()).toBe(false);
@@ -407,12 +377,8 @@ describe("MockOperation", () => {
       });
 
       it("should distinguish between name and index mocks", () => {
-        const nameOperation = new MockOperation(
-          { name: "name-op" },
-          waitManager,
-          mockIndexedOperations
-        );
-        const indexOperation = new MockOperation({ index: 5 }, waitManager, mockIndexedOperations);
+        const nameOperation = createMockOperation({ name: "name-op" });
+        const indexOperation = createMockOperation({ index: 5 });
 
         nameOperation.mockResolvedValue("name");
         indexOperation.mockResolvedValue("index");

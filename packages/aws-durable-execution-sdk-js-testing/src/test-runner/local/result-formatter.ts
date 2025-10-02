@@ -4,7 +4,7 @@ import {
   Invocation,
 } from "../durable-test-runner";
 import { tryJsonParse } from "../common/utils";
-import { TestExecutionResult } from "./test-execution-state";
+import { TestExecutionResult } from "../common/test-execution-state";
 import { OperationStatus, Event } from "@aws-sdk/client-lambda";
 import { OperationStorage } from "../common/operation-storage";
 

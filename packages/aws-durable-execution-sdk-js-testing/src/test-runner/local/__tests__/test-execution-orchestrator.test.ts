@@ -24,6 +24,7 @@ import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
+import { DurableApiClient } from "../../common/create-durable-api-client";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -46,6 +47,7 @@ describe("TestExecutionOrchestrator", () => {
   let checkpointApi: CheckpointApiClient;
   let mockScheduler: Scheduler;
   let mockFunctionStorage: FunctionStorage;
+  let mockDurableApiClient: DurableApiClient;
 
   const mockOperation: Operation = {
     Id: "op1",
@@ -56,10 +58,16 @@ describe("TestExecutionOrchestrator", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDurableApiClient = {
+      sendCallbackFailure: jest.fn(),
+      sendCallbackSuccess: jest.fn(),
+      sendCallbackHeartbeat: jest.fn(),
+    };
     // Mock OperationStorage
     mockOperationStorage = new LocalOperationStorage(
       new OperationWaitManager(),
       new IndexedOperations([]),
+      mockDurableApiClient,
       jest.fn()
     ) as jest.Mocked<LocalOperationStorage>;
     mockOperationStorage.populateOperations = jest.fn();
@@ -72,7 +80,7 @@ describe("TestExecutionOrchestrator", () => {
     const mockFactory: ILocalDurableTestRunnerFactory = {
       createRunner: jest.fn().mockReturnValue({
         run: jest.fn().mockResolvedValue({
-          getStatus: () => 'SUCCEEDED',
+          getStatus: () => "SUCCEEDED",
           getResult: () => ({}),
         }),
       }),
@@ -473,12 +481,6 @@ describe("TestExecutionOrchestrator", () => {
         undefined
       );
       expect(result.status).toBe(OperationStatus.SUCCEEDED);
-    });
-
-    it("should set up environment variable for DEX endpoint", async () => {
-      await orchestrator.executeHandler();
-
-      expect(process.env.DEX_ENDPOINT).toContain("127.0.0.1:");
     });
 
     it("should start polling for checkpoint data", async () => {
@@ -912,7 +914,8 @@ describe("TestExecutionOrchestrator", () => {
 
       const mockOperationResult = new OperationWithData(
         new OperationWaitManager(),
-        new IndexedOperations([])
+        new IndexedOperations([]),
+        {} as DurableApiClient
       );
 
       jest.spyOn(mockOperationResult, "getId").mockReturnValue(operationId);
@@ -954,20 +957,6 @@ describe("TestExecutionOrchestrator", () => {
       await expect(orchestrator.executeHandler()).rejects.toThrow(
         "Could not find invocations for operation orphan-op"
       );
-    });
-  });
-
-  describe("environment setup", () => {
-    it("should set DURABLE_LOCAL_MODE environment variable", async () => {
-      await orchestrator.executeHandler();
-
-      expect(process.env.DURABLE_LOCAL_MODE).toBe("true");
-    });
-
-    it("should set DEX_ENDPOINT environment variable with correct port", async () => {
-      await orchestrator.executeHandler();
-
-      expect(process.env.DEX_ENDPOINT).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     });
   });
 
@@ -1341,7 +1330,7 @@ describe("TestExecutionOrchestrator", () => {
         operationId: "status-ready-retry",
         operationData: {
           Status: OperationStatus.READY,
-        }
+        },
       });
 
       // Verify new invocation was started after status update

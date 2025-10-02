@@ -2,10 +2,8 @@ import {
   OperationType,
   Operation,
   OperationStatus,
-  SendDurableExecutionCallbackSuccessCommand,
   ErrorObject,
-  SendDurableExecutionCallbackFailureCommand,
-  SendDurableExecutionCallbackHeartbeatCommand,
+  SendDurableExecutionCallbackSuccessCommandOutput,
   SendDurableExecutionCallbackFailureCommandOutput,
   SendDurableExecutionCallbackHeartbeatCommandOutput,
   Event,
@@ -15,13 +13,13 @@ import {
   TestResultError,
   WaitingOperationStatus,
 } from "../../durable-test-runner";
-import { getDurableExecutionsClient } from "../../local/api-client/durable-executions-client";
 import { OperationWaitManager } from "../../local/operations/operation-wait-manager";
 import { doesStatusMatch } from "../../local/operations/status-matcher";
 import { tryJsonParse } from "../utils";
 import { IndexedOperations } from "../indexed-operations";
 import { transformErrorObjectToErrorResult } from "../../../utils";
 import { OperationSubType } from "@aws/durable-execution-sdk-js";
+import { DurableApiClient } from "../create-durable-api-client";
 
 export interface OperationResultContextDetails<ResultValue = unknown> {
   readonly result: ResultValue | undefined;
@@ -62,6 +60,7 @@ export class OperationWithData<OperationResultValue = unknown>
   constructor(
     private readonly waitManager: OperationWaitManager,
     private readonly operationIndex: IndexedOperations,
+    private readonly apiClient: DurableApiClient,
     private checkpointOperationData?: OperationEvents | undefined
   ) {}
 
@@ -78,6 +77,7 @@ export class OperationWithData<OperationResultValue = unknown>
       return new OperationWithData(
         this.waitManager,
         this.operationIndex,
+        this.apiClient,
         this.checkpointOperationData
       );
     }
@@ -86,6 +86,7 @@ export class OperationWithData<OperationResultValue = unknown>
     return new OperationWithData(
       this.waitManager,
       this.operationIndex,
+      this.apiClient,
       this.checkpointOperationData
     );
   }
@@ -268,6 +269,7 @@ export class OperationWithData<OperationResultValue = unknown>
         new OperationWithData(
           this.waitManager,
           this.operationIndex,
+          this.apiClient,
           checkpointOperation
         )
     );
@@ -344,21 +346,19 @@ export class OperationWithData<OperationResultValue = unknown>
     return this.checkpointOperationData?.operation.EndTimestamp;
   }
 
-  sendCallbackSuccess(result: string) {
+  sendCallbackSuccess(
+    result: string
+  ): Promise<SendDurableExecutionCallbackSuccessCommandOutput> {
     const callbackDetails = this.getCallbackDetails();
 
     if (!callbackDetails) {
       throw new Error("Could not find callback details");
     }
 
-    const client = getDurableExecutionsClient();
-
-    return client.send(
-      new SendDurableExecutionCallbackSuccessCommand({
-        Result: result,
-        CallbackId: callbackDetails.callbackId,
-      })
-    );
+    return this.apiClient.sendCallbackSuccess({
+      Result: result,
+      CallbackId: callbackDetails.callbackId,
+    });
   }
 
   sendCallbackFailure(
@@ -369,14 +369,10 @@ export class OperationWithData<OperationResultValue = unknown>
     if (!callbackDetails) {
       throw new Error("Could not find callback details");
     }
-    const client = getDurableExecutionsClient();
-
-    return client.send(
-      new SendDurableExecutionCallbackFailureCommand({
-        Error: error,
-        CallbackId: callbackDetails.callbackId,
-      })
-    );
+    return this.apiClient.sendCallbackFailure({
+      Error: error,
+      CallbackId: callbackDetails.callbackId,
+    });
   }
 
   sendCallbackHeartbeat(): Promise<SendDurableExecutionCallbackHeartbeatCommandOutput> {
@@ -386,12 +382,8 @@ export class OperationWithData<OperationResultValue = unknown>
       throw new Error("Could not find callback details");
     }
 
-    const client = getDurableExecutionsClient();
-
-    return client.send(
-      new SendDurableExecutionCallbackHeartbeatCommand({
-        CallbackId: callbackDetails.callbackId,
-      })
-    );
+    return this.apiClient.sendCallbackHeartbeat({
+      CallbackId: callbackDetails.callbackId,
+    });
   }
 }

@@ -113,29 +113,10 @@ describe("LocalDurableTestRunner", () => {
       expect(LocalOperationStorage).toHaveBeenCalledWith(
         mockWaitManager,
         expect.any(Object),
+        expect.any(Object),
         expect.any(Function)
       );
       expect(ResultFormatter).toHaveBeenCalled();
-    });
-
-    it("should not call CheckpointServerWorkerManager during construction", () => {
-      new LocalDurableTestRunner<{ success: boolean }>({
-        handlerFunction: mockHandlerFunction,
-      });
-
-      // CheckpointServerWorkerManager should not be called in constructor, only in run()
-      expect(CheckpointServerWorkerManager.getInstance).not.toHaveBeenCalled();
-      expect(TestExecutionOrchestrator).not.toHaveBeenCalled();
-    });
-
-    it("should handle skipTime parameter", () => {
-      const runner = new LocalDurableTestRunner<{ success: boolean }>({
-        handlerFunction: mockHandlerFunction,
-        skipTime: true,
-      });
-
-      expect(runner).toBeDefined();
-      // Constructor should still not call external dependencies
       expect(CheckpointServerWorkerManager.getInstance).not.toHaveBeenCalled();
     });
   });
@@ -260,10 +241,13 @@ describe("LocalDurableTestRunner", () => {
       const operation = runner.getOperation("testOp");
 
       expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation._mockName).toBe("testOp");
-      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith(
-        operation
-      );
+      expect(operation.getMockParameters().name).toBe("testOp");
+      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
+        operation,
+        params: {
+          name: "testOp",
+        },
+      });
     });
 
     it("should create and register mock operation by index", () => {
@@ -274,11 +258,14 @@ describe("LocalDurableTestRunner", () => {
       const operation = runner.getOperationByIndex(2);
 
       expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation._mockName).toBeUndefined();
-      expect(operation._mockIndex).toBe(2);
-      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith(
-        operation
-      );
+      expect(operation.getMockParameters().name).toBeUndefined();
+      expect(operation.getMockParameters().index).toBe(2);
+      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
+        operation,
+        params: {
+          index: 2,
+        },
+      });
     });
 
     it("should create and register mock operation by name and index", () => {
@@ -289,11 +276,15 @@ describe("LocalDurableTestRunner", () => {
       const operation = runner.getOperationByNameAndIndex("testOp", 2);
 
       expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation._mockName).toBe("testOp");
-      expect(operation._mockIndex).toBe(2);
-      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith(
-        operation
-      );
+      expect(operation.getMockParameters().name).toBe("testOp");
+      expect(operation.getMockParameters().index).toBe(2);
+      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
+        operation,
+        params: {
+          index: 2,
+          name: "testOp",
+        },
+      });
     });
 
     it("should create and register mock operation by ID", () => {
@@ -304,10 +295,13 @@ describe("LocalDurableTestRunner", () => {
       const operation = runner.getOperationById("op-123");
 
       expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation._mockId).toBe("op-123");
-      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith(
-        operation
-      );
+      expect(operation.getMockParameters().id).toBe("op-123");
+      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
+        operation,
+        params: {
+          id: "op-123",
+        },
+      });
     });
   });
 
