@@ -188,9 +188,10 @@
       "handler": "wait-for-callback.handler",
       "durableConfig": {
         "RetentionPeriodInDays": 7,
-        "ExecutionTimeout": 300
+        "ExecutionTimeout": 60
       },
-      "path": "./src/examples/wait-for-callback.ts"
+      "path": "./src/examples/wait-for-callback.ts",
+      "integration": true
     },
     {
       "name": "Named Wait",

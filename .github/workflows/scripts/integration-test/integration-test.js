@@ -219,7 +219,7 @@ class IntegrationTestRunner {
   }
 
   // Run Jest integration tests
-  async runJestTests() {
+  async runJestTests(/** @type {string | undefined} */ testPattern) {
     log.info("Running Jest integration tests...");
 
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
@@ -235,7 +235,14 @@ class IntegrationTestRunner {
     console.log(JSON.stringify(this.getFunctionNameMap(), null, 2));
     log.info(`Lambda Endpoint: ${CONFIG.LAMBDA_ENDPOINT}`);
 
-    this.execCommand("npm run test:integration", {
+    // Build test command with optional pattern
+    let testCommand = "npm run test:integration";
+    if (testPattern) {
+      testCommand += ` -- ${testPattern}`;
+      log.info(`Running tests with pattern: ${testPattern}`);
+    }
+
+    this.execCommand(testCommand, {
       cwd: examplesDir,
       env,
     });
@@ -273,12 +280,14 @@ class IntegrationTestRunner {
    * @param {boolean} [options.deployOnly]
    * @param {boolean} [options.testOnly]
    * @param {boolean} [options.cleanupOnly]
+   * @param {string} [options.testPattern]
    */
   async run(options = {}) {
     const {
       deployOnly = false,
       testOnly = false,
       cleanupOnly = false,
+      testPattern,
     } = options;
 
     log.info("Starting integration test...");
@@ -297,7 +306,7 @@ class IntegrationTestRunner {
     }
 
     if (!deployOnly) {
-      await this.runJestTests();
+      await this.runJestTests(testPattern);
     }
 
     log.success("Integration test completed successfully!");
@@ -312,15 +321,22 @@ class IntegrationTestRunner {
 
 // CLI interface
 function showUsage() {
-  console.log("Usage: node integration-test.js [OPTIONS]");
+  console.log("Usage: node integration-test.js [OPTIONS] [TEST_PATTERN]");
   console.log("");
   console.log("Options:");
   console.log("  --deploy-only   Only deploy functions, don't run tests");
   console.log(
-    "  --test-only     Only run tests (assumes functions are already deployed)"
+    "  --test-only [pattern]  Only run tests (assumes functions are already deployed)"
+  );
+  console.log(
+    "                         Optional test pattern to filter specific tests"
   );
   console.log("  --cleanup-only  Only cleanup existing functions");
   console.log("  --help          Show this help message");
+  console.log("");
+  console.log("Examples:");
+  console.log("  node integration-test.js --test-only my-test-name");
+  console.log("  node integration-test.js --test-only");
   console.log("");
   console.log("Environment Variables:");
   console.log("  AWS_REGION      AWS region (default: us-west-2)");
@@ -332,14 +348,18 @@ async function main() {
   const args = process.argv.slice(2);
 
   // Parse command line arguments
+  /** @type {{ cleanupOnExit: boolean, deployOnly: boolean, testOnly: boolean, cleanupOnly: boolean, testPattern?: string }} */
   const options = {
     cleanupOnExit: true,
     deployOnly: false,
     testOnly: false,
     cleanupOnly: false,
+    testPattern: undefined,
   };
 
-  for (const arg of args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
     switch (arg) {
       case "--deploy-only":
         options.deployOnly = true;
@@ -348,6 +368,11 @@ async function main() {
       case "--test-only":
         options.testOnly = true;
         options.cleanupOnExit = false;
+        // Check if the next argument is a test pattern (not another flag)
+        if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+          options.testPattern = args[i + 1];
+          i++; // Skip the next argument since we consumed it as test pattern
+        }
         break;
       case "--cleanup-only":
         options.cleanupOnly = true;

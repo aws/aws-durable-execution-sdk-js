@@ -1,4 +1,5 @@
-// Intentionally casting the result for better DX
+import { ExecutionStatus } from "@aws-sdk/client-lambda";
+
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function tryJsonParse<ResultType>(
   obj: string | undefined
@@ -14,4 +15,8 @@ export function tryJsonParse<ResultType>(
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     return obj as ResultType;
   }
+}
+
+export function isClosedExecution(status: ExecutionStatus | undefined): boolean {
+  return status !== ExecutionStatus.RUNNING;
 }

@@ -4,11 +4,14 @@ import {
   LambdaClient,
   GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
-  GetDurableExecutionHistoryResponse,
+  InvocationType,
 } from "@aws-sdk/client-lambda";
 import { IndexedOperations } from "../common/indexed-operations";
 import { OperationStorage } from "../common/operation-storage";
-import { OperationWithData } from "../common/operations/operation-with-data";
+import {
+  OperationEvents,
+  OperationWithData,
+} from "../common/operations/operation-with-data";
 import {
   DurableTestRunner,
   InvokeRequest,
@@ -16,15 +19,28 @@ import {
 } from "../durable-test-runner";
 import { OperationWaitManager } from "../local/operations/operation-wait-manager";
 import { ResultFormatter } from "../local/result-formatter";
-import { historyEventsToOperationEvents } from "./utils/process-history-events/process-history-events";
+import { HistoryPoller } from "./history-poller";
+import { TestExecutionState } from "../common/test-execution-state";
 import {
   createDurableApiClient,
   DurableApiClient,
 } from "../common/create-durable-api-client";
+import { CloudOperation } from "./operations/cloud-operation";
+
+export { InvocationType };
+
+interface CloudDurableTestRunnerConfigInternal {
+  pollInterval: number;
+  invocationType: InvocationType;
+}
+
+export type CloudDurableTestRunnerConfig =
+  Partial<CloudDurableTestRunnerConfigInternal>;
 
 export interface CloudDurableTestRunnerParameters {
   functionName: string;
-  config?: LambdaClientConfig;
+  clientConfig?: LambdaClientConfig;
+  config?: CloudDurableTestRunnerConfig;
 }
 
 export class CloudDurableTestRunner<ResultType>
@@ -34,100 +50,151 @@ export class CloudDurableTestRunner<ResultType>
   private readonly client: LambdaClient;
   private readonly formatter = new ResultFormatter<ResultType>();
   private readonly waitManager = new OperationWaitManager();
-  private readonly indexedOperations = new IndexedOperations([]);
-  private readonly operationStorage: OperationStorage;
-  private readonly durableApiClient: DurableApiClient;
-  private history: GetDurableExecutionHistoryResponse | undefined;
+  private indexedOperations = new IndexedOperations([]);
+  private operationStorage: OperationStorage;
+  private readonly apiClient: DurableApiClient;
+  private readonly config: CloudDurableTestRunnerConfigInternal;
 
   constructor({
     functionName: functionArn,
+    clientConfig,
     config,
   }: CloudDurableTestRunnerParameters) {
-    this.client = new LambdaClient(config ?? {});
-    this.durableApiClient = createDurableApiClient(() => this.client);
+    this.client = new LambdaClient(clientConfig ?? {});
+    this.apiClient = createDurableApiClient(() => this.client);
+    this.functionArn = functionArn;
     this.operationStorage = new OperationStorage(
       this.waitManager,
       this.indexedOperations,
-      this.durableApiClient
+      this.apiClient
     );
-    this.functionArn = functionArn;
+    this.config = {
+      pollInterval: 1000,
+      invocationType: InvocationType.RequestResponse,
+      ...config,
+    };
   }
 
   async run(params?: InvokeRequest): Promise<TestResult<ResultType>> {
-    const invokeResult = await this.client.send(
+    const asyncInvokeResult = await this.client.send(
       new InvokeCommand({
         FunctionName: this.functionArn,
         Payload: params?.payload ? JSON.stringify(params.payload) : undefined,
+        InvocationType: this.config.invocationType,
       })
     );
 
-    const executionArn = invokeResult.DurableExecutionArn;
+    const durableExecutionArn = asyncInvokeResult.DurableExecutionArn;
 
-    const result = await this.client.send(
-      new GetDurableExecutionCommand({
-        DurableExecutionArn: executionArn,
-      })
-    );
+    if (!durableExecutionArn) {
+      throw new Error("No execution ARN found on invocation response");
+    }
 
-    // TODO: poll for history instead of waiting for invoke to complete
-    const history = await this.client.send(
-      new GetDurableExecutionHistoryCommand({
-        DurableExecutionArn: executionArn,
-        IncludeExecutionData: true,
-      })
-    );
+    const testExecutionState = new TestExecutionState();
 
-    this.history = history;
-    const events = this.history.Events ?? [];
+    const executionPromise = testExecutionState.createExecutionPromise();
 
-    const operationEvents = historyEventsToOperationEvents(events);
-    this.operationStorage.populateOperations(operationEvents);
+    const historyPoller = new HistoryPoller({
+      pollInterval: this.config.pollInterval,
+      durableExecutionArn: durableExecutionArn,
 
-    const lambdaResponse = {
-      status: result.Status,
-      result: result.Result,
-      error: result.Error,
-    };
+      testExecutionState,
+      apiClient: {
+        getHistory: (request) =>
+          this.client.send(new GetDurableExecutionHistoryCommand(request)),
+        getExecution: (request) =>
+          this.client.send(new GetDurableExecutionCommand(request)),
+      },
+      onOperationEventsReceived: (operationEvents: OperationEvents[]) => {
+        this.waitManager.handleCheckpointReceived(
+          operationEvents,
+          this.operationStorage.getTrackedOperations()
+        );
+        this.operationStorage.populateOperations(operationEvents);
+      },
+    });
 
-    return this.formatter.formatTestResult(
-      lambdaResponse,
-      events,
-      this.operationStorage,
-      []
-    );
+    historyPoller.startPolling();
+
+    try {
+      const lambdaResponse = await executionPromise;
+
+      return this.formatter.formatTestResult(
+        lambdaResponse,
+        historyPoller.getEvents(),
+        this.operationStorage,
+        []
+      );
+    } finally {
+      historyPoller.stopPolling();
+    }
   }
 
-  getOperation<T>(name: string): OperationWithData<T> {
+  getOperation<T>(name: string): CloudOperation<T> {
     return this.getOperationByNameAndIndex(name, 0);
   }
 
-  // TODO: allow calling these functions before the test runs
-  // currently, they will return undefined if you call them before the test runs
-  getOperationByIndex<T>(index: number): OperationWithData<T> {
-    return new OperationWithData(
+  getOperationByIndex<T>(index: number): CloudOperation<T> {
+    const operation = new CloudOperation<T>(
       this.waitManager,
       this.indexedOperations,
-      this.durableApiClient,
+      this.apiClient,
+      this.config.invocationType,
       this.indexedOperations.getByIndex(index)
     );
+    this.operationStorage.registerOperation({
+      operation,
+      params: {
+        index,
+      },
+    });
+    return operation;
   }
+
   getOperationByNameAndIndex<T>(
     name: string,
     index: number
-  ): OperationWithData<T> {
-    return new OperationWithData(
+  ): CloudOperation<T> {
+    const operation = new CloudOperation<T>(
       this.waitManager,
       this.indexedOperations,
-      this.durableApiClient,
+      this.apiClient,
+      this.config.invocationType,
       this.indexedOperations.getByNameAndIndex(name, index)
     );
+    this.operationStorage.registerOperation({
+      operation,
+      params: {
+        name,
+        index,
+      },
+    });
+    return operation;
   }
-  getOperationById<T>(id: string): OperationWithData<T> {
-    return new OperationWithData(
+
+  getOperationById<T>(id: string): CloudOperation<T> {
+    const operation = new CloudOperation<T>(
       this.waitManager,
       this.indexedOperations,
-      this.durableApiClient,
+      this.apiClient,
+      this.config.invocationType,
       this.indexedOperations.getById(id)
+    );
+    this.operationStorage.registerOperation({
+      operation,
+      params: {
+        id,
+      },
+    });
+    return operation;
+  }
+
+  reset() {
+    this.indexedOperations = new IndexedOperations([]);
+    this.operationStorage = new OperationStorage(
+      this.waitManager,
+      this.indexedOperations,
+      this.apiClient
     );
   }
 }
