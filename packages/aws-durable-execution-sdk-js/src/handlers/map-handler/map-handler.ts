@@ -15,29 +15,29 @@ export const createMapHandler = (
   context: ExecutionContext,
   executeConcurrently: DurableContext["executeConcurrently"],
 ) => {
-  return async <T>(
-    nameOrItems: string | undefined | any[],
-    itemsOrMapFunc?: any[] | MapFunc<T>,
-    mapFuncOrConfig?: MapFunc<T> | MapConfig,
-    maybeConfig?: MapConfig,
-  ): Promise<BatchResult<T>> => {
+  return async <TInput, TOutput>(
+    nameOrItems: string | undefined | TInput[],
+    itemsOrMapFunc?: TInput[] | MapFunc<TInput, TOutput>,
+    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput>,
+    maybeConfig?: MapConfig<TInput>,
+  ): Promise<BatchResult<TOutput>> => {
     let name: string | undefined;
-    let items: any[];
-    let mapFunc: MapFunc<T>;
-    let config: MapConfig | undefined;
+    let items: TInput[];
+    let mapFunc: MapFunc<TInput, TOutput>;
+    let config: MapConfig<TInput> | undefined;
 
     // Parse overloaded parameters
     if (typeof nameOrItems === "string" || nameOrItems === undefined) {
       // Case: map(name, items, mapFunc, config?)
       name = nameOrItems;
-      items = itemsOrMapFunc as any[];
-      mapFunc = mapFuncOrConfig as MapFunc<T>;
+      items = itemsOrMapFunc as TInput[];
+      mapFunc = mapFuncOrConfig as MapFunc<TInput, TOutput>;
       config = maybeConfig;
     } else {
       // Case: map(items, mapFunc, config?)
       items = nameOrItems;
-      mapFunc = itemsOrMapFunc as MapFunc<T>;
-      config = mapFuncOrConfig as MapConfig;
+      mapFunc = itemsOrMapFunc as MapFunc<TInput, TOutput>;
+      config = mapFuncOrConfig as MapConfig<TInput>;
     }
 
     log(context.isVerbose, "🗺️", "Starting map operation:", {
@@ -61,11 +61,12 @@ export const createMapHandler = (
         id: `map-item-${index}`,
         data: item,
         index,
+        name: config?.itemNamer ? config.itemNamer(item, index) : undefined,
       }),
     );
 
     // Create executor that calls mapFunc
-    const executor: ConcurrentExecutor<any, T> = async (
+    const executor: ConcurrentExecutor<TInput, TOutput> = async (
       executionItem,
       childContext,
     ) => mapFunc(childContext, executionItem.data, executionItem.index, items);

@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   DurableContext,
   ParallelFunc,
+  NamedParallelBranch,
   BatchItemStatus,
 } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
@@ -57,7 +58,14 @@ describe("Parallel Handler", () => {
 
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         "test-name",
-        [{ id: "parallel-branch-0", data: branch1, index: 0 }],
+        [
+          {
+            id: "parallel-branch-0",
+            data: branch1,
+            index: 0,
+            name: undefined,
+          },
+        ],
         expect.any(Function),
         {
           completionConfig: undefined,
@@ -86,7 +94,14 @@ describe("Parallel Handler", () => {
 
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         undefined,
-        [{ id: "parallel-branch-0", data: branch1, index: 0 }],
+        [
+          {
+            id: "parallel-branch-0",
+            data: branch1,
+            index: 0,
+            name: undefined,
+          },
+        ],
         expect.any(Function),
         {
           completionConfig: undefined,
@@ -115,7 +130,14 @@ describe("Parallel Handler", () => {
 
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         "test-name",
-        [{ id: "parallel-branch-0", data: branch1, index: 0 }],
+        [
+          {
+            id: "parallel-branch-0",
+            data: branch1,
+            index: 0,
+            name: undefined,
+          },
+        ],
         expect.any(Function),
         {
           completionConfig: undefined,
@@ -204,7 +226,12 @@ describe("Parallel Handler", () => {
 
     // Call the captured executor to test its logging
     const mockChildContext = {} as any;
-    const executionItem = { id: "parallel-branch-0", data: branch1, index: 0 };
+    const executionItem = {
+      id: "parallel-branch-0",
+      data: branch1,
+      index: 0,
+      name: undefined,
+    };
     await capturedExecutor(executionItem, mockChildContext);
 
     // Verify the executor logging was called
@@ -218,5 +245,134 @@ describe("Parallel Handler", () => {
     );
 
     consoleSpy.mockRestore();
+  });
+
+  describe("named branches", () => {
+    it("should handle named parallel branches", async () => {
+      const namedBranch: NamedParallelBranch<string> = {
+        name: "custom-branch",
+        func: jest.fn().mockResolvedValue("result1"),
+      };
+      const branches = [namedBranch];
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await parallelHandler("test-name", branches);
+
+      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+        "test-name",
+        [
+          {
+            id: "parallel-branch-0",
+            data: namedBranch.func,
+            index: 0,
+            name: "custom-branch",
+          },
+        ],
+        expect.any(Function),
+        {
+          completionConfig: undefined,
+          iterationSubType: "ParallelBranch",
+          maxConcurrency: undefined,
+          summaryGenerator: expect.any(Function),
+          topLevelSubType: "Parallel",
+        },
+      );
+    });
+
+    it("should handle mixed named and unnamed branches", async () => {
+      const namedBranch: NamedParallelBranch<string> = {
+        name: "named-branch",
+        func: jest.fn().mockResolvedValue("result1"),
+      };
+      const unnamedBranch: ParallelFunc<string> = jest
+        .fn()
+        .mockResolvedValue("result2");
+      const branches = [namedBranch, unnamedBranch];
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await parallelHandler(branches);
+
+      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+        undefined,
+        [
+          {
+            id: "parallel-branch-0",
+            data: namedBranch.func,
+            index: 0,
+            name: "named-branch",
+          },
+          {
+            id: "parallel-branch-1",
+            data: unnamedBranch,
+            index: 1,
+            name: undefined,
+          },
+        ],
+        expect.any(Function),
+        {
+          completionConfig: undefined,
+          iterationSubType: "ParallelBranch",
+          maxConcurrency: undefined,
+          summaryGenerator: expect.any(Function),
+          topLevelSubType: "Parallel",
+        },
+      );
+    });
+
+    it("should use undefined names for unnamed branches", async () => {
+      const branch1: ParallelFunc<string> = jest
+        .fn()
+        .mockResolvedValue("result1");
+      const branch2: ParallelFunc<string> = jest
+        .fn()
+        .mockResolvedValue("result2");
+      const branches = [branch1, branch2];
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await parallelHandler(branches);
+
+      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+        undefined,
+        [
+          {
+            id: "parallel-branch-0",
+            data: branch1,
+            index: 0,
+            name: undefined,
+          },
+          {
+            id: "parallel-branch-1",
+            data: branch2,
+            index: 1,
+            name: undefined,
+          },
+        ],
+        expect.any(Function),
+        {
+          completionConfig: undefined,
+          iterationSubType: "ParallelBranch",
+          maxConcurrency: undefined,
+          summaryGenerator: expect.any(Function),
+          topLevelSubType: "Parallel",
+        },
+      );
+    });
   });
 });

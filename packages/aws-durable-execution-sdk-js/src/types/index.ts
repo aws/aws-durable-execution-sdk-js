@@ -368,29 +368,32 @@ export interface DurableContext extends Context {
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
    * @param name - Step name for tracking and debugging
    * @param items - Array of items to process
-   * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise<T>
-   * @param config - Optional configuration for concurrency and completion behavior
+   * @param mapFunc - Function to apply to each item (context, item, index, array) => Promise<TOutput>
+   * @param config - Optional configuration for concurrency, completion behavior, and item naming
    * @example
    * ```typescript
    * const results = await context.map(
-   *   "process-items",
-   *   [1, 2, 3],
-   *   async (ctx, item, index) => item * 2,
-   *   { maxConcurrency: 2 }
+   *   "process-users",
+   *   users,
+   *   async (ctx, user, index) => processUser(user),
+   *   {
+   *     maxConcurrency: 2,
+   *     itemNamer: (user, index) => `User-${user.id || index}`
+   *   }
    * );
    * ```
    */
-  map<T>(
+  map<TInput, TOutput>(
     name: string | undefined,
-    items: any[],
-    mapFunc: MapFunc<T>,
-    config?: MapConfig,
-  ): Promise<BatchResult<T>>;
+    items: TInput[],
+    mapFunc: MapFunc<TInput, TOutput>,
+    config?: MapConfig<TInput>,
+  ): Promise<BatchResult<TOutput>>;
 
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
    * @param items - Array of items to process
-   * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise<T>
+   * @param mapFunc - Function to apply to each item (context, item, index, array) => Promise<TOutput>
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
@@ -400,22 +403,22 @@ export interface DurableContext extends Context {
    * );
    * ```
    */
-  map<T>(
-    items: any[],
-    mapFunc: MapFunc<T>,
-    config?: MapConfig,
-  ): Promise<BatchResult<T>>;
+  map<TInput, TOutput>(
+    items: TInput[],
+    mapFunc: MapFunc<TInput, TOutput>,
+    config?: MapConfig<TInput>,
+  ): Promise<BatchResult<TOutput>>;
   /**
    * Executes multiple functions in parallel with optional concurrency control
    * @param name - Step name for tracking and debugging
-   * @param branches - Array of functions to execute in parallel
+   * @param branches - Array of functions or named branches to execute in parallel
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
    * const results = await context.parallel(
    *   "parallel-operations",
    *   [
-   *     async (ctx) => ctx.step(async () => "task1"),
+   *     { name: "task1", func: async (ctx) => ctx.step(async () => "result1") },
    *     async (ctx) => ctx.step(async () => "task2")
    *   ],
    *   { maxConcurrency: 2 }
@@ -424,13 +427,13 @@ export interface DurableContext extends Context {
    */
   parallel<T>(
     name: string | undefined,
-    branches: ParallelFunc<T>[],
+    branches: (ParallelFunc<T> | NamedParallelBranch<T>)[],
     config?: ParallelConfig,
   ): Promise<BatchResult<T>>;
 
   /**
    * Executes multiple functions in parallel with optional concurrency control
-   * @param branches - Array of functions to execute in parallel
+   * @param branches - Array of functions or named branches to execute in parallel
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
@@ -443,7 +446,7 @@ export interface DurableContext extends Context {
    * ```
    */
   parallel<T>(
-    branches: ParallelFunc<T>[],
+    branches: (ParallelFunc<T> | NamedParallelBranch<T>)[],
     config?: ParallelConfig,
   ): Promise<BatchResult<T>>;
   promise: {
@@ -808,18 +811,26 @@ export type ChildFunc<T> = (context: DurableContext) => Promise<T>;
  * @param array - The original array being mapped over
  * @returns Promise resolving to the transformed value
  */
-export type MapFunc<T> = (
+export type MapFunc<TInput, TOutput> = (
   context: DurableContext,
-  item: any,
+  item: TInput,
   index: number,
-  array: any[],
-) => Promise<T>;
+  array: TInput[],
+) => Promise<TOutput>;
 /**
  * Function to be executed as a branch in a parallel operation
  * @param context - DurableContext for executing durable operations within the branch
  * @returns Promise resolving to the branch result
  */
 export type ParallelFunc<T> = (context: DurableContext) => Promise<T>;
+
+/**
+ * Named parallel branch with optional custom name
+ */
+export interface NamedParallelBranch<T> {
+  name?: string;
+  func: ParallelFunc<T>;
+}
 
 /**
  * Function that checks and updates state for waitForCondition operations
@@ -865,9 +876,11 @@ export interface WaitForConditionConfig<T> {
 /**
  * Configuration options for map operations
  */
-export interface MapConfig {
+export interface MapConfig<T = any> {
   /** Maximum number of concurrent executions (default: unlimited) */
   maxConcurrency?: number;
+  /** Function to generate custom names for map items */
+  itemNamer?: (item: T, index: number) => string;
   /** Configuration for completion behavior */
   completionConfig?: {
     /** Minimum number of successful executions required */

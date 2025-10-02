@@ -9,6 +9,7 @@ export interface ConcurrentExecutionItem<T> {
   id: string;
   data: T;
   index: number;
+  name?: string;
 }
 
 /**
@@ -141,11 +142,12 @@ export class ConcurrencyController {
           log(this.isVerbose, "▶️", `Starting ${this.operationName} item:`, {
             index,
             itemId: item.id,
+            itemName: item.name,
           });
 
           parentContext
             .runInChildContext(
-              item.id,
+              item.name || item.id,
               (childContext) => executor(item, childContext),
               { subType: config.iterationSubType },
             )
@@ -164,6 +166,7 @@ export class ConcurrencyController {
                   {
                     index,
                     itemId: item.id,
+                    itemName: item.name,
                   },
                 );
                 onComplete();
@@ -184,6 +187,7 @@ export class ConcurrencyController {
                   {
                     index,
                     itemId: item.id,
+                    itemName: item.name,
                     error: err.message,
                   },
                 );

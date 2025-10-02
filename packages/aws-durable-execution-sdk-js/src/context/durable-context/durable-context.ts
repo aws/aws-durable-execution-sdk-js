@@ -12,6 +12,7 @@ import {
   MapConfig,
   ParallelFunc,
   ParallelConfig,
+  NamedParallelBranch,
   ConcurrentExecutionItem,
   ConcurrentExecutor,
   ConcurrencyConfig,
@@ -157,11 +158,11 @@ export const createDurableContext = (
     );
   };
 
-  const map: DurableContext["map"] = <T>(
-    nameOrItems: string | undefined | any[],
-    itemsOrMapFunc: any[] | MapFunc<T>,
-    mapFuncOrConfig?: MapFunc<T> | MapConfig,
-    maybeConfig?: MapConfig,
+  const map: DurableContext["map"] = <TInput, TOutput>(
+    nameOrItems: string | undefined | TInput[],
+    itemsOrMapFunc: TInput[] | MapFunc<TInput, TOutput>,
+    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput>,
+    maybeConfig?: MapConfig<TInput>,
   ) => {
     const mapHandler = createMapHandler(executionContext, executeConcurrently);
     return mapHandler(
@@ -173,8 +174,13 @@ export const createDurableContext = (
   };
 
   const parallel: DurableContext["parallel"] = <T>(
-    nameOrBranches: string | undefined | ParallelFunc<T>[],
-    branchesOrConfig?: ParallelFunc<T>[] | ParallelConfig,
+    nameOrBranches:
+      | string
+      | undefined
+      | (ParallelFunc<T> | NamedParallelBranch<T>)[],
+    branchesOrConfig?:
+      | (ParallelFunc<T> | NamedParallelBranch<T>)[]
+      | ParallelConfig,
     maybeConfig?: ParallelConfig,
   ) => {
     const parallelHandler = createParallelHandler(

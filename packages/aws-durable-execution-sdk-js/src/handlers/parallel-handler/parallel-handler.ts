@@ -6,6 +6,7 @@ import {
   ConcurrentExecutionItem,
   ConcurrentExecutor,
   OperationSubType,
+  NamedParallelBranch,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { BatchResult } from "../concurrent-execution-handler/batch-result";
@@ -16,19 +17,27 @@ export const createParallelHandler = (
   executeConcurrently: DurableContext["executeConcurrently"],
 ) => {
   return async <T>(
-    nameOrBranches: string | undefined | ParallelFunc<T>[],
-    branchesOrConfig?: ParallelFunc<T>[] | ParallelConfig,
+    nameOrBranches:
+      | string
+      | undefined
+      | (ParallelFunc<T> | NamedParallelBranch<T>)[],
+    branchesOrConfig?:
+      | (ParallelFunc<T> | NamedParallelBranch<T>)[]
+      | ParallelConfig,
     maybeConfig?: ParallelConfig,
   ): Promise<BatchResult<T>> => {
     let name: string | undefined;
-    let branches: ParallelFunc<T>[];
+    let branches: (ParallelFunc<T> | NamedParallelBranch<T>)[];
     let config: ParallelConfig | undefined;
 
     // Parse overloaded parameters
     if (typeof nameOrBranches === "string" || nameOrBranches === undefined) {
       // Case: parallel(name, branches, config?)
       name = nameOrBranches;
-      branches = branchesOrConfig as ParallelFunc<T>[];
+      branches = branchesOrConfig as (
+        | ParallelFunc<T>
+        | NamedParallelBranch<T>
+      )[];
       config = maybeConfig;
     } else {
       // Case: parallel(branches, config?)
@@ -49,17 +58,32 @@ export const createParallelHandler = (
       maxConcurrency: config?.maxConcurrency,
     });
 
-    if (branches.some((branch) => typeof branch !== "function")) {
-      throw new Error("All branches must be functions");
+    if (
+      branches.some(
+        (branch) =>
+          typeof branch !== "function" &&
+          (typeof branch !== "object" || typeof branch.func !== "function"),
+      )
+    ) {
+      throw new Error(
+        "All branches must be functions or NamedParallelBranch objects",
+      );
     }
 
     // Convert to concurrent execution items
     const executionItems: ConcurrentExecutionItem<ParallelFunc<T>>[] =
-      branches.map((branch, index) => ({
-        id: `parallel-branch-${index}`,
-        data: branch,
-        index,
-      }));
+      branches.map((branch, index) => {
+        const isNamedBranch = typeof branch === "object" && "func" in branch;
+        const func = isNamedBranch ? branch.func : branch;
+        const branchName = isNamedBranch ? branch.name : undefined;
+
+        return {
+          id: `parallel-branch-${index}`,
+          data: func,
+          index,
+          name: branchName,
+        };
+      });
 
     // Create executor that calls the branch function
     const executor: ConcurrentExecutor<ParallelFunc<T>, T> = async (

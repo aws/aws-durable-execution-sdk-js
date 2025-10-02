@@ -1,14 +1,20 @@
-import { createParallelSummaryGenerator, createMapSummaryGenerator } from "./summary-generators";
+import {
+  createParallelSummaryGenerator,
+  createMapSummaryGenerator,
+} from "./summary-generators";
 import { BatchResultImpl } from "../handlers/concurrent-execution-handler/batch-result";
 import { BatchItemStatus } from "../types";
 
 describe("Summary Generators", () => {
   describe("createParallelSummaryGenerator", () => {
     it("should generate summary for successful parallel result", () => {
-      const batchResult = new BatchResultImpl([
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
-      ], "ALL_COMPLETED");
+      const batchResult = new BatchResultImpl(
+        [
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
+        ],
+        "ALL_COMPLETED",
+      );
 
       const summaryGenerator = createParallelSummaryGenerator();
       const summary = summaryGenerator(batchResult);
@@ -27,10 +33,13 @@ describe("Summary Generators", () => {
 
     it("should generate summary for failed parallel result", () => {
       const error = new Error("Test error");
-      const batchResult = new BatchResultImpl([
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, error, status: BatchItemStatus.FAILED },
-      ], "ALL_COMPLETED");
+      const batchResult = new BatchResultImpl(
+        [
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, error, status: BatchItemStatus.FAILED },
+        ],
+        "ALL_COMPLETED",
+      );
 
       const summaryGenerator = createParallelSummaryGenerator();
       const summary = summaryGenerator(batchResult);
@@ -48,10 +57,13 @@ describe("Summary Generators", () => {
     });
 
     it("should generate summary for early completion", () => {
-      const batchResult = new BatchResultImpl([
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, status: BatchItemStatus.STARTED },
-      ], "MIN_SUCCESSFUL_REACHED");
+      const batchResult = new BatchResultImpl(
+        [
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, status: BatchItemStatus.STARTED },
+        ],
+        "MIN_SUCCESSFUL_REACHED",
+      );
 
       const summaryGenerator = createParallelSummaryGenerator();
       const summary = summaryGenerator(batchResult);
@@ -71,11 +83,14 @@ describe("Summary Generators", () => {
 
   describe("createMapSummaryGenerator", () => {
     it("should generate summary for successful map result", () => {
-      const batchResult = new BatchResultImpl([
-        { index: 0, result: "mapped1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, result: "mapped2", status: BatchItemStatus.SUCCEEDED },
-        { index: 2, result: "mapped3", status: BatchItemStatus.SUCCEEDED },
-      ], "ALL_COMPLETED");
+      const batchResult = new BatchResultImpl(
+        [
+          { index: 0, result: "mapped1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "mapped2", status: BatchItemStatus.SUCCEEDED },
+          { index: 2, result: "mapped3", status: BatchItemStatus.SUCCEEDED },
+        ],
+        "ALL_COMPLETED",
+      );
 
       const summaryGenerator = createMapSummaryGenerator();
       const summary = summaryGenerator(batchResult);
@@ -93,11 +108,14 @@ describe("Summary Generators", () => {
 
     it("should generate summary for failed map result", () => {
       const error = new Error("Mapping failed");
-      const batchResult = new BatchResultImpl([
-        { index: 0, result: "mapped1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, error, status: BatchItemStatus.FAILED },
-        { index: 2, result: "mapped3", status: BatchItemStatus.SUCCEEDED },
-      ], "ALL_COMPLETED");
+      const batchResult = new BatchResultImpl(
+        [
+          { index: 0, result: "mapped1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, error, status: BatchItemStatus.FAILED },
+          { index: 2, result: "mapped3", status: BatchItemStatus.SUCCEEDED },
+        ],
+        "ALL_COMPLETED",
+      );
 
       const summaryGenerator = createMapSummaryGenerator();
       const summary = summaryGenerator(batchResult);
@@ -116,10 +134,13 @@ describe("Summary Generators", () => {
     it("should generate summary for failure tolerance exceeded", () => {
       const error1 = new Error("Error 1");
       const error2 = new Error("Error 2");
-      const batchResult = new BatchResultImpl([
-        { index: 0, error: error1, status: BatchItemStatus.FAILED },
-        { index: 1, error: error2, status: BatchItemStatus.FAILED },
-      ], "FAILURE_TOLERANCE_EXCEEDED");
+      const batchResult = new BatchResultImpl(
+        [
+          { index: 0, error: error1, status: BatchItemStatus.FAILED },
+          { index: 1, error: error2, status: BatchItemStatus.FAILED },
+        ],
+        "FAILURE_TOLERANCE_EXCEEDED",
+      );
 
       const summaryGenerator = createMapSummaryGenerator();
       const summary = summaryGenerator(batchResult);
@@ -141,7 +162,7 @@ describe("Summary Generators", () => {
       const batchResult = new BatchResultImpl([], "ALL_COMPLETED");
       const summaryGenerator = createParallelSummaryGenerator();
       const summary = summaryGenerator(batchResult);
-      
+
       expect(typeof summary).toBe("string");
       expect(() => JSON.parse(summary)).not.toThrow();
     });
@@ -150,7 +171,7 @@ describe("Summary Generators", () => {
       const batchResult = new BatchResultImpl([], "ALL_COMPLETED");
       const summaryGenerator = createMapSummaryGenerator();
       const summary = summaryGenerator(batchResult);
-      
+
       expect(typeof summary).toBe("string");
       expect(() => JSON.parse(summary)).not.toThrow();
     });

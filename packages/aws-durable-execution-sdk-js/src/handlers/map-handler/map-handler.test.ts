@@ -30,7 +30,9 @@ describe("Map Handler", () => {
   describe("parameter parsing", () => {
     it("should parse parameters with name", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string> = jest.fn().mockResolvedValue("result");
+      const mapFunc: MapFunc<string, string> = jest
+        .fn()
+        .mockResolvedValue("result");
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
@@ -43,8 +45,8 @@ describe("Map Handler", () => {
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         "test-map",
         [
-          { id: "map-item-0", data: "item1", index: 0 },
-          { id: "map-item-1", data: "item2", index: 1 },
+          { id: "map-item-0", data: "item1", index: 0, name: undefined },
+          { id: "map-item-1", data: "item2", index: 1, name: undefined },
         ],
         expect.any(Function),
         {
@@ -61,7 +63,9 @@ describe("Map Handler", () => {
 
     it("should parse parameters without name", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string> = jest.fn().mockResolvedValue("result");
+      const mapFunc: MapFunc<string, string> = jest
+        .fn()
+        .mockResolvedValue("result");
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
@@ -74,8 +78,8 @@ describe("Map Handler", () => {
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         undefined,
         [
-          { id: "map-item-0", data: "item1", index: 0 },
-          { id: "map-item-1", data: "item2", index: 1 },
+          { id: "map-item-0", data: "item1", index: 0, name: undefined },
+          { id: "map-item-1", data: "item2", index: 1, name: undefined },
         ],
         expect.any(Function),
         {
@@ -88,7 +92,7 @@ describe("Map Handler", () => {
 
     it("should accept undefined as name parameter", async () => {
       const items = ["item"];
-      const mapFunc: MapFunc<string> = jest.fn();
+      const mapFunc: MapFunc<string, string> = jest.fn();
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "result", status: BatchItemStatus.SUCCEEDED },
@@ -99,7 +103,7 @@ describe("Map Handler", () => {
 
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         undefined,
-        [{ id: "map-item-0", data: "item", index: 0 }],
+        [{ id: "map-item-0", data: "item", index: 0, name: undefined }],
         expect.any(Function),
         {
           ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
@@ -111,7 +115,9 @@ describe("Map Handler", () => {
 
     it("should parse parameters with config", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string> = jest.fn().mockResolvedValue("result");
+      const mapFunc: MapFunc<string, string> = jest
+        .fn()
+        .mockResolvedValue("result");
       const config = {
         ...{
           ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
@@ -132,8 +138,8 @@ describe("Map Handler", () => {
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         undefined,
         [
-          { id: "map-item-0", data: "item1", index: 0 },
-          { id: "map-item-1", data: "item2", index: 1 },
+          { id: "map-item-0", data: "item1", index: 0, name: undefined },
+          { id: "map-item-1", data: "item2", index: 1, name: undefined },
         ],
         expect.any(Function),
         {
@@ -150,7 +156,7 @@ describe("Map Handler", () => {
 
   describe("validation", () => {
     it("should throw error for non-array items", async () => {
-      const mapFunc: MapFunc<string> = jest.fn();
+      const mapFunc: MapFunc<string, string> = jest.fn();
 
       await expect(mapHandler("not-an-array" as any, mapFunc)).rejects.toThrow(
         "Map operation requires an array of items",
@@ -169,7 +175,7 @@ describe("Map Handler", () => {
   describe("execution", () => {
     it("should handle empty array", async () => {
       const items: string[] = [];
-      const mapFunc: MapFunc<string> = jest.fn();
+      const mapFunc: MapFunc<string, string> = jest.fn();
 
       const mockResult = new MockBatchResult([]);
       mockExecuteConcurrently.mockResolvedValue(mockResult as any);
@@ -191,7 +197,9 @@ describe("Map Handler", () => {
 
     it("should create correct execution items", async () => {
       const items = ["item1", "item2", "item3"];
-      const mapFunc: MapFunc<string> = jest.fn().mockResolvedValue("result");
+      const mapFunc: MapFunc<string, string> = jest
+        .fn()
+        .mockResolvedValue("result");
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
@@ -205,9 +213,9 @@ describe("Map Handler", () => {
       expect(mockExecuteConcurrently).toHaveBeenCalledWith(
         undefined,
         [
-          { id: "map-item-0", data: "item1", index: 0 },
-          { id: "map-item-1", data: "item2", index: 1 },
-          { id: "map-item-2", data: "item3", index: 2 },
+          { id: "map-item-0", data: "item1", index: 0, name: undefined },
+          { id: "map-item-1", data: "item2", index: 1, name: undefined },
+          { id: "map-item-2", data: "item3", index: 2, name: undefined },
         ],
         expect.any(Function),
         {
@@ -220,7 +228,7 @@ describe("Map Handler", () => {
 
     it("should return BatchResult with correct structure", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string> = jest
+      const mapFunc: MapFunc<string, string> = jest
         .fn()
         .mockResolvedValueOnce("result1")
         .mockResolvedValueOnce("result2");
@@ -241,7 +249,7 @@ describe("Map Handler", () => {
 
     it("should create executor that calls mapFunc correctly", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string> = jest
+      const mapFunc: MapFunc<string, string> = jest
         .fn()
         .mockResolvedValueOnce("result1")
         .mockResolvedValueOnce("result2");
@@ -284,7 +292,9 @@ describe("Map Handler", () => {
 
     it("should pass through maxConcurrency config", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string> = jest.fn().mockResolvedValue("result");
+      const mapFunc: MapFunc<string, string> = jest
+        .fn()
+        .mockResolvedValue("result");
       const config = {
         ...{
           ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
@@ -308,6 +318,108 @@ describe("Map Handler", () => {
         expect.any(Function),
         config,
       );
+    });
+
+    describe("itemNamer functionality", () => {
+      it("should use custom itemNamer when provided", async () => {
+        const items = [
+          { id: "user1", name: "Alice" },
+          { id: "user2", name: "Bob" },
+        ];
+        const mapFunc: MapFunc<{ id: string; name: string }, string> = jest
+          .fn()
+          .mockResolvedValue("processed");
+        const itemNamer = (item: any, index: number) => `User-${item.id}`;
+
+        const mockResult = new MockBatchResult([
+          { index: 0, result: "processed", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "processed", status: BatchItemStatus.SUCCEEDED },
+        ]);
+        mockExecuteConcurrently.mockResolvedValue(mockResult as any);
+
+        await mapHandler(items, mapFunc, { itemNamer });
+
+        expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+          undefined,
+          [
+            { id: "map-item-0", data: items[0], index: 0, name: "User-user1" },
+            { id: "map-item-1", data: items[1], index: 1, name: "User-user2" },
+          ],
+          expect.any(Function),
+          {
+            ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+            summaryGenerator: expect.any(Function),
+            completionConfig: undefined,
+          },
+        );
+      });
+
+      it("should use undefined names when itemNamer is not provided", async () => {
+        const items = ["item1", "item2"];
+        const mapFunc: MapFunc<string, string> = jest
+          .fn()
+          .mockResolvedValue("processed");
+
+        const mockResult = new MockBatchResult([
+          { index: 0, result: "processed", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "processed", status: BatchItemStatus.SUCCEEDED },
+        ]);
+        mockExecuteConcurrently.mockResolvedValue(mockResult as any);
+
+        await mapHandler(items, mapFunc);
+
+        expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+          undefined,
+          [
+            { id: "map-item-0", data: "item1", index: 0, name: undefined },
+            { id: "map-item-1", data: "item2", index: 1, name: undefined },
+          ],
+          expect.any(Function),
+          {
+            ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+            summaryGenerator: expect.any(Function),
+            completionConfig: undefined,
+          },
+        );
+      });
+
+      it("should pass item and index to itemNamer", async () => {
+        const items = ["a", "b", "c"];
+        const mapFunc: MapFunc<string, string> = jest
+          .fn()
+          .mockResolvedValue("processed");
+        const itemNamer = jest.fn(
+          (item: string, index: number) => `${item}-${index}`,
+        );
+
+        const mockResult = new MockBatchResult([
+          { index: 0, result: "processed", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "processed", status: BatchItemStatus.SUCCEEDED },
+          { index: 2, result: "processed", status: BatchItemStatus.SUCCEEDED },
+        ]);
+        mockExecuteConcurrently.mockResolvedValue(mockResult as any);
+
+        await mapHandler(items, mapFunc, { itemNamer });
+
+        expect(itemNamer).toHaveBeenCalledWith("a", 0);
+        expect(itemNamer).toHaveBeenCalledWith("b", 1);
+        expect(itemNamer).toHaveBeenCalledWith("c", 2);
+
+        expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+          undefined,
+          [
+            { id: "map-item-0", data: "a", index: 0, name: "a-0" },
+            { id: "map-item-1", data: "b", index: 1, name: "b-1" },
+            { id: "map-item-2", data: "c", index: 2, name: "c-2" },
+          ],
+          expect.any(Function),
+          {
+            ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+            summaryGenerator: expect.any(Function),
+            completionConfig: undefined,
+          },
+        );
+      });
     });
   });
 });
