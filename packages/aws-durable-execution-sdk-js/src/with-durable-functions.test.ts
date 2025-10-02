@@ -2,6 +2,11 @@ import { withDurableFunctions } from "./with-durable-functions";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { CheckpointFailedError } from "./errors/checkpoint-errors/checkpoint-errors";
+import { 
+  UnrecoverableInvocationError, 
+  UnrecoverableExecutionError 
+} from "./errors/unrecoverable-error/unrecoverable-error";
+import { SerializationFailedError } from "./errors/serdes-errors/serdes-errors";
 import { TerminationReason } from "./termination-manager/types";
 import { Context } from "aws-lambda";
 import { log } from "./utils/logger/logger";
@@ -381,6 +386,81 @@ describe("withDurableFunctions", () => {
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
     );
+  });
+
+  it("should throw error when handler throws UnrecoverableInvocationError", async () => {
+    // Setup
+    const serdesError = new SerializationFailedError("step-1", "test-step");
+    const mockHandler = jest.fn().mockRejectedValue(serdesError);
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    ); // Never resolves
+
+    // Execute & Verify
+    const wrappedHandler = withDurableFunctions(mockHandler);
+    await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
+      SerializationFailedError,
+    );
+    expect(mockHandler).toHaveBeenCalledWith(
+      mockCustomerHandlerEvent,
+      mockDurableContext,
+    );
+  });
+
+  it("should throw error when handler throws custom UnrecoverableInvocationError", async () => {
+    // Setup - Create a custom UnrecoverableInvocationError
+    class CustomInvocationError extends UnrecoverableInvocationError {
+      readonly terminationReason = TerminationReason.CUSTOM;
+      constructor(message: string) {
+        super(message);
+      }
+    }
+    
+    const customError = new CustomInvocationError("Custom invocation error");
+    const mockHandler = jest.fn().mockRejectedValue(customError);
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    ); // Never resolves
+
+    // Execute & Verify
+    const wrappedHandler = withDurableFunctions(mockHandler);
+    await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
+      CustomInvocationError,
+    );
+    expect(mockHandler).toHaveBeenCalledWith(
+      mockCustomerHandlerEvent,
+      mockDurableContext,
+    );
+  });
+
+  it("should return error response when handler throws UnrecoverableExecutionError", async () => {
+    // Setup - Create a custom UnrecoverableExecutionError
+    class CustomExecutionError extends UnrecoverableExecutionError {
+      readonly terminationReason = TerminationReason.CUSTOM;
+      constructor(message: string) {
+        super(message);
+      }
+    }
+    
+    const executionError = new CustomExecutionError("Custom execution error");
+    const mockHandler = jest.fn().mockRejectedValue(executionError);
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    ); // Never resolves
+
+    // Execute
+    const wrappedHandler = withDurableFunctions(mockHandler);
+    const response = await wrappedHandler(mockEvent, mockContext);
+
+    // Verify - UnrecoverableExecutionError should be returned as failed invocation, not thrown
+    expect(mockHandler).toHaveBeenCalledWith(
+      mockCustomerHandlerEvent,
+      mockDurableContext,
+    );
+    expect(response).toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: createErrorObjectFromError(executionError),
+    });
   });
 
   it("should call deleteCheckpoint when initializing durable function", async () => {

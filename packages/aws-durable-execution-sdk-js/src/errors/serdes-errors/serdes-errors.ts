@@ -1,15 +1,15 @@
 import { TerminationReason } from "../../termination-manager/types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
-import { UnrecoverableExecutionError } from "../unrecoverable-error/unrecoverable-error";
+import { UnrecoverableInvocationError } from "../unrecoverable-error/unrecoverable-error";
 import { log } from "../../utils/logger/logger";
 import { SerdesContext } from "../../utils/serdes/serdes";
 
 /**
  * Error thrown when serialization fails
- * This is an unrecoverable execution error that will terminate the entire execution
+ * This is an unrecoverable invocation error that will terminate the current Lambda invocation
  * because data corruption or incompatible formats indicate a fundamental problem
  */
-export class SerializationFailedError extends UnrecoverableExecutionError {
+export class SerializationFailedError extends UnrecoverableInvocationError {
   readonly terminationReason = TerminationReason.CUSTOM;
 
   constructor(stepId: string, stepName?: string, originalError?: Error) {
@@ -20,10 +20,10 @@ export class SerializationFailedError extends UnrecoverableExecutionError {
 
 /**
  * Error thrown when deserialization fails
- * This is an unrecoverable execution error that will terminate the entire execution
+ * This is an unrecoverable invocation error that will terminate the current Lambda invocation
  * because data corruption or incompatible formats indicate a fundamental problem
  */
-export class DeserializationFailedError extends UnrecoverableExecutionError {
+export class DeserializationFailedError extends UnrecoverableInvocationError {
   readonly terminationReason = TerminationReason.CUSTOM;
 
   constructor(stepId: string, stepName?: string, originalError?: Error) {
@@ -34,7 +34,7 @@ export class DeserializationFailedError extends UnrecoverableExecutionError {
 
 /**
  * Type guard to check if an error is a Serdes error
- * @deprecated Use isUnrecoverableExecutionError instead for broader error detection
+ * @deprecated Use isUnrecoverableInvocationError instead for broader error detection
  */
 export function isSerdesError(
   error: unknown,

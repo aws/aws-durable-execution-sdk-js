@@ -4,6 +4,7 @@ import { createDurableContext } from "./context/durable-context/durable-context"
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { CheckpointFailedError } from "./errors/checkpoint-errors/checkpoint-errors";
+import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import {
   createCheckpoint,
   deleteCheckpoint,
@@ -183,12 +184,12 @@ async function runHandler<Input, Output>(
   } catch (error) {
     log(executionContext.isVerbose, "❌", "Handler threw an error:", error);
 
-    // Check if this is a checkpoint failure
-    if (error instanceof CheckpointFailedError) {
+    // Check if this is an unrecoverable invocation error (includes checkpoint failures and serdes errors)
+    if (isUnrecoverableInvocationError(error)) {
       log(
         executionContext.isVerbose,
         "🛑",
-        "Checkpoint failed - terminating Lambda execution",
+        "Unrecoverable invocation error - terminating Lambda execution",
       );
       throw error; // Re-throw the error to terminate Lambda execution
     }

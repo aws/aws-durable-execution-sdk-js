@@ -7,9 +7,9 @@ import {
 } from "./serdes-errors";
 import {
   UnrecoverableError,
-  UnrecoverableExecutionError,
+  UnrecoverableInvocationError,
   isUnrecoverableError,
-  isUnrecoverableExecutionError,
+  isUnrecoverableInvocationError,
 } from "../unrecoverable-error/unrecoverable-error";
 import { TerminationReason } from "../../termination-manager/types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -26,17 +26,17 @@ describe("Serdes Errors", () => {
       );
 
       expect(error.name).toBe("SerializationFailedError");
-      expect(error.message).toContain("[Unrecoverable Execution]");
+      expect(error.message).toContain("[Unrecoverable Invocation]");
       expect(error.message).toContain(
         'Serialization failed for step "test-step" (step-1)',
       );
       expect(error.message).toContain("JSON.stringify failed");
       expect(error.terminationReason).toBe(TerminationReason.CUSTOM);
       expect(error.isUnrecoverable).toBe(true);
-      expect(error.isUnrecoverableExecution).toBe(true);
+      expect(error.isUnrecoverableInvocation).toBe(true);
       expect(error.originalError).toBe(originalError);
       expect(error).toBeInstanceOf(UnrecoverableError);
-      expect(error).toBeInstanceOf(UnrecoverableExecutionError);
+      expect(error).toBeInstanceOf(UnrecoverableInvocationError);
     });
 
     it("should create error without step name", () => {
@@ -61,7 +61,7 @@ describe("Serdes Errors", () => {
     it("should create error without originalError", () => {
       const error = new SerializationFailedError("step-1", "test-step");
 
-      expect(error.message).toContain("[Unrecoverable Execution]");
+      expect(error.message).toContain("[Unrecoverable Invocation]");
       expect(error.message).toContain(
         'Serialization failed for step "test-step" (step-1)',
       );
@@ -77,7 +77,7 @@ describe("Serdes Errors", () => {
         originalError,
       );
 
-      expect(error.message).toContain("[Unrecoverable Execution]");
+      expect(error.message).toContain("[Unrecoverable Invocation]");
       expect(error.message).toContain(
         'Serialization failed for step "test-step" (step-1)',
       );
@@ -96,17 +96,17 @@ describe("Serdes Errors", () => {
       );
 
       expect(error.name).toBe("DeserializationFailedError");
-      expect(error.message).toContain("[Unrecoverable Execution]");
+      expect(error.message).toContain("[Unrecoverable Invocation]");
       expect(error.message).toContain(
         'Deserialization failed for step "test-step" (step-1)',
       );
       expect(error.message).toContain("JSON.parse failed");
       expect(error.terminationReason).toBe(TerminationReason.CUSTOM);
       expect(error.isUnrecoverable).toBe(true);
-      expect(error.isUnrecoverableExecution).toBe(true);
+      expect(error.isUnrecoverableInvocation).toBe(true);
       expect(error.originalError).toBe(originalError);
       expect(error).toBeInstanceOf(UnrecoverableError);
-      expect(error).toBeInstanceOf(UnrecoverableExecutionError);
+      expect(error).toBeInstanceOf(UnrecoverableInvocationError);
     });
 
     it("should create error without step name", () => {
@@ -121,7 +121,7 @@ describe("Serdes Errors", () => {
     it("should create error without originalError", () => {
       const error = new DeserializationFailedError("step-1", "test-step");
 
-      expect(error.message).toContain("[Unrecoverable Execution]");
+      expect(error.message).toContain("[Unrecoverable Invocation]");
       expect(error.message).toContain(
         'Deserialization failed for step "test-step" (step-1)',
       );
@@ -137,7 +137,7 @@ describe("Serdes Errors", () => {
         originalError,
       );
 
-      expect(error.message).toContain("[Unrecoverable Execution]");
+      expect(error.message).toContain("[Unrecoverable Invocation]");
       expect(error.message).toContain(
         'Deserialization failed for step "test-step" (step-1)',
       );
@@ -174,13 +174,13 @@ describe("Serdes Errors", () => {
     it("should return true for SerializationFailedError", () => {
       const error = new SerializationFailedError("step-1");
       expect(isUnrecoverableError(error)).toBe(true);
-      expect(isUnrecoverableExecutionError(error)).toBe(true);
+      expect(isUnrecoverableInvocationError(error)).toBe(true);
     });
 
     it("should return true for DeserializationFailedError", () => {
       const error = new DeserializationFailedError("step-1");
       expect(isUnrecoverableError(error)).toBe(true);
-      expect(isUnrecoverableExecutionError(error)).toBe(true);
+      expect(isUnrecoverableInvocationError(error)).toBe(true);
     });
   });
 
