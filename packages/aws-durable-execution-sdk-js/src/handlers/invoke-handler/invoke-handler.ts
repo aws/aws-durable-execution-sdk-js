@@ -106,14 +106,18 @@ export const createInvokeHandler = (
           });
           continue; // Re-evaluate status after waiting
         }
-        
+
         // No other operations running, safe to terminate
         log(
           context.isVerbose,
           "⏳",
           `Invoke ${name || funcId} still in progress, terminating`,
         );
-        return terminate(context, TerminationReason.OPERATION_TERMINATED, stepId);
+        return terminate(
+          context,
+          TerminationReason.OPERATION_TERMINATED,
+          stepId,
+        );
       }
 
       // Execute with potential interception (testing)

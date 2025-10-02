@@ -2,9 +2,9 @@ import { withDurableFunctions } from "./with-durable-functions";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { CheckpointFailedError } from "./errors/checkpoint-errors/checkpoint-errors";
-import { 
-  UnrecoverableInvocationError, 
-  UnrecoverableExecutionError 
+import {
+  UnrecoverableInvocationError,
+  UnrecoverableExecutionError,
 } from "./errors/unrecoverable-error/unrecoverable-error";
 import { SerializationFailedError } from "./errors/serdes-errors/serdes-errors";
 import { TerminationReason } from "./termination-manager/types";
@@ -415,7 +415,7 @@ describe("withDurableFunctions", () => {
         super(message);
       }
     }
-    
+
     const customError = new CustomInvocationError("Custom invocation error");
     const mockHandler = jest.fn().mockRejectedValue(customError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
@@ -441,7 +441,7 @@ describe("withDurableFunctions", () => {
         super(message);
       }
     }
-    
+
     const executionError = new CustomExecutionError("Custom execution error");
     const mockHandler = jest.fn().mockRejectedValue(executionError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(

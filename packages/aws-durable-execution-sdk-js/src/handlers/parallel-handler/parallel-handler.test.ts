@@ -63,6 +63,7 @@ describe("Parallel Handler", () => {
           completionConfig: undefined,
           iterationSubType: "ParallelBranch",
           maxConcurrency: undefined,
+          summaryGenerator: expect.any(Function),
           topLevelSubType: "Parallel",
         },
       );
@@ -91,6 +92,7 @@ describe("Parallel Handler", () => {
           completionConfig: undefined,
           iterationSubType: "ParallelBranch",
           maxConcurrency: 2,
+          summaryGenerator: expect.any(Function),
           topLevelSubType: "Parallel",
         },
       );
@@ -119,6 +121,7 @@ describe("Parallel Handler", () => {
           completionConfig: undefined,
           iterationSubType: "ParallelBranch",
           maxConcurrency: 3,
+          summaryGenerator: expect.any(Function),
           topLevelSubType: "Parallel",
         },
       );

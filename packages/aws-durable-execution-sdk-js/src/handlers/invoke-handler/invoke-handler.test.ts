@@ -268,9 +268,13 @@ describe("InvokeHandler", () => {
     });
 
     it("should wait when operation is in progress and other operations are running", async () => {
-      const mockGetStepData = jest.fn()
+      const mockGetStepData = jest
+        .fn()
         .mockReturnValueOnce({ Status: OperationStatus.STARTED })
-        .mockReturnValueOnce({ Status: OperationStatus.SUCCEEDED, InvokeDetails: { Result: '{"result":"success"}' } });
+        .mockReturnValueOnce({
+          Status: OperationStatus.SUCCEEDED,
+          InvokeDetails: { Result: '{"result":"success"}' },
+        });
 
       mockContext.getStepData = mockGetStepData;
       mockHasRunningOperations.mockReturnValue(true); // Other operations running
@@ -303,7 +307,8 @@ describe("InvokeHandler", () => {
     });
 
     it("should create checkpoint and terminate for new invoke without name", async () => {
-      const mockGetStepData = jest.fn()
+      const mockGetStepData = jest
+        .fn()
         .mockReturnValueOnce(undefined) // First call - no step data
         .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
 
@@ -358,7 +363,8 @@ describe("InvokeHandler", () => {
     });
 
     it("should create checkpoint and terminate for new invoke with name", async () => {
-      const mockGetStepData = jest.fn()
+      const mockGetStepData = jest
+        .fn()
         .mockReturnValueOnce(undefined) // First call - no step data
         .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
 
@@ -397,7 +403,8 @@ describe("InvokeHandler", () => {
     });
 
     it("should handle invoke with options", async () => {
-      const mockGetStepData = jest.fn()
+      const mockGetStepData = jest
+        .fn()
         .mockReturnValueOnce(undefined) // First call - no step data
         .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
 

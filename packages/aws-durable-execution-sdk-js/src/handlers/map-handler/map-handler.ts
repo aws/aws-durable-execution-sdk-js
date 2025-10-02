@@ -9,6 +9,7 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { BatchResult } from "../concurrent-execution-handler/batch-result";
+import { createMapSummaryGenerator } from "../../utils/summary-generators";
 
 export const createMapHandler = (
   context: ExecutionContext,
@@ -74,6 +75,7 @@ export const createMapHandler = (
       maxConcurrency: config?.maxConcurrency,
       topLevelSubType: OperationSubType.MAP,
       iterationSubType: OperationSubType.MAP_ITERATION,
+      summaryGenerator: createMapSummaryGenerator(),
       completionConfig: config?.completionConfig,
     });
 

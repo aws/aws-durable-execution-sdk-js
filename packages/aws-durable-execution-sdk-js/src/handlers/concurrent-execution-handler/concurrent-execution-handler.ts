@@ -18,6 +18,7 @@ export interface ConcurrencyConfig {
   maxConcurrency?: number;
   topLevelSubType?: string;
   iterationSubType?: string;
+  summaryGenerator?: (result: any) => string;
   completionConfig?: {
     minSuccessful?: number;
     toleratedFailureCount?: number;
@@ -300,6 +301,7 @@ export const createConcurrentExecutionHandler = (
 
     return await runInChildContext(name, executeOperation, {
       subType: config?.topLevelSubType,
+      summaryGenerator: config?.summaryGenerator,
     });
   };
 };

@@ -1,15 +1,5 @@
 [
   {
-    "timestamp": "2025-06-27T16:47:20.156Z",
-    "size": 888765,
-    "gitCommit": "6c98b2ec2c523a92309a7b8ee00e9c61f83392cf"
-  },
-  {
-    "timestamp": "2025-07-09T20:06:07.839Z",
-    "size": 891952,
-    "gitCommit": "bf7ad0b2cbd6aa0a0bf265e67a013bdf1dec4854"
-  },
-  {
     "timestamp": "2025-07-10T01:35:30.375Z",
     "size": 891887,
     "gitCommit": "ee000fbc8653964a49a894906b8741272288490f"
@@ -248,5 +238,15 @@
     "timestamp": "2025-09-29T21:53:05.018Z",
     "size": 361581,
     "gitCommit": "1eba8c6d9f097275746307697346a5f2caf27c23"
+  },
+  {
+    "timestamp": "2025-10-02T19:08:08.763Z",
+    "size": 357086,
+    "gitCommit": "77e3ad5a04f502ab227318b89b47b5ac8b63630f"
+  },
+  {
+    "timestamp": "2025-10-02T19:56:14.710Z",
+    "size": 357050,
+    "gitCommit": "7934b1ddf1b32907d5a20f1995a49bfa22845821"
   }
 ]

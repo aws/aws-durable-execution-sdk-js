@@ -9,6 +9,7 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { BatchResult } from "../concurrent-execution-handler/batch-result";
+import { createParallelSummaryGenerator } from "../../utils/summary-generators";
 
 export const createParallelHandler = (
   context: ExecutionContext,
@@ -84,6 +85,7 @@ export const createParallelHandler = (
       maxConcurrency: config?.maxConcurrency,
       topLevelSubType: OperationSubType.PARALLEL,
       iterationSubType: OperationSubType.PARALLEL_BRANCH,
+      summaryGenerator: createParallelSummaryGenerator(),
       completionConfig: config?.completionConfig,
     });
 

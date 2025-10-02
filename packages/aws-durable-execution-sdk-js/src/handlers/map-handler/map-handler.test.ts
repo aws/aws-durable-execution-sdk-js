@@ -47,7 +47,15 @@ describe("Map Handler", () => {
           { id: "map-item-1", data: "item2", index: 1 },
         ],
         expect.any(Function),
-        TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+        {
+          ...{
+            ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+            summaryGenerator: expect.any(Function),
+            completionConfig: undefined,
+          },
+          summaryGenerator: expect.any(Function),
+          completionConfig: undefined,
+        },
       );
     });
 
@@ -70,7 +78,11 @@ describe("Map Handler", () => {
           { id: "map-item-1", data: "item2", index: 1 },
         ],
         expect.any(Function),
-        TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+        {
+          ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+          summaryGenerator: expect.any(Function),
+          completionConfig: undefined,
+        },
       );
     });
 
@@ -89,7 +101,11 @@ describe("Map Handler", () => {
         undefined,
         [{ id: "map-item-0", data: "item", index: 0 }],
         expect.any(Function),
-        TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+        {
+          ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+          summaryGenerator: expect.any(Function),
+          completionConfig: undefined,
+        },
       );
     });
 
@@ -97,7 +113,11 @@ describe("Map Handler", () => {
       const items = ["item1", "item2"];
       const mapFunc: MapFunc<string> = jest.fn().mockResolvedValue("result");
       const config = {
-        ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+        ...{
+          ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+          summaryGenerator: expect.any(Function),
+          completionConfig: undefined,
+        },
         maxConcurrency: 2,
       };
 
@@ -116,7 +136,14 @@ describe("Map Handler", () => {
           { id: "map-item-1", data: "item2", index: 1 },
         ],
         expect.any(Function),
-        { ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG, maxConcurrency: 2 },
+        {
+          ...{
+            ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+            summaryGenerator: expect.any(Function),
+            completionConfig: undefined,
+          },
+          maxConcurrency: 2,
+        },
       );
     });
   });
@@ -154,7 +181,11 @@ describe("Map Handler", () => {
         undefined,
         [],
         expect.any(Function),
-        TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+        {
+          ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+          summaryGenerator: expect.any(Function),
+          completionConfig: undefined,
+        },
       );
     });
 
@@ -179,7 +210,11 @@ describe("Map Handler", () => {
           { id: "map-item-2", data: "item3", index: 2 },
         ],
         expect.any(Function),
-        TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+        {
+          ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+          summaryGenerator: expect.any(Function),
+          completionConfig: undefined,
+        },
       );
     });
 
@@ -251,7 +286,11 @@ describe("Map Handler", () => {
       const items = ["item1", "item2"];
       const mapFunc: MapFunc<string> = jest.fn().mockResolvedValue("result");
       const config = {
-        ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+        ...{
+          ...TEST_CONSTANTS.DEFAULT_MAP_CONFIG,
+          summaryGenerator: expect.any(Function),
+          completionConfig: undefined,
+        },
         maxConcurrency: 5,
       };
 
