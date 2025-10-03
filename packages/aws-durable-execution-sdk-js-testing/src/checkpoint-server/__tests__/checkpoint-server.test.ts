@@ -72,8 +72,9 @@ describe("checkpoint-server", () => {
     server = await startCheckpointServer(TEST_PORT);
   });
 
-  afterEach(() => {
-    server.close();
+  afterEach(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
   });
 
   describe("startCheckpointServer", () => {

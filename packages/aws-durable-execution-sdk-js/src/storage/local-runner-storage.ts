@@ -7,10 +7,8 @@ import {
   HttpHandlerOptions,
   HttpRequest,
   HttpResponse,
-  Provider,
 } from "@smithy/types";
 import { ApiStorage } from "./api-storage";
-import { getCredentialsProvider } from "./credentials-provider";
 
 class LocalRunnerSigV4Handler extends NodeHttpHandler {
   private readonly httpHandler: NodeHttpHandler;
@@ -18,7 +16,7 @@ class LocalRunnerSigV4Handler extends NodeHttpHandler {
 
   public constructor(
     handler: NodeHttpHandler,
-    credentials: Provider<AwsCredentialIdentity>,
+    credentials: AwsCredentialIdentity,
   ) {
     super();
     this.httpHandler = handler;
@@ -40,14 +38,16 @@ class LocalRunnerSigV4Handler extends NodeHttpHandler {
   }
 }
 
-export class PlaygroundLocalRunnerStorage extends ApiStorage {
+export class LocalRunnerStorage extends ApiStorage {
   constructor() {
-    const endpoint = process.env.LOCAL_RUNNER_ENDPOINT;
-    const region = process.env.LOCAL_RUNNER_REGION;
+    const endpoint = process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;
+    const region = process.env.DURABLE_LOCAL_RUNNER_REGION;
 
-    // Initializing local runner DAR client with endpoint and region
-
-    const credentials = getCredentialsProvider();
+    const credentials = {
+      accessKeyId: "placeholder-accessKeyId",
+      secretAccessKey: "placeholder-secretAccessKey",
+      sessionToken: "placeholder-sessionToken",
+    };
     const client = new LambdaClient({
       endpoint,
       region,

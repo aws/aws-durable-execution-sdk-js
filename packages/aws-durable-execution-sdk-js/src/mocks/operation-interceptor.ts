@@ -37,17 +37,10 @@ class MockBuilder {
 class MockableExecutionRunner {
   constructor(private readonly handler: ExecutionMockHandler) {}
 
-  private static assertLocalMode(): void {
-    if (process.env.DURABLE_LOCAL_MODE !== "true") {
-      throw new Error("Cannot create mocks outside of durable local mode");
-    }
-  }
-
   /**
    * Configure a mock for a specific operation index
    */
   onIndex(index: number): MockBuilder {
-    MockableExecutionRunner.assertLocalMode();
     return new MockBuilder(this.handler, "index", index);
   }
 
@@ -55,7 +48,6 @@ class MockableExecutionRunner {
    * Configure a mock for a specific operation name
    */
   onName(name: string, index?: number): MockBuilder {
-    MockableExecutionRunner.assertLocalMode();
     return new MockBuilder(this.handler, "name", undefined, name, index);
   }
 

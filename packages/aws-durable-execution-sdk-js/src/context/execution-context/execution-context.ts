@@ -9,24 +9,19 @@ import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-i
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
 ): Promise<{ executionContext: ExecutionContext; checkpointToken: string }> => {
-  const isLocalMode = process.env.DURABLE_LOCAL_MODE === "true";
-  const isRecordDefinitionMode =
-    process.env.DURABLE_RECORD_DEFINITION_MODE === "true";
-  const isVerbose =
-    process.env.DURABLE_VERBOSE_MODE === "true" || isRecordDefinitionMode;
+  const isVerbose = process.env.DURABLE_VERBOSE_MODE === "true";
   const isLocalRunner = event.LocalRunner || false;
 
   log(isVerbose, "🔵", "Initializing durable function with event:", event);
-  log(isVerbose, "🔧", `Running in mode: ${isLocalMode ? "LOCAL" : "LAMBDA"}`);
   log(
     isVerbose,
     "🔧",
-    `Local runner mode: ${isLocalRunner ? "ENABLED" : "DISABLED"}`,
+    `Running in mode: ${isLocalRunner ? "LOCAL" : "LAMBDA"}`,
   );
   log(
     isVerbose,
     "🔧",
-    `Recording definition mode: ${isRecordDefinitionMode ? "ENABLED" : "DISABLED"}`,
+    `Local runner mode: ${isLocalRunner ? "ENABLED" : "DISABLED"}`,
   );
   log(isVerbose, "📍", "Function Input:", event);
 
@@ -75,7 +70,6 @@ export const initializeExecutionContext = async (
       state,
       _stepData: stepData,
       terminationManager: new TerminationManager(),
-      isLocalMode,
       isVerbose,
       durableExecutionArn,
       getStepData(stepId: string): Operation | undefined {

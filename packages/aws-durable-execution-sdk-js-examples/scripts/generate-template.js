@@ -75,7 +75,7 @@ function createFunctionResource(filename) {
       },
       Environment: {
         Variables: {
-          DEX_ENDPOINT: 'http://host.docker.internal:5000',
+          AWS_ENDPOINT_URL_LAMBDA: 'http://host.docker.internal:5000',
           DURABLE_VERBOSE_MODE: 'true',
         }
       }

@@ -41,7 +41,6 @@ describe("Wait Handler", () => {
     mockExecutionContext = {
       _stepData: stepData,
       terminationManager: mockTerminationManager,
-      isLocalMode: false,
       isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
@@ -146,11 +145,6 @@ describe("Wait Handler", () => {
       // Clear mocks before each test
       OperationInterceptor.clearAll();
       mockExecutionContext.durableExecutionArn = "test-execution-arn";
-      process.env.DURABLE_LOCAL_MODE = "true";
-    });
-
-    afterAll(() => {
-      delete process.env.DURABLE_LOCAL_MODE;
     });
 
     test("should throw error when trying to mock wait operations", async () => {

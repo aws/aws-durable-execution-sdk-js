@@ -52,9 +52,8 @@ All Lambda functions get these default settings unless overridden:
 - **Runtime**: nodejs22.x
 - **Architecture**: x86_64
 - **Environment Variables**:
-  - `DEX_ENDPOINT`: `http://host.docker.internal:5000`
+  - `AWS_ENDPOINT_URL_LAMBDA`: `http://host.docker.internal:5000`
   - `DURABLE_VERBOSE_MODE`: `true`
-  - `DURABLE_RECORD_DEFINITION_MODE`: `true`
 
 ### Adding New Examples
 

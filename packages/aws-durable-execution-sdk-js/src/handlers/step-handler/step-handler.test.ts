@@ -53,7 +53,6 @@ describe("Step Handler", () => {
       mutex: {
         lock: jest.fn((fn) => fn()),
       },
-      isLocalMode: false,
       isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
@@ -977,11 +976,6 @@ describe("Step Handler", () => {
     beforeEach(() => {
       // Clear mocks before each test
       OperationInterceptor.clearAll();
-      process.env.DURABLE_LOCAL_MODE = "true";
-    });
-
-    afterAll(() => {
-      process.env.DURABLE_LOCAL_MODE = "false";
     });
 
     test("should use mock callback when mock is registered", async () => {

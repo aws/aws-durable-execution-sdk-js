@@ -6,7 +6,11 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 import examplesCatalog from "../../../../packages/aws-durable-execution-sdk-js-examples/examples-catalog.json" with { type: "json" };
-import { LambdaClient, DeleteFunctionCommand } from "@aws-sdk/client-lambda";
+import {
+  LambdaClient,
+  DeleteFunctionCommand,
+  ResourceNotFoundException,
+} from "@aws-sdk/client-lambda";
 
 // Colors for output
 const COLORS = {
@@ -270,7 +274,15 @@ class IntegrationTestRunner {
         FunctionName: functionName,
       });
 
-      await lambdaClient.send(deleteCommand);
+      try {
+        await lambdaClient.send(deleteCommand);
+      } catch (error) {
+        if (error instanceof ResourceNotFoundException) {
+          log.warning(`Function not found: ${functionName}`);
+          continue;
+        }
+        throw error;
+      }
       log.success(`Deleted function: ${functionName}`);
     }
   }

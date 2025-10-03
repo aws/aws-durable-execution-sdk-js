@@ -54,7 +54,6 @@ describe("withDurableFunctions", () => {
     _stepData: {},
     terminationManager: mockTerminationManager,
     mutex: { lock: jest.fn((fn) => fn()) },
-    isLocalMode: false,
     isVerbose: false,
   };
 

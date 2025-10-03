@@ -129,8 +129,6 @@ describe("TestExecutionOrchestrator", () => {
   });
 
   afterEach(() => {
-    delete process.env.DEX_ENDPOINT;
-    delete process.env.DURABLE_LOCAL_MODE;
     jest.useRealTimers();
   });
 

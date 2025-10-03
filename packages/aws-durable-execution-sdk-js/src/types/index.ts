@@ -669,7 +669,6 @@ export interface ExecutionContext {
   state: ExecutionState;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
   terminationManager: TerminationManager;
-  isLocalMode: boolean;
   isVerbose: boolean;
   durableExecutionArn: string;
   parentId?: string;

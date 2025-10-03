@@ -47,7 +47,7 @@ describe('generate-template', () => {
       const resource = createFunctionResource('hello-world');
       
       expect(resource.Properties.Environment.Variables).toEqual({
-        DEX_ENDPOINT: 'http://host.docker.internal:5000',
+        AWS_ENDPOINT_URL_LAMBDA: 'http://host.docker.internal:5000',
         DURABLE_VERBOSE_MODE: 'true',
       });
     });

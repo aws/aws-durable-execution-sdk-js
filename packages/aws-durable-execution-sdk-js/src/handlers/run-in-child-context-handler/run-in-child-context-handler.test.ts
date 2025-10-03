@@ -44,7 +44,6 @@ describe("Run In Child Context Handler", () => {
       mutex: {
         lock: jest.fn((fn) => fn()),
       },
-      isLocalMode: false,
       isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
@@ -570,7 +569,6 @@ describe("Mock Integration", () => {
     // Reset all mocks before each test to ensure isolation
     jest.resetAllMocks();
     OperationInterceptor.clearAll();
-    process.env.DURABLE_LOCAL_MODE = "true";
 
     mockExecutionContext = {
       _stepData: {},
@@ -579,7 +577,6 @@ describe("Mock Integration", () => {
         terminate: jest.fn(),
         getTerminationPromise: jest.fn(),
       },
-      isLocalMode: false,
       isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
@@ -595,10 +592,6 @@ describe("Mock Integration", () => {
       mockParentContext,
       createStepId,
     );
-  });
-
-  afterAll(() => {
-    delete process.env.DURABLE_LOCAL_MODE;
   });
 
   test("should use mock callback when mock is registered", async () => {

@@ -10,7 +10,6 @@ import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
 } from "../types";
-import { getCredentialsProvider } from "./credentials-provider";
 import { ExecutionState } from "./storage-provider";
 
 /**
@@ -20,22 +19,7 @@ export class ApiStorage implements ExecutionState {
   protected client: LambdaClient;
 
   constructor(client?: LambdaClient) {
-    if (client) {
-      this.client = client;
-    } else {
-      const endpoint = process.env.DEX_ENDPOINT;
-      const region = process.env.DEX_REGION || "us-west-2";
-
-      if (!endpoint) {
-        throw new Error("DEX_ENDPOINT environment variable must be set");
-      }
-
-      this.client = new LambdaClient({
-        endpoint,
-        region,
-        credentials: getCredentialsProvider(),
-      });
-    }
+    this.client = client ?? new LambdaClient();
   }
 
   /**

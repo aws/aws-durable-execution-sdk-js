@@ -101,7 +101,7 @@ if aws lambda get-function --function-name "$FUNCTION_NAME" --endpoint-url "$LAM
     echo "Updating environment variables..."
     aws lambda update-function-configuration \
         --function-name "$FUNCTION_NAME" \
-        --environment Variables="{DEX_ENDPOINT=$LAMBDA_ENDPOINT}" \
+        --environment Variables="{AWS_ENDPOINT_URL_LAMBDA=$LAMBDA_ENDPOINT}" \
         --kms-key-arn "$KMS_KEY_ARN" \
         --endpoint-url "$LAMBDA_ENDPOINT" \
         --region "$AWS_REGION" \
@@ -132,7 +132,7 @@ else
         --durable-config RetentionPeriodInDays=$RETENTION_DAYS,ExecutionTimeout=$EXECUTION_TIMEOUT \
         --timeout 60 \
         --memory-size 128 \
-        --environment Variables="{DEX_ENDPOINT=$LAMBDA_ENDPOINT}" \
+        --environment Variables="{AWS_ENDPOINT_URL_LAMBDA=$LAMBDA_ENDPOINT}" \
         --kms-key-arn "$KMS_KEY_ARN" \
         --endpoint-url "$LAMBDA_ENDPOINT" \
         --region "$AWS_REGION" \

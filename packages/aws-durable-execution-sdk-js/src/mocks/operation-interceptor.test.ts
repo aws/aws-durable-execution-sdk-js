@@ -4,7 +4,6 @@ import { MockCallback } from "./mock-callback-queue";
 describe("OperationInterceptor", () => {
   beforeEach(() => {
     OperationInterceptor.clearAll();
-    process.env.DURABLE_LOCAL_MODE = "true";
   });
 
   describe("clearAll", () => {
@@ -26,21 +25,9 @@ describe("OperationInterceptor", () => {
 
     beforeEach(() => {
       mocker = OperationInterceptor.forExecution("test-exec");
-      process.env.DURABLE_LOCAL_MODE = "true";
-    });
-
-    afterAll(() => {
-      delete process.env.DURABLE_LOCAL_MODE;
     });
 
     describe("onIndex", () => {
-      it("should throw error if not running in local mode", () => {
-        delete process.env.DURABLE_LOCAL_MODE;
-        expect(() =>
-          OperationInterceptor.forExecution("test-exec").onIndex(5),
-        ).toThrow("Cannot create mocks outside of durable local mode");
-      });
-
       it("should register index-based mock", () => {
         const mockCallback: MockCallback = jest.fn().mockResolvedValue("test");
 
@@ -72,13 +59,6 @@ describe("OperationInterceptor", () => {
     });
 
     describe("onName", () => {
-      it("should throw error if not running in local mode", () => {
-        delete process.env.DURABLE_LOCAL_MODE;
-        expect(() =>
-          OperationInterceptor.forExecution("test-exec").onName("testOp"),
-        ).toThrow("Cannot create mocks outside of durable local mode");
-      });
-
       it("should register name-based mock", () => {
         const mockCallback: MockCallback = jest.fn().mockResolvedValue("test");
 

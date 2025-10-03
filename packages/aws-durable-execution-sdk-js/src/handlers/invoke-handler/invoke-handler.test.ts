@@ -66,7 +66,6 @@ describe("InvokeHandler", () => {
       terminationManager: {
         terminate: jest.fn(),
       },
-      isLocalMode: false,
       isVerbose: true,
       durableExecutionArn: "test-arn",
       parentId: "parent-123",

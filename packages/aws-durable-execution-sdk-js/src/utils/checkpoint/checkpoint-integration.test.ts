@@ -38,7 +38,6 @@ describe("Checkpoint Integration Tests", () => {
       state: mockState,
       terminationManager: mockTerminationManager,
       isVerbose: false,
-      isLocalMode: false,
     });
   });
 

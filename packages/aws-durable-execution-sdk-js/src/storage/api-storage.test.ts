@@ -29,17 +29,12 @@ jest.mock("@aws-sdk/client-lambda", () => {
 });
 
 describe("ApiStorage", () => {
-  const endpoint: string = "https://custom-endpoint.com";
   let apiStorage: ApiStorage;
   let mockLambdaClient: { send: jest.Mock };
 
   beforeEach(() => {
     // Reset all mocks
     jest.clearAllMocks();
-
-    // Set environment variables for ApiStorage
-    process.env.DEX_ENDPOINT = endpoint;
-    process.env.DEX_REGION = "us-east-1";
 
     // Create a new instance of ApiStorage
     apiStorage = new ApiStorage();
@@ -50,76 +45,7 @@ describe("ApiStorage", () => {
 
   test("should initialize with correct endpoint and region", () => {
     // Verify that LambdaClient was constructed with the correct parameters
-    expect(LambdaClient).toHaveBeenCalledWith({
-      endpoint: expect.any(String),
-      region: expect.any(String),
-      credentials: expect.any(Function),
-    });
-  });
-
-  test("should use environment variables for endpoint and region if available", () => {
-    // Save original environment
-    const originalEnv = process.env;
-
-    try {
-      // Set environment variables
-      process.env.DEX_ENDPOINT = "https://custom-endpoint.com";
-      process.env.DEX_REGION = "eu-west-1";
-
-      // Create a new instance
-      new ApiStorage();
-
-      // Verify that LambdaClient was constructed with the environment variables
-      expect(LambdaClient).toHaveBeenCalledWith({
-        endpoint: "https://custom-endpoint.com",
-        region: "eu-west-1",
-        credentials: expect.any(Function),
-      });
-    } finally {
-      // Restore original environment
-      process.env = originalEnv;
-    }
-  });
-
-  test("should use default region when DEX_REGION is not set", () => {
-    // Save original environment
-    const originalEnv = process.env;
-
-    try {
-      // Set only endpoint, not region
-      process.env.DEX_ENDPOINT = "https://custom-endpoint.com";
-      delete process.env.DEX_REGION;
-
-      // Create a new instance
-      new ApiStorage();
-
-      // Verify that LambdaClient was constructed with default region
-      expect(LambdaClient).toHaveBeenCalledWith({
-        endpoint: "https://custom-endpoint.com",
-        region: "us-east-1",
-        credentials: expect.any(Function),
-      });
-    } finally {
-      // Restore original environment
-      process.env = originalEnv;
-    }
-  });
-
-  test("should throw error when environment variable is missing", () => {
-    // Save original environment
-    const originalEnv = process.env;
-
-    try {
-      delete process.env.DEX_ENDPOINT;
-
-      // Should throw error when creating instance without environment variables
-      expect(() => new ApiStorage()).toThrow(
-        "DEX_ENDPOINT environment variable must be set",
-      );
-    } finally {
-      // Restore original environment
-      process.env = originalEnv;
-    }
+    expect(LambdaClient).toHaveBeenCalledWith();
   });
 
   test("should call getStepData with correct parameters", async () => {

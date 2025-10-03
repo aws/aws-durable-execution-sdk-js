@@ -49,7 +49,6 @@ describe("CheckpointHandler", () => {
       _stepData: stepData,
       terminationManager: mockTerminationManager,
       isVerbose: false,
-      isLocalMode: false,
       customerHandlerEvent: {},
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
@@ -593,7 +592,6 @@ describe("deleteCheckpointHandler", () => {
       state: mockState1,
       _stepData: stepData1,
       terminationManager: mockTerminationManager,
-      isLocalMode: false,
       isVerbose: false,
       customerHandlerEvent: {},
       getStepData: jest.fn((stepId: string) => {
@@ -608,7 +606,6 @@ describe("deleteCheckpointHandler", () => {
       state: mockState2,
       _stepData: stepData2,
       terminationManager: mockTerminationManager,
-      isLocalMode: false,
       isVerbose: false,
       customerHandlerEvent: {},
       getStepData: jest.fn((stepId: string) => {
@@ -832,7 +829,6 @@ describe("createCheckpointHandler", () => {
       state: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
-      isLocalMode: false,
       isVerbose: false,
       customerHandlerEvent: {},
       getStepData: jest.fn((stepId: string) => {

@@ -102,6 +102,16 @@ describe("LocalDurableTestRunner", () => {
     );
   });
 
+  beforeEach(() => {
+    delete process.env.DURABLE_LOCAL_RUNNER_REGION;
+    delete process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;
+  });
+
+  afterEach(() => {
+    delete process.env.DURABLE_LOCAL_RUNNER_REGION;
+    delete process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;
+  });
+
   describe("constructor", () => {
     it("should initialize with required dependencies", () => {
       const runner = new LocalDurableTestRunner<{ success: boolean }>({
@@ -148,8 +158,13 @@ describe("LocalDurableTestRunner", () => {
         handlerFunction: mockHandlerFunction,
       });
 
+      expect(process.env.DURABLE_LOCAL_RUNNER_REGION).toBeUndefined();
+      expect(process.env.DURABLE_LOCAL_RUNNER_ENDPOINT).toBeUndefined();
+
       await runner.run();
 
+      expect(process.env.DURABLE_LOCAL_RUNNER_REGION).toBe("us-west-2");
+      expect(process.env.DURABLE_LOCAL_RUNNER_ENDPOINT).toBe("http://127.0.0.1:1234");
       expect(mockOrchestrator.executeHandler).toHaveBeenCalledWith(undefined);
     });
 

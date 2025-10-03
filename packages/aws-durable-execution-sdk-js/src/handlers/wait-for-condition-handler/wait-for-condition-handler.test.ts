@@ -43,7 +43,6 @@ describe("WaitForCondition Handler", () => {
       },
       _stepData: stepData,
       terminationManager: mockTerminationManager,
-      isLocalMode: false,
       isVerbose: false,
       durableExecutionArn:
         "arn:aws:lambda:us-east-1:123456789012:function:test",

@@ -37,7 +37,6 @@ describe("CheckpointHandler - StepData Update", () => {
       terminationManager: new TerminationManager(),
       durableExecutionArn:
         "arn:aws:durable-execution:us-east-1:123456789012:execution/test-execution",
-      isLocalMode: false,
       isVerbose: process.env.DURABLE_VERBOSE_MODE === "true",
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);

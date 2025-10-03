@@ -1,17 +1,12 @@
 import { LambdaClient } from "@aws-sdk/client-lambda";
-import { PlaygroundLocalRunnerStorage } from "./local-runner-storage";
-import { getCredentialsProvider } from "./credentials-provider";
+import { LocalRunnerStorage } from "./local-runner-storage";
 
 // Mock dependencies
 jest.mock("@aws-sdk/client-lambda");
-jest.mock("./credentials-provider");
 
 describe("PlaygroundLocalRunnerStorage", () => {
-  const mockCredentials = jest.fn();
-
   beforeEach(() => {
     jest.clearAllMocks();
-    (getCredentialsProvider as jest.Mock).mockReturnValue(mockCredentials);
     (LambdaClient as jest.Mock).mockImplementation(() => ({}));
   });
 
@@ -20,15 +15,15 @@ describe("PlaygroundLocalRunnerStorage", () => {
     const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
     try {
-      process.env.LOCAL_RUNNER_ENDPOINT = "https://local-endpoint.com";
-      process.env.LOCAL_RUNNER_REGION = "us-west-2";
+      process.env.DURABLE_LOCAL_RUNNER_ENDPOINT = "https://local-endpoint.com";
+      process.env.DURABLE_LOCAL_RUNNER_REGION = "us-west-2";
 
-      new PlaygroundLocalRunnerStorage();
+      new LocalRunnerStorage();
 
       expect(LambdaClient).toHaveBeenCalledWith({
         endpoint: "https://local-endpoint.com",
         region: "us-west-2",
-        credentials: mockCredentials,
+        credentials: expect.any(Object),
         requestHandler: expect.any(Object),
       });
     } finally {
@@ -38,7 +33,7 @@ describe("PlaygroundLocalRunnerStorage", () => {
   });
 
   test("should handle requests through LocalRunnerSigV4Handler", async () => {
-    new PlaygroundLocalRunnerStorage();
+    new LocalRunnerStorage();
 
     const lambdaClientCall = (LambdaClient as jest.Mock).mock.calls[0][0];
     const handler = lambdaClientCall.requestHandler;

@@ -55,7 +55,6 @@ describe("Run In Child Context Integration Tests", () => {
       },
       _stepData: {},
       terminationManager: mockTerminationManager,
-      isLocalMode: false,
       isVerbose: false,
       customerHandlerEvent: {},
       durableExecutionArn: "mock-execution-arn",

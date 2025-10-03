@@ -51,6 +51,7 @@ describe("invoke-handler", () => {
             Operations: params.operations,
             NextMarker: "",
           },
+          LocalRunner: true,
         },
         expect.objectContaining({
           functionName: "my-function-name",

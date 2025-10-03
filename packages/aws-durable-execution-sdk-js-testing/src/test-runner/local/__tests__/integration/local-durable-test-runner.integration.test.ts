@@ -13,6 +13,35 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
  * without mocking core dependencies.
  */
 describe("LocalDurableTestRunner Integration", () => {
+  const originalEnv = process.env;
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it("should complete execution with no environment variables set", async () => {
+    process.env = {};
+
+    const handler = withDurableFunctions(
+      async (event: unknown, context: DurableContext) => {
+        const result = await context.step(() => Promise.resolve("completed"));
+        return { success: true, step: result };
+      }
+    );
+
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: handler,
+      skipTime: true,
+    });
+
+    const result = await runner.run();
+
+    expect(result.getResult()).toEqual({
+      success: true,
+      step: "completed",
+    });
+  });
+
   it("should complete execution with wait operations", async () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {

@@ -76,13 +76,11 @@ describe("initializeExecutionContext", () => {
     );
 
     // Mock environment variables
-    process.env.DURABLE_LOCAL_MODE = "false";
     process.env.DURABLE_VERBOSE_MODE = "false";
   });
 
   afterEach(() => {
     // Reset environment variables
-    delete process.env.DURABLE_LOCAL_MODE;
     delete process.env.DURABLE_VERBOSE_MODE;
   });
 
@@ -101,24 +99,12 @@ describe("initializeExecutionContext", () => {
           customerHandlerEvent: JSON.parse(mockCustomerHandlerEvent),
           state: mockExecutionState,
           _stepData: {},
-          isLocalMode: false,
           isVerbose: false,
         }),
         checkpointToken: mockCheckpointToken,
       }),
     );
     expect(result.executionContext.terminationManager).toBeDefined();
-  });
-
-  it("should initialize execution context in local mode", async () => {
-    // Setup
-    process.env.DURABLE_LOCAL_MODE = "true";
-
-    // Execute
-    const result = await initializeExecutionContext(mockEvent);
-
-    // Verify
-    expect(result.executionContext.isLocalMode).toBe(true);
   });
 
   it("should initialize execution context in verbose mode", async () => {
@@ -136,36 +122,7 @@ describe("initializeExecutionContext", () => {
       "Initializing durable function with event:",
       mockEvent,
     );
-    expect(log).toHaveBeenCalledWith(true, "🔧", "Running in mode: LAMBDA");
-    expect(log).toHaveBeenCalledWith(
-      true,
-      "🔧",
-      "Recording definition mode: DISABLED",
-    );
     expect(log).toHaveBeenCalledWith(true, "📍", "Function Input:", mockEvent);
-  });
-
-  it("should initialize execution context in record definition mode", async () => {
-    // Setup
-    process.env.DURABLE_RECORD_DEFINITION_MODE = "true";
-
-    // Execute
-    const result = await initializeExecutionContext(mockEvent);
-
-    // Verify
-    expect(result.executionContext.isVerbose).toBe(true);
-    expect(log).toHaveBeenCalledWith(
-      true,
-      "🔵",
-      "Initializing durable function with event:",
-      mockEvent,
-    );
-    expect(log).toHaveBeenCalledWith(true, "🔧", "Running in mode: LAMBDA");
-    expect(log).toHaveBeenCalledWith(
-      true,
-      "🔧",
-      "Recording definition mode: ENABLED",
-    );
   });
 
   it("should load step data from event", async () => {
@@ -444,10 +401,6 @@ describe("initializeExecutionContext", () => {
     expect(ExecutionStateFactory.createExecutionState).toHaveBeenCalledWith(
       true,
     );
-
-    // Cleanup
-    delete process.env.DEX_ENDPOINT;
-    delete process.env.DEX_REGION;
   });
 
   it("should handle undefined operations in paginated response", async () => {
