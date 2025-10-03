@@ -7,8 +7,10 @@ import {
   HttpHandlerOptions,
   HttpRequest,
   HttpResponse,
+  Provider,
 } from "@smithy/types";
 import { ApiStorage } from "./api-storage";
+import { defaultProvider } from "@aws-sdk/credential-provider-node";
 
 class LocalRunnerSigV4Handler extends NodeHttpHandler {
   private readonly httpHandler: NodeHttpHandler;
@@ -16,7 +18,7 @@ class LocalRunnerSigV4Handler extends NodeHttpHandler {
 
   public constructor(
     handler: NodeHttpHandler,
-    credentials: AwsCredentialIdentity,
+    credentials: Provider<AwsCredentialIdentity> | AwsCredentialIdentity
   ) {
     super();
     this.httpHandler = handler;
@@ -30,7 +32,7 @@ class LocalRunnerSigV4Handler extends NodeHttpHandler {
 
   public async handle(
     request: HttpRequest,
-    _handlerOptions?: HttpHandlerOptions | undefined,
+    _handlerOptions?: HttpHandlerOptions | undefined
   ): Promise<{ response: HttpResponse }> {
     const signedRequest: HttpRequest = await this.signer.sign(request);
     // @ts-expect-error - The handle method signature doesn't match exactly but works correctly
@@ -42,19 +44,17 @@ export class LocalRunnerStorage extends ApiStorage {
   constructor() {
     const endpoint = process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;
     const region = process.env.DURABLE_LOCAL_RUNNER_REGION;
+    const localRunnerCredentials = process.env.DURABLE_LOCAL_RUNNER_CREDENTIALS
+      ? JSON.parse(process.env.DURABLE_LOCAL_RUNNER_CREDENTIALS)
+      : defaultProvider();
 
-    const credentials = {
-      accessKeyId: "placeholder-accessKeyId",
-      secretAccessKey: "placeholder-secretAccessKey",
-      sessionToken: "placeholder-sessionToken",
-    };
     const client = new LambdaClient({
+      credentials: localRunnerCredentials,
       endpoint,
       region,
-      credentials: credentials,
       requestHandler: new LocalRunnerSigV4Handler(
         new NodeHttpHandler(),
-        credentials,
+        localRunnerCredentials
       ),
     });
 

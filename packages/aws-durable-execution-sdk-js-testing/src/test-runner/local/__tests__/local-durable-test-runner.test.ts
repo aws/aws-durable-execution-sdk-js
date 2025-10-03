@@ -105,11 +105,13 @@ describe("LocalDurableTestRunner", () => {
   beforeEach(() => {
     delete process.env.DURABLE_LOCAL_RUNNER_REGION;
     delete process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;
+    delete process.env.DURABLE_LOCAL_RUNNER_CREDENTIALS;
   });
 
   afterEach(() => {
     delete process.env.DURABLE_LOCAL_RUNNER_REGION;
     delete process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;
+    delete process.env.DURABLE_LOCAL_RUNNER_CREDENTIALS;
   });
 
   describe("constructor", () => {
@@ -160,11 +162,21 @@ describe("LocalDurableTestRunner", () => {
 
       expect(process.env.DURABLE_LOCAL_RUNNER_REGION).toBeUndefined();
       expect(process.env.DURABLE_LOCAL_RUNNER_ENDPOINT).toBeUndefined();
+      expect(process.env.DURABLE_LOCAL_RUNNER_CREDENTIALS).toBeUndefined();
 
       await runner.run();
 
       expect(process.env.DURABLE_LOCAL_RUNNER_REGION).toBe("us-west-2");
-      expect(process.env.DURABLE_LOCAL_RUNNER_ENDPOINT).toBe("http://127.0.0.1:1234");
+      expect(process.env.DURABLE_LOCAL_RUNNER_ENDPOINT).toBe(
+        "http://127.0.0.1:1234"
+      );
+      expect(JSON.parse(process.env.DURABLE_LOCAL_RUNNER_CREDENTIALS!)).toEqual(
+        {
+          accessKeyId: "placeholder-accessKeyId",
+          secretAccessKey: "placeholder-secretAccessKey",
+          sessionToken: "placeholder-sessionToken",
+        }
+      );
       expect(mockOrchestrator.executeHandler).toHaveBeenCalledWith(undefined);
     });
 
