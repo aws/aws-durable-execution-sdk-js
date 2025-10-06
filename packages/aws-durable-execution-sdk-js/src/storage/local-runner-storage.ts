@@ -18,7 +18,7 @@ class LocalRunnerSigV4Handler extends NodeHttpHandler {
 
   public constructor(
     handler: NodeHttpHandler,
-    credentials: Provider<AwsCredentialIdentity> | AwsCredentialIdentity
+    credentials: Provider<AwsCredentialIdentity> | AwsCredentialIdentity,
   ) {
     super();
     this.httpHandler = handler;
@@ -32,7 +32,7 @@ class LocalRunnerSigV4Handler extends NodeHttpHandler {
 
   public async handle(
     request: HttpRequest,
-    _handlerOptions?: HttpHandlerOptions | undefined
+    _handlerOptions?: HttpHandlerOptions | undefined,
   ): Promise<{ response: HttpResponse }> {
     const signedRequest: HttpRequest = await this.signer.sign(request);
     // @ts-expect-error - The handle method signature doesn't match exactly but works correctly
@@ -54,7 +54,7 @@ export class LocalRunnerStorage extends ApiStorage {
       region,
       requestHandler: new LocalRunnerSigV4Handler(
         new NodeHttpHandler(),
-        localRunnerCredentials
+        localRunnerCredentials,
       ),
     });
 

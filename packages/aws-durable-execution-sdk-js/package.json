@@ -44,12 +44,6 @@
     "clean": "rm -rf node_modules dist dist-cjs",
     "prepack": "npm run build"
   },
-  "lint-staged": {
-    "./src/**/*.ts": [
-      "prettier --write",
-      "eslint --fix"
-    ]
-  },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.29.0",
@@ -63,9 +57,7 @@
     "eslint-plugin-filename-convention": "file:scripts/eslint-plugin-filename-convention",
     "eslint-plugin-tsdoc": "^0.4.0",
     "globals": "^14.0.0",
-    "husky": "^9.1.7",
     "jest": "^29.7.0",
-    "lint-staged": "^15.5.1",
     "prettier": "^3.5.2",
     "rimraf": "^5.0.10",
     "ts-jest": "^29.2.6",
