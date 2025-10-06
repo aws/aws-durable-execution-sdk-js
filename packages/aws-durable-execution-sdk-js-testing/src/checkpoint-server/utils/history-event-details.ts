@@ -17,7 +17,7 @@ interface DetailsMetadata {
 
 /**
  * Represents the structure for history event details with type-safe event detail extraction.
- * 
+ *
  * @template T - The key of the Event type that corresponds to the specific event detail type
  */
 export interface HistoryEventDetails<T extends keyof Event> {
@@ -29,13 +29,13 @@ export interface HistoryEventDetails<T extends keyof Event> {
   getDetails: (
     update: OperationUpdate,
     operation: Operation,
-    metadata: DetailsMetadata
+    metadata: DetailsMetadata,
   ) => Event[T];
 }
 
 /**
  * Factory function to create a HistoryEventDetails object with proper typing.
- * 
+ *
  * @template T - The key of the Event type that corresponds to the specific event detail type
  * @param eventType - The type of event this detail handler processes
  * @param detailPlace - The property name in the Event type where these details should be placed
@@ -48,15 +48,15 @@ function createEventDetails<T extends keyof Event>(
   getDetails: (
     update: OperationUpdate,
     operation: Operation,
-    metadata: DetailsMetadata
-  ) => Event[T]
+    metadata: DetailsMetadata,
+  ) => Event[T],
 ): HistoryEventDetails<T> {
   return { eventType, detailPlace, getDetails };
 }
 
 /**
  * Type alias for retrieving the correct HistoryEventDetails type based on operation action and type.
- * 
+ *
  * @template Action - The operation action (START, FAIL, SUCCEED, RETRY)
  * @template Type - The operation type (EXECUTION, CALLBACK, CONTEXT, INVOKE, STEP, WAIT)
  */
@@ -67,14 +67,14 @@ export type HistoryEventDetail<
 
 /**
  * Mapping of operation action-type combinations to their corresponding history event details.
- * 
+ *
  * This map provides handlers for all supported combinations of OperationAction and OperationType,
  * defining how to transform operation updates into properly formatted history events.
- * 
+ *
  * Supported operation combinations:
  * - Execution: START, FAIL, SUCCEED
  * - Callback: START
- * - Context: START, FAIL, SUCCEED  
+ * - Context: START, FAIL, SUCCEED
  * - Invoke: START
  * - Step: START, RETRY, FAIL, SUCCEED
  * - Wait: START
@@ -89,7 +89,7 @@ const historyEventDetailMap = {
         Payload: update.Payload,
       },
       ExecutionTimeout: metadata.executionTimeout,
-    })
+    }),
   ),
   [`${OperationAction.FAIL}-${OperationType.EXECUTION}`]: createEventDetails(
     EventType.ExecutionFailed,
@@ -98,7 +98,7 @@ const historyEventDetailMap = {
       Error: {
         Payload: update.Error,
       },
-    })
+    }),
   ),
   [`${OperationAction.SUCCEED}-${OperationType.EXECUTION}`]: createEventDetails(
     EventType.ExecutionSucceeded,
@@ -107,7 +107,7 @@ const historyEventDetailMap = {
       Result: {
         Payload: update.Payload,
       },
-    })
+    }),
   ),
 
   // Callback events
@@ -121,14 +121,14 @@ const historyEventDetailMap = {
       Input: {
         Payload: update.Payload,
       },
-    })
+    }),
   ),
 
   // Context events
   [`${OperationAction.START}-${OperationType.CONTEXT}`]: createEventDetails(
     EventType.ContextStarted,
     "ContextStartedDetails",
-    () => ({})
+    () => ({}),
   ),
   [`${OperationAction.FAIL}-${OperationType.CONTEXT}`]: createEventDetails(
     EventType.ContextFailed,
@@ -137,7 +137,7 @@ const historyEventDetailMap = {
       Error: {
         Payload: update.Error,
       },
-    })
+    }),
   ),
   [`${OperationAction.SUCCEED}-${OperationType.CONTEXT}`]: createEventDetails(
     EventType.ContextSucceeded,
@@ -146,32 +146,29 @@ const historyEventDetailMap = {
       Result: {
         Payload: update.Payload,
       },
-    })
+    }),
   ),
 
   // Invoke events
-  [`${OperationAction.START}-${OperationType.INVOKE}`]: createEventDetails(
-    EventType.InvokeStarted,
-    "InvokeStartedDetails",
-    (update) => ({
-      Input: {
-        Payload: update.Payload,
-      },
-      FunctionArn: update.InvokeOptions?.FunctionName,
-      // DurableExecutionArn: "" // TODO: add the execution ARN
-    })
-  ),
+  [`${OperationAction.START}-${OperationType.CHAINED_INVOKE}`]:
+    createEventDetails(
+      EventType.ChainedInvokeStarted,
+      "ChainedInvokeStartedDetails",
+      () => ({
+        DurableExecutionArn: "", // TODO: add the execution ARN
+      }),
+    ),
 
   // Step events
   [`${OperationAction.START}-${OperationType.STEP}`]: createEventDetails(
     EventType.StepStarted,
     "StepStartedDetails",
-    () => ({})
+    () => ({}),
   ),
   [`${OperationAction.RETRY}-${OperationType.STEP}`]: createEventDetails(
     EventType.StepStarted,
     "StepStartedDetails",
-    () => ({})
+    () => ({}),
   ),
   [`${OperationAction.FAIL}-${OperationType.STEP}`]: createEventDetails(
     EventType.StepFailed,
@@ -184,7 +181,7 @@ const historyEventDetailMap = {
         NextAttemptDelaySeconds: update.StepOptions?.NextAttemptDelaySeconds,
         CurrentAttempt: operation.StepDetails?.Attempt,
       },
-    })
+    }),
   ),
   [`${OperationAction.SUCCEED}-${OperationType.STEP}`]: createEventDetails(
     EventType.StepSucceeded,
@@ -197,7 +194,7 @@ const historyEventDetailMap = {
         NextAttemptDelaySeconds: update.StepOptions?.NextAttemptDelaySeconds,
         CurrentAttempt: operation.StepDetails?.Attempt,
       },
-    })
+    }),
   ),
 
   // Wait events
@@ -208,25 +205,25 @@ const historyEventDetailMap = {
       const scheduledEndTimestamp = new Date();
       scheduledEndTimestamp.setSeconds(
         scheduledEndTimestamp.getSeconds() +
-          (update.WaitOptions?.WaitSeconds ?? 0)
+          (update.WaitOptions?.WaitSeconds ?? 0),
       );
       return {
         Duration: update.WaitOptions?.WaitSeconds,
         ScheduledEndTimestamp: scheduledEndTimestamp,
       };
-    }
+    },
   ),
 } satisfies Record<string, HistoryEventDetails<keyof Event>>;
 
 /**
  * Retrieves the appropriate history event detail handler for a given operation action and type.
- * 
+ *
  * @template Action - The operation action (START, FAIL, SUCCEED, RETRY)
  * @template Type - The operation type (EXECUTION, CALLBACK, CONTEXT, INVOKE, STEP, WAIT)
  * @param action - The action being performed on the operation
  * @param type - The type of operation being performed
  * @returns The corresponding HistoryEventDetails handler, or undefined if no handler exists for the combination
- * 
+ *
  * @example
  * ```typescript
  * const handler = getHistoryEventDetail(OperationAction.START, OperationType.EXECUTION);

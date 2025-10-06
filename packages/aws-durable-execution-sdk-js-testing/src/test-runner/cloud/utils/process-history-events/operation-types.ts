@@ -13,7 +13,7 @@ export type OperationDetailFields = Extract<
   | "StepDetails"
   | "WaitDetails"
   | "CallbackDetails"
-  | "InvokeDetails"
+  | "ChainedInvokeDetails"
 >;
 
 /**
@@ -26,9 +26,8 @@ export type HistoryEventTypes =
  * Maps operation detail fields to their non-nullable property value types.
  * @template DetailsField - The operation detail field type
  */
-export type PropertyValueMap<DetailsField extends OperationDetailFields> = NonNullable<
-  Operation[DetailsField]
->;
+export type PropertyValueMap<DetailsField extends OperationDetailFields> =
+  NonNullable<Operation[DetailsField]>;
 
 /**
  * Utility type that converts an object type to an array of key-value pair tuples.

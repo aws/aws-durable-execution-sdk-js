@@ -94,7 +94,7 @@ describe("InvokeHandler", () => {
     it("should return cached result for completed invoke", async () => {
       const mockGetStepData = jest.fn().mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
-        InvokeDetails: {
+        ChainedInvokeDetails: {
           Result: '{"result":"success"}',
         },
       });
@@ -127,7 +127,7 @@ describe("InvokeHandler", () => {
     it("should handle invoke with name parameter", async () => {
       const mockGetStepData = jest.fn().mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
-        InvokeDetails: {
+        ChainedInvokeDetails: {
           Result: '{"result":"named"}',
         },
       });
@@ -161,7 +161,7 @@ describe("InvokeHandler", () => {
     it("should handle undefined result for void functions", async () => {
       const mockGetStepData = jest.fn().mockReturnValue({
         Status: OperationStatus.SUCCEEDED,
-        InvokeDetails: {
+        ChainedInvokeDetails: {
           Result: undefined,
         },
       });
@@ -193,7 +193,7 @@ describe("InvokeHandler", () => {
     it("should throw error when operation status is FAILED", async () => {
       const mockGetStepData = jest.fn().mockReturnValue({
         Status: OperationStatus.FAILED,
-        InvokeDetails: {
+        ChainedInvokeDetails: {
           Error: {
             ErrorMessage: "Lambda function execution failed",
             ErrorType: "ExecutionError",
@@ -218,7 +218,7 @@ describe("InvokeHandler", () => {
     it("should throw error with default message when FAILED status has no error details", async () => {
       const mockGetStepData = jest.fn().mockReturnValue({
         Status: OperationStatus.FAILED,
-        InvokeDetails: {},
+        ChainedInvokeDetails: {},
       });
 
       mockContext.getStepData = mockGetStepData;
@@ -272,7 +272,7 @@ describe("InvokeHandler", () => {
         .mockReturnValueOnce({ Status: OperationStatus.STARTED })
         .mockReturnValueOnce({
           Status: OperationStatus.SUCCEEDED,
-          InvokeDetails: { Result: '{"result":"success"}' },
+          ChainedInvokeDetails: { Result: '{"result":"success"}' },
         });
 
       mockContext.getStepData = mockGetStepData;
@@ -345,11 +345,11 @@ describe("InvokeHandler", () => {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
-        SubType: OperationSubType.INVOKE,
-        Type: OperationType.INVOKE,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
         Name: undefined,
         Payload: '{"serialized":"data"}',
-        InvokeOptions: {
+        ChainedInvokeOptions: {
           FunctionName: "test-function",
         },
       });
@@ -391,11 +391,11 @@ describe("InvokeHandler", () => {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
-        SubType: OperationSubType.INVOKE,
-        Type: OperationType.INVOKE,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
         Name: "my-invoke",
         Payload: '{"serialized":"data"}',
-        InvokeOptions: {
+        ChainedInvokeOptions: {
           FunctionName: "test-function",
         },
       });
@@ -439,11 +439,11 @@ describe("InvokeHandler", () => {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
-        SubType: OperationSubType.INVOKE,
-        Type: OperationType.INVOKE,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
         Name: undefined,
         Payload: '{"serialized":"data"}',
-        InvokeOptions: {
+        ChainedInvokeOptions: {
           FunctionName: "test-function",
           TimeoutSeconds: 30,
         },

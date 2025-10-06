@@ -240,24 +240,22 @@ describe("historyEventsToOperationEvents", () => {
     expect(result[0].events).toHaveLength(2);
   });
 
-  it("should process INVOKE operation", () => {
+  it("should process CHAINED_INVOKE operation", () => {
     const events: Event[] = [
       {
         Id: "invoke-id",
         Name: "test-invoke",
-        EventType: EventType.InvokeStarted,
+        EventType: EventType.ChainedInvokeStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
-        InvokeStartedDetails: {
-          Input: {
-            Payload: '{"invoke": "input"}',
-          },
+        ChainedInvokeStartedDetails: {
+          DurableExecutionArn: "my-durable-execution-arn",
         },
       },
       {
         Id: "invoke-id",
-        EventType: EventType.InvokeSucceeded,
+        EventType: EventType.ChainedInvokeSucceeded,
         EventTimestamp: new Date("2023-01-01T12:01:00Z"),
-        InvokeSucceededDetails: {
+        ChainedInvokeSucceededDetails: {
           Result: {
             Payload: '{"invoke": "result"}',
           },
@@ -271,7 +269,7 @@ describe("historyEventsToOperationEvents", () => {
     expect(result[0].operation).toEqual({
       Id: "invoke-id",
       Name: "test-invoke",
-      Type: OperationType.INVOKE,
+      Type: OperationType.CHAINED_INVOKE,
       Status: OperationStatus.SUCCEEDED,
       StartTimestamp: new Date("2023-01-01T12:00:00Z"),
       EndTimestamp: new Date("2023-01-01T12:01:00Z"),
@@ -364,10 +362,10 @@ describe("historyEventsToOperationEvents", () => {
 
     // Find step and callback operations
     const stepOperation = result.find(
-      (op) => op.operation.Type === OperationType.STEP
+      (op) => op.operation.Type === OperationType.STEP,
     );
     const callbackOperation = result.find(
-      (op) => op.operation.Type === OperationType.CALLBACK
+      (op) => op.operation.Type === OperationType.CALLBACK,
     );
 
     expect(stepOperation).toBeDefined();
@@ -592,17 +590,13 @@ describe("historyEventsToOperationEvents", () => {
     });
   });
 
-  it("should process InvokeStarted event with additional ARN details", () => {
+  it("should process ChainedInvokeStarted event with additional ARN details", () => {
     const event: Event = {
-      EventType: EventType.InvokeStarted,
+      EventType: EventType.ChainedInvokeStarted,
       Id: "invoke-1",
       Name: "test-invoke",
       EventTimestamp: mockTimestamp,
-      InvokeStartedDetails: {
-        Input: {
-          Payload: '{"invoke": "input"}',
-        },
-        FunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:test",
+      ChainedInvokeStartedDetails: {
         DurableExecutionArn:
           "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
       },
@@ -615,7 +609,7 @@ describe("historyEventsToOperationEvents", () => {
       Id: "invoke-1",
       ParentId: undefined,
       Name: "test-invoke",
-      Type: OperationType.INVOKE,
+      Type: OperationType.CHAINED_INVOKE,
       SubType: undefined,
       Status: OperationStatus.STARTED,
       StartTimestamp: mockTimestamp,
@@ -701,7 +695,7 @@ describe("historyEventsToOperationEvents", () => {
     };
 
     expect(() => historyEventsToOperationEvents([event])).toThrow(
-      `Details missing for event "step-1"`
+      `Details missing for event "step-1"`,
     );
   });
 });

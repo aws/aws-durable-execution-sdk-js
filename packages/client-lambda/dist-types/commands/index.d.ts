@@ -42,7 +42,6 @@ export * from "./InvokeWithResponseStreamCommand";
 export * from "./ListAliasesCommand";
 export * from "./ListCodeSigningConfigsCommand";
 export * from "./ListDurableExecutionsByFunctionCommand";
-export * from "./ListDurableExecutionsCommand";
 export * from "./ListEventSourceMappingsCommand";
 export * from "./ListFunctionEventInvokeConfigsCommand";
 export * from "./ListFunctionUrlConfigsCommand";

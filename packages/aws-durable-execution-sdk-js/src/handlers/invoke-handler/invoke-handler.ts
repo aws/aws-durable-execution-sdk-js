@@ -66,7 +66,7 @@ export const createInvokeHandler = (
 
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         // Return cached result - no need to check for errors in successful operations
-        const invokeDetails = stepData.InvokeDetails;
+        const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
           config?.resultSerdes || defaultSerdes,
           invokeDetails?.Result,
@@ -80,7 +80,7 @@ export const createInvokeHandler = (
 
       if (stepData?.Status === OperationStatus.FAILED) {
         // Operation failed, throw error
-        const invokeDetails = stepData.InvokeDetails;
+        const invokeDetails = stepData.ChainedInvokeDetails;
         const error = new Error(
           invokeDetails?.Error?.ErrorMessage || "Invoke failed",
         );
@@ -140,11 +140,11 @@ export const createInvokeHandler = (
           Id: stepId,
           ParentId: context.parentId,
           Action: OperationAction.START,
-          SubType: OperationSubType.INVOKE,
-          Type: OperationType.INVOKE,
+          SubType: OperationSubType.CHAINED_INVOKE,
+          Type: OperationType.CHAINED_INVOKE,
           Name: name,
           Payload: serializedPayload,
-          InvokeOptions: {
+          ChainedInvokeOptions: {
             FunctionName: funcId,
             ...(config?.timeoutSeconds && {
               TimeoutSeconds: config.timeoutSeconds,

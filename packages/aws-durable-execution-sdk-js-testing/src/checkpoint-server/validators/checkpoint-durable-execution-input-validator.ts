@@ -8,7 +8,7 @@ import {
 import { validateCallbackOperation } from "./operation-type/validate-callback-operation";
 import { validateContextOperation } from "./operation-type/validate-context-operation";
 import { validateExecutionOperation } from "./operation-type/validate-execution-operation";
-import { validateInvokeOperation } from "./operation-type/validate-invoke-operation";
+import { validateChainedInvokeOperation } from "./operation-type/validate-chained-invoke-operation";
 import { validateStepOperation } from "./operation-type/validate-step-operation";
 import { validateWaitOperation } from "./operation-type/validate-wait-operation";
 import { validateValidActionsByOperationType } from "./valid-actions-by-operation-type-validator";
@@ -26,7 +26,7 @@ const MAX_ERROR_PAYLOAD_SIZE_BYTES = 32768; // 32KB
  */
 export function validateCheckpointUpdates(
   updates: OperationUpdate[] | undefined,
-  checkpointOperations: Map<string, OperationEvents>
+  checkpointOperations: Map<string, OperationEvents>,
 ): void {
   if (!updates?.length) {
     return;
@@ -49,7 +49,7 @@ export function validateCheckpointUpdates(
  */
 function validateConflictingExecutionUpdate(updates: OperationUpdate[]): void {
   const executionUpdates = updates.filter(
-    (update) => update.Type === OperationType.EXECUTION
+    (update) => update.Type === OperationType.EXECUTION,
   );
 
   if (executionUpdates.length > 1) {
@@ -79,7 +79,7 @@ function validateConflictingExecutionUpdate(updates: OperationUpdate[]): void {
  */
 function validateOperationUpdate(
   operationUpdate: OperationUpdate,
-  checkpointOperations: Map<string, OperationEvents>
+  checkpointOperations: Map<string, OperationEvents>,
 ): void {
   // Validates that the operation payload sizes are not too large
   validatePayloadSizes(operationUpdate);
@@ -87,7 +87,7 @@ function validateOperationUpdate(
   // Validate that the action is a valid action for the operation type.
   validateValidActionsByOperationType(
     operationUpdate.Type,
-    operationUpdate.Action
+    operationUpdate.Action,
   );
 
   // Validate that the action is valid for the current operation status.
@@ -95,7 +95,7 @@ function validateOperationUpdate(
     operationUpdate,
     operationUpdate.Id
       ? checkpointOperations.get(operationUpdate.Id)?.operation
-      : undefined
+      : undefined,
   );
 }
 
@@ -129,7 +129,7 @@ function validatePayloadSizes(operationUpdate: OperationUpdate): void {
  */
 function validateParentIdAndDuplicateId(
   operationUpdates: OperationUpdate[],
-  checkpointOperations: Map<string, OperationEvents>
+  checkpointOperations: Map<string, OperationEvents>,
 ): void {
   const operationsStarted = new Map<string, OperationUpdate>();
   const lastUpdatesSeen = new Map<string, OperationUpdate>();
@@ -153,7 +153,7 @@ function validateParentIdAndDuplicateId(
     const validParent = isValidParentForUpdate(
       checkpointOperations,
       operationUpdate,
-      operationsStarted
+      operationsStarted,
     );
 
     if (validParent) {
@@ -173,7 +173,7 @@ function validateParentIdAndDuplicateId(
 
 function isInvalidDuplicateUpdate(
   operationUpdate: OperationUpdate,
-  lastUpdatesSeen: Map<string, OperationUpdate>
+  lastUpdatesSeen: Map<string, OperationUpdate>,
 ): boolean {
   if (!operationUpdate.Id) {
     throw new Error("Missing ID in operation update");
@@ -209,7 +209,7 @@ function isInvalidDuplicateUpdate(
 function isValidParentForUpdate(
   checkpointOperations: Map<string, OperationEvents>,
   operationUpdate: OperationUpdate,
-  operationsStarted: Map<string, OperationUpdate>
+  operationsStarted: Map<string, OperationUpdate>,
 ): boolean {
   const parentId = operationUpdate.ParentId;
 
@@ -244,7 +244,7 @@ function isValidParentForUpdate(
  */
 function validateOperationStatusTransition(
   update: OperationUpdate,
-  operation?: Operation
+  operation?: Operation,
 ): void {
   switch (update.Type) {
     case OperationType.CALLBACK:
@@ -256,8 +256,8 @@ function validateOperationStatusTransition(
     case OperationType.EXECUTION:
       validateExecutionOperation(update);
       break;
-    case OperationType.INVOKE:
-      validateInvokeOperation(update, operation);
+    case OperationType.CHAINED_INVOKE:
+      validateChainedInvokeOperation(update, operation);
       break;
     case OperationType.STEP:
       validateStepOperation(update, operation);

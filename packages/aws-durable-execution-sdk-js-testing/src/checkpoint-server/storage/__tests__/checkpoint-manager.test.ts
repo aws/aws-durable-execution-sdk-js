@@ -195,7 +195,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.START,
           Type: OperationType.STEP,
         },
-        mockInvocationId
+        mockInvocationId,
       );
 
       // Complete the operation
@@ -229,7 +229,7 @@ describe("CheckpointManager", () => {
       expect(() =>
         storage.completeOperation({
           Id: "non-existent-id",
-        })
+        }),
       ).toThrow("Could not find operation");
     });
 
@@ -247,7 +247,7 @@ describe("CheckpointManager", () => {
             ReplayChildren: true,
           },
         },
-        mockInvocationId
+        mockInvocationId,
       );
 
       // Complete the operation
@@ -273,7 +273,7 @@ describe("CheckpointManager", () => {
       };
 
       expect(() =>
-        storage.registerUpdate(updateWithoutId, mockInvocationId)
+        storage.registerUpdate(updateWithoutId, mockInvocationId),
       ).toThrow("Missing Id in update");
     });
 
@@ -334,7 +334,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.START,
           Type: OperationType.STEP,
         },
-        mockInvocationId
+        mockInvocationId,
       );
 
       // Register the operation
@@ -344,7 +344,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.SUCCEED,
           Payload: "new payload",
         },
-        mockInvocationId
+        mockInvocationId,
       );
 
       expect(operation).toBeDefined();
@@ -400,7 +400,7 @@ describe("CheckpointManager", () => {
       expect(result.operation.Id).toBe("wait-id");
       expect(result.operation.Type).toBe(OperationType.WAIT);
       expect(result.operation.WaitDetails?.ScheduledTimestamp).toBeInstanceOf(
-        Date
+        Date,
       );
 
       // Make sure waitDetails exists and has a scheduledTimestamp
@@ -479,14 +479,14 @@ describe("CheckpointManager", () => {
         expect(result.operation.Status).toBe(
           action === OperationAction.SUCCEED
             ? OperationStatus.SUCCEEDED
-            : OperationStatus.FAILED
+            : OperationStatus.FAILED,
         );
         expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
         expect(result.operation.StepDetails).toEqual({});
         expect(result.operation.EndTimestamp).toBeInstanceOf(Date);
 
         expect(storage.operationDataMap.get("step-id")).toBe(result);
-      }
+      },
     );
   });
 
@@ -692,7 +692,7 @@ describe("CheckpointManager", () => {
         expect(result.operation).toBeDefined();
         expect(result.operation.Status).toBe(OperationStatus.FAILED);
         expect(result.operation.StepDetails?.Result).toBe(
-          '{"partial": "data"}'
+          '{"partial": "data"}',
         );
         expect(result.operation.StepDetails?.Error).toEqual({
           ErrorMessage: "Partial failure occurred",
@@ -883,7 +883,7 @@ describe("CheckpointManager", () => {
 
           const result = storage.registerUpdate(
             contextUpdate,
-            mockInvocationId
+            mockInvocationId,
           );
 
           expect(result).toBeDefined();
@@ -892,7 +892,7 @@ describe("CheckpointManager", () => {
           expect(result.operation.Status).toBe(
             action === OperationAction.SUCCEED
               ? OperationStatus.SUCCEEDED
-              : OperationStatus.FAILED
+              : OperationStatus.FAILED,
           );
           expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
           expect(result.operation.ContextDetails).toEqual({
@@ -902,9 +902,9 @@ describe("CheckpointManager", () => {
           expect(result.operation.EndTimestamp).toBeInstanceOf(Date);
 
           expect(storage.operationDataMap.get("completed-context")).toBe(
-            result
+            result,
           );
-        }
+        },
       );
     });
 
@@ -932,7 +932,7 @@ describe("CheckpointManager", () => {
         expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
         expect(result.operation.EndTimestamp).toBeInstanceOf(Date);
         expect(result.operation.ContextDetails?.Result).toBe(
-          '{"final": "result"}'
+          '{"final": "result"}',
         );
         expect(result.operation.ContextDetails?.Error).toBeUndefined();
       });
@@ -994,7 +994,7 @@ describe("CheckpointManager", () => {
         expect(result.operation).toBeDefined();
         expect(result.operation.Status).toBe(OperationStatus.FAILED);
         expect(result.operation.ContextDetails?.Result).toBe(
-          '{"partial": "data"}'
+          '{"partial": "data"}',
         );
         expect(result.operation.ContextDetails?.Error).toEqual({
           ErrorMessage: "Partial failure occurred",
@@ -1031,7 +1031,7 @@ describe("CheckpointManager", () => {
 
         expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
         expect(result.operation.ContextDetails?.Result).toBe(
-          '{"new": "result"}'
+          '{"new": "result"}',
         );
         expect(result.operation.ContextDetails?.Error).toBeUndefined();
       });
@@ -1127,7 +1127,7 @@ describe("CheckpointManager", () => {
           executionId: "test-execution-id",
           operationId: "test-callback-op",
           token: "test-token",
-        })
+        }),
       ).toString("base64");
 
       const mockCallbackOperation = {
@@ -1156,7 +1156,7 @@ describe("CheckpointManager", () => {
           executionId: "test-execution-id",
           operationId: "test-callback-op",
           token: "test-token",
-        })
+        }),
       ).toString("base64");
 
       const callbackDetails = {
@@ -1169,7 +1169,7 @@ describe("CheckpointManager", () => {
       expect(() => {
         storage.completeCallback(
           callbackDetails,
-          CompleteCallbackStatus.SUCCEEDED
+          CompleteCallbackStatus.SUCCEEDED,
         );
       }).not.toThrow();
     });
@@ -1181,7 +1181,7 @@ describe("CheckpointManager", () => {
           executionId: "test-execution-id",
           operationId: "test-callback-op",
           token: "test-token",
-        })
+        }),
       ).toString("base64");
 
       const callbackDetails = {
@@ -1195,7 +1195,7 @@ describe("CheckpointManager", () => {
       expect(() => {
         storage.completeCallback(
           callbackDetails,
-          CompleteCallbackStatus.FAILED
+          CompleteCallbackStatus.FAILED,
         );
       }).not.toThrow();
     });
@@ -1254,7 +1254,7 @@ describe("CheckpointManager", () => {
 
       const completedOperation = storage.markOperationCompleted(
         initialOperation,
-        OperationStatus.SUCCEEDED
+        OperationStatus.SUCCEEDED,
       );
 
       expect(completedOperation).not.toBe(initialOperation); // Should be a new object
@@ -1268,7 +1268,7 @@ describe("CheckpointManager", () => {
 
       const failedOperation = storage.markOperationCompleted(
         initialOperation,
-        OperationStatus.FAILED
+        OperationStatus.FAILED,
       );
 
       expect(failedOperation.Status).toBe(OperationStatus.FAILED);
@@ -1280,7 +1280,7 @@ describe("CheckpointManager", () => {
 
       const timedOutOperation = storage.markOperationCompleted(
         initialOperation,
-        OperationStatus.TIMED_OUT
+        OperationStatus.TIMED_OUT,
       );
 
       expect(timedOutOperation.Status).toBe(OperationStatus.TIMED_OUT);
@@ -1302,17 +1302,17 @@ describe("CheckpointManager", () => {
 
       const completedOperation = storage.markOperationCompleted(
         originalOperation,
-        OperationStatus.SUCCEEDED
+        OperationStatus.SUCCEEDED,
       );
 
       expect(completedOperation.Id).toBe(originalOperation.Id);
       expect(completedOperation.Name).toBe(originalOperation.Name);
       expect(completedOperation.Type).toBe(originalOperation.Type);
       expect(completedOperation.StartTimestamp).toBe(
-        originalOperation.StartTimestamp
+        originalOperation.StartTimestamp,
       );
       expect(completedOperation.StepDetails).toEqual(
-        originalOperation.StepDetails
+        originalOperation.StepDetails,
       );
       expect(completedOperation.Status).toBe(OperationStatus.SUCCEEDED);
       expect(completedOperation.EndTimestamp).toBeInstanceOf(Date);
@@ -1424,14 +1424,14 @@ describe("CheckpointManager", () => {
 
       const result = storage.updateOperation(
         initialOperation.Id,
-        newOperationData
+        newOperationData,
       );
 
       // Should return the updated CheckpointOperation
       expect(result.operation.Id).toBe(initialOperation.Id);
       expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED); // Updated status
       expect(result.operation.EndTimestamp).toEqual(
-        newOperationData.EndTimestamp
+        newOperationData.EndTimestamp,
       );
 
       expect(result.events).toEqual([
@@ -1463,25 +1463,25 @@ describe("CheckpointManager", () => {
       ]);
     });
 
-    describe("INVOKE operation updates", () => {
+    describe("CHAINED_INVOKE operation updates", () => {
       describe("valid operation updates", () => {
-        it("should update INVOKE operation with SUCCEEDED status and create history event", () => {
+        it("should update CHAINED_INVOKE operation with SUCCEEDED status and create history event", () => {
           storage.initialize();
 
-          // Register an INVOKE operation first
+          // Register an CHAINED_INVOKE operation first
           const invokeUpdate: OperationUpdate = {
             Id: "invoke-op",
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Action: OperationAction.START,
             Name: "test-invoke",
           };
           storage.registerUpdate(invokeUpdate, mockInvocationId);
 
           const newOperationData = {
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Status: OperationStatus.SUCCEEDED,
             EndTimestamp: new Date(),
-            InvokeDetails: {
+            ChainedInvokeDetails: {
               Result: '{"success": true, "data": "test-result"}',
             },
           };
@@ -1492,17 +1492,17 @@ describe("CheckpointManager", () => {
           expect(result.operation.Id).toBe("invoke-op");
           expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
           expect(result.operation.EndTimestamp).toEqual(
-            newOperationData.EndTimestamp
+            newOperationData.EndTimestamp,
           );
-          expect(result.operation.InvokeDetails?.Result).toBe(
-            '{"success": true, "data": "test-result"}'
+          expect(result.operation.ChainedInvokeDetails?.Result).toBe(
+            '{"success": true, "data": "test-result"}',
           );
 
           // Should have added InvokeSucceeded event
           expect(result.events).toHaveLength(2); // Start event + Success event
           const successEvent = result.events[1];
-          expect(successEvent.EventType).toBe("InvokeSucceeded");
-          expect(successEvent.InvokeSucceededDetails).toEqual({
+          expect(successEvent.EventType).toBe("ChainedInvokeSucceeded");
+          expect(successEvent.ChainedInvokeSucceededDetails).toEqual({
             Result: {
               Payload: '{"success": true, "data": "test-result"}',
             },
@@ -1510,23 +1510,23 @@ describe("CheckpointManager", () => {
           });
         });
 
-        it("should update INVOKE operation with FAILED status", () => {
+        it("should update CHAINED_INVOKE operation with FAILED status", () => {
           storage.initialize();
 
-          // Register an INVOKE operation first
+          // Register an CHAINED_INVOKE operation first
           const invokeUpdate: OperationUpdate = {
             Id: "invoke-fail-op",
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Action: OperationAction.START,
             Name: "test-invoke-fail",
           };
           storage.registerUpdate(invokeUpdate, mockInvocationId);
 
           const newOperationData = {
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Status: OperationStatus.FAILED,
             EndTimestamp: new Date(),
-            InvokeDetails: {
+            ChainedInvokeDetails: {
               Error: {
                 ErrorType: "InvokeError",
                 ErrorMessage: "Function failed",
@@ -1536,25 +1536,25 @@ describe("CheckpointManager", () => {
 
           const result = storage.updateOperation(
             "invoke-fail-op",
-            newOperationData
+            newOperationData,
           );
 
           // Should return the updated CheckpointOperation
           expect(result.operation.Id).toBe("invoke-fail-op");
           expect(result.operation.Status).toBe(OperationStatus.FAILED);
           expect(result.operation.EndTimestamp).toEqual(
-            newOperationData.EndTimestamp
+            newOperationData.EndTimestamp,
           );
-          expect(result.operation.InvokeDetails?.Error).toEqual({
+          expect(result.operation.ChainedInvokeDetails?.Error).toEqual({
             ErrorType: "InvokeError",
             ErrorMessage: "Function failed",
           });
 
-          // Should have added InvokeFailed event
+          // Should have added ChainedInvokeFailed event
           expect(result.events).toHaveLength(2); // Start event + Failed event
           const failedEvent = result.events[1];
-          expect(failedEvent.EventType).toBe("InvokeFailed");
-          expect(failedEvent.InvokeFailedDetails).toEqual({
+          expect(failedEvent.EventType).toBe("ChainedInvokeFailed");
+          expect(failedEvent.ChainedInvokeFailedDetails).toEqual({
             Result: undefined,
             Error: {
               Payload: {
@@ -1565,108 +1565,108 @@ describe("CheckpointManager", () => {
           });
         });
 
-        it("should update INVOKE operation with CANCELLED status", () => {
+        it("should update CHAINED_INVOKE operation with CANCELLED status", () => {
           storage.initialize();
 
-          // Register an INVOKE operation first
+          // Register an CHAINED_INVOKE operation first
           const invokeUpdate: OperationUpdate = {
             Id: "invoke-cancel-op",
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Action: OperationAction.START,
             Name: "test-invoke-cancel",
           };
           storage.registerUpdate(invokeUpdate, mockInvocationId);
 
           const newOperationData = {
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Status: OperationStatus.CANCELLED,
             EndTimestamp: new Date(),
           };
 
           const result = storage.updateOperation(
             "invoke-cancel-op",
-            newOperationData
+            newOperationData,
           );
 
           // Should return the updated CheckpointOperation
           expect(result.operation.Id).toBe("invoke-cancel-op");
           expect(result.operation.Status).toBe(OperationStatus.CANCELLED);
           expect(result.operation.EndTimestamp).toEqual(
-            newOperationData.EndTimestamp
+            newOperationData.EndTimestamp,
           );
 
           // Should have added InvokeCancelled event
           expect(result.events).toHaveLength(2); // Start event + Cancelled event
           const cancelledEvent = result.events[1];
-          expect(cancelledEvent.EventType).toBe("InvokeCancelled");
-          expect(cancelledEvent.InvokeStoppedDetails).toEqual({
+          expect(cancelledEvent.EventType).toBe("ChainedInvokeCancelled");
+          expect(cancelledEvent.ChainedInvokeStoppedDetails).toEqual({
             Result: undefined,
             Error: undefined,
           });
         });
 
-        it("should update INVOKE operation with TIMED_OUT status", () => {
+        it("should update CHAINED_INVOKE operation with TIMED_OUT status", () => {
           storage.initialize();
 
-          // Register an INVOKE operation first
+          // Register an CHAINED_INVOKE operation first
           const invokeUpdate: OperationUpdate = {
             Id: "invoke-timeout-op",
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Action: OperationAction.START,
             Name: "test-invoke-timeout",
           };
           storage.registerUpdate(invokeUpdate, mockInvocationId);
 
           const newOperationData = {
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Status: OperationStatus.TIMED_OUT,
             EndTimestamp: new Date(),
           };
 
           const result = storage.updateOperation(
             "invoke-timeout-op",
-            newOperationData
+            newOperationData,
           );
 
           // Should return the updated CheckpointOperation
           expect(result.operation.Id).toBe("invoke-timeout-op");
           expect(result.operation.Status).toBe(OperationStatus.TIMED_OUT);
           expect(result.operation.EndTimestamp).toEqual(
-            newOperationData.EndTimestamp
+            newOperationData.EndTimestamp,
           );
 
           // Should have added InvokeTimedOut event
           expect(result.events).toHaveLength(2); // Start event + TimedOut event
           const timedOutEvent = result.events[1];
-          expect(timedOutEvent.EventType).toBe("InvokeTimedOut");
-          expect(timedOutEvent.InvokeTimedOutDetails).toEqual({
+          expect(timedOutEvent.EventType).toBe("ChainedInvokeTimedOut");
+          expect(timedOutEvent.ChainedInvokeTimedOutDetails).toEqual({
             Result: undefined,
             Error: undefined,
           });
         });
 
-        it("should update INVOKE operation without InvokeDetails", () => {
+        it("should update CHAINED_INVOKE operation without ChainedInvokeDetails", () => {
           storage.initialize();
 
-          // Register an INVOKE operation first
+          // Register an CHAINED_INVOKE operation first
           const invokeUpdate: OperationUpdate = {
             Id: "invoke-no-details-op",
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Action: OperationAction.START,
             Name: "test-invoke-no-details",
           };
           storage.registerUpdate(invokeUpdate, mockInvocationId);
 
           const newOperationData = {
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Status: OperationStatus.SUCCEEDED,
             EndTimestamp: new Date(),
-            // No InvokeDetails provided
+            // No ChainedInvokeDetails provided
           };
 
           const result = storage.updateOperation(
             "invoke-no-details-op",
-            newOperationData
+            newOperationData,
           );
 
           // Should return the updated CheckpointOperation
@@ -1676,30 +1676,30 @@ describe("CheckpointManager", () => {
           // Should have added InvokeSucceeded event with undefined Result and Error
           expect(result.events).toHaveLength(2); // Start event + Success event
           const successEvent = result.events[1];
-          expect(successEvent.EventType).toBe("InvokeSucceeded");
-          expect(successEvent.InvokeSucceededDetails).toEqual({
+          expect(successEvent.EventType).toBe("ChainedInvokeSucceeded");
+          expect(successEvent.ChainedInvokeSucceededDetails).toEqual({
             Result: undefined,
             Error: undefined,
           });
         });
 
-        it("should handle INVOKE operation with empty Result and Error strings", () => {
+        it("should handle CHAINED_INVOKE operation with empty Result and Error strings", () => {
           storage.initialize();
 
-          // Register an INVOKE operation first
+          // Register an CHAINED_INVOKE operation first
           const invokeUpdate: OperationUpdate = {
             Id: "invoke-empty-op",
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Action: OperationAction.START,
             Name: "test-invoke-empty",
           };
           storage.registerUpdate(invokeUpdate, mockInvocationId);
 
           const newOperationData = {
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Status: OperationStatus.SUCCEEDED,
             EndTimestamp: new Date(),
-            InvokeDetails: {
+            ChainedInvokeDetails: {
               Result: "", // Empty string
               Error: {
                 ErrorType: "",
@@ -1710,14 +1710,14 @@ describe("CheckpointManager", () => {
 
           const result = storage.updateOperation(
             "invoke-empty-op",
-            newOperationData
+            newOperationData,
           );
 
           // Should return the updated CheckpointOperation
           expect(result.operation.Id).toBe("invoke-empty-op");
           expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
-          expect(result.operation.InvokeDetails?.Result).toBe("");
-          expect(result.operation.InvokeDetails?.Error).toEqual({
+          expect(result.operation.ChainedInvokeDetails?.Result).toBe("");
+          expect(result.operation.ChainedInvokeDetails?.Error).toEqual({
             ErrorMessage: "",
             ErrorType: "",
           });
@@ -1725,8 +1725,8 @@ describe("CheckpointManager", () => {
           // Should have added InvokeSucceeded event with empty string payloads
           expect(result.events).toHaveLength(2); // Start event + Success event
           const successEvent = result.events[1];
-          expect(successEvent.EventType).toBe("InvokeSucceeded");
-          expect(successEvent.InvokeSucceededDetails).toEqual({
+          expect(successEvent.EventType).toBe("ChainedInvokeSucceeded");
+          expect(successEvent.ChainedInvokeSucceededDetails).toEqual({
             Result: {
               Payload: "",
             },
@@ -1741,23 +1741,23 @@ describe("CheckpointManager", () => {
       });
 
       describe("invalid operation updates", () => {
-        it("should not update INVOKE operation with both Result and Error", () => {
+        it("should not update CHAINED_INVOKE operation with both Result and Error", () => {
           storage.initialize();
 
-          // Register an INVOKE operation first
+          // Register an CHAINED_INVOKE operation first
           const invokeUpdate: OperationUpdate = {
             Id: "invoke-both-op",
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Action: OperationAction.START,
             Name: "test-invoke-both",
           };
           storage.registerUpdate(invokeUpdate, mockInvocationId);
 
           const newOperationData = {
-            Type: OperationType.INVOKE,
+            Type: OperationType.CHAINED_INVOKE,
             Status: OperationStatus.FAILED,
             EndTimestamp: new Date(),
-            InvokeDetails: {
+            ChainedInvokeDetails: {
               Result: '{"partial": "data"}',
               Error: {
                 ErrorType: "PartialError",
@@ -1767,9 +1767,9 @@ describe("CheckpointManager", () => {
           };
 
           expect(() =>
-            storage.updateOperation("invoke-both-op", newOperationData)
+            storage.updateOperation("invoke-both-op", newOperationData),
           ).toThrow(
-            "Could not update operation with both Result and Error in details."
+            "Could not update operation with both Result and Error in details.",
           );
         });
 
@@ -1778,28 +1778,31 @@ describe("CheckpointManager", () => {
           OperationStatus.READY,
           OperationStatus.STOPPED,
           OperationStatus.STARTED,
-        ])(`should throw error for invalid INVOKE status %s`, (status) => {
-          storage.initialize();
+        ])(
+          `should throw error for invalid CHAINED_INVOKE status %s`,
+          (status) => {
+            storage.initialize();
 
-          // Register an INVOKE operation first
-          const invokeUpdate: OperationUpdate = {
-            Id: "invoke-invalid-op",
-            Type: OperationType.INVOKE,
-            Action: OperationAction.START,
-            Name: "test-invoke-invalid",
-          };
-          storage.registerUpdate(invokeUpdate, mockInvocationId);
+            // Register an CHAINED_INVOKE operation first
+            const invokeUpdate: OperationUpdate = {
+              Id: "invoke-invalid-op",
+              Type: OperationType.CHAINED_INVOKE,
+              Action: OperationAction.START,
+              Name: "test-invoke-invalid",
+            };
+            storage.registerUpdate(invokeUpdate, mockInvocationId);
 
-          const newOperationData = {
-            Type: OperationType.INVOKE,
-            Status: status,
-            EndTimestamp: new Date(),
-          };
+            const newOperationData = {
+              Type: OperationType.CHAINED_INVOKE,
+              Status: status,
+              EndTimestamp: new Date(),
+            };
 
-          expect(() => {
-            storage.updateOperation("invoke-invalid-op", newOperationData);
-          }).toThrow(`Invalid status update for INVOKE: ${status}`);
-        });
+            expect(() => {
+              storage.updateOperation("invoke-invalid-op", newOperationData);
+            }).toThrow(`Invalid status update for CHAINED_INVOKE: ${status}`);
+          },
+        );
       });
     });
 
@@ -1813,14 +1816,14 @@ describe("CheckpointManager", () => {
 
       const result = storage.updateOperation(
         initialOperation.Id,
-        newOperationData
+        newOperationData,
       );
 
       // Should return the updated CheckpointOperation
       expect(result.operation.Id).toBe(initialOperation.Id);
       expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED); // Updated status
       expect(result.operation.EndTimestamp).toEqual(
-        newOperationData.EndTimestamp
+        newOperationData.EndTimestamp,
       );
 
       // And the stored operation should be the same as returned
@@ -1828,7 +1831,7 @@ describe("CheckpointManager", () => {
       expect(storedOperation).toBe(result);
       expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
       expect(storedOperation?.operation.EndTimestamp).toEqual(
-        newOperationData.EndTimestamp
+        newOperationData.EndTimestamp,
       );
     });
 
@@ -1847,11 +1850,11 @@ describe("CheckpointManager", () => {
       const storedOperation = storage.operationDataMap.get(initialOperation.Id);
       expect(storedOperation?.operation.Type).toBe(originalType);
       expect(storedOperation?.operation.ExecutionDetails).toBe(
-        originalExecutionDetails
+        originalExecutionDetails,
       );
       expect(storedOperation?.operation.Status).toBe(OperationStatus.FAILED);
       expect(
-        (storedOperation?.operation as Record<string, unknown>).SomeNewField
+        (storedOperation?.operation as Record<string, unknown>).SomeNewField,
       ).toBe("new-value");
     });
 
@@ -1935,7 +1938,7 @@ describe("CheckpointManager", () => {
         Attempt: 1,
       });
       expect(storedOperation?.operation.EndTimestamp).toEqual(
-        updateData.EndTimestamp
+        updateData.EndTimestamp,
       );
     });
 
@@ -1953,10 +1956,10 @@ describe("CheckpointManager", () => {
       const storedOperation = storage.operationDataMap.get(initialOperation.Id);
       expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
       expect(
-        (storedOperation?.operation as Record<string, unknown>).SomeField
+        (storedOperation?.operation as Record<string, unknown>).SomeField,
       ).toBeUndefined();
       expect(
-        (storedOperation?.operation as Record<string, unknown>).AnotherField
+        (storedOperation?.operation as Record<string, unknown>).AnotherField,
       ).toBeNull();
     });
   });

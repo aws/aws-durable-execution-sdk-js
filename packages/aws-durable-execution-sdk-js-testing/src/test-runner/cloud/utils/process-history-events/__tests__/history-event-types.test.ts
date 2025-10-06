@@ -196,13 +196,13 @@ describe("historyEventTypes", () => {
 
   describe("InvokeStarted", () => {
     it("should have correct configuration", () => {
-      const config = historyEventTypes.InvokeStarted;
+      const config = historyEventTypes.ChainedInvokeStarted;
 
       expect(config).toEqual({
-        operationType: OperationType.INVOKE,
+        operationType: OperationType.CHAINED_INVOKE,
         operationStatus: OperationStatus.STARTED,
-        operationDetailPlace: "InvokeDetails",
-        detailPlace: "InvokeStartedDetails",
+        operationDetailPlace: "ChainedInvokeDetails",
+        detailPlace: "ChainedInvokeStartedDetails",
         isStartEvent: true,
         isEndEvent: false,
         hasResult: false,
@@ -210,14 +210,14 @@ describe("historyEventTypes", () => {
     });
   });
 
-  describe("InvokeFailed", () => {
+  describe("ChainedInvokeFailed", () => {
     it("should have correct configuration", () => {
-      const config = historyEventTypes.InvokeFailed;
+      const config = historyEventTypes.ChainedInvokeFailed;
 
       expect(config).toEqual({
-        operationType: OperationType.INVOKE,
+        operationType: OperationType.CHAINED_INVOKE,
         operationStatus: OperationStatus.FAILED,
-        detailPlace: "InvokeFailedDetails",
+        detailPlace: "ChainedInvokeFailedDetails",
         isStartEvent: false,
         isEndEvent: true,
         operationDetailPlace: undefined,
@@ -226,14 +226,14 @@ describe("historyEventTypes", () => {
     });
   });
 
-  describe("InvokeSucceeded", () => {
+  describe("ChainedInvokeSucceeded", () => {
     it("should have correct configuration", () => {
-      const config = historyEventTypes.InvokeSucceeded;
+      const config = historyEventTypes.ChainedInvokeSucceeded;
 
       expect(config).toEqual({
-        operationType: OperationType.INVOKE,
+        operationType: OperationType.CHAINED_INVOKE,
         operationStatus: OperationStatus.SUCCEEDED,
-        detailPlace: "InvokeSucceededDetails",
+        detailPlace: "ChainedInvokeSucceededDetails",
         isStartEvent: false,
         isEndEvent: true,
         operationDetailPlace: undefined,
@@ -242,14 +242,14 @@ describe("historyEventTypes", () => {
     });
   });
 
-  describe("InvokeTimedOut", () => {
+  describe("ChainedInvokeTimedOut", () => {
     it("should have correct configuration", () => {
-      const config = historyEventTypes.InvokeTimedOut;
+      const config = historyEventTypes.ChainedInvokeTimedOut;
 
       expect(config).toEqual({
-        operationType: OperationType.INVOKE,
+        operationType: OperationType.CHAINED_INVOKE,
         operationStatus: OperationStatus.TIMED_OUT,
-        detailPlace: "InvokeTimedOutDetails",
+        detailPlace: "ChainedInvokeTimedOutDetails",
         isStartEvent: false,
         isEndEvent: true,
         operationDetailPlace: undefined,
@@ -258,14 +258,14 @@ describe("historyEventTypes", () => {
     });
   });
 
-  describe("InvokeCancelled", () => {
+  describe("ChainedInvokeCancelled", () => {
     it("should have correct configuration", () => {
-      const config = historyEventTypes.InvokeCancelled;
+      const config = historyEventTypes.ChainedInvokeCancelled;
 
       expect(config).toEqual({
-        operationType: OperationType.INVOKE,
+        operationType: OperationType.CHAINED_INVOKE,
         operationStatus: OperationStatus.CANCELLED,
-        detailPlace: "InvokeStoppedDetails",
+        detailPlace: "ChainedInvokeStoppedDetails",
         isStartEvent: false,
         isEndEvent: true,
         operationDetailPlace: undefined,

@@ -39,7 +39,7 @@ export interface OperationResultCallbackDetails<ResultValue = unknown> {
   readonly result?: ResultValue;
 }
 
-export interface OperationResultInvokeDetails<ResultValue = unknown> {
+export interface OperationResultChainedInvokeDetails<ResultValue = unknown> {
   readonly error?: TestResultError;
   readonly result?: ResultValue;
 }
@@ -61,7 +61,7 @@ export class OperationWithData<OperationResultValue = unknown>
     private readonly waitManager: OperationWaitManager,
     private readonly operationIndex: IndexedOperations,
     private readonly apiClient: DurableApiClient,
-    private checkpointOperationData?: OperationEvents | undefined
+    private checkpointOperationData?: OperationEvents | undefined,
   ) {}
 
   populateData(checkpointOperation: OperationEvents) {
@@ -69,7 +69,7 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   async waitForData(
-    status: WaitingOperationStatus = WaitingOperationStatus.STARTED
+    status: WaitingOperationStatus = WaitingOperationStatus.STARTED,
   ): Promise<OperationWithData<OperationResultValue>> {
     if (
       doesStatusMatch(this.checkpointOperationData?.operation.Status, status)
@@ -134,7 +134,7 @@ export class OperationWithData<OperationResultValue = unknown>
 
     if (!createCallbackOperation) {
       throw new Error(
-        "Could not find CALLBACK operation in WAIT_FOR_CALLBACK context"
+        "Could not find CALLBACK operation in WAIT_FOR_CALLBACK context",
       );
     }
 
@@ -142,7 +142,7 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   private getCreateCallbackDetails(
-    operationData: Operation
+    operationData: Operation,
   ): OperationResultCallbackDetails<OperationResultValue> | undefined {
     const callbackDetails = operationData.CallbackDetails;
     if (callbackDetails?.CallbackId === undefined) {
@@ -156,8 +156,8 @@ export class OperationWithData<OperationResultValue = unknown>
     };
   }
 
-  getInvokeDetails():
-    | OperationResultInvokeDetails<OperationResultValue>
+  getChainedInvokeDetails():
+    | OperationResultChainedInvokeDetails<OperationResultValue>
     | undefined {
     const operationData = this.getOperationData();
 
@@ -165,11 +165,11 @@ export class OperationWithData<OperationResultValue = unknown>
       return undefined;
     }
 
-    if (operationData.Type !== OperationType.INVOKE) {
+    if (operationData.Type !== OperationType.CHAINED_INVOKE) {
       throw new Error(`Operation type ${operationData.Type} is not INVOKE`);
     }
 
-    const invokeDetails = operationData.InvokeDetails;
+    const invokeDetails = operationData.ChainedInvokeDetails;
 
     let result: OperationResultValue | undefined;
     try {
@@ -210,7 +210,7 @@ export class OperationWithData<OperationResultValue = unknown>
     }
 
     throw new Error(
-      `Operation with Type ${operationData.Type} and SubType ${operationData.SubType} is not a valid callback`
+      `Operation with Type ${operationData.Type} and SubType ${operationData.SubType} is not a valid callback`,
     );
   }
 
@@ -251,7 +251,7 @@ export class OperationWithData<OperationResultValue = unknown>
     }
 
     const checkpointOperations = this.operationIndex.getOperationChildren(
-      result.Id
+      result.Id,
     );
 
     return checkpointOperations.map(
@@ -260,8 +260,8 @@ export class OperationWithData<OperationResultValue = unknown>
           this.waitManager,
           this.operationIndex,
           this.apiClient,
-          checkpointOperation
-        )
+          checkpointOperation,
+        ),
     );
   }
 
@@ -318,7 +318,7 @@ export class OperationWithData<OperationResultValue = unknown>
       typeof this.checkpointOperationData?.operation.StartTimestamp === "number"
     ) {
       return new Date(
-        this.checkpointOperationData.operation.StartTimestamp * 1000
+        this.checkpointOperationData.operation.StartTimestamp * 1000,
       );
     }
     return this.checkpointOperationData?.operation.StartTimestamp;
@@ -330,14 +330,14 @@ export class OperationWithData<OperationResultValue = unknown>
       typeof this.checkpointOperationData?.operation.EndTimestamp === "number"
     ) {
       return new Date(
-        this.checkpointOperationData.operation.EndTimestamp * 1000
+        this.checkpointOperationData.operation.EndTimestamp * 1000,
       );
     }
     return this.checkpointOperationData?.operation.EndTimestamp;
   }
 
   sendCallbackSuccess(
-    result: string
+    result: string,
   ): Promise<SendDurableExecutionCallbackSuccessCommandOutput> {
     const callbackDetails = this.getCallbackDetails();
 
@@ -352,7 +352,7 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   sendCallbackFailure(
-    error: ErrorObject
+    error: ErrorObject,
   ): Promise<SendDurableExecutionCallbackFailureCommandOutput> {
     const callbackDetails = this.getCallbackDetails();
 

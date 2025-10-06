@@ -26,9 +26,9 @@ describe("validateValidActionsByOperationType", () => {
     [OperationType.CALLBACK, OperationAction.START],
     [OperationType.CALLBACK, OperationAction.CANCEL],
 
-    // INVOKE operations
-    [OperationType.INVOKE, OperationAction.START],
-    [OperationType.INVOKE, OperationAction.CANCEL],
+    // CHAINED_INVOKE operations
+    [OperationType.CHAINED_INVOKE, OperationAction.START],
+    [OperationType.CHAINED_INVOKE, OperationAction.CANCEL],
 
     // EXECUTION operations
     [OperationType.EXECUTION, OperationAction.SUCCEED],
@@ -53,10 +53,10 @@ describe("validateValidActionsByOperationType", () => {
     [OperationType.CALLBACK, OperationAction.SUCCEED],
     [OperationType.CALLBACK, OperationAction.RETRY],
 
-    // Invalid INVOKE actions
-    [OperationType.INVOKE, OperationAction.FAIL],
-    [OperationType.INVOKE, OperationAction.SUCCEED],
-    [OperationType.INVOKE, OperationAction.RETRY],
+    // Invalid CHAINED_INVOKE actions
+    [OperationType.CHAINED_INVOKE, OperationAction.FAIL],
+    [OperationType.CHAINED_INVOKE, OperationAction.SUCCEED],
+    [OperationType.CHAINED_INVOKE, OperationAction.RETRY],
 
     // Invalid EXECUTION actions
     [OperationType.EXECUTION, OperationAction.START],
@@ -71,7 +71,7 @@ describe("validateValidActionsByOperationType", () => {
         expect(() => {
           validateValidActionsByOperationType(operationType, action);
         }).not.toThrow();
-      }
+      },
     );
   });
 
@@ -85,7 +85,7 @@ describe("validateValidActionsByOperationType", () => {
         expect(() => {
           validateValidActionsByOperationType(operationType, action);
         }).toThrow("Invalid action for the given operation type.");
-      }
+      },
     );
   });
 
@@ -94,13 +94,13 @@ describe("validateValidActionsByOperationType", () => {
       expect(() => {
         validateValidActionsByOperationType(
           "UNKNOWN_TYPE" as OperationType,
-          OperationAction.START
+          OperationAction.START,
         );
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateValidActionsByOperationType(
           "UNKNOWN_TYPE" as OperationType,
-          OperationAction.START
+          OperationAction.START,
         );
       }).toThrow("Unknown operation type.");
     });

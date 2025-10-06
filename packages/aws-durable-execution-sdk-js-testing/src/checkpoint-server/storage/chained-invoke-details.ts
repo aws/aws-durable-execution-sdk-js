@@ -1,22 +1,22 @@
 import { EventType, OperationStatus, Event } from "@aws-sdk/client-lambda";
 import { OperationHistoryEventDetails } from "./types";
 
-export const invokeHistoryDetails = {
+export const chainedInvokeHistoryDetails = {
   [OperationStatus.CANCELLED]: {
-    eventType: EventType.InvokeCancelled,
-    detailPlace: "InvokeStoppedDetails",
+    eventType: EventType.ChainedInvokeCancelled,
+    detailPlace: "ChainedInvokeStoppedDetails",
   },
   [OperationStatus.FAILED]: {
-    eventType: EventType.InvokeFailed,
-    detailPlace: "InvokeFailedDetails",
+    eventType: EventType.ChainedInvokeFailed,
+    detailPlace: "ChainedInvokeFailedDetails",
   },
   [OperationStatus.SUCCEEDED]: {
-    eventType: EventType.InvokeSucceeded,
-    detailPlace: "InvokeSucceededDetails",
+    eventType: EventType.ChainedInvokeSucceeded,
+    detailPlace: "ChainedInvokeSucceededDetails",
   },
   [OperationStatus.TIMED_OUT]: {
-    eventType: EventType.InvokeTimedOut,
-    detailPlace: "InvokeTimedOutDetails",
+    eventType: EventType.ChainedInvokeTimedOut,
+    detailPlace: "ChainedInvokeTimedOutDetails",
   },
   [OperationStatus.PENDING]: undefined,
   [OperationStatus.READY]: undefined,

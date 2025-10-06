@@ -11,21 +11,21 @@ const allowedStatusToCancel: (OperationStatus | undefined)[] = [
 ];
 
 /**
- * Validates an INVOKE operation update against the current operation state.
+ * Validates an CHAINED_INVOKE operation update against the current operation state.
  *
  * @param update - The operation update to validate
  * @param operation - The current operation state (if it exists)
  * @throws {InvalidParameterValueException} When the operation update is invalid
  */
-export function validateInvokeOperation(
+export function validateChainedInvokeOperation(
   update: OperationUpdate,
-  operation: Operation | undefined
+  operation: Operation | undefined,
 ): void {
   switch (update.Action) {
     case OperationAction.START:
       if (operation) {
         throw new InvalidParameterValueException({
-          message: "Cannot start an INVOKE that already exists.",
+          message: "Cannot start a CHAINED_INVOKE that already exists.",
           $metadata: {},
         });
       }
@@ -34,14 +34,14 @@ export function validateInvokeOperation(
       if (!operation || !allowedStatusToCancel.includes(operation.Status)) {
         throw new InvalidParameterValueException({
           message:
-            "Cannot cancel an INVOKE that does not exist or has already completed.",
+            "Cannot cancel a CHAINED_INVOKE that does not exist or has already completed.",
           $metadata: {},
         });
       }
       break;
     default:
       throw new InvalidParameterValueException({
-        message: "Invalid INVOKE action.",
+        message: "Invalid CHAINED_INVOKE action.",
         $metadata: {},
       });
   }

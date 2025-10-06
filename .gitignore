@@ -11,6 +11,7 @@
 .aws-sam/*
 *.zip
 .DS_Store
+.eslintcache
 
 # Environment files
 .secrets

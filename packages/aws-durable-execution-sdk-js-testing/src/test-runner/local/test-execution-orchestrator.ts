@@ -49,7 +49,7 @@ export class TestExecutionOrchestrator {
     private readonly checkpointApi: CheckpointApiClient,
     private readonly scheduler: Scheduler,
     private readonly functionStorage: FunctionStorage,
-    private skipTime = false
+    private skipTime = false,
   ) {
     this.executionState = new TestExecutionState();
     this.invocationTracker = new InvocationTracker(operationStorage);
@@ -86,7 +86,7 @@ export class TestExecutionOrchestrator {
         checkpointToken,
         invocationId,
       }: InvocationResult = await this.checkpointApi.startDurableExecution(
-        JSON.stringify(params?.payload)
+        JSON.stringify(params?.payload),
       );
 
       this.operationStorage.registerMocks(executionId);
@@ -99,7 +99,7 @@ export class TestExecutionOrchestrator {
         executionId,
         checkpointToken,
         invocationId,
-        initialOperations
+        initialOperations,
       );
 
       // Wait for entire execution to complete
@@ -128,14 +128,14 @@ export class TestExecutionOrchestrator {
    */
   private async pollForCheckpointData(
     abortController: AbortController,
-    executionId: ExecutionId
+    executionId: ExecutionId,
   ): Promise<void> {
     try {
       while (!abortController.signal.aborted) {
         const { operations, operationInvocationIdMap } =
           await this.checkpointApi.pollCheckpointData(
             executionId,
-            abortController.signal
+            abortController.signal,
           );
 
         this.operationStorage.populateOperations(operations);
@@ -143,7 +143,7 @@ export class TestExecutionOrchestrator {
         this.processOperations(
           operations,
           executionId,
-          operationInvocationIdMap
+          operationInvocationIdMap,
         );
 
         // Yield to event loop if `pollCheckpointData` returns too often (mainly in unit tests).
@@ -173,7 +173,7 @@ export class TestExecutionOrchestrator {
   private processOperations(
     operations: CheckpointOperation[],
     executionId: ExecutionId,
-    operationInvocationIdMap: OperationInvocationIdMap = {}
+    operationInvocationIdMap: OperationInvocationIdMap = {},
   ): void {
     for (const { update, operation } of operations) {
       if (!operation.Id) {
@@ -185,7 +185,7 @@ export class TestExecutionOrchestrator {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!invocationIdList) {
         throw new Error(
-          `Could not find invocations for operation ${operation.Id}`
+          `Could not find invocations for operation ${operation.Id}`,
         );
       }
 
@@ -193,7 +193,7 @@ export class TestExecutionOrchestrator {
         update,
         operation,
         executionId,
-        Array.from(invocationIdList)
+        Array.from(invocationIdList),
       );
     }
   }
@@ -209,7 +209,7 @@ export class TestExecutionOrchestrator {
     update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId,
-    invocationIds: InvocationId[]
+    invocationIds: InvocationId[],
   ): void {
     if (!operation.Id) {
       throw new Error("Could not process operation without an Id");
@@ -231,7 +231,7 @@ export class TestExecutionOrchestrator {
       case OperationType.EXECUTION:
         this.handleExecutionUpdate(update, operation);
         break;
-      case OperationType.INVOKE:
+      case OperationType.CHAINED_INVOKE:
         // todo: handle errors
         void this.handleInvokeUpdate(update, executionId);
         break;
@@ -240,26 +240,26 @@ export class TestExecutionOrchestrator {
 
   private async handleInvokeUpdate(
     update: OperationUpdate | undefined,
-    executionId: ExecutionId
+    executionId: ExecutionId,
   ) {
     if (update?.Action !== OperationAction.START) {
       return;
     }
 
-    const functionName = update.InvokeOptions?.FunctionName;
+    const functionName = update.ChainedInvokeOptions?.FunctionName;
     // TODO: invoke nested execution with timeout
-    // const timeoutSeconds = update?.InvokeOptions?.TimeoutSeconds
+    // const timeoutSeconds = update?.ChainedInvokeOptions?.TimeoutSeconds
 
     if (!functionName) {
       throw new Error(
-        `FunctionName is required for ${OperationType.INVOKE} updates`
+        `FunctionName is required for ${OperationType.CHAINED_INVOKE} updates`,
       );
     }
 
     const { result, error } = await this.functionStorage.runHandler(
       functionName,
       update.Payload,
-      this.skipTime
+      this.skipTime,
     );
 
     if (update.Id === undefined) {
@@ -272,7 +272,7 @@ export class TestExecutionOrchestrator {
       operationData: {
         // todo: handle other operation types as well
         Status: result ? OperationStatus.SUCCEEDED : OperationStatus.FAILED,
-        InvokeDetails: {
+        ChainedInvokeDetails: {
           Result: result,
           Error: error,
         },
@@ -286,7 +286,7 @@ export class TestExecutionOrchestrator {
       executionId,
       newInvocationData.checkpointToken,
       newInvocationData.invocationId,
-      newInvocationData.operations
+      newInvocationData.operations,
     );
   }
 
@@ -304,7 +304,7 @@ export class TestExecutionOrchestrator {
   private handleWaitUpdate(
     update: OperationUpdate | undefined,
     operation: Operation,
-    executionId: ExecutionId
+    executionId: ExecutionId,
   ): void {
     if (update?.Action !== OperationAction.START) {
       return;
@@ -337,7 +337,7 @@ export class TestExecutionOrchestrator {
         executionId,
         newInvocationData.checkpointToken,
         newInvocationData.invocationId,
-        newInvocationData.operations
+        newInvocationData.operations,
       );
     });
   }
@@ -353,14 +353,14 @@ export class TestExecutionOrchestrator {
   private handleStepUpdate(
     update: OperationUpdate | undefined,
     operation: Operation,
-    executionId: ExecutionId
+    executionId: ExecutionId,
   ): void {
     if (update?.Action === OperationAction.RETRY) {
       const retryDelaySeconds = update.StepOptions?.NextAttemptDelaySeconds;
 
       if (!retryDelaySeconds) {
         throw new Error(
-          "Step operation with retry is missing NextAttemptDelaySeconds"
+          "Step operation with retry is missing NextAttemptDelaySeconds",
         );
       }
 
@@ -379,7 +379,7 @@ export class TestExecutionOrchestrator {
             executionId,
             newInvocationData.checkpointToken,
             newInvocationData.invocationId,
-            newInvocationData.operations
+            newInvocationData.operations,
           );
         },
         async () => {
@@ -390,14 +390,14 @@ export class TestExecutionOrchestrator {
               Status: OperationStatus.READY,
             },
           });
-        }
+        },
       );
     }
   }
 
   private async handleCallbackUpdate(
     operation: Operation,
-    executionId: ExecutionId
+    executionId: ExecutionId,
   ): Promise<void> {
     if (operation.Status === OperationStatus.STARTED) {
       return;
@@ -405,7 +405,7 @@ export class TestExecutionOrchestrator {
 
     if (this.invocationTracker.hasActiveInvocation()) {
       console.warn(
-        "Skipping scheduled function execution due to current active invocation"
+        "Skipping scheduled function execution due to current active invocation",
       );
       return;
     }
@@ -416,13 +416,13 @@ export class TestExecutionOrchestrator {
       executionId,
       newInvocationData.checkpointToken,
       newInvocationData.invocationId,
-      newInvocationData.operations
+      newInvocationData.operations,
     );
   }
 
   private handleExecutionUpdate(
     update: OperationUpdate | undefined,
-    operation: Operation
+    operation: Operation,
   ): void {
     if (!update) {
       throw new Error("Operation update is missing for execution update");
@@ -459,7 +459,7 @@ export class TestExecutionOrchestrator {
   private scheduleAsyncFunction(
     delaySeconds: number,
     invocationFunction: () => Promise<void>,
-    callback?: () => Promise<void>
+    callback?: () => Promise<void>,
   ): void {
     this.scheduler.scheduleFunction(
       async () => {
@@ -468,7 +468,7 @@ export class TestExecutionOrchestrator {
         // TODO: add more time skipping options instead of completely skipping all time
         if (this.invocationTracker.hasActiveInvocation() && !this.skipTime) {
           console.warn(
-            "Skipping scheduled function execution due to current active invocation"
+            "Skipping scheduled function execution due to current active invocation",
           );
           return;
         }
@@ -478,7 +478,7 @@ export class TestExecutionOrchestrator {
       this.skipTime ? 1 : delaySeconds * 1000,
       (err) => {
         this.executionState.rejectWith(err);
-      }
+      },
     );
   }
 
@@ -496,7 +496,7 @@ export class TestExecutionOrchestrator {
     executionId: ExecutionId,
     checkpointToken: CheckpointToken,
     invocationId: InvocationId,
-    operations: Operation[]
+    operations: Operation[],
   ): Promise<void> {
     // Create invocation record at the start of each invocation using the tracker
     this.invocationTracker.createInvocation(invocationId);
@@ -508,7 +508,7 @@ export class TestExecutionOrchestrator {
           durableExecutionArn: executionId,
           checkpointToken: checkpointToken,
           operations,
-        }
+        },
       );
 
       if (value.Status === InvocationStatus.SUCCEEDED) {

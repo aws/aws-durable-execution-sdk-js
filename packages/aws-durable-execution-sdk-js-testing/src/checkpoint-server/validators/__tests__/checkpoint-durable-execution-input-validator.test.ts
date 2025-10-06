@@ -18,7 +18,7 @@ describe("validateCheckpointUpdates", () => {
 
   const createCheckpointOperation = (
     type: OperationType,
-    status: OperationStatus
+    status: OperationStatus,
   ): CheckpointOperation => ({
     operation: {
       Type: type,
@@ -105,13 +105,13 @@ describe("validateCheckpointUpdates", () => {
       expect(() => {
         validateCheckpointUpdates(
           [executionUpdate, stepUpdate],
-          mockOperations
+          mockOperations,
         );
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateCheckpointUpdates(
           [executionUpdate, stepUpdate],
-          mockOperations
+          mockOperations,
         );
       }).toThrow("EXECUTION checkpoint must be the last update.");
     });
@@ -121,8 +121,8 @@ describe("validateCheckpointUpdates", () => {
         "op1",
         createCheckpointOperation(
           OperationType.EXECUTION,
-          OperationStatus.STARTED
-        )
+          OperationStatus.STARTED,
+        ),
       );
       const update = {
         Id: "op1",
@@ -138,7 +138,7 @@ describe("validateCheckpointUpdates", () => {
     it("should succeed with execution fail operation", () => {
       mockOperations.set(
         "op1",
-        createCheckpointOperation(OperationType.STEP, OperationStatus.STARTED)
+        createCheckpointOperation(OperationType.STEP, OperationStatus.STARTED),
       );
       const update = {
         Id: "op1",
@@ -229,7 +229,7 @@ describe("validateCheckpointUpdates", () => {
     it("should throw exception with non-context parent in state", () => {
       mockOperations.set(
         "parentId",
-        createCheckpointOperation(OperationType.STEP, OperationStatus.STARTED)
+        createCheckpointOperation(OperationType.STEP, OperationStatus.STARTED),
       );
       const update = {
         Id: "op1",
@@ -251,8 +251,8 @@ describe("validateCheckpointUpdates", () => {
         "parentId",
         createCheckpointOperation(
           OperationType.CONTEXT,
-          OperationStatus.STARTED
-        )
+          OperationStatus.STARTED,
+        ),
       );
       const update = {
         Id: "op1",
@@ -308,8 +308,8 @@ describe("validateCheckpointUpdates", () => {
         "parentId",
         createCheckpointOperation(
           OperationType.CONTEXT,
-          OperationStatus.STARTED
-        )
+          OperationStatus.STARTED,
+        ),
       );
       const update = {
         Id: "op1",
@@ -385,10 +385,10 @@ describe("validateCheckpointUpdates", () => {
         expect(() => {
           validateCheckpointUpdates(
             [firstUpdate, secondUpdate],
-            mockOperations
+            mockOperations,
           );
         }).not.toThrow();
-      }
+      },
     );
 
     it.each([
@@ -431,12 +431,12 @@ describe("validateCheckpointUpdates", () => {
         expect(() => {
           validateCheckpointUpdates(
             [firstUpdate, secondUpdate],
-            mockOperations
+            mockOperations,
           );
         }).toThrow(
-          "Cannot update the same operation twice in a single request."
+          "Cannot update the same operation twice in a single request.",
         );
-      }
+      },
     );
   });
 
@@ -570,7 +570,7 @@ describe("validateCheckpointUpdates", () => {
     it("should succeed with invoke operation", () => {
       const update = {
         Id: "op1",
-        Type: OperationType.INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
         Action: OperationAction.START,
       };
 

@@ -12,7 +12,7 @@ import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";
 import { EventProcessor } from "./event-processor";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 import { waitHistoryDetails } from "./wait-details";
-import { invokeHistoryDetails } from "./invoke-details";
+import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -108,7 +108,7 @@ export class CheckpointManager {
         acc[key] = invocationIds ? Array.from(invocationIds) : [];
         return acc;
       },
-      {}
+      {},
     );
   }
 
@@ -150,11 +150,11 @@ export class CheckpointManager {
    */
   completeCallback(
     callbackDetails: CallbackDetails,
-    status: CompleteCallbackStatus
+    status: CompleteCallbackStatus,
   ): OperationEvents {
     const result = this.callbackManager.completeCallback(
       callbackDetails,
-      status
+      status,
     );
     if (!result.operation.Id) {
       throw new Error("Could not find operation Id");
@@ -165,7 +165,7 @@ export class CheckpointManager {
 
   markOperationCompleted(
     operation: Operation,
-    status: OperationStatus
+    status: OperationStatus,
   ): Operation {
     return {
       ...operation,
@@ -205,13 +205,13 @@ export class CheckpointManager {
       case OperationAction.SUCCEED:
         copied.operation = this.markOperationCompleted(
           copied.operation,
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         break;
       case OperationAction.FAIL:
         copied.operation = this.markOperationCompleted(
           copied.operation,
-          OperationStatus.FAILED
+          OperationStatus.FAILED,
         );
         break;
       case OperationAction.RETRY:
@@ -261,7 +261,7 @@ export class CheckpointManager {
    */
   registerUpdates(
     updates: OperationUpdate[],
-    invocationId: InvocationId
+    invocationId: InvocationId,
   ): OperationEvents[] {
     return updates.map((update) => this.registerUpdate(update, invocationId));
   }
@@ -299,7 +299,7 @@ export class CheckpointManager {
         const historyEventType = waitHistoryDetails[newOperation.Status];
         if (!historyEventType) {
           throw new Error(
-            `Invalid status update for ${OperationType.WAIT}: ${newOperation.Status}`
+            `Invalid status update for ${OperationType.WAIT}: ${newOperation.Status}`,
           );
         }
         const historyEvent = this.eventProcessor.createHistoryEvent(
@@ -310,25 +310,26 @@ export class CheckpointManager {
             Duration:
               newOperationData.events.at(0)?.WaitStartedDetails?.Duration,
             // TODO: populate error details from WaitCancelled event
-          }
+          },
         );
         newOperationData.events.push(historyEvent);
         break;
       }
-      case OperationType.INVOKE: {
-        const historyEventType = invokeHistoryDetails[newOperation.Status];
+      case OperationType.CHAINED_INVOKE: {
+        const historyEventType =
+          chainedInvokeHistoryDetails[newOperation.Status];
         if (!historyEventType) {
           throw new Error(
-            `Invalid status update for ${OperationType.INVOKE}: ${newOperation.Status}`
+            `Invalid status update for ${OperationType.CHAINED_INVOKE}: ${newOperation.Status}`,
           );
         }
 
         if (
-          newOperationData.operation.InvokeDetails?.Result &&
-          newOperationData.operation.InvokeDetails.Error
+          newOperationData.operation.ChainedInvokeDetails?.Result &&
+          newOperationData.operation.ChainedInvokeDetails.Error
         ) {
           throw new Error(
-            `Could not update operation with both Result and Error in details.`
+            `Could not update operation with both Result and Error in details.`,
           );
         }
 
@@ -338,18 +339,22 @@ export class CheckpointManager {
           historyEventType.detailPlace,
           {
             Result:
-              newOperationData.operation.InvokeDetails?.Result !== undefined
+              newOperationData.operation.ChainedInvokeDetails?.Result !==
+              undefined
                 ? {
-                    Payload: newOperationData.operation.InvokeDetails.Result,
+                    Payload:
+                      newOperationData.operation.ChainedInvokeDetails.Result,
                   }
                 : undefined,
             Error:
-              newOperationData.operation.InvokeDetails?.Error !== undefined
+              newOperationData.operation.ChainedInvokeDetails?.Error !==
+              undefined
                 ? {
-                    Payload: newOperationData.operation.InvokeDetails.Error,
+                    Payload:
+                      newOperationData.operation.ChainedInvokeDetails.Error,
                   }
                 : undefined,
-          }
+          },
         );
         newOperationData.events.push(historyEvent);
       }
@@ -371,7 +376,7 @@ export class CheckpointManager {
    */
   registerUpdate(
     update: OperationUpdate,
-    invocationId: InvocationId
+    invocationId: InvocationId,
   ): OperationEvents {
     if (!update.Id) {
       throw new Error("Missing Id in update");
@@ -408,7 +413,7 @@ export class CheckpointManager {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (this.operationInvocationIdMap[update.Id]) {
       throw new Error(
-        "Operation invocations list should not exist for new operation."
+        "Operation invocations list should not exist for new operation.",
       );
     }
 
@@ -429,7 +434,7 @@ export class CheckpointManager {
         const scheduledTimestamp = new Date();
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
         scheduledTimestamp.setSeconds(
-          scheduledTimestamp.getSeconds() + waitSeconds
+          scheduledTimestamp.getSeconds() + waitSeconds,
         );
 
         operation.WaitDetails = {
@@ -450,7 +455,7 @@ export class CheckpointManager {
         const callbackId = this.callbackManager.createCallback(
           update.Id,
           update.CallbackOptions?.TimeoutSeconds,
-          update.CallbackOptions?.HeartbeatTimeoutSeconds
+          update.CallbackOptions?.HeartbeatTimeoutSeconds,
         );
         operation.CallbackDetails = {
           CallbackId: callbackId,

@@ -21,7 +21,7 @@ describe("history-event-details", () => {
   });
 
   const createMockUpdate = (
-    overrides: Partial<OperationUpdate> = {}
+    overrides: Partial<OperationUpdate> = {},
   ): OperationUpdate => ({
     Payload: "test-payload",
     Error: createMockErrorObject(),
@@ -29,7 +29,7 @@ describe("history-event-details", () => {
       TimeoutSeconds: 60,
       HeartbeatTimeoutSeconds: 30,
     },
-    InvokeOptions: {
+    ChainedInvokeOptions: {
       FunctionName: "test-function",
     },
     StepOptions: {
@@ -42,7 +42,7 @@ describe("history-event-details", () => {
   });
 
   const createMockOperation = (
-    overrides: Partial<Operation> = {}
+    overrides: Partial<Operation> = {},
   ): Operation => ({
     CallbackDetails: {
       CallbackId: "test-callback-id",
@@ -57,7 +57,7 @@ describe("history-event-details", () => {
     it("should return undefined for unknown action-type combinations", () => {
       const result = getHistoryEventDetail(
         "UNKNOWN" as OperationAction,
-        "UNKNOWN" as OperationType
+        "UNKNOWN" as OperationType,
       );
       expect(result).toBeUndefined();
     });
@@ -66,7 +66,7 @@ describe("history-event-details", () => {
       it("should return correct details for START-EXECUTION", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.EXECUTION
+          OperationType.EXECUTION,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.ExecutionStarted);
@@ -87,7 +87,7 @@ describe("history-event-details", () => {
       it("should return correct details for FAIL-EXECUTION", () => {
         const detail = getHistoryEventDetail(
           OperationAction.FAIL,
-          OperationType.EXECUTION
+          OperationType.EXECUTION,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.ExecutionFailed);
@@ -107,7 +107,7 @@ describe("history-event-details", () => {
       it("should return correct details for SUCCEED-EXECUTION", () => {
         const detail = getHistoryEventDetail(
           OperationAction.SUCCEED,
-          OperationType.EXECUTION
+          OperationType.EXECUTION,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.ExecutionSucceeded);
@@ -129,7 +129,7 @@ describe("history-event-details", () => {
       it("should return correct details for START-CALLBACK", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.CALLBACK
+          OperationType.CALLBACK,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.CallbackStarted);
@@ -152,7 +152,7 @@ describe("history-event-details", () => {
       it("should handle missing callback details", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.CALLBACK
+          OperationType.CALLBACK,
         );
         const update = createMockUpdate();
         const operation = createMockOperation({ CallbackDetails: undefined });
@@ -171,7 +171,7 @@ describe("history-event-details", () => {
       it("should handle missing callback options", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.CALLBACK
+          OperationType.CALLBACK,
         );
         const update = createMockUpdate({ CallbackOptions: undefined });
         const operation = createMockOperation();
@@ -192,7 +192,7 @@ describe("history-event-details", () => {
       it("should return correct details for START-CONTEXT", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.CONTEXT
+          OperationType.CONTEXT,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.ContextStarted);
@@ -208,7 +208,7 @@ describe("history-event-details", () => {
       it("should return correct details for FAIL-CONTEXT", () => {
         const detail = getHistoryEventDetail(
           OperationAction.FAIL,
-          OperationType.CONTEXT
+          OperationType.CONTEXT,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.ContextFailed);
@@ -228,7 +228,7 @@ describe("history-event-details", () => {
       it("should return correct details for SUCCEED-CONTEXT", () => {
         const detail = getHistoryEventDetail(
           OperationAction.SUCCEED,
-          OperationType.CONTEXT
+          OperationType.CONTEXT,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.ContextSucceeded);
@@ -250,40 +250,32 @@ describe("history-event-details", () => {
       it("should return correct details for START-INVOKE", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.INVOKE
+          OperationType.CHAINED_INVOKE,
         );
         expect(detail).toBeDefined();
-        expect(detail!.eventType).toBe(EventType.InvokeStarted);
-        expect(detail!.detailPlace).toBe("InvokeStartedDetails");
+        expect(detail!.eventType).toBe(EventType.ChainedInvokeStarted);
+        expect(detail!.detailPlace).toBe("ChainedInvokeStartedDetails");
 
         const update = createMockUpdate();
         const operation = createMockOperation();
         const details = detail!.getDetails(update, operation, mockMetadata);
 
         expect(details).toEqual({
-          Input: {
-            Payload: "test-payload",
-          },
-          FunctionArn: "test-function",
-          DurableExecutionArn: undefined,
+          DurableExecutionArn: "",
         });
       });
 
       it("should handle missing invoke options", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.INVOKE
+          OperationType.CHAINED_INVOKE,
         );
-        const update = createMockUpdate({ InvokeOptions: undefined });
+        const update = createMockUpdate({ ChainedInvokeOptions: undefined });
         const operation = createMockOperation();
         const details = detail!.getDetails(update, operation, mockMetadata);
 
         expect(details).toEqual({
-          Input: {
-            Payload: "test-payload",
-          },
-          FunctionArn: undefined,
-          DurableExecutionArn: undefined,
+          DurableExecutionArn: "",
         });
       });
     });
@@ -292,7 +284,7 @@ describe("history-event-details", () => {
       it("should return correct details for START-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.STEP
+          OperationType.STEP,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.StepStarted);
@@ -308,7 +300,7 @@ describe("history-event-details", () => {
       it("should return correct details for RETRY-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.RETRY,
-          OperationType.STEP
+          OperationType.STEP,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.StepStarted);
@@ -324,7 +316,7 @@ describe("history-event-details", () => {
       it("should return correct details for FAIL-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.FAIL,
-          OperationType.STEP
+          OperationType.STEP,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.StepFailed);
@@ -348,7 +340,7 @@ describe("history-event-details", () => {
       it("should handle missing step details in FAIL-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.FAIL,
-          OperationType.STEP
+          OperationType.STEP,
         );
         const update = createMockUpdate();
         const operation = createMockOperation({ StepDetails: undefined });
@@ -368,7 +360,7 @@ describe("history-event-details", () => {
       it("should handle missing step options in FAIL-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.FAIL,
-          OperationType.STEP
+          OperationType.STEP,
         );
         const update = createMockUpdate({ StepOptions: undefined });
         const operation = createMockOperation();
@@ -388,7 +380,7 @@ describe("history-event-details", () => {
       it("should return correct details for SUCCEED-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.SUCCEED,
-          OperationType.STEP
+          OperationType.STEP,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.StepSucceeded);
@@ -412,7 +404,7 @@ describe("history-event-details", () => {
       it("should handle missing step details in SUCCEED-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.SUCCEED,
-          OperationType.STEP
+          OperationType.STEP,
         );
         const update = createMockUpdate();
         const operation = createMockOperation({ StepDetails: undefined });
@@ -432,7 +424,7 @@ describe("history-event-details", () => {
       it("should handle missing step options in SUCCEED-STEP", () => {
         const detail = getHistoryEventDetail(
           OperationAction.SUCCEED,
-          OperationType.STEP
+          OperationType.STEP,
         );
         const update = createMockUpdate({ StepOptions: undefined });
         const operation = createMockOperation();
@@ -464,7 +456,7 @@ describe("history-event-details", () => {
       it("should return correct details for START-WAIT", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.WAIT
+          OperationType.WAIT,
         );
         expect(detail).toBeDefined();
         expect(detail!.eventType).toBe(EventType.WaitStarted);
@@ -485,7 +477,7 @@ describe("history-event-details", () => {
       it("should handle missing wait options", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.WAIT
+          OperationType.WAIT,
         );
         const update = createMockUpdate({ WaitOptions: undefined });
         const operation = createMockOperation();
@@ -502,7 +494,7 @@ describe("history-event-details", () => {
       it("should handle zero wait seconds", () => {
         const detail = getHistoryEventDetail(
           OperationAction.START,
-          OperationType.WAIT
+          OperationType.WAIT,
         );
         const update = createMockUpdate({
           WaitOptions: {
@@ -526,7 +518,7 @@ describe("history-event-details", () => {
     it("should handle empty metadata", () => {
       const detail = getHistoryEventDetail(
         OperationAction.START,
-        OperationType.EXECUTION
+        OperationType.EXECUTION,
       );
       const update = createMockUpdate();
       const operation = createMockOperation();
@@ -543,7 +535,7 @@ describe("history-event-details", () => {
     it("should handle empty update object", () => {
       const detail = getHistoryEventDetail(
         OperationAction.FAIL,
-        OperationType.EXECUTION
+        OperationType.EXECUTION,
       );
       const update = {} as OperationUpdate;
       const operation = createMockOperation();
@@ -559,7 +551,7 @@ describe("history-event-details", () => {
     it("should handle empty operation object", () => {
       const detail = getHistoryEventDetail(
         OperationAction.START,
-        OperationType.CALLBACK
+        OperationType.CALLBACK,
       );
       const update = createMockUpdate();
       const operation = {} as Operation;

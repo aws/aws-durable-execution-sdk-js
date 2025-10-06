@@ -67,7 +67,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "*",
-    "@aws-sdk/credential-provider-node": "^3.800.0"
+    "@aws-sdk/credential-provider-node": "*"
   },
   "private": true
 }

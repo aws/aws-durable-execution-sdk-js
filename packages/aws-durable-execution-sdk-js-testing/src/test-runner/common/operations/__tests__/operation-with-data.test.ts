@@ -30,7 +30,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       expect(operation.getOperationData()).toBeUndefined();
@@ -40,7 +40,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -62,7 +62,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -77,7 +77,7 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getContextDetails()).toThrow(
-        "Operation type STEP is not CONTEXT"
+        "Operation type STEP is not CONTEXT",
       );
     });
 
@@ -85,7 +85,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -120,7 +120,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -149,7 +149,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -184,7 +184,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -213,7 +213,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const contextDetails = operation.getContextDetails();
       expect(contextDetails).toBeUndefined();
@@ -223,7 +223,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -251,7 +251,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -266,7 +266,7 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getStepDetails()).toThrow(
-        "Operation type CALLBACK is not STEP"
+        "Operation type CALLBACK is not STEP",
       );
     });
 
@@ -274,7 +274,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -307,7 +307,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const stepDetails = operation.getStepDetails();
       expect(stepDetails).toBeUndefined();
@@ -317,7 +317,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "step-op-error",
@@ -355,7 +355,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "step-op-partial",
@@ -393,7 +393,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "step-op-bad-json",
@@ -431,7 +431,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "step-op-no-details",
@@ -461,7 +461,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -476,7 +476,7 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
-        "Operation with Type STEP and SubType undefined is not a valid callback"
+        "Operation with Type STEP and SubType undefined is not a valid callback",
       );
     });
 
@@ -484,7 +484,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -502,7 +502,7 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
-        "Could not find callback ID in callback details"
+        "Could not find callback ID in callback details",
       );
     });
 
@@ -510,7 +510,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -541,7 +541,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const callbackDetails = operation.getCallbackDetails();
       expect(callbackDetails).toBeUndefined();
@@ -572,7 +572,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "wait-for-callback-op",
@@ -615,7 +615,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "wait-for-callback-op",
@@ -631,7 +631,7 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
-        "Could not find CALLBACK operation in WAIT_FOR_CALLBACK context"
+        "Could not find CALLBACK operation in WAIT_FOR_CALLBACK context",
       );
     });
 
@@ -644,7 +644,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "wait-for-callback-op",
@@ -660,7 +660,7 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
-        "Could not find CALLBACK operation in WAIT_FOR_CALLBACK context"
+        "Could not find CALLBACK operation in WAIT_FOR_CALLBACK context",
       );
     });
 
@@ -687,7 +687,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "wait-for-callback-op",
@@ -703,17 +703,17 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getCallbackDetails()).toThrow(
-        "Could not find callback ID in callback details"
+        "Could not find callback ID in callback details",
       );
     });
   });
 
-  describe("getInvokeDetails", () => {
+  describe("getChainedInvokeDetails", () => {
     it("should throw error when operation type is not INVOKE", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -727,8 +727,8 @@ describe("OperationWithData", () => {
         events: [],
       });
 
-      expect(() => operation.getInvokeDetails()).toThrow(
-        "Operation type STEP is not INVOKE"
+      expect(() => operation.getChainedInvokeDetails()).toThrow(
+        "Operation type STEP is not INVOKE",
       );
     });
 
@@ -736,14 +736,14 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.INVOKE,
-        InvokeDetails: {
+        Type: OperationType.CHAINED_INVOKE,
+        ChainedInvokeDetails: {
           Result: '{"functionResult": "success", "executionTime": 250}',
           Error: undefined,
         },
@@ -754,7 +754,7 @@ describe("OperationWithData", () => {
         events: [],
       });
 
-      const invokeDetails = operation.getInvokeDetails();
+      const invokeDetails = operation.getChainedInvokeDetails();
       expect(invokeDetails).toEqual({
         result: { functionResult: "success", executionTime: 250 },
         error: undefined,
@@ -765,14 +765,14 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.FAILED,
-        Type: OperationType.INVOKE,
-        InvokeDetails: {
+        Type: OperationType.CHAINED_INVOKE,
+        ChainedInvokeDetails: {
           Result: undefined,
           Error: {
             ErrorMessage: "Function invocation failed",
@@ -787,7 +787,7 @@ describe("OperationWithData", () => {
         events: [],
       });
 
-      const invokeDetails = operation.getInvokeDetails();
+      const invokeDetails = operation.getChainedInvokeDetails();
       expect(invokeDetails).toEqual({
         result: undefined,
         error: {
@@ -802,14 +802,14 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.INVOKE,
-        InvokeDetails: {
+        Type: OperationType.CHAINED_INVOKE,
+        ChainedInvokeDetails: {
           Result: "invalid-json{",
           Error: undefined,
         },
@@ -820,8 +820,8 @@ describe("OperationWithData", () => {
         events: [],
       });
 
-      expect(() => operation.getInvokeDetails()).toThrow(
-        "Could not parse result for invoke details"
+      expect(() => operation.getChainedInvokeDetails()).toThrow(
+        "Could not parse result for invoke details",
       );
     });
 
@@ -829,24 +829,24 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
-      const invokeDetails = operation.getInvokeDetails();
+      const invokeDetails = operation.getChainedInvokeDetails();
       expect(invokeDetails).toBeUndefined();
     });
 
-    it("should handle missing InvokeDetails", () => {
+    it("should handle missing ChainedInvokeDetails", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.INVOKE,
-        // InvokeDetails is missing
+        Type: OperationType.CHAINED_INVOKE,
+        // ChainedInvokeDetails is missing
       };
 
       operation.populateData({
@@ -854,7 +854,7 @@ describe("OperationWithData", () => {
         events: [],
       });
 
-      const invokeDetails = operation.getInvokeDetails();
+      const invokeDetails = operation.getChainedInvokeDetails();
       expect(invokeDetails).toEqual({
         result: undefined,
         error: undefined,
@@ -867,7 +867,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -882,7 +882,7 @@ describe("OperationWithData", () => {
       });
 
       expect(() => operation.getWaitDetails()).toThrow(
-        "Operation type STEP is not WAIT"
+        "Operation type STEP is not WAIT",
       );
     });
 
@@ -890,7 +890,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -927,7 +927,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const waitDetails = operation.getWaitDetails();
       expect(waitDetails).toBeUndefined();
@@ -939,7 +939,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-operation-id",
@@ -959,7 +959,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getId()).toBeUndefined();
     });
@@ -968,7 +968,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -988,7 +988,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getName()).toBeUndefined();
     });
@@ -997,7 +997,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1018,7 +1018,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getType()).toBeUndefined();
     });
@@ -1027,7 +1027,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1047,7 +1047,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getStatus()).toBeUndefined();
     });
@@ -1056,7 +1056,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const startTime = new Date("2023-01-01T10:00:00Z");
       const operationData = {
@@ -1078,7 +1078,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getStartTimestamp()).toBeUndefined();
     });
@@ -1087,7 +1087,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const endTime = new Date("2023-01-01T11:00:00Z");
       const operationData = {
@@ -1109,7 +1109,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getEndTimestamp()).toBeUndefined();
     });
@@ -1118,7 +1118,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1139,7 +1139,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getParentId()).toBeUndefined();
     });
@@ -1148,7 +1148,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1170,7 +1170,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       expect(operation.getSubType()).toBeUndefined();
     });
@@ -1179,7 +1179,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1201,7 +1201,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1222,7 +1222,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1243,7 +1243,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "test-id",
@@ -1267,11 +1267,11 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
 
         expect(() => operation.sendCallbackSuccess("test-result")).toThrow(
-          "Could not find callback details"
+          "Could not find callback details",
         );
       });
 
@@ -1279,7 +1279,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1294,7 +1294,7 @@ describe("OperationWithData", () => {
         });
 
         expect(() => operation.sendCallbackSuccess("test-result")).toThrow(
-          "Operation with Type STEP and SubType undefined is not a valid callback"
+          "Operation with Type STEP and SubType undefined is not a valid callback",
         );
       });
 
@@ -1302,7 +1302,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1318,7 +1318,7 @@ describe("OperationWithData", () => {
         });
 
         expect(() => operation.sendCallbackSuccess("test-result")).toThrow(
-          "Could not find callback ID in callback details"
+          "Could not find callback ID in callback details",
         );
       });
 
@@ -1326,7 +1326,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1344,7 +1344,7 @@ describe("OperationWithData", () => {
         });
 
         expect(() => operation.sendCallbackSuccess("test-result")).toThrow(
-          "Could not find callback ID in callback details"
+          "Could not find callback ID in callback details",
         );
       });
     });
@@ -1354,7 +1354,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1389,7 +1389,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1409,7 +1409,7 @@ describe("OperationWithData", () => {
         mockApiClient.sendCallbackSuccess.mockRejectedValue(clientError);
 
         await expect(
-          operation.sendCallbackSuccess("test-result")
+          operation.sendCallbackSuccess("test-result"),
         ).rejects.toThrow("Client error");
       });
     });
@@ -1419,7 +1419,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1457,7 +1457,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1481,7 +1481,7 @@ describe("OperationWithData", () => {
         };
 
         await expect(
-          operation.sendCallbackFailure(errorObject)
+          operation.sendCallbackFailure(errorObject),
         ).rejects.toThrow("Client failure error");
       });
     });
@@ -1491,7 +1491,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1523,7 +1523,7 @@ describe("OperationWithData", () => {
         const operation = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operationData = {
           Id: "test-id",
@@ -1543,7 +1543,7 @@ describe("OperationWithData", () => {
         mockApiClient.sendCallbackHeartbeat.mockRejectedValue(clientError);
 
         await expect(operation.sendCallbackHeartbeat()).rejects.toThrow(
-          "Heartbeat client error"
+          "Heartbeat client error",
         );
       });
     });
@@ -1553,12 +1553,12 @@ describe("OperationWithData", () => {
         const operation1 = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
         const operation2 = new OperationWithData(
           waitManager,
           mockIndexedOperations,
-          mockApiClient
+          mockApiClient,
         );
 
         const operationData1 = {
@@ -1617,7 +1617,7 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const expectedResult = {
         operation: {
@@ -1631,7 +1631,7 @@ describe("OperationWithData", () => {
 
       // waitForData should return immediately for STARTED status
       const result = await mockOperation.waitForData(
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
 
       expect(waitManager.waitForOperation).not.toHaveBeenCalled();
@@ -1642,7 +1642,7 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const expectedResult = {
         operation: {
@@ -1656,7 +1656,7 @@ describe("OperationWithData", () => {
 
       // waitForData should return immediately for COMPLETED status
       const result = await mockOperation.waitForData(
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
 
       expect(waitManager.waitForOperation).not.toHaveBeenCalled();
@@ -1667,7 +1667,7 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const initialData = {
         operation: {
@@ -1693,12 +1693,12 @@ describe("OperationWithData", () => {
 
       // Request COMPLETED status - should wait because current status is STARTED
       const result = await mockOperation.waitForData(
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
 
       expect(waitManager.waitForOperation).toHaveBeenCalledWith(
         mockOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
       expect(result.getOperationData()).toBe(finalData.operation);
     });
@@ -1707,7 +1707,7 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const initialData = {
         operation: {
@@ -1737,12 +1737,12 @@ describe("OperationWithData", () => {
 
       // Should wait because data has no status (never matches any expected status)
       const result = await mockOperation.waitForData(
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
 
       expect(waitManager.waitForOperation).toHaveBeenCalledWith(
         mockOperation,
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
       expect(result.getOperationData()).toBe(finalData.operation);
     });
@@ -1751,10 +1751,10 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       (waitManager.waitForOperation as jest.Mock).mockResolvedValue(
-        mockOperation
+        mockOperation,
       );
 
       const expectedResult = {
@@ -1775,7 +1775,7 @@ describe("OperationWithData", () => {
 
       expect(waitManager.waitForOperation).toHaveBeenCalledWith(
         mockOperation,
-        WaitingOperationStatus.STARTED // default status
+        WaitingOperationStatus.STARTED, // default status
       );
       expect(result.getOperationData()).toBe(expectedResult.operation);
     });
@@ -1784,10 +1784,10 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       (waitManager.waitForOperation as jest.Mock).mockResolvedValue(
-        mockOperation
+        mockOperation,
       );
       const expectedResult = {
         operation: {
@@ -1804,12 +1804,12 @@ describe("OperationWithData", () => {
       });
 
       const result = await mockOperation.waitForData(
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
 
       expect(waitManager.waitForOperation).toHaveBeenCalledWith(
         mockOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
       expect(result.getOperationData()).toBe(expectedResult.operation);
     });
@@ -1818,7 +1818,7 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const waitError = new Error("Wait failed");
       (waitManager.waitForOperation as jest.Mock).mockRejectedValue(waitError);
@@ -1830,7 +1830,7 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const expectedResult = {
         operation: {
@@ -1854,7 +1854,7 @@ describe("OperationWithData", () => {
       const waiter1 = mockOperation.waitForData(WaitingOperationStatus.STARTED);
       const waiter2 = mockOperation.waitForData(WaitingOperationStatus.STARTED);
       const waiter3 = mockOperation.waitForData(
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
 
       // Resolve the wait
@@ -1877,7 +1877,7 @@ describe("OperationWithData", () => {
       const mockOperation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const expectedResult = {
         operation: {
@@ -1931,7 +1931,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "parent-id",
@@ -1947,7 +1947,7 @@ describe("OperationWithData", () => {
       const childOperations = operation.getChildOperations();
 
       expect(mockIndexedOperations.getOperationChildren).toHaveBeenCalledWith(
-        "parent-id"
+        "parent-id",
       );
       expect(childOperations).toHaveLength(2);
       expect(childOperations![0]).toBeInstanceOf(OperationWithData);
@@ -1966,7 +1966,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       const childOperations = operation.getChildOperations();
@@ -1983,7 +1983,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "parent-with-no-children",
@@ -1999,7 +1999,7 @@ describe("OperationWithData", () => {
       const childOperations = operation.getChildOperations();
 
       expect(mockIndexedOperations.getOperationChildren).toHaveBeenCalledWith(
-        "parent-with-no-children"
+        "parent-with-no-children",
       );
       expect(childOperations).toEqual([]);
     });
@@ -2023,7 +2023,7 @@ describe("OperationWithData", () => {
       const operation = new OperationWithData(
         waitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const operationData = {
         Id: "callback-parent",
@@ -2040,7 +2040,7 @@ describe("OperationWithData", () => {
       const childOperations = operation.getChildOperations();
 
       expect(mockIndexedOperations.getOperationChildren).toHaveBeenCalledWith(
-        "callback-parent"
+        "callback-parent",
       );
       expect(childOperations).toHaveLength(1);
       expect(childOperations![0]).toBeInstanceOf(OperationWithData);

@@ -27,7 +27,7 @@ const VALID_ACTIONS_FOR_CALLBACK = new Set([
   OperationAction.CANCEL,
 ]);
 
-const VALID_ACTIONS_FOR_INVOKE = new Set([
+const VALID_ACTIONS_FOR_CHAINED_INVOKE = new Set([
   OperationAction.START,
   OperationAction.CANCEL,
 ]);
@@ -50,7 +50,7 @@ const VALID_ACTIONS_FOR_EXECUTION = new Set([
  */
 export function validateValidActionsByOperationType(
   operationType?: OperationType,
-  action?: OperationAction
+  action?: OperationAction,
 ): void {
   let validActions: Set<OperationAction>;
 
@@ -67,8 +67,8 @@ export function validateValidActionsByOperationType(
     case OperationType.CALLBACK:
       validActions = VALID_ACTIONS_FOR_CALLBACK;
       break;
-    case OperationType.INVOKE:
-      validActions = VALID_ACTIONS_FOR_INVOKE;
+    case OperationType.CHAINED_INVOKE:
+      validActions = VALID_ACTIONS_FOR_CHAINED_INVOKE;
       break;
     case OperationType.EXECUTION:
       validActions = VALID_ACTIONS_FOR_EXECUTION;

@@ -4,7 +4,6 @@ export * from "./Interfaces";
 export * from "./ListAliasesPaginator";
 export * from "./ListCodeSigningConfigsPaginator";
 export * from "./ListDurableExecutionsByFunctionPaginator";
-export * from "./ListDurableExecutionsPaginator";
 export * from "./ListEventSourceMappingsPaginator";
 export * from "./ListFunctionEventInvokeConfigsPaginator";
 export * from "./ListFunctionUrlConfigsPaginator";

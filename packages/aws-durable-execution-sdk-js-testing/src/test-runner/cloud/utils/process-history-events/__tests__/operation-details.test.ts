@@ -141,13 +141,13 @@ describe("addOperationDetails", () => {
     });
   });
 
-  it("should handle InvokeDetails", () => {
+  it("should handle ChainedInvokeDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
     };
 
-    addOperationDetails(operation, "InvokeDetails", {
+    addOperationDetails(operation, "ChainedInvokeDetails", {
       Result: "invoke result",
       Error: {
         ErrorType: "InvokeError",
@@ -155,7 +155,7 @@ describe("addOperationDetails", () => {
       },
     });
 
-    expect(operation.InvokeDetails).toEqual({
+    expect(operation.ChainedInvokeDetails).toEqual({
       Result: "invoke result",
       Error: {
         ErrorType: "InvokeError",
@@ -193,7 +193,7 @@ describe("addOperationDetails", () => {
       Name: "test-operation",
     };
 
-    // Since ExecutionDetails doesn't have any properties we can add, 
+    // Since ExecutionDetails doesn't have any properties we can add,
     // and addOperationDetails skips undefined values, nothing gets added
     addOperationDetails(operation, "ExecutionDetails", {});
 

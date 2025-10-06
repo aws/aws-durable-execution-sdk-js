@@ -120,46 +120,55 @@ export const historyEventTypes = {
     isEndEvent: true,
     hasResult: true,
   },
-  InvokeStarted: {
-    operationType: OperationType.INVOKE,
+  ChainedInvokeStarted: {
+    operationType: OperationType.CHAINED_INVOKE,
     operationStatus: OperationStatus.STARTED,
-    operationDetailPlace: "InvokeDetails",
-    detailPlace: "InvokeStartedDetails",
+    operationDetailPlace: "ChainedInvokeDetails",
+    detailPlace: "ChainedInvokeStartedDetails",
     isStartEvent: true,
     isEndEvent: false,
     hasResult: false,
   },
-  InvokeFailed: {
-    operationType: OperationType.INVOKE,
+  ChainedInvokeFailed: {
+    operationType: OperationType.CHAINED_INVOKE,
     operationStatus: OperationStatus.FAILED,
-    detailPlace: "InvokeFailedDetails",
+    detailPlace: "ChainedInvokeFailedDetails",
     isStartEvent: false,
     isEndEvent: true,
     operationDetailPlace: undefined,
     hasResult: true,
   },
-  InvokeSucceeded: {
-    operationType: OperationType.INVOKE,
+  ChainedInvokeSucceeded: {
+    operationType: OperationType.CHAINED_INVOKE,
     operationStatus: OperationStatus.SUCCEEDED,
-    detailPlace: "InvokeSucceededDetails",
+    detailPlace: "ChainedInvokeSucceededDetails",
     isStartEvent: false,
     isEndEvent: true,
     operationDetailPlace: undefined,
     hasResult: true,
   },
-  InvokeTimedOut: {
-    operationType: OperationType.INVOKE,
+  ChainedInvokePending: {
+    operationType: OperationType.CHAINED_INVOKE,
+    operationStatus: OperationStatus.SUCCEEDED,
+    detailPlace: "ChainedInvokePendingDetails",
+    isStartEvent: false,
+    isEndEvent: false,
+    operationDetailPlace: undefined,
+    hasResult: false,
+  },
+  ChainedInvokeTimedOut: {
+    operationType: OperationType.CHAINED_INVOKE,
     operationStatus: OperationStatus.TIMED_OUT,
-    detailPlace: "InvokeTimedOutDetails",
+    detailPlace: "ChainedInvokeTimedOutDetails",
     isStartEvent: false,
     isEndEvent: true,
     operationDetailPlace: undefined,
     hasResult: true,
   },
-  InvokeCancelled: {
-    operationType: OperationType.INVOKE,
+  ChainedInvokeCancelled: {
+    operationType: OperationType.CHAINED_INVOKE,
     operationStatus: OperationStatus.CANCELLED,
-    detailPlace: "InvokeStoppedDetails",
+    detailPlace: "ChainedInvokeStoppedDetails",
     isStartEvent: false,
     isEndEvent: true,
     operationDetailPlace: undefined,
@@ -219,6 +228,16 @@ export const historyEventTypes = {
     operationDetailPlace: undefined,
     hasResult: true,
   },
+  // TODO: add support for populating invocation information from the InvocationCompleted event
+  InvocationCompleted: {
+    operationType: undefined,
+    operationStatus: undefined,
+    detailPlace: "InvocationCompletedDetails",
+    isStartEvent: false,
+    isEndEvent: false,
+    operationDetailPlace: undefined,
+    hasResult: true,
+  },
 } as const satisfies Record<EventType, HistoryEventType>;
 
 /**
@@ -227,9 +246,9 @@ export const historyEventTypes = {
  */
 export interface HistoryEventType {
   /** The type of operation this event represents */
-  operationType: OperationType;
+  operationType: OperationType | undefined;
   /** The status of the operation (started, succeeded, failed, etc.) */
-  operationStatus: OperationStatus;
+  operationStatus: OperationStatus | undefined;
   /** The property name in the Event object where event details are stored */
   detailPlace: keyof Event | null;
   /** The property name in the Operation object where operation details are stored */

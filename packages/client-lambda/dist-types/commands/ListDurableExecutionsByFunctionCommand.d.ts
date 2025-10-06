@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { ListDurableExecutionsByFunctionRequest, ListDurableExecutionsByFunctionResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  ListDurableExecutionsByFunctionRequest,
+  ListDurableExecutionsByFunctionResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link ListDurableExecutionsByFunctionCommand}.
  */
-export interface ListDurableExecutionsByFunctionCommandInput extends ListDurableExecutionsByFunctionRequest {
-}
+export interface ListDurableExecutionsByFunctionCommandInput
+  extends ListDurableExecutionsByFunctionRequest {}
 /**
  * @public
  *
  * The output of {@link ListDurableExecutionsByFunctionCommand}.
  */
-export interface ListDurableExecutionsByFunctionCommandOutput extends ListDurableExecutionsByFunctionResponse, __MetadataBearer {
-}
+export interface ListDurableExecutionsByFunctionCommandOutput
+  extends ListDurableExecutionsByFunctionResponse,
+    __MetadataBearer {}
 declare const ListDurableExecutionsByFunctionCommand_base: {
-    new (input: ListDurableExecutionsByFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<ListDurableExecutionsByFunctionCommandInput, ListDurableExecutionsByFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: ListDurableExecutionsByFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<ListDurableExecutionsByFunctionCommandInput, ListDurableExecutionsByFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: ListDurableExecutionsByFunctionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListDurableExecutionsByFunctionCommandInput,
+    ListDurableExecutionsByFunctionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: ListDurableExecutionsByFunctionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListDurableExecutionsByFunctionCommandInput,
+    ListDurableExecutionsByFunctionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -59,8 +83,8 @@ declare const ListDurableExecutionsByFunctionCommand_base: {
  * //       DurableExecutionName: "STRING_VALUE",
  * //       FunctionArn: "STRING_VALUE",
  * //       Status: "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED",
- * //       StartDate: new Date("TIMESTAMP"),
- * //       StopDate: new Date("TIMESTAMP"),
+ * //       StartTimestamp: new Date("TIMESTAMP"),
+ * //       EndTimestamp: new Date("TIMESTAMP"),
  * //     },
  * //   ],
  * //   NextMarker: "STRING_VALUE",
@@ -89,15 +113,15 @@ declare const ListDurableExecutionsByFunctionCommand_base: {
  *
  */
 export declare class ListDurableExecutionsByFunctionCommand extends ListDurableExecutionsByFunctionCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: ListDurableExecutionsByFunctionRequest;
-            output: ListDurableExecutionsByFunctionResponse;
-        };
-        sdk: {
-            input: ListDurableExecutionsByFunctionCommandInput;
-            output: ListDurableExecutionsByFunctionCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: ListDurableExecutionsByFunctionRequest;
+      output: ListDurableExecutionsByFunctionResponse;
     };
+    sdk: {
+      input: ListDurableExecutionsByFunctionCommandInput;
+      output: ListDurableExecutionsByFunctionCommandOutput;
+    };
+  };
 }

@@ -131,8 +131,8 @@ export interface DurableContext extends Context {
      *
      * Has built-in idempotency / exactly once execution
      */
-    invoke<I,O>(name: string, funcId: FunctionIdentifier, input: I, options?: InvokeOptions): DurablePromise<O>;
-    invoke<I,O>(nameObj: NameObject, funcId: FunctionIdentifier, input: I, options?: InvokeOptions): DurablePromise<O>;
+    invoke<I,O>(name: string, funcId: FunctionIdentifier, input: I, options?: ChainedInvokeOptions): DurablePromise<O>;
+    invoke<I,O>(nameObj: NameObject, funcId: FunctionIdentifier, input: I, options?: ChainedInvokeOptions): DurablePromise<O>;
 
     /**
      * Invoke another durable function asynchronously, not waiting for any response, optionally
@@ -150,8 +150,8 @@ export interface DurableContext extends Context {
      *
      * TODO: Do we want/need this
      */
-    invokeConnector<I,O>(name: string,resource: Resource<I,O>, input: I, options?: InvokeOptions): DurablePromise<O>;
-    invokeConnector<I,O>(nameObj: NameObject, resource: Resource<I,O>, input: I, options?: InvokeOptions): DurablePromise<O>;
+    invokeConnector<I,O>(name: string,resource: Resource<I,O>, input: I, options?: ChainedInvokeOptions): DurablePromise<O>;
+    invokeConnector<I,O>(nameObj: NameObject, resource: Resource<I,O>, input: I, options?: ChainedInvokeOptions): DurablePromise<O>;
 
     //
     // Helpers for common use cases to avoid non-determinism

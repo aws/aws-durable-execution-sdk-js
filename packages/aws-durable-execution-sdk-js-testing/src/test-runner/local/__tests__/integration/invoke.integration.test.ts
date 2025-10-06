@@ -12,7 +12,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
         "myDurableFunctionArn",
         {
           durableInput: "bar",
-        }
+        },
       );
       return {
         durableResult: result,
@@ -38,37 +38,37 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
           input: durableInput,
           message: stepResult,
         };
-      })
+      }),
     );
 
     const execution = await runner.run();
 
-    expect(durableOperation.getInvokeDetails()?.result).toEqual({
+    expect(durableOperation.getChainedInvokeDetails()?.result).toEqual({
       type: "durable",
       input: "bar",
       message: "durable test result",
     });
     expect(execution.getHistoryEvents()).toEqual([
       {
-        EventType: "InvokeStarted",
-        SubType: "Invoke",
+        EventType: "ChainedInvokeStarted",
+        SubType: "ChainedInvoke",
         EventId: 2,
         Id: "c4ca4238a0b92382",
         Name: "durableOperation",
         EventTimestamp: expect.any(Number),
-        InvokeStartedDetails: {
-          Input: { Payload: JSON.stringify({ durableInput: "bar" }) },
-          FunctionArn: "myDurableFunctionArn",
+        ChainedInvokeStartedDetails: {
+          DurableExecutionArn: "",
         },
       },
+      // TODO: add support for PENDING chained invoke operation
       {
-        EventType: "InvokeSucceeded",
-        SubType: "Invoke",
+        EventType: "ChainedInvokeSucceeded",
+        SubType: "ChainedInvoke",
         EventId: 3,
         Id: "c4ca4238a0b92382",
         Name: "durableOperation",
         EventTimestamp: expect.any(Number),
-        InvokeSucceededDetails: {
+        ChainedInvokeSucceededDetails: {
           Result: {
             Payload: JSON.stringify({
               type: "durable",
@@ -109,7 +109,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
           input: nonDurableInput,
           message: "non-durable test result",
         });
-      })
+      }),
     );
 
     const execution = await runner.run();

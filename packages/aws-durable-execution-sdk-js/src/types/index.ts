@@ -60,7 +60,7 @@ export enum OperationSubType {
   PARALLEL_BRANCH = "ParallelBranch",
   WAIT_FOR_CALLBACK = "WaitForCallback",
   WAIT_FOR_CONDITION = "WaitForCondition",
-  INVOKE = "Invoke",
+  CHAINED_INVOKE = "ChainedInvoke",
 }
 
 interface DurableExecutionInvocationOutputFailed {
