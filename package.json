@@ -10,9 +10,10 @@
     "install-all": "npm install && npm install --workspaces",
     "test": "npm run test --workspaces --if-present",
     "test:integration": "act -W .github/workflows/integration-tests.yml --secret-file .secrets --artifact-server-path /tmp/artifacts --container-architecture linux/amd64",
-    "build": "npm run build -w packages/aws-durable-execution-sdk-js -w packages/aws-durable-execution-sdk-js-testing -w packages/aws-durable-execution-sdk-js-examples",
+    "build": "npm run build -w packages/aws-durable-execution-sdk-js -w packages/aws-durable-execution-sdk-js-testing -w packages/aws-durable-execution-sdk-js-examples -w packages/eslint-plugin-durable-functions",
     "postpublish": "git restore .",
-    "clean": "rm -rf node_modules && npm run clean --workspaces --if-present"
+    "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
+    "prepare": "husky install"
   },
   "repository": {
     "type": "git",
@@ -50,6 +51,8 @@
     "globals": "^16.2.0",
     "husky": "^9.1.7",
     "jest": "^30.0.3",
+    "lint-staged": "^16.2.3",
+    "prettier": "^3.6.2",
     "rollup": "^4.50.2",
     "rollup-plugin-node-externals": "^8.1.1",
     "supertest": "^7.1.1",
@@ -60,7 +63,8 @@
     "typescript-eslint": "^8.34.1"
   },
   "lint-staged": {
-    "*.js": "eslint --cache --fix"
+    "*.{js,ts}": "eslint --cache --fix",
+    "*.{js,ts,css,md}": "prettier --write"
   },
   "private": true
 }
