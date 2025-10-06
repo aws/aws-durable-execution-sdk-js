@@ -2,7 +2,7 @@ name: Sync Testing
 
 on:
   push:
-    branches: [ "development"]
+    branches: [ "development", "SilanHe-patch-1"]
     paths:
       - 'packages/aws-durable-execution-sdk-js-testing/**'
       
