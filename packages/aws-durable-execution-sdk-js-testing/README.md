@@ -1,4 +1,4 @@
-## aws-durable-execution-sdk-js-testing
+## My Project
 
 TODO: Fill this README out!
 
