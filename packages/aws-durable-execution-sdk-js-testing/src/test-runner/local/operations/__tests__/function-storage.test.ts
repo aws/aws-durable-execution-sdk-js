@@ -2,7 +2,7 @@ import { ExecutionStatus } from "@aws-sdk/client-lambda";
 import {
   DurableExecutionInvocationInput,
   LambdaHandler,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 import { Handler } from "aws-lambda";
 import {
   FunctionStorage,
@@ -36,7 +36,7 @@ describe("FunctionStorage", () => {
       status: ExecutionStatus;
       result: unknown;
       error: unknown;
-    }> = {}
+    }> = {},
   ) => ({
     getStatus: jest
       .fn()
@@ -95,7 +95,7 @@ describe("FunctionStorage", () => {
 
       // Since the functionNameMap is private, we can test it through runHandler
       expect(() =>
-        functionStorage.runHandler("test-durable-function", "{}", false)
+        functionStorage.runHandler("test-durable-function", "{}", false),
       ).not.toThrow();
     });
 
@@ -126,7 +126,7 @@ describe("FunctionStorage", () => {
 
       // Since the functionNameMap is private, we can test it through runHandler
       expect(() =>
-        functionStorage.runHandler("test-non-durable-function", "{}", false)
+        functionStorage.runHandler("test-non-durable-function", "{}", false),
       ).not.toThrow();
     });
 
@@ -142,7 +142,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "test-function",
         "{}",
-        false
+        false,
       );
 
       expect(newHandler).toHaveBeenCalled();
@@ -169,7 +169,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(mockFactory.createRunner).toHaveBeenCalledWith({
@@ -192,7 +192,7 @@ describe("FunctionStorage", () => {
       await functionStorage.runHandler(
         "durable-function",
         '{"input": "test"}',
-        true
+        true,
       );
 
       expect(mockFactory.createRunner).toHaveBeenCalledWith({
@@ -230,7 +230,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -262,7 +262,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -286,10 +286,10 @@ describe("FunctionStorage", () => {
         functionStorage.runHandler(
           "durable-function",
           '{"input": "test"}',
-          false
-        )
+          false,
+        ),
       ).rejects.toThrow(
-        "Invalid execution status for completed handler: RUNNING"
+        "Invalid execution status for completed handler: RUNNING",
       );
     });
   });
@@ -309,7 +309,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "non-durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(mockNonDurableHandler).toHaveBeenCalledWith(
@@ -318,7 +318,7 @@ describe("FunctionStorage", () => {
           functionName: "test-function",
           awsRequestId: "test-request-id",
         }),
-        expect.any(Function)
+        expect.any(Function),
       );
       expect(result).toEqual({
         result: JSON.stringify(mockResult),
@@ -335,7 +335,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "non-durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -353,13 +353,13 @@ describe("FunctionStorage", () => {
       await functionStorage.runHandler(
         "non-durable-function",
         undefined,
-        false
+        false,
       );
 
       expect(mockNonDurableHandler).toHaveBeenCalledWith(
         {},
         expect.any(Object),
-        expect.any(Function)
+        expect.any(Function),
       );
     });
 
@@ -373,7 +373,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "non-durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -395,7 +395,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "non-durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -416,7 +416,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "non-durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -438,7 +438,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "non-durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -461,7 +461,7 @@ describe("FunctionStorage", () => {
       const result = await functionStorage.runHandler(
         "non-durable-function",
         '{"input": "test"}',
-        false
+        false,
       );
 
       expect(result).toEqual({
@@ -478,20 +478,20 @@ describe("FunctionStorage", () => {
         functionStorage.runHandler(
           "non-existent-function",
           '{"input": "test"}',
-          false
-        )
+          false,
+        ),
       ).rejects.toThrow(
         "No function found for function name non-existent-function.\n" +
-          'Please configure the function handler for "non-existent-function" with LocalDurableTestRunner.registerFunctions.'
+          'Please configure the function handler for "non-existent-function" with LocalDurableTestRunner.registerFunctions.',
       );
     });
 
     it("should throw error when function map is empty", async () => {
       await expect(
-        functionStorage.runHandler("any-function", '{"input": "test"}', false)
+        functionStorage.runHandler("any-function", '{"input": "test"}', false),
       ).rejects.toThrow(
         "No function found for function name any-function.\n" +
-          'Please configure the function handler for "any-function" with LocalDurableTestRunner.registerFunctions.'
+          'Please configure the function handler for "any-function" with LocalDurableTestRunner.registerFunctions.',
       );
     });
   });

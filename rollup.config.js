@@ -1,21 +1,9 @@
 // @ts-check
 
 import typescript from "@rollup/plugin-typescript";
-import { nodeResolve } from "@rollup/plugin-node-resolve";
 import json from "@rollup/plugin-json";
-import terser from "@rollup/plugin-terser";
-import commonjs from '@rollup/plugin-commonjs';
 
-const plugins = [
-  commonjs({
-    include: /node_modules/
-  }),
-  nodeResolve({
-    preferBuiltins: true,
-  }),
-  json(),
-  terser(),
-];
+const plugins = [json()];
 
 const commonOutputOptions = {
   entryFileNames: "[name].js",
@@ -54,6 +42,7 @@ export function createBuildOptions(options, mode) {
           declaration: true,
           declarationMap: true,
           outDir: "./dist",
+          exclude: ["**/__tests__/**/*"],
         }),
         ...inputPlugins,
       ],
@@ -76,6 +65,7 @@ export function createBuildOptions(options, mode) {
         declarationMap: false,
         emitDeclarationOnly: false,
         outDir: undefined,
+        exclude: ["**/__tests__/**/*"],
       }),
       ...inputPlugins,
     ],

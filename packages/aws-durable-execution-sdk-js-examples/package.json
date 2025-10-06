@@ -5,7 +5,7 @@
   "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-examples",
   "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-examples",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "files": [
     "dist"
@@ -37,12 +37,14 @@
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.777.0",
     "@aws/durable-execution-sdk-js": "*",
-    "@aws/durable-execution-sdk-js-testing": "*",
-    "@aws-sdk/client-dynamodb": "^3.777.0"
+    "@aws/durable-execution-sdk-js-testing": "*"
   },
   "devDependencies": {
     "@eslint/js": "^9.23.0",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-node-resolve": "^16.0.2",
     "@tsconfig/node22": "^22.0.1",
     "@types/aws-lambda": "^8.10.145",
     "@types/jest": "^29.5.14",

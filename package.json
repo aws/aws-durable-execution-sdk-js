@@ -32,10 +32,7 @@
   "devDependencies": {
     "@eslint/compat": "^1.3.0",
     "@eslint/js": "^9.29.0",
-    "@rollup/plugin-commonjs": "^28.0.6",
     "@rollup/plugin-json": "^6.1.0",
-    "@rollup/plugin-node-resolve": "^16.0.1",
-    "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^12.1.4",
     "@tsconfig/node20": "^20.1.5",
     "@types/aws-lambda": "^8.10.150",
@@ -64,7 +61,7 @@
   },
   "lint-staged": {
     "*.{js,ts}": "eslint --cache --fix",
-    "*.{js,ts,css,md}": "prettier --write"
+    "*.{js,mjs,ts,md,json}": "prettier --write"
   },
   "private": true
 }
