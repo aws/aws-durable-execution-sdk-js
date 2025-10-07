@@ -68,7 +68,10 @@ const createTerminatingThenable = <T>(
         );
         return result[0] as Promise<TResult1 | TResult2>;
       }
-      if (finalStepData?.Status === OperationStatus.FAILED) {
+      if (
+        finalStepData?.Status === OperationStatus.FAILED ||
+        finalStepData?.Status === OperationStatus.TIMED_OUT
+      ) {
         const result = await handleFailedCallback<T>(
           context,
           stepId,
@@ -145,7 +148,10 @@ export const createCallback = (
       return await handleCompletedCallback<T>(context, stepId, name, serdes);
     }
 
-    if (stepData?.Status === OperationStatus.FAILED) {
+    if (
+      stepData?.Status === OperationStatus.FAILED ||
+      stepData?.Status === OperationStatus.TIMED_OUT
+    ) {
       return await handleFailedCallback<T>(context, stepId, name, serdes);
     }
 

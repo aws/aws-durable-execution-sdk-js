@@ -190,50 +190,56 @@ describe("InvokeHandler", () => {
       );
     });
 
-    it("should throw error when operation status is FAILED", async () => {
-      const mockGetStepData = jest.fn().mockReturnValue({
-        Status: OperationStatus.FAILED,
-        ChainedInvokeDetails: {
-          Error: {
-            ErrorMessage: "Lambda function execution failed",
-            ErrorType: "ExecutionError",
+    it.each([OperationStatus.FAILED, OperationStatus.TIMED_OUT])(
+      "should throw error when operation status is %s",
+      async (status) => {
+        const mockGetStepData = jest.fn().mockReturnValue({
+          Status: status,
+          ChainedInvokeDetails: {
+            Error: {
+              ErrorMessage: "Lambda function execution failed",
+              ErrorType: "ExecutionError",
+            },
           },
-        },
-      });
+        });
 
-      mockContext.getStepData = mockGetStepData;
+        mockContext.getStepData = mockGetStepData;
 
-      const invokeHandler = createInvokeHandler(
-        mockContext,
-        mockCheckpointFn,
-        mockCreateStepId,
-        mockHasRunningOperations,
-      );
+        const invokeHandler = createInvokeHandler(
+          mockContext,
+          mockCheckpointFn,
+          mockCreateStepId,
+          mockHasRunningOperations,
+        );
 
-      await expect(
-        invokeHandler("test-function", { test: "data" }),
-      ).rejects.toThrow("Lambda function execution failed");
-    });
+        await expect(
+          invokeHandler("test-function", { test: "data" }),
+        ).rejects.toThrow("Lambda function execution failed");
+      },
+    );
 
-    it("should throw error with default message when FAILED status has no error details", async () => {
-      const mockGetStepData = jest.fn().mockReturnValue({
-        Status: OperationStatus.FAILED,
-        ChainedInvokeDetails: {},
-      });
+    it.each([OperationStatus.FAILED, OperationStatus.TIMED_OUT])(
+      "should throw error with default message when %s status has no error details",
+      async (status) => {
+        const mockGetStepData = jest.fn().mockReturnValue({
+          Status: status,
+          ChainedInvokeDetails: {},
+        });
 
-      mockContext.getStepData = mockGetStepData;
+        mockContext.getStepData = mockGetStepData;
 
-      const invokeHandler = createInvokeHandler(
-        mockContext,
-        mockCheckpointFn,
-        mockCreateStepId,
-        mockHasRunningOperations,
-      );
+        const invokeHandler = createInvokeHandler(
+          mockContext,
+          mockCheckpointFn,
+          mockCreateStepId,
+          mockHasRunningOperations,
+        );
 
-      await expect(
-        invokeHandler("test-function", { test: "data" }),
-      ).rejects.toThrow("Invoke failed");
-    });
+        await expect(
+          invokeHandler("test-function", { test: "data" }),
+        ).rejects.toThrow("Invoke failed");
+      },
+    );
 
     it("should terminate when operation is still in progress", async () => {
       const mockGetStepData = jest.fn().mockReturnValue({

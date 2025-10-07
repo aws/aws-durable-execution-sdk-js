@@ -10,7 +10,7 @@ createTests({
   functionName: "wait-for-callback",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, isCloud) => {
     it("function completes when callback succeeds - happy case", async () => {
       const executionPromise = runner.run();
 
@@ -35,7 +35,13 @@ createTests({
       expect(execution.getError()).toBeDefined();
     });
 
-    it("function times out when callback is not called - failure case", async () => {
-    });
+    // TODO: fix testing lib local runner time scaling to handle timeouts better
+    if (isCloud) {
+      it("function times out when callback is not called - failure case", async () => {
+        const execution = await runner.run();
+
+        expect(execution.getError()).toBeDefined();
+      });
+    }
   },
 });

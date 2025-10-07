@@ -302,29 +302,55 @@ describe("Callback Handler", () => {
     });
   });
 
-  describe("Failed Callback Scenarios", () => {
-    test("should throw error for failed callback", async () => {
+  describe.each([
+    {
+      status: OperationStatus.FAILED,
+      statusName: "failed",
+      testData: {
+        callbackId: "callback-failed-123",
+        errorData: "Error data",
+        errorMessage: "Callback execution failed",
+        errorType: "CallbackErrorType",
+        stackTrace: ["1", "2", "3"],
+        callbackIdWithoutError: "callback-failed-456",
+      },
+    },
+    {
+      status: OperationStatus.TIMED_OUT,
+      statusName: "timed out",
+      testData: {
+        callbackId: "callback-timed-out-123",
+        errorData: "Timeout error data",
+        errorMessage: "Callback timed out",
+        errorType: "TimeoutError",
+        stackTrace: ["timeout", "stack", "trace"],
+        callbackIdWithoutError: "callback-timed-out-456",
+      },
+    },
+  ])("$statusName Callback Scenarios", ({ status, statusName, testData }) => {
+    test(`should throw error for ${statusName} callback`, async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
       mockExecutionContext._stepData = {
         [hashedStepId]: {
           Id: hashedStepId,
-          Status: OperationStatus.FAILED,
+          Status: status,
           CallbackDetails: {
-            CallbackId: "callback-failed-123",
+            CallbackId: testData.callbackId,
             Error: {
-              ErrorData: "Error data",
-              ErrorMessage: "Callback execution failed",
-              ErrorType: "CallbackErrorType",
-              StackTrace: ["1", "2", "3"],
+              ErrorData: testData.errorData,
+              ErrorMessage: testData.errorMessage,
+              ErrorType: testData.errorType,
+              StackTrace: testData.stackTrace,
             },
           },
         } as Operation,
       };
 
-      const [promise, callbackId] =
-        await callbackHandler<string>("failed-callback");
-      expect(callbackId).toBe("callback-failed-123");
+      const [promise, callbackId] = await callbackHandler<string>(
+        `${statusName}-callback`,
+      );
+      expect(callbackId).toBe(testData.callbackId);
 
       await promise
         .then(() => {
@@ -333,52 +359,111 @@ describe("Callback Handler", () => {
         .catch((err: CallbackError) => {
           expect(err).toBeInstanceOf(CallbackError);
           expect(err.message).toEqual("Callback failed");
-          expect(err.data).toEqual("Error data");
+          expect(err.data).toEqual(testData.errorData);
 
           const cause = err.cause;
           expect(cause).toBeInstanceOf(Error);
-          expect(cause!.message).toEqual("Callback execution failed");
-          expect(cause!.name).toEqual("CallbackErrorType");
-          expect(cause!.stack).toEqual("1\n2\n3");
+          expect(cause!.message).toEqual(testData.errorMessage);
+          expect(cause!.name).toEqual(testData.errorType);
+          expect(cause!.stack).toEqual(testData.stackTrace.join("\n"));
         });
     });
 
-    test("should throw generic error for failed callback without error message", async () => {
+    test(`should throw generic error for ${statusName} callback without error message`, async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
       mockExecutionContext._stepData = {
         [hashedStepId]: {
           Id: hashedStepId,
-          Status: OperationStatus.FAILED,
+          Status: status,
           CallbackDetails: {
-            CallbackId: "callback-failed-456",
+            CallbackId: testData.callbackIdWithoutError,
           },
           StepDetails: {},
         } as Operation,
       };
 
-      const [promise, callbackId] =
-        await callbackHandler<string>("failed-callback");
-      expect(callbackId).toBe("callback-failed-456");
+      const [promise, callbackId] = await callbackHandler<string>(
+        `${statusName}-callback`,
+      );
+      expect(callbackId).toBe(testData.callbackIdWithoutError);
       await expect(promise).rejects.toThrow("Callback failed");
     });
 
-    test("should throw error for failed callback without CallbackId", async () => {
+    test(`should throw error for ${statusName} callback without CallbackId`, async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
       mockExecutionContext._stepData = {
         [hashedStepId]: {
           Id: hashedStepId,
-          Status: OperationStatus.FAILED,
+          Status: status,
           StepDetails: {
-            Result: "Callback execution failed",
+            Result: `Callback ${statusName}`,
           },
         } as Operation,
       };
 
-      await expect(callbackHandler<string>("failed-callback")).rejects.toThrow(
+      await expect(
+        callbackHandler<string>(`${statusName}-callback`),
+      ).rejects.toThrow(
         "No callback ID found for failed callback: test-callback-id",
       );
+    });
+
+    test(`should handle callback ${statusName} during operation wait`, async () => {
+      const mockHasRunningOperations = jest.fn().mockReturnValue(true);
+
+      const callbackHandler = createCallback(
+        mockExecutionContext,
+        mockCheckpoint,
+        createStepId,
+        mockHasRunningOperations,
+      );
+
+      // Initially STARTED, then becomes the target status after waitBeforeContinue
+      let callCount = 0;
+      mockExecutionContext.getStepData.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // First call during callback creation
+          return {
+            Status: OperationStatus.STARTED,
+            CallbackDetails: { CallbackId: "callback-123" },
+          };
+        } else {
+          // Second call after waitBeforeContinue - status changed to target status
+          return {
+            Status: status,
+            CallbackDetails: {
+              CallbackId: "callback-123",
+              Error: {
+                ErrorMessage: testData.errorMessage,
+                ErrorType: testData.errorType,
+                ErrorData: testData.errorData,
+              },
+            },
+          };
+        }
+      });
+
+      const [promise] = await callbackHandler<string>("test-callback");
+
+      // Mock waitBeforeContinue to simulate the wait completing
+      const mockWaitBeforeContinue = (
+        await import("../../utils/wait-before-continue/wait-before-continue")
+      ).waitBeforeContinue as jest.Mock;
+      mockWaitBeforeContinue.mockResolvedValue({ reason: "status" });
+
+      // Trigger the promise - this should execute the target status path
+      promise.then(() => {}).catch(() => {});
+
+      // The key verification is that getStepData was called twice:
+      // 1. During callback creation (returns STARTED)
+      // 2. After waitBeforeContinue (returns target status)
+      expect(mockExecutionContext.getStepData).toHaveBeenCalledTimes(2);
+
+      // Verify waitBeforeContinue was called (indicating operations were running)
+      expect(mockWaitBeforeContinue).toHaveBeenCalled();
     });
   });
 
