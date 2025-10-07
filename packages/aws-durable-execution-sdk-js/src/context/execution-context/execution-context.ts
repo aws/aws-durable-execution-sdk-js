@@ -2,7 +2,11 @@ import { Operation } from "@aws-sdk/client-lambda";
 import { randomUUID } from "crypto";
 import { ExecutionStateFactory } from "../../storage/storage-factory";
 import { TerminationManager } from "../../termination-manager/termination-manager";
-import { DurableExecutionInvocationInput, ExecutionContext } from "../../types";
+import {
+  DurableExecutionInvocationInput,
+  ExecutionContext,
+  DurableExecutionMode,
+} from "../../types";
 import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
 
@@ -48,6 +52,12 @@ export const initializeExecutionContext = async (
     initialExecutionEvent.ExecutionDetails?.InputPayload ?? "{}",
   );
 
+  // Determine replay mode based on operations array length
+  const durableExecutionMode =
+    operationsArray.length > 1
+      ? DurableExecutionMode.ReplayMode
+      : DurableExecutionMode.ExecutionMode;
+
   log(isVerbose, "📝", "Operations:", operationsArray);
 
   const stepData: Record<string, Operation> = operationsArray.reduce(
@@ -69,6 +79,7 @@ export const initializeExecutionContext = async (
       customerHandlerEvent,
       state,
       _stepData: stepData,
+      _durableExecutionMode: durableExecutionMode,
       terminationManager: new TerminationManager(),
       isVerbose,
       durableExecutionArn,

@@ -12,6 +12,13 @@ export enum BatchItemStatus {
   STARTED = "STARTED",
 }
 
+// Define DurableExecutionMode enum
+export enum DurableExecutionMode {
+  ExecutionMode = "ExecutionMode",
+  ReplayMode = "ReplayMode",
+  ReplaySucceededContext = "ReplaySucceededContext",
+}
+
 // Import types for concurrent execution
 import type {
   ConcurrentExecutionItem,
@@ -85,6 +92,7 @@ export type DurableExecutionInvocationOutput =
 export interface DurableContext extends Context {
   _stepPrefix?: string;
   _stepCounter: number;
+  _durableExecutionMode: DurableExecutionMode;
   /**
    * Executes a function as a durable step with automatic retry and state persistence
    * @param name - Step name for tracking and debugging
@@ -204,30 +212,28 @@ export interface DurableContext extends Context {
    */
   runInChildContext<T>(fn: ChildFunc<T>, config?: ChildConfig<T>): Promise<T>;
 
-  wait: {
-    /**
-     * Pauses execution for the specified duration
-     * @param name - Step name for tracking and debugging
-     * @param millis - Duration to wait in milliseconds
-     * @example
-     * ```typescript
-     * // Wait 5 seconds before retrying
-     * await context.wait("retry-delay", 5000);
-     * ```
-     */
-    (name: string, millis: number): Promise<void>;
+  /**
+   * Pauses execution for the specified duration
+   * @param name - Step name for tracking and debugging
+   * @param millis - Duration to wait in milliseconds
+   * @example
+   * ```typescript
+   * // Wait 5 seconds before retrying
+   * await context.wait("retry-delay", 5000);
+   * ```
+   */
+  wait(name: string, millis: number): Promise<void>;
 
-    /**
-     * Pauses execution for the specified duration
-     * @param millis - Duration to wait in milliseconds
-     * @example
-     * ```typescript
-     * // Wait 30 seconds for rate limiting
-     * await context.wait(30000);
-     * ```
-     */
-    (millis: number): Promise<void>;
-  };
+  /**
+   * Pauses execution for the specified duration
+   * @param millis - Duration to wait in milliseconds
+   * @example
+   * ```typescript
+   * // Wait 30 seconds for rate limiting
+   * await context.wait(30000);
+   * ```
+   */
+  wait(millis: number): Promise<void>;
 
   /**
    * Waits for a condition to be met by periodically checking state
@@ -668,6 +674,7 @@ export interface ExecutionContext {
   customerHandlerEvent: any;
   state: ExecutionState;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
+  _durableExecutionMode: DurableExecutionMode;
   terminationManager: TerminationManager;
   isVerbose: boolean;
   durableExecutionArn: string;

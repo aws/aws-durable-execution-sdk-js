@@ -6,7 +6,11 @@ import {
 import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import { OperationSubType, ExecutionContext } from "../../types";
+import {
+  OperationSubType,
+  ExecutionContext,
+  DurableExecutionMode,
+} from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import {
   CheckpointHandler,
@@ -47,6 +51,7 @@ describe("CheckpointHandler", () => {
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
       _stepData: stepData,
+      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
       terminationManager: mockTerminationManager,
       isVerbose: false,
       customerHandlerEvent: {},
@@ -593,6 +598,7 @@ describe("deleteCheckpointHandler", () => {
       _stepData: stepData1,
       terminationManager: mockTerminationManager,
       isVerbose: false,
+      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
       customerHandlerEvent: {},
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData1, stepId);
@@ -611,6 +617,7 @@ describe("deleteCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData2, stepId);
       }),
+      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
     } satisfies ExecutionContext;
   });
 
@@ -834,6 +841,7 @@ describe("createCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
     } satisfies ExecutionContext;
   });
 

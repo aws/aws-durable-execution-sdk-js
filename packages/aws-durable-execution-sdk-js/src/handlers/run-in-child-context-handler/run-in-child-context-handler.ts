@@ -3,6 +3,7 @@ import {
   ChildFunc,
   ChildConfig,
   OperationSubType,
+  DurableExecutionMode,
 } from "../../types";
 import { Context } from "aws-lambda";
 import {
@@ -23,6 +24,33 @@ import { createErrorObjectFromError } from "../../utils/error-object/error-objec
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
+
+export const determineChildReplayMode = (
+  context: ExecutionContext,
+  stepId: string,
+): DurableExecutionMode => {
+  const stepData = context.getStepData(stepId);
+
+  if (!stepData) {
+    return DurableExecutionMode.ExecutionMode;
+  }
+
+  if (
+    stepData.Status === OperationStatus.SUCCEEDED &&
+    stepData.ContextDetails?.ReplayChildren
+  ) {
+    return DurableExecutionMode.ReplaySucceededContext;
+  }
+
+  if (
+    stepData.Status === OperationStatus.SUCCEEDED ||
+    stepData.Status === OperationStatus.FAILED
+  ) {
+    return DurableExecutionMode.ReplayMode;
+  }
+
+  return DurableExecutionMode.ExecutionMode;
+};
 
 export const createRunInChildContextHandler = (
   context: ExecutionContext,
@@ -101,7 +129,15 @@ export const handleCompletedChildContext = async <T>(
     );
 
     // Re-execute the child context to reconstruct the result
-    const childContext = createDurableContext(context, parentContext, entityId);
+    const childContext = createDurableContext(
+      {
+        ...context,
+        parentId: entityId,
+        _durableExecutionMode: DurableExecutionMode.ReplaySucceededContext,
+      },
+      parentContext,
+      entityId,
+    );
 
     return await OperationInterceptor.forExecution(
       context.durableExecutionArn,
@@ -155,6 +191,7 @@ export const executeChildContext = async <T>(
     {
       ...context,
       parentId: entityId,
+      _durableExecutionMode: determineChildReplayMode(context, entityId),
     },
     parentContext,
     entityId,

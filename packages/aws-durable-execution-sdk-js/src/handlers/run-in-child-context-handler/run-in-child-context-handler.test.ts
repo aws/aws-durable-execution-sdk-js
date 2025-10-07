@@ -1,8 +1,12 @@
 import {
   createRunInChildContextHandler,
-  handleCompletedChildContext,
+  determineChildReplayMode,
 } from "./run-in-child-context-handler";
-import { ExecutionContext, OperationSubType } from "../../types";
+import {
+  ExecutionContext,
+  OperationSubType,
+  DurableExecutionMode,
+} from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import {
   createMockCheckpoint,
@@ -855,5 +859,85 @@ describe("Mock Integration", () => {
 
     expect(result).toBe("re-executed-result");
     expect(childFn).toHaveBeenCalledTimes(1);
+  });
+
+  test("should handle child context with succeeded status and ReplayChildren", async () => {
+    mockExecutionContext._stepData = {
+      [TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID]: {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID,
+        Status: OperationStatus.SUCCEEDED,
+        ContextDetails: {
+          ReplayChildren: true,
+          Result: JSON.stringify("cached-result"),
+        },
+      },
+    };
+
+    const childFn = jest.fn().mockResolvedValue("re-executed-result");
+    const result = await runInChildContextHandler(
+      TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      childFn,
+    );
+
+    expect(result).toBe("re-executed-result");
+    expect(childFn).toHaveBeenCalledTimes(1);
+  });
+
+  test("should handle child context with non-succeeded status", async () => {
+    mockExecutionContext._stepData = {
+      [TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID]: {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID,
+        Status: OperationStatus.STARTED,
+      },
+    };
+
+    const childFn = jest.fn().mockResolvedValue("new-result");
+    const result = await runInChildContextHandler(
+      TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      childFn,
+    );
+
+    expect(result).toBe("new-result");
+    expect(childFn).toHaveBeenCalledTimes(1);
+  });
+
+  describe("determineChildReplayMode", () => {
+    test("should return ReplaySucceededContext for succeeded step with ReplayChildren", () => {
+      const stepId = "test-step-id";
+      mockExecutionContext._stepData = {
+        [hashId(stepId)]: {
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { ReplayChildren: true },
+        },
+      };
+
+      const result = determineChildReplayMode(mockExecutionContext, stepId);
+      expect(result).toBe(DurableExecutionMode.ReplaySucceededContext);
+    });
+
+    test("should return ReplayMode for succeeded step without ReplayChildren", () => {
+      const stepId = "test-step-id";
+      mockExecutionContext._stepData = {
+        [hashId(stepId)]: {
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: {},
+        },
+      };
+
+      const result = determineChildReplayMode(mockExecutionContext, stepId);
+      expect(result).toBe(DurableExecutionMode.ReplayMode);
+    });
+
+    test("should return ReplayMode for failed step", () => {
+      const stepId = "test-step-id";
+      mockExecutionContext._stepData = {
+        [hashId(stepId)]: {
+          Status: OperationStatus.FAILED,
+        },
+      };
+
+      const result = determineChildReplayMode(mockExecutionContext, stepId);
+      expect(result).toBe(DurableExecutionMode.ReplayMode);
+    });
   });
 });
