@@ -23,7 +23,7 @@ describe("WaitForCallback Operations Integration", () => {
           async (callbackId) => {
             receivedCallbackId = callbackId;
             return Promise.resolve();
-          }
+          },
         );
 
         return {
@@ -31,7 +31,7 @@ describe("WaitForCallback Operations Integration", () => {
           submitterReceived: (receivedCallbackId?.length ?? 0) > 0,
           completed: true,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -73,7 +73,7 @@ describe("WaitForCallback Operations Integration", () => {
           async (callbackId) => {
             receivedCallbackId = callbackId;
             return Promise.resolve();
-          }
+          },
         );
 
         return {
@@ -81,7 +81,7 @@ describe("WaitForCallback Operations Integration", () => {
           completed: true,
           callbackId: receivedCallbackId,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -122,7 +122,7 @@ describe("WaitForCallback Operations Integration", () => {
             const result = await context.waitForCallback<{ data: string }>(
               () => {
                 throw new Error("Submitter failed immediately");
-              }
+              },
             );
 
             return {
@@ -135,7 +135,7 @@ describe("WaitForCallback Operations Integration", () => {
               error: error instanceof Error ? error.message : String(error),
             };
           }
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -166,7 +166,7 @@ describe("WaitForCallback Operations Integration", () => {
             const result = await context.waitForCallback<{ data: string }>(
               () => {
                 return Promise.reject(new Error("Async submitter failure"));
-              }
+              },
             );
 
             return {
@@ -179,7 +179,7 @@ describe("WaitForCallback Operations Integration", () => {
               error: error instanceof Error ? error.message : String(error),
             };
           }
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -214,7 +214,7 @@ describe("WaitForCallback Operations Integration", () => {
                 receivedCallbackId = callbackId;
                 // Submitter succeeds - simulates successful external API call setup
                 return Promise.resolve();
-              }
+              },
             );
 
             return {
@@ -228,7 +228,7 @@ describe("WaitForCallback Operations Integration", () => {
               callbackId: receivedCallbackId,
             };
           }
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -279,7 +279,7 @@ describe("WaitForCallback Operations Integration", () => {
                 scenario1CallbackId = callbackId;
                 // Simulate submitter that fails after receiving callback ID
                 throw new Error("Submitter failed after callback creation");
-              }
+              },
             );
 
             return { success: true, result };
@@ -290,7 +290,7 @@ describe("WaitForCallback Operations Integration", () => {
               scenario: "submitter-fails-after-callback-creation",
             };
           }
-        }
+        },
       );
 
       const runner1 = new LocalDurableTestRunner({
@@ -317,7 +317,7 @@ describe("WaitForCallback Operations Integration", () => {
               scenario2CallbackId = callbackId;
               // Submitter succeeds
               return Promise.resolve();
-            }
+            },
           );
 
           return {
@@ -325,7 +325,7 @@ describe("WaitForCallback Operations Integration", () => {
             result,
             scenario: "submitter-succeeds-callback-succeeds",
           };
-        }
+        },
       );
 
       const runner2 = new LocalDurableTestRunner({
@@ -338,7 +338,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       const callbackOperation2 = runner2.getOperationByIndex<{ data: string }>(
-        1
+        1,
       );
       await callbackOperation2.waitForData(WaitingOperationStatus.STARTED);
 
@@ -387,7 +387,7 @@ describe("WaitForCallback Operations Integration", () => {
                   shouldRetry: attemptCount < 3,
                   delaySeconds: 1,
                 }),
-              }
+              },
             );
 
             return {
@@ -402,7 +402,7 @@ describe("WaitForCallback Operations Integration", () => {
               callbackId: callbackId,
             };
           }
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -450,7 +450,7 @@ describe("WaitForCallback Operations Integration", () => {
             {
               heartbeatTimeout: 2, // 2 seconds heartbeat timeout
               timeout: 300, // 5 minute total timeout
-            }
+            },
           );
 
           return {
@@ -458,7 +458,7 @@ describe("WaitForCallback Operations Integration", () => {
             heartbeatEnabled: true,
             completed: true,
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -524,7 +524,7 @@ describe("WaitForCallback Operations Integration", () => {
             },
             {
               heartbeatTimeout: 1, // 1 second heartbeat timeout
-            }
+            },
           );
 
           return {
@@ -532,7 +532,7 @@ describe("WaitForCallback Operations Integration", () => {
             submitterDuration: submitterEndTime - submitterStartTime,
             callbackId: receivedCallbackId,
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -584,8 +584,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(completedOperations.length).toBeGreaterThan(0);
     });
 
-    // Skip timeout scenarios until SDK properly supports them (similar to callback-operations.integration.test.ts)
-    it.skip("should handle waitForCallback timeout scenarios", async () => {
+    it("should handle waitForCallback timeout scenarios", async () => {
       const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
@@ -596,7 +595,7 @@ describe("WaitForCallback Operations Integration", () => {
               },
               {
                 timeout: 1, // 1 second timeout
-              }
+              },
             );
 
             return {
@@ -609,7 +608,7 @@ describe("WaitForCallback Operations Integration", () => {
               error: error instanceof Error ? error.message : String(error),
             };
           }
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -620,10 +619,9 @@ describe("WaitForCallback Operations Integration", () => {
         payload: { test: "timeout-scenario" },
       });
 
-      // When SDK properly supports timeouts, this should fail with timeout error
-      expect(result.getResult()).toMatchObject({
+      expect(result.getResult()).toEqual({
         success: false,
-        error: expect.stringContaining("timeout"),
+        error: "Callback failed",
       });
     });
   });
@@ -646,7 +644,7 @@ describe("WaitForCallback Operations Integration", () => {
                 // Simulate different submitter behavior for each callback
                 await new Promise((resolve) => setTimeout(resolve, 10));
                 return Promise.resolve();
-              }
+              },
             ),
             context.waitForCallback<{ id: number; data: string }>(
               async (callbackId) => {
@@ -654,14 +652,14 @@ describe("WaitForCallback Operations Integration", () => {
                 // Different submitter with longer setup time
                 await new Promise((resolve) => setTimeout(resolve, 20));
                 return Promise.resolve();
-              }
+              },
             ),
             context.waitForCallback<{ id: number; data: string }>(
               (callbackId) => {
                 callback3Id = callbackId;
                 // Synchronous submitter
                 return Promise.resolve();
-              }
+              },
             ),
           ]);
 
@@ -670,7 +668,7 @@ describe("WaitForCallback Operations Integration", () => {
             callbackIds: [callback1Id, callback2Id, callback3Id],
             allCompleted: true,
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -790,7 +788,7 @@ describe("WaitForCallback Operations Integration", () => {
             callbackId,
             workflowCompleted: true,
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -868,7 +866,7 @@ describe("WaitForCallback Operations Integration", () => {
                 childResult: childCallbackResult,
                 childProcessed: true,
               };
-            }
+            },
           );
 
           return {
@@ -879,7 +877,7 @@ describe("WaitForCallback Operations Integration", () => {
               child: childCallbackId,
             },
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -893,7 +891,7 @@ describe("WaitForCallback Operations Integration", () => {
       }>("parent-callback-op");
       const childContextOp = runner.getOperation("child-context-with-callback");
       const childCallbackOp = runner.getOperation<{ childData: number }>(
-        "child-callback-op"
+        "child-callback-op",
       );
 
       const executionPromise = runner.run({
@@ -976,7 +974,7 @@ describe("WaitForCallback Operations Integration", () => {
             stepResult,
             callbackIds: [firstCallbackId, secondCallbackId],
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -986,10 +984,10 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Get operations for verification
       const firstCallbackOp = runner.getOperation<{ step: number }>(
-        "first-callback"
+        "first-callback",
       );
       const secondCallbackOp = runner.getOperation<{ step: number }>(
-        "second-callback"
+        "second-callback",
       );
 
       const executionPromise = runner.run({
@@ -1021,7 +1019,7 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Verify operations distribution across invocations
       const invocationOperations = invocations.map(
-        (inv) => inv.getOperations().length
+        (inv) => inv.getOperations().length,
       );
 
       expect(invocationOperations).toHaveLength(5);
@@ -1055,7 +1053,7 @@ describe("WaitForCallback Operations Integration", () => {
             async (callbackId) => {
               outerCallbackId = callbackId;
               return Promise.resolve();
-            }
+            },
           );
 
           const nestedResult = await context.runInChildContext(
@@ -1087,7 +1085,7 @@ describe("WaitForCallback Operations Integration", () => {
                       nestedCallback: nestedCallbackResult,
                       deepLevel: "inner-child",
                     };
-                  }
+                  },
                 );
 
               return {
@@ -1095,7 +1093,7 @@ describe("WaitForCallback Operations Integration", () => {
                 deepNested: deepNestedResult,
                 level: "outer-child",
               };
-            }
+            },
           );
 
           return {
@@ -1107,7 +1105,7 @@ describe("WaitForCallback Operations Integration", () => {
               nested: nestedCallbackId,
             },
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -1117,15 +1115,15 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Get operations - outer callback, outer context, inner callback, inner context, deep wait, nested callback
       const outerCallbackOp = runner.getOperation<{ level: string }>(
-        "outer-callback-op"
+        "outer-callback-op",
       );
       const outerContextOp = runner.getOperation("outer-child-context");
       const innerCallbackOp = runner.getOperation<{ level: string }>(
-        "inner-callback-op"
+        "inner-callback-op",
       );
       const innerContextOp = runner.getOperation("inner-child-context");
       const nestedCallbackOp = runner.getOperation<{ level: string }>(
-        "nested-callback-op"
+        "nested-callback-op",
       );
 
       const executionPromise = runner.run({
@@ -1178,7 +1176,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(innerCallbackId).toBeDefined();
       expect(nestedCallbackId).toBeDefined();
       expect(
-        new Set([outerCallbackId, innerCallbackId, nestedCallbackId]).size
+        new Set([outerCallbackId, innerCallbackId, nestedCallbackId]).size,
       ).toBe(3);
 
       // Should have tracked all operations
@@ -1203,7 +1201,7 @@ describe("WaitForCallback Operations Integration", () => {
             {
               timeout: 120, // 2 minutes custom timeout
               heartbeatTimeout: 5, // 5 seconds heartbeat timeout
-            }
+            },
           );
 
           return {
@@ -1211,7 +1209,7 @@ describe("WaitForCallback Operations Integration", () => {
             timeoutConfigured: true,
             callbackId: receivedCallbackId,
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -1224,7 +1222,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       const callbackOperation = runner.getOperation<{ data: string }>(
-        "custom-timeout-callback"
+        "custom-timeout-callback",
       );
 
       // Wait for the operation to be available
@@ -1270,7 +1268,7 @@ describe("WaitForCallback Operations Integration", () => {
 
       const customSerdes = {
         serialize: async (
-          data: CustomData | undefined
+          data: CustomData | undefined,
         ): Promise<string | undefined> => {
           if (data === undefined) return Promise.resolve(undefined);
           return Promise.resolve(
@@ -1278,11 +1276,11 @@ describe("WaitForCallback Operations Integration", () => {
               ...data,
               timestamp: data.timestamp.toISOString(),
               _serializedBy: "custom-serdes-v1",
-            })
+            }),
           );
         },
         deserialize: async (
-          str: string | undefined
+          str: string | undefined,
         ): Promise<CustomData | undefined> => {
           if (str === undefined) return Promise.resolve(undefined);
           const parsed = JSON.parse(str) as {
@@ -1328,7 +1326,7 @@ describe("WaitForCallback Operations Integration", () => {
             {
               serdes: customSerdes,
               timeout: 300,
-            }
+            },
           );
 
           return {
@@ -1337,7 +1335,7 @@ describe("WaitForCallback Operations Integration", () => {
             isDateObject: result.timestamp instanceof Date,
             serdesUsed: true,
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -1350,7 +1348,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       const callbackOperation = runner.getOperation<CustomData>(
-        "custom-serdes-callback"
+        "custom-serdes-callback",
       );
 
       await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
@@ -1380,8 +1378,8 @@ describe("WaitForCallback Operations Integration", () => {
             submitterData: submitterData,
             isDateObject: true,
             serdesUsed: true,
-          })
-        )
+          }),
+        ),
       );
 
       expect(receivedCallbackId).toBeDefined();
@@ -1403,7 +1401,7 @@ describe("WaitForCallback Operations Integration", () => {
             async () => {
               // This submitter function should be mocked
               return Promise.resolve();
-            }
+            },
           );
 
           const result2 = await context.waitForCallback<{ processed: boolean }>(
@@ -1411,7 +1409,7 @@ describe("WaitForCallback Operations Integration", () => {
             async () => {
               // This submitter function should be replaced by mockImplementation
               return Promise.resolve();
-            }
+            },
           );
 
           return {
@@ -1419,7 +1417,7 @@ describe("WaitForCallback Operations Integration", () => {
             secondResult: result2,
             completed: true,
           };
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -1428,10 +1426,10 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       const mockCallback1 = runner.getOperation<{ data: string }>(
-        "mock-callback-1"
+        "mock-callback-1",
       );
       const mockCallback2 = runner.getOperation<{ processed: boolean }>(
-        "mock-callback-2"
+        "mock-callback-2",
       );
 
       // Mock the first callback with mockResolvedValue
@@ -1439,7 +1437,7 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Mock the second callback with mockImplementation
       mockCallback2.mockImplementation(() =>
-        Promise.resolve({ processed: true })
+        Promise.resolve({ processed: true }),
       );
 
       const result = await runner.run({
@@ -1468,7 +1466,7 @@ describe("WaitForCallback Operations Integration", () => {
               async () => {
                 // This should be mocked to fail
                 return Promise.resolve();
-              }
+              },
             );
 
             return { result, success: true };
@@ -1478,7 +1476,7 @@ describe("WaitForCallback Operations Integration", () => {
               error: error instanceof Error ? error.message : String(error),
             };
           }
-        }
+        },
       );
 
       const runner = new LocalDurableTestRunner({
@@ -1487,7 +1485,7 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       const failingCallback = runner.getOperation<{ data: string }>(
-        "failing-callback"
+        "failing-callback",
       );
       failingCallback.mockRejectedValue(new Error("Mocked callback failure"));
 

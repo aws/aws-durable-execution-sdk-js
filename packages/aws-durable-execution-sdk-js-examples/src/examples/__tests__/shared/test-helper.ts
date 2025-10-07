@@ -12,7 +12,8 @@ export interface TestDefinition<ResultType> {
   functionName: string;
   handler: LocalTestRunnerHandlerFunction;
   tests: (
-    runner: DurableTestRunner<DurableOperation<unknown>, ResultType>
+    runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
+    isCloud: boolean,
   ) => void;
   invocationType?: InvocationType;
 }
@@ -32,7 +33,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     const functionName = functionNames[testDef.functionName];
     if (!functionName) {
       throw new Error(
-        `Function name ${testDef.functionName} not found in FUNCTION_NAME_MAP`
+        `Function name ${testDef.functionName} not found in FUNCTION_NAME_MAP`,
       );
     }
 
@@ -53,7 +54,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     });
 
     describe(`${testDef.name} (cloud)`, () => {
-      testDef.tests(runner);
+      testDef.tests(runner, true);
     });
     return;
   }
@@ -74,6 +75,6 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       runner.reset();
     });
 
-    testDef.tests(runner);
+    testDef.tests(runner, false);
   });
 }

@@ -23,7 +23,7 @@ describe("Callback Operations Integration", () => {
           {
             timeout: 300, // 5 minutes
             heartbeatTimeout: 60, // 1 minute
-          }
+          },
         );
 
         // The execution will pause here until callback is completed
@@ -34,7 +34,7 @@ describe("Callback Operations Integration", () => {
           callbackId, // for verification
           completed: true,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -52,7 +52,7 @@ describe("Callback Operations Integration", () => {
 
     // Wait for the callback operation to be started
     const callbackData = await callbackOperation.waitForData(
-      WaitingOperationStatus.STARTED
+      WaitingOperationStatus.STARTED,
     );
 
     // Verify callback was created correctly
@@ -84,7 +84,7 @@ describe("Callback Operations Integration", () => {
             "failing-operation",
             {
               timeout: 60,
-            }
+            },
           );
 
           await callbackPromise;
@@ -95,7 +95,7 @@ describe("Callback Operations Integration", () => {
             error: error instanceof Error ? error.message : String(error),
           };
         }
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -137,12 +137,12 @@ describe("Callback Operations Integration", () => {
           "long-running-task",
           {
             heartbeatTimeout: 1,
-          }
+          },
         );
 
         const result = await callbackPromise;
         return { longTaskResult: result };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -178,20 +178,19 @@ describe("Callback Operations Integration", () => {
     });
   });
 
-  // todo: enable test when language SDK handles timeouts
-  it.skip("should time out if there are no callback heartbeats", async () => {
+  it("should time out if there are no callback heartbeats", async () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
           {
             heartbeatTimeout: 1,
-          }
+          },
         );
 
         const result = await callbackPromise;
         return { longTaskResult: result };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -200,25 +199,26 @@ describe("Callback Operations Integration", () => {
 
     const result = await runner.run();
 
-    expect(result.getError()).toBe({
-      ErrorMessage: "",
+    expect(result.getError()).toEqual({
+      errorMessage: "Callback failed",
+      errorType: "CallbackError",
+      stackTrace: expect.any(Array),
     });
   });
 
-  // todo: enable test when language SDK handles timeouts
-  it.skip("should time out if callback times out", async () => {
+  it("should time out if callback times out", async () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
           {
             timeout: 1,
-          }
+          },
         );
 
         const result = await callbackPromise;
         return { longTaskResult: result };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -227,8 +227,10 @@ describe("Callback Operations Integration", () => {
 
     const result = await runner.run();
 
-    expect(result.getError()).toBe({
-      ErrorMessage: "",
+    expect(result.getError()).toEqual({
+      errorMessage: "Callback failed",
+      errorType: "CallbackError",
+      stackTrace: expect.any(Array),
     });
   });
 
@@ -256,7 +258,7 @@ describe("Callback Operations Integration", () => {
           results: [result1, result2, result3],
           allCompleted: true,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -306,7 +308,9 @@ describe("Callback Operations Integration", () => {
     const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(3);
     expect(
-      completedOperations.every((op) => op.getType() === OperationType.CALLBACK)
+      completedOperations.every(
+        (op) => op.getType() === OperationType.CALLBACK,
+      ),
     ).toBe(true);
   });
 
@@ -331,7 +335,7 @@ describe("Callback Operations Integration", () => {
           callbackResult,
           completed: true,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -380,18 +384,18 @@ describe("Callback Operations Integration", () => {
 
     const customSerdes = {
       serialize: async (
-        data: CustomData | undefined
+        data: CustomData | undefined,
       ): Promise<string | undefined> => {
         if (data === undefined) return Promise.resolve(undefined);
         return Promise.resolve(
           JSON.stringify({
             ...data,
             timestamp: data.timestamp.toISOString(),
-          })
+          }),
         );
       },
       deserialize: async (
-        str: string | undefined
+        str: string | undefined,
       ): Promise<CustomData | undefined> => {
         if (str === undefined) return Promise.resolve(undefined);
         const parsed = JSON.parse(str) as {
@@ -413,7 +417,7 @@ describe("Callback Operations Integration", () => {
           {
             timeout: 300,
             serdes: customSerdes,
-          }
+          },
         );
 
         const result = await callbackPromise;
@@ -421,7 +425,7 @@ describe("Callback Operations Integration", () => {
           receivedData: result,
           isDateObject: result.timestamp instanceof Date,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -452,8 +456,8 @@ describe("Callback Operations Integration", () => {
         JSON.stringify({
           receivedData: testData,
           isDateObject: true,
-        })
-      )
+        }),
+      ),
     );
   });
 });
