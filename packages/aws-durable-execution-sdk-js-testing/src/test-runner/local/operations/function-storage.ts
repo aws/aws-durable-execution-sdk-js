@@ -2,7 +2,7 @@ import { ErrorObject, ExecutionStatus } from "@aws-sdk/client-lambda";
 import {
   DurableExecutionInvocationInput,
   LambdaHandler,
-} from "aws-durable-execution-sdk-js";
+} from "@aws/durable-execution-sdk-js";
 import { Handler } from "aws-lambda";
 import { InvokeHandler } from "../invoke-handler";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
@@ -59,7 +59,7 @@ export class FunctionStorage {
    */
   registerDurableFunction(
     functionName: string,
-    durableHandler: LambdaHandler<DurableExecutionInvocationInput>
+    durableHandler: LambdaHandler<DurableExecutionInvocationInput>,
   ) {
     this.functionNameMap[functionName] = {
       isDurable: true,
@@ -94,7 +94,7 @@ export class FunctionStorage {
   async runHandler(
     functionName: string,
     payload: string | undefined,
-    skipTime: boolean
+    skipTime: boolean,
   ): Promise<{
     result?: string;
     error?: ErrorObject;
@@ -104,7 +104,7 @@ export class FunctionStorage {
     if (!functionData) {
       throw new Error(
         `No function found for function name ${functionName}.\n` +
-          `Please configure the function handler for "${functionName}" with LocalDurableTestRunner.registerFunctions.`
+          `Please configure the function handler for "${functionName}" with LocalDurableTestRunner.registerFunctions.`,
       );
     }
 
@@ -124,7 +124,7 @@ export class FunctionStorage {
 
       if (status === ExecutionStatus.RUNNING) {
         throw new Error(
-          `Invalid execution status for completed handler: ${status}`
+          `Invalid execution status for completed handler: ${status}`,
         );
       }
 
@@ -161,7 +161,7 @@ export class FunctionStorage {
             } else {
               resolve(result);
             }
-          }
+          },
         );
         if (result instanceof Promise) {
           result.then(resolve).catch(reject);

@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
     "paths": {
-      "@aws-sdk/client-lambda": ["./packages/client-lambda/dist-types"],
-      "aws-durable-execution-sdk-js": [
-        "./packages/aws-durable-execution-sdk-js/dist"
+      "@aws-sdk/client-lambda": ["./packages/client-lambda"],
+      "@aws/durable-execution-sdk-js": [
+        "./packages/aws-durable-execution-sdk-js"
       ],
-      "aws-durable-execution-sdk-js-testing": [
-        "./packages/aws-durable-execution-sdk-js-testing/dist"
+      "@aws/durable-execution-sdk-js-testing": [
+        "./packages/aws-durable-execution-sdk-js-testing"
       ]
     },
     "target": "ES2022",
@@ -19,6 +19,7 @@
     "moduleResolution": "bundler",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "removeComments": true
   }
 }
