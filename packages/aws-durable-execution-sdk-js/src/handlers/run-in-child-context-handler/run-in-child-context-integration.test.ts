@@ -1,5 +1,9 @@
 import { createDurableContext } from "../../context/durable-context/durable-context";
-import { ExecutionContext, DurableContext } from "../../types";
+import {
+  ExecutionContext,
+  DurableContext,
+  DurableExecutionMode,
+} from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   OperationType,
@@ -54,6 +58,7 @@ describe("Run In Child Context Integration Tests", () => {
           ),
       },
       _stepData: {},
+      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
       terminationManager: mockTerminationManager,
       isVerbose: false,
       customerHandlerEvent: {},

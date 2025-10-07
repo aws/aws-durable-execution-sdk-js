@@ -19,6 +19,7 @@ export const TEST_CONSTANTS = {
 
   // Child context constants
   CHILD_CONTEXT_ID: "test-child-context-id",
+  CHILD_CONTEXT_STEP_ID: "test-child-context-step-id",
   CHILD_CONTEXT_NAME: "test-child-context",
   CHILD_CONTEXT_RESULT: "child-context-result",
 

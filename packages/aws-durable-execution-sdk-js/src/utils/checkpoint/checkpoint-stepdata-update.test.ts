@@ -1,5 +1,9 @@
 import { CheckpointHandler } from "./checkpoint";
-import { ExecutionContext, OperationSubType } from "../../types";
+import {
+  ExecutionContext,
+  OperationSubType,
+  DurableExecutionMode,
+} from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   CheckpointDurableExecutionResponse,
@@ -34,6 +38,7 @@ describe("CheckpointHandler - StepData Update", () => {
       customerHandlerEvent: {},
       state: mockState,
       _stepData: stepData,
+      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
       terminationManager: new TerminationManager(),
       durableExecutionArn:
         "arn:aws:durable-execution:us-east-1:123456789012:execution/test-execution",

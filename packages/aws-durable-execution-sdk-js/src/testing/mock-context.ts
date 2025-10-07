@@ -1,4 +1,4 @@
-import { ExecutionContext } from "../types";
+import { ExecutionContext, DurableExecutionMode } from "../types";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
 
@@ -23,6 +23,7 @@ export const createMockExecutionContext = (
       checkpoint: jest.fn(),
     },
     _stepData: {},
+    _durableExecutionMode: DurableExecutionMode.ExecutionMode,
     terminationManager: mockTerminationManager,
     isVerbose: false,
     durableExecutionArn: "test-arn",
