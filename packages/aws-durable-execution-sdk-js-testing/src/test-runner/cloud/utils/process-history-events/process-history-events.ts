@@ -1,4 +1,4 @@
-import { Event, OperationType } from "@aws-sdk/client-lambda";
+import { Event, EventType, OperationType } from "@aws-sdk/client-lambda";
 import { OperationEvents } from "../../../common/operations/operation-with-data";
 import { historyEventTypes } from "./history-event-types";
 import { createOperation, populateOperationDetails } from "./operation-factory";
@@ -17,12 +17,21 @@ import { createOperation, populateOperationDetails } from "./operation-factory";
  * @throws {Error} When required fields (EventType, Id, EventTimestamp) are missing from an event
  */
 export function historyEventsToOperationEvents(
-  events: Event[]
+  events: Event[],
 ): OperationEvents[] {
   const operationEvents = new Map<string, OperationEvents>();
   for (const event of events) {
-    if (!event.EventType || !event.Id) {
-      throw new Error("Missing required fields in event");
+    if (!event.EventType) {
+      throw new Error("Missing required 'EventType' field in event");
+    }
+
+    if (event.EventType === EventType.InvocationCompleted) {
+      // TODO: populate the InvocationCompleted event to add invocation information
+      continue;
+    }
+
+    if (!event.Id) {
+      throw new Error("Missing required 'Id' field in event");
     }
 
     const historyEventType = historyEventTypes[event.EventType];
@@ -41,7 +50,7 @@ export function historyEventsToOperationEvents(
     const operation = createOperation(
       previousOperationEvents,
       event,
-      historyEventType
+      historyEventType,
     );
 
     populateOperationDetails(event, historyEventType, operation);

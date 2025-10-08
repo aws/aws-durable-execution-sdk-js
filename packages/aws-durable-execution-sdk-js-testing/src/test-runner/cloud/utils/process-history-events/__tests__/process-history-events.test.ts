@@ -26,7 +26,7 @@ describe("historyEventsToOperationEvents", () => {
 
     expect(() => {
       historyEventsToOperationEvents(events);
-    }).toThrow("Missing required fields in event");
+    }).toThrow("Missing required 'EventType' field in event");
   });
 
   it("should throw error when Id is missing", () => {
@@ -39,7 +39,18 @@ describe("historyEventsToOperationEvents", () => {
 
     expect(() => {
       historyEventsToOperationEvents(events);
-    }).toThrow("Missing required fields in event");
+    }).toThrow("Missing required 'Id' field in event");
+  });
+
+  it("should not throw error when Id is missing for InvocationCompleted event", () => {
+    const events: Event[] = [
+      {
+        EventType: EventType.InvocationCompleted,
+        EventTimestamp: new Date("2023-01-01T12:00:00Z"),
+      },
+    ];
+
+    expect(historyEventsToOperationEvents(events)).toEqual([]);
   });
 
   it("should skip EXECUTION operation types", () => {
