@@ -94,6 +94,10 @@ export interface DurableContext extends Context {
   _stepCounter: number;
   _durableExecutionMode: DurableExecutionMode;
   /**
+   * Logger instance for this context, enriched with execution context information
+   */
+  logger: Logger;
+  /**
    * Executes a function as a durable step with automatic retry and state persistence
    * @param name - Step name for tracking and debugging
    * @param fn - Function to execute as a durable step

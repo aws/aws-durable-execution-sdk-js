@@ -57,11 +57,19 @@ describe("Run In Child Context Handler", () => {
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { awsRequestId: "mock-request-id" };
     createStepId = jest.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
+    const mockGetLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
     runInChildContextHandler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       createStepId,
+      mockGetLogger,
     );
   });
 
@@ -492,12 +500,20 @@ describe("runInChildContext with custom serdes", () => {
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { getRemainingTimeInMillis: () => 30000 };
     mockCreateStepId = jest.fn().mockReturnValue("test-step-id");
+    const mockGetLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
 
     runInChildContext = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       mockCreateStepId,
+      mockGetLogger,
     );
   });
 
@@ -590,11 +606,19 @@ describe("Mock Integration", () => {
     mockCheckpoint = createMockCheckpoint();
     mockParentContext = { awsRequestId: "mock-request-id" };
     createStepId = jest.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
+    const mockGetLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
     runInChildContextHandler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       createStepId,
+      mockGetLogger,
     );
   });
 

@@ -36,15 +36,17 @@ import { createConcurrentExecutionHandler } from "../../handlers/concurrent-exec
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 
 export const createDurableContext = (
   executionContext: ExecutionContext,
   parentContext: Context,
   stepPrefix?: string,
   checkpointToken?: string,
+  inheritedLogger?: Logger | null,
 ): DurableContext => {
   // Local logger state for this context instance
-  let contextLogger: Logger | null = null;
+  let contextLogger: Logger | null = inheritedLogger || null;
 
   // Local getter function for this context
   const getLogger = (): Logger => {
@@ -211,6 +213,7 @@ export const createDurableContext = (
       checkpoint,
       parentContext,
       createStepId,
+      getLogger,
     );
     try {
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -438,11 +441,18 @@ export const createDurableContext = (
     }
   };
 
-  return {
+  const durableContext = {
     ...parentContext,
     _stepPrefix: stepPrefix,
     _stepCounter: stepCounter,
     _durableExecutionMode: executionContext._durableExecutionMode,
+    get logger(): Logger {
+      return createModeAwareLogger(
+        executionContext,
+        createContextLogger,
+        stepPrefix,
+      );
+    },
     step,
     invoke,
     runInChildContext,
@@ -456,4 +466,6 @@ export const createDurableContext = (
     promise,
     setCustomLogger,
   };
+
+  return durableContext as DurableContext;
 };

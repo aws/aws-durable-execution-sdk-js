@@ -16,10 +16,10 @@ export const createContextLoggerFactory = (
       const entry: Record<string, unknown> = {
         timestamp: new Date().toISOString(),
         execution_arn: executionContext.durableExecutionArn,
-        step_id: stepId,
         level,
       };
 
+      if (stepId) entry.step_id = stepId;
       if (attempt !== undefined) entry.attempt = attempt;
       if (message) entry.message = message;
       if (data) entry.data = data;

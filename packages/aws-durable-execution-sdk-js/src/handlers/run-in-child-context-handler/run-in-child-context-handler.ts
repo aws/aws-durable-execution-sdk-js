@@ -4,6 +4,7 @@ import {
   ChildConfig,
   OperationSubType,
   DurableExecutionMode,
+  Logger,
 } from "../../types";
 import { Context } from "aws-lambda";
 import {
@@ -57,6 +58,7 @@ export const createRunInChildContextHandler = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   parentContext: Context,
   createStepId: () => string,
+  getParentLogger: () => Logger,
 ) => {
   return async <T>(
     nameOrFn: string | undefined | ChildFunc<T>,
@@ -92,6 +94,7 @@ export const createRunInChildContextHandler = (
         name,
         fn,
         options,
+        getParentLogger,
       );
     }
 
@@ -103,6 +106,7 @@ export const createRunInChildContextHandler = (
       name,
       fn,
       options,
+      getParentLogger,
     );
   };
 };
@@ -113,7 +117,8 @@ export const handleCompletedChildContext = async <T>(
   entityId: string,
   stepName: string | undefined,
   fn: ChildFunc<T>,
-  options?: ChildConfig<T>,
+  options: ChildConfig<T> | undefined,
+  getParentLogger: () => Logger,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
   const stepData = context.getStepData(entityId);
@@ -137,6 +142,8 @@ export const handleCompletedChildContext = async <T>(
       },
       parentContext,
       entityId,
+      undefined,
+      getParentLogger(),
     );
 
     return await OperationInterceptor.forExecution(
@@ -169,7 +176,8 @@ export const executeChildContext = async <T>(
   entityId: string,
   name: string | undefined,
   fn: ChildFunc<T>,
-  options?: ChildConfig<T>,
+  options: ChildConfig<T> | undefined,
+  getParentLogger: () => Logger,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
 
@@ -195,6 +203,8 @@ export const executeChildContext = async <T>(
     },
     parentContext,
     entityId,
+    undefined,
+    getParentLogger(),
   );
 
   try {
