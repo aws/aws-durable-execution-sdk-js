@@ -21,6 +21,7 @@ describe("WaitForCallback Operations Integration", () => {
       async (_event: unknown, context: DurableContext) => {
         const result = await context.waitForCallback<{ data: string }>(
           async (callbackId) => {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             receivedCallbackId = callbackId;
             return Promise.resolve();
           },
@@ -212,6 +213,7 @@ describe("WaitForCallback Operations Integration", () => {
             const result = await context.waitForCallback<{ data: string }>(
               async (callbackId) => {
                 receivedCallbackId = callbackId;
+                await new Promise((resolve) => setTimeout(resolve, 1000));
                 // Submitter succeeds - simulates successful external API call setup
                 return Promise.resolve();
               },
@@ -637,31 +639,41 @@ describe("WaitForCallback Operations Integration", () => {
       const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           // Start multiple waitForCallback operations concurrently
-          const [result1, result2, result3] = await Promise.all([
-            context.waitForCallback<{ id: number; data: string }>(
-              async (callbackId) => {
-                callback1Id = callbackId;
-                // Simulate different submitter behavior for each callback
-                await new Promise((resolve) => setTimeout(resolve, 10));
-                return Promise.resolve();
-              },
-            ),
-            context.waitForCallback<{ id: number; data: string }>(
-              async (callbackId) => {
-                callback2Id = callbackId;
-                // Different submitter with longer setup time
-                await new Promise((resolve) => setTimeout(resolve, 20));
-                return Promise.resolve();
-              },
-            ),
-            context.waitForCallback<{ id: number; data: string }>(
-              (callbackId) => {
-                callback3Id = callbackId;
-                // Synchronous submitter
-                return Promise.resolve();
-              },
-            ),
+          const parallelResult = await context.parallel([
+            (childContext) =>
+              childContext.waitForCallback<{ id: number; data: string }>(
+                "wait-for-callback",
+                async (callbackId) => {
+                  callback1Id = callbackId;
+                  // Simulate different submitter behavior for each callback
+                  await new Promise((resolve) => setTimeout(resolve, 10));
+                  return Promise.resolve();
+                },
+              ),
+            (childContext) =>
+              childContext.waitForCallback<{ id: number; data: string }>(
+                "wait-for-callback",
+                async (callbackId) => {
+                  callback2Id = callbackId;
+                  // Different submitter with longer setup time
+                  await new Promise((resolve) => setTimeout(resolve, 20));
+                  return Promise.resolve();
+                },
+              ),
+            (childContext) =>
+              childContext.waitForCallback<{ id: number; data: string }>(
+                "wait-for-callback",
+                (callbackId) => {
+                  callback3Id = callbackId;
+                  // Synchronous submitter
+                  return Promise.resolve();
+                },
+              ),
           ]);
+
+          const [result1, result2, result3] = parallelResult
+            .getResults()
+            .map((result) => result.data);
 
           return {
             results: [result1, result2, result3],
@@ -677,18 +689,18 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       // Get all callback operations by index
-      const callback1Op = runner.getOperationByIndex<{
+      const callback1Op = runner.getOperationByNameAndIndex<{
         id: number;
         data: string;
-      }>(1);
-      const callback2Op = runner.getOperationByIndex<{
+      }>("wait-for-callback", 0);
+      const callback2Op = runner.getOperationByNameAndIndex<{
         id: number;
         data: string;
-      }>(2);
-      const callback3Op = runner.getOperationByIndex<{
+      }>("wait-for-callback", 1);
+      const callback3Op = runner.getOperationByNameAndIndex<{
         id: number;
         data: string;
-      }>(3);
+      }>("wait-for-callback", 2);
 
       const executionPromise = runner.run({
         payload: { test: "concurrent-waitForCallback" },
@@ -748,10 +760,7 @@ describe("WaitForCallback Operations Integration", () => {
       expect(new Set([callback1Id, callback2Id, callback3Id]).size).toBe(3);
     });
 
-    // TODO: enable when concurrency support is added
-    // Currently, the submitter takes 10ms, but sendCallbackSuccess is called before the submitter completes.
-    // The callbackPromise does not check for the result before terminating, so it terminates too early.
-    it.skip("should handle waitForCallback mixed with steps, waits, and other operations", async () => {
+    it("should handle waitForCallback mixed with steps, waits, and other operations", async () => {
       let callbackId: string | undefined;
 
       const handler = withDurableFunctions<unknown, unknown>(
@@ -823,18 +832,18 @@ describe("WaitForCallback Operations Integration", () => {
 
       expect(resultData).toMatchObject({
         stepResult: { userId: 123, name: "John Doe" },
-        callbackResult: { processed: true },
+        callbackResult: JSON.stringify({ processed: true }),
         finalStep: { status: "completed" },
         workflowCompleted: true,
       });
       expect(resultData.callbackId).toBeDefined();
       expect(typeof resultData.finalStep.timestamp).toBe("number");
 
-      // Verify all operations were tracked - should have wait, step, waitForCallback, wait, step
+      // Verify all operations were tracked - should have wait, step, waitForCallback (context + callback + submitter), wait, step
       const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
-      expect(completedOperations.length).toBe(5);
+      expect(completedOperations.length).toBe(7);
     });
 
     it("should handle waitForCallback within child contexts", async () => {

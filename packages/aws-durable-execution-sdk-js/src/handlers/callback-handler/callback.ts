@@ -20,6 +20,114 @@ const passThroughSerdes: Serdes<any> = {
 };
 
 /**
+ * A Promise-like class that checks status and running operations before terminating
+ */
+export class TerminatingPromise<T> implements Promise<T> {
+  constructor(
+    private readonly context: ExecutionContext,
+    private readonly stepId: string,
+    private readonly stepName: string | undefined,
+    private readonly message: string,
+    private readonly hasRunningOperations: () => boolean,
+    private readonly serdes: Serdes<T>,
+  ) {}
+
+  async then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    try {
+      // Wait for EITHER operations to complete OR status to change
+      if (this.hasRunningOperations()) {
+        await waitBeforeContinue({
+          checkHasRunningOperations: true,
+          checkStepStatus: true, // ✅ Check status changes too
+          checkTimer: false,
+          stepId: this.stepId,
+          context: this.context,
+          hasRunningOperations: this.hasRunningOperations,
+          pollingInterval: 1000,
+        });
+      }
+
+      // Check final status after waiting
+      const finalStepData = this.context.getStepData(this.stepId);
+      if (finalStepData?.Status === OperationStatus.SUCCEEDED) {
+        const result = await handleCompletedCallback<T>(
+          this.context,
+          this.stepId,
+          this.stepName,
+          this.serdes,
+        );
+
+        if (onfulfilled) {
+          return onfulfilled(await result[0]);
+        }
+
+        return result[0] as TResult1;
+      }
+
+      if (
+        finalStepData?.Status === OperationStatus.FAILED ||
+        finalStepData?.Status === OperationStatus.TIMED_OUT
+      ) {
+        const result = await handleFailedCallback<T>(
+          this.context,
+          this.stepId,
+          this.stepName,
+          this.serdes,
+        );
+
+        await result[0];
+        throw new Error(
+          "Unreachable state detected. Failed callback should always throw an error.",
+        );
+      }
+    } catch (err) {
+      if (onrejected) {
+        return onrejected(err);
+      }
+
+      throw err;
+    }
+
+    // Only terminate if still pending
+    return terminate(
+      this.context,
+      TerminationReason.CALLBACK_PENDING,
+      this.message,
+    );
+  }
+
+  catch<TResult = never>(
+    onrejected?:
+      | ((reason: any) => TResult | PromiseLike<TResult>)
+      | null
+      | undefined,
+  ): Promise<T | TResult> {
+    return this.then(undefined, onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null): Promise<T> {
+    // Delegate to then() which handles the status checking
+    return this.then(
+      (value) => {
+        onfinally?.();
+        return value;
+      },
+      (reason) => {
+        onfinally?.();
+        throw reason;
+      },
+    );
+  }
+
+  get [Symbol.toStringTag](): string {
+    return "TerminatingPromise";
+  }
+}
+
+/**
  * Creates a thenable that checks status and running operations before terminating
  * Properly implements Promise interface including instanceof Promise support
  */
@@ -30,86 +138,15 @@ const createTerminatingThenable = <T>(
   message: string,
   hasRunningOperations: () => boolean,
   serdes: Serdes<T>,
-): Promise<T> => {
-  // Create a class that extends Promise to support instanceof checks
-  class TerminatingPromise extends Promise<T> {
-    constructor() {
-      // Call super with a dummy executor that never resolves
-      super(() => {});
-    }
-
-    async then<TResult1 = T, TResult2 = never>(
-      _onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-      _onrejected?:
-        | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
-        | null,
-    ): Promise<TResult1 | TResult2> {
-      // Wait for EITHER operations to complete OR status to change
-      if (hasRunningOperations()) {
-        await waitBeforeContinue({
-          checkHasRunningOperations: true,
-          checkStepStatus: true, // ✅ Check status changes too
-          checkTimer: false,
-          stepId,
-          context,
-          hasRunningOperations,
-          pollingInterval: 1000,
-        });
-      }
-
-      // Check final status after waiting
-      const finalStepData = context.getStepData(stepId);
-      if (finalStepData?.Status === OperationStatus.SUCCEEDED) {
-        const result = await handleCompletedCallback<T>(
-          context,
-          stepId,
-          stepName,
-          serdes,
-        );
-        return result[0] as Promise<TResult1 | TResult2>;
-      }
-      if (
-        finalStepData?.Status === OperationStatus.FAILED ||
-        finalStepData?.Status === OperationStatus.TIMED_OUT
-      ) {
-        const result = await handleFailedCallback<T>(
-          context,
-          stepId,
-          stepName,
-          serdes,
-        );
-        return result[0] as Promise<TResult1 | TResult2>;
-      }
-
-      // Only terminate if still pending
-      return terminate(context, TerminationReason.CALLBACK_PENDING, message);
-    }
-
-    catch<TResult = never>(
-      _onrejected?:
-        | ((reason: unknown) => TResult | PromiseLike<TResult>)
-        | null,
-    ): Promise<T | TResult> {
-      // Delegate to then() which handles the status checking
-      return this.then(undefined, _onrejected);
-    }
-
-    finally(_onfinally?: (() => void) | null): Promise<T> {
-      // Delegate to then() which handles the status checking
-      return this.then(
-        (value) => {
-          _onfinally?.();
-          return value;
-        },
-        (reason) => {
-          _onfinally?.();
-          throw reason;
-        },
-      );
-    }
-  }
-
-  return new TerminatingPromise();
+): TerminatingPromise<T> => {
+  return new TerminatingPromise<T>(
+    context,
+    stepId,
+    stepName,
+    message,
+    hasRunningOperations,
+    serdes,
+  );
 };
 
 export const createCallback = (
