@@ -1,5 +1,6 @@
 import { createContextLoggerFactory } from "./context-logger";
 import { Logger, ExecutionContext } from "../../types";
+import { hashId } from "../step-id-utils/step-id-utils";
 
 describe("Context Logger", () => {
   let mockBaseLogger: Logger;
@@ -33,7 +34,7 @@ describe("Context Logger", () => {
       "test message",
       expect.objectContaining({
         execution_arn: "test-execution-arn",
-        step_id: "test-step",
+        step_id: hashId("test-step"),
         attempt: 1,
         level: "info",
         message: "test message",
@@ -56,7 +57,7 @@ describe("Context Logger", () => {
       "warning",
       expect.objectContaining({
         execution_arn: "test-execution-arn",
-        step_id: "test-step",
+        step_id: hashId("test-step"),
         level: "warn",
         message: "warning",
       }),

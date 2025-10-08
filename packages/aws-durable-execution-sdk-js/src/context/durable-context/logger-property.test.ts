@@ -1,6 +1,7 @@
 import { createDurableContext } from "./durable-context";
 import { ExecutionContext, Logger, DurableExecutionMode } from "../../types";
 import { Context } from "aws-lambda";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 describe("DurableContext Logger Property", () => {
   let mockExecutionContext: ExecutionContext;
@@ -176,12 +177,12 @@ describe("DurableContext Logger Property", () => {
 
     childContext.logger.info("child message");
 
-    // Child context logger should have step_id populated with the prefix
+    // Child context logger should have step_id populated with the hashed prefix
     expect(customLogger.info).toHaveBeenCalledWith(
       "child message",
       expect.objectContaining({
         execution_arn: "test-arn",
-        step_id: "1", // Should match the stepPrefix
+        step_id: hashId("1"),
       }),
     );
   });

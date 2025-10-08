@@ -1,4 +1,5 @@
 import { Logger, ExecutionContext } from "../../types";
+import { hashId } from "../step-id-utils/step-id-utils";
 
 export const createContextLoggerFactory = (
   executionContext: ExecutionContext,
@@ -19,7 +20,7 @@ export const createContextLoggerFactory = (
         level,
       };
 
-      if (stepId) entry.step_id = stepId;
+      if (stepId) entry.step_id = hashId(stepId);
       if (attempt !== undefined) entry.attempt = attempt;
       if (message) entry.message = message;
       if (data) entry.data = data;
