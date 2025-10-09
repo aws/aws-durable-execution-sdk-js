@@ -25,6 +25,37 @@ describe("Concurrent Execution Handler", () => {
     );
   });
 
+  describe("BatchResult restoration", () => {
+    it("should automatically restore BatchResult methods when result comes from deserialized data", async () => {
+      const items = [{ id: "item-0", data: "test", index: 0 }];
+      const executor = jest.fn().mockResolvedValue("result");
+
+      // Simulate deserialized BatchResult data (plain object without methods)
+      const deserializedBatchResultData = {
+        all: [
+          { index: 0, result: "result", status: BatchItemStatus.SUCCEEDED },
+        ],
+        completionReason: "ALL_COMPLETED",
+      };
+
+      // Mock runInChildContext to return the deserialized data
+      mockRunInChildContext.mockResolvedValue(deserializedBatchResultData);
+
+      const result = await concurrentExecutionHandler(items, executor);
+
+      // This test will fail if restoreBatchResult is not called
+      expect(typeof result.getResults).toBe("function");
+      expect(typeof result.getErrors).toBe("function");
+      expect(typeof result.succeeded).toBe("function");
+      expect(typeof result.failed).toBe("function");
+
+      // Verify methods work correctly
+      expect(result.getResults()).toEqual(["result"]);
+      expect(result.successCount).toBe(1);
+      expect(result.totalCount).toBe(1);
+    });
+  });
+
   describe("validation", () => {
     it("should throw for non-array items", async () => {
       await expect(

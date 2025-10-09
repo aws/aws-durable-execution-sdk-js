@@ -1,6 +1,11 @@
 import { ExecutionContext, DurableContext, BatchItemStatus } from "../../types";
 import { log } from "../../utils/logger/logger";
-import { BatchResult, BatchItem, BatchResultImpl } from "./batch-result";
+import {
+  BatchResult,
+  BatchItem,
+  BatchResultImpl,
+  restoreBatchResult,
+} from "./batch-result";
 
 /**
  * Represents an item to be executed with metadata for deterministic replay
@@ -306,6 +311,12 @@ export const createConcurrentExecutionHandler = (
     return await runInChildContext(name, executeOperation, {
       subType: config?.topLevelSubType,
       summaryGenerator: config?.summaryGenerator,
+    }).then((result) => {
+      // Restore BatchResult methods if the result came from deserialized data
+      if (result && typeof result === "object" && Array.isArray(result.all)) {
+        return restoreBatchResult(result);
+      }
+      return result;
     });
   };
 };
