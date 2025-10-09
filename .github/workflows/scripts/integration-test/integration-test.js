@@ -45,13 +45,18 @@ const CONFIG = {
   // Package directory paths
   SDK_PACKAGE_PATH: join(
     __dirname,
-    "../../../../packages/aws-durable-execution-sdk-js"
+    "../../../../packages/aws-durable-execution-sdk-js",
   ),
   EXAMPLES_PACKAGE_PATH: join(
     __dirname,
-    "../../../../packages/aws-durable-execution-sdk-js-examples"
+    "../../../../packages/aws-durable-execution-sdk-js-examples",
   ),
+  AWS_ACCOUNT_ID: process.env.AWS_ACCOUNT_ID,
 };
+
+if (!CONFIG.AWS_ACCOUNT_ID) {
+  throw new Error("AWS_ACCOUNT_ID environment variable must be set.");
+}
 
 class IntegrationTestRunner {
   /**
@@ -132,7 +137,7 @@ class IntegrationTestRunner {
     log.info("Getting integration examples...");
 
     const integrationExamples = examplesCatalog.examples.filter(
-      (example) => example.integration === true
+      (example) => example.integration === true,
     );
     return integrationExamples;
   }
@@ -157,15 +162,16 @@ class IntegrationTestRunner {
         if (process.env.GITHUB_EVENT_NAME === "pull_request") {
           if (!process.env.GITHUB_EVENT_NUMBER) {
             throw new Error(
-              "Could not find GITHUB_EVENT_NUMBER environment variable"
+              "Could not find GITHUB_EVENT_NUMBER environment variable",
             );
           }
-          functionName = `${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
+          functionName = `arn:aws:lambda:${CONFIG.AWS_REGION}:${CONFIG.AWS_ACCOUNT_ID}:${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
         } else {
-          functionName = baseName;
+          functionName = `arn:aws:lambda:${CONFIG.AWS_REGION}:${CONFIG.AWS_ACCOUNT_ID}:${baseName}`;
         }
       } else {
-        functionName = exampleName.replace(/\s/g, "") + "-TypeScript-Local";
+        const name = exampleName.replace(/\s/g, "") + "-TypeScript-Local";
+        functionName = `arn:aws:lambda:${CONFIG.AWS_REGION}:${CONFIG.AWS_ACCOUNT_ID}:${name}`;
       }
 
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
@@ -200,7 +206,7 @@ class IntegrationTestRunner {
       });
 
       // Deploy using npm script
-      this.execCommand(`npm run deploy -- "${handlerFile}" "${functionName}"`, {
+      this.execCommand(`npm run deploy -- "${handlerFile}" '${functionName}'`, {
         cwd: examplesDir,
       });
       log.success(`Deployed function: ${functionName}`);
@@ -215,7 +221,7 @@ class IntegrationTestRunner {
       }
       appendFileSync(
         process.env.GITHUB_OUTPUT,
-        `function-name-map=${JSON.stringify(functionNameMap)}`
+        `function-name-map=${JSON.stringify(functionNameMap)}`,
       );
     }
 
@@ -228,15 +234,21 @@ class IntegrationTestRunner {
 
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
 
+    const functionsWithLatestArn = Object.fromEntries(
+      Object.entries(this.getFunctionNameMap()).map(([key, value]) => {
+        return [key, `${value}:$LATEST`];
+      }),
+    );
+
     // Set environment variables
     const env = {
       ...process.env,
-      FUNCTION_NAME_MAP: JSON.stringify(this.getFunctionNameMap()),
+      FUNCTION_NAME_MAP: JSON.stringify(functionsWithLatestArn),
       LAMBDA_ENDPOINT: CONFIG.LAMBDA_ENDPOINT,
     };
 
     log.info("Running Jest integration tests with function map:");
-    console.log(JSON.stringify(this.getFunctionNameMap(), null, 2));
+    console.log(JSON.stringify(functionsWithLatestArn, null, 2));
     log.info(`Lambda Endpoint: ${CONFIG.LAMBDA_ENDPOINT}`);
 
     // Build test command with optional pattern
@@ -325,7 +337,7 @@ class IntegrationTestRunner {
 
     if (!this.cleanupOnExit) {
       log.warning(
-        "Functions were not cleaned up. Use --cleanup-only to clean them up later."
+        "Functions were not cleaned up. Use --cleanup-only to clean them up later.",
       );
     }
   }
@@ -338,10 +350,10 @@ function showUsage() {
   console.log("Options:");
   console.log("  --deploy-only   Only deploy functions, don't run tests");
   console.log(
-    "  --test-only [pattern]  Only run tests (assumes functions are already deployed)"
+    "  --test-only [pattern]  Only run tests (assumes functions are already deployed)",
   );
   console.log(
-    "                         Optional test pattern to filter specific tests"
+    "                         Optional test pattern to filter specific tests",
   );
   console.log("  --cleanup-only  Only cleanup existing functions");
   console.log("  --help          Show this help message");

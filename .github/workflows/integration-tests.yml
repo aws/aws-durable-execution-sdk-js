@@ -119,6 +119,7 @@ jobs:
         FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
         GITHUB_EVENT_NAME: ${{ github.event_name }}
         GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       run: |
          node .github/workflows/scripts/integration-test/integration-test.js --test-only
 
@@ -160,5 +161,6 @@ jobs:
         FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
         GITHUB_EVENT_NAME: ${{ github.event_name }}
         GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+        AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       run: |
         node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only
