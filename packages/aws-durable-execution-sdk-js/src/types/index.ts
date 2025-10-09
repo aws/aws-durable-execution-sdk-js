@@ -89,10 +89,11 @@ export type DurableExecutionInvocationOutput =
   | DurableExecutionInvocationOutputFailed
   | DurableExecutionInvocationOutputPending;
 
-export interface DurableContext extends Context {
-  _stepPrefix?: string;
-  _stepCounter: number;
-  _durableExecutionMode: DurableExecutionMode;
+export interface DurableContext {
+  /**
+   * The underlying AWS Lambda context
+   */
+  lambdaContext: Context;
   /**
    * Logger instance for this context, enriched with execution context information
    */

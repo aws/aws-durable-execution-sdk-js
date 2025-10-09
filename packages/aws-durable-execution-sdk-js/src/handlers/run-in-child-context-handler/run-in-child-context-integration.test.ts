@@ -89,7 +89,12 @@ describe("Run In Child Context Integration Tests", () => {
 
     expect(result).toBe("child-context-result");
     expect(capturedChildContext).toBeDefined();
-    expect(capturedChildContext!._stepPrefix).toBe("1");
+
+    // Verify that the child context has access to the lambda context
+    expect(capturedChildContext!.lambdaContext).toBeDefined();
+    expect(capturedChildContext!.lambdaContext.awsRequestId).toBe(
+      "mock-request-id",
+    );
 
     // The fire-and-forget optimization means we may only see the START checkpoint
     // in the test environment, but the functionality should work correctly
@@ -151,29 +156,47 @@ describe("Run In Child Context Integration Tests", () => {
   });
 
   test("should support nested child contexts with deterministic IDs", async () => {
-    const nestedIds: string[] = [];
+    const stepIds: string[] = [];
 
     await durableContext.runInChildContext(
       "parent-child-context",
       async (parentCtx) => {
-        nestedIds.push(parentCtx._stepPrefix!);
+        // Verify parent context has lambda context
+        expect(parentCtx.lambdaContext).toBeDefined();
+
+        await parentCtx.step("parent-step", async () => {
+          stepIds.push("parent-executed");
+          return "parent-result";
+        });
 
         await parentCtx.runInChildContext(
           "child-context-1",
           async (childCtx1) => {
-            nestedIds.push(childCtx1._stepPrefix!);
+            expect(childCtx1.lambdaContext).toBeDefined();
+            await childCtx1.step("child1-step", async () => {
+              stepIds.push("child1-executed");
+              return "child1-result";
+            });
           },
         );
 
         await parentCtx.runInChildContext(
           "child-context-2",
           async (childCtx2) => {
-            nestedIds.push(childCtx2._stepPrefix!);
+            expect(childCtx2.lambdaContext).toBeDefined();
+            await childCtx2.step("child2-step", async () => {
+              stepIds.push("child2-executed");
+              return "child2-result";
+            });
 
             await childCtx2.runInChildContext(
               "grandchild-context",
               async (grandchildCtx) => {
-                nestedIds.push(grandchildCtx._stepPrefix!);
+                expect(grandchildCtx.lambdaContext).toBeDefined();
+                await grandchildCtx.step("grandchild-step", async () => {
+                  stepIds.push("grandchild-executed");
+                  return "grandchild-result";
+                });
               },
             );
           },
@@ -181,11 +204,13 @@ describe("Run In Child Context Integration Tests", () => {
       },
     );
 
-    // Check that the IDs follow the expected pattern
-    expect(nestedIds[0]).toBe("1"); // parent child context
-    expect(nestedIds[1]).toBe("1-1"); // first child context
-    expect(nestedIds[2]).toBe("1-2"); // second child context
-    expect(nestedIds[3]).toBe("1-2-1"); // grandchild context
+    // Verify all nested operations executed in correct order
+    expect(stepIds).toEqual([
+      "parent-executed",
+      "child1-executed",
+      "child2-executed",
+      "grandchild-executed",
+    ]);
   });
 
   test("should support mixed step and child context operations", async () => {
