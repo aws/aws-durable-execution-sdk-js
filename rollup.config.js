@@ -33,9 +33,26 @@ export function createBuildOptions(options, mode) {
     throw new Error("Output cannot be an array");
   }
 
+  const commonConfig = {
+    ...options,
+    onwarn: (warning, warn) => {
+      // Suppress warnings for known external dependencies
+      if (
+        warning.code === "UNRESOLVED_IMPORT" &&
+        (warning.exporter?.startsWith("@aws-sdk/") ||
+          warning.exporter?.startsWith("@smithy/") ||
+          warning.exporter?.startsWith("@aws-crypto/") ||
+          ["crypto", "events"].includes(warning.exporter))
+      ) {
+        return;
+      }
+      warn(warning);
+    },
+  };
+
   if (mode === "esm") {
     return {
-      ...options,
+      ...commonConfig,
       plugins: [
         typescript({
           noEmitOnError: true,
@@ -57,7 +74,7 @@ export function createBuildOptions(options, mode) {
   }
 
   return {
-    ...options,
+    ...commonConfig,
     plugins: [
       typescript({
         noEmitOnError: true,
