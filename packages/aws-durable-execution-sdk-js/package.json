@@ -27,8 +27,6 @@
     "build": "concurrently npm:build:esm npm:build:cjs",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
-    "analyze:track": "tsx scripts/bundle-size-tracker.ts",
-    "postbuild": "npm run analyze:track",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
