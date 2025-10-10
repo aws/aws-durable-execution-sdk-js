@@ -64,12 +64,16 @@ describe("Run In Child Context Handler", () => {
       warn: jest.fn(),
       debug: jest.fn(),
     });
+    const mockCreateChildContext = jest.fn().mockReturnValue({
+      _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+    });
     runInChildContextHandler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       createStepId,
       mockGetLogger,
+      mockCreateChildContext,
     );
   });
 
@@ -508,12 +512,16 @@ describe("runInChildContext with custom serdes", () => {
       debug: jest.fn(),
     });
 
+    const mockCreateChildContext = jest.fn().mockReturnValue({
+      _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+    });
     runInChildContext = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       mockCreateStepId,
       mockGetLogger,
+      mockCreateChildContext,
     );
   });
 
@@ -613,12 +621,16 @@ describe("Mock Integration", () => {
       warn: jest.fn(),
       debug: jest.fn(),
     });
+    const mockCreateChildContext = jest.fn().mockReturnValue({
+      _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+    });
     runInChildContextHandler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       createStepId,
       mockGetLogger,
+      mockCreateChildContext,
     );
   });
 

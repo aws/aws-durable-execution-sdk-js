@@ -5,6 +5,7 @@ import {
   OperationSubType,
   DurableExecutionMode,
   Logger,
+  DurableContext,
 } from "../../types";
 import { Context } from "aws-lambda";
 import {
@@ -13,7 +14,6 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { createDurableContext } from "../../context/durable-context/durable-context";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
@@ -59,6 +59,13 @@ export const createRunInChildContextHandler = (
   parentContext: Context,
   createStepId: () => string,
   getParentLogger: () => Logger,
+  createChildContext: (
+    executionContext: ExecutionContext,
+    parentContext: Context,
+    entityId: string,
+    checkpointToken: string | undefined,
+    logger: Logger,
+  ) => DurableContext,
 ) => {
   return async <T>(
     nameOrFn: string | undefined | ChildFunc<T>,
@@ -95,6 +102,7 @@ export const createRunInChildContextHandler = (
         fn,
         options,
         getParentLogger,
+        createChildContext,
       );
     }
 
@@ -107,6 +115,7 @@ export const createRunInChildContextHandler = (
       fn,
       options,
       getParentLogger,
+      createChildContext,
     );
   };
 };
@@ -119,6 +128,13 @@ export const handleCompletedChildContext = async <T>(
   fn: ChildFunc<T>,
   options: ChildConfig<T> | undefined,
   getParentLogger: () => Logger,
+  createChildContext: (
+    executionContext: ExecutionContext,
+    parentContext: Context,
+    entityId: string,
+    checkpointToken: string | undefined,
+    logger: Logger,
+  ) => DurableContext,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
   const stepData = context.getStepData(entityId);
@@ -134,7 +150,7 @@ export const handleCompletedChildContext = async <T>(
     );
 
     // Re-execute the child context to reconstruct the result
-    const childContext = createDurableContext(
+    const durableChildContext = createChildContext(
       {
         ...context,
         parentId: entityId,
@@ -148,7 +164,7 @@ export const handleCompletedChildContext = async <T>(
 
     return await OperationInterceptor.forExecution(
       context.durableExecutionArn,
-    ).execute(stepName, () => fn(childContext));
+    ).execute(stepName, () => fn(durableChildContext));
   }
 
   log(
@@ -178,6 +194,13 @@ export const executeChildContext = async <T>(
   fn: ChildFunc<T>,
   options: ChildConfig<T> | undefined,
   getParentLogger: () => Logger,
+  createChildContext: (
+    executionContext: ExecutionContext,
+    parentContext: Context,
+    entityId: string,
+    checkpointToken: string | undefined,
+    logger: Logger,
+  ) => DurableContext,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
 
@@ -195,7 +218,7 @@ export const executeChildContext = async <T>(
   }
 
   // Create a child context with the entity ID as prefix
-  const childContext = createDurableContext(
+  const durableChildContext = createChildContext(
     {
       ...context,
       parentId: entityId,
@@ -211,7 +234,7 @@ export const executeChildContext = async <T>(
     // Execute the child context function
     const result = await OperationInterceptor.forExecution(
       context.durableExecutionArn,
-    ).execute(name, () => fn(childContext));
+    ).execute(name, () => fn(durableChildContext));
 
     // Always checkpoint at finish with adaptive mode
     // Serialize the result for consistency
