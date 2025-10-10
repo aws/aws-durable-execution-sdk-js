@@ -18,24 +18,24 @@ export const createWaitHandler = (
   createStepId: () => string,
   hasRunningOperations: () => boolean,
 ): {
-  (name: string, millis: number): Promise<void>;
-  (millis: number): Promise<void>;
+  (name: string, seconds: number): Promise<void>;
+  (seconds: number): Promise<void>;
 } => {
-  function waitHandler(name: string, millis: number): Promise<void>;
-  function waitHandler(millis: number): Promise<void>;
+  function waitHandler(name: string, seconds: number): Promise<void>;
+  function waitHandler(seconds: number): Promise<void>;
   async function waitHandler(
-    nameOrMillis: string | number,
-    millis?: number,
+    nameOrSeconds: string | number,
+    seconds?: number,
   ): Promise<void> {
-    const isNameFirst = typeof nameOrMillis === "string";
-    const actualName = isNameFirst ? nameOrMillis : undefined;
-    const actualMillis = isNameFirst ? millis! : nameOrMillis;
+    const isNameFirst = typeof nameOrSeconds === "string";
+    const actualName = isNameFirst ? nameOrSeconds : undefined;
+    const actualSeconds = isNameFirst ? seconds! : nameOrSeconds;
     const stepId = createStepId();
 
     log(context.isVerbose, "⏲️", "Wait requested:", {
       stepId,
       name: actualName,
-      millis: actualMillis,
+      seconds: actualSeconds,
     });
 
     // Main wait logic - can be re-executed if step data changes
@@ -63,7 +63,7 @@ export const createWaitHandler = (
           Type: OperationType.WAIT,
           Name: actualName,
           WaitOptions: {
-            WaitSeconds: actualMillis / 1000,
+            WaitSeconds: actualSeconds,
           },
         });
       }

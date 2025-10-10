@@ -72,9 +72,9 @@ describe("steps-with-retry", () => {
       data: { S: "found-item" },
     });
 
-    // Verify wait operation was called (5 second wait between polls)
+    // Verify wait operation was called (1 second wait between polls)
     const waitOp = durableTestRunner.getOperationByIndex(1);
-    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(5);
+    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(1);
   });
 
   it("should retry failed DynamoDB calls according to retry strategy", async () => {
@@ -141,6 +141,6 @@ describe("steps-with-retry", () => {
 
     // Should have wait operations between polls
     const waitOp = durableTestRunner.getOperationByIndex(1);
-    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(5);
+    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(1);
   });
 });

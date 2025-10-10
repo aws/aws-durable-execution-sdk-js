@@ -137,8 +137,8 @@ describe("LocalDurableTestRunner Integration", () => {
   it("should handle multiple wait operations", async () => {
     const handler = withDurableFunctions(
       async (_event: unknown, context: DurableContext) => {
-        await context.wait("wait-1", 50000);
-        await context.wait("wait-2", 50000);
+        await context.wait("wait-1", 50);
+        await context.wait("wait-2", 50);
 
         return {
           completedWaits: 2,
@@ -224,7 +224,7 @@ describe("LocalDurableTestRunner Integration", () => {
           Promise.resolve(undefined),
         );
 
-        await context.wait(1000);
+        await context.wait(1);
 
         return "result";
       },
@@ -271,7 +271,7 @@ describe("LocalDurableTestRunner Integration", () => {
         const stepResult = await context.runInChildContext(
           "parent-context",
           async (childContext) => {
-            await childContext.wait("child-wait", 1000);
+            await childContext.wait("child-wait", 1);
 
             return Promise.resolve({ userId: 123, name: "John Doe" });
           },
@@ -471,7 +471,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const handler = withDurableFunctions(
       async (_event: unknown, context: DurableContext) => {
         // First wait operation - this will run in invocation index 0
-        await context.wait("wait-invocation-1", 1000);
+        await context.wait("wait-invocation-1", 1);
 
         // This will execute in invocation index 1
         const stepResult = await context.step("process-data-step", () => {
@@ -479,7 +479,7 @@ describe("LocalDurableTestRunner Integration", () => {
         });
 
         // Second wait operation - this will run in invocation index 1
-        await context.wait("wait-invocation-2", 1000);
+        await context.wait("wait-invocation-2", 1);
 
         // Third invocation will only return the result
         return {

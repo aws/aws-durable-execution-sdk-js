@@ -8,10 +8,10 @@ createTests({
   tests: (runner) => {
     it("should call wait for 5 seconds", async () => {
       const execution = await runner.run();
-      const waitOp = runner.getOperation("wait-5-seconds");
+      const waitOp = runner.getOperation("wait-2-seconds");
 
       expect(execution.getResult()).toBe("wait finished");
-      expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(5);
+      expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(2);
     });
   },
 });

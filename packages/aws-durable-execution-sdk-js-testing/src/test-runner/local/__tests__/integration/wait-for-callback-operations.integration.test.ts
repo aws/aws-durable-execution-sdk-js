@@ -954,7 +954,7 @@ describe("WaitForCallback Operations Integration", () => {
 
       const handler = withDurableFunctions<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
-          await context.wait("wait-invocation-1", 1000);
+          await context.wait("wait-invocation-1", 1);
 
           const callbackResult1 = await context.waitForCallback<{
             step: number;
@@ -967,7 +967,7 @@ describe("WaitForCallback Operations Integration", () => {
             return Promise.resolve({ processed: true, step: 1 });
           });
 
-          await context.wait("wait-invocation-2", 1000);
+          await context.wait("wait-invocation-2", 1);
 
           const callbackResult2 = await context.waitForCallback<{
             step: number;

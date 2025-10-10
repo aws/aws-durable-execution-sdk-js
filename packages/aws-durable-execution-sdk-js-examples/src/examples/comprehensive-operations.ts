@@ -24,8 +24,8 @@ export const handler = withDurableFunctions(
       return "Step 1 completed successfully";
     });
 
-    // Step 2: ctx.wait - Wait for 5 seconds
-    await context.wait(5000);
+    // Step 2: ctx.wait - Wait for 1 second
+    await context.wait(1);
 
     // Step 3: ctx.map - Map with 5 iterations returning numbers 1 to 5
     const mapInput = [1, 2, 3, 4, 5];
@@ -33,14 +33,13 @@ export const handler = withDurableFunctions(
       "map-numbers",
       mapInput,
       async (ctx, item, index) => {
-        
         // Each iteration returns the number (1 to 5)
         const result = await ctx.step(`map-step-${index}`, async () => {
           return item;
         });
-        
+
         return result;
-      }
+      },
     );
 
     // Step 4: ctx.parallel - 3 branches, each returning a fruit name
@@ -85,5 +84,5 @@ export const handler = withDurableFunctions(
     };
 
     return finalResult;
-  }
+  },
 );

@@ -368,7 +368,7 @@ describe("LocalDurableTestRunner mocking Integration", () => {
           }),
         );
 
-        await context.wait("wait", 10000);
+        await context.wait("wait", 10);
 
         const stepResult = await context.step("after-wait", () =>
           Promise.resolve({ completed: "after-wait" }),

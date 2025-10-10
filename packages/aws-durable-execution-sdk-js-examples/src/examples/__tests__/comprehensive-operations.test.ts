@@ -24,7 +24,7 @@ createTests({
       // parallelResults is now a BatchResult object
       expect(result.parallelResults.all).toHaveLength(3);
       expect(
-        result.parallelResults.all.map((item: any) => item.result)
+        result.parallelResults.all.map((item: any) => item.result),
       ).toEqual(["apple", "banana", "orange"]);
       expect(result.parallelResults.completionReason).toBe("ALL_COMPLETED");
 
@@ -32,21 +32,21 @@ createTests({
       expect(result.summary.totalOperations).toBe(4);
       expect(result.summary.stepResult).toBe("Step 1 completed successfully");
       expect(
-        result.summary.numbersProcessed.all.map((item: any) => item.result)
+        result.summary.numbersProcessed.all.map((item: any) => item.result),
       ).toEqual([1, 2, 3, 4, 5]);
       expect(
-        result.summary.fruitsSelected.all.map((item: any) => item.result)
+        result.summary.fruitsSelected.all.map((item: any) => item.result),
       ).toEqual(["apple", "banana", "orange"]);
 
       const step1Op = runner.getOperation("step1");
 
       expect(step1Op).toBeDefined();
       expect(step1Op.getStepDetails()?.result).toBe(
-        "Step 1 completed successfully"
+        "Step 1 completed successfully",
       );
       const waitOp = runner.getOperationByIndex(1); // Wait should be the second operation
 
-      expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(5);
+      expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(1);
       // Verify map results - now BatchResult object
       expect(result.mapResults.all).toHaveLength(5);
       expect(result.mapResults.all.map((item: any) => item.result)).toEqual([
@@ -63,7 +63,7 @@ createTests({
       // Verify parallel results - now BatchResult object
       expect(result.parallelResults.all).toHaveLength(3);
       expect(
-        result.parallelResults.all.map((item: any) => item.result)
+        result.parallelResults.all.map((item: any) => item.result),
       ).toEqual(["apple", "banana", "orange"]);
 
       // Verify individual parallel step operations exist
@@ -84,10 +84,10 @@ createTests({
       expect(result.summary.totalOperations).toBe(4);
       expect(result.summary.stepResult).toBe("Step 1 completed successfully");
       expect(
-        result.summary.numbersProcessed.all.map((item: any) => item.result)
+        result.summary.numbersProcessed.all.map((item: any) => item.result),
       ).toEqual([1, 2, 3, 4, 5]);
       expect(
-        result.summary.fruitsSelected.all.map((item: any) => item.result)
+        result.summary.fruitsSelected.all.map((item: any) => item.result),
       ).toEqual(["apple", "banana", "orange"]);
 
       // Verify execution completed successfully
