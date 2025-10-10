@@ -59,7 +59,7 @@ export class EventProcessor {
     eventType: EventType,
     operation: Operation,
     detailPlace: T,
-    details: Event[T]
+    details: Event[T],
   ): Event {
     return {
       EventType: eventType,
@@ -98,13 +98,13 @@ export class EventProcessor {
   processUpdate(update: OperationUpdate, operation: Operation): Event {
     if (!update.Action || !operation.Type) {
       throw new Error(
-        `Could not create history event with Action=${update.Action} and Type=${operation.Type}`
+        `Could not create history event with Action=${update.Action} and Type=${operation.Type}`,
       );
     }
 
     const historyDetails = EventProcessor.getHistoryDetailsFromUpdate(
       update.Action,
-      operation.Type
+      operation.Type,
     );
 
     return {
@@ -120,7 +120,7 @@ export class EventProcessor {
         operation,
         {
           executionTimeout: this.executionTimeout,
-        }
+        },
       ),
     };
   }
@@ -155,7 +155,7 @@ export class EventProcessor {
     const historyDetails = getHistoryEventDetail(action, type);
     if (!historyDetails) {
       throw new Error(
-        `Could not create history event with Action=${action} and Type=${type}`
+        `Could not create history event with Action=${action} and Type=${type}`,
       );
     }
 

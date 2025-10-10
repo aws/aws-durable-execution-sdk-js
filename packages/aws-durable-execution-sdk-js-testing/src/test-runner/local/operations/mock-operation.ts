@@ -38,7 +38,7 @@ export class MockOperation<
     params: MockOperationParameters,
     waitManager: OperationWaitManager,
     operationIndex: IndexedOperations,
-    apiClient: DurableApiClient
+    apiClient: DurableApiClient,
   ) {
     super(waitManager, operationIndex, apiClient);
     this._mockName = params.name;
@@ -78,7 +78,7 @@ export class MockOperation<
       throw new Error("Mocking for ids is not supported");
     } else {
       throw new Error(
-        "Failed to mock implementation with missing name and index"
+        "Failed to mock implementation with missing name and index",
       );
     }
 
@@ -103,7 +103,7 @@ export class MockOperation<
       throw new Error("Mocking for ids is not supported");
     } else {
       throw new Error(
-        "Failed to mock implementation with missing name and index"
+        "Failed to mock implementation with missing name and index",
       );
     }
 

@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { ListTagsRequest, ListTagsResponse } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link ListTagsCommand}.
  */
-export interface ListTagsCommandInput extends ListTagsRequest {
-}
+export interface ListTagsCommandInput extends ListTagsRequest {}
 /**
  * @public
  *
  * The output of {@link ListTagsCommand}.
  */
-export interface ListTagsCommandOutput extends ListTagsResponse, __MetadataBearer {
-}
+export interface ListTagsCommandOutput
+  extends ListTagsResponse,
+    __MetadataBearer {}
 declare const ListTagsCommand_base: {
-    new (input: ListTagsCommandInput): import("@smithy/smithy-client").CommandImpl<ListTagsCommandInput, ListTagsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: ListTagsCommandInput): import("@smithy/smithy-client").CommandImpl<ListTagsCommandInput, ListTagsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: ListTagsCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListTagsCommandInput,
+    ListTagsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: ListTagsCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListTagsCommandInput,
+    ListTagsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns a function, event source mapping, or code signing configuration's <a href="https://docs.aws.amazon.com/lambda/latest/dg/tagging.html">tags</a>. You can also view function tags with <a>GetFunction</a>.</p>
@@ -92,15 +112,15 @@ declare const ListTagsCommand_base: {
  * @public
  */
 export declare class ListTagsCommand extends ListTagsCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: ListTagsRequest;
-            output: ListTagsResponse;
-        };
-        sdk: {
-            input: ListTagsCommandInput;
-            output: ListTagsCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: ListTagsRequest;
+      output: ListTagsResponse;
     };
+    sdk: {
+      input: ListTagsCommandInput;
+      output: ListTagsCommandOutput;
+    };
+  };
 }

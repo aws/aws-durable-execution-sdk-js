@@ -41,7 +41,7 @@ describe("CallbackManager", () => {
     mockCheckpointManager = new CheckpointManager(mockExecutionId);
     callbackManager = new CallbackManager(
       mockExecutionId,
-      mockCheckpointManager
+      mockCheckpointManager,
     );
 
     // Setup default mock implementations
@@ -77,7 +77,7 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.createCallback(
         operationId,
-        timeoutSeconds
+        timeoutSeconds,
       );
 
       expect(result).toBe("encoded-callback-id");
@@ -98,7 +98,7 @@ describe("CallbackManager", () => {
       const result = callbackManager.createCallback(
         operationId,
         undefined,
-        heartbeatTimeoutSeconds
+        heartbeatTimeoutSeconds,
       );
 
       expect(result).toBe("encoded-callback-id");
@@ -116,7 +116,7 @@ describe("CallbackManager", () => {
       const result = callbackManager.createCallback(
         operationId,
         timeoutSeconds,
-        heartbeatTimeoutSeconds
+        heartbeatTimeoutSeconds,
       );
 
       expect(result).toBe("encoded-callback-id");
@@ -157,13 +157,13 @@ describe("CallbackManager", () => {
       };
       mockCheckpointManager.operationDataMap.set(
         operationId,
-        mockOperationData
+        mockOperationData,
       );
 
       // Spy on completeCallback
       const completeCallbackSpy = jest.spyOn(
         callbackManager,
-        "completeCallback"
+        "completeCallback",
       );
 
       // Create callback with timeout
@@ -175,7 +175,7 @@ describe("CallbackManager", () => {
       // Verify completeCallback was called with TIMED_OUT status
       expect(completeCallbackSpy).toHaveBeenCalledWith(
         { CallbackId: "encoded-callback-id" },
-        CompleteCallbackStatus.TIMED_OUT
+        CompleteCallbackStatus.TIMED_OUT,
       );
     });
   });
@@ -197,7 +197,7 @@ describe("CallbackManager", () => {
       };
       mockCheckpointManager.operationDataMap.set(
         "test-operation-id",
-        mockOperationData
+        mockOperationData,
       );
     });
 
@@ -207,7 +207,7 @@ describe("CallbackManager", () => {
       expect(() => {
         callbackManager.completeCallback(
           callbackDetails,
-          CompleteCallbackStatus.SUCCEEDED
+          CompleteCallbackStatus.SUCCEEDED,
         );
       }).toThrow(InvalidParameterValueException);
     });
@@ -223,7 +223,7 @@ describe("CallbackManager", () => {
       expect(() => {
         callbackManager.completeCallback(
           callbackDetails,
-          CompleteCallbackStatus.SUCCEEDED
+          CompleteCallbackStatus.SUCCEEDED,
         );
       }).toThrow(InvalidParameterValueException);
     });
@@ -235,7 +235,7 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        CompleteCallbackStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED,
       );
 
       expect(createCallbackId).toHaveBeenCalledWith("test-callback-id");
@@ -257,14 +257,14 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        CompleteCallbackStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED,
       );
       expect(result).toBeDefined();
 
       // Set up spy AFTER completing the callback to monitor if timer still fires
       const completeCallbackSpy = jest.spyOn(
         callbackManager,
-        "completeCallback"
+        "completeCallback",
       );
 
       // Fast-forward time - timeout should not trigger since it was cleared
@@ -284,12 +284,12 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        CompleteCallbackStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED,
       );
 
       expect(setSpy).toHaveBeenCalledWith(
         "test-operation-id",
-        expect.any(Object)
+        expect.any(Object),
       );
       // Verify the correct structure with CallbackDetails property
       expect(result.operation.CallbackDetails).toEqual(callbackDetails);
@@ -303,7 +303,7 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        CompleteCallbackStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED,
       );
 
       expect(result.operation.CallbackDetails).toEqual(callbackDetails);
@@ -323,7 +323,7 @@ describe("CallbackManager", () => {
 
       const result = callbackManager.completeCallback(
         callbackDetails,
-        CompleteCallbackStatus.FAILED
+        CompleteCallbackStatus.FAILED,
       );
 
       expect(result.operation.CallbackDetails).toEqual(callbackDetails);
@@ -349,7 +349,7 @@ describe("CallbackManager", () => {
       };
       mockCheckpointManager.operationDataMap.set(
         "test-operation-id",
-        mockOperationData
+        mockOperationData,
       );
     });
 
@@ -382,7 +382,7 @@ describe("CallbackManager", () => {
       };
       mockCheckpointManager.operationDataMap.set(
         "test-operation-id",
-        mockOperationData
+        mockOperationData,
       );
 
       expect(() => {
@@ -407,13 +407,13 @@ describe("CallbackManager", () => {
       callbackManager.createCallback(
         operationId,
         undefined,
-        heartbeatTimeoutSeconds
+        heartbeatTimeoutSeconds,
       );
 
       // Spy on completeCallback
       const completeCallbackSpy = jest.spyOn(
         callbackManager,
-        "completeCallback"
+        "completeCallback",
       );
 
       // Fast-forward time to trigger heartbeat timeout
@@ -422,7 +422,7 @@ describe("CallbackManager", () => {
       // Verify completeCallback was called with TIMED_OUT status
       expect(completeCallbackSpy).toHaveBeenCalledWith(
         { CallbackId: "encoded-callback-id" },
-        CompleteCallbackStatus.TIMED_OUT
+        CompleteCallbackStatus.TIMED_OUT,
       );
     });
   });
@@ -459,11 +459,11 @@ describe("CallbackManager", () => {
       };
       mockCheckpointManager.operationDataMap.set(
         operationId1,
-        mockOperationData1
+        mockOperationData1,
       );
       mockCheckpointManager.operationDataMap.set(
         operationId2,
-        mockOperationData2
+        mockOperationData2,
       );
 
       // Fix: Make encodeCallbackId return unique IDs for different operations
@@ -480,13 +480,13 @@ describe("CallbackManager", () => {
             operationId: operationId,
             token: "test-token",
           };
-        }
+        },
       );
 
       // Spy on completeCallback BEFORE creating callbacks
       const completeCallbackSpy = jest.spyOn(
         callbackManager,
-        "completeCallback"
+        "completeCallback",
       );
 
       // Create callbacks with different timeout configurations
@@ -531,7 +531,7 @@ describe("CallbackManager", () => {
       };
       mockCheckpointManager.operationDataMap.set(
         operationId,
-        mockOperationData
+        mockOperationData,
       );
 
       // Override decodeCallbackId for this test to return the correct operation ID
@@ -548,7 +548,7 @@ describe("CallbackManager", () => {
       // Complete callback before timeout
       const result = callbackManager.completeCallback(
         { CallbackId: callbackId },
-        CompleteCallbackStatus.SUCCEEDED
+        CompleteCallbackStatus.SUCCEEDED,
       );
 
       // Verify the flow
@@ -558,7 +558,7 @@ describe("CallbackManager", () => {
       // Verify timeout doesn't trigger after completion
       const completeCallbackSpy = jest.spyOn(
         callbackManager,
-        "completeCallback"
+        "completeCallback",
       );
       jest.advanceTimersByTime(35 * 1000);
       expect(completeCallbackSpy).not.toHaveBeenCalled();
@@ -598,7 +598,7 @@ describe("CallbackManager", () => {
             operationId: operationId,
             token: `test-token-${operationId}`,
           };
-        }
+        },
       );
 
       // Create multiple callbacks with different timeouts
@@ -616,7 +616,7 @@ describe("CallbackManager", () => {
       // Spy on completeCallback
       const completeCallbackSpy = jest.spyOn(
         callbackManager,
-        "completeCallback"
+        "completeCallback",
       );
 
       // Advance time partially - only first callback should timeout

@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { PutRuntimeManagementConfigRequest, PutRuntimeManagementConfigResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  PutRuntimeManagementConfigRequest,
+  PutRuntimeManagementConfigResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link PutRuntimeManagementConfigCommand}.
  */
-export interface PutRuntimeManagementConfigCommandInput extends PutRuntimeManagementConfigRequest {
-}
+export interface PutRuntimeManagementConfigCommandInput
+  extends PutRuntimeManagementConfigRequest {}
 /**
  * @public
  *
  * The output of {@link PutRuntimeManagementConfigCommand}.
  */
-export interface PutRuntimeManagementConfigCommandOutput extends PutRuntimeManagementConfigResponse, __MetadataBearer {
-}
+export interface PutRuntimeManagementConfigCommandOutput
+  extends PutRuntimeManagementConfigResponse,
+    __MetadataBearer {}
 declare const PutRuntimeManagementConfigCommand_base: {
-    new (input: PutRuntimeManagementConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutRuntimeManagementConfigCommandInput, PutRuntimeManagementConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: PutRuntimeManagementConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutRuntimeManagementConfigCommandInput, PutRuntimeManagementConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: PutRuntimeManagementConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PutRuntimeManagementConfigCommandInput,
+    PutRuntimeManagementConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: PutRuntimeManagementConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PutRuntimeManagementConfigCommandInput,
+    PutRuntimeManagementConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Sets the runtime management configuration for a function's version. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/runtimes-update.html">Runtime updates</a>.</p>
@@ -80,15 +104,15 @@ declare const PutRuntimeManagementConfigCommand_base: {
  * @public
  */
 export declare class PutRuntimeManagementConfigCommand extends PutRuntimeManagementConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: PutRuntimeManagementConfigRequest;
-            output: PutRuntimeManagementConfigResponse;
-        };
-        sdk: {
-            input: PutRuntimeManagementConfigCommandInput;
-            output: PutRuntimeManagementConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: PutRuntimeManagementConfigRequest;
+      output: PutRuntimeManagementConfigResponse;
     };
+    sdk: {
+      input: PutRuntimeManagementConfigCommandInput;
+      output: PutRuntimeManagementConfigCommandOutput;
+    };
+  };
 }

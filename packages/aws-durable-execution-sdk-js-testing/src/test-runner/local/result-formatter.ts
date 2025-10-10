@@ -25,7 +25,7 @@ export class ResultFormatter<ResultType> {
     lambdaResponse: TestExecutionResult,
     events: Event[],
     operationStorage: OperationStorage,
-    invocations: Invocation[]
+    invocations: Invocation[],
   ): TestResult<ResultType> {
     return {
       getStatus: () => lambdaResponse.status,
@@ -50,7 +50,7 @@ export class ResultFormatter<ResultType> {
           const error = new Error(
             errorFromResult.errorMessage?.trim()
               ? errorFromResult.errorMessage
-              : "Execution failed"
+              : "Execution failed",
           );
 
           if (errorFromResult.stackTrace) {
@@ -87,26 +87,29 @@ export class ResultFormatter<ResultType> {
           status: true,
           startTime: true,
           endTime: true,
-          duration: true
+          duration: true,
         };
         const finalConfig = { ...defaultConfig, ...config };
 
         const rows = operations.map((op) => {
           const startTime = op.getStartTimestamp();
           const endTime = op.getEndTimestamp();
-          const duration = startTime && endTime 
-            ? `${endTime.getTime() - startTime.getTime()}ms`
-            : '-';
+          const duration =
+            startTime && endTime
+              ? `${endTime.getTime() - startTime.getTime()}ms`
+              : "-";
 
           const row: Record<string, string> = {};
-          
-          if (finalConfig.parentId) row.parentId = op.getParentId() ?? '-';
-          if (finalConfig.name) row.name = op.getName() ?? '-';
-          if (finalConfig.type) row.type = op.getType() ?? '-';
-          if (finalConfig.subType) row.subType = op.getSubType() ?? '-';
-          if (finalConfig.status) row.status = op.getStatus() ?? '-';
-          if (finalConfig.startTime) row.startTime = startTime ? startTime.toISOString() : '-';
-          if (finalConfig.endTime) row.endTime = endTime ? endTime.toISOString() : '-';
+
+          if (finalConfig.parentId) row.parentId = op.getParentId() ?? "-";
+          if (finalConfig.name) row.name = op.getName() ?? "-";
+          if (finalConfig.type) row.type = op.getType() ?? "-";
+          if (finalConfig.subType) row.subType = op.getSubType() ?? "-";
+          if (finalConfig.status) row.status = op.getStatus() ?? "-";
+          if (finalConfig.startTime)
+            row.startTime = startTime ? startTime.toISOString() : "-";
+          if (finalConfig.endTime)
+            row.endTime = endTime ? endTime.toISOString() : "-";
           if (finalConfig.duration) row.duration = duration;
 
           return row;

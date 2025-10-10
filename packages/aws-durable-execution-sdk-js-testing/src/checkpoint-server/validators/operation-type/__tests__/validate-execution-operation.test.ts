@@ -11,7 +11,7 @@ describe("validateExecutionOperation", () => {
   const createOperationUpdate = (
     action: OperationAction,
     payload?: string,
-    error?: ErrorObject
+    error?: ErrorObject,
   ): OperationUpdate => ({
     Action: action,
     Type: OperationType.EXECUTION,
@@ -34,7 +34,11 @@ describe("validateExecutionOperation", () => {
         ErrorType: "TestError",
         StackTrace: ["test stack trace"],
       };
-      const update = createOperationUpdate(OperationAction.SUCCEED, undefined, errorObject);
+      const update = createOperationUpdate(
+        OperationAction.SUCCEED,
+        undefined,
+        errorObject,
+      );
 
       expect(() => {
         validateExecutionOperation(update);
@@ -55,7 +59,10 @@ describe("validateExecutionOperation", () => {
     });
 
     it("should throw exception when payload is provided", () => {
-      const update = createOperationUpdate(OperationAction.FAIL, "test-payload");
+      const update = createOperationUpdate(
+        OperationAction.FAIL,
+        "test-payload",
+      );
 
       expect(() => {
         validateExecutionOperation(update);

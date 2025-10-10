@@ -74,7 +74,7 @@ function validateTitle(title) {
 
 function run() {
   const eventData = JSON.parse(
-    readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")
+    readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"),
   );
   const pullRequest = eventData.pull_request;
 
@@ -158,7 +158,7 @@ function _test() {
       passed++;
     } else {
       console.log(
-        `❌ Test failed for "${title}" (expected "${expected}", got "${result}")`
+        `❌ Test failed for "${title}" (expected "${expected}", got "${result}")`,
       );
       failed++;
     }

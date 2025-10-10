@@ -61,7 +61,9 @@ describe("validateWaitOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateWaitOperation(update, undefined);
-      }).toThrow("Cannot cancel a WAIT that does not exist or has already completed.");
+      }).toThrow(
+        "Cannot cancel a WAIT that does not exist or has already completed.",
+      );
     });
 
     it("should throw exception when operation has invalid status", () => {
@@ -73,7 +75,9 @@ describe("validateWaitOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateWaitOperation(update, currentOperation);
-      }).toThrow("Cannot cancel a WAIT that does not exist or has already completed.");
+      }).toThrow(
+        "Cannot cancel a WAIT that does not exist or has already completed.",
+      );
     });
   });
 

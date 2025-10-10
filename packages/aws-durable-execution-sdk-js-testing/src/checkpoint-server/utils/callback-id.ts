@@ -10,7 +10,7 @@ export interface CallbackIdData {
 export function decodeCallbackId(callbackId: CallbackId): CallbackIdData {
   try {
     const decodedJson: unknown = JSON.parse(
-      Buffer.from(callbackId, "base64").toString("utf-8")
+      Buffer.from(callbackId, "base64").toString("utf-8"),
     );
 
     // Validate the decoded data has the required fields
@@ -31,20 +31,20 @@ export function decodeCallbackId(callbackId: CallbackId): CallbackIdData {
     throw new Error(
       `Failed to decode CallbackIdData : ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 }
 
 export function encodeCallbackId(
-  callbackIdData: Omit<CallbackIdData, "token">
+  callbackIdData: Omit<CallbackIdData, "token">,
 ): CallbackId {
   return createCallbackId(
     Buffer.from(
       JSON.stringify({
         ...callbackIdData,
         token: randomUUID(),
-      })
-    ).toString("base64")
+      }),
+    ).toString("base64"),
   );
 }

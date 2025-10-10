@@ -12,7 +12,7 @@ describe("test-runner/index.ts exports", () => {
     for (const key of localKeys) {
       expect(Object.keys(indexExports)).toContain(key);
       expect((indexExports as Record<string, unknown>)[key]).toBe(
-        (localExports as Record<string, unknown>)[key]
+        (localExports as Record<string, unknown>)[key],
       );
     }
   });
@@ -25,7 +25,7 @@ describe("test-runner/index.ts exports", () => {
     for (const key of cloudKeys) {
       expect(Object.keys(indexExports)).toContain(key);
       expect((indexExports as Record<string, unknown>)[key]).toBe(
-        (cloudExports as Record<string, unknown>)[key]
+        (cloudExports as Record<string, unknown>)[key],
       );
     }
   });
@@ -38,7 +38,7 @@ describe("test-runner/index.ts exports", () => {
     for (const key of durableKeys) {
       expect(Object.keys(indexExports)).toContain(key);
       expect((indexExports as Record<string, unknown>)[key]).toBe(
-        (durableTestRunnerExports as Record<string, unknown>)[key]
+        (durableTestRunnerExports as Record<string, unknown>)[key],
       );
     }
   });
@@ -52,7 +52,7 @@ describe("test-runner/index.ts exports", () => {
 
     // The total count of exports should match the sum of the individual modules
     expect(indexKeys.length).toBe(
-      localKeys.length + durableKeys.length + cloudKeys.length
+      localKeys.length + durableKeys.length + cloudKeys.length,
     );
 
     // Every key in indexExports should be in either localExports or durableTestRunnerExports

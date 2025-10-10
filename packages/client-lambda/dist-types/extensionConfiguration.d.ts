@@ -5,5 +5,8 @@ import { HttpAuthExtensionConfiguration } from "./auth/httpAuthExtensionConfigur
 /**
  * @internal
  */
-export interface LambdaExtensionConfiguration extends HttpHandlerExtensionConfiguration, DefaultExtensionConfiguration, AwsRegionExtensionConfiguration, HttpAuthExtensionConfiguration {
-}
+export interface LambdaExtensionConfiguration
+  extends HttpHandlerExtensionConfiguration,
+    DefaultExtensionConfiguration,
+    AwsRegionExtensionConfiguration,
+    HttpAuthExtensionConfiguration {}

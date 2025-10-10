@@ -11,7 +11,7 @@ import { HistoryEventTypes } from "./operation-types";
  */
 export function getErrorFromEvent(
   event: Event,
-  detailPlace: HistoryEventTypes["detailPlace"]
+  detailPlace: HistoryEventTypes["detailPlace"],
 ): ErrorObject | undefined {
   const details = event[detailPlace];
   if (!details) {
@@ -35,7 +35,7 @@ export function getErrorFromEvent(
  */
 export function getPayloadFromEvent(
   event: Event,
-  detailPlace: HistoryEventTypes["detailPlace"]
+  detailPlace: HistoryEventTypes["detailPlace"],
 ): string | undefined {
   const details = event[detailPlace];
   if (!details) {

@@ -30,7 +30,7 @@ const allowedStatusToReattempt: (OperationStatus | undefined)[] = [
  */
 export function validateStepOperation(
   update: OperationUpdate,
-  operation: Operation | undefined
+  operation: Operation | undefined,
 ): void {
   switch (update.Action) {
     case OperationAction.START:

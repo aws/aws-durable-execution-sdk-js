@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { DeleteProvisionedConcurrencyConfigRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link DeleteProvisionedConcurrencyConfigCommand}.
  */
-export interface DeleteProvisionedConcurrencyConfigCommandInput extends DeleteProvisionedConcurrencyConfigRequest {
-}
+export interface DeleteProvisionedConcurrencyConfigCommandInput
+  extends DeleteProvisionedConcurrencyConfigRequest {}
 /**
  * @public
  *
  * The output of {@link DeleteProvisionedConcurrencyConfigCommand}.
  */
-export interface DeleteProvisionedConcurrencyConfigCommandOutput extends __MetadataBearer {
-}
+export interface DeleteProvisionedConcurrencyConfigCommandOutput
+  extends __MetadataBearer {}
 declare const DeleteProvisionedConcurrencyConfigCommand_base: {
-    new (input: DeleteProvisionedConcurrencyConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteProvisionedConcurrencyConfigCommandInput, DeleteProvisionedConcurrencyConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: DeleteProvisionedConcurrencyConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteProvisionedConcurrencyConfigCommandInput, DeleteProvisionedConcurrencyConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: DeleteProvisionedConcurrencyConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteProvisionedConcurrencyConfigCommandInput,
+    DeleteProvisionedConcurrencyConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: DeleteProvisionedConcurrencyConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteProvisionedConcurrencyConfigCommandInput,
+    DeleteProvisionedConcurrencyConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Deletes the provisioned concurrency configuration for a function.</p>
@@ -88,15 +108,15 @@ declare const DeleteProvisionedConcurrencyConfigCommand_base: {
  * @public
  */
 export declare class DeleteProvisionedConcurrencyConfigCommand extends DeleteProvisionedConcurrencyConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: DeleteProvisionedConcurrencyConfigRequest;
-            output: {};
-        };
-        sdk: {
-            input: DeleteProvisionedConcurrencyConfigCommandInput;
-            output: DeleteProvisionedConcurrencyConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: DeleteProvisionedConcurrencyConfigRequest;
+      output: {};
     };
+    sdk: {
+      input: DeleteProvisionedConcurrencyConfigCommandInput;
+      output: DeleteProvisionedConcurrencyConfigCommandOutput;
+    };
+  };
 }

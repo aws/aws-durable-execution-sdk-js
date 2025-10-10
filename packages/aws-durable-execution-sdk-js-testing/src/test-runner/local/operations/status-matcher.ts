@@ -18,7 +18,7 @@ const COMPLETED_STATUSES: OperationStatus[] = [
  */
 export function doesStatusMatch(
   status: OperationStatus | undefined,
-  expectedStatus: WaitingOperationStatus
+  expectedStatus: WaitingOperationStatus,
 ): boolean {
   if (!status) {
     return false;

@@ -92,7 +92,7 @@ export class ExecutionManager {
    * Get a checkpoint manager by the execution id.
    */
   getCheckpointsByExecution(
-    executionId: ExecutionId
+    executionId: ExecutionId,
   ): CheckpointManager | undefined {
     return this.executions.get(executionId);
   }
@@ -102,7 +102,7 @@ export class ExecutionManager {
    * If the execution is not found or cannot be parsed, this will return undefined.
    */
   getCheckpointsByToken(
-    checkpointToken: CheckpointToken
+    checkpointToken: CheckpointToken,
   ): { storage: CheckpointManager; data: CheckpointTokenData } | undefined {
     try {
       const checkpointData = decodeCheckpointToken(checkpointToken);
@@ -121,7 +121,7 @@ export class ExecutionManager {
   }
 
   getCheckpointsByCallbackId(
-    callbackId: CallbackId
+    callbackId: CallbackId,
   ): CheckpointManager | undefined {
     try {
       const checkpointData = decodeCallbackId(callbackId);

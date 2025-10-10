@@ -24,7 +24,7 @@ export interface InvokeRequest {
 
 export interface DurableTestRunner<
   T extends DurableOperation<unknown>,
-  ResultType
+  ResultType,
 > {
   // Run the durable execution and return the result/error.
   run(params?: InvokeRequest): Promise<TestResult<ResultType>>;
@@ -48,15 +48,15 @@ export interface DurableTestRunner<
 
 export interface DurableOperation<Value> extends OperationWithData<Value> {
   waitForData(
-    status?: WaitingOperationStatus
+    status?: WaitingOperationStatus,
   ): Promise<DurableOperation<Value>>;
 
   // Callback APIs
   sendCallbackSuccess(
-    result: string
+    result: string,
   ): Promise<SendDurableExecutionCallbackSuccessCommandOutput>;
   sendCallbackFailure(
-    error: ErrorObject
+    error: ErrorObject,
   ): Promise<SendDurableExecutionCallbackFailureCommandOutput>;
   sendCallbackHeartbeat(): Promise<SendDurableExecutionCallbackHeartbeatCommandOutput>;
 }
@@ -101,7 +101,7 @@ export interface TestResult<T> {
   /**
    * Returns the history events for the execution.
    */
-  getHistoryEvents(): Event[]
+  getHistoryEvents(): Event[];
 
   /**
    * Prints a table of all operations to the console with their details.
@@ -122,7 +122,5 @@ export interface TestResult<T> {
 export interface Invocation {
   id: string;
   // Get completed steps in this invocation
-  getOperations(params?: {
-    status: OperationStatus;
-  }): OperationWithData[];
+  getOperations(params?: { status: OperationStatus }): OperationWithData[];
 }

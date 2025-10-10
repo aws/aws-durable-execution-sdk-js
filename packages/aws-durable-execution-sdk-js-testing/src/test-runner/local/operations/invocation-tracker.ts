@@ -80,21 +80,19 @@ export class InvocationTracker {
    */
   getOperationsForInvocation(
     invocationId: InvocationId,
-    status?: OperationStatus
+    status?: OperationStatus,
   ): OperationWithData[] {
     const opIds = this.invocationOperationsMap.get(invocationId) ?? new Set();
     // Filter by operation ID (belonging to this invocation)
-    const operations = this.operationStorage
-      .getOperations()
-      .filter((op) => {
-        const id = op.getId();
-        return (
-          id !== undefined &&
-          opIds.has(id) &&
-          // Filter by status if provided
-          (status !== undefined ? op.getStatus() === status : true)
-        );
-      });
+    const operations = this.operationStorage.getOperations().filter((op) => {
+      const id = op.getId();
+      return (
+        id !== undefined &&
+        opIds.has(id) &&
+        // Filter by status if provided
+        (status !== undefined ? op.getStatus() === status : true)
+      );
+    });
 
     return operations;
   }

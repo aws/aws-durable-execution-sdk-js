@@ -11,7 +11,7 @@ describe("doesStatusMatch", () => {
       (operationStatus) => {
         const result = doesStatusMatch(operationStatus, expectedStatus);
         expect(result).toBe(true);
-      }
+      },
     );
 
     it("should return false when status is undefined", () => {
@@ -22,7 +22,7 @@ describe("doesStatusMatch", () => {
     it("should return false when status is null", () => {
       const result = doesStatusMatch(
         null as unknown as OperationStatus,
-        expectedStatus
+        expectedStatus,
       );
       expect(result).toBe(false);
     });
@@ -51,7 +51,7 @@ describe("doesStatusMatch", () => {
       (operationStatus) => {
         const result = doesStatusMatch(operationStatus, expectedStatus);
         expect(result).toBe(false);
-      }
+      },
     );
 
     it("should return false when status is undefined", () => {
@@ -62,7 +62,7 @@ describe("doesStatusMatch", () => {
     it("should return false when status is null", () => {
       const result = doesStatusMatch(
         null as unknown as OperationStatus,
-        expectedStatus
+        expectedStatus,
       );
       expect(result).toBe(false);
     });
@@ -74,7 +74,7 @@ describe("doesStatusMatch", () => {
       const startedStatuses = Object.values(OperationStatus);
       startedStatuses.forEach((status) => {
         expect(doesStatusMatch(status, WaitingOperationStatus.STARTED)).toBe(
-          true
+          true,
         );
       });
 
@@ -95,13 +95,13 @@ describe("doesStatusMatch", () => {
 
       completedStatuses.forEach((status) => {
         expect(doesStatusMatch(status, WaitingOperationStatus.COMPLETED)).toBe(
-          true
+          true,
         );
       });
 
       nonCompletedStatuses.forEach((status) => {
         expect(doesStatusMatch(status, WaitingOperationStatus.COMPLETED)).toBe(
-          false
+          false,
         );
       });
     });

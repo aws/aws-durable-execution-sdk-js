@@ -59,7 +59,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       expect(storage.getOperations()).toEqual([]);
@@ -71,7 +71,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       storage.populateOperations(sampleOperations);
@@ -83,7 +83,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       storage.populateOperations(
@@ -93,7 +93,7 @@ describe("OperationStorage", () => {
             Type: OperationType.EXECUTION,
           },
           events: [],
-        })
+        }),
       );
 
       expect(storage.getOperations()).toHaveLength(sampleOperations.length);
@@ -105,7 +105,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       storage.populateOperations(sampleOperations);
@@ -117,7 +117,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       const initialOperationsCount = storage.getOperations().length;
@@ -131,14 +131,14 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       // Create a mock tracked operation
       const mockOperation = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const trackedOperation: TrackedOperation<OperationWithData> = {
         operation: mockOperation,
@@ -158,7 +158,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       expect(storage.getTrackedOperations()).toEqual([]);
@@ -168,18 +168,18 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       const mockOperation1 = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const mockOperation2 = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       const trackedOperation1: TrackedOperation<OperationWithData> = {
@@ -206,13 +206,13 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       const mockOperation = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const trackedOperation: TrackedOperation<OperationWithData> = {
         operation: mockOperation,
@@ -230,7 +230,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       // First populate operations so they can be found
@@ -239,7 +239,7 @@ describe("OperationStorage", () => {
       const mockOperation = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const populateDataSpy = jest.spyOn(mockOperation, "populateData");
 
@@ -257,7 +257,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       // First populate operations so they can be found
@@ -266,7 +266,7 @@ describe("OperationStorage", () => {
       const mockOperation = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const populateDataSpy = jest.spyOn(mockOperation, "populateData");
 
@@ -285,7 +285,7 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       // First populate operations so they can be found
@@ -294,7 +294,7 @@ describe("OperationStorage", () => {
       const mockOperation = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const populateDataSpy = jest.spyOn(mockOperation, "populateData");
 
@@ -312,13 +312,13 @@ describe("OperationStorage", () => {
       const storage = new OperationStorage(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
 
       const mockOperation = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
-        mockApiClient
+        mockApiClient,
       );
       const populateDataSpy = jest.spyOn(mockOperation, "populateData");
 

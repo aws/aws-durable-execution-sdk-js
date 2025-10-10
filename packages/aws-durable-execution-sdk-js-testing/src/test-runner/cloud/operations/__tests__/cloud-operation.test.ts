@@ -20,7 +20,7 @@ describe("CloudOperation", () => {
         waitManager,
         mockIndexedOperations,
         mockApiClient,
-        InvocationType.Event
+        InvocationType.Event,
       );
 
       const checkpointData = {
@@ -33,7 +33,9 @@ describe("CloudOperation", () => {
 
       operation.populateData(checkpointData);
 
-      const result = await operation.waitForData(WaitingOperationStatus.COMPLETED);
+      const result = await operation.waitForData(
+        WaitingOperationStatus.COMPLETED,
+      );
 
       expect(result).toBe(operation);
       expect(result).toBeInstanceOf(CloudOperation);
@@ -44,11 +46,11 @@ describe("CloudOperation", () => {
         waitManager,
         mockIndexedOperations,
         mockApiClient,
-        InvocationType.RequestResponse
+        InvocationType.RequestResponse,
       );
 
       await expect(operation.waitForData()).rejects.toThrow(
-        "InvocationType.RequestResponse cannot wait for operation data. Use InvocationType.Event to wait for operation data."
+        "InvocationType.RequestResponse cannot wait for operation data. Use InvocationType.Event to wait for operation data.",
       );
     });
   });

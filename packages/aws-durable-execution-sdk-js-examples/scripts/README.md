@@ -29,17 +29,17 @@ The script supports custom configurations for specific examples via the `EXAMPLE
 
 ```javascript
 const EXAMPLE_CONFIGS = {
-  'steps-with-retry': {
+  "steps-with-retry": {
     memorySize: 256,
     timeout: 300,
     policies: [
       {
         DynamoDBReadPolicy: {
-          TableName: 'TEST'
-        }
-      }
-    ]
-  }
+          TableName: "TEST",
+        },
+      },
+    ],
+  },
 };
 ```
 
@@ -85,4 +85,3 @@ The script is integrated into the build process via the `prebuild` npm script:
 ```
 
 This ensures the template is always up-to-date before building the project.
-

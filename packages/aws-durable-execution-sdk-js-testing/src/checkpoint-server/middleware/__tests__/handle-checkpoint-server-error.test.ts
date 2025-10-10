@@ -34,7 +34,7 @@ describe("Handle Checkpoint Server Error Middleware", () => {
       new Error("Test error"),
       req as Request,
       res as Response,
-      next
+      next,
     );
 
     expect(statusMock).toHaveBeenCalledWith(500);
@@ -48,7 +48,7 @@ describe("Handle Checkpoint Server Error Middleware", () => {
       error,
       req as Request,
       res as Response,
-      next
+      next,
     );
 
     expect(jsonMock).toHaveBeenCalledWith({
@@ -64,7 +64,7 @@ describe("Handle Checkpoint Server Error Middleware", () => {
       error,
       req as Request,
       res as Response,
-      next
+      next,
     );
 
     expect(jsonMock).toHaveBeenCalledWith({
@@ -79,7 +79,7 @@ describe("Handle Checkpoint Server Error Middleware", () => {
       error,
       req as Request,
       res as Response,
-      next
+      next,
     );
 
     expect(jsonMock).toHaveBeenCalledWith({
@@ -92,7 +92,7 @@ describe("Handle Checkpoint Server Error Middleware", () => {
       null,
       req as Request,
       res as Response,
-      next
+      next,
     );
 
     expect(jsonMock).toHaveBeenCalledWith({
@@ -105,7 +105,7 @@ describe("Handle Checkpoint Server Error Middleware", () => {
       undefined,
       req as Request,
       res as Response,
-      next
+      next,
     );
 
     expect(jsonMock).toHaveBeenCalledWith({
@@ -120,7 +120,7 @@ describe("Handle Checkpoint Server Error Middleware", () => {
       error,
       req as Request,
       res as Response,
-      next
+      next,
     );
 
     expect(jsonMock).toHaveBeenCalledWith({

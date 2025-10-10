@@ -17,7 +17,7 @@ createTests({
       // as soon as one of the promises resolves
       const promiseRaceOp = runner.getOperation("promise-race");
       expect(promiseRaceOp.getStatus()).toStrictEqual(
-        OperationStatus.SUCCEEDED
+        OperationStatus.SUCCEEDED,
       );
       expect(promiseRaceOp.getStepDetails()?.result).toBeDefined();
     });

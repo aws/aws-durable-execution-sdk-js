@@ -17,13 +17,13 @@ describe("MockOperation", () => {
   jest.spyOn(waitManager, "waitForOperation");
 
   const createMockOperation = (
-    params: MockOperationParameters
+    params: MockOperationParameters,
   ): MockOperation => {
     return new MockOperation(
       params,
       waitManager,
       mockIndexedOperations,
-      mockDurableApi
+      mockDurableApi,
     );
   };
 
@@ -111,7 +111,7 @@ describe("MockOperation", () => {
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementation(mockFn)).toThrow(
-          "Mocking for ids is not supported"
+          "Mocking for ids is not supported",
         );
       });
 
@@ -120,7 +120,7 @@ describe("MockOperation", () => {
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementation(mockFn)).toThrow(
-          "Failed to mock implementation with missing name and index"
+          "Failed to mock implementation with missing name and index",
         );
       });
 
@@ -163,7 +163,7 @@ describe("MockOperation", () => {
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementationOnce(mockFn)).toThrow(
-          "Mocking for ids is not supported"
+          "Mocking for ids is not supported",
         );
       });
 
@@ -172,7 +172,7 @@ describe("MockOperation", () => {
         const mockFn = jest.fn(() => Promise.resolve({}));
 
         expect(() => operation.mockImplementationOnce(mockFn)).toThrow(
-          "Failed to mock implementation with missing name and index"
+          "Failed to mock implementation with missing name and index",
         );
       });
     });
@@ -290,7 +290,7 @@ describe("MockOperation", () => {
         expect(mockForExecution).toHaveBeenCalledWith(executionId);
         expect(mockChain.onName).toHaveBeenCalledWith(
           "test-operation",
-          undefined
+          undefined,
         );
         expect(mockChain.mock).toHaveBeenCalledWith(mockFn, Infinity);
       });

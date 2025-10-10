@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { FunctionConfiguration, UpdateFunctionConfigurationRequest } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  FunctionConfiguration,
+  UpdateFunctionConfigurationRequest,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link UpdateFunctionConfigurationCommand}.
  */
-export interface UpdateFunctionConfigurationCommandInput extends UpdateFunctionConfigurationRequest {
-}
+export interface UpdateFunctionConfigurationCommandInput
+  extends UpdateFunctionConfigurationRequest {}
 /**
  * @public
  *
  * The output of {@link UpdateFunctionConfigurationCommand}.
  */
-export interface UpdateFunctionConfigurationCommandOutput extends FunctionConfiguration, __MetadataBearer {
-}
+export interface UpdateFunctionConfigurationCommandOutput
+  extends FunctionConfiguration,
+    __MetadataBearer {}
 declare const UpdateFunctionConfigurationCommand_base: {
-    new (input: UpdateFunctionConfigurationCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionConfigurationCommandInput, UpdateFunctionConfigurationCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: UpdateFunctionConfigurationCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionConfigurationCommandInput, UpdateFunctionConfigurationCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: UpdateFunctionConfigurationCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateFunctionConfigurationCommandInput,
+    UpdateFunctionConfigurationCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: UpdateFunctionConfigurationCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateFunctionConfigurationCommandInput,
+    UpdateFunctionConfigurationCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Modify the version-specific settings of a Lambda function.</p> <p>When you update a function, Lambda provisions an instance of the function and its supporting resources. If your function connects to a VPC, this process can take a minute. During this time, you can't modify the function, but you can still invoke it. The <code>LastUpdateStatus</code>, <code>LastUpdateStatusReason</code>, and <code>LastUpdateStatusReasonCode</code> fields in the response from <a>GetFunctionConfiguration</a> indicate when the update is complete and the function is processing events with the new configuration. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/functions-states.html">Lambda function states</a>.</p> <p>These settings can vary between versions of a function and are locked when you publish a version. You can't modify the configuration of a published version, only the unpublished version.</p> <p>To configure function concurrency, use <a>PutFunctionConcurrency</a>. To grant invoke permissions to an Amazon Web Services account or Amazon Web Services service, use <a>AddPermission</a>.</p>
@@ -284,15 +308,15 @@ declare const UpdateFunctionConfigurationCommand_base: {
  * @public
  */
 export declare class UpdateFunctionConfigurationCommand extends UpdateFunctionConfigurationCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: UpdateFunctionConfigurationRequest;
-            output: FunctionConfiguration;
-        };
-        sdk: {
-            input: UpdateFunctionConfigurationCommandInput;
-            output: UpdateFunctionConfigurationCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: UpdateFunctionConfigurationRequest;
+      output: FunctionConfiguration;
     };
+    sdk: {
+      input: UpdateFunctionConfigurationCommandInput;
+      output: UpdateFunctionConfigurationCommandOutput;
+    };
+  };
 }

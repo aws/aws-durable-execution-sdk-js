@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { PutProvisionedConcurrencyConfigRequest, PutProvisionedConcurrencyConfigResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  PutProvisionedConcurrencyConfigRequest,
+  PutProvisionedConcurrencyConfigResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link PutProvisionedConcurrencyConfigCommand}.
  */
-export interface PutProvisionedConcurrencyConfigCommandInput extends PutProvisionedConcurrencyConfigRequest {
-}
+export interface PutProvisionedConcurrencyConfigCommandInput
+  extends PutProvisionedConcurrencyConfigRequest {}
 /**
  * @public
  *
  * The output of {@link PutProvisionedConcurrencyConfigCommand}.
  */
-export interface PutProvisionedConcurrencyConfigCommandOutput extends PutProvisionedConcurrencyConfigResponse, __MetadataBearer {
-}
+export interface PutProvisionedConcurrencyConfigCommandOutput
+  extends PutProvisionedConcurrencyConfigResponse,
+    __MetadataBearer {}
 declare const PutProvisionedConcurrencyConfigCommand_base: {
-    new (input: PutProvisionedConcurrencyConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutProvisionedConcurrencyConfigCommandInput, PutProvisionedConcurrencyConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: PutProvisionedConcurrencyConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutProvisionedConcurrencyConfigCommandInput, PutProvisionedConcurrencyConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: PutProvisionedConcurrencyConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PutProvisionedConcurrencyConfigCommandInput,
+    PutProvisionedConcurrencyConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: PutProvisionedConcurrencyConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PutProvisionedConcurrencyConfigCommandInput,
+    PutProvisionedConcurrencyConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Adds a provisioned concurrency configuration to a function's alias or version.</p>
@@ -102,15 +126,15 @@ declare const PutProvisionedConcurrencyConfigCommand_base: {
  * @public
  */
 export declare class PutProvisionedConcurrencyConfigCommand extends PutProvisionedConcurrencyConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: PutProvisionedConcurrencyConfigRequest;
-            output: PutProvisionedConcurrencyConfigResponse;
-        };
-        sdk: {
-            input: PutProvisionedConcurrencyConfigCommandInput;
-            output: PutProvisionedConcurrencyConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: PutProvisionedConcurrencyConfigRequest;
+      output: PutProvisionedConcurrencyConfigResponse;
     };
+    sdk: {
+      input: PutProvisionedConcurrencyConfigCommandInput;
+      output: PutProvisionedConcurrencyConfigCommandOutput;
+    };
+  };
 }

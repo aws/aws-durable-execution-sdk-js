@@ -1,6 +1,13 @@
 import { Command as $Command } from "@smithy/smithy-client";
-import { MetadataBearer as __MetadataBearer, StreamingBlobPayloadInputTypes } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  MetadataBearer as __MetadataBearer,
+  StreamingBlobPayloadInputTypes,
+} from "@smithy/types";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { InvokeAsyncRequest, InvokeAsyncResponse } from "../models/models_0";
 /**
  * @public
@@ -12,20 +19,38 @@ export { $Command };
  *
  * The input for {@link InvokeAsyncCommand}.
  */
-export interface InvokeAsyncCommandInput extends Omit<InvokeAsyncRequest, "InvokeArgs"> {
-    InvokeArgs: StreamingBlobPayloadInputTypes;
+export interface InvokeAsyncCommandInput
+  extends Omit<InvokeAsyncRequest, "InvokeArgs"> {
+  InvokeArgs: StreamingBlobPayloadInputTypes;
 }
 /**
  * @public
  *
  * The output of {@link InvokeAsyncCommand}.
  */
-export interface InvokeAsyncCommandOutput extends InvokeAsyncResponse, __MetadataBearer {
-}
+export interface InvokeAsyncCommandOutput
+  extends InvokeAsyncResponse,
+    __MetadataBearer {}
 declare const InvokeAsyncCommand_base: {
-    new (input: InvokeAsyncCommandInput): import("@smithy/smithy-client").CommandImpl<InvokeAsyncCommandInput, InvokeAsyncCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: InvokeAsyncCommandInput): import("@smithy/smithy-client").CommandImpl<InvokeAsyncCommandInput, InvokeAsyncCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: InvokeAsyncCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    InvokeAsyncCommandInput,
+    InvokeAsyncCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: InvokeAsyncCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    InvokeAsyncCommandInput,
+    InvokeAsyncCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <important> <p>For asynchronous function invocation, use <a>Invoke</a>.</p> </important> <p>Invokes a function asynchronously.</p> <note> <p>If you do use the InvokeAsync action, note that it doesn't support the use of X-Ray active tracing. Trace ID is not propagated to the function, even if X-Ray active tracing is turned on.</p> </note>
@@ -95,15 +120,15 @@ declare const InvokeAsyncCommand_base: {
  * @public
  */
 export declare class InvokeAsyncCommand extends InvokeAsyncCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: InvokeAsyncRequest;
-            output: InvokeAsyncResponse;
-        };
-        sdk: {
-            input: InvokeAsyncCommandInput;
-            output: InvokeAsyncCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: InvokeAsyncRequest;
+      output: InvokeAsyncResponse;
     };
+    sdk: {
+      input: InvokeAsyncCommandInput;
+      output: InvokeAsyncCommandOutput;
+    };
+  };
 }

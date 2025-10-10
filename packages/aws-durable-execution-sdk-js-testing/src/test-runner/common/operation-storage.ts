@@ -24,7 +24,7 @@ export class OperationStorage<
   constructor(
     private readonly waitManager: OperationWaitManager,
     protected readonly indexedOperations: IndexedOperations,
-    private readonly apiClient: DurableApiClient
+    private readonly apiClient: DurableApiClient,
   ) {}
 
   private populateOperation(trackedOperation: TrackedOperation<Operation>) {
@@ -37,7 +37,7 @@ export class OperationStorage<
         trackedOperation.params.name !== undefined
           ? this.indexedOperations.getByNameAndIndex(
               trackedOperation.params.name,
-              trackedOperation.params.index
+              trackedOperation.params.index,
             )
           : null,
       () =>
@@ -67,7 +67,7 @@ export class OperationStorage<
           const operation = new OperationWithData(
             this.waitManager,
             this.indexedOperations,
-            this.apiClient
+            this.apiClient,
           );
           operation.populateData(data);
           return operation;

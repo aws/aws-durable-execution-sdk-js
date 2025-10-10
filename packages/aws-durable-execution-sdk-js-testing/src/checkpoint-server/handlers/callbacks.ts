@@ -29,7 +29,7 @@ export const handleCallbackFailure: RequestHandler<
         CallbackId: callbackId,
         Error: input,
       },
-      CompleteCallbackStatus.FAILED
+      CompleteCallbackStatus.FAILED,
     );
   } catch (err) {
     if (err instanceof InvalidParameterValueException) {
@@ -81,7 +81,7 @@ export const handleCallbackSuccess: RequestHandler<
         CallbackId: callbackId,
         Result: result,
       },
-      CompleteCallbackStatus.SUCCEEDED
+      CompleteCallbackStatus.SUCCEEDED,
     );
   } catch (err) {
     if (err instanceof InvalidParameterValueException) {

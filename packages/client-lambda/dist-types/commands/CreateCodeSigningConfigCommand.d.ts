@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { CreateCodeSigningConfigRequest, CreateCodeSigningConfigResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  CreateCodeSigningConfigRequest,
+  CreateCodeSigningConfigResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link CreateCodeSigningConfigCommand}.
  */
-export interface CreateCodeSigningConfigCommandInput extends CreateCodeSigningConfigRequest {
-}
+export interface CreateCodeSigningConfigCommandInput
+  extends CreateCodeSigningConfigRequest {}
 /**
  * @public
  *
  * The output of {@link CreateCodeSigningConfigCommand}.
  */
-export interface CreateCodeSigningConfigCommandOutput extends CreateCodeSigningConfigResponse, __MetadataBearer {
-}
+export interface CreateCodeSigningConfigCommandOutput
+  extends CreateCodeSigningConfigResponse,
+    __MetadataBearer {}
 declare const CreateCodeSigningConfigCommand_base: {
-    new (input: CreateCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<CreateCodeSigningConfigCommandInput, CreateCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: CreateCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<CreateCodeSigningConfigCommandInput, CreateCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: CreateCodeSigningConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    CreateCodeSigningConfigCommandInput,
+    CreateCodeSigningConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: CreateCodeSigningConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    CreateCodeSigningConfigCommandInput,
+    CreateCodeSigningConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Creates a code signing configuration. A <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-codesigning.html">code signing configuration</a> defines a list of allowed signing profiles and defines the code-signing validation policy (action to be taken if deployment validation checks fail). </p>
@@ -90,15 +114,15 @@ declare const CreateCodeSigningConfigCommand_base: {
  * @public
  */
 export declare class CreateCodeSigningConfigCommand extends CreateCodeSigningConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: CreateCodeSigningConfigRequest;
-            output: CreateCodeSigningConfigResponse;
-        };
-        sdk: {
-            input: CreateCodeSigningConfigCommandInput;
-            output: CreateCodeSigningConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: CreateCodeSigningConfigRequest;
+      output: CreateCodeSigningConfigResponse;
     };
+    sdk: {
+      input: CreateCodeSigningConfigCommandInput;
+      output: CreateCodeSigningConfigCommandOutput;
+    };
+  };
 }

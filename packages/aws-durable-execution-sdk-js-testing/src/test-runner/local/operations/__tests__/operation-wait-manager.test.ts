@@ -29,14 +29,14 @@ describe("OperationWaitManager", () => {
           Status: OperationStatus.PENDING,
         },
         events: [],
-      }
+      },
     );
   });
 
   // Helper function to trigger operation resolution
   const triggerOperationResolution = (
     operation: OperationWithData,
-    status: OperationStatus
+    status: OperationStatus,
   ) => {
     // Update the operation's internal data to have the new status
     const originalData = operation.getOperationData()!;
@@ -60,7 +60,7 @@ describe("OperationWaitManager", () => {
       // Act
       const waitPromise = waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
 
       // Trigger resolution
@@ -75,7 +75,7 @@ describe("OperationWaitManager", () => {
       // Act
       const waitPromise = waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
 
       // Trigger resolution
@@ -90,11 +90,11 @@ describe("OperationWaitManager", () => {
       // Act
       const waitPromise1 = waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
       const waitPromise2 = waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
 
       // Trigger resolution
@@ -113,11 +113,11 @@ describe("OperationWaitManager", () => {
       // Act
       const waitForStarted = waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
       const waitForCompleted = waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
 
       // Trigger STARTED resolution
@@ -155,7 +155,7 @@ describe("OperationWaitManager", () => {
             // Create a promise waiting for the specified waiting status
             const waitPromise = waitManager.waitForOperation(
               testOperation,
-              waitStatus
+              waitStatus,
             );
 
             // Try to resolve the promise with the operation status
@@ -164,7 +164,7 @@ describe("OperationWaitManager", () => {
             // The promise should have resolved
             const result = await waitPromise;
             expect(result).toBe(testOperation);
-          }
+          },
         );
       });
 
@@ -180,7 +180,7 @@ describe("OperationWaitManager", () => {
             // Create a promise waiting for the specified waiting status
             const waitPromise = waitManager.waitForOperation(
               testOperation,
-              waitStatus
+              waitStatus,
             );
 
             // Try to resolve the promise with the operation status
@@ -194,7 +194,7 @@ describe("OperationWaitManager", () => {
 
             // The promise should still be pending (not resolved)
             expect(stillPending).toBe(true);
-          }
+          },
         );
       });
 
@@ -211,17 +211,17 @@ describe("OperationWaitManager", () => {
               // Status is undefined
             },
             events: [],
-          }
+          },
         );
 
         // Create promises for both wait statuses
         const startedPromise = waitManager.waitForOperation(
           operationWithoutStatus,
-          WaitingOperationStatus.STARTED
+          WaitingOperationStatus.STARTED,
         );
         const completedPromise = waitManager.waitForOperation(
           operationWithoutStatus,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Try to resolve the promises with the operation that has no status
@@ -255,7 +255,7 @@ describe("OperationWaitManager", () => {
       // Act
       const waitPromise = waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
       expect(waitManager.getWaitingOperationsCount()).toBe(1);
 
@@ -282,15 +282,15 @@ describe("OperationWaitManager", () => {
             Status: OperationStatus.PENDING,
           },
           events: [],
-        }
+        },
       );
       void waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
       void waitManager.waitForOperation(
         testOperation2,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
       expect(waitManager.getWaitingOperationsCount()).toBe(2);
 
@@ -321,21 +321,21 @@ describe("OperationWaitManager", () => {
             Status: OperationStatus.PENDING,
           },
           events: [],
-        }
+        },
       );
 
       // Act
       void waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
       void waitManager.waitForOperation(
         testOperation,
-        WaitingOperationStatus.COMPLETED
+        WaitingOperationStatus.COMPLETED,
       );
       void waitManager.waitForOperation(
         testOperation2,
-        WaitingOperationStatus.STARTED
+        WaitingOperationStatus.STARTED,
       );
 
       // Assert
@@ -347,7 +347,7 @@ describe("OperationWaitManager", () => {
     // Helper function to create a waitForCallback operation
     const createWaitForCallbackOperation = (
       id: string,
-      status: OperationStatus = OperationStatus.PENDING
+      status: OperationStatus = OperationStatus.PENDING,
     ) =>
       new OperationWithData(
         waitManager,
@@ -361,13 +361,13 @@ describe("OperationWaitManager", () => {
             Status: status,
           },
           events: [],
-        }
+        },
       );
 
     // Helper function to create a regular (non-waitForCallback) operation
     const createRegularOperation = (
       id: string,
-      status: OperationStatus = OperationStatus.PENDING
+      status: OperationStatus = OperationStatus.PENDING,
     ) =>
       new OperationWithData(
         waitManager,
@@ -380,13 +380,13 @@ describe("OperationWaitManager", () => {
             Status: status,
           },
           events: [],
-        }
+        },
       );
 
     // Helper function to create a callback checkpoint operation
     const createCallbackCheckpointOperation = (
       parentId: string,
-      status: OperationStatus = OperationStatus.SUCCEEDED
+      status: OperationStatus = OperationStatus.SUCCEEDED,
     ): OperationEvents => ({
       operation: {
         Id: "callback-op-id",
@@ -400,7 +400,7 @@ describe("OperationWaitManager", () => {
     // Helper function to create a non-callback checkpoint operation
     const createNonCallbackCheckpointOperation = (
       type: OperationType = OperationType.STEP,
-      parentId?: string
+      parentId?: string,
     ): OperationEvents => ({
       operation: {
         Id: "non-callback-op-id",
@@ -419,13 +419,13 @@ describe("OperationWaitManager", () => {
         // Create a promise waiting for the parent operation
         const waitPromise = waitManager.waitForOperation(
           parentOperation,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger callback operation with matching parent ID
         const callbackOperation = createCallbackCheckpointOperation(
           "parent-op-id",
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         waitManager.handleCheckpointReceived([callbackOperation], []);
 
@@ -442,17 +442,17 @@ describe("OperationWaitManager", () => {
 
         const waitPromise1 = waitManager.waitForOperation(
           parentOperation1,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
         const waitPromise2 = waitManager.waitForOperation(
           parentOperation2,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger callback operation
         const callbackOperation = createCallbackCheckpointOperation(
           "parent-op-id",
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         waitManager.handleCheckpointReceived([callbackOperation], []);
 
@@ -469,18 +469,18 @@ describe("OperationWaitManager", () => {
       it("should not resolve operations with different parent IDs", async () => {
         // Arrange - Create operation with different parent ID
         const parentOperation = createWaitForCallbackOperation(
-          "different-parent-id"
+          "different-parent-id",
         );
 
         const waitPromise = waitManager.waitForOperation(
           parentOperation,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger callback operation with different parent ID
         const callbackOperation = createCallbackCheckpointOperation(
           "parent-op-id",
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         waitManager.handleCheckpointReceived([callbackOperation], []);
 
@@ -500,13 +500,13 @@ describe("OperationWaitManager", () => {
 
         const waitPromise = waitManager.waitForOperation(
           parentOperation,
-          WaitingOperationStatus.STARTED
+          WaitingOperationStatus.STARTED,
         );
 
         // Act - Trigger callback operation with SUCCEEDED status (should resolve STARTED)
         const callbackOperation = createCallbackCheckpointOperation(
           "parent-op-id",
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         waitManager.handleCheckpointReceived([callbackOperation], []);
 
@@ -521,13 +521,13 @@ describe("OperationWaitManager", () => {
 
         const waitPromise = waitManager.waitForOperation(
           parentOperation,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger non-callback operation (should not trigger parent resolution)
         const nonCallbackOperation = createNonCallbackCheckpointOperation(
           OperationType.STEP,
-          "parent-op-id"
+          "parent-op-id",
         );
         waitManager.handleCheckpointReceived([nonCallbackOperation], []);
 
@@ -547,7 +547,7 @@ describe("OperationWaitManager", () => {
 
         const waitPromise = waitManager.waitForOperation(
           parentOperation,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger callback operation without ParentId
@@ -578,13 +578,13 @@ describe("OperationWaitManager", () => {
 
         const waitPromise = waitManager.waitForOperation(
           regularOperation,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger callback operation (should not resolve non-waitForCallback operations)
         const callbackOperation = createCallbackCheckpointOperation(
           "parent-op-id",
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         waitManager.handleCheckpointReceived([callbackOperation], []);
 
@@ -614,26 +614,26 @@ describe("OperationWaitManager", () => {
               Status: OperationStatus.SUCCEEDED,
             },
             events: [],
-          }
+          },
         );
 
         const parentWaitPromise = waitManager.waitForOperation(
           parentOperation,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
         const directWaitPromise = waitManager.waitForOperation(
           directOperation,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger both callback and direct operations
         const callbackOperation = createCallbackCheckpointOperation(
           "parent-op-id",
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         waitManager.handleCheckpointReceived(
           [callbackOperation],
-          [directOperation]
+          [directOperation],
         );
 
         // Assert - Both operations should be resolved
@@ -654,21 +654,21 @@ describe("OperationWaitManager", () => {
 
         const wait1 = waitManager.waitForOperation(
           parent1,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
         const wait2 = waitManager.waitForOperation(
           parent2,
-          WaitingOperationStatus.COMPLETED
+          WaitingOperationStatus.COMPLETED,
         );
 
         // Act - Trigger multiple callback operations
         const callback1 = createCallbackCheckpointOperation(
           "parent-1",
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
         const callback2 = createCallbackCheckpointOperation(
           "parent-2",
-          OperationStatus.FAILED
+          OperationStatus.FAILED,
         );
         waitManager.handleCheckpointReceived([callback1, callback2], []);
 

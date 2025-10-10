@@ -36,7 +36,7 @@ describe("callback-id", () => {
       const invalidJson = Buffer.from("not-json", "utf-8").toString("base64");
 
       expect(() => decodeCallbackId(createCallbackId(invalidJson))).toThrow(
-        "Failed to decode CallbackIdData"
+        "Failed to decode CallbackIdData",
       );
     });
 
@@ -47,11 +47,11 @@ describe("callback-id", () => {
       };
       const encoded = Buffer.from(
         JSON.stringify(incompleteData),
-        "utf-8"
+        "utf-8",
       ).toString("base64");
 
       expect(() => decodeCallbackId(createCallbackId(encoded))).toThrow(
-        "Failed to decode CallbackIdData"
+        "Failed to decode CallbackIdData",
       );
     });
 
@@ -62,11 +62,11 @@ describe("callback-id", () => {
       };
       const encoded = Buffer.from(
         JSON.stringify(incompleteData),
-        "utf-8"
+        "utf-8",
       ).toString("base64");
 
       expect(() => decodeCallbackId(createCallbackId(encoded))).toThrow(
-        "Failed to decode CallbackIdData"
+        "Failed to decode CallbackIdData",
       );
     });
 
@@ -77,11 +77,11 @@ describe("callback-id", () => {
       };
       const encoded = Buffer.from(
         JSON.stringify(incompleteData),
-        "utf-8"
+        "utf-8",
       ).toString("base64");
 
       expect(() => decodeCallbackId(createCallbackId(encoded))).toThrow(
-        "Failed to decode CallbackIdData"
+        "Failed to decode CallbackIdData",
       );
     });
   });

@@ -56,7 +56,7 @@ describe("invoke-handler", () => {
         expect.objectContaining({
           functionName: "my-function-name",
           awsRequestId: "00000000-0000-0000-0000-000000000000",
-        })
+        }),
       );
 
       expect(result).toEqual({
@@ -93,7 +93,7 @@ describe("invoke-handler", () => {
           awsRequestId: "custom-request-id",
           getRemainingTimeInMillis:
             customContextValues.getRemainingTimeInMillis,
-        })
+        }),
       );
     });
 
@@ -122,7 +122,7 @@ describe("invoke-handler", () => {
         expect.objectContaining({
           functionName: "constructor-custom-name",
           memoryLimitInMB: "512",
-        })
+        }),
       );
     });
 
@@ -137,7 +137,7 @@ describe("invoke-handler", () => {
       };
 
       await expect(
-        invokeHandlerInstance.invoke(mockHandler, params)
+        invokeHandlerInstance.invoke(mockHandler, params),
       ).rejects.toThrow(mockError);
     });
   });

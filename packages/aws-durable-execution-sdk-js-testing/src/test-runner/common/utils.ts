@@ -2,7 +2,7 @@ import { ExecutionStatus } from "@aws-sdk/client-lambda";
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function tryJsonParse<ResultType>(
-  obj: string | undefined
+  obj: string | undefined,
 ): ResultType | undefined {
   if (obj === undefined) {
     return obj;
@@ -17,6 +17,8 @@ export function tryJsonParse<ResultType>(
   }
 }
 
-export function isClosedExecution(status: ExecutionStatus | undefined): boolean {
+export function isClosedExecution(
+  status: ExecutionStatus | undefined,
+): boolean {
   return status !== ExecutionStatus.RUNNING;
 }

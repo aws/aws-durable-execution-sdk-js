@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { CreateFunctionUrlConfigRequest, CreateFunctionUrlConfigResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  CreateFunctionUrlConfigRequest,
+  CreateFunctionUrlConfigResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link CreateFunctionUrlConfigCommand}.
  */
-export interface CreateFunctionUrlConfigCommandInput extends CreateFunctionUrlConfigRequest {
-}
+export interface CreateFunctionUrlConfigCommandInput
+  extends CreateFunctionUrlConfigRequest {}
 /**
  * @public
  *
  * The output of {@link CreateFunctionUrlConfigCommand}.
  */
-export interface CreateFunctionUrlConfigCommandOutput extends CreateFunctionUrlConfigResponse, __MetadataBearer {
-}
+export interface CreateFunctionUrlConfigCommandOutput
+  extends CreateFunctionUrlConfigResponse,
+    __MetadataBearer {}
 declare const CreateFunctionUrlConfigCommand_base: {
-    new (input: CreateFunctionUrlConfigCommandInput): import("@smithy/smithy-client").CommandImpl<CreateFunctionUrlConfigCommandInput, CreateFunctionUrlConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: CreateFunctionUrlConfigCommandInput): import("@smithy/smithy-client").CommandImpl<CreateFunctionUrlConfigCommandInput, CreateFunctionUrlConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: CreateFunctionUrlConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    CreateFunctionUrlConfigCommandInput,
+    CreateFunctionUrlConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: CreateFunctionUrlConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    CreateFunctionUrlConfigCommandInput,
+    CreateFunctionUrlConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Creates a Lambda function URL with the specified configuration parameters. A function URL is a dedicated HTTP(S) endpoint that you can use to invoke your function.</p>
@@ -114,15 +138,15 @@ declare const CreateFunctionUrlConfigCommand_base: {
  * @public
  */
 export declare class CreateFunctionUrlConfigCommand extends CreateFunctionUrlConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: CreateFunctionUrlConfigRequest;
-            output: CreateFunctionUrlConfigResponse;
-        };
-        sdk: {
-            input: CreateFunctionUrlConfigCommandInput;
-            output: CreateFunctionUrlConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: CreateFunctionUrlConfigRequest;
+      output: CreateFunctionUrlConfigResponse;
     };
+    sdk: {
+      input: CreateFunctionUrlConfigCommandInput;
+      output: CreateFunctionUrlConfigCommandOutput;
+    };
+  };
 }

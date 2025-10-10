@@ -4,7 +4,7 @@ export class Scheduler {
   private waitForScheduledFunctionPromise: Promise<void> = new Promise<void>(
     (resolve) => {
       this.resolveWaitForScheduledFunction = resolve;
-    }
+    },
   );
 
   async waitForScheduledFunction(): Promise<void> {
@@ -17,7 +17,7 @@ export class Scheduler {
   scheduleFunction(
     fn: () => Promise<void>,
     delayMs: number,
-    onError: (err: unknown) => void
+    onError: (err: unknown) => void,
   ): void {
     this.hasScheduledFunctionFlag = true;
     setTimeout(() => {

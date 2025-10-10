@@ -67,7 +67,7 @@ export class CallbackManager {
 
   constructor(
     private readonly executionId: ExecutionId,
-    private readonly checkpointManager: CheckpointManager
+    private readonly checkpointManager: CheckpointManager,
   ) {}
 
   /**
@@ -76,7 +76,7 @@ export class CallbackManager {
   createCallback(
     operationId: string,
     timeoutSeconds?: number,
-    heartbeatTimeoutSeconds?: number
+    heartbeatTimeoutSeconds?: number,
   ): CallbackId {
     const callbackId = encodeCallbackId({
       executionId: this.executionId,
@@ -94,9 +94,9 @@ export class CallbackManager {
             {
               CallbackId: callbackId,
             },
-            CompleteCallbackStatus.TIMED_OUT
+            CompleteCallbackStatus.TIMED_OUT,
           );
-        }, timeoutSeconds * 1000)
+        }, timeoutSeconds * 1000),
       );
     }
 
@@ -109,9 +109,9 @@ export class CallbackManager {
             {
               CallbackId: callbackId,
             },
-            CompleteCallbackStatus.TIMED_OUT
+            CompleteCallbackStatus.TIMED_OUT,
           );
-        }, heartbeatTimeoutSeconds * 1000)
+        }, heartbeatTimeoutSeconds * 1000),
       );
     }
 
@@ -123,7 +123,7 @@ export class CallbackManager {
    */
   completeCallback(
     callbackDetails: CallbackDetails,
-    status: CompleteCallbackStatus
+    status: CompleteCallbackStatus,
   ): OperationEvents {
     if (!callbackDetails.CallbackId) {
       throw new InvalidParameterValueException({
@@ -161,7 +161,7 @@ export class CallbackManager {
           historyDetails.eventType,
           newOperation,
           historyDetails.detailPlace,
-          historyDetails.getDetails(newOperation)
+          historyDetails.getDetails(newOperation),
         ),
       ],
     };
@@ -210,9 +210,9 @@ export class CallbackManager {
           {
             CallbackId: callbackId,
           },
-          CompleteCallbackStatus.TIMED_OUT
+          CompleteCallbackStatus.TIMED_OUT,
         );
-      }, heartbeatTimeoutSeconds * 1000)
+      }, heartbeatTimeoutSeconds * 1000),
     );
   }
 

@@ -17,12 +17,12 @@ export class LocalOperationStorage extends OperationStorage<MockOperation> {
     apiClient: DurableApiClient,
     private readonly onCheckpointReceived: (
       checkpointOperationsReceived: OperationEvents[],
-      trackedDurableOperations: DurableOperation<unknown>[]
-    ) => void
+      trackedDurableOperations: DurableOperation<unknown>[],
+    ) => void,
   ) {
     super(waitManager, indexedOperations, apiClient);
     this.events.push(
-      ...indexedOperations.getOperations().flatMap((op) => op.events)
+      ...indexedOperations.getOperations().flatMap((op) => op.events),
     );
   }
 
@@ -54,7 +54,7 @@ export class LocalOperationStorage extends OperationStorage<MockOperation> {
     // Notify via callback
     this.onCheckpointReceived(
       newCheckpointOperations,
-      this.getTrackedOperations()
+      this.getTrackedOperations(),
     );
   }
 }

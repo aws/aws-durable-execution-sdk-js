@@ -15,7 +15,7 @@ describe("validateStepOperation", () => {
     action: OperationAction,
     payload?: string,
     error?: ErrorObject,
-    stepOptions?: StepOptions
+    stepOptions?: StepOptions,
   ): OperationUpdate => ({
     Action: action,
     Type: OperationType.STEP,
@@ -85,7 +85,7 @@ describe("validateStepOperation", () => {
       const currentOperation = createOperation(OperationStatus.STARTED);
       const update = createOperationUpdate(
         OperationAction.FAIL,
-        "test-payload"
+        "test-payload",
       );
 
       expect(() => {
@@ -137,7 +137,7 @@ describe("validateStepOperation", () => {
       const update = createOperationUpdate(
         OperationAction.SUCCEED,
         undefined,
-        errorObject
+        errorObject,
       );
 
       expect(() => {
@@ -157,7 +157,7 @@ describe("validateStepOperation", () => {
         OperationAction.RETRY,
         undefined,
         undefined,
-        stepOptions
+        stepOptions,
       );
 
       expect(() => {
@@ -172,7 +172,7 @@ describe("validateStepOperation", () => {
         OperationAction.RETRY,
         "test-payload",
         undefined,
-        stepOptions
+        stepOptions,
       );
 
       expect(() => {
@@ -203,7 +203,7 @@ describe("validateStepOperation", () => {
         OperationAction.RETRY,
         "test-payload",
         errorObject,
-        stepOptions
+        stepOptions,
       );
 
       expect(() => {
@@ -221,7 +221,7 @@ describe("validateStepOperation", () => {
         OperationAction.RETRY,
         undefined,
         undefined,
-        stepOptions
+        stepOptions,
       );
 
       expect(() => {

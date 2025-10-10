@@ -22,13 +22,13 @@ describe("InvocationTracker", () => {
   // Helper function to create test operations
   const createMockOperation = (
     id: string,
-    status: OperationStatus = OperationStatus.SUCCEEDED
+    status: OperationStatus = OperationStatus.SUCCEEDED,
   ): MockOperation => {
     const operation = new MockOperation(
       { id },
       waitManager,
       indexedOperations,
-      durableApiClient
+      durableApiClient,
     );
     const checkpointOp: OperationEvents = {
       operation: {
@@ -54,7 +54,7 @@ describe("InvocationTracker", () => {
         sendCallbackHeartbeat: jest.fn(),
         sendCallbackSuccess: jest.fn(),
       },
-      jest.fn()
+      jest.fn(),
     );
     invocationTracker = new InvocationTracker(operationStorage);
   });
@@ -170,7 +170,7 @@ describe("InvocationTracker", () => {
       // Associate the operation with both invocations
       invocationTracker.associateOperation(
         [invocationId1, invocationId2],
-        operationId
+        operationId,
       );
 
       // Get operations for each invocation
@@ -275,11 +275,11 @@ describe("InvocationTracker", () => {
     it("should filter operations by status when a status filter is provided", () => {
       const succeededOps = invocationTracker.getOperationsForInvocation(
         invocationId1,
-        OperationStatus.SUCCEEDED
+        OperationStatus.SUCCEEDED,
       );
       const failedOps = invocationTracker.getOperationsForInvocation(
         invocationId1,
-        OperationStatus.FAILED
+        OperationStatus.FAILED,
       );
 
       expect(succeededOps.length).toBe(1);
@@ -309,7 +309,7 @@ describe("InvocationTracker", () => {
 
       // Check if ops contain operation with ID "op2"
       const opsContainOp2 = (
-        ops: ReturnType<typeof invocationTracker.getOperationsForInvocation>
+        ops: ReturnType<typeof invocationTracker.getOperationsForInvocation>,
       ) => ops.some((op) => op.getId() === "op2");
 
       expect(opsContainOp2(ops1)).toBe(true);

@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { ListCodeSigningConfigsRequest, ListCodeSigningConfigsResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  ListCodeSigningConfigsRequest,
+  ListCodeSigningConfigsResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link ListCodeSigningConfigsCommand}.
  */
-export interface ListCodeSigningConfigsCommandInput extends ListCodeSigningConfigsRequest {
-}
+export interface ListCodeSigningConfigsCommandInput
+  extends ListCodeSigningConfigsRequest {}
 /**
  * @public
  *
  * The output of {@link ListCodeSigningConfigsCommand}.
  */
-export interface ListCodeSigningConfigsCommandOutput extends ListCodeSigningConfigsResponse, __MetadataBearer {
-}
+export interface ListCodeSigningConfigsCommandOutput
+  extends ListCodeSigningConfigsResponse,
+    __MetadataBearer {}
 declare const ListCodeSigningConfigsCommand_base: {
-    new (input: ListCodeSigningConfigsCommandInput): import("@smithy/smithy-client").CommandImpl<ListCodeSigningConfigsCommandInput, ListCodeSigningConfigsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (...[input]: [] | [ListCodeSigningConfigsCommandInput]): import("@smithy/smithy-client").CommandImpl<ListCodeSigningConfigsCommandInput, ListCodeSigningConfigsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: ListCodeSigningConfigsCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListCodeSigningConfigsCommandInput,
+    ListCodeSigningConfigsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    ...[input]: [] | [ListCodeSigningConfigsCommandInput]
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListCodeSigningConfigsCommandInput,
+    ListCodeSigningConfigsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns a list of <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuring-codesigning.html">code signing configurations</a>. A request returns up to 10,000 configurations per call. You can use the <code>MaxItems</code> parameter to return fewer configurations per call. </p>
@@ -83,15 +107,15 @@ declare const ListCodeSigningConfigsCommand_base: {
  * @public
  */
 export declare class ListCodeSigningConfigsCommand extends ListCodeSigningConfigsCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: ListCodeSigningConfigsRequest;
-            output: ListCodeSigningConfigsResponse;
-        };
-        sdk: {
-            input: ListCodeSigningConfigsCommandInput;
-            output: ListCodeSigningConfigsCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: ListCodeSigningConfigsRequest;
+      output: ListCodeSigningConfigsResponse;
     };
+    sdk: {
+      input: ListCodeSigningConfigsCommandInput;
+      output: ListCodeSigningConfigsCommandOutput;
+    };
+  };
 }

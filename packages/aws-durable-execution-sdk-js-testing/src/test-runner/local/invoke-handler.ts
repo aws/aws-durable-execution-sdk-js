@@ -56,7 +56,7 @@ export class InvokeHandler {
    */
   async invoke(
     handler: ReturnType<typeof withDurableFunctions>,
-    parameters: HandlerParameters
+    parameters: HandlerParameters,
   ): Promise<DurableExecutionInvocationOutput> {
     const invocationEvent = this.buildInvocationEvent(parameters);
     const context = this.buildContext(parameters.contextValues);

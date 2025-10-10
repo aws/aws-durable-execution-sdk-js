@@ -30,7 +30,7 @@ export interface ILocalDurableTestRunnerFactory {
    * @returns A new test runner instance
    */
   createRunner<ResultType>(
-    params: LocalDurableTestRunnerParameters
+    params: LocalDurableTestRunnerParameters,
   ): ILocalDurableTestRunnerExecutor<ResultType>;
 }
 

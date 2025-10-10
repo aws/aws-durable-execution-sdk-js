@@ -1,5 +1,9 @@
 import { Operation } from "@aws-sdk/client-lambda";
-import { OperationDetailFields, PropertyValueMap, Entries } from "./operation-types";
+import {
+  OperationDetailFields,
+  PropertyValueMap,
+  Entries,
+} from "./operation-types";
 
 /**
  * Adds operation details to an operation object by merging property values.
@@ -14,7 +18,7 @@ import { OperationDetailFields, PropertyValueMap, Entries } from "./operation-ty
 export function addOperationDetails<DetailsField extends OperationDetailFields>(
   operation: Operation,
   detailsField: DetailsField | undefined,
-  propertyValueMap: PropertyValueMap<DetailsField>
+  propertyValueMap: PropertyValueMap<DetailsField>,
 ) {
   if (!detailsField) {
     return;

@@ -38,14 +38,14 @@ Prevents using the same context object inside its own durable operation.
 #### ❌ Incorrect
 
 ```javascript
-context.step('step1', async () => {
+context.step("step1", async () => {
   // Error: Cannot use the same context object inside its own operation
   await context.wait(1000);
-  
-  const result = await context.step('step2', async () => {
+
+  const result = await context.step("step2", async () => {
     return "nested step";
   });
-  
+
   return result;
 });
 ```
@@ -54,13 +54,13 @@ context.step('step1', async () => {
 
 ```javascript
 // Use runInChildContext for nested operations
-const result = await context.runInChildContext('block1', async (childCtx) => {
+const result = await context.runInChildContext("block1", async (childCtx) => {
   await childCtx.wait(1000);
-  
-  const result = await childCtx.step('step2', async () => {
+
+  const result = await childCtx.step("step2", async () => {
     return "nested step";
   });
-  
+
   return result;
 });
 ```

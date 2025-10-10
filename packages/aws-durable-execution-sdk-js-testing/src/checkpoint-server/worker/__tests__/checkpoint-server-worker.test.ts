@@ -76,7 +76,7 @@ describe("CheckpointServerWorker", () => {
 
       expect(mockMessagePort.on).toHaveBeenCalledWith(
         "message",
-        expect.any(Function)
+        expect.any(Function),
       );
       expect(mockStartCheckpointServer).toHaveBeenCalledWith(0);
       expect(mockMessagePort.postMessage).toHaveBeenCalledWith({
@@ -214,7 +214,7 @@ describe("CheckpointServerWorker", () => {
         code: string;
       };
       errorWithCode.code = "EADDRINUSE";
-      
+
       mockStartCheckpointServer.mockRejectedValue(errorWithCode);
 
       await worker.startServer();
@@ -317,7 +317,7 @@ describe("CheckpointServerWorker", () => {
       // Set up a running server for shutdown tests
       const mockAddress: AddressInfo = {
         address: "127.0.0.1",
-        family: "IPv4", 
+        family: "IPv4",
         port: 3000,
       };
 
@@ -344,7 +344,7 @@ describe("CheckpointServerWorker", () => {
       messageListener(command);
 
       // Wait for async shutdown to complete
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
 
       expect(mockServer.closeAllConnections).toHaveBeenCalled();
       expect(mockMessagePort.postMessage).toHaveBeenCalledWith({
