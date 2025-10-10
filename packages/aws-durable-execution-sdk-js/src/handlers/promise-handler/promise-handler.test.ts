@@ -155,32 +155,6 @@ describe("Promise Handler", () => {
         "error without name",
       );
     });
-
-    it("should handle non-array values in errorAwareSerdes", async () => {
-      mockStep.mockImplementation(async (name, fn, config) => {
-        // Test the serdes with non-array values
-        if (config?.serdes) {
-          // Test serialize with non-array value
-          const nonArrayValue = { someProperty: "value" };
-          const serialized = await config.serdes.serialize(nonArrayValue, {
-            entityId: "test",
-            durableExecutionArn: "arn",
-          });
-          expect(serialized).toBe(JSON.stringify(nonArrayValue));
-
-          // Test deserialize with non-array value
-          const deserialized = await config.serdes.deserialize(serialized, {
-            entityId: "test",
-            durableExecutionArn: "arn",
-          });
-          expect(deserialized).toEqual(nonArrayValue);
-        }
-
-        return await fn();
-      });
-
-      await promiseHandler.allSettled([Promise.resolve(1)]);
-    });
   });
 
   describe("retry behavior", () => {

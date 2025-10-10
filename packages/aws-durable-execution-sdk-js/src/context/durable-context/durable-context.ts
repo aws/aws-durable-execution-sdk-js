@@ -6,8 +6,11 @@ import {
   ChildFunc,
   ChildConfig,
   CreateCallbackConfig,
+  CreateCallbackResult,
   WaitForCallbackSubmitterFunc,
   WaitForCallbackConfig,
+  WaitForConditionCheckFunc,
+  WaitForConditionConfig,
   MapFunc,
   MapConfig,
   ParallelFunc,
@@ -20,6 +23,7 @@ import {
   InvokeConfig,
   DurableExecutionMode,
 } from "../../types";
+import { BatchResult } from "../../handlers/concurrent-execution-handler/batch-result";
 import { Context } from "aws-lambda";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
@@ -38,75 +42,92 @@ import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 
-export const createDurableContext = (
-  executionContext: ExecutionContext,
-  parentContext: Context,
-  stepPrefix?: string,
-  checkpointToken?: string,
-  inheritedLogger?: Logger | null,
-): DurableContext => {
-  // Local logger state for this context instance
-  let contextLogger: Logger | null = inheritedLogger || null;
+class DurableContextImpl implements DurableContext {
+  private _stepPrefix?: string;
+  private _stepCounter: number = 0;
+  private contextLogger: Logger | null;
+  private runningOperations = new Set<string>();
+  private checkpoint: ReturnType<typeof createCheckpoint>;
+  private createContextLogger: ReturnType<typeof createContextLoggerFactory>;
 
-  // Local getter function for this context
-  const getLogger = (): Logger => {
-    return contextLogger || createDefaultLogger();
-  };
+  constructor(
+    private executionContext: ExecutionContext,
+    public lambdaContext: Context,
+    stepPrefix?: string,
+    checkpointToken?: string,
+    inheritedLogger?: Logger | null,
+  ) {
+    this._stepPrefix = stepPrefix;
+    this.contextLogger = inheritedLogger || null;
+    this.checkpoint = createCheckpoint(executionContext, checkpointToken || "");
 
-  // Create context logger factory
-  const createContextLogger = createContextLoggerFactory(
-    executionContext,
-    getLogger,
-  );
+    const getLogger = (): Logger => {
+      return this.contextLogger || createDefaultLogger();
+    };
 
-  let stepCounter = 0;
-  const runningOperations = new Set<string>();
-  const checkpoint = createCheckpoint(executionContext, checkpointToken || "");
+    this.createContextLogger = createContextLoggerFactory(
+      executionContext,
+      getLogger,
+    );
+  }
 
-  const createStepId = (): string => {
-    stepCounter++;
-    return stepPrefix ? `${stepPrefix}-${stepCounter}` : `${stepCounter}`;
-  };
+  get logger(): Logger {
+    return createModeAwareLogger(
+      this.executionContext,
+      this.createContextLogger,
+      this._stepPrefix,
+    );
+  }
 
-  const getNextStepId = (): string => {
-    const nextCounter = stepCounter + 1;
-    return stepPrefix ? `${stepPrefix}-${nextCounter}` : `${nextCounter}`;
-  };
+  private createStepId(): string {
+    this._stepCounter++;
+    return this._stepPrefix
+      ? `${this._stepPrefix}-${this._stepCounter}`
+      : `${this._stepCounter}`;
+  }
 
-  const checkAndUpdateReplayMode = (): void => {
+  private getNextStepId(): string {
+    const nextCounter = this._stepCounter + 1;
+    return this._stepPrefix
+      ? `${this._stepPrefix}-${nextCounter}`
+      : `${nextCounter}`;
+  }
+
+  private checkAndUpdateReplayMode(): void {
     if (
-      executionContext._durableExecutionMode === DurableExecutionMode.ReplayMode
+      this.executionContext._durableExecutionMode ===
+      DurableExecutionMode.ReplayMode
     ) {
-      const nextStepId = getNextStepId();
-      const nextStepData = executionContext.getStepData(nextStepId);
+      const nextStepId = this.getNextStepId();
+      const nextStepData = this.executionContext.getStepData(nextStepId);
       if (!nextStepData) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const captureExecutionState = (): boolean => {
+  private captureExecutionState(): boolean {
     const wasInReplayMode =
-      executionContext._durableExecutionMode ===
+      this.executionContext._durableExecutionMode ===
       DurableExecutionMode.ReplayMode;
-    const nextStepId = getNextStepId();
-    const stepData = executionContext.getStepData(nextStepId);
+    const nextStepId = this.getNextStepId();
+    const stepData = this.executionContext.getStepData(nextStepId);
     const wasNotFinished = !!(
       stepData &&
       stepData.Status !== OperationStatus.SUCCEEDED &&
       stepData.Status !== OperationStatus.FAILED
     );
     return wasInReplayMode && wasNotFinished;
-  };
+  }
 
-  const checkForNonResolvingPromise = (): Promise<never> | null => {
+  private checkForNonResolvingPromise(): Promise<never> | null {
     if (
-      executionContext._durableExecutionMode ===
+      this.executionContext._durableExecutionMode ===
       DurableExecutionMode.ReplaySucceededContext
     ) {
-      const nextStepId = getNextStepId();
-      const nextStepData = executionContext.getStepData(nextStepId);
+      const nextStepId = this.getNextStepId();
+      const nextStepData = this.executionContext.getStepData(nextStepId);
       if (
         nextStepData &&
         nextStepData.Status !== OperationStatus.SUCCEEDED &&
@@ -116,69 +137,68 @@ export const createDurableContext = (
       }
     }
     return null;
-  };
+  }
 
-  // Internal helpers for managing running operations
-  const addRunningOperation = (stepId: string): void => {
-    runningOperations.add(stepId);
-  };
+  private addRunningOperation(stepId: string): void {
+    this.runningOperations.add(stepId);
+  }
 
-  const removeRunningOperation = (stepId: string): void => {
-    runningOperations.delete(stepId);
-  };
+  private removeRunningOperation(stepId: string): void {
+    this.runningOperations.delete(stepId);
+  }
 
-  const hasRunningOperations = (): boolean => {
-    return runningOperations.size > 0;
-  };
+  private hasRunningOperations(): boolean {
+    return this.runningOperations.size > 0;
+  }
 
-  const step: DurableContext["step"] = <T>(
+  step<T>(
     nameOrFn: string | undefined | StepFunc<T>,
     fnOrOptions?: StepFunc<T> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<T> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
     const stepHandler = createStepHandler(
-      executionContext,
-      checkpoint,
-      parentContext,
-      createStepId,
-      createContextLogger,
-      addRunningOperation,
-      removeRunningOperation,
-      hasRunningOperations,
+      this.executionContext,
+      this.checkpoint,
+      this.lambdaContext,
+      this.createStepId.bind(this),
+      this.createContextLogger,
+      this.addRunningOperation.bind(this),
+      this.removeRunningOperation.bind(this),
+      this.hasRunningOperations.bind(this),
     );
     try {
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const invoke: DurableContext["invoke"] = <I, O>(
+  invoke<I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
     inputOrConfig?: I | InvokeConfig<I, O>,
     maybeConfig?: InvokeConfig<I, O>,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<O> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
     const invokeHandler = createInvokeHandler(
-      executionContext,
-      checkpoint,
-      createStepId,
-      hasRunningOperations,
+      this.executionContext,
+      this.checkpoint,
+      this.createStepId.bind(this),
+      this.hasRunningOperations.bind(this),
     );
     try {
       return invokeHandler<I, O>(
@@ -191,80 +211,111 @@ export const createDurableContext = (
       );
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const runInChildContext: DurableContext["runInChildContext"] = <T>(
+  runInChildContext<T>(
     nameOrFn: string | undefined | ChildFunc<T>,
     fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<T> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
     const blockHandler = createRunInChildContextHandler(
-      executionContext,
-      checkpoint,
-      parentContext,
-      createStepId,
-      getLogger,
+      this.executionContext,
+      this.checkpoint,
+      this.lambdaContext,
+      this.createStepId.bind(this),
+      () => this.contextLogger || createDefaultLogger(),
     );
     try {
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const createCallback: DurableContext["createCallback"] = (
+  wait(nameOrMillis: string | number, maybeMillis?: number): Promise<void> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
+
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
+    if (nonResolvingPromise) return nonResolvingPromise;
+
+    const waitHandler = createWaitHandler(
+      this.executionContext,
+      this.checkpoint,
+      this.createStepId.bind(this),
+      this.hasRunningOperations.bind(this),
+    );
+    try {
+      if (typeof nameOrMillis === "string") {
+        return waitHandler(nameOrMillis, maybeMillis!);
+      } else {
+        return waitHandler(nameOrMillis);
+      }
+    } finally {
+      if (shouldSwitchToExecutionMode) {
+        this.executionContext._durableExecutionMode =
+          DurableExecutionMode.ExecutionMode;
+      }
+    }
+  }
+
+  setCustomLogger(logger: Logger): void {
+    this.contextLogger = logger;
+  }
+
+  createCallback<T>(
     nameOrConfig?: string | CreateCallbackConfig,
     maybeConfig?: CreateCallbackConfig,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<CreateCallbackResult<T>> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
     const callbackFactory = createCallbackFactory(
-      executionContext,
-      checkpoint,
-      createStepId,
-      hasRunningOperations,
+      this.executionContext,
+      this.checkpoint,
+      this.createStepId.bind(this),
+      this.hasRunningOperations.bind(this),
     );
     try {
       return callbackFactory(nameOrConfig, maybeConfig);
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const waitForCallback: DurableContext["waitForCallback"] = (
+  waitForCallback<T>(
     nameOrSubmitter?: string | undefined | WaitForCallbackSubmitterFunc,
     submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig,
     maybeConfig?: WaitForCallbackConfig,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<T> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
     const waitForCallbackHandler = createWaitForCallbackHandler(
-      executionContext,
-      runInChildContext,
+      this.executionContext,
+      this.runInChildContext.bind(this),
     );
     try {
       return waitForCallbackHandler(
@@ -274,25 +325,77 @@ export const createDurableContext = (
       );
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const map: DurableContext["map"] = <TInput, TOutput>(
+  waitForCondition<T>(
+    nameOrCheckFunc: string | undefined | WaitForConditionCheckFunc<T>,
+    checkFuncOrConfig?:
+      | WaitForConditionCheckFunc<T>
+      | WaitForConditionConfig<T>,
+    maybeConfig?: WaitForConditionConfig<T>,
+  ): Promise<T> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
+
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
+    if (nonResolvingPromise) return nonResolvingPromise;
+
+    const waitForConditionHandler = createWaitForConditionHandler(
+      this.executionContext,
+      this.checkpoint,
+      this.createStepId.bind(this),
+      this.createContextLogger,
+      this.addRunningOperation.bind(this),
+      this.removeRunningOperation.bind(this),
+      this.hasRunningOperations.bind(this),
+    );
+
+    try {
+      if (
+        typeof nameOrCheckFunc === "string" ||
+        nameOrCheckFunc === undefined
+      ) {
+        // First overload: waitForCondition(name, checkFunc, config)
+        return waitForConditionHandler(
+          nameOrCheckFunc,
+          checkFuncOrConfig as WaitForConditionCheckFunc<T>,
+          maybeConfig!,
+        );
+      } else {
+        // Second overload: waitForCondition(checkFunc, config)
+        return waitForConditionHandler(
+          nameOrCheckFunc,
+          checkFuncOrConfig as WaitForConditionConfig<T>,
+        );
+      }
+    } finally {
+      if (shouldSwitchToExecutionMode) {
+        this.executionContext._durableExecutionMode =
+          DurableExecutionMode.ExecutionMode;
+      }
+    }
+  }
+
+  map<TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],
     itemsOrMapFunc: TInput[] | MapFunc<TInput, TOutput>,
     mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput>,
     maybeConfig?: MapConfig<TInput>,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<BatchResult<TOutput>> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
-    const mapHandler = createMapHandler(executionContext, executeConcurrently);
+    const mapHandler = createMapHandler(
+      this.executionContext,
+      this.executeConcurrently.bind(this),
+    );
     try {
       return mapHandler(
         nameOrItems,
@@ -302,13 +405,13 @@ export const createDurableContext = (
       );
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const parallel: DurableContext["parallel"] = <T>(
+  parallel<T>(
     nameOrBranches:
       | string
       | undefined
@@ -317,47 +420,44 @@ export const createDurableContext = (
       | (ParallelFunc<T> | NamedParallelBranch<T>)[]
       | ParallelConfig,
     maybeConfig?: ParallelConfig,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<BatchResult<T>> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
     const parallelHandler = createParallelHandler(
-      executionContext,
-      executeConcurrently,
+      this.executionContext,
+      this.executeConcurrently.bind(this),
     );
     try {
       return parallelHandler(nameOrBranches, branchesOrConfig, maybeConfig);
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const executeConcurrently: DurableContext["executeConcurrently"] = <
-    TItem,
-    TResult,
-  >(
+  executeConcurrently<TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
       | ConcurrentExecutor<TItem, TResult>,
     executorOrConfig?: ConcurrentExecutor<TItem, TResult> | ConcurrencyConfig,
     maybeConfig?: ConcurrencyConfig,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
+  ): Promise<BatchResult<TResult>> {
+    const shouldSwitchToExecutionMode = this.captureExecutionState();
 
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
+    this.checkAndUpdateReplayMode();
+    const nonResolvingPromise = this.checkForNonResolvingPromise();
     if (nonResolvingPromise) return nonResolvingPromise;
 
     const concurrentExecutionHandler = createConcurrentExecutionHandler(
-      executionContext,
-      runInChildContext,
+      this.executionContext,
+      this.runInChildContext.bind(this),
     );
     try {
       return concurrentExecutionHandler(
@@ -368,104 +468,29 @@ export const createDurableContext = (
       );
     } finally {
       if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
+        this.executionContext._durableExecutionMode =
           DurableExecutionMode.ExecutionMode;
       }
     }
-  };
+  }
 
-  const promise = createPromiseHandler(step);
+  get promise(): DurableContext["promise"] {
+    return createPromiseHandler(this.step.bind(this));
+  }
+}
 
-  const setCustomLogger = (logger: Logger): void => {
-    contextLogger = logger;
-  };
-
-  const wait: DurableContext["wait"] = (
-    nameOrMillis: string | number,
-    maybeMillis?: number,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
-
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
-    if (nonResolvingPromise) return nonResolvingPromise;
-
-    const waitHandler = createWaitHandler(
-      executionContext,
-      checkpoint,
-      createStepId,
-      hasRunningOperations,
-    );
-    try {
-      return waitHandler(nameOrMillis as any, maybeMillis as any);
-    } finally {
-      if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
-          DurableExecutionMode.ExecutionMode;
-      }
-    }
-  };
-
-  const waitForConditionHandler = createWaitForConditionHandler(
+export const createDurableContext = (
+  executionContext: ExecutionContext,
+  parentContext: Context,
+  stepPrefix?: string,
+  checkpointToken?: string,
+  inheritedLogger?: Logger | null,
+): DurableContext => {
+  return new DurableContextImpl(
     executionContext,
-    checkpoint,
-    createStepId,
-    createContextLogger,
-    addRunningOperation,
-    removeRunningOperation,
-    hasRunningOperations,
+    parentContext,
+    stepPrefix,
+    checkpointToken,
+    inheritedLogger,
   );
-
-  const waitForCondition: DurableContext["waitForCondition"] = <T>(
-    nameOrCheckFunc: string | undefined | any,
-    checkFuncOrConfig?: any,
-    maybeConfig?: any,
-  ) => {
-    const shouldSwitchToExecutionMode = captureExecutionState();
-
-    checkAndUpdateReplayMode();
-    const nonResolvingPromise = checkForNonResolvingPromise();
-    if (nonResolvingPromise) return nonResolvingPromise;
-
-    try {
-      return waitForConditionHandler(
-        nameOrCheckFunc,
-        checkFuncOrConfig,
-        maybeConfig,
-      );
-    } finally {
-      if (shouldSwitchToExecutionMode) {
-        executionContext._durableExecutionMode =
-          DurableExecutionMode.ExecutionMode;
-      }
-    }
-  };
-
-  const durableContext = {
-    ...parentContext,
-    _stepPrefix: stepPrefix,
-    _stepCounter: stepCounter,
-    _durableExecutionMode: executionContext._durableExecutionMode,
-    get logger(): Logger {
-      return createModeAwareLogger(
-        executionContext,
-        createContextLogger,
-        stepPrefix,
-      );
-    },
-    step,
-    invoke,
-    runInChildContext,
-    wait,
-    waitForCondition,
-    createCallback,
-    waitForCallback,
-    map,
-    parallel,
-    executeConcurrently,
-    promise,
-    setCustomLogger,
-  };
-
-  return durableContext as DurableContext;
 };

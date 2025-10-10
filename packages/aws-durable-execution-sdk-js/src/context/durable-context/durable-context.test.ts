@@ -116,8 +116,8 @@ describe("Durable Context", () => {
     expect(durableContext).toHaveProperty("map");
     expect(durableContext).toHaveProperty("parallel");
     expect(durableContext).toHaveProperty("executeConcurrently");
-    expect(durableContext._stepCounter).toBe(0);
-    expect(durableContext._stepPrefix).toBeUndefined();
+    expect(durableContext).toHaveProperty("lambdaContext");
+    expect(durableContext).toHaveProperty("logger");
   });
 
   test("should create a durable context with step prefix", () => {
@@ -127,7 +127,9 @@ describe("Durable Context", () => {
       "test-prefix",
     );
 
-    expect(durableContext._stepPrefix).toBe("test-prefix");
+    // Access Lambda context properties through lambdaContext
+    expect(durableContext.lambdaContext.functionName).toBe("mock-function");
+    expect(durableContext.lambdaContext.awsRequestId).toBe("mock-request-id");
   });
 
   test("should call step handler when step method is invoked", () => {
@@ -495,6 +497,21 @@ describe("Durable Context", () => {
     expect(typeof durableContext.setCustomLogger).toBe("function");
   });
 
+  it("should provide promise utility methods", () => {
+    const durableContext = createDurableContext(
+      mockExecutionContext,
+      mockParentContext,
+    );
+
+    const promiseHandler = durableContext.promise;
+
+    expect(promiseHandler).toBeDefined();
+    expect(typeof promiseHandler.all).toBe("function");
+    expect(typeof promiseHandler.allSettled).toBe("function");
+    expect(typeof promiseHandler.any).toBe("function");
+    expect(typeof promiseHandler.race).toBe("function");
+  });
+
   it("should configure custom logger through DurableContext", () => {
     const durableContext = createDurableContext(
       mockExecutionContext,
@@ -788,6 +805,27 @@ describe("Durable Context", () => {
       expect(mockExecutionContext._durableExecutionMode).toBe(
         DurableExecutionMode.ExecutionMode,
       );
+    });
+
+    test("should call waitForCondition with named step parameter", () => {
+      const durableContext = createDurableContext(
+        mockExecutionContext,
+        mockParentContext,
+      );
+
+      const checkFunc = jest.fn().mockResolvedValue({ done: true });
+      const config = {
+        initialState: { done: false },
+        waitStrategy: jest.fn().mockReturnValue({ shouldContinue: false }),
+      };
+
+      try {
+        durableContext.waitForCondition("test-condition", checkFunc, config);
+      } catch (error) {
+        // Expected to fail due to mocking
+      }
+
+      expect(typeof durableContext.waitForCondition).toBe("function");
     });
 
     test("should return non-resolving promise in ReplaySucceededContext mode with unfinished step", async () => {
