@@ -200,6 +200,7 @@ describe("Durable Context", () => {
       mockParentContext,
       expect.any(Function),
       expect.any(Function),
+      expect.any(Function),
     );
     expect(mockRunInChildContextHandler).toHaveBeenCalledWith(
       "test-block",

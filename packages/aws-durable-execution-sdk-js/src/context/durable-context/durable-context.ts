@@ -234,6 +234,7 @@ class DurableContextImpl implements DurableContext {
       this.lambdaContext,
       this.createStepId.bind(this),
       () => this.contextLogger || createDefaultLogger(),
+      createDurableContext,
     );
     try {
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
