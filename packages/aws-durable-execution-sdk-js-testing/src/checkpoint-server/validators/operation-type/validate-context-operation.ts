@@ -20,7 +20,7 @@ const allowedStatusToClose: (OperationStatus | undefined)[] = [
  */
 export function validateContextOperation(
   update: OperationUpdate,
-  operation: Operation | undefined
+  operation: Operation | undefined,
 ): void {
   switch (update.Action) {
     case OperationAction.START:

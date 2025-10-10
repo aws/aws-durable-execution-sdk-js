@@ -13,7 +13,7 @@ describe("test-runner/local/index.ts exports", () => {
     for (const key of durableRunnerKeys) {
       expect(indexKeys).toContain(key);
       expect((indexExports as Record<string, unknown>)[key]).toBe(
-        (localDurableTestRunnerExports as Record<string, unknown>)[key]
+        (localDurableTestRunnerExports as Record<string, unknown>)[key],
       );
     }
 

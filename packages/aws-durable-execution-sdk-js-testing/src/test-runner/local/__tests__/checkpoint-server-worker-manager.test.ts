@@ -18,7 +18,7 @@ const mockFs = fs as jest.Mocked<typeof fs>;
 
 function flushPromises() {
   return new Promise((resolve) =>
-    jest.requireActual<typeof import("timers")>("timers").setImmediate(resolve)
+    jest.requireActual<typeof import("timers")>("timers").setImmediate(resolve),
   );
 }
 
@@ -130,7 +130,7 @@ describe("CheckpointServerWorkerManager", () => {
       // From local/ directory: ../../checkpoint-server/index.ts
       const expectedDevPath = path.resolve(
         __dirname,
-        "../../../checkpoint-server/index.ts"
+        "../../../checkpoint-server/index.ts",
       );
 
       expect(MockWorker).toHaveBeenCalledWith(expectedDevPath, {
@@ -159,7 +159,7 @@ describe("CheckpointServerWorkerManager", () => {
       // From local/ directory: ./checkpoint-server/index.js
       const expectedProdPath = path.resolve(
         __dirname,
-        "../checkpoint-server/index.js"
+        "../checkpoint-server/index.js",
       );
 
       expect(MockWorker).toHaveBeenCalledWith(expectedProdPath, {
@@ -209,7 +209,7 @@ describe("CheckpointServerWorkerManager", () => {
 
       // Second setup should fail
       await expect(manager.setup()).rejects.toThrow(
-        "Worker thread is already running"
+        "Worker thread is already running",
       );
     });
 
@@ -227,7 +227,7 @@ describe("CheckpointServerWorkerManager", () => {
         jest.advanceTimersByTime(4100);
 
         await expect(setupPromise).rejects.toThrow(
-          "Starting the server timed out"
+          "Starting the server timed out",
         );
       } finally {
         jest.useRealTimers();
@@ -262,7 +262,7 @@ describe("CheckpointServerWorkerManager", () => {
       });
 
       await expect(manager.setup()).rejects.toThrow(
-        "Unknown start response received"
+        "Unknown start response received",
       );
     });
   });
@@ -406,7 +406,7 @@ describe("CheckpointServerWorkerManager", () => {
 
       expect(console.warn).toHaveBeenCalledWith(
         "There was a worker error: ",
-        testError
+        testError,
       );
       expect(manager.getServerInfo()).toBeNull(); // Worker should be nullified
     });
@@ -468,7 +468,7 @@ describe("CheckpointServerWorkerManager", () => {
       exitHandler!(0);
 
       expect(console.warn).not.toHaveBeenCalledWith(
-        expect.stringContaining("Worker exited with code:")
+        expect.stringContaining("Worker exited with code:"),
       );
       expect(manager.getServerInfo()).toBeNull(); // Worker should still be nullified
     });
@@ -529,7 +529,7 @@ describe("CheckpointServerWorkerManager", () => {
 
         // Setup should timeout, teardown should handle gracefully
         await expect(setupPromise).rejects.toThrow(
-          "Starting the server timed out"
+          "Starting the server timed out",
         );
         await expect(teardownPromise).resolves.toBeUndefined();
       } finally {
@@ -626,7 +626,7 @@ describe("CheckpointServerWorkerManager", () => {
 
       const setupPromise = manager.setup();
 
-      await flushPromises()
+      await flushPromises();
 
       // Trigger worker error during startup
       const testError = new Error("Worker startup error");

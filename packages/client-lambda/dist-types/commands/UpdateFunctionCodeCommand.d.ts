@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { FunctionConfiguration, UpdateFunctionCodeRequest } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  FunctionConfiguration,
+  UpdateFunctionCodeRequest,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link UpdateFunctionCodeCommand}.
  */
-export interface UpdateFunctionCodeCommandInput extends UpdateFunctionCodeRequest {
-}
+export interface UpdateFunctionCodeCommandInput
+  extends UpdateFunctionCodeRequest {}
 /**
  * @public
  *
  * The output of {@link UpdateFunctionCodeCommand}.
  */
-export interface UpdateFunctionCodeCommandOutput extends FunctionConfiguration, __MetadataBearer {
-}
+export interface UpdateFunctionCodeCommandOutput
+  extends FunctionConfiguration,
+    __MetadataBearer {}
 declare const UpdateFunctionCodeCommand_base: {
-    new (input: UpdateFunctionCodeCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionCodeCommandInput, UpdateFunctionCodeCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: UpdateFunctionCodeCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionCodeCommandInput, UpdateFunctionCodeCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: UpdateFunctionCodeCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateFunctionCodeCommandInput,
+    UpdateFunctionCodeCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: UpdateFunctionCodeCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateFunctionCodeCommandInput,
+    UpdateFunctionCodeCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Updates a Lambda function's code. If code signing is enabled for the function, the code package must be signed by a trusted publisher. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-codesigning.html">Configuring code signing for Lambda</a>.</p> <p>If the function's package type is <code>Image</code>, then you must specify the code package in <code>ImageUri</code> as the URI of a <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html">container image</a> in the Amazon ECR registry.</p> <p>If the function's package type is <code>Zip</code>, then you must specify the deployment package as a <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html#gettingstarted-package-zip">.zip file archive</a>. Enter the Amazon S3 bucket and key of the code .zip file location. You can also provide the function code inline using the <code>ZipFile</code> field.</p> <p>The code in the deployment package must be compatible with the target instruction set architecture of the function (<code>x86-64</code> or <code>arm64</code>).</p> <p>The function's code is locked when you publish a version. You can't modify the code of a published version, only the unpublished version.</p> <note> <p>For a function defined as a container image, Lambda resolves the image tag to an image digest. In Amazon ECR, if you update the image tag to a new image, Lambda does not automatically update the function.</p> </note>
@@ -238,15 +262,15 @@ declare const UpdateFunctionCodeCommand_base: {
  * @public
  */
 export declare class UpdateFunctionCodeCommand extends UpdateFunctionCodeCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: UpdateFunctionCodeRequest;
-            output: FunctionConfiguration;
-        };
-        sdk: {
-            input: UpdateFunctionCodeCommandInput;
-            output: UpdateFunctionCodeCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: UpdateFunctionCodeRequest;
+      output: FunctionConfiguration;
     };
+    sdk: {
+      input: UpdateFunctionCodeCommandInput;
+      output: UpdateFunctionCodeCommandOutput;
+    };
+  };
 }

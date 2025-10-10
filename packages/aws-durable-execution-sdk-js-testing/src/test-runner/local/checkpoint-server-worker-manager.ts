@@ -83,8 +83,8 @@ export class CheckpointServerWorkerManager {
           new Error(
             response.type === WorkerResponseType.ERROR
               ? response.error
-              : "Unknown start response received"
-          )
+              : "Unknown start response received",
+          ),
         );
       });
     });
@@ -122,8 +122,8 @@ export class CheckpointServerWorkerManager {
           new Error(
             response.type === WorkerResponseType.ERROR
               ? response.error
-              : "Unknown stop response received"
-          )
+              : "Unknown stop response received",
+          ),
         );
       });
 
@@ -134,11 +134,11 @@ export class CheckpointServerWorkerManager {
   private async getWorkerPath(): Promise<string> {
     const devWorkerPath = path.resolve(
       __dirname,
-      "../../checkpoint-server/index.ts"
+      "../../checkpoint-server/index.ts",
     );
     const prodWorkerPath = path.resolve(
       __dirname,
-      "./checkpoint-server/index.js"
+      "./checkpoint-server/index.js",
     );
 
     const isDev = await access(devWorkerPath, constants.F_OK)

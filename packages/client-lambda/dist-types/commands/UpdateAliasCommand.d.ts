@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { AliasConfiguration, UpdateAliasRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link UpdateAliasCommand}.
  */
-export interface UpdateAliasCommandInput extends UpdateAliasRequest {
-}
+export interface UpdateAliasCommandInput extends UpdateAliasRequest {}
 /**
  * @public
  *
  * The output of {@link UpdateAliasCommand}.
  */
-export interface UpdateAliasCommandOutput extends AliasConfiguration, __MetadataBearer {
-}
+export interface UpdateAliasCommandOutput
+  extends AliasConfiguration,
+    __MetadataBearer {}
 declare const UpdateAliasCommand_base: {
-    new (input: UpdateAliasCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateAliasCommandInput, UpdateAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: UpdateAliasCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateAliasCommandInput, UpdateAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: UpdateAliasCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateAliasCommandInput,
+    UpdateAliasCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: UpdateAliasCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateAliasCommandInput,
+    UpdateAliasCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Updates the configuration of a Lambda function <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html">alias</a>.</p>
@@ -127,15 +147,15 @@ declare const UpdateAliasCommand_base: {
  * @public
  */
 export declare class UpdateAliasCommand extends UpdateAliasCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: UpdateAliasRequest;
-            output: AliasConfiguration;
-        };
-        sdk: {
-            input: UpdateAliasCommandInput;
-            output: UpdateAliasCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: UpdateAliasRequest;
+      output: AliasConfiguration;
     };
+    sdk: {
+      input: UpdateAliasCommandInput;
+      output: UpdateAliasCommandOutput;
+    };
+  };
 }

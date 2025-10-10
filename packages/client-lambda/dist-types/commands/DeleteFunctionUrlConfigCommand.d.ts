@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { DeleteFunctionUrlConfigRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link DeleteFunctionUrlConfigCommand}.
  */
-export interface DeleteFunctionUrlConfigCommandInput extends DeleteFunctionUrlConfigRequest {
-}
+export interface DeleteFunctionUrlConfigCommandInput
+  extends DeleteFunctionUrlConfigRequest {}
 /**
  * @public
  *
  * The output of {@link DeleteFunctionUrlConfigCommand}.
  */
-export interface DeleteFunctionUrlConfigCommandOutput extends __MetadataBearer {
-}
+export interface DeleteFunctionUrlConfigCommandOutput
+  extends __MetadataBearer {}
 declare const DeleteFunctionUrlConfigCommand_base: {
-    new (input: DeleteFunctionUrlConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionUrlConfigCommandInput, DeleteFunctionUrlConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: DeleteFunctionUrlConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionUrlConfigCommandInput, DeleteFunctionUrlConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: DeleteFunctionUrlConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteFunctionUrlConfigCommandInput,
+    DeleteFunctionUrlConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: DeleteFunctionUrlConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteFunctionUrlConfigCommandInput,
+    DeleteFunctionUrlConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Deletes a Lambda function URL. When you delete a function URL, you can't recover it. Creating a new function URL results in a different URL address.</p>
@@ -71,15 +91,15 @@ declare const DeleteFunctionUrlConfigCommand_base: {
  * @public
  */
 export declare class DeleteFunctionUrlConfigCommand extends DeleteFunctionUrlConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: DeleteFunctionUrlConfigRequest;
-            output: {};
-        };
-        sdk: {
-            input: DeleteFunctionUrlConfigCommandInput;
-            output: DeleteFunctionUrlConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: DeleteFunctionUrlConfigRequest;
+      output: {};
     };
+    sdk: {
+      input: DeleteFunctionUrlConfigCommandInput;
+      output: DeleteFunctionUrlConfigCommandOutput;
+    };
+  };
 }

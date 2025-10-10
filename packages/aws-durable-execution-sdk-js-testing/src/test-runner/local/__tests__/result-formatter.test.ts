@@ -23,7 +23,7 @@ describe("ResultFormatter", () => {
       new OperationWaitManager(),
       mockOperationIndex,
       mockApiClient,
-      jest.fn()
+      jest.fn(),
     ) as jest.Mocked<LocalOperationStorage>;
     resultFormatter = new ResultFormatter<{ success: boolean }>();
     mockWaitManager = new OperationWaitManager();
@@ -45,7 +45,7 @@ describe("ResultFormatter", () => {
               Status: OperationStatus.SUCCEEDED,
             },
             events: [],
-          }
+          },
         ),
       ];
 
@@ -66,7 +66,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        mockInvocations
+        mockInvocations,
       );
 
       expect(testResult.getOperations()).toEqual(mockOperations);
@@ -90,7 +90,7 @@ describe("ResultFormatter", () => {
             Status: OperationStatus.SUCCEEDED,
           },
           events: [],
-        }
+        },
       );
 
       const failedOp = new OperationWithData(
@@ -105,7 +105,7 @@ describe("ResultFormatter", () => {
             Status: OperationStatus.FAILED,
           },
           events: [],
-        }
+        },
       );
 
       const mockOperations = [succeededOp, failedOp];
@@ -120,7 +120,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       // Test filtering by SUCCEEDED status
@@ -165,7 +165,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        mockInvocations
+        mockInvocations,
       );
 
       const returnedInvocations = testResult.getInvocations();
@@ -188,7 +188,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getResult()).toEqual("");
@@ -206,7 +206,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getResult()).toEqual("raw-string-value");
@@ -224,7 +224,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getResult()).toEqual("{ invalid json");
@@ -258,8 +258,8 @@ describe("ResultFormatter", () => {
             mockWaitManager,
             mockOperationIndex,
             mockApiClient,
-            checkpointOperation
-          )
+            checkpointOperation,
+          ),
       );
 
       mockOperationStorage.getOperations.mockReturnValue(mockOperations);
@@ -273,7 +273,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getOperations()).toEqual(mockOperations);
@@ -302,7 +302,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getResult()).toEqual(complexData);
@@ -318,7 +318,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(() => testResult.getResult()).toThrow("Execution failed");
@@ -334,7 +334,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       let thrownError: Error;
@@ -363,7 +363,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getError()).toEqual({
@@ -381,11 +381,11 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(() => testResult.getError()).toThrow(
-        "Cannot get error for succeeded execution"
+        "Cannot get error for succeeded execution",
       );
     });
 
@@ -399,11 +399,11 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(() => testResult.getError()).toThrow(
-        "Could not find error result"
+        "Could not find error result",
       );
     });
 
@@ -417,11 +417,11 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(() => testResult.getError()).toThrow(
-        "Could not find error result"
+        "Could not find error result",
       );
     });
 
@@ -441,7 +441,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getError()).toEqual({
@@ -479,7 +479,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         mockEvents,
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getHistoryEvents()).toEqual(mockEvents);
@@ -497,7 +497,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getHistoryEvents()).toEqual([]);
@@ -517,7 +517,7 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        []
+        [],
       );
 
       expect(testResult.getStatus()).toBe(OperationStatus.SUCCEEDED);

@@ -66,7 +66,7 @@ export class CloudDurableTestRunner<ResultType>
     this.operationStorage = new OperationStorage(
       this.waitManager,
       this.indexedOperations,
-      this.apiClient
+      this.apiClient,
     );
     this.config = {
       pollInterval: 1000,
@@ -81,7 +81,7 @@ export class CloudDurableTestRunner<ResultType>
         FunctionName: this.functionArn,
         Payload: params?.payload ? JSON.stringify(params.payload) : undefined,
         InvocationType: this.config.invocationType,
-      })
+      }),
     );
 
     const durableExecutionArn = asyncInvokeResult.DurableExecutionArn;
@@ -108,7 +108,7 @@ export class CloudDurableTestRunner<ResultType>
       onOperationEventsReceived: (operationEvents: OperationEvents[]) => {
         this.waitManager.handleCheckpointReceived(
           operationEvents,
-          this.operationStorage.getTrackedOperations()
+          this.operationStorage.getTrackedOperations(),
         );
         this.operationStorage.populateOperations(operationEvents);
       },
@@ -123,7 +123,7 @@ export class CloudDurableTestRunner<ResultType>
         lambdaResponse,
         historyPoller.getEvents(),
         this.operationStorage,
-        []
+        [],
       );
     } finally {
       historyPoller.stopPolling();
@@ -140,7 +140,7 @@ export class CloudDurableTestRunner<ResultType>
       this.indexedOperations,
       this.apiClient,
       this.config.invocationType,
-      this.indexedOperations.getByIndex(index)
+      this.indexedOperations.getByIndex(index),
     );
     this.operationStorage.registerOperation({
       operation,
@@ -153,14 +153,14 @@ export class CloudDurableTestRunner<ResultType>
 
   getOperationByNameAndIndex<T>(
     name: string,
-    index: number
+    index: number,
   ): CloudOperation<T> {
     const operation = new CloudOperation<T>(
       this.waitManager,
       this.indexedOperations,
       this.apiClient,
       this.config.invocationType,
-      this.indexedOperations.getByNameAndIndex(name, index)
+      this.indexedOperations.getByNameAndIndex(name, index),
     );
     this.operationStorage.registerOperation({
       operation,
@@ -178,7 +178,7 @@ export class CloudDurableTestRunner<ResultType>
       this.indexedOperations,
       this.apiClient,
       this.config.invocationType,
-      this.indexedOperations.getById(id)
+      this.indexedOperations.getById(id),
     );
     this.operationStorage.registerOperation({
       operation,
@@ -194,7 +194,7 @@ export class CloudDurableTestRunner<ResultType>
     this.operationStorage = new OperationStorage(
       this.waitManager,
       this.indexedOperations,
-      this.apiClient
+      this.apiClient,
     );
   }
 }

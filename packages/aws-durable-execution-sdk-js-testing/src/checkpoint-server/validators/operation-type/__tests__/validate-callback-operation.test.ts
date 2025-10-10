@@ -62,7 +62,7 @@ describe("validateCallbackOperation", () => {
       expect(() => {
         validateCallbackOperation(update, undefined);
       }).toThrow(
-        "Cannot cancel a CALLBACK that does not exist or has already completed."
+        "Cannot cancel a CALLBACK that does not exist or has already completed.",
       );
     });
 
@@ -76,7 +76,7 @@ describe("validateCallbackOperation", () => {
       expect(() => {
         validateCallbackOperation(update, currentOperation);
       }).toThrow(
-        "Cannot cancel a CALLBACK that does not exist or has already completed."
+        "Cannot cancel a CALLBACK that does not exist or has already completed.",
       );
     });
   });

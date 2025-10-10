@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { FunctionConfiguration, PublishVersionRequest } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  FunctionConfiguration,
+  PublishVersionRequest,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,35 @@ export { $Command };
  *
  * The input for {@link PublishVersionCommand}.
  */
-export interface PublishVersionCommandInput extends PublishVersionRequest {
-}
+export interface PublishVersionCommandInput extends PublishVersionRequest {}
 /**
  * @public
  *
  * The output of {@link PublishVersionCommand}.
  */
-export interface PublishVersionCommandOutput extends FunctionConfiguration, __MetadataBearer {
-}
+export interface PublishVersionCommandOutput
+  extends FunctionConfiguration,
+    __MetadataBearer {}
 declare const PublishVersionCommand_base: {
-    new (input: PublishVersionCommandInput): import("@smithy/smithy-client").CommandImpl<PublishVersionCommandInput, PublishVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: PublishVersionCommandInput): import("@smithy/smithy-client").CommandImpl<PublishVersionCommandInput, PublishVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: PublishVersionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PublishVersionCommandInput,
+    PublishVersionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: PublishVersionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PublishVersionCommandInput,
+    PublishVersionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Creates a <a href="https://docs.aws.amazon.com/lambda/latest/dg/versioning-aliases.html">version</a> from the current code and configuration of a function. Use versions to create a snapshot of your function code and configuration that doesn't change.</p> <p>Lambda doesn't publish a version if the function's configuration and code haven't changed since the last version. Use <a>UpdateFunctionCode</a> or <a>UpdateFunctionConfiguration</a> to update the function before publishing a version.</p> <p>Clients can invoke versions directly or with an alias. To create an alias, use <a>CreateAlias</a>.</p>
@@ -229,15 +252,15 @@ declare const PublishVersionCommand_base: {
  * @public
  */
 export declare class PublishVersionCommand extends PublishVersionCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: PublishVersionRequest;
-            output: FunctionConfiguration;
-        };
-        sdk: {
-            input: PublishVersionCommandInput;
-            output: PublishVersionCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: PublishVersionRequest;
+      output: FunctionConfiguration;
     };
+    sdk: {
+      input: PublishVersionCommandInput;
+      output: PublishVersionCommandOutput;
+    };
+  };
 }

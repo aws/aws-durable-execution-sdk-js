@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { UpdateCodeSigningConfigRequest, UpdateCodeSigningConfigResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  UpdateCodeSigningConfigRequest,
+  UpdateCodeSigningConfigResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link UpdateCodeSigningConfigCommand}.
  */
-export interface UpdateCodeSigningConfigCommandInput extends UpdateCodeSigningConfigRequest {
-}
+export interface UpdateCodeSigningConfigCommandInput
+  extends UpdateCodeSigningConfigRequest {}
 /**
  * @public
  *
  * The output of {@link UpdateCodeSigningConfigCommand}.
  */
-export interface UpdateCodeSigningConfigCommandOutput extends UpdateCodeSigningConfigResponse, __MetadataBearer {
-}
+export interface UpdateCodeSigningConfigCommandOutput
+  extends UpdateCodeSigningConfigResponse,
+    __MetadataBearer {}
 declare const UpdateCodeSigningConfigCommand_base: {
-    new (input: UpdateCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateCodeSigningConfigCommandInput, UpdateCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: UpdateCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateCodeSigningConfigCommandInput, UpdateCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: UpdateCodeSigningConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateCodeSigningConfigCommandInput,
+    UpdateCodeSigningConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: UpdateCodeSigningConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    UpdateCodeSigningConfigCommandInput,
+    UpdateCodeSigningConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Update the code signing configuration. Changes to the code signing configuration take effect the next time a user tries to deploy a code package to the function. </p>
@@ -91,15 +115,15 @@ declare const UpdateCodeSigningConfigCommand_base: {
  * @public
  */
 export declare class UpdateCodeSigningConfigCommand extends UpdateCodeSigningConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: UpdateCodeSigningConfigRequest;
-            output: UpdateCodeSigningConfigResponse;
-        };
-        sdk: {
-            input: UpdateCodeSigningConfigCommandInput;
-            output: UpdateCodeSigningConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: UpdateCodeSigningConfigRequest;
+      output: UpdateCodeSigningConfigResponse;
     };
+    sdk: {
+      input: UpdateCodeSigningConfigCommandInput;
+      output: UpdateCodeSigningConfigCommandOutput;
+    };
+  };
 }

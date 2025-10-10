@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { GetPolicyRequest, GetPolicyResponse } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link GetPolicyCommand}.
  */
-export interface GetPolicyCommandInput extends GetPolicyRequest {
-}
+export interface GetPolicyCommandInput extends GetPolicyRequest {}
 /**
  * @public
  *
  * The output of {@link GetPolicyCommand}.
  */
-export interface GetPolicyCommandOutput extends GetPolicyResponse, __MetadataBearer {
-}
+export interface GetPolicyCommandOutput
+  extends GetPolicyResponse,
+    __MetadataBearer {}
 declare const GetPolicyCommand_base: {
-    new (input: GetPolicyCommandInput): import("@smithy/smithy-client").CommandImpl<GetPolicyCommandInput, GetPolicyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: GetPolicyCommandInput): import("@smithy/smithy-client").CommandImpl<GetPolicyCommandInput, GetPolicyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: GetPolicyCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetPolicyCommandInput,
+    GetPolicyCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: GetPolicyCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetPolicyCommandInput,
+    GetPolicyCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns the <a href="https://docs.aws.amazon.com/lambda/latest/dg/access-control-resource-based.html">resource-based IAM policy</a> for a function, version, or alias.</p>
@@ -91,15 +111,15 @@ declare const GetPolicyCommand_base: {
  * @public
  */
 export declare class GetPolicyCommand extends GetPolicyCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: GetPolicyRequest;
-            output: GetPolicyResponse;
-        };
-        sdk: {
-            input: GetPolicyCommandInput;
-            output: GetPolicyCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: GetPolicyRequest;
+      output: GetPolicyResponse;
     };
+    sdk: {
+      input: GetPolicyCommandInput;
+      output: GetPolicyCommandOutput;
+    };
+  };
 }

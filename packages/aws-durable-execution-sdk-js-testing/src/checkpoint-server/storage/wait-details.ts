@@ -1,8 +1,4 @@
-import {
-  EventType,
-  OperationStatus,
-  Event,
-} from "@aws-sdk/client-lambda";
+import { EventType, OperationStatus, Event } from "@aws-sdk/client-lambda";
 import { OperationHistoryEventDetails } from "./types";
 
 export const waitHistoryDetails = {

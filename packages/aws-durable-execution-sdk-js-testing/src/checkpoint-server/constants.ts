@@ -26,7 +26,7 @@ export function getPollCheckpointDataPath(executionId: string): string {
 
 export function getUpdateCheckpointDataPath(
   executionId: string,
-  operationId: string
+  operationId: string,
 ): string {
   return `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`;
 }

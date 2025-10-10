@@ -14,7 +14,7 @@ jest.mock("../../utils/history-event-details");
 describe("EventProcessor", () => {
   let eventProcessor: EventProcessor;
   const mockGetHistoryEventDetail = jest.mocked(
-    historyEventDetails.getHistoryEventDetail
+    historyEventDetails.getHistoryEventDetail,
   );
 
   beforeEach(() => {
@@ -47,7 +47,7 @@ describe("EventProcessor", () => {
         eventType,
         operation,
         detailPlace,
-        details
+        details,
       );
 
       expect(result).toEqual({
@@ -80,13 +80,13 @@ describe("EventProcessor", () => {
         eventType,
         operation,
         detailPlace,
-        details
+        details,
       );
       const secondEvent = eventProcessor.createHistoryEvent(
         eventType,
         operation,
         detailPlace,
-        details
+        details,
       );
 
       expect(firstEvent.EventId).toBe(1);
@@ -115,7 +115,7 @@ describe("EventProcessor", () => {
         eventType,
         operation,
         detailPlace,
-        details
+        details,
       );
 
       expect(result.ExecutionFailedDetails).toEqual(details);
@@ -158,12 +158,12 @@ describe("EventProcessor", () => {
 
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.START,
-        OperationType.EXECUTION
+        OperationType.EXECUTION,
       );
       expect(mockHistoryDetails.getDetails).toHaveBeenCalledWith(
         update,
         operation,
-        { executionTimeout: undefined }
+        { executionTimeout: undefined },
       );
       expect(result).toEqual({
         EventType: EventType.ExecutionStarted,
@@ -202,7 +202,7 @@ describe("EventProcessor", () => {
       expect(mockHistoryDetails.getDetails).toHaveBeenCalledWith(
         update,
         operation,
-        { executionTimeout: 7200 }
+        { executionTimeout: 7200 },
       );
     });
 
@@ -222,7 +222,7 @@ describe("EventProcessor", () => {
       };
 
       expect(() => eventProcessor.processUpdate(update, operation)).toThrow(
-        "Could not create history event with Action=undefined and Type=EXECUTION"
+        "Could not create history event with Action=undefined and Type=EXECUTION",
       );
     });
 
@@ -242,7 +242,7 @@ describe("EventProcessor", () => {
       };
 
       expect(() => eventProcessor.processUpdate(update, operation)).toThrow(
-        "Could not create history event with Action=START and Type=undefined"
+        "Could not create history event with Action=START and Type=undefined",
       );
     });
 
@@ -289,7 +289,7 @@ describe("EventProcessor", () => {
 
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.START,
-        OperationType.STEP
+        OperationType.STEP,
       );
     });
 
@@ -313,7 +313,7 @@ describe("EventProcessor", () => {
 
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.FAIL,
-        OperationType.EXECUTION
+        OperationType.EXECUTION,
       );
     });
   });
@@ -332,12 +332,12 @@ describe("EventProcessor", () => {
     it("should return history details for valid action and type", () => {
       const result = EventProcessor.getHistoryDetailsFromUpdate(
         OperationAction.START,
-        OperationType.EXECUTION
+        OperationType.EXECUTION,
       );
 
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.START,
-        OperationType.EXECUTION
+        OperationType.EXECUTION,
       );
       expect(result).toBe(mockHistoryDetails);
     });
@@ -348,46 +348,46 @@ describe("EventProcessor", () => {
       expect(() =>
         EventProcessor.getHistoryDetailsFromUpdate(
           OperationAction.START,
-          OperationType.EXECUTION
-        )
+          OperationType.EXECUTION,
+        ),
       ).toThrow(
-        "Could not create history event with Action=START and Type=EXECUTION"
+        "Could not create history event with Action=START and Type=EXECUTION",
       );
     });
 
     it("should handle different combinations of action and type", () => {
       EventProcessor.getHistoryDetailsFromUpdate(
         OperationAction.SUCCEED,
-        OperationType.STEP
+        OperationType.STEP,
       );
 
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.SUCCEED,
-        OperationType.STEP
+        OperationType.STEP,
       );
     });
 
     it("should handle FAIL action with CONTEXT type", () => {
       EventProcessor.getHistoryDetailsFromUpdate(
         OperationAction.FAIL,
-        OperationType.CONTEXT
+        OperationType.CONTEXT,
       );
 
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.FAIL,
-        OperationType.CONTEXT
+        OperationType.CONTEXT,
       );
     });
 
     it("should handle RETRY action with STEP type", () => {
       EventProcessor.getHistoryDetailsFromUpdate(
         OperationAction.RETRY,
-        OperationType.STEP
+        OperationType.STEP,
       );
 
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.RETRY,
-        OperationType.STEP
+        OperationType.STEP,
       );
     });
   });
@@ -408,14 +408,14 @@ describe("EventProcessor", () => {
         EventType.ExecutionStarted,
         operation,
         "ExecutionStartedDetails",
-        { Input: { Payload: "test" } }
+        { Input: { Payload: "test" } },
       );
 
       const event2 = processor2.createHistoryEvent(
         EventType.ExecutionStarted,
         operation,
         "ExecutionStartedDetails",
-        { Input: { Payload: "test" } }
+        { Input: { Payload: "test" } },
       );
 
       expect(event1.EventId).toBe(1);
@@ -451,7 +451,7 @@ describe("EventProcessor", () => {
         EventType.ExecutionStarted,
         operation,
         "ExecutionStartedDetails",
-        { Input: { Payload: "test" } }
+        { Input: { Payload: "test" } },
       );
 
       // Create event using processUpdate
@@ -462,7 +462,7 @@ describe("EventProcessor", () => {
         EventType.ExecutionSucceeded,
         operation,
         "ExecutionSucceededDetails",
-        { Result: { Payload: "result" } }
+        { Result: { Payload: "result" } },
       );
 
       expect(event1.EventId).toBe(1);
@@ -549,7 +549,7 @@ describe("EventProcessor", () => {
         EventType.ExecutionStarted,
         operation,
         "ExecutionStartedDetails",
-        details
+        details,
       );
 
       expect(result.ExecutionStartedDetails).toEqual(details);

@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { DeleteFunctionEventInvokeConfigRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link DeleteFunctionEventInvokeConfigCommand}.
  */
-export interface DeleteFunctionEventInvokeConfigCommandInput extends DeleteFunctionEventInvokeConfigRequest {
-}
+export interface DeleteFunctionEventInvokeConfigCommandInput
+  extends DeleteFunctionEventInvokeConfigRequest {}
 /**
  * @public
  *
  * The output of {@link DeleteFunctionEventInvokeConfigCommand}.
  */
-export interface DeleteFunctionEventInvokeConfigCommandOutput extends __MetadataBearer {
-}
+export interface DeleteFunctionEventInvokeConfigCommandOutput
+  extends __MetadataBearer {}
 declare const DeleteFunctionEventInvokeConfigCommand_base: {
-    new (input: DeleteFunctionEventInvokeConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionEventInvokeConfigCommandInput, DeleteFunctionEventInvokeConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: DeleteFunctionEventInvokeConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionEventInvokeConfigCommandInput, DeleteFunctionEventInvokeConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: DeleteFunctionEventInvokeConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteFunctionEventInvokeConfigCommandInput,
+    DeleteFunctionEventInvokeConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: DeleteFunctionEventInvokeConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteFunctionEventInvokeConfigCommandInput,
+    DeleteFunctionEventInvokeConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Deletes the configuration for asynchronous invocation for a function, version, or alias.</p> <p>To configure options for asynchronous invocation, use <a>PutFunctionEventInvokeConfig</a>.</p>
@@ -88,15 +108,15 @@ declare const DeleteFunctionEventInvokeConfigCommand_base: {
  * @public
  */
 export declare class DeleteFunctionEventInvokeConfigCommand extends DeleteFunctionEventInvokeConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: DeleteFunctionEventInvokeConfigRequest;
-            output: {};
-        };
-        sdk: {
-            input: DeleteFunctionEventInvokeConfigCommandInput;
-            output: DeleteFunctionEventInvokeConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: DeleteFunctionEventInvokeConfigRequest;
+      output: {};
     };
+    sdk: {
+      input: DeleteFunctionEventInvokeConfigCommandInput;
+      output: DeleteFunctionEventInvokeConfigCommandOutput;
+    };
+  };
 }

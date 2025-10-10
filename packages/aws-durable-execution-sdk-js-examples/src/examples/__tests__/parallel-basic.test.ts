@@ -10,7 +10,7 @@ createTests({
       const execution = await runner.run();
 
       expect(runner.getOperation("parallel").getChildOperations()).toHaveLength(
-        3
+        3,
       );
     });
 

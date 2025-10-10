@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { GetLayerVersionPolicyRequest, GetLayerVersionPolicyResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  GetLayerVersionPolicyRequest,
+  GetLayerVersionPolicyResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link GetLayerVersionPolicyCommand}.
  */
-export interface GetLayerVersionPolicyCommandInput extends GetLayerVersionPolicyRequest {
-}
+export interface GetLayerVersionPolicyCommandInput
+  extends GetLayerVersionPolicyRequest {}
 /**
  * @public
  *
  * The output of {@link GetLayerVersionPolicyCommand}.
  */
-export interface GetLayerVersionPolicyCommandOutput extends GetLayerVersionPolicyResponse, __MetadataBearer {
-}
+export interface GetLayerVersionPolicyCommandOutput
+  extends GetLayerVersionPolicyResponse,
+    __MetadataBearer {}
 declare const GetLayerVersionPolicyCommand_base: {
-    new (input: GetLayerVersionPolicyCommandInput): import("@smithy/smithy-client").CommandImpl<GetLayerVersionPolicyCommandInput, GetLayerVersionPolicyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: GetLayerVersionPolicyCommandInput): import("@smithy/smithy-client").CommandImpl<GetLayerVersionPolicyCommandInput, GetLayerVersionPolicyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: GetLayerVersionPolicyCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetLayerVersionPolicyCommandInput,
+    GetLayerVersionPolicyCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: GetLayerVersionPolicyCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetLayerVersionPolicyCommandInput,
+    GetLayerVersionPolicyCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns the permission policy for a version of an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a>. For more information, see <a>AddLayerVersionPermission</a>.</p>
@@ -74,15 +98,15 @@ declare const GetLayerVersionPolicyCommand_base: {
  * @public
  */
 export declare class GetLayerVersionPolicyCommand extends GetLayerVersionPolicyCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: GetLayerVersionPolicyRequest;
-            output: GetLayerVersionPolicyResponse;
-        };
-        sdk: {
-            input: GetLayerVersionPolicyCommandInput;
-            output: GetLayerVersionPolicyCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: GetLayerVersionPolicyRequest;
+      output: GetLayerVersionPolicyResponse;
     };
+    sdk: {
+      input: GetLayerVersionPolicyCommandInput;
+      output: GetLayerVersionPolicyCommandOutput;
+    };
+  };
 }

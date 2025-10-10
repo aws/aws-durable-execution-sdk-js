@@ -28,7 +28,7 @@ createTests({
       });
 
       expect(execution.getResult()).toStrictEqual(
-        getExpectedResult(INPUT.data)
+        getExpectedResult(INPUT.data),
       );
     });
 
@@ -36,7 +36,7 @@ createTests({
       const execution = await runner.run();
 
       expect(
-        runner.getOperation("process-data").getStepDetails()?.result
+        runner.getOperation("process-data").getStepDetails()?.result,
       ).toStrictEqual(getExpectedResult(DEFAULT));
     });
   },

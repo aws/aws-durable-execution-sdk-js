@@ -9,7 +9,7 @@ export type Tagged<BaseType, Tag extends PropertyKey> = BaseType & {
 export type ConvertDatesToNumbers<T> = T extends Date
   ? number
   : T extends (infer U)[]
-  ? ConvertDatesToNumbers<U>[]
-  : T extends object
-  ? { [K in keyof T]: ConvertDatesToNumbers<T[K]> }
-  : T;
+    ? ConvertDatesToNumbers<U>[]
+    : T extends object
+      ? { [K in keyof T]: ConvertDatesToNumbers<T[K]> }
+      : T;

@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { Concurrency, PutFunctionConcurrencyRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,36 @@ export { $Command };
  *
  * The input for {@link PutFunctionConcurrencyCommand}.
  */
-export interface PutFunctionConcurrencyCommandInput extends PutFunctionConcurrencyRequest {
-}
+export interface PutFunctionConcurrencyCommandInput
+  extends PutFunctionConcurrencyRequest {}
 /**
  * @public
  *
  * The output of {@link PutFunctionConcurrencyCommand}.
  */
-export interface PutFunctionConcurrencyCommandOutput extends Concurrency, __MetadataBearer {
-}
+export interface PutFunctionConcurrencyCommandOutput
+  extends Concurrency,
+    __MetadataBearer {}
 declare const PutFunctionConcurrencyCommand_base: {
-    new (input: PutFunctionConcurrencyCommandInput): import("@smithy/smithy-client").CommandImpl<PutFunctionConcurrencyCommandInput, PutFunctionConcurrencyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: PutFunctionConcurrencyCommandInput): import("@smithy/smithy-client").CommandImpl<PutFunctionConcurrencyCommandInput, PutFunctionConcurrencyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: PutFunctionConcurrencyCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PutFunctionConcurrencyCommandInput,
+    PutFunctionConcurrencyCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: PutFunctionConcurrencyCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    PutFunctionConcurrencyCommandInput,
+    PutFunctionConcurrencyCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Sets the maximum number of simultaneous executions for a function, and reserves capacity for that concurrency level.</p> <p>Concurrency settings apply to the function as a whole, including all published versions and the unpublished version. Reserving concurrency both ensures that your function has capacity to process the specified number of events simultaneously, and prevents it from scaling beyond that level. Use <a>GetFunction</a> to see the current setting for a function.</p> <p>Use <a>GetAccountSettings</a> to see your Regional concurrency limit. You can reserve concurrency for as many functions as you like, as long as you leave at least 100 simultaneous executions unreserved for functions that aren't configured with a per-function limit. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-scaling.html">Lambda function scaling</a>.</p>
@@ -92,15 +113,15 @@ declare const PutFunctionConcurrencyCommand_base: {
  * @public
  */
 export declare class PutFunctionConcurrencyCommand extends PutFunctionConcurrencyCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: PutFunctionConcurrencyRequest;
-            output: Concurrency;
-        };
-        sdk: {
-            input: PutFunctionConcurrencyCommandInput;
-            output: PutFunctionConcurrencyCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: PutFunctionConcurrencyRequest;
+      output: Concurrency;
     };
+    sdk: {
+      input: PutFunctionConcurrencyCommandInput;
+      output: PutFunctionConcurrencyCommandOutput;
+    };
+  };
 }

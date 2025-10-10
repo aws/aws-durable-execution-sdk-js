@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { AddLayerVersionPermissionRequest, AddLayerVersionPermissionResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  AddLayerVersionPermissionRequest,
+  AddLayerVersionPermissionResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link AddLayerVersionPermissionCommand}.
  */
-export interface AddLayerVersionPermissionCommandInput extends AddLayerVersionPermissionRequest {
-}
+export interface AddLayerVersionPermissionCommandInput
+  extends AddLayerVersionPermissionRequest {}
 /**
  * @public
  *
  * The output of {@link AddLayerVersionPermissionCommand}.
  */
-export interface AddLayerVersionPermissionCommandOutput extends AddLayerVersionPermissionResponse, __MetadataBearer {
-}
+export interface AddLayerVersionPermissionCommandOutput
+  extends AddLayerVersionPermissionResponse,
+    __MetadataBearer {}
 declare const AddLayerVersionPermissionCommand_base: {
-    new (input: AddLayerVersionPermissionCommandInput): import("@smithy/smithy-client").CommandImpl<AddLayerVersionPermissionCommandInput, AddLayerVersionPermissionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: AddLayerVersionPermissionCommandInput): import("@smithy/smithy-client").CommandImpl<AddLayerVersionPermissionCommandInput, AddLayerVersionPermissionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: AddLayerVersionPermissionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    AddLayerVersionPermissionCommandInput,
+    AddLayerVersionPermissionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: AddLayerVersionPermissionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    AddLayerVersionPermissionCommandInput,
+    AddLayerVersionPermissionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Adds permissions to the resource-based policy of a version of an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a>. Use this action to grant layer usage permission to other accounts. You can grant permission to a single account, all accounts in an organization, or all Amazon Web Services accounts. </p> <p>To revoke permission, call <a>RemoveLayerVersionPermission</a> with the statement ID that you specified when you added it.</p>
@@ -108,15 +132,15 @@ declare const AddLayerVersionPermissionCommand_base: {
  * @public
  */
 export declare class AddLayerVersionPermissionCommand extends AddLayerVersionPermissionCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: AddLayerVersionPermissionRequest;
-            output: AddLayerVersionPermissionResponse;
-        };
-        sdk: {
-            input: AddLayerVersionPermissionCommandInput;
-            output: AddLayerVersionPermissionCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: AddLayerVersionPermissionRequest;
+      output: AddLayerVersionPermissionResponse;
     };
+    sdk: {
+      input: AddLayerVersionPermissionCommandInput;
+      output: AddLayerVersionPermissionCommandOutput;
+    };
+  };
 }

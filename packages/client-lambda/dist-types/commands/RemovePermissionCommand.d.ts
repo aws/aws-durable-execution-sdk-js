@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { RemovePermissionRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,33 @@ export { $Command };
  *
  * The input for {@link RemovePermissionCommand}.
  */
-export interface RemovePermissionCommandInput extends RemovePermissionRequest {
-}
+export interface RemovePermissionCommandInput extends RemovePermissionRequest {}
 /**
  * @public
  *
  * The output of {@link RemovePermissionCommand}.
  */
-export interface RemovePermissionCommandOutput extends __MetadataBearer {
-}
+export interface RemovePermissionCommandOutput extends __MetadataBearer {}
 declare const RemovePermissionCommand_base: {
-    new (input: RemovePermissionCommandInput): import("@smithy/smithy-client").CommandImpl<RemovePermissionCommandInput, RemovePermissionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: RemovePermissionCommandInput): import("@smithy/smithy-client").CommandImpl<RemovePermissionCommandInput, RemovePermissionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: RemovePermissionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    RemovePermissionCommandInput,
+    RemovePermissionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: RemovePermissionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    RemovePermissionCommandInput,
+    RemovePermissionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Revokes function-use permission from an Amazon Web Services service or another Amazon Web Services account. You can get the ID of the statement from the output of <a>GetPolicy</a>.</p>
@@ -91,15 +109,15 @@ declare const RemovePermissionCommand_base: {
  * @public
  */
 export declare class RemovePermissionCommand extends RemovePermissionCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: RemovePermissionRequest;
-            output: {};
-        };
-        sdk: {
-            input: RemovePermissionCommandInput;
-            output: RemovePermissionCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: RemovePermissionRequest;
+      output: {};
     };
+    sdk: {
+      input: RemovePermissionCommandInput;
+      output: RemovePermissionCommandOutput;
+    };
+  };
 }

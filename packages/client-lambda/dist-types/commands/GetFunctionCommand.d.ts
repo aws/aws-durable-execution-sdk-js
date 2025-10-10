@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { GetFunctionRequest, GetFunctionResponse } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link GetFunctionCommand}.
  */
-export interface GetFunctionCommandInput extends GetFunctionRequest {
-}
+export interface GetFunctionCommandInput extends GetFunctionRequest {}
 /**
  * @public
  *
  * The output of {@link GetFunctionCommand}.
  */
-export interface GetFunctionCommandOutput extends GetFunctionResponse, __MetadataBearer {
-}
+export interface GetFunctionCommandOutput
+  extends GetFunctionResponse,
+    __MetadataBearer {}
 declare const GetFunctionCommand_base: {
-    new (input: GetFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<GetFunctionCommandInput, GetFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: GetFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<GetFunctionCommandInput, GetFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: GetFunctionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetFunctionCommandInput,
+    GetFunctionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: GetFunctionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetFunctionCommandInput,
+    GetFunctionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns information about the function or function version, with a link to download the deployment package that's valid for 10 minutes. If you specify a function version, only details that are specific to that version are returned.</p>
@@ -245,15 +265,15 @@ declare const GetFunctionCommand_base: {
  * @public
  */
 export declare class GetFunctionCommand extends GetFunctionCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: GetFunctionRequest;
-            output: GetFunctionResponse;
-        };
-        sdk: {
-            input: GetFunctionCommandInput;
-            output: GetFunctionCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: GetFunctionRequest;
+      output: GetFunctionResponse;
     };
+    sdk: {
+      input: GetFunctionCommandInput;
+      output: GetFunctionCommandOutput;
+    };
+  };
 }

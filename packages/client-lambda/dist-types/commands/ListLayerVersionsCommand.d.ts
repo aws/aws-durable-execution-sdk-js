@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { ListLayerVersionsRequest, ListLayerVersionsResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  ListLayerVersionsRequest,
+  ListLayerVersionsResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link ListLayerVersionsCommand}.
  */
-export interface ListLayerVersionsCommandInput extends ListLayerVersionsRequest {
-}
+export interface ListLayerVersionsCommandInput
+  extends ListLayerVersionsRequest {}
 /**
  * @public
  *
  * The output of {@link ListLayerVersionsCommand}.
  */
-export interface ListLayerVersionsCommandOutput extends ListLayerVersionsResponse, __MetadataBearer {
-}
+export interface ListLayerVersionsCommandOutput
+  extends ListLayerVersionsResponse,
+    __MetadataBearer {}
 declare const ListLayerVersionsCommand_base: {
-    new (input: ListLayerVersionsCommandInput): import("@smithy/smithy-client").CommandImpl<ListLayerVersionsCommandInput, ListLayerVersionsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: ListLayerVersionsCommandInput): import("@smithy/smithy-client").CommandImpl<ListLayerVersionsCommandInput, ListLayerVersionsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: ListLayerVersionsCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListLayerVersionsCommandInput,
+    ListLayerVersionsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: ListLayerVersionsCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListLayerVersionsCommandInput,
+    ListLayerVersionsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Lists the versions of an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a>. Versions that have been deleted aren't listed. Specify a <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">runtime identifier</a> to list only versions that indicate that they're compatible with that runtime. Specify a compatible architecture to include only layer versions that are compatible with that architecture.</p>
@@ -125,15 +149,15 @@ declare const ListLayerVersionsCommand_base: {
  * @public
  */
 export declare class ListLayerVersionsCommand extends ListLayerVersionsCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: ListLayerVersionsRequest;
-            output: ListLayerVersionsResponse;
-        };
-        sdk: {
-            input: ListLayerVersionsCommandInput;
-            output: ListLayerVersionsCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: ListLayerVersionsRequest;
+      output: ListLayerVersionsResponse;
     };
+    sdk: {
+      input: ListLayerVersionsCommandInput;
+      output: ListLayerVersionsCommandOutput;
+    };
+  };
 }

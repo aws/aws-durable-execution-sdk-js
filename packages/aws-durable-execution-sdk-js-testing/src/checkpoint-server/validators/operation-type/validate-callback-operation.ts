@@ -19,7 +19,7 @@ const allowedStatusToCancel: (OperationStatus | undefined)[] = [
  */
 export function validateCallbackOperation(
   update: OperationUpdate,
-  operation: Operation | undefined
+  operation: Operation | undefined,
 ): void {
   switch (update.Action) {
     case OperationAction.START:

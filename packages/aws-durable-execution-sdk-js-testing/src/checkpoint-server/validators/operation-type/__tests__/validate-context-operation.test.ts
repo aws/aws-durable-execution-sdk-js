@@ -13,7 +13,7 @@ describe("validateContextOperation", () => {
   const createOperationUpdate = (
     action: OperationAction,
     payload?: string,
-    error?: ErrorObject
+    error?: ErrorObject,
   ): OperationUpdate => ({
     Action: action,
     Type: OperationType.CONTEXT,
@@ -83,7 +83,7 @@ describe("validateContextOperation", () => {
     it("should throw exception when payload is provided", () => {
       const update = createOperationUpdate(
         OperationAction.FAIL,
-        "test-payload"
+        "test-payload",
       );
 
       expect(() => {
@@ -133,7 +133,7 @@ describe("validateContextOperation", () => {
       const update = createOperationUpdate(
         OperationAction.SUCCEED,
         undefined,
-        errorObject
+        errorObject,
       );
 
       expect(() => {

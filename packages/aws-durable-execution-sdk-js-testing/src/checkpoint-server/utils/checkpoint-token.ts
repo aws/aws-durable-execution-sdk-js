@@ -12,12 +12,12 @@ export interface CheckpointTokenData {
 }
 
 export function decodeCheckpointToken(
-  checkpointToken: CheckpointToken
+  checkpointToken: CheckpointToken,
 ): CheckpointTokenData {
   try {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const decodedJson = JSON.parse(
-      Buffer.from(checkpointToken, "base64").toString("utf-8")
+      Buffer.from(checkpointToken, "base64").toString("utf-8"),
     );
 
     // Validate the decoded data has the required fields
@@ -38,15 +38,15 @@ export function decodeCheckpointToken(
     throw new Error(
       `Failed to decode checkpoint token: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 }
 
 export function encodeCheckpointToken(
-  checkpointTokenData: CheckpointTokenData
+  checkpointTokenData: CheckpointTokenData,
 ): CheckpointToken {
   return createCheckpointToken(
-    Buffer.from(JSON.stringify(checkpointTokenData)).toString("base64")
+    Buffer.from(JSON.stringify(checkpointTokenData)).toString("base64"),
   );
 }

@@ -13,7 +13,7 @@ interface PromiseCombinatorsInput {
  * - context.promise.race: Get the first promise to complete
  * - context.promise.allSettled: Wait for all promises regardless of success/failure
  * - context.promise.any: Get the first successful promise
- * 
+ *
  */
 export const handler = withDurableFunctions(
   async (event: PromiseCombinatorsInput, context: DurableContext) => {
@@ -113,5 +113,5 @@ export const handler = withDurableFunctions(
       settledResults,
       anyResult,
     };
-  }
+  },
 );

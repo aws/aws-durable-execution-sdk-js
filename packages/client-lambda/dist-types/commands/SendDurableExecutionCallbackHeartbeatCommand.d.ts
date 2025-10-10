@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { SendDurableExecutionCallbackHeartbeatRequest, SendDurableExecutionCallbackHeartbeatResponse } from "../models/models_1";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  SendDurableExecutionCallbackHeartbeatRequest,
+  SendDurableExecutionCallbackHeartbeatResponse,
+} from "../models/models_1";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link SendDurableExecutionCallbackHeartbeatCommand}.
  */
-export interface SendDurableExecutionCallbackHeartbeatCommandInput extends SendDurableExecutionCallbackHeartbeatRequest {
-}
+export interface SendDurableExecutionCallbackHeartbeatCommandInput
+  extends SendDurableExecutionCallbackHeartbeatRequest {}
 /**
  * @public
  *
  * The output of {@link SendDurableExecutionCallbackHeartbeatCommand}.
  */
-export interface SendDurableExecutionCallbackHeartbeatCommandOutput extends SendDurableExecutionCallbackHeartbeatResponse, __MetadataBearer {
-}
+export interface SendDurableExecutionCallbackHeartbeatCommandOutput
+  extends SendDurableExecutionCallbackHeartbeatResponse,
+    __MetadataBearer {}
 declare const SendDurableExecutionCallbackHeartbeatCommand_base: {
-    new (input: SendDurableExecutionCallbackHeartbeatCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackHeartbeatCommandInput, SendDurableExecutionCallbackHeartbeatCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: SendDurableExecutionCallbackHeartbeatCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackHeartbeatCommandInput, SendDurableExecutionCallbackHeartbeatCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: SendDurableExecutionCallbackHeartbeatCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    SendDurableExecutionCallbackHeartbeatCommandInput,
+    SendDurableExecutionCallbackHeartbeatCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: SendDurableExecutionCallbackHeartbeatCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    SendDurableExecutionCallbackHeartbeatCommandInput,
+    SendDurableExecutionCallbackHeartbeatCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -69,15 +93,15 @@ declare const SendDurableExecutionCallbackHeartbeatCommand_base: {
  *
  */
 export declare class SendDurableExecutionCallbackHeartbeatCommand extends SendDurableExecutionCallbackHeartbeatCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: SendDurableExecutionCallbackHeartbeatRequest;
-            output: {};
-        };
-        sdk: {
-            input: SendDurableExecutionCallbackHeartbeatCommandInput;
-            output: SendDurableExecutionCallbackHeartbeatCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: SendDurableExecutionCallbackHeartbeatRequest;
+      output: {};
     };
+    sdk: {
+      input: SendDurableExecutionCallbackHeartbeatCommandInput;
+      output: SendDurableExecutionCallbackHeartbeatCommandOutput;
+    };
+  };
 }

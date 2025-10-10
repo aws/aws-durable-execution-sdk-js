@@ -30,14 +30,14 @@ describe("create-durable-api-client", () => {
     });
 
     expect(client.send).toHaveBeenCalledWith(
-      expect.any(SendDurableExecutionCallbackSuccessCommand)
+      expect.any(SendDurableExecutionCallbackSuccessCommand),
     );
     expect(client.send).toHaveBeenCalledWith(
       expect.objectContaining({
         input: {
           CallbackId: "CallbackId",
         },
-      })
+      }),
     );
   });
 
@@ -49,14 +49,14 @@ describe("create-durable-api-client", () => {
     });
 
     expect(client.send).toHaveBeenCalledWith(
-      expect.any(SendDurableExecutionCallbackFailureCommand)
+      expect.any(SendDurableExecutionCallbackFailureCommand),
     );
     expect(client.send).toHaveBeenCalledWith(
       expect.objectContaining({
         input: {
           CallbackId: "CallbackId",
         },
-      })
+      }),
     );
   });
 
@@ -68,14 +68,14 @@ describe("create-durable-api-client", () => {
     });
 
     expect(client.send).toHaveBeenCalledWith(
-      expect.any(SendDurableExecutionCallbackHeartbeatCommand)
+      expect.any(SendDurableExecutionCallbackHeartbeatCommand),
     );
     expect(client.send).toHaveBeenCalledWith(
       expect.objectContaining({
         input: {
           CallbackId: "CallbackId",
         },
-      })
+      }),
     );
   });
 });

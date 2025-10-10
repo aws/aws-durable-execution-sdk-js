@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { RemoveLayerVersionPermissionRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link RemoveLayerVersionPermissionCommand}.
  */
-export interface RemoveLayerVersionPermissionCommandInput extends RemoveLayerVersionPermissionRequest {
-}
+export interface RemoveLayerVersionPermissionCommandInput
+  extends RemoveLayerVersionPermissionRequest {}
 /**
  * @public
  *
  * The output of {@link RemoveLayerVersionPermissionCommand}.
  */
-export interface RemoveLayerVersionPermissionCommandOutput extends __MetadataBearer {
-}
+export interface RemoveLayerVersionPermissionCommandOutput
+  extends __MetadataBearer {}
 declare const RemoveLayerVersionPermissionCommand_base: {
-    new (input: RemoveLayerVersionPermissionCommandInput): import("@smithy/smithy-client").CommandImpl<RemoveLayerVersionPermissionCommandInput, RemoveLayerVersionPermissionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: RemoveLayerVersionPermissionCommandInput): import("@smithy/smithy-client").CommandImpl<RemoveLayerVersionPermissionCommandInput, RemoveLayerVersionPermissionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: RemoveLayerVersionPermissionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    RemoveLayerVersionPermissionCommandInput,
+    RemoveLayerVersionPermissionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: RemoveLayerVersionPermissionCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    RemoveLayerVersionPermissionCommandInput,
+    RemoveLayerVersionPermissionCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Removes a statement from the permissions policy for a version of an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a>. For more information, see <a>AddLayerVersionPermission</a>.</p>
@@ -91,15 +111,15 @@ declare const RemoveLayerVersionPermissionCommand_base: {
  * @public
  */
 export declare class RemoveLayerVersionPermissionCommand extends RemoveLayerVersionPermissionCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: RemoveLayerVersionPermissionRequest;
-            output: {};
-        };
-        sdk: {
-            input: RemoveLayerVersionPermissionCommandInput;
-            output: RemoveLayerVersionPermissionCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: RemoveLayerVersionPermissionRequest;
+      output: {};
     };
+    sdk: {
+      input: RemoveLayerVersionPermissionCommandInput;
+      output: RemoveLayerVersionPermissionCommandOutput;
+    };
+  };
 }

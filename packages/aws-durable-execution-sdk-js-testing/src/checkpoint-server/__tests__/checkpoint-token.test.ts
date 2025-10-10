@@ -34,11 +34,11 @@ describe("checkpoint-token", () => {
       expect(typeof result).toBe("string");
       // Verify it can be decoded as base64
       expect(() =>
-        Buffer.from(result, "base64").toString("utf-8")
+        Buffer.from(result, "base64").toString("utf-8"),
       ).not.toThrow();
       // Verify the content matches what we expect
       const decoded = JSON.parse(
-        Buffer.from(result, "base64").toString("utf-8")
+        Buffer.from(result, "base64").toString("utf-8"),
       ) as CheckpointTokenData;
       expect(decoded).toEqual(tokenData);
     });
@@ -52,7 +52,7 @@ describe("checkpoint-token", () => {
 
       const result = encodeCheckpointToken(tokenData);
       const decoded = JSON.parse(
-        Buffer.from(result, "base64").toString("utf-8")
+        Buffer.from(result, "base64").toString("utf-8"),
       ) as CheckpointTokenData;
       expect(decoded).toEqual(tokenData);
     });
@@ -66,7 +66,7 @@ describe("checkpoint-token", () => {
         token: "test-token",
       };
       const encodedToken = Buffer.from(JSON.stringify(tokenData)).toString(
-        "base64"
+        "base64",
       ) as CheckpointToken;
 
       const result = decodeCheckpointToken(encodedToken);
@@ -81,21 +81,21 @@ describe("checkpoint-token", () => {
         decodeCheckpointToken(invalidToken);
       }).toThrow();
     });
-    
+
     it("should wrap non-Error exceptions in an Error object", () => {
       // Mock Buffer.from to throw a string instead of an Error object
       const originalFrom = Buffer.from;
       Buffer.from = jest.fn().mockImplementation(() => {
         throw new Error("Test error");
       });
-      
+
       const invalidToken = "invalid-token" as CheckpointToken;
-      
+
       try {
         expect(() => {
           decodeCheckpointToken(invalidToken);
         }).toThrow(Error);
-        
+
         // Also verify the error message
         expect(() => {
           decodeCheckpointToken(invalidToken);
@@ -109,7 +109,7 @@ describe("checkpoint-token", () => {
     it("should throw an error when decoded data is not a valid CheckpointTokenData object", () => {
       // Create base64 string that doesn't contain valid CheckpointTokenData
       const invalidData = Buffer.from(JSON.stringify({ foo: "bar" })).toString(
-        "base64"
+        "base64",
       ) as CheckpointToken;
 
       expect(() => {

@@ -11,7 +11,7 @@ import { TestResultError } from "./test-runner";
  */
 function mapValuesDeep(
   obj: unknown,
-  fn: (val: unknown, key?: string | number) => unknown
+  fn: (val: unknown, key?: string | number) => unknown,
 ): unknown {
   // Handle arrays
   if (Array.isArray(obj)) {
@@ -67,7 +67,7 @@ export function convertDatesToTimestamps<T>(obj: T): ConvertDatesToNumbers<T> {
 }
 
 export function transformErrorObjectToErrorResult(
-  error: ErrorObject | undefined
+  error: ErrorObject | undefined,
 ): TestResultError | undefined {
   if (!error) {
     return undefined;

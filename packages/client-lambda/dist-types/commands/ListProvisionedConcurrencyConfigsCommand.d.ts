@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { ListProvisionedConcurrencyConfigsRequest, ListProvisionedConcurrencyConfigsResponse } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  ListProvisionedConcurrencyConfigsRequest,
+  ListProvisionedConcurrencyConfigsResponse,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link ListProvisionedConcurrencyConfigsCommand}.
  */
-export interface ListProvisionedConcurrencyConfigsCommandInput extends ListProvisionedConcurrencyConfigsRequest {
-}
+export interface ListProvisionedConcurrencyConfigsCommandInput
+  extends ListProvisionedConcurrencyConfigsRequest {}
 /**
  * @public
  *
  * The output of {@link ListProvisionedConcurrencyConfigsCommand}.
  */
-export interface ListProvisionedConcurrencyConfigsCommandOutput extends ListProvisionedConcurrencyConfigsResponse, __MetadataBearer {
-}
+export interface ListProvisionedConcurrencyConfigsCommandOutput
+  extends ListProvisionedConcurrencyConfigsResponse,
+    __MetadataBearer {}
 declare const ListProvisionedConcurrencyConfigsCommand_base: {
-    new (input: ListProvisionedConcurrencyConfigsCommandInput): import("@smithy/smithy-client").CommandImpl<ListProvisionedConcurrencyConfigsCommandInput, ListProvisionedConcurrencyConfigsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: ListProvisionedConcurrencyConfigsCommandInput): import("@smithy/smithy-client").CommandImpl<ListProvisionedConcurrencyConfigsCommandInput, ListProvisionedConcurrencyConfigsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: ListProvisionedConcurrencyConfigsCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListProvisionedConcurrencyConfigsCommandInput,
+    ListProvisionedConcurrencyConfigsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: ListProvisionedConcurrencyConfigsCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    ListProvisionedConcurrencyConfigsCommandInput,
+    ListProvisionedConcurrencyConfigsCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Retrieves a list of provisioned concurrency configurations for a function.</p>
@@ -117,15 +141,15 @@ declare const ListProvisionedConcurrencyConfigsCommand_base: {
  * @public
  */
 export declare class ListProvisionedConcurrencyConfigsCommand extends ListProvisionedConcurrencyConfigsCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: ListProvisionedConcurrencyConfigsRequest;
-            output: ListProvisionedConcurrencyConfigsResponse;
-        };
-        sdk: {
-            input: ListProvisionedConcurrencyConfigsCommandInput;
-            output: ListProvisionedConcurrencyConfigsCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: ListProvisionedConcurrencyConfigsRequest;
+      output: ListProvisionedConcurrencyConfigsResponse;
     };
+    sdk: {
+      input: ListProvisionedConcurrencyConfigsCommandInput;
+      output: ListProvisionedConcurrencyConfigsCommandOutput;
+    };
+  };
 }

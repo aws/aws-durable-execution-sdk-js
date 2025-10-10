@@ -1,17 +1,17 @@
 name: Sync SDK
 on:
   push:
-    branches: [ "development"]
+    branches: ["development"]
     paths:
-      - 'packages/aws-durable-execution-sdk-js/**'
+      - "packages/aws-durable-execution-sdk-js/**"
 
 env:
-  AWS_REGION : "us-west-2"
+  AWS_REGION: "us-west-2"
 
 # permission can be added at job level or workflow level
 permissions:
-  id-token: write   # This is required for requesting the JWT
-  contents: read    # This is required for actions/checkout
+  id-token: write # This is required for requesting the JWT
+  contents: read # This is required for actions/checkout
 
 jobs:
   sync-aws-durable-execution-sdk-js:

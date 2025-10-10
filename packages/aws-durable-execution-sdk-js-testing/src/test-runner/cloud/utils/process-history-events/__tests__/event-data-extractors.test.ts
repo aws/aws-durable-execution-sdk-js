@@ -165,7 +165,7 @@ describe("getPayloadFromEvent", () => {
     };
 
     expect(() => getPayloadFromEvent(event, "StepStartedDetails")).toThrow(
-      "Event contains both Input and Result"
+      "Event contains both Input and Result",
     );
   });
 

@@ -1,6 +1,4 @@
-import {
-  OperationType,
-} from "@aws/durable-execution-sdk-js-testing";
+import { OperationType } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "../block-example";
 import { createTests } from "./shared/test-helper";
 
@@ -26,19 +24,25 @@ createTests({
         nestedBlock: "nested block result",
       });
 
-      const childOperations = parentBlockOp.getChildOperations()
-      expect(childOperations).toHaveLength(2)
-      expect(childOperations![0].getStepDetails()?.result).toEqual("nested step result");
-      expect(childOperations![1].getContextDetails()?.result).toEqual("nested block result");
+      const childOperations = parentBlockOp.getChildOperations();
+      expect(childOperations).toHaveLength(2);
+      expect(childOperations![0].getStepDetails()?.result).toEqual(
+        "nested step result",
+      );
+      expect(childOperations![1].getContextDetails()?.result).toEqual(
+        "nested block result",
+      );
 
       // Check for nested step operation
       const nestedStepOp = runner.getOperation("nested_step");
-      expect(nestedStepOp.getStepDetails()?.result).toEqual("nested step result");
+      expect(nestedStepOp.getStepDetails()?.result).toEqual(
+        "nested step result",
+      );
 
       // Check for nested block operation
       const nestedBlockOp = runner.getOperation("nested_block");
       expect(nestedBlockOp.getContextDetails()?.result).toEqual(
-        "nested block result"
+        "nested block result",
       );
     });
 
@@ -52,7 +56,7 @@ createTests({
       const waitOp = completedOperations.find(
         (op) =>
           op.getType() === OperationType.WAIT &&
-          op.getWaitDetails()?.waitSeconds === 1
+          op.getWaitDetails()?.waitSeconds === 1,
       );
       expect(waitOp).toBeDefined();
     });

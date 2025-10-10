@@ -42,7 +42,7 @@ export class LocalDurableTestRunnerFactory
    * Creates new runner instances for nested function execution
    */
   createRunner<T>(
-    params: LocalDurableTestRunnerParameters
+    params: LocalDurableTestRunnerParameters,
   ): ILocalDurableTestRunnerExecutor<T> {
     return new LocalDurableTestRunner<T>(params);
   }
@@ -83,7 +83,7 @@ export class LocalDurableTestRunner<ResultType>
     this.handlerFunction = handlerFunction;
 
     this.functionStorage = new FunctionStorage(
-      new LocalDurableTestRunnerFactory()
+      new LocalDurableTestRunnerFactory(),
     );
 
     this.durableApi = createDurableApiClient(() => {
@@ -95,7 +95,7 @@ export class LocalDurableTestRunner<ResultType>
       this.waitManager,
       this.operationIndex,
       this.durableApi,
-      this.waitManager.handleCheckpointReceived.bind(this.waitManager)
+      this.waitManager.handleCheckpointReceived.bind(this.waitManager),
     );
   }
 
@@ -104,7 +104,7 @@ export class LocalDurableTestRunner<ResultType>
       CheckpointServerWorkerManager.getInstance().getServerInfo();
     if (!serverInfo) {
       throw new Error(
-        "Could not find checkpoint server info. Did you call LocalDurableTestRunner.setupTestEnvironment()?"
+        "Could not find checkpoint server info. Did you call LocalDurableTestRunner.setupTestEnvironment()?",
       );
     }
     return serverInfo;
@@ -136,7 +136,7 @@ export class LocalDurableTestRunner<ResultType>
         new CheckpointApiClient(serverInfo.url),
         new Scheduler(),
         this.functionStorage,
-        this.skipTime
+        this.skipTime,
       );
 
       const lambdaResponse = await orchestrator.executeHandler(params);
@@ -144,7 +144,7 @@ export class LocalDurableTestRunner<ResultType>
         lambdaResponse,
         this.operationStorage.getHistoryEvents(),
         this.operationStorage,
-        orchestrator.getInvocations()
+        orchestrator.getInvocations(),
       );
     } finally {
       this.waitManager.clearWaitingOperations();
@@ -184,7 +184,7 @@ export class LocalDurableTestRunner<ResultType>
    */
   registerDurableFunction(
     functionName: string,
-    durableHandler: LambdaHandler<DurableExecutionInvocationInput>
+    durableHandler: LambdaHandler<DurableExecutionInvocationInput>,
   ): this {
     this.functionStorage.registerDurableFunction(functionName, durableHandler);
     return this;
@@ -193,7 +193,7 @@ export class LocalDurableTestRunner<ResultType>
   // Inherited methods from DurableTestRunner
   getOperation<OperationResult>(
     name: string,
-    index?: number
+    index?: number,
   ): MockOperation<OperationResult> {
     const mockOperation = new MockOperation<OperationResult>(
       {
@@ -202,7 +202,7 @@ export class LocalDurableTestRunner<ResultType>
       },
       this.waitManager,
       this.operationIndex,
-      this.durableApi
+      this.durableApi,
     );
     this.operationStorage.registerOperation({
       operation: mockOperation,
@@ -215,7 +215,7 @@ export class LocalDurableTestRunner<ResultType>
   }
 
   getOperationByIndex<OperationResult>(
-    index: number
+    index: number,
   ): MockOperation<OperationResult> {
     const mockOperation = new MockOperation<OperationResult>(
       {
@@ -223,7 +223,7 @@ export class LocalDurableTestRunner<ResultType>
       },
       this.waitManager,
       this.operationIndex,
-      this.durableApi
+      this.durableApi,
     );
     this.operationStorage.registerOperation({
       operation: mockOperation,
@@ -236,7 +236,7 @@ export class LocalDurableTestRunner<ResultType>
 
   getOperationByNameAndIndex<OperationResult>(
     name: string,
-    index: number
+    index: number,
   ): MockOperation<OperationResult> {
     const mockOperation = new MockOperation<OperationResult>(
       {
@@ -245,7 +245,7 @@ export class LocalDurableTestRunner<ResultType>
       },
       this.waitManager,
       this.operationIndex,
-      this.durableApi
+      this.durableApi,
     );
     this.operationStorage.registerOperation({
       operation: mockOperation,
@@ -258,7 +258,7 @@ export class LocalDurableTestRunner<ResultType>
   }
 
   getOperationById<OperationResult>(
-    id: string
+    id: string,
   ): MockOperation<OperationResult> {
     const mockOperation = new MockOperation<OperationResult>(
       {
@@ -266,7 +266,7 @@ export class LocalDurableTestRunner<ResultType>
       },
       this.waitManager,
       this.operationIndex,
-      this.durableApi
+      this.durableApi,
     );
     this.operationStorage.registerOperation({
       operation: mockOperation,
@@ -283,7 +283,7 @@ export class LocalDurableTestRunner<ResultType>
       this.waitManager,
       this.operationIndex,
       this.durableApi,
-      this.waitManager.handleCheckpointReceived.bind(this.waitManager)
+      this.waitManager.handleCheckpointReceived.bind(this.waitManager),
     );
   }
 

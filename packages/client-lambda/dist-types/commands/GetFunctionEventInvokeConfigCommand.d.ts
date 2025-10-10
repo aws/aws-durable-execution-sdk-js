@@ -1,7 +1,14 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
-import { FunctionEventInvokeConfig, GetFunctionEventInvokeConfigRequest } from "../models/models_0";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
+import {
+  FunctionEventInvokeConfig,
+  GetFunctionEventInvokeConfigRequest,
+} from "../models/models_0";
 /**
  * @public
  */
@@ -12,19 +19,36 @@ export { $Command };
  *
  * The input for {@link GetFunctionEventInvokeConfigCommand}.
  */
-export interface GetFunctionEventInvokeConfigCommandInput extends GetFunctionEventInvokeConfigRequest {
-}
+export interface GetFunctionEventInvokeConfigCommandInput
+  extends GetFunctionEventInvokeConfigRequest {}
 /**
  * @public
  *
  * The output of {@link GetFunctionEventInvokeConfigCommand}.
  */
-export interface GetFunctionEventInvokeConfigCommandOutput extends FunctionEventInvokeConfig, __MetadataBearer {
-}
+export interface GetFunctionEventInvokeConfigCommandOutput
+  extends FunctionEventInvokeConfig,
+    __MetadataBearer {}
 declare const GetFunctionEventInvokeConfigCommand_base: {
-    new (input: GetFunctionEventInvokeConfigCommandInput): import("@smithy/smithy-client").CommandImpl<GetFunctionEventInvokeConfigCommandInput, GetFunctionEventInvokeConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: GetFunctionEventInvokeConfigCommandInput): import("@smithy/smithy-client").CommandImpl<GetFunctionEventInvokeConfigCommandInput, GetFunctionEventInvokeConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: GetFunctionEventInvokeConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetFunctionEventInvokeConfigCommandInput,
+    GetFunctionEventInvokeConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: GetFunctionEventInvokeConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    GetFunctionEventInvokeConfigCommandInput,
+    GetFunctionEventInvokeConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Retrieves the configuration for asynchronous invocation for a function, version, or alias.</p> <p>To configure options for asynchronous invocation, use <a>PutFunctionEventInvokeConfig</a>.</p>
@@ -109,15 +133,15 @@ declare const GetFunctionEventInvokeConfigCommand_base: {
  * @public
  */
 export declare class GetFunctionEventInvokeConfigCommand extends GetFunctionEventInvokeConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: GetFunctionEventInvokeConfigRequest;
-            output: FunctionEventInvokeConfig;
-        };
-        sdk: {
-            input: GetFunctionEventInvokeConfigCommandInput;
-            output: GetFunctionEventInvokeConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: GetFunctionEventInvokeConfigRequest;
+      output: FunctionEventInvokeConfig;
     };
+    sdk: {
+      input: GetFunctionEventInvokeConfigCommandInput;
+      output: GetFunctionEventInvokeConfigCommandOutput;
+    };
+  };
 }

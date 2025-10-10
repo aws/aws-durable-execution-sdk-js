@@ -6,7 +6,7 @@ export const handleCheckpointServerError: ErrorRequestHandler = (
   res,
   // Express requires error handlers to have 4 parameters, even if not all are used
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _next
+  _next,
 ) => {
   console.error("Checkpoint server error:", err);
   res.status(500).json({

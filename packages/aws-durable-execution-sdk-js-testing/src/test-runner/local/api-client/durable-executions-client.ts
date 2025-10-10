@@ -11,7 +11,7 @@ export function getDurableExecutionsClient(endpoint: string) {
       accessKeyId: "mock-accessKeyId",
     },
     region: "us-east-1",
-    endpoint
+    endpoint,
   });
 
   return client;

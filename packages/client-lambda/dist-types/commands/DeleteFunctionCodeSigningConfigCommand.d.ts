@@ -1,6 +1,10 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import {
+  LambdaClientResolvedConfig,
+  ServiceInputTypes,
+  ServiceOutputTypes,
+} from "../LambdaClient";
 import { DeleteFunctionCodeSigningConfigRequest } from "../models/models_0";
 /**
  * @public
@@ -12,19 +16,35 @@ export { $Command };
  *
  * The input for {@link DeleteFunctionCodeSigningConfigCommand}.
  */
-export interface DeleteFunctionCodeSigningConfigCommandInput extends DeleteFunctionCodeSigningConfigRequest {
-}
+export interface DeleteFunctionCodeSigningConfigCommandInput
+  extends DeleteFunctionCodeSigningConfigRequest {}
 /**
  * @public
  *
  * The output of {@link DeleteFunctionCodeSigningConfigCommand}.
  */
-export interface DeleteFunctionCodeSigningConfigCommandOutput extends __MetadataBearer {
-}
+export interface DeleteFunctionCodeSigningConfigCommandOutput
+  extends __MetadataBearer {}
 declare const DeleteFunctionCodeSigningConfigCommand_base: {
-    new (input: DeleteFunctionCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionCodeSigningConfigCommandInput, DeleteFunctionCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    new (input: DeleteFunctionCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionCodeSigningConfigCommandInput, DeleteFunctionCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
-    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+  new (
+    input: DeleteFunctionCodeSigningConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteFunctionCodeSigningConfigCommandInput,
+    DeleteFunctionCodeSigningConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  new (
+    input: DeleteFunctionCodeSigningConfigCommandInput,
+  ): import("@smithy/smithy-client").CommandImpl<
+    DeleteFunctionCodeSigningConfigCommandInput,
+    DeleteFunctionCodeSigningConfigCommandOutput,
+    LambdaClientResolvedConfig,
+    ServiceInputTypes,
+    ServiceOutputTypes
+  >;
+  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Removes the code signing configuration from the function.</p>
@@ -76,15 +96,15 @@ declare const DeleteFunctionCodeSigningConfigCommand_base: {
  * @public
  */
 export declare class DeleteFunctionCodeSigningConfigCommand extends DeleteFunctionCodeSigningConfigCommand_base {
-    /** @internal type navigation helper, not in runtime. */
-    protected static __types: {
-        api: {
-            input: DeleteFunctionCodeSigningConfigRequest;
-            output: {};
-        };
-        sdk: {
-            input: DeleteFunctionCodeSigningConfigCommandInput;
-            output: DeleteFunctionCodeSigningConfigCommandOutput;
-        };
+  /** @internal type navigation helper, not in runtime. */
+  protected static __types: {
+    api: {
+      input: DeleteFunctionCodeSigningConfigRequest;
+      output: {};
     };
+    sdk: {
+      input: DeleteFunctionCodeSigningConfigCommandInput;
+      output: DeleteFunctionCodeSigningConfigCommandOutput;
+    };
+  };
 }

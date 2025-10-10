@@ -30,7 +30,7 @@ export class OperationWaitManager {
    */
   waitForOperation(
     operation: DurableOperation<unknown>,
-    status: WaitingOperationStatus
+    status: WaitingOperationStatus,
   ): Promise<DurableOperation<unknown>> {
     return new Promise<DurableOperation<unknown>>((resolve) => {
       this.waitingOperations.add({
@@ -57,7 +57,7 @@ export class OperationWaitManager {
    */
   handleCheckpointReceived(
     checkpointOperationsReceived: OperationEvents[],
-    trackedDurableOperations: DurableOperation<unknown>[]
+    trackedDurableOperations: DurableOperation<unknown>[],
   ): void {
     // Handle callback operations
     checkpointOperationsReceived
@@ -77,7 +77,7 @@ export class OperationWaitManager {
   }
 
   private shouldBeResolvedByParent(
-    operation: DurableOperation<unknown>
+    operation: DurableOperation<unknown>,
   ): boolean {
     return operation.isWaitForCallback();
   }
@@ -87,13 +87,13 @@ export class OperationWaitManager {
    */
   private resolveMatchingOperations(
     operation: DurableOperation<unknown>,
-    status?: OperationStatus
+    status?: OperationStatus,
   ): void {
     const toResolve = Array.from(this.waitingOperations).filter(
       (waiting) =>
         waiting.operation === operation &&
         !this.shouldBeResolvedByParent(waiting.operation) &&
-        doesStatusMatch(status, waiting.expectedStatus)
+        doesStatusMatch(status, waiting.expectedStatus),
     );
 
     toResolve.forEach((waiting) => {
@@ -107,13 +107,13 @@ export class OperationWaitManager {
    */
   private resolveOperationsByParentId(
     parentId: string,
-    status?: OperationStatus
+    status?: OperationStatus,
   ): void {
     const toResolve = Array.from(this.waitingOperations).filter(
       (waiting) =>
         waiting.operation.getId() === parentId &&
         this.shouldBeResolvedByParent(waiting.operation) &&
-        doesStatusMatch(status, waiting.expectedStatus)
+        doesStatusMatch(status, waiting.expectedStatus),
     );
 
     toResolve.forEach((waiting) => {

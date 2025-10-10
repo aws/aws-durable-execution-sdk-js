@@ -16,17 +16,17 @@ export class CloudOperation<
     operationIndex: IndexedOperations,
     apiClient: DurableApiClient,
     private readonly invocationType: InvocationType,
-    checkpointOperationData?: OperationEvents
+    checkpointOperationData?: OperationEvents,
   ) {
     super(waitManager, operationIndex, apiClient, checkpointOperationData);
   }
 
   async waitForData(
-    status?: WaitingOperationStatus
+    status?: WaitingOperationStatus,
   ): Promise<CloudOperation<OperationResultValue>> {
     if (this.invocationType !== InvocationType.Event) {
       throw new Error(
-        `InvocationType.${this.invocationType} cannot wait for operation data. Use InvocationType.Event to wait for operation data.`
+        `InvocationType.${this.invocationType} cannot wait for operation data. Use InvocationType.Event to wait for operation data.`,
       );
     }
 
