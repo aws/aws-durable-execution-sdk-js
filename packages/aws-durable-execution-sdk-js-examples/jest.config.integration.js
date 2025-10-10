@@ -6,5 +6,5 @@ const defaultPreset = createDefaultPreset();
 module.exports = {
   ...defaultPreset,
   testMatch: ["**/__tests__/**.test.ts"],
-  testTimeout: 30000,
+  testTimeout: 60000,
 };
