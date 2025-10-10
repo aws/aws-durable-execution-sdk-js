@@ -36,11 +36,18 @@ describe("CloudDurableTestRunner", () => {
     EventType: EventType.ExecutionStarted,
     EventId: 1,
     Id: "1",
+    ExecutionStartedDetails: {
+      Input: {
+        Payload: JSON.stringify({
+          hello: "world",
+        }),
+      },
+    },
   };
 
   const setupMockApiResponses = (
     mockSend: jest.Mock,
-    responses: MockApiResponses = {}
+    responses: MockApiResponses = {},
   ): void => {
     let historyCallCount = 0;
     let executionCallCount = 0;
@@ -62,7 +69,7 @@ describe("CloudDurableTestRunner", () => {
           responses.historyResponse ?? {
             Events: [mockEvent],
             $metadata: {},
-          }
+          },
         );
       }
 
@@ -79,7 +86,7 @@ describe("CloudDurableTestRunner", () => {
             Status: ExecutionStatus.SUCCEEDED,
             Result: '{"success": true}',
             $metadata: {},
-          }
+          },
         );
       }
 
@@ -245,10 +252,8 @@ describe("CloudDurableTestRunner", () => {
         EventType: EventType.StepStarted,
         EventId: 1,
         Id: "1",
-        StepStartedDetails: {
-          Name: "testOperation",
-          Input: "{}",
-        },
+        Name: "testOperation",
+        StepStartedDetails: {},
       };
 
       setupMockApiResponses(mockSend, {
@@ -273,20 +278,24 @@ describe("CloudDurableTestRunner", () => {
     });
 
     it("should retrieve operation by index", async () => {
+      const executionEvent: Event = {
+        EventType: EventType.ExecutionStarted,
+        EventTimestamp: new Date(),
+        EventId: 1,
+        Id: "1",
+        ExecutionStartedDetails: {},
+      };
       const stepEvent: Event = {
         EventTimestamp: new Date(),
         EventType: EventType.StepStarted,
-        EventId: 1,
-        Id: "1",
-        StepStartedDetails: {
-          Name: "stepAtIndex",
-          Input: "{}",
-        },
+        EventId: 2,
+        Id: "2",
+        StepStartedDetails: {},
       };
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [stepEvent],
+          Events: [executionEvent, stepEvent],
           $metadata: {},
         },
       });
@@ -295,13 +304,14 @@ describe("CloudDurableTestRunner", () => {
         functionName: mockFunctionArn,
       });
 
-      const operation = runner.getOperationByIndex(2);
+      const operation = runner.getOperationByIndex(0);
 
       const runPromise = runner.run();
       await jest.advanceTimersByTimeAsync(1000);
       await runPromise;
 
-      expect(operation).toBeDefined();
+      expect(operation.getStatus()).toBe(OperationStatus.STARTED);
+      expect(operation.getStepDetails()).toBeDefined();
     });
 
     it("should retrieve operation by name and index", async () => {
@@ -424,6 +434,13 @@ describe("CloudDurableTestRunner", () => {
         EventType: EventType.ExecutionSucceeded,
         EventId: 2,
         Id: "2",
+        ExecutionSucceededDetails: {
+          Result: {
+            Payload: JSON.stringify({
+              hello: "world",
+            }),
+          },
+        },
       };
 
       setupMockApiResponses(mockSend, {
@@ -609,7 +626,7 @@ describe("CloudDurableTestRunner", () => {
         EventTimestamp: new Date(),
         EventType: EventType.StepSucceeded,
         EventId: 2,
-        Id: "2",
+        Id: "1",
         StepSucceededDetails: {
           Result: {
             Payload: '{"result": "processed"}',
@@ -644,8 +661,12 @@ describe("CloudDurableTestRunner", () => {
       expect(operation.getOperationData()).toEqual({
         Id: "1",
         StartTimestamp: expect.any(Date),
-        Status: OperationStatus.STARTED,
+        Status: OperationStatus.SUCCEEDED,
         Type: OperationType.STEP,
+        EndTimestamp: expect.any(Date),
+        StepDetails: {
+          Result: '{"result": "processed"}',
+        },
       });
     });
 

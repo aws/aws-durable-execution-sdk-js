@@ -4,6 +4,7 @@ import {
   CheckpointDurableExecutionResponse,
   InvalidParameterValueException,
   Operation,
+  ErrorObject,
 } from "@aws-sdk/client-lambda";
 import { ParamsDictionary } from "express-serve-static-core";
 import express from "express";
@@ -61,15 +62,17 @@ export async function startCheckpointServer(port: number) {
           payload: string;
         }
       >,
-      res
+      res,
     ) => {
       res.json(
-        executionManager.startExecution({
-          payload: req.body.payload,
-          executionId: createExecutionId(),
-        })
+        convertDatesToTimestamps(
+          executionManager.startExecution({
+            payload: req.body.payload,
+            executionId: createExecutionId(),
+          }),
+        ),
       );
-    }
+    },
   );
 
   /**
@@ -79,8 +82,8 @@ export async function startCheckpointServer(port: number) {
   app.post(`${API_PATHS.START_INVOCATION}/:executionId`, (req, res) => {
     res.json(
       executionManager.startInvocation(
-        createExecutionId(req.params.executionId)
-      )
+        createExecutionId(req.params.executionId),
+      ),
     );
   });
 
@@ -110,7 +113,7 @@ export async function startCheckpointServer(port: number) {
         operationInvocationIdMap:
           checkpointStorage.getOperationInvocationIdMap(),
       });
-    }
+    },
   );
 
   /**
@@ -126,9 +129,11 @@ export async function startCheckpointServer(port: number) {
         object,
         {
           operationData: Operation;
+          payload?: string;
+          error?: ErrorObject;
         }
       >,
-      res
+      res,
     ) => {
       const executionId = createExecutionId(req.params.executionId);
 
@@ -151,15 +156,17 @@ export async function startCheckpointServer(port: number) {
 
       const operation = checkpointStorage.updateOperation(
         req.params.operationId,
-        req.body.operationData
+        req.body.operationData,
+        req.body.payload,
+        req.body.error,
       );
 
       res.json(
         convertDatesToTimestamps({
           operation,
-        })
+        }),
       );
-    }
+    },
   );
 
   /**
@@ -167,7 +174,7 @@ export async function startCheckpointServer(port: number) {
    */
   app.get(`${API_PATHS.GET_STATE}/:durableExecutionArn/state`, (req, res) => {
     const executionData = executionManager.getCheckpointsByExecution(
-      createExecutionId(req.params.durableExecutionArn)
+      createExecutionId(req.params.durableExecutionArn),
     );
 
     if (!executionData) {
@@ -192,7 +199,7 @@ export async function startCheckpointServer(port: number) {
     `${API_PATHS.CHECKPOINT}/:durableExecutionArn/checkpoint`,
     (req, res) => {
       const storage = executionManager.getCheckpointsByExecution(
-        createExecutionId(req.params.durableExecutionArn)
+        createExecutionId(req.params.durableExecutionArn),
       );
       if (!storage) {
         res.status(404).json({
@@ -214,7 +221,7 @@ export async function startCheckpointServer(port: number) {
       }
 
       const data = decodeCheckpointToken(
-        createCheckpointToken(input.CheckpointToken)
+        createCheckpointToken(input.CheckpointToken),
       );
 
       try {
@@ -225,7 +232,7 @@ export async function startCheckpointServer(port: number) {
           res.setHeaders(
             new Headers({
               "x-amzn-errortype": err.name,
-            })
+            }),
           );
           res.status(400).json({
             Type: err.name,
@@ -245,27 +252,27 @@ export async function startCheckpointServer(port: number) {
         NewExecutionState: {
           // TODO: implement pagination
           Operations: Array.from(storage.operationDataMap.values()).map(
-            (data) => data.operation
+            (data) => data.operation,
           ),
           NextMarker: undefined,
         },
       };
 
       res.json(convertDatesToTimestamps(output));
-    }
+    },
   );
 
   app.post(
     `${API_PATHS.CALLBACKS}/:callbackId/succeed`,
     express.raw(),
-    handleCallbackSuccess
+    handleCallbackSuccess,
   );
 
   app.post(`${API_PATHS.CALLBACKS}/:callbackId/fail`, handleCallbackFailure);
 
   app.post(
     `${API_PATHS.CALLBACKS}/:callbackId/heartbeat`,
-    handleCallbackHeartbeat
+    handleCallbackHeartbeat,
   );
 
   app.use((_req, res) => {
@@ -289,7 +296,7 @@ export async function startCheckpointServer(port: number) {
           address && typeof address !== "string"
             ? `on port ${address.port}`
             : ""
-        }`
+        }`,
       );
       resolve(server);
     });

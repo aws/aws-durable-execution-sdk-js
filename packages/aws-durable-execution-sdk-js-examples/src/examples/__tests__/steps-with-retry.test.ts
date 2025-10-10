@@ -109,7 +109,7 @@ describe("steps-with-retry", () => {
       errorMessage: "Persistent failure",
       errorType: "Error",
       stackTrace: expect.any(Array),
-    }
+    };
 
     const result = await durableTestRunner.run();
     const error = result.getError();
@@ -119,7 +119,7 @@ describe("steps-with-retry", () => {
     // Verify that step operations were attempted
     const stepOp = durableTestRunner.getOperationByIndex(0);
     expect(stepOp.getStepDetails()?.result).toBeUndefined();
-    expect(stepOp.getStepDetails()?.error).toEqual(expectedErrorObject)
+    expect(stepOp.getStepDetails()?.error).toEqual(expectedErrorObject);
   });
 
   it("should fail when item is not found after maximum polls", async () => {

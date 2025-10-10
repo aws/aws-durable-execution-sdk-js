@@ -11,7 +11,7 @@ import { TestExecutionState } from "../common/test-execution-state";
 import { isClosedExecution } from "../common/utils";
 
 export type ReceivedOperationEventsCallback = (
-  operationEvents: OperationEvents[]
+  operationEvents: OperationEvents[],
 ) => void;
 
 export interface HistoryPollerParams {
@@ -26,10 +26,10 @@ export interface HistoryPollerParams {
 
 export interface HistoryApiClient {
   getHistory: (
-    request: GetDurableExecutionHistoryRequest
+    request: GetDurableExecutionHistoryRequest,
   ) => Promise<GetDurableExecutionHistoryCommandOutput>;
   getExecution: (
-    request: GetDurableExecutionRequest
+    request: GetDurableExecutionRequest,
   ) => Promise<GetDurableExecutionCommandOutput>;
 }
 

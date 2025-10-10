@@ -3,7 +3,7 @@ import {
   OperationInvocationIdMap,
 } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
-import { Operation } from "@aws-sdk/client-lambda";
+import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 import {
   API_PATHS,
   HTTP_METHODS,
@@ -39,7 +39,7 @@ export class CheckpointApiClient {
    */
   async pollCheckpointData(
     executionId: ExecutionId,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<{
     operations: CheckpointOperation[];
     operationInvocationIdMap: OperationInvocationIdMap;
@@ -64,12 +64,16 @@ export class CheckpointApiClient {
     executionId: ExecutionId;
     operationId: string;
     operationData: Operation;
+    payload?: string;
+    error?: ErrorObject;
   }): Promise<void> {
     return this.makeRequest({
       path: getUpdateCheckpointDataPath(params.executionId, params.operationId),
       method: HTTP_METHODS.POST,
       body: JSON.stringify({
         operationData: params.operationData,
+        payload: params.payload,
+        error: params.error,
       }),
     });
   }
@@ -110,7 +114,7 @@ export class CheckpointApiClient {
     if (!response.ok) {
       const errorText = await response.text();
       const error = new Error(
-        `Error making HTTP request to ${path}: status: ${response.status}, ${errorText}`
+        `Error making HTTP request to ${path}: status: ${response.status}, ${errorText}`,
       );
       throw error;
     }

@@ -1,6 +1,14 @@
-import { Event, OperationType, OperationStatus, Operation } from "@aws-sdk/client-lambda";
+import {
+  Event,
+  OperationType,
+  OperationStatus,
+  Operation,
+} from "@aws-sdk/client-lambda";
 import { OperationEvents } from "../../../../common/operations/operation-with-data";
-import { createOperation, populateOperationDetails } from "../operation-factory";
+import {
+  createOperation,
+  populateOperationDetails,
+} from "../operation-factory";
 import { HistoryEventType } from "../history-event-types";
 import { historyEventTypes } from "../history-event-types";
 
@@ -24,7 +32,11 @@ describe("createOperation", () => {
   };
 
   it("should create operation with basic properties from event", () => {
-    const operation = createOperation(undefined, mockEvent, mockHistoryEventType);
+    const operation = createOperation(
+      undefined,
+      mockEvent,
+      mockHistoryEventType,
+    );
 
     expect(operation).toEqual({
       Id: "test-id",
@@ -62,7 +74,11 @@ describe("createOperation", () => {
       isEndEvent: true,
     };
 
-    const operation = createOperation(previousOperationEvents, mockEvent, endEventType);
+    const operation = createOperation(
+      previousOperationEvents,
+      mockEvent,
+      endEventType,
+    );
 
     expect(operation).toEqual({
       Id: "test-id",
@@ -156,7 +172,11 @@ describe("createOperation", () => {
       isEndEvent: true,
     };
 
-    const operation = createOperation(previousOperationEvents, mockEvent, nonStartEventType);
+    const operation = createOperation(
+      previousOperationEvents,
+      mockEvent,
+      nonStartEventType,
+    );
 
     expect(operation.StepDetails).toEqual({ Attempt: 1 });
     expect(operation.StartTimestamp).toEqual(new Date("2023-01-01T11:00:00Z"));
@@ -183,7 +203,11 @@ describe("createOperation", () => {
       isEndEvent: true,
     };
 
-    const operation = createOperation(previousOperationEvents, mockEvent, failedEventType);
+    const operation = createOperation(
+      previousOperationEvents,
+      mockEvent,
+      failedEventType,
+    );
 
     expect(operation.Status).toBe(OperationStatus.FAILED);
   });
@@ -204,7 +228,11 @@ describe("populateOperationDetails", () => {
     const operation: Operation = { Id: "test-id" };
 
     expect(() => {
-      populateOperationDetails(eventWithoutTimestamp, historyEventType, operation);
+      populateOperationDetails(
+        eventWithoutTimestamp,
+        historyEventType,
+        operation,
+      );
     }).toThrow("Missing required fields in event");
   });
 
@@ -315,13 +343,13 @@ describe("populateOperationDetails", () => {
     });
   });
 
-  it("should throw error for EXECUTION operation type", () => {
+  it("should populate EXECUTION operation type", () => {
     const historyEventType = historyEventTypes.ExecutionStarted;
     const operation: Operation = { Id: "test-id" };
 
-    expect(() => {
-      populateOperationDetails(baseEvent, historyEventType, operation);
-    }).toThrow("Cannot populate EXECUTION event");
+    populateOperationDetails(baseEvent, historyEventType, operation);
+
+    expect(operation.ExecutionDetails).toBeUndefined();
   });
 
   it("should handle events with both result and error", () => {

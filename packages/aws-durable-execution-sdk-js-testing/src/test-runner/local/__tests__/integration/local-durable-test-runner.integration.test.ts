@@ -26,7 +26,7 @@ describe("LocalDurableTestRunner Integration", () => {
       async (event: unknown, context: DurableContext) => {
         const result = await context.step(() => Promise.resolve("completed"));
         return { success: true, step: result };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -47,7 +47,7 @@ describe("LocalDurableTestRunner Integration", () => {
       async (event: unknown, context: DurableContext) => {
         await context.wait("wait", 100);
         return { success: true, step: "completed" };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -103,7 +103,7 @@ describe("LocalDurableTestRunner Integration", () => {
         received: JSON.stringify(event),
         timestamp: Date.now(),
         message: "Handler completed successfully",
-      })
+      }),
     );
 
     const runner = new LocalDurableTestRunner({
@@ -144,7 +144,7 @@ describe("LocalDurableTestRunner Integration", () => {
           completedWaits: 2,
           finalStep: "done",
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -170,11 +170,11 @@ describe("LocalDurableTestRunner Integration", () => {
     // Verify MockOperation data for both wait operations
     expect(firstWait.getWaitDetails()?.waitSeconds).toBe(50);
     expect(firstWait.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
-      Date
+      Date,
     );
     expect(secondWait.getWaitDetails()?.waitSeconds).toBe(50);
     expect(secondWait.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
-      Date
+      Date,
     );
   });
 
@@ -189,7 +189,7 @@ describe("LocalDurableTestRunner Integration", () => {
           user: stepResult,
           final: "processed",
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -221,13 +221,13 @@ describe("LocalDurableTestRunner Integration", () => {
         await context.step("fetch-user", () => Promise.resolve(undefined));
 
         await context.runInChildContext("parent", () =>
-          Promise.resolve(undefined)
+          Promise.resolve(undefined),
         );
 
         await context.wait(1000);
 
         return "result";
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -245,7 +245,7 @@ describe("LocalDurableTestRunner Integration", () => {
       async (event: unknown, context: DurableContext) => {
         await context.step("fetch-user-1", () => Promise.resolve("user-1"));
         await context.step("fetch-user-2", () => Promise.resolve("user-2"));
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -274,14 +274,14 @@ describe("LocalDurableTestRunner Integration", () => {
             await childContext.wait("child-wait", 1000);
 
             return Promise.resolve({ userId: 123, name: "John Doe" });
-          }
+          },
         );
 
         return {
           user: stepResult,
           final: "processed",
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -313,7 +313,7 @@ describe("LocalDurableTestRunner Integration", () => {
     // Verify wait step
     expect(waitStep.getWaitDetails()?.waitSeconds).toEqual(1);
     expect(waitStep.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
-      Date
+      Date,
     );
   });
 
@@ -327,7 +327,7 @@ describe("LocalDurableTestRunner Integration", () => {
             const shouldRetry = attemptsMade <= 5;
             return { shouldRetry, delaySeconds: 1 + attemptsMade };
           },
-        }
+        },
       );
       return { success: true, step: "completed" };
     });
@@ -379,7 +379,7 @@ describe("LocalDurableTestRunner Integration", () => {
             shouldRetry: true,
             delaySeconds: 1,
           }),
-        }
+        },
       );
       return { success: true, step: "completed" };
     });
@@ -423,17 +423,17 @@ describe("LocalDurableTestRunner Integration", () => {
                 await grandChildContext.wait("grandchild-wait-1", 1000);
                 await grandChildContext.wait("grandchild-wait-2", 1000);
                 return "grandchild-context";
-              }
+              },
             );
 
             await childContext.wait("child-wait-2", 1000);
 
             return "parent-context";
-          }
+          },
         );
 
         return stepResult;
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -486,7 +486,7 @@ describe("LocalDurableTestRunner Integration", () => {
           result: stepResult,
           completed: true,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({
@@ -542,7 +542,7 @@ describe("LocalDurableTestRunner Integration", () => {
 
     // For each invocation, get its operations
     const invocationOperations = invocations.map((inv) =>
-      inv.getOperations().map((op) => op.getOperationData()?.Id)
+      inv.getOperations().map((op) => op.getOperationData()?.Id),
     );
 
     // Verify exact operations in each invocation
@@ -559,6 +559,17 @@ describe("LocalDurableTestRunner Integration", () => {
     // TODO: update timestamps to Date objects
     expect(result.getHistoryEvents()).toEqual([
       {
+        EventType: "ExecutionStarted",
+        EventId: 1,
+        Id: expect.any(String),
+        EventTimestamp: expect.any(Number),
+        ExecutionStartedDetails: {
+          Input: {
+            Payload: "{}",
+          },
+        },
+      },
+      {
         EventType: "WaitStarted",
         SubType: "Wait",
         EventId: 2,
@@ -572,10 +583,10 @@ describe("LocalDurableTestRunner Integration", () => {
       },
       {
         EventType: "WaitSucceeded",
-        SubType: "Wait",
         EventId: 3,
         Id: "c4ca4238a0b92382",
         Name: "wait-invocation-1",
+        SubType: "Wait",
         EventTimestamp: expect.any(Number),
         WaitSucceededDetails: { Duration: 1 },
       },
@@ -597,10 +608,7 @@ describe("LocalDurableTestRunner Integration", () => {
         EventTimestamp: expect.any(Number),
         StepSucceededDetails: {
           Result: {
-            Payload: JSON.stringify({
-              processed: true,
-              timestamp: resultData.result.timestamp,
-            }),
+            Payload: JSON.stringify(resultData.result),
           },
           RetryDetails: {},
         },
@@ -619,12 +627,23 @@ describe("LocalDurableTestRunner Integration", () => {
       },
       {
         EventType: "WaitSucceeded",
-        SubType: "Wait",
         EventId: 7,
+        SubType: "Wait",
         Id: "eccbc87e4b5ce2fe",
         Name: "wait-invocation-2",
         EventTimestamp: expect.any(Number),
         WaitSucceededDetails: { Duration: 1 },
+      },
+      {
+        EventType: "ExecutionSucceeded",
+        EventId: 8,
+        Id: expect.any(String),
+        EventTimestamp: expect.any(Number),
+        ExecutionSucceededDetails: {
+          Result: {
+            Payload: JSON.stringify(resultData),
+          },
+        },
       },
     ]);
   });
@@ -644,14 +663,14 @@ describe("LocalDurableTestRunner Integration", () => {
 
         // This step runs after all parallel waits complete
         await context.step("after-parallel", () =>
-          Promise.resolve("completed")
+          Promise.resolve("completed"),
         );
 
         return {
           parallelResults: results,
           completed: true,
         };
-      }
+      },
     );
 
     const runner = new LocalDurableTestRunner({

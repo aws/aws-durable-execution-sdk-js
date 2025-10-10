@@ -39,7 +39,7 @@ import { FunctionStorage } from "./operations/function-storage";
  * Manages the coordination between checkpoint polling, operation processing, and handler execution.
  */
 export class TestExecutionOrchestrator {
-  private executionState: TestExecutionState = new TestExecutionState();
+  private executionState: TestExecutionState;
   private invokeHandlerInstance: InvokeHandler = new InvokeHandler();
   private invocationTracker: InvocationTracker;
 
@@ -64,6 +64,45 @@ export class TestExecutionOrchestrator {
     return this.invocationTracker.getInvocations();
   }
 
+  private async handleCompletedExecution(
+    executionId: ExecutionId,
+    operationId: string,
+  ) {
+    try {
+      const result = await this.executionState.createExecutionPromise();
+
+      if (result.status === ExecutionStatus.RUNNING) {
+        throw new Error(
+          `Execution did not resolve with valid status. Status: ${result.status}`,
+        );
+      }
+
+      await this.checkpointApi.updateCheckpointData({
+        executionId,
+        operationId,
+        operationData: {
+          Status: result.status,
+        },
+        error: result.error,
+        payload: result.result,
+      });
+
+      return result;
+    } catch (err) {
+      await this.checkpointApi.updateCheckpointData({
+        executionId,
+        operationId,
+        operationData: {
+          Status: OperationStatus.FAILED,
+        },
+        error: {
+          ErrorMessage: err instanceof Error ? err.message : "Internal failure",
+        },
+      });
+      throw err;
+    }
+  }
+
   /**
    * Executes the durable function handler and returns the result.
    * The method will not resolve until the handler function completes successfully
@@ -82,28 +121,40 @@ export class TestExecutionOrchestrator {
     try {
       const {
         executionId,
-        operations: initialOperations,
+        operationEvents: initialOperationsEvents,
         checkpointToken,
         invocationId,
       }: InvocationResult = await this.checkpointApi.startDurableExecution(
         JSON.stringify(params?.payload),
       );
 
+      const executionOperationId = initialOperationsEvents
+        .at(0)
+        ?.events.at(0)?.Id;
+
+      if (!executionOperationId) {
+        throw new Error("Could not get Id for EXECUTION operation");
+      }
+
       this.operationStorage.registerMocks(executionId);
 
       // Start polling for checkpoint data before invoking the handler
       void this.pollForCheckpointData(abortController, executionId);
+
+      this.operationStorage.populateOperations(initialOperationsEvents);
 
       // Start initial invocation of the handler
       void this.invokeHandler(
         executionId,
         checkpointToken,
         invocationId,
-        initialOperations,
+        initialOperationsEvents.map((op) => op.operation),
       );
 
-      // Wait for entire execution to complete
-      return await this.executionState.createExecutionPromise();
+      return await this.handleCompletedExecution(
+        executionId,
+        executionOperationId,
+      );
     } finally {
       // Stop polling
       await new Promise<void>((resolve) => {
@@ -286,7 +337,7 @@ export class TestExecutionOrchestrator {
       executionId,
       newInvocationData.checkpointToken,
       newInvocationData.invocationId,
-      newInvocationData.operations,
+      newInvocationData.operationEvents.map((operation) => operation.operation),
     );
   }
 
@@ -337,7 +388,7 @@ export class TestExecutionOrchestrator {
         executionId,
         newInvocationData.checkpointToken,
         newInvocationData.invocationId,
-        newInvocationData.operations,
+        newInvocationData.operationEvents.map((op) => op.operation),
       );
     });
   }
@@ -379,7 +430,7 @@ export class TestExecutionOrchestrator {
             executionId,
             newInvocationData.checkpointToken,
             newInvocationData.invocationId,
-            newInvocationData.operations,
+            newInvocationData.operationEvents.map((op) => op.operation),
           );
         },
         async () => {
@@ -416,7 +467,7 @@ export class TestExecutionOrchestrator {
       executionId,
       newInvocationData.checkpointToken,
       newInvocationData.invocationId,
-      newInvocationData.operations,
+      newInvocationData.operationEvents.map((op) => op.operation),
     );
   }
 

@@ -34,12 +34,31 @@ describe("CheckpointManager", () => {
     it("should create initial operation with default payload", () => {
       const initialOperation = storage.initialize();
 
-      expect(initialOperation).toMatchObject({
-        Id: "mocked-uuid",
-        Type: OperationType.EXECUTION,
-        Status: OperationStatus.STARTED,
-        ExecutionDetails: {
-          InputPayload: "{}",
+      expect(initialOperation).toEqual({
+        events: [
+          {
+            EventId: 1,
+            EventTimestamp: expect.any(Date),
+            EventType: "ExecutionStarted",
+            ExecutionStartedDetails: {
+              ExecutionTimeout: undefined,
+              Input: {
+                Payload: "{}",
+              },
+            },
+            Id: "mocked-uuid",
+            Name: undefined,
+            ParentId: undefined,
+            SubType: undefined,
+          },
+        ],
+        operation: {
+          Id: "mocked-uuid",
+          Type: OperationType.EXECUTION,
+          Status: OperationStatus.STARTED,
+          ExecutionDetails: {
+            InputPayload: "{}",
+          },
         },
       });
 
@@ -51,12 +70,31 @@ describe("CheckpointManager", () => {
       const customPayload = '{"key":"value"}';
       const initialOperation = storage.initialize(customPayload);
 
-      expect(initialOperation).toMatchObject({
-        Id: "mocked-uuid",
-        Type: OperationType.EXECUTION,
-        Status: OperationStatus.STARTED,
-        ExecutionDetails: {
-          InputPayload: customPayload,
+      expect(initialOperation).toEqual({
+        events: [
+          {
+            EventId: 1,
+            EventTimestamp: expect.any(Date),
+            EventType: "ExecutionStarted",
+            ExecutionStartedDetails: {
+              ExecutionTimeout: undefined,
+              Input: {
+                Payload: customPayload,
+              },
+            },
+            Id: "mocked-uuid",
+            Name: undefined,
+            ParentId: undefined,
+            SubType: undefined,
+          },
+        ],
+        operation: {
+          Id: "mocked-uuid",
+          Type: OperationType.EXECUTION,
+          Status: OperationStatus.STARTED,
+          ExecutionDetails: {
+            InputPayload: customPayload,
+          },
         },
       });
 
@@ -133,7 +171,7 @@ describe("CheckpointManager", () => {
   describe("hasOperation", () => {
     it("should return true when operation exists", () => {
       const initialOperation = storage.initialize();
-      expect(storage.hasOperation(initialOperation.Id)).toBe(true);
+      expect(storage.hasOperation(initialOperation.operation.Id)).toBe(true);
     });
 
     it.each([
@@ -160,11 +198,11 @@ describe("CheckpointManager", () => {
       const initialOperation = storage.initialize();
 
       storage.completeOperation({
-        Id: initialOperation.Id,
+        Id: initialOperation.operation.Id,
         Action: OperationAction.SUCCEED,
       });
 
-      expect(storage.hasOperation(initialOperation.Id)).toBe(true);
+      expect(storage.hasOperation(initialOperation.operation.Id)).toBe(true);
     });
   });
 
@@ -175,7 +213,7 @@ describe("CheckpointManager", () => {
 
       // Complete the operation
       const { operation } = storage.completeOperation({
-        Id: initialOperation.Id,
+        Id: initialOperation.operation.Id,
         Action: OperationAction.SUCCEED,
       });
 
@@ -217,7 +255,7 @@ describe("CheckpointManager", () => {
 
       // Complete the operation
       const { operation } = storage.completeOperation({
-        Id: initialOperation.Id,
+        Id: initialOperation.operation.Id,
         Action: OperationAction.SUCCEED,
       });
 
@@ -1253,12 +1291,12 @@ describe("CheckpointManager", () => {
       const initialOperation = storage.initialize();
 
       const completedOperation = storage.markOperationCompleted(
-        initialOperation,
+        initialOperation.operation,
         OperationStatus.SUCCEEDED,
       );
 
       expect(completedOperation).not.toBe(initialOperation); // Should be a new object
-      expect(completedOperation.Id).toBe(initialOperation.Id);
+      expect(completedOperation.Id).toBe(initialOperation.operation.Id);
       expect(completedOperation.Status).toBe(OperationStatus.SUCCEEDED);
       expect(completedOperation.EndTimestamp).toBeInstanceOf(Date);
     });
@@ -1267,7 +1305,7 @@ describe("CheckpointManager", () => {
       const initialOperation = storage.initialize();
 
       const failedOperation = storage.markOperationCompleted(
-        initialOperation,
+        initialOperation.operation,
         OperationStatus.FAILED,
       );
 
@@ -1279,7 +1317,7 @@ describe("CheckpointManager", () => {
       const initialOperation = storage.initialize();
 
       const timedOutOperation = storage.markOperationCompleted(
-        initialOperation,
+        initialOperation.operation,
         OperationStatus.TIMED_OUT,
       );
 
@@ -1423,12 +1461,12 @@ describe("CheckpointManager", () => {
       };
 
       const result = storage.updateOperation(
-        initialOperation.Id,
+        initialOperation.operation.Id,
         newOperationData,
       );
 
       // Should return the updated CheckpointOperation
-      expect(result.operation.Id).toBe(initialOperation.Id);
+      expect(result.operation.Id).toBe(initialOperation.operation.Id);
       expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED); // Updated status
       expect(result.operation.EndTimestamp).toEqual(
         newOperationData.EndTimestamp,
@@ -1806,6 +1844,290 @@ describe("CheckpointManager", () => {
       });
     });
 
+    describe("EXECUTION operation updates", () => {
+      describe("valid operation updates", () => {
+        it("should update EXECUTION operation with SUCCEEDED status and create history event", () => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.SUCCEEDED,
+            EndTimestamp: new Date(),
+            ExecutionDetails: {
+              InputPayload: '{"success": true, "data": "test-result"}',
+            },
+          };
+
+          const result = storage.updateOperation(
+            initialOperation.operation.Id,
+            newOperationData,
+            '{"success": true, "data": "test-result"}',
+          );
+
+          // Should return the updated CheckpointOperation
+          expect(result.operation.Id).toBe(initialOperation.operation.Id);
+          expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
+          expect(result.operation.EndTimestamp).toEqual(
+            newOperationData.EndTimestamp,
+          );
+          expect(result.operation.ExecutionDetails?.InputPayload).toBe(
+            '{"success": true, "data": "test-result"}',
+          );
+
+          // Should have added ExecutionSucceeded event
+          expect(result.events).toHaveLength(2); // Start event + Success event
+          const successEvent = result.events[1];
+          expect(successEvent.EventType).toBe("ExecutionSucceeded");
+          expect(successEvent.ExecutionSucceededDetails).toEqual({
+            Result: {
+              Payload: '{"success": true, "data": "test-result"}',
+            },
+            Error: undefined,
+          });
+        });
+
+        it("should update EXECUTION operation with FAILED status", () => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.FAILED,
+            EndTimestamp: new Date(),
+            ExecutionDetails: {
+              InputPayload: "{}",
+            },
+          };
+
+          const result = storage.updateOperation(
+            initialOperation.operation.Id,
+            newOperationData,
+            undefined,
+            {
+              ErrorType: "ExecutionError",
+              ErrorMessage: "Execution failed",
+            },
+          );
+
+          // Should return the updated CheckpointOperation
+          expect(result.operation.Id).toBe(initialOperation.operation.Id);
+          expect(result.operation.Status).toBe(OperationStatus.FAILED);
+          expect(result.operation.EndTimestamp).toEqual(
+            newOperationData.EndTimestamp,
+          );
+
+          // Should have added ExecutionFailed event
+          expect(result.events).toHaveLength(2); // Start event + Failed event
+          const failedEvent = result.events[1];
+          expect(failedEvent.EventType).toBe("ExecutionFailed");
+          expect(failedEvent.ExecutionFailedDetails).toEqual({
+            Result: undefined,
+            Error: {
+              Payload: {
+                ErrorType: "ExecutionError",
+                ErrorMessage: "Execution failed",
+              },
+            },
+          });
+        });
+
+        it("should update EXECUTION operation with STOPPED status", () => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.STOPPED,
+            EndTimestamp: new Date(),
+          };
+
+          const result = storage.updateOperation(
+            initialOperation.operation.Id,
+            newOperationData,
+          );
+
+          // Should return the updated CheckpointOperation
+          expect(result.operation.Id).toBe(initialOperation.operation.Id);
+          expect(result.operation.Status).toBe(OperationStatus.STOPPED);
+          expect(result.operation.EndTimestamp).toEqual(
+            newOperationData.EndTimestamp,
+          );
+
+          // Should have added ExecutionStopped event
+          expect(result.events).toHaveLength(2); // Start event + Stopped event
+          const stoppedEvent = result.events[1];
+          expect(stoppedEvent.EventType).toBe("ExecutionStopped");
+          expect(stoppedEvent.ExecutionStoppedDetails).toEqual({
+            Result: undefined,
+            Error: undefined,
+          });
+        });
+
+        it("should update EXECUTION operation with TIMED_OUT status", () => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.TIMED_OUT,
+            EndTimestamp: new Date(),
+          };
+
+          const result = storage.updateOperation(
+            initialOperation.operation.Id,
+            newOperationData,
+          );
+
+          // Should return the updated CheckpointOperation
+          expect(result.operation.Id).toBe(initialOperation.operation.Id);
+          expect(result.operation.Status).toBe(OperationStatus.TIMED_OUT);
+          expect(result.operation.EndTimestamp).toEqual(
+            newOperationData.EndTimestamp,
+          );
+
+          // Should have added ExecutionTimedOut event
+          expect(result.events).toHaveLength(2); // Start event + TimedOut event
+          const timedOutEvent = result.events[1];
+          expect(timedOutEvent.EventType).toBe("ExecutionTimedOut");
+          expect(timedOutEvent.ExecutionTimedOutDetails).toEqual({
+            Result: undefined,
+            Error: undefined,
+          });
+        });
+
+        it("should update EXECUTION operation with STARTED status", () => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.STARTED,
+            EndTimestamp: new Date(),
+          };
+
+          const result = storage.updateOperation(
+            initialOperation.operation.Id,
+            newOperationData,
+          );
+
+          // Should return the updated CheckpointOperation
+          expect(result.operation.Id).toBe(initialOperation.operation.Id);
+          expect(result.operation.Status).toBe(OperationStatus.STARTED);
+          expect(result.operation.EndTimestamp).toEqual(
+            newOperationData.EndTimestamp,
+          );
+
+          // Should have added ExecutionStarted event
+          expect(result.events).toHaveLength(2); // Start event + Started event
+          const startedEvent = result.events[1];
+          expect(startedEvent.EventType).toBe("ExecutionStarted");
+          expect(startedEvent.ExecutionStartedDetails).toEqual({
+            Result: undefined,
+            Error: undefined,
+          });
+        });
+
+        it("should update EXECUTION operation with both result and error", () => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.FAILED,
+            EndTimestamp: new Date(),
+          };
+
+          const result = storage.updateOperation(
+            initialOperation.operation.Id,
+            newOperationData,
+            '{"partial": "data"}',
+            {
+              ErrorType: "PartialError",
+              ErrorMessage: "Partial failure",
+            },
+          );
+
+          // Should return the updated CheckpointOperation
+          expect(result.operation.Id).toBe(initialOperation.operation.Id);
+          expect(result.operation.Status).toBe(OperationStatus.FAILED);
+
+          // Should have added ExecutionFailed event with both Result and Error
+          expect(result.events).toHaveLength(2); // Start event + Failed event
+          const failedEvent = result.events[1];
+          expect(failedEvent.EventType).toBe("ExecutionFailed");
+          expect(failedEvent.ExecutionFailedDetails).toEqual({
+            Result: {
+              Payload: '{"partial": "data"}',
+            },
+            Error: {
+              Payload: {
+                ErrorType: "PartialError",
+                ErrorMessage: "Partial failure",
+              },
+            },
+          });
+        });
+
+        it("should handle EXECUTION operation with empty Result and Error strings", () => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.SUCCEEDED,
+            EndTimestamp: new Date(),
+          };
+
+          const result = storage.updateOperation(
+            initialOperation.operation.Id,
+            newOperationData,
+            "", // Empty string
+            {
+              ErrorType: "",
+              ErrorMessage: "",
+            },
+          );
+
+          // Should return the updated CheckpointOperation
+          expect(result.operation.Id).toBe(initialOperation.operation.Id);
+          expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
+
+          // Should have added ExecutionSucceeded event with empty string payloads
+          expect(result.events).toHaveLength(2); // Start event + Success event
+          const successEvent = result.events[1];
+          expect(successEvent.EventType).toBe("ExecutionSucceeded");
+          expect(successEvent.ExecutionSucceededDetails).toEqual({
+            Result: {
+              Payload: "",
+            },
+            Error: {
+              Payload: {
+                ErrorMessage: "",
+                ErrorType: "",
+              },
+            },
+          });
+        });
+      });
+
+      describe("invalid operation updates", () => {
+        it.each([
+          OperationStatus.PENDING,
+          OperationStatus.READY,
+          OperationStatus.CANCELLED,
+        ])(`should throw error for invalid EXECUTION status %s`, (status) => {
+          const initialOperation = storage.initialize();
+
+          const newOperationData = {
+            Type: OperationType.EXECUTION,
+            Status: status,
+            EndTimestamp: new Date(),
+          };
+
+          expect(() => {
+            storage.updateOperation(
+              initialOperation.operation.Id,
+              newOperationData,
+            );
+          }).toThrow(`Invalid status update for EXECUTION: ${status}`);
+        });
+      });
+    });
+
     it("should update existing operation and return the updated CheckpointOperation", () => {
       const initialOperation = storage.initialize();
 
@@ -1815,19 +2137,21 @@ describe("CheckpointManager", () => {
       };
 
       const result = storage.updateOperation(
-        initialOperation.Id,
+        initialOperation.operation.Id,
         newOperationData,
       );
 
       // Should return the updated CheckpointOperation
-      expect(result.operation.Id).toBe(initialOperation.Id);
+      expect(result.operation.Id).toBe(initialOperation.operation.Id);
       expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED); // Updated status
       expect(result.operation.EndTimestamp).toEqual(
         newOperationData.EndTimestamp,
       );
 
       // And the stored operation should be the same as returned
-      const storedOperation = storage.operationDataMap.get(initialOperation.Id);
+      const storedOperation = storage.operationDataMap.get(
+        initialOperation.operation.Id,
+      );
       expect(storedOperation).toBe(result);
       expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
       expect(storedOperation?.operation.EndTimestamp).toEqual(
@@ -1837,17 +2161,20 @@ describe("CheckpointManager", () => {
 
     it("should preserve existing operation properties when updating", () => {
       const initialOperation = storage.initialize();
-      const originalType = initialOperation.Type;
-      const originalExecutionDetails = initialOperation.ExecutionDetails;
+      const originalType = initialOperation.operation.Type;
+      const originalExecutionDetails =
+        initialOperation.operation.ExecutionDetails;
 
       const newOperationData = {
         Status: OperationStatus.FAILED,
         SomeNewField: "new-value",
       };
 
-      storage.updateOperation(initialOperation.Id, newOperationData);
+      storage.updateOperation(initialOperation.operation.Id, newOperationData);
 
-      const storedOperation = storage.operationDataMap.get(initialOperation.Id);
+      const storedOperation = storage.operationDataMap.get(
+        initialOperation.operation.Id,
+      );
       expect(storedOperation?.operation.Type).toBe(originalType);
       expect(storedOperation?.operation.ExecutionDetails).toBe(
         originalExecutionDetails,
@@ -1951,9 +2278,14 @@ describe("CheckpointManager", () => {
         AnotherField: null,
       };
 
-      storage.updateOperation(initialOperation.Id, updateWithUndefined);
+      storage.updateOperation(
+        initialOperation.operation.Id,
+        updateWithUndefined,
+      );
 
-      const storedOperation = storage.operationDataMap.get(initialOperation.Id);
+      const storedOperation = storage.operationDataMap.get(
+        initialOperation.operation.Id,
+      );
       expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
       expect(
         (storedOperation?.operation as Record<string, unknown>).SomeField,
@@ -1976,7 +2308,7 @@ describe("CheckpointManager", () => {
       const state = storage.getState();
 
       expect(state).toHaveLength(1);
-      expect(state[0]).toEqual(initialOperation);
+      expect(state[0]).toEqual(initialOperation.operation);
     });
 
     it("should return all operations when no parent-child relationships exist", () => {

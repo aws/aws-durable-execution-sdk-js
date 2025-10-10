@@ -3,7 +3,10 @@ import { OperationEvents } from "../../../common/operations/operation-with-data"
 import { HistoryEventType } from "./history-event-types";
 import { HistoryEventTypes } from "./operation-types";
 import { addOperationDetails } from "./operation-details";
-import { getErrorFromEvent, getPayloadFromEvent } from "./event-data-extractors";
+import {
+  getErrorFromEvent,
+  getPayloadFromEvent,
+} from "./event-data-extractors";
 
 /**
  * Creates an Operation object from an event and its history event type configuration.
@@ -18,7 +21,7 @@ import { getErrorFromEvent, getPayloadFromEvent } from "./event-data-extractors"
 export function createOperation(
   previousOperationEvents: OperationEvents | undefined,
   event: Event,
-  historyEventType: HistoryEventType
+  historyEventType: HistoryEventType,
 ): Operation {
   const operation: Operation = {
     // Most fields are immutable, so they should get overwritten by previous events.
@@ -64,7 +67,7 @@ export function createOperation(
 export function populateOperationDetails(
   event: Event,
   historyEventType: HistoryEventTypes,
-  operation: Operation
+  operation: Operation,
 ) {
   if (!event.EventTimestamp) {
     throw new Error("Missing required fields in event");
@@ -95,7 +98,7 @@ export function populateOperationDetails(
             ? new Date(
                 event.EventTimestamp.getTime() +
                   event.StepFailedDetails.RetryDetails.NextAttemptDelaySeconds *
-                    1000
+                    1000,
               )
             : undefined,
       });
@@ -106,7 +109,10 @@ export function populateOperationDetails(
       });
       break;
     case "EXECUTION":
-      throw new Error("Cannot populate EXECUTION event");
+      addOperationDetails(operation, historyEventType.operationDetailPlace, {
+        InputPayload: event.ExecutionStartedDetails?.Input?.Payload,
+      });
+      break;
     default:
       break;
   }

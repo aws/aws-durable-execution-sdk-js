@@ -54,7 +54,7 @@ function createMockEvent(overrides: Partial<Event> = {}): Event {
 }
 
 function createMockHistoryResponse(
-  overrides: Partial<GetDurableExecutionHistoryCommandOutput> = {}
+  overrides: Partial<GetDurableExecutionHistoryCommandOutput> = {},
 ): GetDurableExecutionHistoryCommandOutput {
   return {
     Events: [createMockEvent()],
@@ -64,7 +64,7 @@ function createMockHistoryResponse(
 }
 
 function createMockExecutionResponse(
-  overrides: Partial<GetDurableExecutionCommandOutput> = {}
+  overrides: Partial<GetDurableExecutionCommandOutput> = {},
 ): GetDurableExecutionCommandOutput {
   const defaultResponse: GetDurableExecutionCommandOutput = {
     Status: ExecutionStatus.SUCCEEDED,
@@ -142,7 +142,7 @@ function createHistoryPoller(options: CreateHistoryPollerOptions = {}): {
 
 async function waitForPollerCycles(
   cycles: number,
-  pollInterval = 100
+  pollInterval = 100,
 ): Promise<void> {
   for (let i = 0; i < cycles; i++) {
     await jest.advanceTimersByTimeAsync(pollInterval);
@@ -208,7 +208,7 @@ describe("HistoryPoller", () => {
       await jest.advanceTimersByTimeAsync(200);
 
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
-        initialHistoryCalls
+        initialHistoryCalls,
       );
     });
 
@@ -456,7 +456,7 @@ describe("HistoryPoller", () => {
       await waitForPollerCycles(2);
 
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
-        callsAfterCompletion
+        callsAfterCompletion,
       );
     });
 
@@ -575,13 +575,13 @@ describe("HistoryPoller", () => {
         1,
         expect.objectContaining({
           Marker: undefined,
-        })
+        }),
       );
       expect(mockApiClient.getHistory).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
           Marker: "test-marker",
-        })
+        }),
       );
     });
   });
@@ -620,14 +620,14 @@ describe("HistoryPoller", () => {
             createMockHistoryResponse({
               Events: [createMockEvent({ Id: "event-1" })],
               NextMarker: "persistent-marker", // This should persist to next polling cycle
-            })
+            }),
           );
         } else {
           return Promise.resolve(
             createMockHistoryResponse({
               Events: [createMockEvent({ Id: "event-2" })],
               NextMarker: undefined,
-            })
+            }),
           );
         }
       });
@@ -645,13 +645,13 @@ describe("HistoryPoller", () => {
       // First call starts with no marker
       expect(mockApiClient.getHistory).toHaveBeenNthCalledWith(
         1,
-        expect.objectContaining({ Marker: undefined })
+        expect.objectContaining({ Marker: undefined }),
       );
 
       // Second call should use the marker from first polling cycle
       expect(mockApiClient.getHistory).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({ Marker: "persistent-marker" })
+        expect.objectContaining({ Marker: "persistent-marker" }),
       );
     });
 
@@ -778,7 +778,7 @@ describe("HistoryPoller", () => {
       const eventsAfterFirstPoll = poller.getEvents();
       expect(eventsAfterFirstPoll).toEqual([...page1Events, ...page2Events]);
       expect(eventsAfterFirstPoll).not.toContain(
-        expect.objectContaining({ Id: "page3-event1" })
+        expect.objectContaining({ Id: "page3-event1" }),
       );
     });
 
@@ -855,7 +855,7 @@ describe("HistoryPoller", () => {
       const eventsAfterFirstPoll = poller.getEvents();
       expect(eventsAfterFirstPoll).toEqual([...page1Events, ...page2Events]);
       expect(eventsAfterFirstPoll).not.toContainEqual(
-        expect.objectContaining({ Id: "page3-event1" })
+        expect.objectContaining({ Id: "page3-event1" }),
       );
 
       // Second polling cycle - execution completes, re-fetches the last page with new events
@@ -872,13 +872,13 @@ describe("HistoryPoller", () => {
 
       // Verify we have both original and new events from the last page
       expect(finalEvents).toContainEqual(
-        expect.objectContaining({ Id: "page3-event1" })
+        expect.objectContaining({ Id: "page3-event1" }),
       ); // Original
       expect(finalEvents).toContainEqual(
-        expect.objectContaining({ Id: "page3-event2" })
+        expect.objectContaining({ Id: "page3-event2" }),
       ); // New
       expect(finalEvents).toContainEqual(
-        expect.objectContaining({ Id: "page3-event3" })
+        expect.objectContaining({ Id: "page3-event3" }),
       ); // New
 
       // Total: 2 from early pages + 3 from re-fetched last page = 5 events

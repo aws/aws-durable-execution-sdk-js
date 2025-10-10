@@ -1,5 +1,6 @@
 import {
   CallbackDetails,
+  ErrorObject,
   Operation,
   OperationAction,
   OperationStatus,
@@ -13,6 +14,7 @@ import { EventProcessor } from "./event-processor";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 import { waitHistoryDetails } from "./wait-details";
 import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
+import { executionDetails } from "./execution-details";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -92,12 +94,15 @@ export class CheckpointManager {
       Action: OperationAction.START,
       Payload: payload,
     };
-    this.operationDataMap.set(initialId, {
+
+    const initialOperationEvents = {
       operation: initialOperation,
       events: [this.eventProcessor.processUpdate(update, initialOperation)],
-    });
+    } satisfies OperationEvents;
 
-    return initialOperation;
+    this.operationDataMap.set(initialId, initialOperationEvents);
+
+    return initialOperationEvents;
   }
 
   getOperationInvocationIdMap(): OperationInvocationIdMap {
@@ -273,10 +278,16 @@ export class CheckpointManager {
    *
    * @param id The operation ID to update
    * @param newOperation Partial operation data to merge with existing operation
+   * @param payload Optional payload to update the operation with
    * @returns The updated checkpoint operation data
    * @throws {Error} When the operation with the given ID is not found
    */
-  updateOperation(id: string, newOperation: Operation): OperationEvents {
+  updateOperation(
+    id: string,
+    newOperation: Operation,
+    payload: string | undefined,
+    error: ErrorObject | undefined,
+  ): OperationEvents {
     const operationData = this.operationDataMap.get(id);
     if (!operationData) {
       throw new Error("Could not find operation");
@@ -286,7 +297,7 @@ export class CheckpointManager {
       throw new Error("Missing Status in operation");
     }
 
-    const newOperationData = {
+    const newOperationData: OperationEvents = {
       ...operationData,
       operation: {
         ...operationData.operation,
@@ -354,6 +365,35 @@ export class CheckpointManager {
                       newOperationData.operation.ChainedInvokeDetails.Error,
                   }
                 : undefined,
+          },
+        );
+        newOperationData.events.push(historyEvent);
+        break;
+      }
+      case OperationType.EXECUTION: {
+        const historyEventType = executionDetails[newOperation.Status];
+        if (!historyEventType) {
+          throw new Error(
+            `Invalid status update for ${OperationType.EXECUTION}: ${newOperation.Status}`,
+          );
+        }
+
+        const historyEvent = this.eventProcessor.createHistoryEvent(
+          historyEventType.eventType,
+          newOperationData.operation,
+          historyEventType.detailPlace,
+          {
+            Result:
+              payload !== undefined
+                ? {
+                    Payload: payload,
+                  }
+                : undefined,
+            Error: error
+              ? {
+                  Payload: error,
+                }
+              : undefined,
           },
         );
         newOperationData.events.push(historyEvent);

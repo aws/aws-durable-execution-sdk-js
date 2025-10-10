@@ -1,5 +1,5 @@
 import { OperationEvents } from "./operations/operation-with-data";
-import { Event } from "@aws-sdk/client-lambda";
+import { Event, OperationType } from "@aws-sdk/client-lambda";
 
 /**
  * Optimized way of retrieving operations by id and name/index.
@@ -7,6 +7,7 @@ import { Event } from "@aws-sdk/client-lambda";
  * Avoids re-iterating over the operations list every time an operation needs to be fetched.
  */
 export class IndexedOperations {
+  private executionOperation: OperationEvents | undefined = undefined;
   private readonly operationsById = new Map<string, OperationEvents>();
   private readonly operationsByName = new Map<
     string,
@@ -16,13 +17,14 @@ export class IndexedOperations {
     string,
     Map<string, OperationEvents>
   >();
+  private readonly historyEvents: Event[] = [];
 
   constructor(operations: OperationEvents[]) {
     this.addOperations(operations);
   }
 
   getHistoryEvents(): Event[] {
-    return this.getOperations().flatMap((op) => op.events);
+    return this.historyEvents;
   }
 
   getOperations(): OperationEvents[] {
@@ -36,14 +38,32 @@ export class IndexedOperations {
         throw new Error("Cannot add operation without an ID");
       }
 
+      // Execution operation is tracked separately so that it isn't added to the operation index
+      const executionOperation =
+        this.executionOperation?.operation.Id === operation.Id
+          ? this.executionOperation
+          : undefined;
+
       // Check if operation already exists and validate parent doesn't change
-      const existingOperation = this.operationsById.get(operation.Id);
+      const existingOperation =
+        this.operationsById.get(operation.Id) ?? executionOperation;
+
+      const previousHistoryIndex = existingOperation?.events.length ?? 0;
+      this.historyEvents.push(
+        ...checkpointOperation.events.slice(previousHistoryIndex),
+      );
+
+      if (operation.Type === OperationType.EXECUTION) {
+        this.executionOperation = checkpointOperation;
+        continue;
+      }
+
       if (existingOperation) {
         const existingParentId = existingOperation.operation.ParentId;
         // Throw error if parent has changed
         if (existingParentId !== operation.ParentId) {
           throw new Error(
-            `Cannot change ParentId of operation ${operation.Id} from ${existingParentId} to ${operation.ParentId}`
+            `Cannot change ParentId of operation ${operation.Id} from ${existingParentId} to ${operation.ParentId}`,
           );
         }
       }

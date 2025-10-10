@@ -50,6 +50,17 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
     });
     expect(execution.getHistoryEvents()).toEqual([
       {
+        EventId: 1,
+        EventTimestamp: expect.any(Number),
+        EventType: "ExecutionStarted",
+        ExecutionStartedDetails: {
+          Input: {
+            Payload: "{}",
+          },
+        },
+        Id: expect.any(String),
+      },
+      {
         EventType: "ChainedInvokeStarted",
         SubType: "ChainedInvoke",
         EventId: 2,
@@ -77,6 +88,23 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
             }),
           },
         },
+      },
+      {
+        EventId: 4,
+        EventTimestamp: expect.any(Number),
+        EventType: "ExecutionSucceeded",
+        ExecutionSucceededDetails: {
+          Result: {
+            Payload: JSON.stringify({
+              durableResult: {
+                type: "durable",
+                input: "bar",
+                message: "durable test result",
+              },
+            }),
+          },
+        },
+        Id: expect.any(String),
       },
     ]);
     expect(execution.getResult()).toEqual({

@@ -92,7 +92,7 @@ describe("checkpoint-server", () => {
         checkpointToken: createCheckpointToken("mockToken"),
         executionId: createExecutionId("mockExecutionId"),
         invocationId: createInvocationId("mockInvocationId"),
-        operations: [],
+        operationEvents: [],
       });
 
       const response = await request(server)
@@ -108,7 +108,7 @@ describe("checkpoint-server", () => {
         checkpointToken: "mockToken",
         executionId: "mockExecutionId",
         invocationId: "mockInvocationId",
-        operations: [],
+        operationEvents: [],
       });
     });
   });
@@ -121,22 +121,22 @@ describe("checkpoint-server", () => {
         checkpointToken: createCheckpointToken("mockToken"),
         executionId: createExecutionId(executionId),
         invocationId: createInvocationId("mockInvocationId"),
-        operations: [],
+        operationEvents: [],
       });
 
       const response = await request(server).post(
-        `${API_PATHS.START_INVOCATION}/${executionId}`
+        `${API_PATHS.START_INVOCATION}/${executionId}`,
       );
 
       expect(response.status).toBe(200);
       expect(mockExecutionManager.startInvocation).toHaveBeenCalledWith(
-        expect.any(String)
+        expect.any(String),
       );
       expect(response.body).toEqual({
         checkpointToken: "mockToken",
         executionId,
         invocationId: "mockInvocationId",
-        operations: [],
+        operationEvents: [],
       });
     });
   });
@@ -145,7 +145,7 @@ describe("checkpoint-server", () => {
     it("should return pending checkpoint updates when execution exists", async () => {
       const executionId = "test-execution-id";
       const mockStorage = new CheckpointManager(
-        createExecutionId("test-execution-id")
+        createExecutionId("test-execution-id"),
       );
       jest
         .spyOn(mockStorage, "getPendingCheckpointUpdates")
@@ -158,16 +158,16 @@ describe("checkpoint-server", () => {
         ]);
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage
+        mockStorage,
       );
 
       const response = await request(server).get(
-        `${API_PATHS.POLL_CHECKPOINT_DATA}/${executionId}`
+        `${API_PATHS.POLL_CHECKPOINT_DATA}/${executionId}`,
       );
 
       expect(response.status).toBe(200);
       expect(
-        mockExecutionManager.getCheckpointsByExecution
+        mockExecutionManager.getCheckpointsByExecution,
       ).toHaveBeenCalledWith(executionId);
       expect(mockStorage.getPendingCheckpointUpdates).toHaveBeenCalled();
       expect(response.body).toEqual({
@@ -185,11 +185,11 @@ describe("checkpoint-server", () => {
       const executionId = "non-existent-id";
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        undefined
+        undefined,
       );
 
       const response = await request(server).get(
-        `${API_PATHS.POLL_CHECKPOINT_DATA}/${executionId}`
+        `${API_PATHS.POLL_CHECKPOINT_DATA}/${executionId}`,
       );
 
       expect(response.status).toBe(404);
@@ -214,12 +214,12 @@ describe("checkpoint-server", () => {
       } as unknown as CheckpointManager;
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage
+        mockStorage,
       );
 
       const response = await request(server)
         .post(
-          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`
+          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`,
         )
         .send({
           operationData: {
@@ -235,14 +235,19 @@ describe("checkpoint-server", () => {
       });
       expect(response.status).toBe(200);
       expect(
-        mockExecutionManager.getCheckpointsByExecution
+        mockExecutionManager.getCheckpointsByExecution,
       ).toHaveBeenCalledWith(executionId);
-      expect(mockStorage.updateOperation).toHaveBeenCalledWith(operationId, {
-        Status: status,
-        StepDetails: {
-          Result: "hello world",
+      expect(mockStorage.updateOperation).toHaveBeenCalledWith(
+        operationId,
+        {
+          Status: status,
+          StepDetails: {
+            Result: "hello world",
+          },
         },
-      });
+        undefined,
+        undefined,
+      );
     });
 
     it("should return 404 when execution does not exist", async () => {
@@ -250,12 +255,12 @@ describe("checkpoint-server", () => {
       const operationId = "test-operation-id";
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        undefined
+        undefined,
       );
 
       const response = await request(server)
         .post(
-          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`
+          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`,
         )
         .send({
           operationData: {
@@ -284,12 +289,12 @@ describe("checkpoint-server", () => {
       } as unknown as CheckpointManager;
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage
+        mockStorage,
       );
 
       const response = await request(server)
         .post(
-          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`
+          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`,
         )
         .send({
           operationData: {
@@ -299,6 +304,204 @@ describe("checkpoint-server", () => {
 
       expect(response.body).toEqual({ message: "Operation not found" });
       expect(response.status).toBe(404);
+    });
+
+    it("should pass payload parameter to updateOperation when provided", async () => {
+      const executionId = "test-execution-id";
+      const operationId = "test-operation-id";
+      const status = OperationStatus.SUCCEEDED;
+      const payload = JSON.stringify({ result: "test payload data" });
+
+      const mockUpdatedOperation = {
+        Id: operationId,
+        Status: OperationStatus.SUCCEEDED,
+      };
+
+      const mockStorage = {
+        updateOperation: jest.fn().mockReturnValue(mockUpdatedOperation),
+        hasOperation: jest.fn().mockReturnValue(true),
+      } as unknown as CheckpointManager;
+
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage,
+      );
+
+      const response = await request(server)
+        .post(
+          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`,
+        )
+        .send({
+          operationData: {
+            Status: status,
+            StepDetails: {
+              Result: "hello world",
+            },
+          },
+          payload: payload,
+        });
+
+      expect(response.body).toEqual({
+        operation: mockUpdatedOperation,
+      });
+      expect(response.status).toBe(200);
+      expect(mockStorage.updateOperation).toHaveBeenCalledWith(
+        operationId,
+        {
+          Status: status,
+          StepDetails: {
+            Result: "hello world",
+          },
+        },
+        payload,
+        undefined,
+      );
+    });
+
+    it("should pass error parameter to updateOperation when provided", async () => {
+      const executionId = "test-execution-id";
+      const operationId = "test-operation-id";
+      const status = OperationStatus.FAILED;
+      const errorObject = {
+        ErrorType: "ServiceException",
+        ErrorMessage: "Operation failed",
+      };
+
+      const mockUpdatedOperation = {
+        Id: operationId,
+        Status: OperationStatus.FAILED,
+      };
+
+      const mockStorage = {
+        updateOperation: jest.fn().mockReturnValue(mockUpdatedOperation),
+        hasOperation: jest.fn().mockReturnValue(true),
+      } as unknown as CheckpointManager;
+
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage,
+      );
+
+      const response = await request(server)
+        .post(
+          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`,
+        )
+        .send({
+          operationData: {
+            Status: status,
+            StepDetails: {
+              Error: errorObject,
+            },
+          },
+          error: errorObject,
+        });
+
+      expect(response.body).toEqual({
+        operation: mockUpdatedOperation,
+      });
+      expect(response.status).toBe(200);
+      expect(mockStorage.updateOperation).toHaveBeenCalledWith(
+        operationId,
+        {
+          Status: status,
+          StepDetails: {
+            Error: errorObject,
+          },
+        },
+        undefined,
+        errorObject,
+      );
+    });
+
+    it("should pass both payload and error parameters to updateOperation when provided", async () => {
+      const executionId = "test-execution-id";
+      const operationId = "test-operation-id";
+      const status = OperationStatus.FAILED;
+      const payload = JSON.stringify({ attemptedValue: "some data" });
+      const errorObject = {
+        ErrorType: "ValidationException",
+        ErrorMessage: "Invalid input data",
+      };
+
+      const mockUpdatedOperation = {
+        Id: operationId,
+        Status: OperationStatus.FAILED,
+      };
+
+      const mockStorage = {
+        updateOperation: jest.fn().mockReturnValue(mockUpdatedOperation),
+        hasOperation: jest.fn().mockReturnValue(true),
+      } as unknown as CheckpointManager;
+
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage,
+      );
+
+      const response = await request(server)
+        .post(
+          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`,
+        )
+        .send({
+          operationData: {
+            Status: status,
+          },
+          payload: payload,
+          error: errorObject,
+        });
+
+      expect(response.body).toEqual({
+        operation: mockUpdatedOperation,
+      });
+      expect(response.status).toBe(200);
+      expect(mockStorage.updateOperation).toHaveBeenCalledWith(
+        operationId,
+        {
+          Status: status,
+        },
+        payload,
+        errorObject,
+      );
+    });
+
+    it("should pass undefined for payload and error when not provided", async () => {
+      const executionId = "test-execution-id";
+      const operationId = "test-operation-id";
+      const status = OperationStatus.SUCCEEDED;
+
+      const mockUpdatedOperation = {
+        Id: operationId,
+        Status: OperationStatus.SUCCEEDED,
+      };
+
+      const mockStorage = {
+        updateOperation: jest.fn().mockReturnValue(mockUpdatedOperation),
+        hasOperation: jest.fn().mockReturnValue(true),
+      } as unknown as CheckpointManager;
+
+      mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
+        mockStorage,
+      );
+
+      const response = await request(server)
+        .post(
+          `${API_PATHS.UPDATE_CHECKPOINT_DATA}/${executionId}/${operationId}`,
+        )
+        .send({
+          operationData: {
+            Status: status,
+          },
+        });
+
+      expect(response.body).toEqual({
+        operation: mockUpdatedOperation,
+      });
+      expect(response.status).toBe(200);
+      expect(mockStorage.updateOperation).toHaveBeenCalledWith(
+        operationId,
+        {
+          Status: status,
+        },
+        undefined,
+        undefined,
+      );
     });
   });
 
@@ -329,16 +532,16 @@ describe("checkpoint-server", () => {
       };
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage as unknown as CheckpointManager
+        mockStorage as unknown as CheckpointManager,
       );
 
       const response = await request(server).get(
-        `${API_PATHS.GET_STATE}/${durableExecutionArn}/state`
+        `${API_PATHS.GET_STATE}/${durableExecutionArn}/state`,
       );
 
       expect(response.status).toBe(200);
       expect(
-        mockExecutionManager.getCheckpointsByExecution
+        mockExecutionManager.getCheckpointsByExecution,
       ).toHaveBeenCalledWith(durableExecutionArn);
       expect(response.body).toEqual({
         Operations: mockOperations,
@@ -350,11 +553,11 @@ describe("checkpoint-server", () => {
       const invalidExecutionId = "invalid-id" as ExecutionId;
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        undefined
+        undefined,
       );
 
       const response = await request(server).get(
-        `${API_PATHS.GET_STATE}/${invalidExecutionId}/state`
+        `${API_PATHS.GET_STATE}/${invalidExecutionId}/state`,
       );
 
       expect(response.status).toBe(404);
@@ -386,7 +589,7 @@ describe("checkpoint-server", () => {
       };
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage as unknown as CheckpointManager
+        mockStorage as unknown as CheckpointManager,
       );
 
       // Send request with no updates field
@@ -400,12 +603,12 @@ describe("checkpoint-server", () => {
 
       expect(response.status).toBe(200);
       expect(
-        mockExecutionManager.getCheckpointsByExecution
+        mockExecutionManager.getCheckpointsByExecution,
       ).toHaveBeenCalledWith(durableExecutionArn);
       // registerUpdates should be called with empty array when no Updates field is provided
       expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
         [],
-        "test-invocation-id"
+        "test-invocation-id",
       );
       expect(response.body).toEqual({
         CheckpointToken: expect.any(String),
@@ -447,7 +650,7 @@ describe("checkpoint-server", () => {
       };
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage as unknown as CheckpointManager
+        mockStorage as unknown as CheckpointManager,
       );
 
       const input: CheckpointDurableExecutionRequest = {
@@ -468,11 +671,11 @@ describe("checkpoint-server", () => {
 
       expect(response.status).toBe(200);
       expect(
-        mockExecutionManager.getCheckpointsByExecution
+        mockExecutionManager.getCheckpointsByExecution,
       ).toHaveBeenCalledWith(durableExecutionArn);
       expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
         input.Updates,
-        "test-invocation-id"
+        "test-invocation-id",
       );
       expect(response.body).toEqual({
         CheckpointToken: expect.any(String),
@@ -512,7 +715,7 @@ describe("checkpoint-server", () => {
       };
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage as unknown as CheckpointManager
+        mockStorage as unknown as CheckpointManager,
       );
 
       const input: CheckpointDurableExecutionRequest = {
@@ -535,7 +738,7 @@ describe("checkpoint-server", () => {
       expect(response.status).toBe(200);
       expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
         input.Updates,
-        "test-invocation-id"
+        "test-invocation-id",
       );
       expect(response.body).toEqual({
         CheckpointToken: expect.any(String),
@@ -577,7 +780,7 @@ describe("checkpoint-server", () => {
       };
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage as unknown as CheckpointManager
+        mockStorage as unknown as CheckpointManager,
       );
 
       const input: CheckpointDurableExecutionRequest = {
@@ -606,7 +809,7 @@ describe("checkpoint-server", () => {
       expect(response.status).toBe(200);
       expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
         input.Updates,
-        "test-invocation-id"
+        "test-invocation-id",
       );
     });
 
@@ -614,7 +817,7 @@ describe("checkpoint-server", () => {
       const invalidExecutionId = "invalid-id" as ExecutionId;
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        undefined
+        undefined,
       );
 
       const response = await request(server)
@@ -656,7 +859,7 @@ describe("checkpoint-server", () => {
       };
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
-        mockStorage as unknown as CheckpointManager
+        mockStorage as unknown as CheckpointManager,
       );
 
       const input: CheckpointDurableExecutionRequest = {
@@ -678,7 +881,7 @@ describe("checkpoint-server", () => {
 
       expect(response.status).toBe(400);
       expect(response.headers["x-amzn-errortype"]).toEqual(
-        "InvalidParameterValueException"
+        "InvalidParameterValueException",
       );
       expect(response.body).toEqual({
         Type: "InvalidParameterValueException",
@@ -697,7 +900,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const rawData = "success-result";
@@ -710,14 +913,14 @@ describe("checkpoint-server", () => {
         expect(response.status).toBe(200);
         expect(response.body).toEqual({});
         expect(
-          mockExecutionManager.getCheckpointsByCallbackId
+          mockExecutionManager.getCheckpointsByCallbackId,
         ).toHaveBeenCalledWith(callbackId);
         expect(mockCheckpointManager.completeCallback).toHaveBeenCalledWith(
           {
             CallbackId: callbackId,
             Result: "success-result",
           },
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
       });
 
@@ -728,7 +931,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const bufferData = Buffer.from("buffer-content", "utf-8");
@@ -744,7 +947,7 @@ describe("checkpoint-server", () => {
             CallbackId: callbackId,
             Result: "buffer-content",
           },
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
       });
 
@@ -755,7 +958,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const response = await request(server)
@@ -769,14 +972,14 @@ describe("checkpoint-server", () => {
             CallbackId: callbackId,
             Result: "",
           },
-          OperationStatus.SUCCEEDED
+          OperationStatus.SUCCEEDED,
         );
       });
 
       it("should return 404 when execution not found", async () => {
         const callbackId = "test-callback-id";
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          undefined
+          undefined,
         );
 
         const response = await request(server)
@@ -796,7 +999,7 @@ describe("checkpoint-server", () => {
           completeCallback: jest.fn(),
         } as unknown as CheckpointManager;
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const response = await request(server)
@@ -821,7 +1024,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const response = await request(server)
@@ -844,7 +1047,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const errorObject = {
@@ -859,14 +1062,14 @@ describe("checkpoint-server", () => {
         expect(response.status).toBe(200);
         expect(response.body).toEqual({});
         expect(
-          mockExecutionManager.getCheckpointsByCallbackId
+          mockExecutionManager.getCheckpointsByCallbackId,
         ).toHaveBeenCalledWith(callbackId);
         expect(mockCheckpointManager.completeCallback).toHaveBeenCalledWith(
           {
             CallbackId: callbackId,
             Error: errorObject,
           },
-          OperationStatus.FAILED
+          OperationStatus.FAILED,
         );
       });
 
@@ -877,7 +1080,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const simpleError = "Simple error message";
@@ -896,14 +1099,14 @@ describe("checkpoint-server", () => {
               ErrorMessage: simpleError,
             },
           },
-          OperationStatus.FAILED
+          OperationStatus.FAILED,
         );
       });
 
       it("should return 404 when execution not found", async () => {
         const callbackId = "test-callback-id";
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          undefined
+          undefined,
         );
 
         const response = await request(server)
@@ -928,7 +1131,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const response = await request(server)
@@ -950,7 +1153,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const heartbeatInput: SendDurableExecutionCallbackHeartbeatRequest = {
@@ -964,17 +1167,17 @@ describe("checkpoint-server", () => {
         expect(response.status).toBe(200);
         expect(response.body).toEqual({});
         expect(
-          mockExecutionManager.getCheckpointsByCallbackId
+          mockExecutionManager.getCheckpointsByCallbackId,
         ).toHaveBeenCalledWith(callbackId);
         expect(mockCheckpointManager.heartbeatCallback).toHaveBeenCalledWith(
-          callbackId
+          callbackId,
         );
       });
 
       it("should return 404 when execution not found", async () => {
         const callbackId = "test-callback-id";
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          undefined
+          undefined,
         );
 
         const response = await request(server)
@@ -999,7 +1202,7 @@ describe("checkpoint-server", () => {
         } as unknown as CheckpointManager;
 
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
-          mockCheckpointManager
+          mockCheckpointManager,
         );
 
         const response = await request(server)
