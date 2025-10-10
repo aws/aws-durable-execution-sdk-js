@@ -22,7 +22,7 @@ export const handler = withDurableFunctions(
 
     // context.wait() terminates the current execution and restarts it later,
     // ensuring getResults() functions correctly during workflow replay
-    await context.wait(1000);
+    await context.wait(1);
 
     return results.getResults();
   },

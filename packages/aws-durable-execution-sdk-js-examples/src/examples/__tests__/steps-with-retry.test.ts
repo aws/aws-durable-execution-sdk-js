@@ -72,9 +72,9 @@ describe("steps-with-retry", () => {
       data: { S: "found-item" },
     });
 
-    // Verify wait operation was called (5 second wait between polls)
+    // Verify wait operation was called (1 second wait between polls)
     const waitOp = durableTestRunner.getOperationByIndex(1);
-    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(5);
+    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(1);
   });
 
   it("should retry failed DynamoDB calls according to retry strategy", async () => {
@@ -109,7 +109,7 @@ describe("steps-with-retry", () => {
       errorMessage: "Persistent failure",
       errorType: "Error",
       stackTrace: expect.any(Array),
-    }
+    };
 
     const result = await durableTestRunner.run();
     const error = result.getError();
@@ -119,7 +119,7 @@ describe("steps-with-retry", () => {
     // Verify that step operations were attempted
     const stepOp = durableTestRunner.getOperationByIndex(0);
     expect(stepOp.getStepDetails()?.result).toBeUndefined();
-    expect(stepOp.getStepDetails()?.error).toEqual(expectedErrorObject)
+    expect(stepOp.getStepDetails()?.error).toEqual(expectedErrorObject);
   });
 
   it("should fail when item is not found after maximum polls", async () => {
@@ -141,6 +141,6 @@ describe("steps-with-retry", () => {
 
     // Should have wait operations between polls
     const waitOp = durableTestRunner.getOperationByIndex(1);
-    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(5);
+    expect(waitOp.getWaitDetails()?.waitSeconds).toEqual(1);
   });
 });

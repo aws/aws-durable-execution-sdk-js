@@ -246,7 +246,7 @@ class DurableContextImpl implements DurableContext {
     }
   }
 
-  wait(nameOrMillis: string | number, maybeMillis?: number): Promise<void> {
+  wait(nameOrSeconds: string | number, maybeSeconds?: number): Promise<void> {
     const shouldSwitchToExecutionMode = this.captureExecutionState();
 
     this.checkAndUpdateReplayMode();
@@ -260,10 +260,10 @@ class DurableContextImpl implements DurableContext {
       this.hasRunningOperations.bind(this),
     );
     try {
-      if (typeof nameOrMillis === "string") {
-        return waitHandler(nameOrMillis, maybeMillis!);
+      if (typeof nameOrSeconds === "string") {
+        return waitHandler(nameOrSeconds, maybeSeconds!);
       } else {
-        return waitHandler(nameOrMillis);
+        return waitHandler(nameOrSeconds);
       }
     } finally {
       if (shouldSwitchToExecutionMode) {
