@@ -62,6 +62,7 @@ export const createRunInChildContextHandler = (
   createChildContext: (
     executionContext: ExecutionContext,
     parentContext: Context,
+    durableExecutionMode: DurableExecutionMode,
     entityId: string,
     checkpointToken: string | undefined,
     logger: Logger,
@@ -131,6 +132,7 @@ export const handleCompletedChildContext = async <T>(
   createChildContext: (
     executionContext: ExecutionContext,
     parentContext: Context,
+    durableExecutionMode: DurableExecutionMode,
     entityId: string,
     checkpointToken: string | undefined,
     logger: Logger,
@@ -154,9 +156,9 @@ export const handleCompletedChildContext = async <T>(
       {
         ...context,
         parentId: entityId,
-        _durableExecutionMode: DurableExecutionMode.ReplaySucceededContext,
       },
       parentContext,
+      DurableExecutionMode.ReplaySucceededContext,
       entityId,
       undefined,
       getParentLogger(),
@@ -197,6 +199,7 @@ export const executeChildContext = async <T>(
   createChildContext: (
     executionContext: ExecutionContext,
     parentContext: Context,
+    durableExecutionMode: DurableExecutionMode,
     entityId: string,
     checkpointToken: string | undefined,
     logger: Logger,
@@ -222,9 +225,9 @@ export const executeChildContext = async <T>(
     {
       ...context,
       parentId: entityId,
-      _durableExecutionMode: determineChildReplayMode(context, entityId),
     },
     parentContext,
+    determineChildReplayMode(context, entityId),
     entityId,
     undefined,
     getParentLogger(),

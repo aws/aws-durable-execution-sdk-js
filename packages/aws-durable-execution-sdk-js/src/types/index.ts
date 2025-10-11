@@ -679,7 +679,6 @@ export interface ExecutionContext {
   customerHandlerEvent: any;
   state: ExecutionState;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
-  _durableExecutionMode: DurableExecutionMode;
   terminationManager: TerminationManager;
   isVerbose: boolean;
   durableExecutionArn: string;

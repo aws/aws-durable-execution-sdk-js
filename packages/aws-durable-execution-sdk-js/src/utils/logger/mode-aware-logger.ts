@@ -1,7 +1,7 @@
-import { Logger, ExecutionContext, DurableExecutionMode } from "../../types";
+import { Logger, DurableExecutionMode } from "../../types";
 
 export const createModeAwareLogger = (
-  executionContext: ExecutionContext,
+  durableExecutionMode: DurableExecutionMode,
   createContextLogger: (stepId: string, attempt?: number) => Logger,
   stepPrefix?: string,
 ): Logger => {
@@ -10,8 +10,7 @@ export const createModeAwareLogger = (
 
   // Only log if in ExecutionMode
   const shouldLog = () =>
-    executionContext._durableExecutionMode ===
-    DurableExecutionMode.ExecutionMode;
+    durableExecutionMode === DurableExecutionMode.ExecutionMode;
 
   return {
     log: (

@@ -19,7 +19,6 @@ describe("Mode-Aware Logger", () => {
 
     mockExecutionContext = {
       _stepData: {},
-      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
       durableExecutionArn: "test-arn",
       executionContextId: "test-id",
       customerHandlerEvent: {},
@@ -37,10 +36,8 @@ describe("Mode-Aware Logger", () => {
   });
 
   test("should log in ExecutionMode", () => {
-    mockExecutionContext._durableExecutionMode =
-      DurableExecutionMode.ExecutionMode;
     const logger = createModeAwareLogger(
-      mockExecutionContext,
+      DurableExecutionMode.ExecutionMode,
       mockCreateContextLogger,
     );
 
@@ -53,10 +50,8 @@ describe("Mode-Aware Logger", () => {
   });
 
   test("should not log in ReplayMode", () => {
-    mockExecutionContext._durableExecutionMode =
-      DurableExecutionMode.ReplayMode;
     const logger = createModeAwareLogger(
-      mockExecutionContext,
+      DurableExecutionMode.ReplayMode,
       mockCreateContextLogger,
     );
 
@@ -66,10 +61,8 @@ describe("Mode-Aware Logger", () => {
   });
 
   test("should not log in ReplaySucceededContext", () => {
-    mockExecutionContext._durableExecutionMode =
-      DurableExecutionMode.ReplaySucceededContext;
     const logger = createModeAwareLogger(
-      mockExecutionContext,
+      DurableExecutionMode.ReplaySucceededContext,
       mockCreateContextLogger,
     );
 
@@ -81,7 +74,7 @@ describe("Mode-Aware Logger", () => {
   test("should pass stepPrefix to createContextLogger", () => {
     const stepPrefix = "1-2";
     createModeAwareLogger(
-      mockExecutionContext,
+      DurableExecutionMode.ExecutionMode,
       mockCreateContextLogger,
       stepPrefix,
     );
@@ -90,16 +83,17 @@ describe("Mode-Aware Logger", () => {
   });
 
   test("should pass empty string when no stepPrefix", () => {
-    createModeAwareLogger(mockExecutionContext, mockCreateContextLogger);
+    createModeAwareLogger(
+      DurableExecutionMode.ExecutionMode,
+      mockCreateContextLogger,
+    );
 
     expect(mockCreateContextLogger).toHaveBeenCalledWith("", undefined);
   });
 
   test("should call all logger methods in ExecutionMode", () => {
-    mockExecutionContext._durableExecutionMode =
-      DurableExecutionMode.ExecutionMode;
     const logger = createModeAwareLogger(
-      mockExecutionContext,
+      DurableExecutionMode.ExecutionMode,
       mockCreateContextLogger,
     );
 
@@ -128,10 +122,8 @@ describe("Mode-Aware Logger", () => {
   });
 
   test("should not call any logger methods in ReplayMode", () => {
-    mockExecutionContext._durableExecutionMode =
-      DurableExecutionMode.ReplayMode;
     const logger = createModeAwareLogger(
-      mockExecutionContext,
+      DurableExecutionMode.ReplayMode,
       mockCreateContextLogger,
     );
 

@@ -58,7 +58,6 @@ describe("Run In Child Context Integration Tests", () => {
           ),
       },
       _stepData: {},
-      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
       terminationManager: mockTerminationManager,
       isVerbose: false,
       customerHandlerEvent: {},
@@ -73,6 +72,7 @@ describe("Run In Child Context Integration Tests", () => {
     durableContext = createDurableContext(
       mockExecutionContext,
       mockParentContext,
+      DurableExecutionMode.ExecutionMode,
     );
   });
 
