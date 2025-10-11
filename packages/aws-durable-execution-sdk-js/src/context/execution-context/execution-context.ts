@@ -12,7 +12,11 @@ import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-i
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
-): Promise<{ executionContext: ExecutionContext; checkpointToken: string }> => {
+): Promise<{
+  executionContext: ExecutionContext;
+  durableExecutionMode: DurableExecutionMode;
+  checkpointToken: string;
+}> => {
   const isVerbose = process.env.DURABLE_VERBOSE_MODE === "true";
   const isLocalRunner = event.LocalRunner || false;
 
@@ -79,7 +83,6 @@ export const initializeExecutionContext = async (
       customerHandlerEvent,
       state,
       _stepData: stepData,
-      _durableExecutionMode: durableExecutionMode,
       terminationManager: new TerminationManager(),
       isVerbose,
       durableExecutionArn,
@@ -87,6 +90,7 @@ export const initializeExecutionContext = async (
         return getStepDataUtil(stepData, stepId);
       },
     },
+    durableExecutionMode,
     checkpointToken,
   };
 };

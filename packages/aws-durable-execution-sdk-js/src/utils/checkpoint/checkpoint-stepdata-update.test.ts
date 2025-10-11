@@ -38,7 +38,6 @@ describe("CheckpointHandler - StepData Update", () => {
       customerHandlerEvent: {},
       state: mockState,
       _stepData: stepData,
-      _durableExecutionMode: DurableExecutionMode.ExecutionMode,
       terminationManager: new TerminationManager(),
       durableExecutionArn:
         "arn:aws:durable-execution:us-east-1:123456789012:execution/test-execution",

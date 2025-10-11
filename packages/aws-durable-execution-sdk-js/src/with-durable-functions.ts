@@ -15,6 +15,7 @@ import {
   DurableContext,
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
+  DurableExecutionMode,
   ExecutionContext,
   InvocationStatus,
   LambdaHandler,
@@ -32,6 +33,7 @@ async function runHandler<Input, Output>(
   event: DurableExecutionInvocationInput,
   context: Context,
   executionContext: ExecutionContext,
+  durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
   handler: DurableHandler<Input, Output>,
 ): Promise<DurableExecutionInvocationOutput> {
@@ -41,6 +43,7 @@ async function runHandler<Input, Output>(
   const durableContext = createDurableContext(
     executionContext,
     context,
+    durableExecutionMode,
     undefined,
     checkpointToken,
   );
@@ -208,7 +211,7 @@ export const withDurableFunctions = <Input = any, Output = any>(
     event: DurableExecutionInvocationInput,
     context: Context,
   ): Promise<DurableExecutionInvocationOutput> => {
-    const { executionContext, checkpointToken } =
+    const { executionContext, durableExecutionMode, checkpointToken } =
       await initializeExecutionContext(event);
     let response: DurableExecutionInvocationOutput | null = null;
     try {
@@ -216,6 +219,7 @@ export const withDurableFunctions = <Input = any, Output = any>(
         event,
         context,
         executionContext,
+        durableExecutionMode,
         checkpointToken,
         handler,
       );
