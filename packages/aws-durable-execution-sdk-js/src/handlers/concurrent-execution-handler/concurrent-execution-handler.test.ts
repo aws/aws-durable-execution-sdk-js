@@ -52,6 +52,20 @@ describe("Concurrent Execution Handler", () => {
       expect(result.successCount).toBe(1);
       expect(result.totalCount).toBe(1);
     });
+
+    it("should return result as BatchResult when result is not a plain object with all array", async () => {
+      const items = [{ id: "item-0", data: "test", index: 0 }];
+      const executor = jest.fn().mockResolvedValue("result");
+
+      // Mock runInChildContext to return a non-BatchResult object (covers line 307)
+      const nonBatchResult = { someProperty: "value" };
+      mockRunInChildContext.mockResolvedValue(nonBatchResult);
+
+      const result = await concurrentExecutionHandler(items, executor);
+
+      // Should return the result as-is, cast to BatchResult (line 307)
+      expect(result).toBe(nonBatchResult);
+    });
   });
 
   describe("validation", () => {

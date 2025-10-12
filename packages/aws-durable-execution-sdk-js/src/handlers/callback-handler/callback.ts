@@ -79,9 +79,6 @@ export class TerminatingPromise<T> implements Promise<T> {
         );
 
         await result[0];
-        throw new Error(
-          "Unreachable state detected. Failed callback should always throw an error.",
-        );
       }
     } catch (err) {
       if (onrejected) {
