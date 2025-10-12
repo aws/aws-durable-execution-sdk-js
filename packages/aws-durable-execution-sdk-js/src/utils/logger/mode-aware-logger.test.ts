@@ -20,7 +20,6 @@ describe("Mode-Aware Logger", () => {
     mockExecutionContext = {
       _stepData: {},
       durableExecutionArn: "test-arn",
-      executionContextId: "test-id",
       isVerbose: false,
       terminationManager: {
         terminate: jest.fn(),

@@ -54,7 +54,6 @@ describe("InvokeHandler", () => {
     mockCheckpointFn.force = jest.fn().mockResolvedValue(undefined);
 
     mockContext = {
-      executionContextId: "test-context",
       state: {
         operations: [],
         nextMarker: "1",

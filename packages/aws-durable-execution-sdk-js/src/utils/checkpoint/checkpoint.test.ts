@@ -17,7 +17,6 @@ import {
   createCheckpoint,
   deleteCheckpoint,
 } from "./checkpoint";
-import { randomUUID } from "crypto";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 
 // Mock dependencies
@@ -47,7 +46,6 @@ describe("CheckpointHandler", () => {
 
     const stepData = {};
     mockContext = {
-      executionContextId: randomUUID(),
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
       _stepData: stepData,
@@ -590,7 +588,6 @@ describe("deleteCheckpointHandler", () => {
 
     const stepData1 = {};
     mockContext1 = {
-      executionContextId: "execution-context-1",
       durableExecutionArn: "test-durable-execution-arn-1",
       state: mockState1,
       _stepData: stepData1,
@@ -603,7 +600,6 @@ describe("deleteCheckpointHandler", () => {
 
     const stepData2 = {};
     mockContext2 = {
-      executionContextId: "execution-context-2",
       durableExecutionArn: "test-durable-execution-arn-2",
       state: mockState2,
       _stepData: stepData2,
@@ -825,7 +821,6 @@ describe("createCheckpointHandler", () => {
 
     const stepData = {};
     mockContext = {
-      executionContextId: randomUUID(),
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
       _stepData: stepData,
@@ -961,7 +956,6 @@ describe("createCheckpointHandler", () => {
     // Setup second context
     const mockContext2 = {
       ...mockContext,
-      executionContextId: "different-execution-context-id",
     } satisfies ExecutionContext;
 
     const checkpoint1 = createCheckpoint(

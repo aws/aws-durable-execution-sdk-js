@@ -1,5 +1,4 @@
 import { Operation } from "@aws-sdk/client-lambda";
-import { randomUUID } from "crypto";
 import { ExecutionStateFactory } from "../../storage/storage-factory";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
@@ -74,7 +73,6 @@ export const initializeExecutionContext = async (
 
   return {
     executionContext: {
-      executionContextId: randomUUID(),
       state,
       _stepData: stepData,
       terminationManager: new TerminationManager(),

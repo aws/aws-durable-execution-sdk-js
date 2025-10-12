@@ -95,7 +95,6 @@ describe("initializeExecutionContext", () => {
     expect(result).toEqual(
       expect.objectContaining({
         executionContext: expect.objectContaining({
-          executionContextId: expect.any(String),
           state: mockExecutionState,
           _stepData: {},
           isVerbose: false,

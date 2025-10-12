@@ -47,7 +47,6 @@ describe("WaitForCondition Handler", () => {
       durableExecutionArn:
         "arn:aws:lambda:us-east-1:123456789012:function:test",
       parentId: "parent-123",
-      executionContextId: "exec-123",
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
