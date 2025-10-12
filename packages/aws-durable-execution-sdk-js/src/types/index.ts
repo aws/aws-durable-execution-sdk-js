@@ -676,7 +676,6 @@ export interface DurableContext {
 
 export interface ExecutionContext {
   executionContextId: string;
-  customerHandlerEvent: any;
   state: ExecutionState;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
   terminationManager: TerminationManager;

@@ -32,7 +32,6 @@ describe("Checkpoint Integration Tests", () => {
     };
 
     mockContext = createMockExecutionContext({
-      customerHandlerEvent: {},
       executionContextId: randomUUID(),
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,

@@ -48,23 +48,32 @@ async function runHandler<Input, Output>(
     checkpointToken,
   );
 
+  // Extract customerHandlerEvent from the original event
+  const initialExecutionEvent = event.InitialExecutionState.Operations?.[0];
+  const customerHandlerEvent = JSON.parse(
+    initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
+  );
+
   try {
     log(
       executionContext.isVerbose,
       "🎯",
-      `Starting handler execution, handler event: ${executionContext.customerHandlerEvent}`,
+      `Starting handler execution, handler event: ${customerHandlerEvent}`,
     );
     let handlerPromiseResolved = false;
     let terminationPromiseResolved = false;
 
-    const handlerPromise = handler(
-      executionContext.customerHandlerEvent,
-      durableContext,
-    ).then((result) => {
-      handlerPromiseResolved = true;
-      log(executionContext.isVerbose, "🏆", "Handler promise resolved first!");
-      return ["handler", result] as const;
-    });
+    const handlerPromise = handler(customerHandlerEvent, durableContext).then(
+      (result) => {
+        handlerPromiseResolved = true;
+        log(
+          executionContext.isVerbose,
+          "🏆",
+          "Handler promise resolved first!",
+        );
+        return ["handler", result] as const;
+      },
+    );
 
     const terminationPromise = executionContext.terminationManager
       .getTerminationPromise()

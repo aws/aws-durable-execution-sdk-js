@@ -17,7 +17,6 @@ export const createMockExecutionContext = (
 
   const defaultMockContext: jest.Mocked<ExecutionContext> = {
     executionContextId: "test-execution-id",
-    customerHandlerEvent: "test-event",
     state: {
       getStepData: jest.fn(),
       checkpoint: jest.fn(),

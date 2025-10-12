@@ -21,7 +21,6 @@ describe("Mode-Aware Logger", () => {
       _stepData: {},
       durableExecutionArn: "test-arn",
       executionContextId: "test-id",
-      customerHandlerEvent: {},
       isVerbose: false,
       terminationManager: {
         terminate: jest.fn(),

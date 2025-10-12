@@ -35,7 +35,6 @@ describe("CheckpointHandler - StepData Update", () => {
     };
     mockContext = {
       executionContextId: randomUUID(),
-      customerHandlerEvent: {},
       state: mockState,
       _stepData: stepData,
       terminationManager: new TerminationManager(),

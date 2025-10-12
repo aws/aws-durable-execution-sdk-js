@@ -55,7 +55,6 @@ describe("InvokeHandler", () => {
 
     mockContext = {
       executionContextId: "test-context",
-      customerHandlerEvent: {},
       state: {
         operations: [],
         nextMarker: "1",

@@ -60,7 +60,6 @@ describe("Run In Child Context Integration Tests", () => {
       _stepData: {},
       terminationManager: mockTerminationManager,
       isVerbose: false,
-      customerHandlerEvent: {},
       durableExecutionArn: "mock-execution-arn",
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);

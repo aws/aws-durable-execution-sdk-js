@@ -47,9 +47,8 @@ describe("withDurableFunctions", () => {
     terminate: jest.fn(),
   };
 
-  const mockCustomerHandlerEvent = "{}";
+  const mockCustomerHandlerEvent = {};
   const mockExecutionContext = {
-    customerHandlerEvent: mockCustomerHandlerEvent,
     state: {},
     _stepData: {},
     terminationManager: mockTerminationManager,

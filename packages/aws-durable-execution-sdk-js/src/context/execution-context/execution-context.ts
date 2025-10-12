@@ -51,11 +51,6 @@ export const initializeExecutionContext = async (
     nextMarker = response.NextMarker || "";
   }
 
-  const initialExecutionEvent = operationsArray[0];
-  const customerHandlerEvent = JSON.parse(
-    initialExecutionEvent.ExecutionDetails?.InputPayload ?? "{}",
-  );
-
   // Determine replay mode based on operations array length
   const durableExecutionMode =
     operationsArray.length > 1
@@ -80,7 +75,6 @@ export const initializeExecutionContext = async (
   return {
     executionContext: {
       executionContextId: randomUUID(),
-      customerHandlerEvent,
       state,
       _stepData: stepData,
       terminationManager: new TerminationManager(),
