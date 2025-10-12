@@ -21,6 +21,7 @@ export const createInvokeHandler = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
+  parentId?: string,
 ): {
   <I, O>(funcId: string, input: I, config?: InvokeConfig<I, O>): Promise<O>;
   <I, O>(
@@ -141,7 +142,7 @@ export const createInvokeHandler = (
         // Create checkpoint for the invoke operation
         await checkpoint(stepId, {
           Id: stepId,
-          ParentId: context.parentId,
+          ParentId: parentId,
           Action: OperationAction.START,
           SubType: OperationSubType.CHAINED_INVOKE,
           Type: OperationType.CHAINED_INVOKE,

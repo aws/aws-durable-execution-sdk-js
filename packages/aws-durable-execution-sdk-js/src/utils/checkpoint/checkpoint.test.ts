@@ -992,7 +992,6 @@ describe("createCheckpointHandler", () => {
     // Setup second context
     const mockContext2 = {
       ...mockContext,
-      parentId: "different-parent-id",
     } satisfies ExecutionContext;
 
     const checkpoint1 = createCheckpoint(

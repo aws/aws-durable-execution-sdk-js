@@ -154,6 +154,7 @@ export const createCallback = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
+  parentId?: string,
 ) => {
   return async <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig,
@@ -212,6 +213,7 @@ export const createCallback = (
       config,
       serdes,
       hasRunningOperations,
+      parentId,
     );
   };
 };
@@ -322,6 +324,7 @@ const createNewCallback = async <T>(
   config: CreateCallbackConfig | undefined,
   serdes: Serdes<T>,
   hasRunningOperations: () => boolean,
+  parentId?: string,
 ): Promise<CreateCallbackResult<T>> => {
   log(context.isVerbose, "🆕", "Creating new callback:", {
     stepId,
@@ -332,7 +335,7 @@ const createNewCallback = async <T>(
   // Checkpoint the callback creation - the API will generate and return the callbackId
   await checkpoint(stepId, {
     Id: stepId,
-    ParentId: context.parentId,
+    ParentId: parentId,
     Action: "START",
     SubType: OperationSubType.CALLBACK,
     Type: OperationType.CALLBACK,

@@ -63,10 +63,12 @@ export const createRunInChildContextHandler = (
     executionContext: ExecutionContext,
     parentContext: Context,
     durableExecutionMode: DurableExecutionMode,
-    entityId: string,
-    checkpointToken: string | undefined,
-    logger: Logger,
+    stepPrefix?: string,
+    checkpointToken?: string,
+    inheritedLogger?: Logger | null,
+    parentId?: string,
   ) => DurableContext,
+  parentId?: string,
 ) => {
   return async <T>(
     nameOrFn: string | undefined | ChildFunc<T>,
@@ -117,6 +119,7 @@ export const createRunInChildContextHandler = (
       options,
       getParentLogger,
       createChildContext,
+      parentId,
     );
   };
 };
@@ -136,6 +139,7 @@ export const handleCompletedChildContext = async <T>(
     entityId: string,
     checkpointToken: string | undefined,
     logger: Logger,
+    parentId?: string,
   ) => DurableContext,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
@@ -153,15 +157,13 @@ export const handleCompletedChildContext = async <T>(
 
     // Re-execute the child context to reconstruct the result
     const durableChildContext = createChildContext(
-      {
-        ...context,
-        parentId: entityId,
-      },
+      context,
       parentContext,
       DurableExecutionMode.ReplaySucceededContext,
       entityId,
       undefined,
       getParentLogger(),
+      entityId, // parentId
     );
 
     return await OperationInterceptor.forExecution(
@@ -203,7 +205,9 @@ export const executeChildContext = async <T>(
     entityId: string,
     checkpointToken: string | undefined,
     logger: Logger,
+    parentId?: string,
   ) => DurableContext,
+  parentId?: string,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
 
@@ -212,7 +216,7 @@ export const executeChildContext = async <T>(
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
     checkpoint(entityId, {
       Id: entityId,
-      ParentId: context.parentId,
+      ParentId: parentId,
       Action: OperationAction.START,
       SubType: subType,
       Type: OperationType.CONTEXT,
@@ -222,15 +226,13 @@ export const executeChildContext = async <T>(
 
   // Create a child context with the entity ID as prefix
   const durableChildContext = createChildContext(
-    {
-      ...context,
-      parentId: entityId,
-    },
+    context,
     parentContext,
     determineChildReplayMode(context, entityId),
     entityId,
     undefined,
     getParentLogger(),
+    entityId, // parentId
   );
 
   try {
@@ -284,7 +286,7 @@ export const executeChildContext = async <T>(
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
     await checkpoint(entityId, {
       Id: entityId,
-      ParentId: context.parentId,
+      ParentId: parentId,
       Action: OperationAction.SUCCEED,
       SubType: subType,
       Type: OperationType.CONTEXT,
@@ -310,7 +312,7 @@ export const executeChildContext = async <T>(
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
     await checkpoint(entityId, {
       Id: entityId,
-      ParentId: context.parentId,
+      ParentId: parentId,
       Action: OperationAction.FAIL,
       SubType: subType,
       Type: OperationType.CONTEXT,

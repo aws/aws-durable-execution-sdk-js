@@ -244,45 +244,6 @@ describe("Run In Child Context Integration Tests", () => {
     ]);
   });
 
-  test("should pass entityId as parentId to child context operations", async () => {
-    // Set up original parent context parentId
-    mockExecutionContext.parentId = "original-parent-123";
-
-    await durableContext.runInChildContext(
-      "test-child-context",
-      async (childContext) => {
-        // Perform a step within the child context
-        await childContext.step("child-step", async () => "child-step-result");
-        return "child-result";
-      },
-    );
-
-    // Should have at least 2 checkpoints: child context START, child context SUCCEED
-    // The child step checkpoint may not be captured due to fire-and-forget optimization
-    expect(checkpointCalls.length).toBeGreaterThanOrEqual(2);
-
-    // First checkpoint should be child context START
-    expect(checkpointCalls[0].data.Updates[0].Action).toBe(
-      OperationAction.START,
-    );
-    expect(checkpointCalls[0].data.Updates[0].Id).toBe(hashId("1"));
-
-    // If we have more than 2 checkpoints, check for child step
-    if (checkpointCalls.length >= 3) {
-      const childStepCheckpoint = checkpointCalls[1];
-      expect(childStepCheckpoint.data.Updates[0].ParentId).toBe(hashId("1"));
-      expect(childStepCheckpoint.data.Updates[0].Name).toBe("child-step");
-    }
-
-    // Last checkpoint should be child context SUCCEED
-    const lastCheckpoint = checkpointCalls[checkpointCalls.length - 1];
-    expect(lastCheckpoint.data.Updates[0].Action).toBe(OperationAction.SUCCEED);
-    expect(lastCheckpoint.data.Updates[0].ParentId).toBe(
-      hashId("original-parent-123"),
-    );
-    expect(lastCheckpoint.data.Updates[0].Name).toBe("test-child-context");
-  });
-
   test("should handle adaptive mode with large payload", async () => {
     // Create a large payload (over 256KB)
     const largePayload = "x".repeat(300 * 1024); // 300KB string

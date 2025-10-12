@@ -329,6 +329,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        "parent-123",
       );
 
       await expect(
@@ -385,6 +386,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        "parent-123",
       );
 
       await expect(
@@ -425,6 +427,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        "parent-123",
       );
 
       const config = {

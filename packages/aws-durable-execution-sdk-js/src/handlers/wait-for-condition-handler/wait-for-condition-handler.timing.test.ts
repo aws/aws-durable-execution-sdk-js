@@ -52,6 +52,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
       jest.fn(),
       jest.fn(),
       jest.fn().mockReturnValue(false),
+      undefined, // parentId
     );
   });
 
@@ -76,6 +77,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        undefined, // parentId
       );
 
       waitForConditionHandlerWithMocks("test-wait", checkFn, config);
@@ -132,6 +134,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        undefined, // parentId
       );
 
       const result = await waitForConditionHandlerWithMocks(
@@ -192,6 +195,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        undefined, // parentId
       );
 
       const result = await waitForConditionHandlerWithMocks(
@@ -267,6 +271,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        undefined, // parentId
       );
 
       const result = await waitForConditionHandlerWithMocks(
@@ -339,6 +344,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        undefined, // parentId
       );
 
       const result = await waitForConditionHandlerWithMocks(

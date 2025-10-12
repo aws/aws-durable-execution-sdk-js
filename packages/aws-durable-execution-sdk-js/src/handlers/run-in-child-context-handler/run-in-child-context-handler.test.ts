@@ -67,6 +67,7 @@ describe("Run In Child Context Handler", () => {
     const mockCreateChildContext = jest.fn().mockReturnValue({
       _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
     });
+    const mockParentDurableContext = "parent-step-123";
     runInChildContextHandler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
@@ -74,6 +75,7 @@ describe("Run In Child Context Handler", () => {
       createStepId,
       mockGetLogger,
       mockCreateChildContext,
+      mockParentDurableContext,
     );
   });
 
@@ -101,6 +103,7 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: "START",
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -112,11 +115,13 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: "SUCCEED",
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
         Payload: JSON.stringify(TEST_CONSTANTS.CHILD_CONTEXT_RESULT),
         Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        ContextOptions: undefined,
       },
     );
   });
@@ -138,6 +143,7 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.START,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -149,6 +155,7 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -169,6 +176,7 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.START,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -180,6 +188,7 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -206,6 +215,7 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.START,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -217,7 +227,7 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
-        ParentId: mockExecutionContext.parentId,
+        ParentId: "parent-step-123", // This should match the mock return value
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -259,10 +269,25 @@ describe("Run In Child Context Handler", () => {
       runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {}),
     ).rejects.toThrow("child-context-error");
 
-    expect(mockCheckpoint).toHaveBeenCalledWith(
+    expect(mockCheckpoint).toHaveBeenCalledTimes(2);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      1,
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+        Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      },
+    );
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      2,
+      TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.FAIL,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -280,10 +305,25 @@ describe("Run In Child Context Handler", () => {
       runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {}),
     ).rejects.toBe(nonErrorObject);
 
-    expect(mockCheckpoint).toHaveBeenCalledWith(
+    expect(mockCheckpoint).toHaveBeenCalledTimes(2);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      1,
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+        Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      },
+    );
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      2,
+      TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.FAIL,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -300,15 +340,31 @@ describe("Run In Child Context Handler", () => {
 
     await runInChildContextHandler(childFn, {});
 
-    expect(mockCheckpoint).toHaveBeenCalledWith(
+    expect(mockCheckpoint).toHaveBeenCalledTimes(2);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      1,
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+        Name: undefined,
+      },
+    );
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      2,
+      TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
         Payload: JSON.stringify(TEST_CONSTANTS.CHILD_CONTEXT_RESULT),
         Name: undefined,
+        ContextOptions: undefined,
       },
     );
   });
@@ -320,15 +376,31 @@ describe("Run In Child Context Handler", () => {
 
     await runInChildContextHandler(undefined, childFn, {});
 
-    expect(mockCheckpoint).toHaveBeenCalledWith(
+    expect(mockCheckpoint).toHaveBeenCalledTimes(2);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      1,
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+        Name: undefined,
+      },
+    );
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      2,
+      TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
         Payload: JSON.stringify(TEST_CONSTANTS.CHILD_CONTEXT_RESULT),
         Name: undefined,
+        ContextOptions: undefined,
       },
     );
   });
@@ -360,118 +432,15 @@ describe("Run In Child Context Handler", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
         Payload: JSON.stringify(TEST_CONSTANTS.CHILD_CONTEXT_RESULT),
         Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        ContextOptions: undefined,
       },
     );
-  });
-
-  describe("ParentId Handling", () => {
-    test("should include ParentId in checkpoints", async () => {
-      mockExecutionContext.parentId = "parent-step-123";
-
-      const childFn = jest.fn().mockResolvedValue("child-result");
-
-      await runInChildContextHandler(
-        TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-        childFn,
-        {},
-      );
-
-      expect(mockCheckpoint).toHaveBeenNthCalledWith(
-        1,
-        TEST_CONSTANTS.CHILD_CONTEXT_ID,
-        {
-          Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
-          ParentId: "parent-step-123",
-          Action: OperationAction.START,
-          SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
-          Type: OperationType.CONTEXT,
-          Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-        },
-      );
-    });
-
-    test("should include ParentId in SUCCEED checkpoint", async () => {
-      mockExecutionContext.parentId = "parent-step-456";
-
-      const childFn = jest.fn().mockResolvedValue("child-result");
-
-      await runInChildContextHandler(
-        TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-        childFn,
-        {},
-      );
-
-      expect(mockCheckpoint).toHaveBeenCalledWith(
-        TEST_CONSTANTS.CHILD_CONTEXT_ID,
-        {
-          Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
-          ParentId: "parent-step-456",
-          Action: OperationAction.SUCCEED,
-          SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
-          Type: OperationType.CONTEXT,
-          Payload: JSON.stringify("child-result"),
-          Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-        },
-      );
-    });
-
-    test("should include ParentId in FAIL checkpoint when child context throws error", async () => {
-      mockExecutionContext.parentId = "parent-step-789";
-
-      const error = new Error("child-context-error");
-      const childFn = jest.fn().mockRejectedValue(error);
-
-      await expect(
-        runInChildContextHandler(
-          TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-          childFn,
-          {},
-        ),
-      ).rejects.toThrow("child-context-error");
-
-      expect(mockCheckpoint).toHaveBeenCalledWith(
-        TEST_CONSTANTS.CHILD_CONTEXT_ID,
-        {
-          Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
-          ParentId: "parent-step-789",
-          Action: OperationAction.FAIL,
-          SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
-          Type: OperationType.CONTEXT,
-          Error: createErrorObjectFromError(error),
-          Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-        },
-      );
-    });
-
-    test("should include ParentId as undefined when context has no parentId", async () => {
-      mockExecutionContext.parentId = undefined;
-
-      const childFn = jest.fn().mockResolvedValue("child-result");
-
-      await runInChildContextHandler(
-        TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-        childFn,
-        {},
-      );
-
-      expect(mockCheckpoint).toHaveBeenCalledWith(
-        TEST_CONSTANTS.CHILD_CONTEXT_ID,
-        {
-          Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
-          ParentId: undefined,
-          Action: OperationAction.SUCCEED,
-          SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
-          Type: OperationType.CONTEXT,
-          Payload: JSON.stringify("child-result"),
-          Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
-        },
-      );
-    });
   });
 });
 
@@ -515,6 +484,7 @@ describe("runInChildContext with custom serdes", () => {
     const mockCreateChildContext = jest.fn().mockReturnValue({
       _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
     });
+    const mockParentDurableContext = "parent-step-123";
     runInChildContext = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
@@ -522,6 +492,7 @@ describe("runInChildContext with custom serdes", () => {
       mockCreateStepId,
       mockGetLogger,
       mockCreateChildContext,
+      mockParentDurableContext,
     );
   });
 
@@ -542,13 +513,16 @@ describe("runInChildContext with custom serdes", () => {
 
     expect(result).toEqual(testResult);
     expect(result).toBeInstanceOf(TestResult);
-    expect(mockCheckpoint).toHaveBeenCalledWith("test-step-id", {
+    expect(mockCheckpoint).toHaveBeenCalledTimes(2);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(2, "test-step-id", {
       Id: "test-step-id",
+      ParentId: "parent-step-123",
       Action: OperationAction.SUCCEED,
       SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
       Type: OperationType.CONTEXT,
       Payload: JSON.stringify(testResult),
       Name: "test-child-with-serdes",
+      ContextOptions: undefined,
     });
   });
 
@@ -624,6 +598,7 @@ describe("Mock Integration", () => {
     const mockCreateChildContext = jest.fn().mockReturnValue({
       _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
     });
+    const mockParentDurableContext = "parent-step-123";
     runInChildContextHandler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
@@ -631,6 +606,7 @@ describe("Mock Integration", () => {
       createStepId,
       mockGetLogger,
       mockCreateChildContext,
+      mockParentDurableContext,
     );
   });
 
@@ -796,16 +772,32 @@ describe("Mock Integration", () => {
     expect(mockCallback).toHaveBeenCalledTimes(1);
     expect(originalChildFn).not.toHaveBeenCalled();
 
-    // Should still checkpoint the mocked result
-    expect(mockCheckpoint).toHaveBeenCalledWith(
+    // Should checkpoint both START and SUCCEED
+    expect(mockCheckpoint).toHaveBeenCalledTimes(2);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      1,
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+        Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      },
+    );
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      2,
+      TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
         Payload: JSON.stringify("mocked-result"),
         Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        ContextOptions: undefined,
       },
     );
   });
@@ -831,11 +823,26 @@ describe("Mock Integration", () => {
     expect(mockCallback).toHaveBeenCalledTimes(1);
     expect(originalChildFn).not.toHaveBeenCalled();
 
-    // Should checkpoint the failure
-    expect(mockCheckpoint).toHaveBeenCalledWith(
+    // Should checkpoint both START and FAIL
+    expect(mockCheckpoint).toHaveBeenCalledTimes(2);
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      1,
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+        Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      },
+    );
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(
+      2,
+      TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      {
+        Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        ParentId: "parent-step-123",
         Action: OperationAction.FAIL,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,
@@ -862,7 +869,7 @@ describe("Mock Integration", () => {
       TEST_CONSTANTS.CHILD_CONTEXT_ID,
       {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
-        ParentId: mockExecutionContext.parentId,
+        ParentId: "parent-step-123", // This should match the mock return value
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         Type: OperationType.CONTEXT,

@@ -17,6 +17,7 @@ export const createWaitHandler = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
+  parentId?: string,
 ): {
   (name: string, seconds: number): Promise<void>;
   (seconds: number): Promise<void>;
@@ -57,7 +58,7 @@ export const createWaitHandler = (
       if (!stepData) {
         await checkpoint(stepId, {
           Id: stepId,
-          ParentId: context.parentId,
+          ParentId: parentId,
           Action: OperationAction.START,
           SubType: OperationSubType.WAIT,
           Type: OperationType.WAIT,

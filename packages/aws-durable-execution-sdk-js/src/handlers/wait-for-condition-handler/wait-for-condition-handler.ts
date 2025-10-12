@@ -70,6 +70,7 @@ export const createWaitForConditionHandler = (
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
+  parentId: string | undefined,
 ) => {
   return async <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T>,
@@ -148,6 +149,7 @@ export const createWaitForConditionHandler = (
           addRunningOperation,
           removeRunningOperation,
           hasRunningOperations,
+          parentId,
         );
 
         // If executeWaitForCondition signals to continue the main loop, do so
@@ -202,6 +204,7 @@ export const executeWaitForCondition = async <T>(
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
+  parentId: string | undefined,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   const serdes = config.serdes || defaultSerdes;
 
@@ -252,7 +255,7 @@ export const executeWaitForCondition = async <T>(
   if (stepData?.Status !== OperationStatus.STARTED) {
     checkpoint(stepId, {
       Id: stepId,
-      ParentId: context.parentId,
+      ParentId: parentId,
       Action: OperationAction.START,
       SubType: OperationSubType.WAIT_FOR_CONDITION,
       Type: OperationType.STEP,
@@ -317,7 +320,7 @@ export const executeWaitForCondition = async <T>(
       // Condition is met - complete successfully
       await checkpoint(stepId, {
         Id: stepId,
-        ParentId: context.parentId,
+        ParentId: parentId,
         Action: OperationAction.SUCCEED,
         SubType: OperationSubType.WAIT_FOR_CONDITION,
         Type: OperationType.STEP,
@@ -338,7 +341,7 @@ export const executeWaitForCondition = async <T>(
       // Only checkpoint the state, not the attempt number (system handles that)
       await checkpoint(stepId, {
         Id: stepId,
-        ParentId: context.parentId,
+        ParentId: parentId,
         Action: OperationAction.RETRY,
         SubType: OperationSubType.WAIT_FOR_CONDITION,
         Type: OperationType.STEP,
@@ -371,7 +374,7 @@ export const executeWaitForCondition = async <T>(
     // If the check function throws, it's considered a failure
     await checkpoint(stepId, {
       Id: stepId,
-      ParentId: context.parentId,
+      ParentId: parentId,
       Action: OperationAction.FAIL,
       SubType: OperationSubType.WAIT_FOR_CONDITION,
       Type: OperationType.STEP,

@@ -680,7 +680,6 @@ export interface ExecutionContext {
   terminationManager: TerminationManager;
   isVerbose: boolean;
   durableExecutionArn: string;
-  parentId?: string;
   getStepData(stepId: string): Operation | undefined;
 }
 

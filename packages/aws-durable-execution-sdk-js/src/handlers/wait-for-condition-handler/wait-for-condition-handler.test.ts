@@ -81,6 +81,7 @@ describe("WaitForCondition Handler", () => {
       jest.fn(), // addRunningOperation
       jest.fn(), // removeRunningOperation
       jest.fn(() => false), // hasRunningOperations
+      "parent-123", // parentId
     );
   });
 

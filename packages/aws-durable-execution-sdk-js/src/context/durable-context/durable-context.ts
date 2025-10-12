@@ -50,6 +50,7 @@ class DurableContextImpl implements DurableContext {
   private checkpoint: ReturnType<typeof createCheckpoint>;
   private createContextLogger: ReturnType<typeof createContextLoggerFactory>;
   private durableExecutionMode: DurableExecutionMode;
+  private _parentId?: string;
 
   constructor(
     private executionContext: ExecutionContext,
@@ -58,8 +59,10 @@ class DurableContextImpl implements DurableContext {
     stepPrefix?: string,
     checkpointToken?: string,
     inheritedLogger?: Logger | null,
+    parentId?: string,
   ) {
     this._stepPrefix = stepPrefix;
+    this._parentId = parentId;
     this.contextLogger = inheritedLogger || null;
     this.checkpoint = createCheckpoint(executionContext, checkpointToken || "");
     this.durableExecutionMode = durableExecutionMode;
@@ -179,6 +182,7 @@ class DurableContextImpl implements DurableContext {
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
+        this._parentId,
       );
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
@@ -196,6 +200,7 @@ class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
+        this._parentId,
       );
       return invokeHandler<I, O>(
         ...([
@@ -221,6 +226,7 @@ class DurableContextImpl implements DurableContext {
         this.createStepId.bind(this),
         () => this.contextLogger || createDefaultLogger(),
         createDurableContext,
+        this._parentId,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
@@ -233,6 +239,7 @@ class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
+        this._parentId,
       );
       if (typeof nameOrSeconds === "string") {
         return waitHandler(nameOrSeconds, maybeSeconds!);
@@ -256,6 +263,7 @@ class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
+        this._parentId,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });
@@ -295,6 +303,7 @@ class DurableContextImpl implements DurableContext {
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
+        this._parentId,
       );
 
       if (
@@ -388,6 +397,7 @@ export const createDurableContext = (
   stepPrefix?: string,
   checkpointToken?: string,
   inheritedLogger?: Logger | null,
+  parentId?: string,
 ): DurableContext => {
   return new DurableContextImpl(
     executionContext,
@@ -396,5 +406,6 @@ export const createDurableContext = (
     stepPrefix,
     checkpointToken,
     inheritedLogger,
+    parentId,
   );
 };
