@@ -1,27 +1,13 @@
 import { createWaitForCallbackHandler } from "./wait-for-callback-handler";
 import { ExecutionContext, WaitForCallbackConfig } from "../../types";
-import { Context } from "aws-lambda";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 
 describe("waitForCallback handler", () => {
   let mockExecutionContext: ExecutionContext;
-  let mockParentContext: Context;
   let mockCheckpoint: ReturnType<typeof createCheckpoint>;
-  let stepIdCounter: number;
   let mockRunInChildContext: jest.Mock;
 
-  const createMockLogger = () => ({
-    log: jest.fn(),
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
-  });
-  const createMockEnrichedLogger = () => createMockLogger();
-
   beforeEach(() => {
-    stepIdCounter = 0;
-
     mockExecutionContext = {
       _stepData: {},
       terminationManager: {
@@ -29,15 +15,9 @@ describe("waitForCallback handler", () => {
       },
     } as any;
 
-    mockParentContext = {} as Context;
     mockCheckpoint = jest.fn() as any;
     mockCheckpoint.force = jest.fn().mockResolvedValue(undefined);
     mockRunInChildContext = jest.fn();
-
-    const createStepId = () => {
-      stepIdCounter++;
-      return `${stepIdCounter}`;
-    };
   });
 
   it("should handle waitForCallback with submitter function", async () => {
@@ -328,7 +308,7 @@ describe("waitForCallback handler", () => {
   });
 
   it("should pass config to createCallback when submitter and config are provided", async () => {
-    const config: WaitForCallbackConfig = {
+    const config: WaitForCallbackConfig<string> = {
       timeout: 300,
       heartbeatTimeout: 30,
     };

@@ -3,10 +3,6 @@ import {
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateResponse,
 } from "@aws-sdk/client-lambda";
-import {
-  DurableExecutionInvocationInput,
-  DurableExecutionInvocationOutput,
-} from "../types";
 
 export interface ExecutionState {
   getStepData(
@@ -18,8 +14,4 @@ export interface ExecutionState {
     taskToken: string,
     data: CheckpointDurableExecutionRequest,
   ): Promise<CheckpointDurableExecutionResponse>;
-  complete?(
-    event: DurableExecutionInvocationInput,
-    response: DurableExecutionInvocationOutput | null,
-  ): void;
 }

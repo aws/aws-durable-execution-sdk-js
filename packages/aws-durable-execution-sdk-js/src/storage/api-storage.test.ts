@@ -6,13 +6,7 @@ import {
   OperationAction,
   OperationType,
 } from "@aws-sdk/client-lambda";
-import { TEST_CONSTANTS } from "../testing/test-constants";
-import {
-  DurableExecutionInvocationInput,
-  DurableExecutionInvocationOutput,
-  InvocationStatus,
-  OperationSubType,
-} from "../types";
+import { OperationSubType } from "../types";
 import { ApiStorage } from "./api-storage";
 
 // Mock the LambdaClient
@@ -142,31 +136,5 @@ describe("ApiStorage", () => {
         ],
       }),
     ).rejects.toThrow("Lambda client error");
-  });
-
-  test("should call complete method without errors", () => {
-    // Setup mock event and response
-    const mockEvent: DurableExecutionInvocationInput = {
-      CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
-      DurableExecutionArn: "test-arn",
-      InitialExecutionState: {
-        Operations: [],
-        NextMarker: "",
-      },
-    };
-    const mockResponse: DurableExecutionInvocationOutput = {
-      Status: InvocationStatus.SUCCEEDED,
-      Result: "",
-    };
-
-    // Call complete method - should not throw
-    expect(() => {
-      apiStorage.complete?.(mockEvent, mockResponse);
-    }).not.toThrow();
-
-    // Call complete method with undefined response - should not throw
-    expect(() => {
-      apiStorage.complete?.(mockEvent, null);
-    }).not.toThrow();
   });
 });

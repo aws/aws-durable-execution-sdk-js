@@ -469,7 +469,7 @@ describe("runInChildContext with custom serdes", () => {
     } as any;
 
     mockCheckpoint = createMockCheckpoint();
-    mockParentContext = { getRemainingTimeInMillis: () => 30000 };
+    mockParentContext = { getRemainingTimeInMillis: (): number => 30000 };
     mockCreateStepId = jest.fn().mockReturnValue("test-step-id");
     const mockGetLogger = jest.fn().mockReturnValue({
       log: jest.fn(),

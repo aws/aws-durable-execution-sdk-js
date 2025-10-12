@@ -8,6 +8,7 @@ import {
   WaitForConditionCheckFunc,
   WaitForConditionConfig,
   OperationSubType,
+  Logger,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -21,7 +22,7 @@ jest.mock("../../mocks/operation-interceptor");
 describe("WaitForCondition Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
   let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
-  let mockParentContext: any;
+  let _mockParentContext: any;
   let createStepId: jest.Mock;
   let waitForConditionHandler: ReturnType<typeof createWaitForConditionHandler>;
   let mockTerminationManager: jest.Mocked<TerminationManager>;
@@ -52,7 +53,7 @@ describe("WaitForCondition Handler", () => {
     } as unknown as jest.Mocked<ExecutionContext>;
 
     mockCheckpoint = createMockCheckpoint();
-    mockParentContext = {};
+    _mockParentContext = {};
     createStepId = jest.fn().mockReturnValue("step-1");
 
     mockExecutionRunner = {
@@ -70,7 +71,7 @@ describe("WaitForCondition Handler", () => {
       warn: jest.fn(),
       debug: jest.fn(),
     };
-    const createMockEnrichedLogger = () => mockLogger;
+    const createMockEnrichedLogger = (): Logger => mockLogger;
 
     waitForConditionHandler = createWaitForConditionHandler(
       mockExecutionContext,
@@ -288,7 +289,7 @@ describe("WaitForCondition Handler", () => {
 
       mockExecutionRunner.execute.mockResolvedValue("not-ready");
 
-      const promise = waitForConditionHandler(checkFunc, config);
+      const _promise = waitForConditionHandler(checkFunc, config);
 
       // Should not resolve
       await new Promise((resolve) => setTimeout(resolve, 10));

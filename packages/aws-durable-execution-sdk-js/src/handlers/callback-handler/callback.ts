@@ -4,7 +4,7 @@ import {
   CreateCallbackResult,
   OperationSubType,
 } from "../../types";
-import { terminate } from "../../utils/termination-helper";
+import { terminate } from "../../utils/termination-helper/termination-helper";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
@@ -14,10 +14,10 @@ import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/callback-error/callback-error";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
-const passThroughSerdes: Serdes<any> = {
-  serialize: async (value: any) => value,
-  deserialize: async (data: string | undefined) => data,
-};
+const createPassThroughSerdes = <T>(): Serdes<T> => ({
+  serialize: async (value: T | undefined) => value as string | undefined,
+  deserialize: async (data: string | undefined) => data as T | undefined,
+});
 
 /**
  * A Promise-like class that checks status and running operations before terminating
@@ -101,7 +101,7 @@ export class TerminatingPromise<T> implements Promise<T> {
 
   catch<TResult = never>(
     onrejected?:
-      | ((reason: any) => TResult | PromiseLike<TResult>)
+      | ((reason: unknown) => TResult | PromiseLike<TResult>)
       | null
       | undefined,
   ): Promise<T | TResult> {
@@ -157,11 +157,11 @@ export const createCallback = (
   parentId?: string,
 ) => {
   return async <T>(
-    nameOrConfig?: string | undefined | CreateCallbackConfig,
-    maybeConfig?: CreateCallbackConfig,
+    nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
+    maybeConfig?: CreateCallbackConfig<T>,
   ): Promise<CreateCallbackResult<T>> => {
     let name: string | undefined;
-    let config: CreateCallbackConfig | undefined;
+    let config: CreateCallbackConfig<T> | undefined;
 
     if (typeof nameOrConfig === "string" || nameOrConfig === undefined) {
       name = nameOrConfig;
@@ -171,7 +171,7 @@ export const createCallback = (
     }
 
     const stepId = createStepId();
-    const serdes = config?.serdes || passThroughSerdes;
+    const serdes = config?.serdes || createPassThroughSerdes<T>();
 
     log("📞", "Creating callback:", {
       stepId,
@@ -308,7 +308,7 @@ const createNewCallback = async <T>(
   checkpoint: ReturnType<typeof createCheckpoint>,
   stepId: string,
   name: string | undefined,
-  config: CreateCallbackConfig | undefined,
+  config: CreateCallbackConfig<T> | undefined,
   serdes: Serdes<T>,
   hasRunningOperations: () => boolean,
   parentId?: string,

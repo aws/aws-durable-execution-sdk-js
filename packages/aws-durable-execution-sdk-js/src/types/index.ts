@@ -316,7 +316,7 @@ export interface DurableContext {
    */
   createCallback<T>(
     name: string | undefined,
-    config?: CreateCallbackConfig,
+    config?: CreateCallbackConfig<T>,
   ): Promise<CreateCallbackResult<T>>;
 
   /**
@@ -333,7 +333,7 @@ export interface DurableContext {
    * ```
    */
   createCallback<T>(
-    config?: CreateCallbackConfig,
+    config?: CreateCallbackConfig<T>,
   ): Promise<CreateCallbackResult<T>>;
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
@@ -355,7 +355,7 @@ export interface DurableContext {
   waitForCallback<T>(
     name: string | undefined,
     submitter: WaitForCallbackSubmitterFunc,
-    config?: WaitForCallbackConfig,
+    config?: WaitForCallbackConfig<T>,
   ): Promise<T>;
 
   /**
@@ -373,13 +373,13 @@ export interface DurableContext {
    */
   waitForCallback<T>(
     submitter: WaitForCallbackSubmitterFunc,
-    config?: WaitForCallbackConfig,
+    config?: WaitForCallbackConfig<T>,
   ): Promise<T>;
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
    * @param name - Step name for tracking and debugging
    * @param items - Array of items to process
-   * @param mapFunc - Function to apply to each item (context, item, index, array) => Promise<TOutput>
+   * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise\<TOutput\>
    * @param config - Optional configuration for concurrency, completion behavior, and item naming
    * @example
    * ```typescript
@@ -404,7 +404,7 @@ export interface DurableContext {
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
    * @param items - Array of items to process
-   * @param mapFunc - Function to apply to each item (context, item, index, array) => Promise<TOutput>
+   * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise\<TOutput\>
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
@@ -707,7 +707,7 @@ export interface StepConfig<T> {
 /**
  * Configuration options for child context operations
  */
-export interface ChildConfig<T = any> {
+export interface ChildConfig<T> {
   /** Serialization/deserialization configuration for child context data */
   serdes?: Serdes<T>;
   /** Sub-type identifier for categorizing child contexts */
@@ -719,19 +719,19 @@ export interface ChildConfig<T = any> {
 /**
  * Configuration options for createCallback operations
  */
-export interface CreateCallbackConfig {
+export interface CreateCallbackConfig<T> {
   /** Maximum time to wait for callback submission in seconds */
   timeout?: number; // seconds
   /** Heartbeat timeout in seconds to detect stalled callback operations */
   heartbeatTimeout?: number; // seconds
   /** Serialization/deserialization configuration for callback data */
-  serdes?: Serdes<any>;
+  serdes?: Serdes<T>;
 }
 
 /**
  * Configuration options for waitForCallback operations
  */
-export interface WaitForCallbackConfig {
+export interface WaitForCallbackConfig<T> {
   /** Maximum time to wait for callback in seconds */
   timeout?: number; // seconds
   /** Heartbeat timeout in seconds to detect stalled operations */
@@ -739,13 +739,13 @@ export interface WaitForCallbackConfig {
   /** Strategy for retrying failed callback submissions */
   retryStrategy?: (error: Error, attemptCount: number) => RetryDecision;
   /** Serialization/deserialization configuration for callback data */
-  serdes?: Serdes<any>;
+  serdes?: Serdes<T>;
 }
 
 /**
  * Configuration options for invoke operations
  */
-export interface InvokeConfig<I = any, O = any> {
+export interface InvokeConfig<I, O> {
   /** Serialization/deserialization configuration for input payload */
   payloadSerdes?: Serdes<I>;
   /** Serialization/deserialization configuration for result data */
@@ -778,9 +778,9 @@ export interface Logger {
   /** Log warning messages with optional additional data */
   warn(message?: string, data?: unknown): void;
   /** Log informational messages with optional additional data */
-  info(message?: string, data?: any): void;
+  info(message?: string, data?: unknown): void;
   /** Log debug messages with optional additional data */
-  debug(message?: string, data?: any): void;
+  debug(message?: string, data?: unknown): void;
 }
 
 /**
@@ -882,7 +882,7 @@ export interface WaitForConditionConfig<T> {
 /**
  * Configuration options for map operations
  */
-export interface MapConfig<T = any> {
+export interface MapConfig<T> {
   /** Maximum number of concurrent executions (default: unlimited) */
   maxConcurrency?: number;
   /** Function to generate custom names for map items */

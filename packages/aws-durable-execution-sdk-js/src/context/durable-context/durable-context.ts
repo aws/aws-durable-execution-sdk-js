@@ -254,8 +254,8 @@ class DurableContextImpl implements DurableContext {
   }
 
   createCallback<T>(
-    nameOrConfig?: string | CreateCallbackConfig,
-    maybeConfig?: CreateCallbackConfig,
+    nameOrConfig?: string | CreateCallbackConfig<T>,
+    maybeConfig?: CreateCallbackConfig<T>,
   ): Promise<CreateCallbackResult<T>> {
     return this.withModeManagement(() => {
       const callbackFactory = createCallbackFactory(
@@ -271,8 +271,8 @@ class DurableContextImpl implements DurableContext {
 
   waitForCallback<T>(
     nameOrSubmitter?: string | undefined | WaitForCallbackSubmitterFunc,
-    submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig,
-    maybeConfig?: WaitForCallbackConfig,
+    submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
+    maybeConfig?: WaitForCallbackConfig<T>,
   ): Promise<T> {
     return this.withModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(

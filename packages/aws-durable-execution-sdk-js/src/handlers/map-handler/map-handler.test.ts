@@ -327,7 +327,8 @@ describe("Map Handler", () => {
         const mapFunc: MapFunc<{ id: string; name: string }, string> = jest
           .fn()
           .mockResolvedValue("processed");
-        const itemNamer = (item: any, index: number) => `User-${item.id}`;
+        const itemNamer = (item: any, _index: number): string =>
+          `User-${item.id}`;
 
         const mockResult = new MockBatchResult([
           { index: 0, result: "processed", status: BatchItemStatus.SUCCEEDED },

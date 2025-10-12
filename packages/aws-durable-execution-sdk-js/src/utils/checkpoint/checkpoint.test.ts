@@ -6,11 +6,7 @@ import {
 import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import {
-  OperationSubType,
-  ExecutionContext,
-  DurableExecutionMode,
-} from "../../types";
+import { OperationSubType, ExecutionContext } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import {
   CheckpointHandler,

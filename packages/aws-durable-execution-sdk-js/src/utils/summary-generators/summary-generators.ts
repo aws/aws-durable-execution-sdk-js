@@ -1,10 +1,11 @@
-import { BatchResult } from "../handlers/concurrent-execution-handler/batch-result";
+import { BatchResult } from "../../handlers/concurrent-execution-handler/batch-result";
 
 /**
  * Creates a predefined summary generator for parallel operations
  */
 export const createParallelSummaryGenerator =
-  () => (result: BatchResult<any>) => {
+  <T>() =>
+  (result: BatchResult<T>): string => {
     return JSON.stringify({
       type: "ParallelResult",
       totalCount: result.totalCount,
@@ -19,13 +20,15 @@ export const createParallelSummaryGenerator =
 /**
  * Creates a predefined summary generator for map operations
  */
-export const createMapSummaryGenerator = () => (result: BatchResult<any>) => {
-  return JSON.stringify({
-    type: "MapResult",
-    totalCount: result.totalCount,
-    successCount: result.successCount,
-    failureCount: result.failureCount,
-    completionReason: result.completionReason,
-    status: result.status,
-  });
-};
+export const createMapSummaryGenerator =
+  <T>() =>
+  (result: BatchResult<T>): string => {
+    return JSON.stringify({
+      type: "MapResult",
+      totalCount: result.totalCount,
+      successCount: result.successCount,
+      failureCount: result.failureCount,
+      completionReason: result.completionReason,
+      status: result.status,
+    });
+  };

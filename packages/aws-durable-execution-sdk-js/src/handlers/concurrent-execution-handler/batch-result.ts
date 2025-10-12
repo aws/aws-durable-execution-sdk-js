@@ -106,20 +106,47 @@ export class BatchResultImpl<R> implements BatchResult<R> {
   }
 }
 
+interface SerializedBatchItem {
+  result?: unknown;
+  error?: { message: string; [key: string]: unknown };
+  index: number;
+  status: BatchItemStatus;
+}
+
+interface SerializedBatchResult {
+  all: SerializedBatchItem[];
+  completionReason:
+    | "ALL_COMPLETED"
+    | "MIN_SUCCESSFUL_REACHED"
+    | "FAILURE_TOLERANCE_EXCEEDED";
+}
+
 /**
  * Restores methods to deserialized BatchResult data
  */
-export function restoreBatchResult<R>(data: any): BatchResult<R> {
-  if (data && typeof data === "object" && Array.isArray(data.all)) {
+export function restoreBatchResult<R>(data: unknown): BatchResult<R> {
+  if (
+    data &&
+    typeof data === "object" &&
+    "all" in data &&
+    Array.isArray(data.all)
+  ) {
+    const serializedData = data as SerializedBatchResult;
     // Restore Error objects
-    const restoredItems = data.all.map((item: any) => ({
-      ...item,
-      error: item.error
-        ? Object.assign(new Error(item.error.message), item.error)
-        : undefined,
-    }));
+    const restoredItems = serializedData.all.map(
+      (item: SerializedBatchItem): BatchItem<R> => ({
+        ...item,
+        result: item.result as R,
+        error: item.error
+          ? Object.assign(new Error(item.error.message), item.error)
+          : undefined,
+      }),
+    );
 
-    return new BatchResultImpl<R>(restoredItems, data.completionReason);
+    return new BatchResultImpl<R>(
+      restoredItems,
+      serializedData.completionReason,
+    );
   }
 
   return new BatchResultImpl<R>([]);

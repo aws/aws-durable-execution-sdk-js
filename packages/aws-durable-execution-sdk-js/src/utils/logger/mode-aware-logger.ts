@@ -9,7 +9,7 @@ export const createModeAwareLogger = (
   const enrichedLogger = createContextLogger(stepPrefix || "", undefined);
 
   // Only log if in ExecutionMode
-  const shouldLog = () =>
+  const shouldLog = (): boolean =>
     durableExecutionMode === DurableExecutionMode.ExecutionMode;
 
   return {

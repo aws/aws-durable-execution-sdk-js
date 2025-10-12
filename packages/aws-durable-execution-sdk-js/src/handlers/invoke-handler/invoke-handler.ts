@@ -1,5 +1,5 @@
 import { ExecutionContext, InvokeConfig, OperationSubType } from "../../types";
-import { terminate } from "../../utils/termination-helper";
+import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationAction,
   OperationStatus,

@@ -14,7 +14,6 @@ describe("Step Handler Timing Tests", () => {
   let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
   let mockParentContext: any;
   let createStepId: jest.Mock;
-  let stepHandler: ReturnType<typeof createStepHandler>;
   let mockTerminationManager: jest.Mocked<TerminationManager>;
 
   beforeEach(() => {
@@ -34,19 +33,8 @@ describe("Step Handler Timing Tests", () => {
     } as unknown as jest.Mocked<ExecutionContext>;
 
     mockCheckpoint = createMockCheckpoint();
-    mockParentContext = { getRemainingTimeInMillis: () => 30000 };
+    mockParentContext = { getRemainingTimeInMillis: (): number => 30000 };
     createStepId = jest.fn().mockReturnValue("test-step-id");
-
-    stepHandler = createStepHandler(
-      mockExecutionContext,
-      mockCheckpoint,
-      mockParentContext,
-      createStepId,
-      jest.fn().mockReturnValue({ log: jest.fn() }),
-      jest.fn(),
-      jest.fn(),
-      jest.fn().mockReturnValue(false),
-    );
   });
 
   describe("Step Handler Timing and Concurrency Tests", () => {
@@ -69,7 +57,7 @@ describe("Step Handler Timing Tests", () => {
         mockHasRunningOperations,
       );
 
-      const stepPromise = stepHandlerWithMocks("test-step", stepFn, {
+      stepHandlerWithMocks("test-step", stepFn, {
         retryStrategy: mockRetryStrategy,
       });
 

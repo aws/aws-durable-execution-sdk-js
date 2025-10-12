@@ -2,7 +2,7 @@ import { createModeAwareLogger } from "./mode-aware-logger";
 import { ExecutionContext, Logger, DurableExecutionMode } from "../../types";
 
 describe("Mode-Aware Logger", () => {
-  let mockExecutionContext: ExecutionContext;
+  let _mockExecutionContext: ExecutionContext;
   let mockEnrichedLogger: Logger;
   let mockCreateContextLogger: jest.Mock;
 
@@ -17,7 +17,7 @@ describe("Mode-Aware Logger", () => {
 
     mockCreateContextLogger = jest.fn().mockReturnValue(mockEnrichedLogger);
 
-    mockExecutionContext = {
+    _mockExecutionContext = {
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: {
