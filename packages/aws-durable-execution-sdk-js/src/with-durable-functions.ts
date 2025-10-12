@@ -56,7 +56,6 @@ async function runHandler<Input, Output>(
 
   try {
     log(
-      executionContext.isVerbose,
       "🎯",
       `Starting handler execution, handler event: ${customerHandlerEvent}`,
     );
@@ -66,11 +65,7 @@ async function runHandler<Input, Output>(
     const handlerPromise = handler(customerHandlerEvent, durableContext).then(
       (result) => {
         handlerPromiseResolved = true;
-        log(
-          executionContext.isVerbose,
-          "🏆",
-          "Handler promise resolved first!",
-        );
+        log("🏆", "Handler promise resolved first!");
         return ["handler", result] as const;
       },
     );
@@ -79,30 +74,24 @@ async function runHandler<Input, Output>(
       .getTerminationPromise()
       .then((result) => {
         terminationPromiseResolved = true;
-        log(
-          executionContext.isVerbose,
-          "💥",
-          "Termination promise resolved first!",
-        );
+        log("💥", "Termination promise resolved first!");
         return ["termination", result] as const;
       });
 
-    if (executionContext.isVerbose) {
-      // Set up a timeout to log the state of promises after a short delay
-      setTimeout(() => {
-        log(executionContext.isVerbose, "⏱️", "Promise race status check:", {
-          handlerResolved: handlerPromiseResolved,
-          terminationResolved: terminationPromiseResolved,
-        });
-      }, 500);
-    }
+    // Set up a timeout to log the state of promises after a short delay
+    setTimeout(() => {
+      log("⏱️", "Promise race status check:", {
+        handlerResolved: handlerPromiseResolved,
+        terminationResolved: terminationPromiseResolved,
+      });
+    }, 500);
 
     const [resultType, result] = await Promise.race([
       handlerPromise,
       terminationPromise,
     ]);
 
-    log(executionContext.isVerbose, "🏁", "Promise race completed with:", {
+    log("🏁", "Promise race completed with:", {
       resultType,
     });
 
@@ -111,27 +100,19 @@ async function runHandler<Input, Output>(
       resultType === "termination" &&
       result.reason === TerminationReason.CHECKPOINT_FAILED
     ) {
-      log(
-        executionContext.isVerbose,
-        "🛑",
-        "Checkpoint failed - terminating Lambda execution",
-      );
+      log("🛑", "Checkpoint failed - terminating Lambda execution");
       throw new CheckpointFailedError(result.message);
     }
 
     if (resultType === "termination") {
-      log(executionContext.isVerbose, "🛑", "Returning termination response");
+      log("🛑", "Returning termination response");
 
       return {
         Status: InvocationStatus.PENDING,
       };
     }
 
-    log(
-      executionContext.isVerbose,
-      "✅",
-      "Returning normal completion response",
-    );
+    log("✅", "Returning normal completion response");
 
     // Stringify the result once to avoid multiple JSON.stringify calls
     const serializedResult = JSON.stringify(result);
@@ -143,7 +124,6 @@ async function runHandler<Input, Output>(
       serializedResult.length > LAMBDA_RESPONSE_SIZE_LIMIT
     ) {
       log(
-        executionContext.isVerbose,
         "📦",
         `Response size (${serializedResult.length} bytes) exceeds Lambda limit (${LAMBDA_RESPONSE_SIZE_LIMIT} bytes). Checkpointing result.`,
       );
@@ -160,11 +140,7 @@ async function runHandler<Input, Output>(
           Payload: serializedResult, // Reuse the already serialized result
         });
 
-        log(
-          executionContext.isVerbose,
-          "✅",
-          "Large result successfully checkpointed",
-        );
+        log("✅", "Large result successfully checkpointed");
 
         // Return a response indicating the result was checkpointed
         return {
@@ -172,12 +148,7 @@ async function runHandler<Input, Output>(
           Result: "",
         };
       } catch (checkpointError) {
-        log(
-          executionContext.isVerbose,
-          "❌",
-          "Failed to checkpoint large result:",
-          checkpointError,
-        );
+        log("❌", "Failed to checkpoint large result:", checkpointError);
 
         // Throw CheckpointFailedError to terminate Lambda execution
         throw new CheckpointFailedError(
@@ -194,12 +165,11 @@ async function runHandler<Input, Output>(
       Result: serializedResult || "",
     };
   } catch (error) {
-    log(executionContext.isVerbose, "❌", "Handler threw an error:", error);
+    log("❌", "Handler threw an error:", error);
 
     // Check if this is an unrecoverable invocation error (includes checkpoint failures and serdes errors)
     if (isUnrecoverableInvocationError(error)) {
       log(
-        executionContext.isVerbose,
         "🛑",
         "Unrecoverable invocation error - terminating Lambda execution",
       );

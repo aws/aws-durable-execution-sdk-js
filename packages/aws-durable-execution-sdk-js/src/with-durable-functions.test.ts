@@ -53,7 +53,6 @@ describe("withDurableFunctions", () => {
     _stepData: {},
     terminationManager: mockTerminationManager,
     mutex: { lock: jest.fn((fn) => fn()) },
-    isVerbose: false,
   };
 
   const mockDurableContext = {
@@ -227,7 +226,6 @@ describe("withDurableFunctions", () => {
 
     // Verify log was called with the right parameters
     expect(log).toHaveBeenCalledWith(
-      true,
       "⏱️",
       "Promise race status check:",
       expect.objectContaining({

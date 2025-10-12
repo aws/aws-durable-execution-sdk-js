@@ -20,7 +20,6 @@ describe("DurableContext Logger Property", () => {
     mockExecutionContext = {
       _stepData: {},
       durableExecutionArn: "test-arn",
-      isVerbose: false,
       terminationManager: {
         terminate: jest.fn(),
         getTerminationPromise: jest.fn().mockResolvedValue({ reason: "test" }),

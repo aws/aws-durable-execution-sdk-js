@@ -43,7 +43,7 @@ export const createWaitForCallbackHandler = (
       throw new Error("waitForCallback requires a submitter function");
     }
 
-    log(context.isVerbose, "📞", "WaitForCallback requested:", {
+    log("📞", "WaitForCallback requested:", {
       name,
       hasSubmitter: !!submitter,
       config,
@@ -64,7 +64,7 @@ export const createWaitForCallbackHandler = (
       const [callbackPromise, callbackId] =
         await childCtx.createCallback<T>(createCallbackConfig);
 
-      log(context.isVerbose, "🆔", "Callback created:", {
+      log("🆔", "Callback created:", {
         callbackId,
         name,
       });
@@ -76,18 +76,18 @@ export const createWaitForCallbackHandler = (
           logger: stepContext.logger,
         };
 
-        log(context.isVerbose, "📤", "Executing submitter:", {
+        log("📤", "Executing submitter:", {
           callbackId,
           name,
         });
         await submitter(callbackId, callbackContext);
-        log(context.isVerbose, "✅", "Submitter completed:", {
+        log("✅", "Submitter completed:", {
           callbackId,
           name,
         });
       });
 
-      log(context.isVerbose, "⏳", "Waiting for callback completion:", {
+      log("⏳", "Waiting for callback completion:", {
         callbackId,
         name,
       });

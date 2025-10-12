@@ -99,7 +99,7 @@ export const createWaitForConditionHandler = (
 
     const stepId = createStepId();
 
-    log(context.isVerbose, "🔄", "Running waitForCondition:", {
+    log("🔄", "Running waitForCondition:", {
       stepId,
       name,
       config,
@@ -172,12 +172,9 @@ export const handleCompletedWaitForCondition = async <T>(
   stepName: string | undefined,
   serdes = defaultSerdes,
 ): Promise<T> => {
-  log(
-    context.isVerbose,
-    "⏭️",
-    "waitForCondition already finished, returning cached result:",
-    { stepId },
-  );
+  log("⏭️", "waitForCondition already finished, returning cached result:", {
+    stepId,
+  });
 
   const stepData = context.getStepData(stepId);
   const result = stepData?.StepDetails?.Result;
@@ -188,7 +185,7 @@ export const handleCompletedWaitForCondition = async <T>(
     stepId,
     stepName,
     context.terminationManager,
-    context.isVerbose,
+
     context.durableExecutionArn,
   );
 };
@@ -228,7 +225,6 @@ export const executeWaitForCondition = async <T>(
         currentState = await serdes.deserialize(checkpointData, serdesContext);
       } catch (error) {
         log(
-          context.isVerbose,
           "⚠️",
           "Failed to deserialize checkpoint data, using initial state:",
           {
@@ -287,7 +283,7 @@ export const executeWaitForCondition = async <T>(
       stepId,
       name,
       context.terminationManager,
-      context.isVerbose,
+
       context.durableExecutionArn,
     );
 
@@ -298,7 +294,7 @@ export const executeWaitForCondition = async <T>(
       stepId,
       name,
       context.terminationManager,
-      context.isVerbose,
+
       context.durableExecutionArn,
     );
 
@@ -308,7 +304,7 @@ export const executeWaitForCondition = async <T>(
       currentAttempt,
     );
 
-    log(context.isVerbose, "🔍", "waitForCondition check completed:", {
+    log("🔍", "waitForCondition check completed:", {
       stepId,
       name,
       currentAttempt: currentAttempt,
@@ -328,7 +324,7 @@ export const executeWaitForCondition = async <T>(
         Name: name,
       });
 
-      log(context.isVerbose, "✅", "waitForCondition completed successfully:", {
+      log("✅", "waitForCondition completed successfully:", {
         stepId,
         name,
         result: deserializedState,
@@ -363,7 +359,7 @@ export const executeWaitForCondition = async <T>(
       return CONTINUE_MAIN_LOOP;
     }
   } catch (error) {
-    log(context.isVerbose, "❌", "waitForCondition check function failed:", {
+    log("❌", "waitForCondition check function failed:", {
       stepId,
       name,
       error,

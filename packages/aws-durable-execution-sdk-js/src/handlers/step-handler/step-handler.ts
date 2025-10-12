@@ -101,7 +101,7 @@ export const createStepHandler = (
 
     const stepId = createStepId();
 
-    log(context.isVerbose, "▶️", "Running step:", { stepId, name, options });
+    log("▶️", "Running step:", { stepId, name, options });
 
     // Main step logic - can be re-executed if step status changes
     while (true) {
@@ -139,15 +139,10 @@ export const createStepHandler = (
           const semantics =
             options?.semantics || StepSemantics.AtLeastOncePerRetry;
           if (semantics === StepSemantics.AtMostOncePerRetry) {
-            log(
-              context.isVerbose,
-              "⚠️",
-              "Step was interrupted during execution:",
-              {
-                stepId,
-                name,
-              },
-            );
+            log("⚠️", "Step was interrupted during execution:", {
+              stepId,
+              name,
+            });
             const error = new StepInterruptedError(stepId, name);
 
             // Handle the interrupted step as a failure
@@ -160,7 +155,7 @@ export const createStepHandler = (
               retryDecision = retryPresets.default(error, currentAttempt);
             }
 
-            log(context.isVerbose, "⚠️", "Should Retry Interrupted Step:", {
+            log("⚠️", "Should Retry Interrupted Step:", {
               stepId,
               name,
               currentAttempt,
@@ -245,12 +240,7 @@ export const handleCompletedStep = async <T>(
   stepName: string | undefined,
   serdes = defaultSerdes,
 ): Promise<T> => {
-  log(
-    context.isVerbose,
-    "⏭️",
-    "Step already finished, returning cached result:",
-    { stepId },
-  );
+  log("⏭️", "Step already finished, returning cached result:", { stepId });
 
   const stepData = context.getStepData(stepId);
   const result = stepData?.StepDetails?.Result;
@@ -261,7 +251,7 @@ export const handleCompletedStep = async <T>(
     stepId,
     stepName,
     context.terminationManager,
-    context.isVerbose,
+
     context.durableExecutionArn,
   );
 };
@@ -337,7 +327,7 @@ export const executeStep = async <T>(
       stepId,
       name,
       context.terminationManager,
-      context.isVerbose,
+
       context.durableExecutionArn,
     );
 
@@ -352,7 +342,7 @@ export const executeStep = async <T>(
       Name: name,
     });
 
-    log(context.isVerbose, "✅", "Step completed successfully:", {
+    log("✅", "Step completed successfully:", {
       stepId,
       name,
       result,
@@ -366,11 +356,11 @@ export const executeStep = async <T>(
       stepId,
       name,
       context.terminationManager,
-      context.isVerbose,
+
       context.durableExecutionArn,
     );
   } catch (error) {
-    log(context.isVerbose, "❌", "Step failed:", {
+    log("❌", "Step failed:", {
       stepId,
       name,
       error,
@@ -379,7 +369,7 @@ export const executeStep = async <T>(
 
     // Handle unrecoverable errors - these should not go through retry logic
     if (isUnrecoverableError(error)) {
-      log(context.isVerbose, "💥", "Unrecoverable error detected:", {
+      log("💥", "Unrecoverable error detected:", {
         stepId,
         name,
         error: error.message,
@@ -406,7 +396,7 @@ export const executeStep = async <T>(
       );
     }
 
-    log(context.isVerbose, "⚠️", "Should Retry:", {
+    log("⚠️", "Should Retry:", {
       stepId,
       name,
       currentAttempt,

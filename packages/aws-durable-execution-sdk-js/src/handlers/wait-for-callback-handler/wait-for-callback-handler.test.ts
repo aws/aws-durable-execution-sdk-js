@@ -27,7 +27,6 @@ describe("waitForCallback handler", () => {
       terminationManager: {
         terminate: jest.fn(),
       },
-      isVerbose: false,
     } as any;
 
     mockParentContext = {} as Context;

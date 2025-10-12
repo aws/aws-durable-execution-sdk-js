@@ -41,10 +41,7 @@ export type ConcurrentExecutor<TItem, TResult> = (
 ) => Promise<TResult>;
 
 export class ConcurrencyController {
-  constructor(
-    private readonly isVerbose: boolean,
-    private readonly operationName: string,
-  ) {}
+  constructor(private readonly operationName: string) {}
 
   async executeItems<T, R>(
     items: ConcurrentExecutionItem<T>[],
@@ -64,15 +61,10 @@ export class ConcurrencyController {
     let successCount = 0;
     let failureCount = 0;
 
-    log(
-      this.isVerbose,
-      "🚀",
-      `Starting ${this.operationName} with concurrency control:`,
-      {
-        itemCount: items.length,
-        maxConcurrency,
-      },
-    );
+    log("🚀", `Starting ${this.operationName} with concurrency control:`, {
+      itemCount: items.length,
+      maxConcurrency,
+    });
 
     return new Promise<BatchResult<R>>((resolve) => {
       const shouldContinue = (): boolean => {
@@ -144,7 +136,7 @@ export class ConcurrencyController {
           // Set STARTED status immediately in result array
           resultItems[index] = { index, status: BatchItemStatus.STARTED };
 
-          log(this.isVerbose, "▶️", `Starting ${this.operationName} item:`, {
+          log("▶️", `Starting ${this.operationName} item:`, {
             index,
             itemId: item.id,
             itemName: item.name,
@@ -164,16 +156,11 @@ export class ConcurrencyController {
                   status: BatchItemStatus.SUCCEEDED,
                 };
                 successCount++;
-                log(
-                  this.isVerbose,
-                  "✅",
-                  `${this.operationName} item completed:`,
-                  {
-                    index,
-                    itemId: item.id,
-                    itemName: item.name,
-                  },
-                );
+                log("✅", `${this.operationName} item completed:`, {
+                  index,
+                  itemId: item.id,
+                  itemName: item.name,
+                });
                 onComplete();
               },
               (error) => {
@@ -185,17 +172,12 @@ export class ConcurrencyController {
                   status: BatchItemStatus.FAILED,
                 };
                 failureCount++;
-                log(
-                  this.isVerbose,
-                  "❌",
-                  `${this.operationName} item failed:`,
-                  {
-                    index,
-                    itemId: item.id,
-                    itemName: item.name,
-                    error: err.message,
-                  },
-                );
+                log("❌", `${this.operationName} item failed:`, {
+                  index,
+                  itemId: item.id,
+                  itemName: item.name,
+                  error: err.message,
+                });
                 onComplete();
               },
             );
@@ -216,7 +198,7 @@ export class ConcurrencyController {
             }
           }
 
-          log(this.isVerbose, "🎉", `${this.operationName} completed:`, {
+          log("🎉", `${this.operationName} completed:`, {
             successCount,
             failureCount,
             startedCount: finalBatchItems.filter(
@@ -268,7 +250,7 @@ export const createConcurrentExecutionHandler = (
       config = executorOrConfig as ConcurrencyConfig;
     }
 
-    log(context.isVerbose, "🔄", "Starting concurrent execution:", {
+    log("🔄", "Starting concurrent execution:", {
       name,
       itemCount: items.length,
       maxConcurrency: config?.maxConcurrency,
@@ -296,7 +278,6 @@ export const createConcurrentExecutionHandler = (
       executionContext: DurableContext,
     ): Promise<BatchResult<TResult>> => {
       const concurrencyController = new ConcurrencyController(
-        context.isVerbose,
         "concurrent-execution",
       );
 

@@ -41,7 +41,6 @@ describe("Wait Handler", () => {
     mockExecutionContext = {
       _stepData: stepData,
       terminationManager: mockTerminationManager,
-      isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),

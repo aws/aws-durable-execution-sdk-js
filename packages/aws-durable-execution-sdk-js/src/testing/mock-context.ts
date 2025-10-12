@@ -23,7 +23,6 @@ export const createMockExecutionContext = (
     _stepData: {},
     _durableExecutionMode: DurableExecutionMode.ExecutionMode,
     terminationManager: mockTerminationManager,
-    isVerbose: false,
     durableExecutionArn: "test-arn",
     getStepData: jest.fn((stepId: string) => {
       return getStepDataUtil(defaultMockContext._stepData, stepId);

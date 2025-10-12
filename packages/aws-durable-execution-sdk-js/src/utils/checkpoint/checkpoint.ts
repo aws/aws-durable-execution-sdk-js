@@ -61,7 +61,7 @@ class CheckpointHandler {
 
       this.queue.push(queuedItem);
 
-      log(this.context.isVerbose, "📥", "Checkpoint queued:", {
+      log("📥", "Checkpoint queued:", {
         stepId,
         queueLength: this.queue.length,
         isProcessing: this.isProcessing,
@@ -109,7 +109,7 @@ class CheckpointHandler {
       currentSize += itemSize;
     }
 
-    log(this.context.isVerbose, "🔄", "Processing checkpoint batch:", {
+    log("🔄", "Processing checkpoint batch:", {
       batchSize: batch.length,
       remainingInQueue: this.queue.length,
       estimatedSize: currentSize,
@@ -134,18 +134,13 @@ class CheckpointHandler {
         promise.resolve();
       });
 
-      log(
-        this.context.isVerbose,
-        "✅",
-        "Checkpoint batch processed successfully:",
-        {
-          batchSize: batch.length,
-          forceRequests: forcePromises.length,
-          newTaskToken: this.currentTaskToken,
-        },
-      );
+      log("✅", "Checkpoint batch processed successfully:", {
+        batchSize: batch.length,
+        forceRequests: forcePromises.length,
+        newTaskToken: this.currentTaskToken,
+      });
     } catch (error) {
-      log(this.context.isVerbose, "❌", "Checkpoint batch failed:", {
+      log("❌", "Checkpoint batch failed:", {
         batchSize: batch.length,
         error,
       });
@@ -209,7 +204,7 @@ class CheckpointHandler {
       Updates: updates,
     };
 
-    log(this.context.isVerbose, "⏺️", "Creating checkpoint batch:", {
+    log("⏺️", "Creating checkpoint batch:", {
       batchSize: updates.length,
       checkpointToken: this.currentTaskToken,
       updates: updates.map((u) => ({
@@ -242,15 +237,10 @@ class CheckpointHandler {
    * @param operations - Array of operations from checkpoint response
    */
   private updateStepDataFromCheckpointResponse(operations: Operation[]): void {
-    log(
-      this.context.isVerbose,
-      "🔄",
-      "Updating stepData from checkpoint response:",
-      {
-        operationCount: operations.length,
-        operationIds: operations.map((op) => op.Id).filter(Boolean),
-      },
-    );
+    log("🔄", "Updating stepData from checkpoint response:", {
+      operationCount: operations.length,
+      operationIds: operations.map((op) => op.Id).filter(Boolean),
+    });
 
     // Merge new operations into existing stepData
     // IDs from backend are already hashed, store directly
@@ -259,11 +249,11 @@ class CheckpointHandler {
         // Store operation with the already-hashed ID from backend
         this.context._stepData[operation.Id] = operation;
 
-        log(this.context.isVerbose, "📝", "Updated stepData entry:", operation);
+        log("📝", "Updated stepData entry:", operation);
       }
     });
 
-    log(this.context.isVerbose, "✅", "StepData update completed:", {
+    log("✅", "StepData update completed:", {
       totalStepDataEntries: Object.keys(this.context._stepData).length,
     });
   }

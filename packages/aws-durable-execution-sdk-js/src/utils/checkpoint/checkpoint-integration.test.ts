@@ -34,7 +34,6 @@ describe("Checkpoint Integration Tests", () => {
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
       terminationManager: mockTerminationManager,
-      isVerbose: false,
     });
   });
 

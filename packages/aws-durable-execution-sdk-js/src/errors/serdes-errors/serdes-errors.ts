@@ -60,7 +60,6 @@ export async function safeSerialize<T>(
   stepId: string,
   stepName: string | undefined,
   terminationManager: TerminationManager,
-  isVerbose: boolean = false,
   durableExecutionArn: string,
 ): Promise<string | undefined> {
   try {
@@ -72,7 +71,7 @@ export async function safeSerialize<T>(
   } catch (error) {
     const message = `Serialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${error instanceof Error ? error.message : "Unknown serialization error"}`;
 
-    log(isVerbose, "💥", "Serialization failed - terminating execution:", {
+    log("💥", "Serialization failed - terminating execution:", {
       stepId,
       stepName,
       error: error instanceof Error ? error.message : String(error),
@@ -103,7 +102,6 @@ export async function safeDeserialize<T>(
   stepId: string,
   stepName: string | undefined,
   terminationManager: TerminationManager,
-  isVerbose: boolean = false,
   durableExecutionArn: string,
 ): Promise<T | undefined> {
   try {
@@ -115,7 +113,7 @@ export async function safeDeserialize<T>(
   } catch (error) {
     const message = `Deserialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${error instanceof Error ? error.message : "Unknown deserialization error"}`;
 
-    log(isVerbose, "💥", "Deserialization failed - terminating execution:", {
+    log("💥", "Deserialization failed - terminating execution:", {
       stepId,
       stepName,
       error: error instanceof Error ? error.message : String(error),

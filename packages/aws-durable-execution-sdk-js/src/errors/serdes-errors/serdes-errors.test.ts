@@ -211,7 +211,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -220,24 +219,6 @@ describe("Serdes Errors", () => {
         entityId: TEST_CONSTANTS.STEP_ID_1,
         durableExecutionArn: TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       });
-    });
-
-    it("should use default isVerbose parameter", async () => {
-      const value = { test: "data" };
-      const serialized = '{"test":"data"}';
-      mockSerdes.serialize.mockReturnValue(serialized);
-
-      const result = await safeSerialize(
-        mockSerdes,
-        value,
-        TEST_CONSTANTS.STEP_ID_1,
-        TEST_CONSTANTS.STEP_NAME,
-        mockTerminationManager,
-        undefined,
-        TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
-      );
-
-      expect(result).toBe(serialized);
     });
 
     it("should call terminate when serialization fails", async () => {
@@ -254,7 +235,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -282,7 +262,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -310,7 +289,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         undefined,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -337,7 +315,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -363,7 +340,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -389,7 +365,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         undefined,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -432,7 +407,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -441,24 +415,6 @@ describe("Serdes Errors", () => {
         entityId: TEST_CONSTANTS.STEP_ID_1,
         durableExecutionArn: TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       });
-    });
-
-    it("should use default isVerbose parameter", async () => {
-      const data = '{"test":"data"}';
-      const deserialized = { test: "data" };
-      mockSerdes.deserialize.mockReturnValue(deserialized);
-
-      const result = await safeDeserialize(
-        mockSerdes,
-        data,
-        TEST_CONSTANTS.STEP_ID_1,
-        TEST_CONSTANTS.STEP_NAME,
-        mockTerminationManager,
-        undefined,
-        TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
-      );
-
-      expect(result).toBe(deserialized);
     });
 
     it("should call terminate when deserialization fails", async () => {
@@ -475,7 +431,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -503,7 +458,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -531,7 +485,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         undefined,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -558,7 +511,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -584,7 +536,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         TEST_CONSTANTS.STEP_NAME,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 
@@ -610,7 +561,6 @@ describe("Serdes Errors", () => {
         TEST_CONSTANTS.STEP_ID_1,
         undefined,
         mockTerminationManager,
-        false,
         TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
       );
 

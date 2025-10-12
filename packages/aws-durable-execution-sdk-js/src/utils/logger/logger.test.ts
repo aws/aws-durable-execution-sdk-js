@@ -2,6 +2,7 @@ import { log } from "./logger";
 
 describe("Logger", () => {
   let consoleLogSpy: jest.SpyInstance;
+  const originalEnv = process.env.DURABLE_VERBOSE_MODE;
 
   beforeEach(() => {
     // Create a spy on console.log before each test
@@ -11,30 +12,49 @@ describe("Logger", () => {
   afterEach(() => {
     // Restore the original console.log after each test
     consoleLogSpy.mockRestore();
+    // Restore original environment variable
+    if (originalEnv !== undefined) {
+      process.env.DURABLE_VERBOSE_MODE = originalEnv;
+    } else {
+      delete process.env.DURABLE_VERBOSE_MODE;
+    }
   });
 
-  test("should log message when isVerbose is true", () => {
+  test("should log message when DURABLE_VERBOSE_MODE is true", () => {
     // Arrange
-    const isVerbose = true;
+    process.env.DURABLE_VERBOSE_MODE = "true";
     const emoji = "🚀";
     const message = "Test message";
 
     // Act
-    log(isVerbose, emoji, message);
+    log(emoji, message);
 
     // Assert
     expect(consoleLogSpy).toHaveBeenCalledTimes(1);
     expect(consoleLogSpy).toHaveBeenCalledWith("🚀 Test message", "");
   });
 
-  test("should not log message when isVerbose is false", () => {
+  test("should not log message when DURABLE_VERBOSE_MODE is false", () => {
     // Arrange
-    const isVerbose = false;
+    process.env.DURABLE_VERBOSE_MODE = "false";
     const emoji = "🚀";
     const message = "Test message";
 
     // Act
-    log(isVerbose, emoji, message);
+    log(emoji, message);
+
+    // Assert
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+  });
+
+  test("should not log message when DURABLE_VERBOSE_MODE is undefined", () => {
+    // Arrange
+    delete process.env.DURABLE_VERBOSE_MODE;
+    const emoji = "🚀";
+    const message = "Test message";
+
+    // Act
+    log(emoji, message);
 
     // Assert
     expect(consoleLogSpy).not.toHaveBeenCalled();
@@ -42,13 +62,13 @@ describe("Logger", () => {
 
   test("should log message with stringified data when data is provided", () => {
     // Arrange
-    const isVerbose = true;
+    process.env.DURABLE_VERBOSE_MODE = "true";
     const emoji = "📊";
     const message = "Data received";
     const data = { id: 123, name: "test" };
 
     // Act
-    log(isVerbose, emoji, message, data);
+    log(emoji, message, data);
 
     // Assert
     expect(consoleLogSpy).toHaveBeenCalledTimes(1);
@@ -60,7 +80,7 @@ describe("Logger", () => {
 
   test("should handle complex data structures", () => {
     // Arrange
-    const isVerbose = true;
+    process.env.DURABLE_VERBOSE_MODE = "true";
     const emoji = "🔄";
     const message = "Complex data";
     const complexData = {
@@ -72,7 +92,7 @@ describe("Logger", () => {
     };
 
     // Act
-    log(isVerbose, emoji, message, complexData);
+    log(emoji, message, complexData);
 
     // Assert
     expect(consoleLogSpy).toHaveBeenCalledTimes(1);
@@ -84,12 +104,12 @@ describe("Logger", () => {
 
   test("should handle null and undefined data", () => {
     // Arrange
-    const isVerbose = true;
+    process.env.DURABLE_VERBOSE_MODE = "true";
     const emoji = "⚠️";
     const message = "No data";
 
     // Act - with undefined
-    log(isVerbose, emoji, message, undefined);
+    log(emoji, message, undefined);
 
     // Assert
     expect(consoleLogSpy).toHaveBeenCalledTimes(1);
@@ -99,7 +119,7 @@ describe("Logger", () => {
     consoleLogSpy.mockClear();
 
     // Act - with null
-    log(isVerbose, emoji, message, null);
+    log(emoji, message, null);
 
     // Assert
     expect(consoleLogSpy).toHaveBeenCalledTimes(1);

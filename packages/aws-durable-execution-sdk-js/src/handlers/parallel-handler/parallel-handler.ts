@@ -52,7 +52,7 @@ export const createParallelHandler = (
       );
     }
 
-    log(context.isVerbose, "🔀", "Starting parallel operation:", {
+    log("🔀", "Starting parallel operation:", {
       name,
       branchCount: branches.length,
       maxConcurrency: config?.maxConcurrency,
@@ -90,13 +90,13 @@ export const createParallelHandler = (
       executionItem,
       childContext,
     ) => {
-      log(context.isVerbose, "🔀", "Processing parallel branch:", {
+      log("🔀", "Processing parallel branch:", {
         index: executionItem.index,
       });
 
       const result = await executionItem.data(childContext);
 
-      log(context.isVerbose, "✅", "Parallel branch completed:", {
+      log("✅", "Parallel branch completed:", {
         index: executionItem.index,
         result,
       });
@@ -113,7 +113,7 @@ export const createParallelHandler = (
       completionConfig: config?.completionConfig,
     });
 
-    log(context.isVerbose, "🔀", "Parallel operation completed successfully:", {
+    log("🔀", "Parallel operation completed successfully:", {
       resultCount: result.totalCount,
     });
 

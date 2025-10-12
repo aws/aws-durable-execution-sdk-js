@@ -16,9 +16,7 @@ describe("Map Handler", () => {
   let mapHandler: ReturnType<typeof createMapHandler>;
 
   beforeEach(() => {
-    mockExecutionContext = {
-      isVerbose: false,
-    } as jest.Mocked<ExecutionContext>;
+    mockExecutionContext = {} as jest.Mocked<ExecutionContext>;
 
     mockExecuteConcurrently = jest.fn();
     mapHandler = createMapHandler(

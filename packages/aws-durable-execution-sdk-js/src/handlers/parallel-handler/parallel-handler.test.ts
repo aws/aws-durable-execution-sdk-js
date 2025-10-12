@@ -16,9 +16,7 @@ describe("Parallel Handler", () => {
   let parallelHandler: ReturnType<typeof createParallelHandler>;
 
   beforeEach(() => {
-    mockExecutionContext = {
-      isVerbose: false,
-    } as jest.Mocked<ExecutionContext>;
+    mockExecutionContext = {} as jest.Mocked<ExecutionContext>;
     mockExecuteConcurrently = jest.fn();
     parallelHandler = createParallelHandler(
       mockExecutionContext,
@@ -193,7 +191,10 @@ describe("Parallel Handler", () => {
   });
 
   it("should execute executor function with logging", async () => {
-    mockExecutionContext.isVerbose = true;
+    // Set verbose mode for this test
+    const originalEnv = process.env.DURABLE_VERBOSE_MODE;
+    process.env.DURABLE_VERBOSE_MODE = "true";
+
     const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
     const branch1: ParallelFunc<string> = jest
@@ -245,6 +246,13 @@ describe("Parallel Handler", () => {
     );
 
     consoleSpy.mockRestore();
+
+    // Restore original environment variable
+    if (originalEnv !== undefined) {
+      process.env.DURABLE_VERBOSE_MODE = originalEnv;
+    } else {
+      delete process.env.DURABLE_VERBOSE_MODE;
+    }
   });
 
   describe("named branches", () => {

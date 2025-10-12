@@ -48,7 +48,6 @@ describe("Run In Child Context Handler", () => {
       mutex: {
         lock: jest.fn((fn) => fn()),
       },
-      isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
@@ -464,7 +463,6 @@ describe("runInChildContext with custom serdes", () => {
       terminationManager: {
         terminate: jest.fn(),
       },
-      isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
@@ -579,7 +577,6 @@ describe("Mock Integration", () => {
         terminate: jest.fn(),
         getTerminationPromise: jest.fn(),
       },
-      isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),

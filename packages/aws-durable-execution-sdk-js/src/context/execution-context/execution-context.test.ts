@@ -97,7 +97,6 @@ describe("initializeExecutionContext", () => {
         executionContext: expect.objectContaining({
           state: mockExecutionState,
           _stepData: {},
-          isVerbose: false,
         }),
         checkpointToken: mockCheckpointToken,
       }),
@@ -113,14 +112,12 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(mockEvent);
 
     // Verify
-    expect(result.executionContext.isVerbose).toBe(true);
     expect(log).toHaveBeenCalledWith(
-      true,
       "🔵",
       "Initializing durable function with event:",
       mockEvent,
     );
-    expect(log).toHaveBeenCalledWith(true, "📍", "Function Input:", mockEvent);
+    expect(log).toHaveBeenCalledWith("📍", "Function Input:", mockEvent);
   });
 
   it("should load step data from event", async () => {

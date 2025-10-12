@@ -40,7 +40,7 @@ export const createMapHandler = (
       config = mapFuncOrConfig as MapConfig<TInput>;
     }
 
-    log(context.isVerbose, "🗺️", "Starting map operation:", {
+    log("🗺️", "Starting map operation:", {
       name,
       itemCount: items.length,
       maxConcurrency: config?.maxConcurrency,
@@ -80,7 +80,7 @@ export const createMapHandler = (
       completionConfig: config?.completionConfig,
     });
 
-    log(context.isVerbose, "🗺️", "Map operation completed successfully:", {
+    log("🗺️", "Map operation completed successfully:", {
       resultCount: result.totalCount,
     });
 

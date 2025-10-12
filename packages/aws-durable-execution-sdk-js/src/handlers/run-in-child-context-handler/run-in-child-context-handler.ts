@@ -90,7 +90,7 @@ export const createRunInChildContextHandler = (
 
     const entityId = createStepId();
 
-    log(context.isVerbose, "🔄", "Running child context:", {
+    log("🔄", "Running child context:", {
       entityId,
       name,
     });
@@ -149,7 +149,6 @@ export const handleCompletedChildContext = async <T>(
   // Check if we need to replay children due to large payload
   if (stepData?.ContextDetails?.ReplayChildren) {
     log(
-      context.isVerbose,
       "🔄",
       "ReplayChildren mode: Re-executing child context due to large payload:",
       { entityId, stepName },
@@ -171,12 +170,9 @@ export const handleCompletedChildContext = async <T>(
     ).execute(stepName, () => fn(durableChildContext));
   }
 
-  log(
-    context.isVerbose,
-    "⏭️",
-    "Child context already finished, returning cached result:",
-    { entityId },
-  );
+  log("⏭️", "Child context already finished, returning cached result:", {
+    entityId,
+  });
 
   return await safeDeserialize(
     serdes,
@@ -184,7 +180,7 @@ export const handleCompletedChildContext = async <T>(
     entityId,
     stepName,
     context.terminationManager,
-    context.isVerbose,
+
     context.durableExecutionArn,
   );
 };
@@ -249,7 +245,7 @@ export const executeChildContext = async <T>(
       entityId,
       name,
       context.terminationManager,
-      context.isVerbose,
+
       context.durableExecutionArn,
     );
 
@@ -270,17 +266,12 @@ export const executeChildContext = async <T>(
         payloadToCheckpoint = "";
       }
 
-      log(
-        context.isVerbose,
-        "📦",
-        "Large payload detected, using ReplayChildren mode:",
-        {
-          entityId,
-          name,
-          payloadSize: Buffer.byteLength(serializedResult, "utf8"),
-          limit: CHECKPOINT_SIZE_LIMIT,
-        },
-      );
+      log("📦", "Large payload detected, using ReplayChildren mode:", {
+        entityId,
+        name,
+        payloadSize: Buffer.byteLength(serializedResult, "utf8"),
+        limit: CHECKPOINT_SIZE_LIMIT,
+      });
     }
 
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
@@ -295,14 +286,14 @@ export const executeChildContext = async <T>(
       Name: name,
     });
 
-    log(context.isVerbose, "✅", "Child context completed successfully:", {
+    log("✅", "Child context completed successfully:", {
       entityId,
       name,
     });
 
     return result;
   } catch (error) {
-    log(context.isVerbose, "❌", "Child context failed:", {
+    log("❌", "Child context failed:", {
       entityId,
       name,
       error,

@@ -34,7 +34,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
     mockExecutionContext = {
       durableExecutionArn: "test-arn",
       parentId: "test-parent-id",
-      isVerbose: false,
       terminationManager: mockTerminationManager,
       getStepData: jest.fn().mockReturnValue(undefined),
       _stepData: {},

@@ -117,7 +117,6 @@ describe("InvokeHandler", () => {
         "test-step-1",
         undefined,
         mockContext.terminationManager,
-        true,
         "test-arn",
       );
     });
@@ -151,7 +150,6 @@ describe("InvokeHandler", () => {
         "test-step-1",
         "test-invoke",
         mockContext.terminationManager,
-        true,
         "test-arn",
       );
     });
@@ -183,7 +181,6 @@ describe("InvokeHandler", () => {
         "test-step-1",
         undefined,
         mockContext.terminationManager,
-        true,
         "test-arn",
       );
     });
@@ -259,7 +256,6 @@ describe("InvokeHandler", () => {
       ).rejects.toThrow("Execution terminated");
 
       expect(mockLog).toHaveBeenCalledWith(
-        true,
         "⏳",
         "Invoke test-function still in progress, terminating",
       );
@@ -295,7 +291,6 @@ describe("InvokeHandler", () => {
 
       expect(result).toEqual({ result: "success" });
       expect(mockLog).toHaveBeenCalledWith(
-        true,
         "⏳",
         "Invoke test-function still in progress, waiting for other operations",
       );
@@ -342,7 +337,6 @@ describe("InvokeHandler", () => {
         "test-step-1",
         undefined,
         mockContext.terminationManager,
-        true,
         "test-arn",
       );
 
@@ -360,7 +354,6 @@ describe("InvokeHandler", () => {
       });
 
       expect(mockLog).toHaveBeenCalledWith(
-        true,
         "🚀",
         "Invoke test-function started, re-checking status",
       );

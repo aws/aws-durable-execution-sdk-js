@@ -53,7 +53,6 @@ describe("Step Handler", () => {
       mutex: {
         lock: jest.fn((fn) => fn()),
       },
-      isVerbose: false,
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),

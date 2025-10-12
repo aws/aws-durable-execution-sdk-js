@@ -16,21 +16,12 @@ export const initializeExecutionContext = async (
   durableExecutionMode: DurableExecutionMode;
   checkpointToken: string;
 }> => {
-  const isVerbose = process.env.DURABLE_VERBOSE_MODE === "true";
   const isLocalRunner = event.LocalRunner || false;
 
-  log(isVerbose, "🔵", "Initializing durable function with event:", event);
-  log(
-    isVerbose,
-    "🔧",
-    `Running in mode: ${isLocalRunner ? "LOCAL" : "LAMBDA"}`,
-  );
-  log(
-    isVerbose,
-    "🔧",
-    `Local runner mode: ${isLocalRunner ? "ENABLED" : "DISABLED"}`,
-  );
-  log(isVerbose, "📍", "Function Input:", event);
+  log("🔵", "Initializing durable function with event:", event);
+  log("🔧", `Running in mode: ${isLocalRunner ? "LOCAL" : "LAMBDA"}`);
+  log("🔧", `Local runner mode: ${isLocalRunner ? "ENABLED" : "DISABLED"}`);
+  log("📍", "Function Input:", event);
 
   const checkpointToken = event.CheckpointToken;
   const durableExecutionArn = event.DurableExecutionArn;
@@ -56,7 +47,7 @@ export const initializeExecutionContext = async (
       ? DurableExecutionMode.ReplayMode
       : DurableExecutionMode.ExecutionMode;
 
-  log(isVerbose, "📝", "Operations:", operationsArray);
+  log("📝", "Operations:", operationsArray);
 
   const stepData: Record<string, Operation> = operationsArray.reduce(
     (acc, operation: Operation) => {
@@ -69,14 +60,13 @@ export const initializeExecutionContext = async (
     {} as Record<string, Operation>,
   );
 
-  log(isVerbose, "📝", "Loaded step data:", stepData);
+  log("📝", "Loaded step data:", stepData);
 
   return {
     executionContext: {
       state,
       _stepData: stepData,
       terminationManager: new TerminationManager(),
-      isVerbose,
       durableExecutionArn,
       getStepData(stepId: string): Operation | undefined {
         return getStepDataUtil(stepData, stepId);
