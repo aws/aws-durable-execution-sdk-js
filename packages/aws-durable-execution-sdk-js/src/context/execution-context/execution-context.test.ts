@@ -109,7 +109,7 @@ describe("initializeExecutionContext", () => {
     process.env.DURABLE_VERBOSE_MODE = "true";
 
     // Execute
-    const result = await initializeExecutionContext(mockEvent);
+    await initializeExecutionContext(mockEvent);
 
     // Verify
     expect(log).toHaveBeenCalledWith(

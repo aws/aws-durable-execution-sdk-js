@@ -330,7 +330,7 @@ describe("Wait Handler", () => {
       );
 
       // Start the wait handler (don't await - it will wait for operations)
-      const waitPromise = waitHandler("test-wait", 1);
+      waitHandler("test-wait", 1);
 
       // Give it time to enter the waiting logic
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -383,7 +383,7 @@ describe("Wait Handler", () => {
       );
 
       // Start wait handler - should detect running operations and wait
-      const waitPromise = waitHandler("parallel-wait", 2000);
+      waitHandler("parallel-wait", 2000);
 
       // Give time for wait handler to enter complex waiting logic
       await new Promise((resolve) => setTimeout(resolve, 50));

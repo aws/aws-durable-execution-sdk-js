@@ -1,7 +1,7 @@
 import {
   terminate,
   terminateForUnrecoverableError,
-} from "./termination-helper";
+} from "./termination-helper/termination-helper";
 import { ExecutionContext } from "../types";
 import { UnrecoverableError } from "../errors/unrecoverable-error/unrecoverable-error";
 import { TerminationReason } from "../termination-manager/types";

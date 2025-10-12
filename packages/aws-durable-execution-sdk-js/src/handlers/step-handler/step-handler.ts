@@ -11,7 +11,7 @@ import {
 import {
   terminate,
   terminateForUnrecoverableError,
-} from "../../utils/termination-helper";
+} from "../../utils/termination-helper/termination-helper";
 import { Context } from "aws-lambda";
 import {
   OperationAction,

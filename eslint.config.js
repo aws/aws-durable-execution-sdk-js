@@ -6,6 +6,14 @@ const typescriptParser = require("@typescript-eslint/parser");
 
 export default [
   {
+    ignores: [
+      "**/coverage/**",
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+    ],
+  },
+  {
     files: [
       "packages/examples/src/examples/**/*.ts",
       "packages/examples/src/examples/**/*.js",

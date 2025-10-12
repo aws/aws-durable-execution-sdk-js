@@ -20,11 +20,11 @@ export interface ConcurrentExecutionItem<T> {
 /**
  * Configuration for concurrency control
  */
-export interface ConcurrencyConfig {
+export interface ConcurrencyConfig<TResult = unknown> {
   maxConcurrency?: number;
   topLevelSubType?: string;
   iterationSubType?: string;
-  summaryGenerator?: (result: any) => string;
+  summaryGenerator?: (result: BatchResult<TResult>) => string;
   completionConfig?: {
     minSuccessful?: number;
     toleratedFailureCount?: number;
@@ -47,7 +47,7 @@ export class ConcurrencyController {
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R>,
     parentContext: DurableContext,
-    config: ConcurrencyConfig,
+    config: ConcurrencyConfig<R>,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
     const resultItems: Array<BatchItem<R> | undefined> = new Array(
@@ -231,13 +231,15 @@ export const createConcurrentExecutionHandler = (
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
       | ConcurrentExecutor<TItem, TResult>,
-    executorOrConfig?: ConcurrentExecutor<TItem, TResult> | ConcurrencyConfig,
-    maybeConfig?: ConcurrencyConfig,
+    executorOrConfig?:
+      | ConcurrentExecutor<TItem, TResult>
+      | ConcurrencyConfig<TResult>,
+    maybeConfig?: ConcurrencyConfig<TResult>,
   ): Promise<BatchResult<TResult>> => {
     let name: string | undefined;
     let items: ConcurrentExecutionItem<TItem>[];
     let executor: ConcurrentExecutor<TItem, TResult>;
-    let config: ConcurrencyConfig | undefined;
+    let config: ConcurrencyConfig<TResult> | undefined;
 
     if (typeof nameOrItems === "string" || nameOrItems === undefined) {
       name = nameOrItems;
@@ -247,7 +249,7 @@ export const createConcurrentExecutionHandler = (
     } else {
       items = nameOrItems;
       executor = itemsOrExecutor as ConcurrentExecutor<TItem, TResult>;
-      config = executorOrConfig as ConcurrencyConfig;
+      config = executorOrConfig as ConcurrencyConfig<TResult>;
     }
 
     log("🔄", "Starting concurrent execution:", {
@@ -294,10 +296,15 @@ export const createConcurrentExecutionHandler = (
       summaryGenerator: config?.summaryGenerator,
     }).then((result) => {
       // Restore BatchResult methods if the result came from deserialized data
-      if (result && typeof result === "object" && Array.isArray(result.all)) {
-        return restoreBatchResult(result);
+      if (
+        result &&
+        typeof result === "object" &&
+        "all" in result &&
+        Array.isArray(result.all)
+      ) {
+        return restoreBatchResult<TResult>(result);
       }
-      return result;
+      return result as BatchResult<TResult>;
     });
   };
 };

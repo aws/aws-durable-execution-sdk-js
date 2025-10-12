@@ -16,12 +16,12 @@ export const createWaitForCallbackHandler = (
 ) => {
   return async <T>(
     nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc,
-    submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig,
-    maybeConfig?: WaitForCallbackConfig,
+    submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
+    maybeConfig?: WaitForCallbackConfig<T>,
   ): Promise<T> => {
     let name: string | undefined;
     let submitter: WaitForCallbackSubmitterFunc;
-    let config: WaitForCallbackConfig | undefined;
+    let config: WaitForCallbackConfig<T> | undefined;
 
     // Parse the overloaded parameters
     if (typeof nameOrSubmitter === "string" || nameOrSubmitter === undefined) {
@@ -38,7 +38,7 @@ export const createWaitForCallbackHandler = (
     } else if (typeof nameOrSubmitter === "function") {
       // Case: waitForCallback(submitterFunc, config?)
       submitter = nameOrSubmitter;
-      config = submitterOrConfig as WaitForCallbackConfig;
+      config = submitterOrConfig as WaitForCallbackConfig<T>;
     } else {
       throw new Error("waitForCallback requires a submitter function");
     }
@@ -52,7 +52,7 @@ export const createWaitForCallbackHandler = (
     // Use runInChildContext to ensure proper ID generation and isolation
     const childFunction = async (childCtx: DurableContext): Promise<T> => {
       // Convert WaitForCallbackConfig to CreateCallbackConfig
-      const createCallbackConfig: CreateCallbackConfig | undefined = config
+      const createCallbackConfig: CreateCallbackConfig<T> | undefined = config
         ? {
             timeout: config.timeout,
             heartbeatTimeout: config.heartbeatTimeout,

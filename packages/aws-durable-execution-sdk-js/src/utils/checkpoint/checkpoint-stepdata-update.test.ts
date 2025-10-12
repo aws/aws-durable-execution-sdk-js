@@ -1,9 +1,5 @@
 import { CheckpointHandler } from "./checkpoint";
-import {
-  ExecutionContext,
-  OperationSubType,
-  DurableExecutionMode,
-} from "../../types";
+import { ExecutionContext, OperationSubType } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   CheckpointDurableExecutionResponse,

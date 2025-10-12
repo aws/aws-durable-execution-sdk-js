@@ -8,7 +8,7 @@ import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-u
  * @returns A mocked ExecutionContext
  */
 export const createMockExecutionContext = (
-  overrides: Partial<ExecutionContext & { mutex?: any }> = {},
+  overrides: Partial<ExecutionContext & { mutex?: unknown }> = {},
 ): jest.Mocked<ExecutionContext> => {
   const mockTerminationManager = {
     terminate: jest.fn(),

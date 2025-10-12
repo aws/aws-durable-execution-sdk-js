@@ -9,7 +9,7 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { BatchResult } from "../concurrent-execution-handler/batch-result";
-import { createMapSummaryGenerator } from "../../utils/summary-generators";
+import { createMapSummaryGenerator } from "../../utils/summary-generators/summary-generators";
 
 export const createMapHandler = (
   context: ExecutionContext,
@@ -56,7 +56,7 @@ export const createMapHandler = (
     }
 
     // Convert to concurrent execution items
-    const executionItems: ConcurrentExecutionItem<any>[] = items.map(
+    const executionItems: ConcurrentExecutionItem<TInput>[] = items.map(
       (item, index) => ({
         id: `map-item-${index}`,
         data: item,

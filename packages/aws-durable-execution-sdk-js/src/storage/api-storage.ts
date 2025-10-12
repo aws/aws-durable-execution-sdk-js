@@ -6,10 +6,6 @@ import {
   GetDurableExecutionStateResponse,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
-import {
-  DurableExecutionInvocationInput,
-  DurableExecutionInvocationOutput,
-} from "../types";
 import { ExecutionState } from "./storage-provider";
 
 /**
@@ -64,15 +60,5 @@ export class ApiStorage implements ExecutionState {
       }),
     );
     return response;
-  }
-
-  /**
-   * Optional complete method
-   */
-  complete?(
-    _event: DurableExecutionInvocationInput,
-    _response: DurableExecutionInvocationOutput | null,
-  ): void {
-    // Implementation if needed
   }
 }

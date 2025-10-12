@@ -10,7 +10,7 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { BatchResult } from "../concurrent-execution-handler/batch-result";
-import { createParallelSummaryGenerator } from "../../utils/summary-generators";
+import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
 
 export const createParallelHandler = (
   context: ExecutionContext,

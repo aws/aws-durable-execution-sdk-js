@@ -10,13 +10,13 @@ import { OperationInterceptor } from "../../mocks/operation-interceptor";
 
 // Mock dependencies
 jest.mock("../../utils/checkpoint/checkpoint");
-jest.mock("../../utils/termination-helper");
+jest.mock("../../utils/termination-helper/termination-helper");
 jest.mock("../../mocks/operation-interceptor");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
 jest.mock("../../utils/wait-before-continue/wait-before-continue");
 
-import { terminate } from "../../utils/termination-helper";
+import { terminate } from "../../utils/termination-helper/termination-helper";
 import { log } from "../../utils/logger/logger";
 import {
   safeSerialize,

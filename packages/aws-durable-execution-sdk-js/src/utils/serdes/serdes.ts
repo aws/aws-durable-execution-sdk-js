@@ -44,9 +44,16 @@ export interface Serdes<T> {
  * Default Serdes implementation using JSON.stringify and JSON.parse
  * Wrapped in Promise.resolve() to maintain async interface compatibility
  * Ignores context parameter since it uses inline JSON serialization
+ *
+ * Note: Uses 'any' type intentionally as this is a generic serializer that must
+ * handle arbitrary JavaScript values. JSON.stringify/parse work with any type,
+ * and using more restrictive types would break compatibility with the generic
+ * Serdes<T> interface when T can be any type.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const defaultSerdes: Serdes<any> = {
   serialize: async (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
     _context: SerdesContext,
   ): Promise<string | undefined> =>
@@ -54,6 +61,7 @@ export const defaultSerdes: Serdes<any> = {
   deserialize: async (
     data: string | undefined,
     _context: SerdesContext,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> => (data !== undefined ? JSON.parse(data) : undefined),
 };
 
