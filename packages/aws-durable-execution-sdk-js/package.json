@@ -24,9 +24,10 @@
   ],
   "scripts": {
     "prebuild": "npm run lint:fix",
-    "build": "concurrently npm:build:esm npm:build:cjs",
+    "build": "concurrently npm:build:esm npm:build:cjs && npm run build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
+    "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

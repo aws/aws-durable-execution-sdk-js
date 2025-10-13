@@ -10,9 +10,10 @@
   },
   "scripts": {
     "clean": "rm -rf dist dist-cjs node_modules",
-    "build": "concurrently npm:build:esm npm:build:cjs",
+    "build": "concurrently npm:build:esm npm:build:cjs && npm run build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
+    "build:types": "tsc --project tsconfig.build.json",
     "prepublishOnly": "npm run build && npm run test",
     "lint": "eslint",
     "pretest": "npm run lint",

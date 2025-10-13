@@ -56,8 +56,8 @@ export function createBuildOptions(options, mode) {
       plugins: [
         typescript({
           noEmitOnError: true,
-          declaration: true,
-          declarationMap: true,
+          declaration: false,
+          declarationMap: false,
           outDir: "./dist",
           exclude: ["**/__tests__/**/*"],
         }),
