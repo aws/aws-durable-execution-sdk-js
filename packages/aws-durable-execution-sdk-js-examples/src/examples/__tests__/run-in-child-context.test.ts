@@ -17,16 +17,12 @@ describe("run-in-child-context test", () => {
   });
 
   it("parent should return result from child", async () => {
-    const RESULT = "res";
-
     const parentOp = durableTestRunner.getOperationByIndex(0);
     const childOp = durableTestRunner.getOperationByIndex(1);
-
-    childOp.mockResolvedValue(RESULT);
 
     await durableTestRunner.run();
 
     expect(parentOp.getChildOperations()).toHaveLength(1);
-    expect(parentOp.getContextDetails()?.result).toBe(RESULT);
+    expect(parentOp.getContextDetails()?.result).toBe("child step completed");
   });
 });

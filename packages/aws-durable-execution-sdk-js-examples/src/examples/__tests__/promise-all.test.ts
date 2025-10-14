@@ -17,13 +17,13 @@ describe("promise-all test", () => {
   });
 
   it("should return correct result - happy case", async () => {
-    durableTestRunner.getOperationByIndex(0).mockResolvedValue(1);
-    durableTestRunner.getOperationByIndex(1).mockResolvedValue(2);
-    durableTestRunner.getOperationByIndex(2).mockResolvedValue(3);
-
     const execution = await durableTestRunner.run();
 
-    expect(execution.getResult()).toStrictEqual([1, 2, 3]);
+    expect(execution.getResult()).toStrictEqual([
+      "result 1",
+      "result 2",
+      "result 3",
+    ]);
   });
 
   // TODO: enable following test once SDK/testing lib is fixed to handle concurrent retries
