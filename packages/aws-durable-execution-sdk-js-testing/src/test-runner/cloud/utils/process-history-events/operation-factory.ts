@@ -31,6 +31,7 @@ export function createOperation(
     Id: event.Id,
     Type: historyEventType.operationType,
     SubType: event.SubType,
+    StartTimestamp: new Date(),
     ...previousOperationEvents?.operation,
     // Only the status can be overwritten from the previous operation
     Status: historyEventType.operationStatus,
@@ -105,7 +106,7 @@ export function populateOperationDetails(
       break;
     case "WAIT":
       addOperationDetails(operation, historyEventType.operationDetailPlace, {
-        ScheduledTimestamp: event.WaitStartedDetails?.ScheduledEndTimestamp,
+        ScheduledEndTimestamp: event.WaitStartedDetails?.ScheduledEndTimestamp,
       });
       break;
     case "EXECUTION":

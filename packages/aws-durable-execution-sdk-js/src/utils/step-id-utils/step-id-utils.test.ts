@@ -1,6 +1,6 @@
 import { hashId, getStepData } from "./step-id-utils";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
-import { Operation } from "@aws-sdk/client-lambda";
+import { Operation, OperationType } from "@aws-sdk/client-lambda";
 
 describe("Hash Utility", () => {
   describe("hashId", () => {
@@ -31,7 +31,10 @@ describe("Hash Utility", () => {
       const stepId = TEST_CONSTANTS.STEP;
       const hashedId = hashId(stepId);
       const mockData = {
+        Id: hashedId,
         Status: "SUCCEEDED",
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Result: TEST_CONSTANTS.RESULT,
       } as Operation;
 
@@ -55,6 +58,8 @@ describe("Hash Utility", () => {
       const mockOperation = {
         Id: hashedId,
         Status: "SUCCEEDED",
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         StepDetails: {
           Result: "complex-result",
         },

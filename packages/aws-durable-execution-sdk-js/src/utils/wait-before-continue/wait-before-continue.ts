@@ -8,8 +8,8 @@ export interface WaitBeforeContinueOptions {
   checkStepStatus: boolean;
   /** Check if timer has expired */
   checkTimer: boolean;
-  /** Scheduled timestamp for timer check */
-  scheduledTimestamp?: Date | null;
+  /** Scheduled end timestamp for timer check */
+  scheduledEndTimestamp?: Date | null;
   /** Step ID to get current status */
   stepId: string;
   /** Execution context to get step data */
@@ -45,7 +45,7 @@ export async function waitBeforeContinue(
     checkHasRunningOperations,
     checkStepStatus,
     checkTimer,
-    scheduledTimestamp,
+    scheduledEndTimestamp,
     stepId,
     context,
     hasRunningOperations,
@@ -62,9 +62,9 @@ export async function waitBeforeContinue(
   };
 
   // Timer promise - resolves when scheduled time is reached
-  if (checkTimer && scheduledTimestamp) {
+  if (checkTimer && scheduledEndTimestamp) {
     const timerPromise = new Promise<WaitBeforeContinueResult>((resolve) => {
-      const timeLeft = Number(scheduledTimestamp) - Date.now();
+      const timeLeft = Number(scheduledEndTimestamp) - Date.now();
       if (timeLeft > 0) {
         const timer = setTimeout(
           () => resolve({ reason: "timer", timerExpired: true }),

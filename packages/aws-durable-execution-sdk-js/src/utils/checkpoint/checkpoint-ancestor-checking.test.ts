@@ -55,6 +55,8 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     mockContext._stepData[hashId(parentId)] = {
       Id: hashId(parentId),
       Status: "SUCCEEDED",
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     checkpointHandler.checkpoint(childId, {
@@ -79,6 +81,8 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     mockContext._stepData[hashId(parentId)] = {
       Id: hashId(parentId),
       Status: "FAILED",
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     checkpointHandler.checkpoint(childId, {
@@ -104,6 +108,8 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     mockContext._stepData[hashId(grandparentId)] = {
       Id: hashId(grandparentId),
       Status: "SUCCEEDED",
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     // Setup parent as STARTED with reference to grandparent
@@ -111,6 +117,8 @@ describe("CheckpointHandler - Ancestor Checking", () => {
       Id: hashId(parentId),
       Status: "STARTED",
       ParentId: hashId(grandparentId),
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     checkpointHandler.checkpoint(childId, {
@@ -135,6 +143,8 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     mockContext._stepData[hashId(parentId)] = {
       Id: hashId(parentId),
       Status: "STARTED",
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     await checkpointHandler.checkpoint(childId, {
@@ -183,18 +193,24 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     mockContext._stepData[hashId(rootId)] = {
       Id: hashId(rootId),
       Status: "SUCCEEDED",
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     mockContext._stepData[hashId(level1Id)] = {
       Id: hashId(level1Id),
       Status: "STARTED",
       ParentId: hashId(rootId),
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     mockContext._stepData[hashId(level2Id)] = {
       Id: hashId(level2Id),
       Status: "STARTED",
       ParentId: hashId(level1Id),
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
     } as any;
 
     checkpointHandler.checkpoint(level3Id, {

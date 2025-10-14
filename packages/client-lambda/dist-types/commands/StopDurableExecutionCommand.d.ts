@@ -75,7 +75,7 @@ declare const StopDurableExecutionCommand_base: {
  * const command = new StopDurableExecutionCommand(input);
  * const response = await client.send(command);
  * // { // StopDurableExecutionResponse
- * //   StopDate: new Date("TIMESTAMP"),
+ * //   StopTimestamp: new Date("TIMESTAMP"), // required
  * // };
  *
  * ```

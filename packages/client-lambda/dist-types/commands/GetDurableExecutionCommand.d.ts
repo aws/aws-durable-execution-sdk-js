@@ -67,9 +67,9 @@ declare const GetDurableExecutionCommand_base: {
  * const command = new GetDurableExecutionCommand(input);
  * const response = await client.send(command);
  * // { // GetDurableExecutionResponse
- * //   DurableExecutionArn: "STRING_VALUE",
- * //   DurableExecutionName: "STRING_VALUE",
- * //   FunctionArn: "STRING_VALUE",
+ * //   DurableExecutionArn: "STRING_VALUE", // required
+ * //   DurableExecutionName: "STRING_VALUE", // required
+ * //   FunctionArn: "STRING_VALUE", // required
  * //   InputPayload: "STRING_VALUE",
  * //   Result: "STRING_VALUE",
  * //   Error: { // ErrorObject
@@ -80,8 +80,8 @@ declare const GetDurableExecutionCommand_base: {
  * //       "STRING_VALUE",
  * //     ],
  * //   },
- * //   StartTimestamp: new Date("TIMESTAMP"),
- * //   Status: "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED",
+ * //   StartTimestamp: new Date("TIMESTAMP"), // required
+ * //   Status: "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED", // required
  * //   EndTimestamp: new Date("TIMESTAMP"),
  * //   Version: "STRING_VALUE",
  * // };

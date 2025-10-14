@@ -757,14 +757,14 @@ export const se_ListDurableExecutionsByFunctionCommand = async (
   const query = map({
     [_Q]: [, input[_Q]],
     [_DEN]: [, input[_DEN]],
-    [_SF]: [() => input.StatusFilter !== void 0, () => input[_SF] || []],
-    [_TA]: [
-      () => input.TimeAfter !== void 0,
-      () => __serializeDateTime(input[_TA]).toString(),
+    [_S]: [() => input.Statuses !== void 0, () => input[_S] || []],
+    [_SA]: [
+      () => input.StartedAfter !== void 0,
+      () => __serializeDateTime(input[_SA]).toString(),
     ],
-    [_TB]: [
-      () => input.TimeBefore !== void 0,
-      () => __serializeDateTime(input[_TB]).toString(),
+    [_SB]: [
+      () => input.StartedBefore !== void 0,
+      () => __serializeDateTime(input[_SB]).toString(),
     ],
     [_RO]: [() => input.ReverseOrder !== void 0, () => input[_RO].toString()],
     [_M]: [, input[_M]],
@@ -2815,7 +2815,8 @@ export const de_StopDurableExecutionCommand = async (output, context) => {
     "body",
   );
   const doc = take(data, {
-    StopDate: (_) => __expectNonNull(__parseEpochTimestamp(__expectNumber(_))),
+    StopTimestamp: (_) =>
+      __expectNonNull(__parseEpochTimestamp(__expectNumber(_))),
   });
   Object.assign(contents, doc);
   return contents;
@@ -3239,7 +3240,8 @@ const de_CallbackTimeoutExceptionRes = async (parsedOutput, context) => {
   const contents = map({});
   const data = parsedOutput.body;
   const doc = take(data, {
-    message: __expectString,
+    Message: __expectString,
+    Type: __expectString,
   });
   Object.assign(contents, doc);
   const exception = new CallbackTimeoutException({
@@ -4094,7 +4096,7 @@ const de_StepDetails = (output, context) => {
 };
 const de_WaitDetails = (output, context) => {
   return take(output, {
-    ScheduledTimestamp: (_) =>
+    ScheduledEndTimestamp: (_) =>
       __expectNonNull(__parseEpochTimestamp(__expectNumber(_))),
   });
 };
@@ -4140,9 +4142,9 @@ const _Q = "Qualifier";
 const _RI = "RevisionId";
 const _RO = "ReverseOrder";
 const _RSCT = "ResponseStreamContentType";
-const _SF = "StatusFilter";
-const _TA = "TimeAfter";
-const _TB = "TimeBefore";
+const _S = "Statuses";
+const _SA = "StartedAfter";
+const _SB = "StartedBefore";
 const _TK = "TagKeys";
 const _ct = "content-type";
 const _f = "find";

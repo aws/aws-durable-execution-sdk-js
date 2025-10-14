@@ -1,5 +1,8 @@
 import { Context } from "aws-lambda";
-import { Operation } from "@aws-sdk/client-lambda";
+import {
+  Operation,
+  CheckpointDurableExecutionResponse,
+} from "@aws-sdk/client-lambda";
 import { createDurableContext } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage-provider";
 import { TerminationManager } from "../termination-manager/termination-manager";
@@ -20,8 +23,8 @@ class InMemoryStorage implements ExecutionState {
     return { Operations: this.operations };
   }
 
-  async checkpoint(): Promise<Record<string, never>> {
-    return {};
+  async checkpoint(): Promise<CheckpointDurableExecutionResponse> {
+    return { NewExecutionState: undefined };
   }
 
   addOperation(operation: Operation): void {

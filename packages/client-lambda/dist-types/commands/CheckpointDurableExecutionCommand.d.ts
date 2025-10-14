@@ -66,12 +66,12 @@ declare const CheckpointDurableExecutionCommand_base: {
  *   CheckpointToken: "STRING_VALUE", // required
  *   Updates: [ // OperationUpdates
  *     { // OperationUpdate
- *       Id: "STRING_VALUE",
+ *       Id: "STRING_VALUE", // required
  *       ParentId: "STRING_VALUE",
  *       Name: "STRING_VALUE",
- *       Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE",
+ *       Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE", // required
  *       SubType: "STRING_VALUE",
- *       Action: "START" || "SUCCEED" || "FAIL" || "RETRY" || "CANCEL",
+ *       Action: "START" || "SUCCEED" || "FAIL" || "RETRY" || "CANCEL", // required
  *       Payload: "STRING_VALUE",
  *       Error: { // ErrorObject
  *         ErrorMessage: "STRING_VALUE",
@@ -96,7 +96,6 @@ declare const CheckpointDurableExecutionCommand_base: {
  *       },
  *       ChainedInvokeOptions: { // ChainedInvokeOptions
  *         FunctionName: "STRING_VALUE",
- *         TimeoutSeconds: Number("int"),
  *       },
  *     },
  *   ],
@@ -109,14 +108,14 @@ declare const CheckpointDurableExecutionCommand_base: {
  * //   NewExecutionState: { // CheckpointUpdatedExecutionState
  * //     Operations: [ // Operations
  * //       { // Operation
- * //         Id: "STRING_VALUE",
+ * //         Id: "STRING_VALUE", // required
  * //         ParentId: "STRING_VALUE",
  * //         Name: "STRING_VALUE",
- * //         Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE",
+ * //         Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE", // required
  * //         SubType: "STRING_VALUE",
- * //         StartTimestamp: new Date("TIMESTAMP"),
+ * //         StartTimestamp: new Date("TIMESTAMP"), // required
  * //         EndTimestamp: new Date("TIMESTAMP"),
- * //         Status: "STARTED" || "PENDING" || "READY" || "SUCCEEDED" || "FAILED" || "CANCELLED" || "TIMED_OUT" || "STOPPED",
+ * //         Status: "STARTED" || "PENDING" || "READY" || "SUCCEEDED" || "FAILED" || "CANCELLED" || "TIMED_OUT" || "STOPPED", // required
  * //         ExecutionDetails: { // ExecutionDetails
  * //           InputPayload: "STRING_VALUE",
  * //         },
@@ -146,7 +145,7 @@ declare const CheckpointDurableExecutionCommand_base: {
  * //           },
  * //         },
  * //         WaitDetails: { // WaitDetails
- * //           ScheduledTimestamp: new Date("TIMESTAMP"),
+ * //           ScheduledEndTimestamp: new Date("TIMESTAMP"),
  * //         },
  * //         CallbackDetails: { // CallbackDetails
  * //           CallbackId: "STRING_VALUE",

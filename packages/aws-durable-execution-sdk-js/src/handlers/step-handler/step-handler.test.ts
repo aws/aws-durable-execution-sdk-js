@@ -14,7 +14,7 @@ import {
   UnrecoverableExecutionError,
   UnrecoverableInvocationError,
 } from "../../errors/unrecoverable-error/unrecoverable-error";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 
@@ -669,6 +669,8 @@ describe("Step Handler", () => {
     mockExecutionContext._stepData = {
       [hashedStepId]: {
         Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.PENDING,
       },
     };

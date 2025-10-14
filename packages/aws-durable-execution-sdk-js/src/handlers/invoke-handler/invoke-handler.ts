@@ -140,9 +140,6 @@ export const createInvokeHandler = (
         Payload: serializedPayload,
         ChainedInvokeOptions: {
           FunctionName: funcId,
-          ...(config?.timeoutSeconds && {
-            TimeoutSeconds: config.timeoutSeconds,
-          }),
         },
       });
 

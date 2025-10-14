@@ -553,7 +553,6 @@ export interface CallbackOptions {
  */
 export interface ChainedInvokeOptions {
   FunctionName?: string | undefined;
-  TimeoutSeconds?: number | undefined;
 }
 /**
  * @public
@@ -602,12 +601,12 @@ export interface WaitOptions {
  * @public
  */
 export interface OperationUpdate {
-  Id?: string | undefined;
+  Id: string | undefined;
   ParentId?: string | undefined;
   Name?: string | undefined;
-  Type?: OperationType | undefined;
+  Type: OperationType | undefined;
   SubType?: string | undefined;
-  Action?: OperationAction | undefined;
+  Action: OperationAction | undefined;
   Payload?: string | undefined;
   Error?: ErrorObject | undefined;
   ContextOptions?: ContextOptions | undefined;
@@ -686,20 +685,20 @@ export interface StepDetails {
  * @public
  */
 export interface WaitDetails {
-  ScheduledTimestamp?: Date | undefined;
+  ScheduledEndTimestamp?: Date | undefined;
 }
 /**
  * @public
  */
 export interface Operation {
-  Id?: string | undefined;
+  Id: string | undefined;
   ParentId?: string | undefined;
   Name?: string | undefined;
-  Type?: OperationType | undefined;
+  Type: OperationType | undefined;
   SubType?: string | undefined;
-  StartTimestamp?: Date | undefined;
+  StartTimestamp: Date | undefined;
   EndTimestamp?: Date | undefined;
-  Status?: OperationStatus | undefined;
+  Status: OperationStatus | undefined;
   ExecutionDetails?: ExecutionDetails | undefined;
   ContextDetails?: ContextDetails | undefined;
   StepDetails?: StepDetails | undefined;
@@ -719,7 +718,7 @@ export interface CheckpointUpdatedExecutionState {
  */
 export interface CheckpointDurableExecutionResponse {
   CheckpointToken?: string | undefined;
-  NewExecutionState?: CheckpointUpdatedExecutionState | undefined;
+  NewExecutionState: CheckpointUpdatedExecutionState | undefined;
 }
 /**
  * @public
@@ -2409,6 +2408,7 @@ export type State = (typeof State)[keyof typeof State];
 export declare const StateReasonCode: {
   readonly Creating: "Creating";
   readonly DisabledKMSKey: "DisabledKMSKey";
+  readonly DrainingDurableExecutions: "DrainingDurableExecutions";
   readonly EFSIOError: "EFSIOError";
   readonly EFSMountConnectivityError: "EFSMountConnectivityError";
   readonly EFSMountFailure: "EFSMountFailure";
@@ -4842,14 +4842,14 @@ export type ExecutionStatus =
  * @public
  */
 export interface GetDurableExecutionResponse {
-  DurableExecutionArn?: string | undefined;
-  DurableExecutionName?: string | undefined;
-  FunctionArn?: string | undefined;
+  DurableExecutionArn: string | undefined;
+  DurableExecutionName: string | undefined;
+  FunctionArn: string | undefined;
   InputPayload?: string | undefined;
   Result?: string | undefined;
   Error?: ErrorObject | undefined;
-  StartTimestamp?: Date | undefined;
-  Status?: ExecutionStatus | undefined;
+  StartTimestamp: Date | undefined;
+  Status: ExecutionStatus | undefined;
   EndTimestamp?: Date | undefined;
   Version?: string | undefined;
 }
@@ -4874,13 +4874,13 @@ export interface EventError {
  * @public
  */
 export interface CallbackFailedDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
  */
 export interface CallbackStartedDetails {
-  CallbackId?: string | undefined;
+  CallbackId: string | undefined;
   HeartbeatTimeout?: number | undefined;
   Timeout?: number | undefined;
 }
@@ -4895,19 +4895,19 @@ export interface EventResult {
  * @public
  */
 export interface CallbackSucceededDetails {
-  Result?: EventResult | undefined;
+  Result: EventResult | undefined;
 }
 /**
  * @public
  */
 export interface CallbackTimedOutDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
  */
 export interface ChainedInvokeFailedDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
@@ -4920,9 +4920,8 @@ export interface EventInput {
  * @public
  */
 export interface ChainedInvokePendingDetails {
-  Input?: EventInput | undefined;
-  FunctionName?: string | undefined;
-  Timeout?: number | undefined;
+  Input: EventInput | undefined;
+  FunctionName: string | undefined;
 }
 /**
  * @public
@@ -4934,25 +4933,25 @@ export interface ChainedInvokeStartedDetails {
  * @public
  */
 export interface ChainedInvokeStoppedDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
  */
 export interface ChainedInvokeSucceededDetails {
-  Result?: EventResult | undefined;
+  Result: EventResult | undefined;
 }
 /**
  * @public
  */
 export interface ChainedInvokeTimedOutDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
  */
 export interface ContextFailedDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
@@ -4962,7 +4961,7 @@ export interface ContextStartedDetails {}
  * @public
  */
 export interface ContextSucceededDetails {
-  Result?: EventResult | undefined;
+  Result: EventResult | undefined;
 }
 /**
  * @public
@@ -5003,26 +5002,26 @@ export type EventType = (typeof EventType)[keyof typeof EventType];
  * @public
  */
 export interface ExecutionFailedDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
  */
 export interface ExecutionStartedDetails {
-  Input?: EventInput | undefined;
-  ExecutionTimeout?: number | undefined;
+  Input: EventInput | undefined;
+  ExecutionTimeout: number | undefined;
 }
 /**
  * @public
  */
 export interface ExecutionStoppedDetails {
-  Error?: EventError | undefined;
+  Error: EventError | undefined;
 }
 /**
  * @public
  */
 export interface ExecutionSucceededDetails {
-  Result?: EventResult | undefined;
+  Result: EventResult | undefined;
 }
 /**
  * @public
@@ -5036,7 +5035,7 @@ export interface ExecutionTimedOutDetails {
 export interface InvocationCompletedDetails {
   StartTimestamp: Date | undefined;
   EndTimestamp: Date | undefined;
-  RequestId?: string | undefined;
+  RequestId: string | undefined;
   Error?: EventError | undefined;
 }
 /**
@@ -5050,8 +5049,8 @@ export interface RetryDetails {
  * @public
  */
 export interface StepFailedDetails {
-  Error?: EventError | undefined;
-  RetryDetails?: RetryDetails | undefined;
+  Error: EventError | undefined;
+  RetryDetails: RetryDetails | undefined;
 }
 /**
  * @public
@@ -5061,8 +5060,8 @@ export interface StepStartedDetails {}
  * @public
  */
 export interface StepSucceededDetails {
-  Result?: EventResult | undefined;
-  RetryDetails?: RetryDetails | undefined;
+  Result: EventResult | undefined;
+  RetryDetails: RetryDetails | undefined;
 }
 /**
  * @public
@@ -5074,8 +5073,8 @@ export interface WaitCancelledDetails {
  * @public
  */
 export interface WaitStartedDetails {
-  Duration?: number | undefined;
-  ScheduledEndTimestamp?: Date | undefined;
+  Duration: number | undefined;
+  ScheduledEndTimestamp: Date | undefined;
 }
 /**
  * @public
@@ -5124,7 +5123,7 @@ export interface Event {
  * @public
  */
 export interface GetDurableExecutionHistoryResponse {
-  Events?: Event[] | undefined;
+  Events: Event[] | undefined;
   NextMarker?: string | undefined;
 }
 /**
@@ -5140,7 +5139,7 @@ export interface GetDurableExecutionStateRequest {
  * @public
  */
 export interface GetDurableExecutionStateResponse {
-  Operations?: Operation[] | undefined;
+  Operations: Operation[] | undefined;
   NextMarker?: string | undefined;
 }
 /**
@@ -5584,9 +5583,9 @@ export interface ListDurableExecutionsByFunctionRequest {
   FunctionName: string | undefined;
   Qualifier?: string | undefined;
   DurableExecutionName?: string | undefined;
-  StatusFilter?: ExecutionStatus[] | undefined;
-  TimeAfter?: Date | undefined;
-  TimeBefore?: Date | undefined;
+  Statuses?: ExecutionStatus[] | undefined;
+  StartedAfter?: Date | undefined;
+  StartedBefore?: Date | undefined;
   ReverseOrder?: boolean | undefined;
   Marker?: string | undefined;
   MaxItems?: number | undefined;
@@ -5595,11 +5594,11 @@ export interface ListDurableExecutionsByFunctionRequest {
  * @public
  */
 export interface Execution {
-  DurableExecutionArn?: string | undefined;
-  DurableExecutionName?: string | undefined;
-  FunctionArn?: string | undefined;
-  Status?: ExecutionStatus | undefined;
-  StartTimestamp?: Date | undefined;
+  DurableExecutionArn: string | undefined;
+  DurableExecutionName: string | undefined;
+  FunctionArn: string | undefined;
+  Status: ExecutionStatus | undefined;
+  StartTimestamp: Date | undefined;
   EndTimestamp?: Date | undefined;
 }
 /**
@@ -5798,6 +5797,8 @@ export interface PutProvisionedConcurrencyConfigResponse {
 export declare class CallbackTimeoutException extends __BaseException {
   readonly name: "CallbackTimeoutException";
   readonly $fault: "client";
+  Type?: string | undefined;
+  Message?: string | undefined;
   /**
    * @internal
    */

@@ -125,7 +125,7 @@ describe("createOperation", () => {
 
     const operation = createOperation(undefined, mockEvent, endEventType);
 
-    expect(operation.StartTimestamp).toBeUndefined();
+    expect(operation.StartTimestamp).toEqual(expect.any(Date));
     expect(operation.EndTimestamp).toEqual(new Date("2023-01-01T12:00:00Z"));
   });
 
@@ -323,11 +323,11 @@ describe("populateOperationDetails", () => {
   });
 
   it("should handle WAIT operation type", () => {
-    const scheduledTimestamp = new Date("2023-01-01T13:00:00Z");
+    const scheduledEndTimestamp = new Date("2023-01-01T13:00:00Z");
     const event: Event = {
       ...baseEvent,
       WaitStartedDetails: {
-        ScheduledEndTimestamp: scheduledTimestamp,
+        ScheduledEndTimestamp: scheduledEndTimestamp,
       },
     };
 
@@ -339,7 +339,7 @@ describe("populateOperationDetails", () => {
     expect(operation.WaitDetails).toEqual({
       Result: undefined,
       Error: undefined,
-      ScheduledTimestamp: scheduledTimestamp,
+      ScheduledEndTimestamp: scheduledEndTimestamp,
     });
   });
 

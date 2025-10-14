@@ -140,14 +140,13 @@ export interface DurableContext {
    * @param name - Step name for tracking and debugging
    * @param funcId - Function ID or ARN of the durable function to invoke
    * @param input - Input data to pass to the invoked function
-   * @param config - Optional configuration for serialization and timeout
+   * @param config - Optional configuration for serialization
    * @example
    * ```typescript
    * const result = await context.invoke(
    *   "process-payment",
    *   "arn:aws:lambda:us-east-1:123456789012:function:payment-processor",
-   *   { amount: 100, currency: "USD" },
-   *   { timeoutSeconds: 300 }
+   *   { amount: 100, currency: "USD" }
    * );
    * ```
    */
@@ -162,7 +161,7 @@ export interface DurableContext {
    * Invokes another durable function with the specified input
    * @param funcId - Function ID or ARN of the durable function to invoke
    * @param input - Input data to pass to the invoked function
-   * @param config - Optional configuration for serialization and timeout
+   * @param config - Optional configuration for serialization
    * @example
    * ```typescript
    * const result = await context.invoke(
@@ -750,8 +749,6 @@ export interface InvokeConfig<I, O> {
   payloadSerdes?: Serdes<I>;
   /** Serialization/deserialization configuration for result data */
   resultSerdes?: Serdes<O>;
-  /** Maximum execution time for the invoked function in seconds */
-  timeoutSeconds?: number | undefined;
 }
 
 export type CreateCallbackResult<T> = [Promise<T>, string]; // [promise, callbackId]

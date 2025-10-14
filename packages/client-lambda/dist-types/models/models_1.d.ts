@@ -42,7 +42,7 @@ export interface StopDurableExecutionRequest {
  * @public
  */
 export interface StopDurableExecutionResponse {
-  StopDate?: Date | undefined;
+  StopTimestamp: Date | undefined;
 }
 /**
  * @public

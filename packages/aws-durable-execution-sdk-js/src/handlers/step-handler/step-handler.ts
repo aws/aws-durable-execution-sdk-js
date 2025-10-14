@@ -59,7 +59,7 @@ const waitForContinuation = async (
     checkHasRunningOperations: true,
     checkStepStatus: true,
     checkTimer: true,
-    scheduledTimestamp: stepData?.StepDetails?.NextAttemptTimestamp,
+    scheduledEndTimestamp: stepData?.StepDetails?.NextAttemptTimestamp,
     stepId,
     context,
     hasRunningOperations,

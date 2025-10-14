@@ -163,7 +163,7 @@ describe("Wait Handler", () => {
     test("should not checkpoint START if step data already exists", async () => {
       mockExecutionContext.getStepData.mockReturnValue({
         Status: OperationStatus.STARTED,
-        WaitDetails: { ScheduledTimestamp: new Date(Date.now() + 5000) },
+        WaitDetails: { ScheduledEndTimestamp: new Date(Date.now() + 5000) },
       } as Operation);
 
       const mockHasRunningOperations = jest.fn(() => false);
@@ -214,7 +214,7 @@ describe("Wait Handler", () => {
       // Mock step data with existing wait
       mockExecutionContext.getStepData.mockReturnValue({
         Status: OperationStatus.STARTED,
-        WaitDetails: { ScheduledTimestamp: new Date(Date.now() + 5000) },
+        WaitDetails: { ScheduledEndTimestamp: new Date(Date.now() + 5000) },
       } as Operation);
 
       waitHandler = createWaitHandler(
@@ -267,7 +267,7 @@ describe("Wait Handler", () => {
       const waitTime = Date.now() + 2000;
       mockExecutionContext.getStepData.mockReturnValue({
         Status: OperationStatus.STARTED,
-        WaitDetails: { ScheduledTimestamp: new Date(waitTime) },
+        WaitDetails: { ScheduledEndTimestamp: new Date(waitTime) },
       } as Operation);
 
       waitHandler = createWaitHandler(

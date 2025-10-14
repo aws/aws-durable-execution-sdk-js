@@ -71,13 +71,13 @@ export const createWaitHandler = (
       }
 
       // There are ongoing operations - wait before continuing
-      // Refresh stepData after checkpoint to get ScheduledTimestamp
+      // Refresh stepData after checkpoint to get ScheduledEndTimestamp
       stepData = context.getStepData(stepId);
       await waitBeforeContinue({
         checkHasRunningOperations: true,
         checkStepStatus: true,
         checkTimer: true,
-        scheduledTimestamp: stepData?.WaitDetails?.ScheduledTimestamp,
+        scheduledEndTimestamp: stepData?.WaitDetails?.ScheduledEndTimestamp,
         stepId,
         context,
         hasRunningOperations,

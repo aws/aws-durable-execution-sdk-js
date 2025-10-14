@@ -370,6 +370,7 @@ export const State = {
 export const StateReasonCode = {
   Creating: "Creating",
   DisabledKMSKey: "DisabledKMSKey",
+  DrainingDurableExecutions: "DrainingDurableExecutions",
   EFSIOError: "EFSIOError",
   EFSMountConnectivityError: "EFSMountConnectivityError",
   EFSMountFailure: "EFSMountFailure",
@@ -923,6 +924,8 @@ export class ProvisionedConcurrencyConfigNotFoundException extends __BaseExcepti
 export class CallbackTimeoutException extends __BaseException {
   name = "CallbackTimeoutException";
   $fault = "client";
+  Type;
+  Message;
   constructor(opts) {
     super({
       name: "CallbackTimeoutException",
@@ -930,6 +933,8 @@ export class CallbackTimeoutException extends __BaseException {
       ...opts,
     });
     Object.setPrototypeOf(this, CallbackTimeoutException.prototype);
+    this.Type = opts.Type;
+    this.Message = opts.Message;
   }
 }
 export const ErrorObjectFilterSensitiveLog = (obj) => ({

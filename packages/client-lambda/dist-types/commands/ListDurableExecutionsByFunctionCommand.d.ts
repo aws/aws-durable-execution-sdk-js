@@ -65,11 +65,11 @@ declare const ListDurableExecutionsByFunctionCommand_base: {
  *   FunctionName: "STRING_VALUE", // required
  *   Qualifier: "STRING_VALUE",
  *   DurableExecutionName: "STRING_VALUE",
- *   StatusFilter: [ // ExecutionStatusList
+ *   Statuses: [ // ExecutionStatusList
  *     "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED",
  *   ],
- *   TimeAfter: new Date("TIMESTAMP"),
- *   TimeBefore: new Date("TIMESTAMP"),
+ *   StartedAfter: new Date("TIMESTAMP"),
+ *   StartedBefore: new Date("TIMESTAMP"),
  *   ReverseOrder: true || false,
  *   Marker: "STRING_VALUE",
  *   MaxItems: Number("int"),
@@ -79,11 +79,11 @@ declare const ListDurableExecutionsByFunctionCommand_base: {
  * // { // ListDurableExecutionsByFunctionResponse
  * //   DurableExecutions: [ // DurableExecutions
  * //     { // Execution
- * //       DurableExecutionArn: "STRING_VALUE",
- * //       DurableExecutionName: "STRING_VALUE",
- * //       FunctionArn: "STRING_VALUE",
- * //       Status: "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED",
- * //       StartTimestamp: new Date("TIMESTAMP"),
+ * //       DurableExecutionArn: "STRING_VALUE", // required
+ * //       DurableExecutionName: "STRING_VALUE", // required
+ * //       FunctionArn: "STRING_VALUE", // required
+ * //       Status: "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED", // required
+ * //       StartTimestamp: new Date("TIMESTAMP"), // required
  * //       EndTimestamp: new Date("TIMESTAMP"),
  * //     },
  * //   ],
