@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { DeleteFunctionRequest } from "../models/models_0";
 /**
  * @public
@@ -16,33 +12,19 @@ export { $Command };
  *
  * The input for {@link DeleteFunctionCommand}.
  */
-export interface DeleteFunctionCommandInput extends DeleteFunctionRequest {}
+export interface DeleteFunctionCommandInput extends DeleteFunctionRequest {
+}
 /**
  * @public
  *
  * The output of {@link DeleteFunctionCommand}.
  */
-export interface DeleteFunctionCommandOutput extends __MetadataBearer {}
+export interface DeleteFunctionCommandOutput extends __MetadataBearer {
+}
 declare const DeleteFunctionCommand_base: {
-  new (
-    input: DeleteFunctionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteFunctionCommandInput,
-    DeleteFunctionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: DeleteFunctionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteFunctionCommandInput,
-    DeleteFunctionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: DeleteFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionCommandInput, DeleteFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: DeleteFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionCommandInput, DeleteFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Deletes a Lambda function. To delete a specific function version, use the <code>Qualifier</code> parameter. Otherwise, all versions and aliases are deleted. This doesn't require the user to have explicit permissions for <a>DeleteAlias</a>.</p> <p>To delete Lambda event source mappings that invoke a function, use <a>DeleteEventSourceMapping</a>. For Amazon Web Services services and resources that invoke your function directly, delete the trigger in the service where you originally configured it.</p>
@@ -106,15 +88,15 @@ declare const DeleteFunctionCommand_base: {
  * @public
  */
 export declare class DeleteFunctionCommand extends DeleteFunctionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: DeleteFunctionRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: DeleteFunctionRequest;
+            output: {};
+        };
+        sdk: {
+            input: DeleteFunctionCommandInput;
+            output: DeleteFunctionCommandOutput;
+        };
     };
-    sdk: {
-      input: DeleteFunctionCommandInput;
-      output: DeleteFunctionCommandOutput;
-    };
-  };
 }

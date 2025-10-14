@@ -1,7 +1,4 @@
-import {
-  ServiceException as __ServiceException,
-  ServiceExceptionOptions as __ServiceExceptionOptions,
-} from "@smithy/smithy-client";
+import { ServiceException as __ServiceException, ServiceExceptionOptions as __ServiceExceptionOptions } from "@smithy/smithy-client";
 export type { __ServiceExceptionOptions };
 export { __ServiceException };
 /**
@@ -10,8 +7,8 @@ export { __ServiceException };
  * Base exception class for all service exceptions from Lambda service.
  */
 export declare class LambdaServiceException extends __ServiceException {
-  /**
-   * @internal
-   */
-  constructor(options: __ServiceExceptionOptions);
+    /**
+     * @internal
+     */
+    constructor(options: __ServiceExceptionOptions);
 }

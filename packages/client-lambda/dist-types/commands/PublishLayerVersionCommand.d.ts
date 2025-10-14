@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  PublishLayerVersionRequest,
-  PublishLayerVersionResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { PublishLayerVersionRequest, PublishLayerVersionResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link PublishLayerVersionCommand}.
  */
-export interface PublishLayerVersionCommandInput
-  extends PublishLayerVersionRequest {}
+export interface PublishLayerVersionCommandInput extends PublishLayerVersionRequest {
+}
 /**
  * @public
  *
  * The output of {@link PublishLayerVersionCommand}.
  */
-export interface PublishLayerVersionCommandOutput
-  extends PublishLayerVersionResponse,
-    __MetadataBearer {}
+export interface PublishLayerVersionCommandOutput extends PublishLayerVersionResponse, __MetadataBearer {
+}
 declare const PublishLayerVersionCommand_base: {
-  new (
-    input: PublishLayerVersionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    PublishLayerVersionCommandInput,
-    PublishLayerVersionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: PublishLayerVersionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    PublishLayerVersionCommandInput,
-    PublishLayerVersionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: PublishLayerVersionCommandInput): import("@smithy/smithy-client").CommandImpl<PublishLayerVersionCommandInput, PublishLayerVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: PublishLayerVersionCommandInput): import("@smithy/smithy-client").CommandImpl<PublishLayerVersionCommandInput, PublishLayerVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Creates an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a> from a ZIP archive. Each time you call <code>PublishLayerVersion</code> with the same layer name, a new version is created.</p> <p>Add layers to your function with <a>CreateFunction</a> or <a>UpdateFunctionConfiguration</a>.</p>
@@ -170,15 +146,15 @@ declare const PublishLayerVersionCommand_base: {
  * @public
  */
 export declare class PublishLayerVersionCommand extends PublishLayerVersionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: PublishLayerVersionRequest;
-      output: PublishLayerVersionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: PublishLayerVersionRequest;
+            output: PublishLayerVersionResponse;
+        };
+        sdk: {
+            input: PublishLayerVersionCommandInput;
+            output: PublishLayerVersionCommandOutput;
+        };
     };
-    sdk: {
-      input: PublishLayerVersionCommandInput;
-      output: PublishLayerVersionCommandOutput;
-    };
-  };
 }

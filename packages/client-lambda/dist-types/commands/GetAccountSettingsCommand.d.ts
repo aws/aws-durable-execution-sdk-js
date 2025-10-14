@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetAccountSettingsRequest,
-  GetAccountSettingsResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetAccountSettingsRequest, GetAccountSettingsResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetAccountSettingsCommand}.
  */
-export interface GetAccountSettingsCommandInput
-  extends GetAccountSettingsRequest {}
+export interface GetAccountSettingsCommandInput extends GetAccountSettingsRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetAccountSettingsCommand}.
  */
-export interface GetAccountSettingsCommandOutput
-  extends GetAccountSettingsResponse,
-    __MetadataBearer {}
+export interface GetAccountSettingsCommandOutput extends GetAccountSettingsResponse, __MetadataBearer {
+}
 declare const GetAccountSettingsCommand_base: {
-  new (
-    input: GetAccountSettingsCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetAccountSettingsCommandInput,
-    GetAccountSettingsCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    ...[input]: [] | [GetAccountSettingsCommandInput]
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetAccountSettingsCommandInput,
-    GetAccountSettingsCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetAccountSettingsCommandInput): import("@smithy/smithy-client").CommandImpl<GetAccountSettingsCommandInput, GetAccountSettingsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (...[input]: [] | [GetAccountSettingsCommandInput]): import("@smithy/smithy-client").CommandImpl<GetAccountSettingsCommandInput, GetAccountSettingsCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Retrieves details about your account's <a href="https://docs.aws.amazon.com/lambda/latest/dg/limits.html">limits</a> and usage in an Amazon Web Services Region.</p>
@@ -121,15 +97,15 @@ declare const GetAccountSettingsCommand_base: {
  * @public
  */
 export declare class GetAccountSettingsCommand extends GetAccountSettingsCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: {};
-      output: GetAccountSettingsResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: {};
+            output: GetAccountSettingsResponse;
+        };
+        sdk: {
+            input: GetAccountSettingsCommandInput;
+            output: GetAccountSettingsCommandOutput;
+        };
     };
-    sdk: {
-      input: GetAccountSettingsCommandInput;
-      output: GetAccountSettingsCommandOutput;
-    };
-  };
 }

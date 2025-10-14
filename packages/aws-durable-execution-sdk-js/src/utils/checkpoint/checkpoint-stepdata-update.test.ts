@@ -26,6 +26,7 @@ describe("CheckpointHandler - StepData Update", () => {
         Status: OperationStatus.STARTED,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
+        StartTimestamp: new Date(),
       },
     };
     mockContext = {
@@ -53,6 +54,7 @@ describe("CheckpointHandler - StepData Update", () => {
         Status: OperationStatus.SUCCEEDED,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Name: "test-step-1",
         StepDetails: {
           Result: "success-result",
@@ -64,6 +66,7 @@ describe("CheckpointHandler - StepData Update", () => {
         Status: OperationStatus.FAILED,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Name: "test-step-2",
         StepDetails: {
           Result: "error-message",
@@ -101,6 +104,7 @@ describe("CheckpointHandler - StepData Update", () => {
       Status: OperationStatus.SUCCEEDED,
       SubType: OperationSubType.STEP,
       Type: OperationType.STEP,
+      StartTimestamp: new Date(),
       Name: "updated-step",
       StepDetails: {
         Result: "final-result",
@@ -138,7 +142,7 @@ describe("CheckpointHandler - StepData Update", () => {
     // Arrange
     const checkpointResponse: CheckpointDurableExecutionResponse = {
       CheckpointToken: "new-token",
-      // No NewExecutionState
+      NewExecutionState: undefined, // No NewExecutionState
     };
 
     mockState.checkpoint.mockResolvedValue(checkpointResponse);
@@ -182,10 +186,11 @@ describe("CheckpointHandler - StepData Update", () => {
     // Arrange
     const operationsWithoutId: Operation[] = [
       {
-        // No Id field
+        Id: undefined, // No Id field
         Status: OperationStatus.SUCCEEDED,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Name: "no-id-step",
       },
       {
@@ -193,6 +198,7 @@ describe("CheckpointHandler - StepData Update", () => {
         Status: OperationStatus.SUCCEEDED,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Name: "valid-step",
       },
     ];
@@ -227,12 +233,14 @@ describe("CheckpointHandler - StepData Update", () => {
         Status: OperationStatus.SUCCEEDED,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
+        StartTimestamp: new Date(),
       },
       {
         Id: "batch-step-2",
         Status: OperationStatus.SUCCEEDED,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
+        StartTimestamp: new Date(),
       },
     ];
 

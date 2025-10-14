@@ -1,17 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
-import {
-  BlobPayloadInputTypes,
-  MetadataBearer as __MetadataBearer,
-} from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  SendDurableExecutionCallbackSuccessRequest,
-  SendDurableExecutionCallbackSuccessResponse,
-} from "../models/models_1";
+import { BlobPayloadInputTypes, MetadataBearer as __MetadataBearer } from "@smithy/types";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { SendDurableExecutionCallbackSuccessRequest, SendDurableExecutionCallbackSuccessResponse } from "../models/models_1";
 /**
  * @public
  */
@@ -20,47 +10,27 @@ export { $Command };
 /**
  * @public
  */
-export type SendDurableExecutionCallbackSuccessCommandInputType = Omit<
-  SendDurableExecutionCallbackSuccessRequest,
-  "Result"
-> & {
-  Result?: BlobPayloadInputTypes;
+export type SendDurableExecutionCallbackSuccessCommandInputType = Omit<SendDurableExecutionCallbackSuccessRequest, "Result"> & {
+    Result?: BlobPayloadInputTypes;
 };
 /**
  * @public
  *
  * The input for {@link SendDurableExecutionCallbackSuccessCommand}.
  */
-export interface SendDurableExecutionCallbackSuccessCommandInput
-  extends SendDurableExecutionCallbackSuccessCommandInputType {}
+export interface SendDurableExecutionCallbackSuccessCommandInput extends SendDurableExecutionCallbackSuccessCommandInputType {
+}
 /**
  * @public
  *
  * The output of {@link SendDurableExecutionCallbackSuccessCommand}.
  */
-export interface SendDurableExecutionCallbackSuccessCommandOutput
-  extends SendDurableExecutionCallbackSuccessResponse,
-    __MetadataBearer {}
+export interface SendDurableExecutionCallbackSuccessCommandOutput extends SendDurableExecutionCallbackSuccessResponse, __MetadataBearer {
+}
 declare const SendDurableExecutionCallbackSuccessCommand_base: {
-  new (
-    input: SendDurableExecutionCallbackSuccessCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    SendDurableExecutionCallbackSuccessCommandInput,
-    SendDurableExecutionCallbackSuccessCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: SendDurableExecutionCallbackSuccessCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    SendDurableExecutionCallbackSuccessCommandInput,
-    SendDurableExecutionCallbackSuccessCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: SendDurableExecutionCallbackSuccessCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackSuccessCommandInput, SendDurableExecutionCallbackSuccessCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: SendDurableExecutionCallbackSuccessCommandInput): import("@smithy/smithy-client").CommandImpl<SendDurableExecutionCallbackSuccessCommandInput, SendDurableExecutionCallbackSuccessCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -106,15 +76,15 @@ declare const SendDurableExecutionCallbackSuccessCommand_base: {
  *
  */
 export declare class SendDurableExecutionCallbackSuccessCommand extends SendDurableExecutionCallbackSuccessCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: SendDurableExecutionCallbackSuccessRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: SendDurableExecutionCallbackSuccessRequest;
+            output: {};
+        };
+        sdk: {
+            input: SendDurableExecutionCallbackSuccessCommandInput;
+            output: SendDurableExecutionCallbackSuccessCommandOutput;
+        };
     };
-    sdk: {
-      input: SendDurableExecutionCallbackSuccessCommandInput;
-      output: SendDurableExecutionCallbackSuccessCommandOutput;
-    };
-  };
 }

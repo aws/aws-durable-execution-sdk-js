@@ -234,7 +234,7 @@ describe("historyEventsToOperationEvents", () => {
   });
 
   it("should process WAIT operation with scheduled timestamp", () => {
-    const scheduledTimestamp = new Date("2023-01-01T13:00:00Z");
+    const scheduledEndTimestamp = new Date("2023-01-01T13:00:00Z");
     const events: Event[] = [
       {
         Id: "wait-id",
@@ -242,7 +242,7 @@ describe("historyEventsToOperationEvents", () => {
         EventType: EventType.WaitStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
         WaitStartedDetails: {
-          ScheduledEndTimestamp: scheduledTimestamp,
+          ScheduledEndTimestamp: scheduledEndTimestamp,
         },
       },
       {
@@ -266,7 +266,7 @@ describe("historyEventsToOperationEvents", () => {
       WaitDetails: {
         Result: undefined,
         Error: undefined,
-        ScheduledTimestamp: scheduledTimestamp,
+        ScheduledEndTimestamp: scheduledEndTimestamp,
       },
     });
     expect(result[0].events).toHaveLength(2);
@@ -561,6 +561,7 @@ describe("historyEventsToOperationEvents", () => {
       Type: OperationType.CALLBACK,
       SubType: undefined,
       Status: OperationStatus.FAILED,
+      StartTimestamp: expect.any(Date),
       EndTimestamp: mockTimestamp,
       CallbackDetails: {
         Error: mockError,
@@ -569,7 +570,7 @@ describe("historyEventsToOperationEvents", () => {
   });
 
   it("should process WaitStarted event with Duration field", () => {
-    const scheduledEndTime = new Date("2023-01-01T00:05:00.000Z");
+    const scheduledEndTimestamp = new Date("2023-01-01T00:05:00.000Z");
     const event: Event = {
       EventType: EventType.WaitStarted,
       Id: "wait-1",
@@ -577,7 +578,7 @@ describe("historyEventsToOperationEvents", () => {
       EventTimestamp: mockTimestamp,
       WaitStartedDetails: {
         Duration: 300,
-        ScheduledEndTimestamp: scheduledEndTime,
+        ScheduledEndTimestamp: scheduledEndTimestamp,
       },
     };
 
@@ -593,7 +594,7 @@ describe("historyEventsToOperationEvents", () => {
       Status: OperationStatus.STARTED,
       StartTimestamp: mockTimestamp,
       WaitDetails: {
-        ScheduledTimestamp: scheduledEndTime,
+        ScheduledEndTimestamp: scheduledEndTimestamp,
       },
     });
   });

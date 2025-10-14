@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  UpdateFunctionUrlConfigRequest,
-  UpdateFunctionUrlConfigResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { UpdateFunctionUrlConfigRequest, UpdateFunctionUrlConfigResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link UpdateFunctionUrlConfigCommand}.
  */
-export interface UpdateFunctionUrlConfigCommandInput
-  extends UpdateFunctionUrlConfigRequest {}
+export interface UpdateFunctionUrlConfigCommandInput extends UpdateFunctionUrlConfigRequest {
+}
 /**
  * @public
  *
  * The output of {@link UpdateFunctionUrlConfigCommand}.
  */
-export interface UpdateFunctionUrlConfigCommandOutput
-  extends UpdateFunctionUrlConfigResponse,
-    __MetadataBearer {}
+export interface UpdateFunctionUrlConfigCommandOutput extends UpdateFunctionUrlConfigResponse, __MetadataBearer {
+}
 declare const UpdateFunctionUrlConfigCommand_base: {
-  new (
-    input: UpdateFunctionUrlConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    UpdateFunctionUrlConfigCommandInput,
-    UpdateFunctionUrlConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: UpdateFunctionUrlConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    UpdateFunctionUrlConfigCommandInput,
-    UpdateFunctionUrlConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: UpdateFunctionUrlConfigCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionUrlConfigCommandInput, UpdateFunctionUrlConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: UpdateFunctionUrlConfigCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionUrlConfigCommandInput, UpdateFunctionUrlConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Updates the configuration for a Lambda function URL.</p>
@@ -139,15 +115,15 @@ declare const UpdateFunctionUrlConfigCommand_base: {
  * @public
  */
 export declare class UpdateFunctionUrlConfigCommand extends UpdateFunctionUrlConfigCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: UpdateFunctionUrlConfigRequest;
-      output: UpdateFunctionUrlConfigResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: UpdateFunctionUrlConfigRequest;
+            output: UpdateFunctionUrlConfigResponse;
+        };
+        sdk: {
+            input: UpdateFunctionUrlConfigCommandInput;
+            output: UpdateFunctionUrlConfigCommandOutput;
+        };
     };
-    sdk: {
-      input: UpdateFunctionUrlConfigCommandInput;
-      output: UpdateFunctionUrlConfigCommandOutput;
-    };
-  };
 }

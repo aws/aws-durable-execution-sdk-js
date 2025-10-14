@@ -7546,7 +7546,7 @@
     "WaitDetails": {
       "type": "structure",
       "members": {
-        "ScheduledTimestamp": { "shape": "ExecutionTimestamp" }
+        "ScheduledEndTimestamp": { "shape": "ExecutionTimestamp" }
       }
     },
     "WaitOptions": {

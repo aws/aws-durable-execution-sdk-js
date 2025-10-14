@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { DeleteFunctionConcurrencyRequest } from "../models/models_0";
 /**
  * @public
@@ -16,35 +12,19 @@ export { $Command };
  *
  * The input for {@link DeleteFunctionConcurrencyCommand}.
  */
-export interface DeleteFunctionConcurrencyCommandInput
-  extends DeleteFunctionConcurrencyRequest {}
+export interface DeleteFunctionConcurrencyCommandInput extends DeleteFunctionConcurrencyRequest {
+}
 /**
  * @public
  *
  * The output of {@link DeleteFunctionConcurrencyCommand}.
  */
-export interface DeleteFunctionConcurrencyCommandOutput
-  extends __MetadataBearer {}
+export interface DeleteFunctionConcurrencyCommandOutput extends __MetadataBearer {
+}
 declare const DeleteFunctionConcurrencyCommand_base: {
-  new (
-    input: DeleteFunctionConcurrencyCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteFunctionConcurrencyCommandInput,
-    DeleteFunctionConcurrencyCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: DeleteFunctionConcurrencyCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteFunctionConcurrencyCommandInput,
-    DeleteFunctionConcurrencyCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: DeleteFunctionConcurrencyCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionConcurrencyCommandInput, DeleteFunctionConcurrencyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: DeleteFunctionConcurrencyCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteFunctionConcurrencyCommandInput, DeleteFunctionConcurrencyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Removes a concurrent execution limit from a function.</p>
@@ -106,15 +86,15 @@ declare const DeleteFunctionConcurrencyCommand_base: {
  * @public
  */
 export declare class DeleteFunctionConcurrencyCommand extends DeleteFunctionConcurrencyCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: DeleteFunctionConcurrencyRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: DeleteFunctionConcurrencyRequest;
+            output: {};
+        };
+        sdk: {
+            input: DeleteFunctionConcurrencyCommandInput;
+            output: DeleteFunctionConcurrencyCommandOutput;
+        };
     };
-    sdk: {
-      input: DeleteFunctionConcurrencyCommandInput;
-      output: DeleteFunctionConcurrencyCommandOutput;
-    };
-  };
 }

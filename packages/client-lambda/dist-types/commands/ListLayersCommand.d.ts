@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { ListLayersRequest, ListLayersResponse } from "../models/models_0";
 /**
  * @public
@@ -16,35 +12,19 @@ export { $Command };
  *
  * The input for {@link ListLayersCommand}.
  */
-export interface ListLayersCommandInput extends ListLayersRequest {}
+export interface ListLayersCommandInput extends ListLayersRequest {
+}
 /**
  * @public
  *
  * The output of {@link ListLayersCommand}.
  */
-export interface ListLayersCommandOutput
-  extends ListLayersResponse,
-    __MetadataBearer {}
+export interface ListLayersCommandOutput extends ListLayersResponse, __MetadataBearer {
+}
 declare const ListLayersCommand_base: {
-  new (
-    input: ListLayersCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListLayersCommandInput,
-    ListLayersCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    ...[input]: [] | [ListLayersCommandInput]
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListLayersCommandInput,
-    ListLayersCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: ListLayersCommandInput): import("@smithy/smithy-client").CommandImpl<ListLayersCommandInput, ListLayersCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (...[input]: [] | [ListLayersCommandInput]): import("@smithy/smithy-client").CommandImpl<ListLayersCommandInput, ListLayersCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Lists <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-layers.html">Lambda layers</a> and shows information about the latest version of each. Specify a <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">runtime identifier</a> to list only layers that indicate that they're compatible with that runtime. Specify a compatible architecture to include only layers that are compatible with that <a href="https://docs.aws.amazon.com/lambda/latest/dg/foundation-arch.html">instruction set architecture</a>.</p>
@@ -141,15 +121,15 @@ declare const ListLayersCommand_base: {
  * @public
  */
 export declare class ListLayersCommand extends ListLayersCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: ListLayersRequest;
-      output: ListLayersResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: ListLayersRequest;
+            output: ListLayersResponse;
+        };
+        sdk: {
+            input: ListLayersCommandInput;
+            output: ListLayersCommandOutput;
+        };
     };
-    sdk: {
-      input: ListLayersCommandInput;
-      output: ListLayersCommandOutput;
-    };
-  };
 }

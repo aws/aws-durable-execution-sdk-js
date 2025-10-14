@@ -243,6 +243,8 @@ describe("Run In Child Context Handler", () => {
     const stepData = mockExecutionContext._stepData;
     stepData[hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)] = {
       Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
       Status: OperationStatus.SUCCEEDED,
       ContextDetails: {
         Result: JSON.stringify("cached-result"),
@@ -409,8 +411,9 @@ describe("Run In Child Context Handler", () => {
     mockExecutionContext._stepData = {
       [hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)]: {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        Type: OperationType.CONTEXT,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
-        type: OperationType.STEP,
         name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
       },
     } as any;
@@ -532,6 +535,8 @@ describe("runInChildContext with custom serdes", () => {
     mockExecutionContext._stepData = {
       [hashId("test-step-id")]: {
         Id: "test-step-id",
+        Type: OperationType.CONTEXT,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
           Result: JSON.stringify(testResult),
@@ -733,6 +738,8 @@ describe("Mock Integration", () => {
     mockExecutionContext._stepData = {
       [hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)]: {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+        Type: OperationType.CONTEXT,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
           Result: JSON.stringify("cached-result"),
@@ -883,6 +890,8 @@ describe("Mock Integration", () => {
     const stepData = mockExecutionContext._stepData;
     stepData[hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)] = {
       Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
       Status: OperationStatus.SUCCEEDED,
       ContextDetails: {
         Result: "Summary of large payload",
@@ -905,6 +914,8 @@ describe("Mock Integration", () => {
     mockExecutionContext._stepData = {
       [TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID]: {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID,
+        Type: OperationType.CONTEXT,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
           ReplayChildren: true,
@@ -927,6 +938,8 @@ describe("Mock Integration", () => {
     mockExecutionContext._stepData = {
       [TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID]: {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_STEP_ID,
+        Type: OperationType.CONTEXT,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
       },
     };
@@ -946,6 +959,9 @@ describe("Mock Integration", () => {
       const stepId = "test-step-id";
       mockExecutionContext._stepData = {
         [hashId(stepId)]: {
+          Id: stepId,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.SUCCEEDED,
           ContextDetails: { ReplayChildren: true },
         },
@@ -959,6 +975,9 @@ describe("Mock Integration", () => {
       const stepId = "test-step-id";
       mockExecutionContext._stepData = {
         [hashId(stepId)]: {
+          Id: stepId,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.SUCCEEDED,
           ContextDetails: {},
         },
@@ -972,6 +991,9 @@ describe("Mock Integration", () => {
       const stepId = "test-step-id";
       mockExecutionContext._stepData = {
         [hashId(stepId)]: {
+          Id: stepId,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.FAILED,
         },
       };

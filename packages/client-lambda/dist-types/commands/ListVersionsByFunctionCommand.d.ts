@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  ListVersionsByFunctionRequest,
-  ListVersionsByFunctionResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { ListVersionsByFunctionRequest, ListVersionsByFunctionResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link ListVersionsByFunctionCommand}.
  */
-export interface ListVersionsByFunctionCommandInput
-  extends ListVersionsByFunctionRequest {}
+export interface ListVersionsByFunctionCommandInput extends ListVersionsByFunctionRequest {
+}
 /**
  * @public
  *
  * The output of {@link ListVersionsByFunctionCommand}.
  */
-export interface ListVersionsByFunctionCommandOutput
-  extends ListVersionsByFunctionResponse,
-    __MetadataBearer {}
+export interface ListVersionsByFunctionCommandOutput extends ListVersionsByFunctionResponse, __MetadataBearer {
+}
 declare const ListVersionsByFunctionCommand_base: {
-  new (
-    input: ListVersionsByFunctionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListVersionsByFunctionCommandInput,
-    ListVersionsByFunctionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: ListVersionsByFunctionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListVersionsByFunctionCommandInput,
-    ListVersionsByFunctionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: ListVersionsByFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<ListVersionsByFunctionCommandInput, ListVersionsByFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: ListVersionsByFunctionCommandInput): import("@smithy/smithy-client").CommandImpl<ListVersionsByFunctionCommandInput, ListVersionsByFunctionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns a list of <a href="https://docs.aws.amazon.com/lambda/latest/dg/versioning-aliases.html">versions</a>, with the version-specific configuration of each. Lambda returns up to 50 versions per call.</p>
@@ -121,7 +97,7 @@ declare const ListVersionsByFunctionCommand_base: {
  * //       ],
  * //       State: "Pending" || "Active" || "Inactive" || "Failed",
  * //       StateReason: "STRING_VALUE",
- * //       StateReasonCode: "Idle" || "Creating" || "Restoring" || "EniLimitExceeded" || "InsufficientRolePermissions" || "InvalidConfiguration" || "InternalError" || "SubnetOutOfIPAddresses" || "InvalidSubnet" || "InvalidSecurityGroup" || "ImageDeleted" || "ImageAccessDenied" || "InvalidImage" || "KMSKeyAccessDenied" || "KMSKeyNotFound" || "InvalidStateKMSKey" || "DisabledKMSKey" || "EFSIOError" || "EFSMountConnectivityError" || "EFSMountFailure" || "EFSMountTimeout" || "InvalidRuntime" || "InvalidZipFileException" || "FunctionError",
+ * //       StateReasonCode: "Idle" || "Creating" || "Restoring" || "EniLimitExceeded" || "InsufficientRolePermissions" || "InvalidConfiguration" || "InternalError" || "SubnetOutOfIPAddresses" || "InvalidSubnet" || "InvalidSecurityGroup" || "ImageDeleted" || "ImageAccessDenied" || "InvalidImage" || "KMSKeyAccessDenied" || "KMSKeyNotFound" || "InvalidStateKMSKey" || "DisabledKMSKey" || "EFSIOError" || "EFSMountConnectivityError" || "EFSMountFailure" || "EFSMountTimeout" || "InvalidRuntime" || "InvalidZipFileException" || "FunctionError" || "DrainingDurableExecutions",
  * //       LastUpdateStatus: "Successful" || "Failed" || "InProgress",
  * //       LastUpdateStatusReason: "STRING_VALUE",
  * //       LastUpdateStatusReasonCode: "EniLimitExceeded" || "InsufficientRolePermissions" || "InvalidConfiguration" || "InternalError" || "SubnetOutOfIPAddresses" || "InvalidSubnet" || "InvalidSecurityGroup" || "ImageDeleted" || "ImageAccessDenied" || "InvalidImage" || "KMSKeyAccessDenied" || "KMSKeyNotFound" || "InvalidStateKMSKey" || "DisabledKMSKey" || "EFSIOError" || "EFSMountConnectivityError" || "EFSMountFailure" || "EFSMountTimeout" || "InvalidRuntime" || "InvalidZipFileException" || "FunctionError",
@@ -273,15 +249,15 @@ declare const ListVersionsByFunctionCommand_base: {
  * @public
  */
 export declare class ListVersionsByFunctionCommand extends ListVersionsByFunctionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: ListVersionsByFunctionRequest;
-      output: ListVersionsByFunctionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: ListVersionsByFunctionRequest;
+            output: ListVersionsByFunctionResponse;
+        };
+        sdk: {
+            input: ListVersionsByFunctionCommandInput;
+            output: ListVersionsByFunctionCommandOutput;
+        };
     };
-    sdk: {
-      input: ListVersionsByFunctionCommandInput;
-      output: ListVersionsByFunctionCommandOutput;
-    };
-  };
 }

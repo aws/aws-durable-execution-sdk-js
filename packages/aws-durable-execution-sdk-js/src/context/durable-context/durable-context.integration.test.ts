@@ -1,6 +1,6 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
 import { DurableExecutionMode } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 
 describe("DurableContext Integration Tests", () => {
   it("should handle replay mode and skip operations correctly", async () => {
@@ -8,10 +8,14 @@ describe("DurableContext Integration Tests", () => {
     const existingOperations = [
       {
         Id: "1",
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
       },
       {
         Id: "2",
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
       },
     ];
@@ -35,6 +39,8 @@ describe("DurableContext Integration Tests", () => {
     const existingOperations = [
       {
         Id: "1",
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
       },
     ];

@@ -428,7 +428,6 @@ describe("InvokeHandler", () => {
           serialize: async (): Promise<string> => "custom",
           deserialize: async (): Promise<object> => ({}),
         },
-        timeoutSeconds: 30,
       };
 
       await expect(
@@ -445,7 +444,6 @@ describe("InvokeHandler", () => {
         Payload: '{"serialized":"data"}',
         ChainedInvokeOptions: {
           FunctionName: "test-function",
-          TimeoutSeconds: 30,
         },
       });
     });

@@ -1,17 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
-import {
-  BlobPayloadInputTypes,
-  MetadataBearer as __MetadataBearer,
-} from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  InvokeWithResponseStreamRequest,
-  InvokeWithResponseStreamResponse,
-} from "../models/models_0";
+import { BlobPayloadInputTypes, MetadataBearer as __MetadataBearer } from "@smithy/types";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { InvokeWithResponseStreamRequest, InvokeWithResponseStreamResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -20,47 +10,27 @@ export { $Command };
 /**
  * @public
  */
-export type InvokeWithResponseStreamCommandInputType = Omit<
-  InvokeWithResponseStreamRequest,
-  "Payload"
-> & {
-  Payload?: BlobPayloadInputTypes;
+export type InvokeWithResponseStreamCommandInputType = Omit<InvokeWithResponseStreamRequest, "Payload"> & {
+    Payload?: BlobPayloadInputTypes;
 };
 /**
  * @public
  *
  * The input for {@link InvokeWithResponseStreamCommand}.
  */
-export interface InvokeWithResponseStreamCommandInput
-  extends InvokeWithResponseStreamCommandInputType {}
+export interface InvokeWithResponseStreamCommandInput extends InvokeWithResponseStreamCommandInputType {
+}
 /**
  * @public
  *
  * The output of {@link InvokeWithResponseStreamCommand}.
  */
-export interface InvokeWithResponseStreamCommandOutput
-  extends InvokeWithResponseStreamResponse,
-    __MetadataBearer {}
+export interface InvokeWithResponseStreamCommandOutput extends InvokeWithResponseStreamResponse, __MetadataBearer {
+}
 declare const InvokeWithResponseStreamCommand_base: {
-  new (
-    input: InvokeWithResponseStreamCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    InvokeWithResponseStreamCommandInput,
-    InvokeWithResponseStreamCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: InvokeWithResponseStreamCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    InvokeWithResponseStreamCommandInput,
-    InvokeWithResponseStreamCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: InvokeWithResponseStreamCommandInput): import("@smithy/smithy-client").CommandImpl<InvokeWithResponseStreamCommandInput, InvokeWithResponseStreamCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: InvokeWithResponseStreamCommandInput): import("@smithy/smithy-client").CommandImpl<InvokeWithResponseStreamCommandInput, InvokeWithResponseStreamCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Configure your Lambda functions to stream response payloads back to clients. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html">Configuring a Lambda function to stream responses</a>.</p> <p>This operation requires permission for the <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/list_awslambda.html">lambda:InvokeFunction</a> action. For details on how to set up permissions for cross-account invocations, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/access-control-resource-based.html#permissions-resource-xaccountinvoke">Granting function access to other accounts</a>.</p>
@@ -203,15 +173,15 @@ declare const InvokeWithResponseStreamCommand_base: {
  * @public
  */
 export declare class InvokeWithResponseStreamCommand extends InvokeWithResponseStreamCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: InvokeWithResponseStreamRequest;
-      output: InvokeWithResponseStreamResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: InvokeWithResponseStreamRequest;
+            output: InvokeWithResponseStreamResponse;
+        };
+        sdk: {
+            input: InvokeWithResponseStreamCommandInput;
+            output: InvokeWithResponseStreamCommandOutput;
+        };
     };
-    sdk: {
-      input: InvokeWithResponseStreamCommandInput;
-      output: InvokeWithResponseStreamCommandOutput;
-    };
-  };
 }

@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetCodeSigningConfigRequest,
-  GetCodeSigningConfigResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetCodeSigningConfigRequest, GetCodeSigningConfigResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetCodeSigningConfigCommand}.
  */
-export interface GetCodeSigningConfigCommandInput
-  extends GetCodeSigningConfigRequest {}
+export interface GetCodeSigningConfigCommandInput extends GetCodeSigningConfigRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetCodeSigningConfigCommand}.
  */
-export interface GetCodeSigningConfigCommandOutput
-  extends GetCodeSigningConfigResponse,
-    __MetadataBearer {}
+export interface GetCodeSigningConfigCommandOutput extends GetCodeSigningConfigResponse, __MetadataBearer {
+}
 declare const GetCodeSigningConfigCommand_base: {
-  new (
-    input: GetCodeSigningConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetCodeSigningConfigCommandInput,
-    GetCodeSigningConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetCodeSigningConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetCodeSigningConfigCommandInput,
-    GetCodeSigningConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<GetCodeSigningConfigCommandInput, GetCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<GetCodeSigningConfigCommandInput, GetCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns information about the specified code signing configuration.</p>
@@ -106,15 +82,15 @@ declare const GetCodeSigningConfigCommand_base: {
  * @public
  */
 export declare class GetCodeSigningConfigCommand extends GetCodeSigningConfigCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetCodeSigningConfigRequest;
-      output: GetCodeSigningConfigResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetCodeSigningConfigRequest;
+            output: GetCodeSigningConfigResponse;
+        };
+        sdk: {
+            input: GetCodeSigningConfigCommandInput;
+            output: GetCodeSigningConfigCommandOutput;
+        };
     };
-    sdk: {
-      input: GetCodeSigningConfigCommandInput;
-      output: GetCodeSigningConfigCommandOutput;
-    };
-  };
 }

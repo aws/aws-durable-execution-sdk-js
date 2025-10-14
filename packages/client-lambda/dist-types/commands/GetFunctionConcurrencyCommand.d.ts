@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetFunctionConcurrencyRequest,
-  GetFunctionConcurrencyResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetFunctionConcurrencyRequest, GetFunctionConcurrencyResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetFunctionConcurrencyCommand}.
  */
-export interface GetFunctionConcurrencyCommandInput
-  extends GetFunctionConcurrencyRequest {}
+export interface GetFunctionConcurrencyCommandInput extends GetFunctionConcurrencyRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetFunctionConcurrencyCommand}.
  */
-export interface GetFunctionConcurrencyCommandOutput
-  extends GetFunctionConcurrencyResponse,
-    __MetadataBearer {}
+export interface GetFunctionConcurrencyCommandOutput extends GetFunctionConcurrencyResponse, __MetadataBearer {
+}
 declare const GetFunctionConcurrencyCommand_base: {
-  new (
-    input: GetFunctionConcurrencyCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetFunctionConcurrencyCommandInput,
-    GetFunctionConcurrencyCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetFunctionConcurrencyCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetFunctionConcurrencyCommandInput,
-    GetFunctionConcurrencyCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetFunctionConcurrencyCommandInput): import("@smithy/smithy-client").CommandImpl<GetFunctionConcurrencyCommandInput, GetFunctionConcurrencyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetFunctionConcurrencyCommandInput): import("@smithy/smithy-client").CommandImpl<GetFunctionConcurrencyCommandInput, GetFunctionConcurrencyCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns details about the reserved concurrency configuration for a function. To set a concurrency limit for a function, use <a>PutFunctionConcurrency</a>.</p>
@@ -111,15 +87,15 @@ declare const GetFunctionConcurrencyCommand_base: {
  * @public
  */
 export declare class GetFunctionConcurrencyCommand extends GetFunctionConcurrencyCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetFunctionConcurrencyRequest;
-      output: GetFunctionConcurrencyResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetFunctionConcurrencyRequest;
+            output: GetFunctionConcurrencyResponse;
+        };
+        sdk: {
+            input: GetFunctionConcurrencyCommandInput;
+            output: GetFunctionConcurrencyCommandOutput;
+        };
     };
-    sdk: {
-      input: GetFunctionConcurrencyCommandInput;
-      output: GetFunctionConcurrencyCommandOutput;
-    };
-  };
 }

@@ -424,12 +424,18 @@ describe("Callback Handler", () => {
         if (callCount === 1) {
           // First call during callback creation
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.STARTED,
             CallbackDetails: { CallbackId: "callback-123" },
           };
         } else {
           // Second call after waitBeforeContinue - status changed to target status
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: status,
             CallbackDetails: {
               CallbackId: "callback-123",
@@ -912,6 +918,9 @@ describe("Callback Handler", () => {
 
       // Set up a started callback
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -951,6 +960,9 @@ describe("Callback Handler", () => {
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -989,6 +1001,9 @@ describe("Callback Handler", () => {
 
       // Set up a started callback that remains started
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -1016,6 +1031,9 @@ describe("Callback Handler", () => {
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -1046,6 +1064,9 @@ describe("Callback Handler", () => {
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -1084,6 +1105,9 @@ describe("Callback Handler", () => {
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -1133,6 +1157,9 @@ describe("Callback Handler", () => {
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -1154,6 +1181,9 @@ describe("Callback Handler", () => {
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -1194,12 +1224,18 @@ describe("Callback Handler", () => {
         if (callCount === 1) {
           // First call during callback creation
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.STARTED,
             CallbackDetails: { CallbackId: "callback-123" },
           };
         } else {
           // Second call after waitBeforeContinue - status changed to SUCCEEDED
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.SUCCEEDED,
             CallbackDetails: {
               CallbackId: "callback-123",
@@ -1246,12 +1282,18 @@ describe("Callback Handler", () => {
         if (callCount === 1) {
           // First call during callback creation
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.STARTED,
             CallbackDetails: { CallbackId: "callback-123" },
           };
         } else {
           // Second call after waitBeforeContinue - status changed to FAILED
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.FAILED,
             CallbackDetails: {
               CallbackId: "callback-123",
@@ -1295,6 +1337,9 @@ describe("Callback Handler", () => {
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
+        Id: TEST_CONSTANTS.CALLBACK_ID,
+        Type: OperationType.CALLBACK,
+        StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
         CallbackDetails: { CallbackId: "callback-123" },
       });
@@ -1427,11 +1472,17 @@ describe("Callback Handler", () => {
         callCount++;
         if (callCount === 1) {
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.STARTED,
             CallbackDetails: { CallbackId: "callback-123" },
           };
         } else {
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.SUCCEEDED,
             CallbackDetails: {
               CallbackId: "callback-123",
@@ -1466,11 +1517,17 @@ describe("Callback Handler", () => {
         callCount++;
         if (callCount === 1) {
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.STARTED,
             CallbackDetails: { CallbackId: "callback-123" },
           };
         } else {
           return {
+            Id: TEST_CONSTANTS.CALLBACK_ID,
+            Type: OperationType.CALLBACK,
+            StartTimestamp: new Date(),
             Status: OperationStatus.FAILED,
             CallbackDetails: {
               CallbackId: "callback-123",

@@ -84,6 +84,7 @@ export class CheckpointManager {
       Id: initialId,
       Type: OperationType.EXECUTION,
       Status: OperationStatus.STARTED,
+      StartTimestamp: new Date(),
       ExecutionDetails: {
         InputPayload: payload,
       },
@@ -434,7 +435,7 @@ export class CheckpointManager {
 
       operationInvocations.add(invocationId);
 
-      if (previousOperation.operation.WaitDetails?.ScheduledTimestamp) {
+      if (previousOperation.operation.WaitDetails?.ScheduledEndTimestamp) {
         this.addOperationUpdate({
           ...previousOperation,
           update,
@@ -471,14 +472,14 @@ export class CheckpointManager {
 
     switch (update.Type) {
       case OperationType.WAIT: {
-        const scheduledTimestamp = new Date();
+        const scheduledEndTimestamp = new Date();
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
-        scheduledTimestamp.setSeconds(
-          scheduledTimestamp.getSeconds() + waitSeconds,
+        scheduledEndTimestamp.setSeconds(
+          scheduledEndTimestamp.getSeconds() + waitSeconds,
         );
 
         operation.WaitDetails = {
-          ScheduledTimestamp: scheduledTimestamp,
+          ScheduledEndTimestamp: scheduledEndTimestamp,
         };
         break;
       }

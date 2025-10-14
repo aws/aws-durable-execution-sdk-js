@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  PutFunctionRecursionConfigRequest,
-  PutFunctionRecursionConfigResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { PutFunctionRecursionConfigRequest, PutFunctionRecursionConfigResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link PutFunctionRecursionConfigCommand}.
  */
-export interface PutFunctionRecursionConfigCommandInput
-  extends PutFunctionRecursionConfigRequest {}
+export interface PutFunctionRecursionConfigCommandInput extends PutFunctionRecursionConfigRequest {
+}
 /**
  * @public
  *
  * The output of {@link PutFunctionRecursionConfigCommand}.
  */
-export interface PutFunctionRecursionConfigCommandOutput
-  extends PutFunctionRecursionConfigResponse,
-    __MetadataBearer {}
+export interface PutFunctionRecursionConfigCommandOutput extends PutFunctionRecursionConfigResponse, __MetadataBearer {
+}
 declare const PutFunctionRecursionConfigCommand_base: {
-  new (
-    input: PutFunctionRecursionConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    PutFunctionRecursionConfigCommandInput,
-    PutFunctionRecursionConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: PutFunctionRecursionConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    PutFunctionRecursionConfigCommandInput,
-    PutFunctionRecursionConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: PutFunctionRecursionConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutFunctionRecursionConfigCommandInput, PutFunctionRecursionConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: PutFunctionRecursionConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutFunctionRecursionConfigCommandInput, PutFunctionRecursionConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Sets your function's <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-recursion.html">recursive loop detection</a> configuration.</p> <p>When you configure a Lambda function to output to the same service or resource that invokes the function, it's possible to create an infinite recursive loop. For example, a Lambda function might write a message to an Amazon Simple Queue Service (Amazon SQS) queue, which then invokes the same function. This invocation causes the function to write another message to the queue, which in turn invokes the function again.</p> <p>Lambda can detect certain types of recursive loops shortly after they occur. When Lambda detects a recursive loop and your function's recursive loop detection configuration is set to <code>Terminate</code>, it stops your function being invoked and notifies you.</p>
@@ -100,15 +76,15 @@ declare const PutFunctionRecursionConfigCommand_base: {
  * @public
  */
 export declare class PutFunctionRecursionConfigCommand extends PutFunctionRecursionConfigCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: PutFunctionRecursionConfigRequest;
-      output: PutFunctionRecursionConfigResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: PutFunctionRecursionConfigRequest;
+            output: PutFunctionRecursionConfigResponse;
+        };
+        sdk: {
+            input: PutFunctionRecursionConfigCommandInput;
+            output: PutFunctionRecursionConfigCommandOutput;
+        };
     };
-    sdk: {
-      input: PutFunctionRecursionConfigCommandInput;
-      output: PutFunctionRecursionConfigCommandOutput;
-    };
-  };
 }

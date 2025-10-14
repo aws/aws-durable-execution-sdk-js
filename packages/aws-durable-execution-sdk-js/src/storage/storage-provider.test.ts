@@ -19,7 +19,7 @@ describe("StorageProvider Interface", () => {
       _taskToken: string,
       _data: CheckpointDurableExecutionRequest,
     ): Promise<CheckpointDurableExecutionResponse> {
-      return { CheckpointToken: "new-token" };
+      return { CheckpointToken: "new-token", NewExecutionState: undefined };
     }
   }
 

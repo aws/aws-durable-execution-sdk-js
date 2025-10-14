@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  StopDurableExecutionRequest,
-  StopDurableExecutionResponse,
-} from "../models/models_1";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { StopDurableExecutionRequest, StopDurableExecutionResponse } from "../models/models_1";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link StopDurableExecutionCommand}.
  */
-export interface StopDurableExecutionCommandInput
-  extends StopDurableExecutionRequest {}
+export interface StopDurableExecutionCommandInput extends StopDurableExecutionRequest {
+}
 /**
  * @public
  *
  * The output of {@link StopDurableExecutionCommand}.
  */
-export interface StopDurableExecutionCommandOutput
-  extends StopDurableExecutionResponse,
-    __MetadataBearer {}
+export interface StopDurableExecutionCommandOutput extends StopDurableExecutionResponse, __MetadataBearer {
+}
 declare const StopDurableExecutionCommand_base: {
-  new (
-    input: StopDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    StopDurableExecutionCommandInput,
-    StopDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: StopDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    StopDurableExecutionCommandInput,
-    StopDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: StopDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<StopDurableExecutionCommandInput, StopDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: StopDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<StopDurableExecutionCommandInput, StopDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -75,7 +51,7 @@ declare const StopDurableExecutionCommand_base: {
  * const command = new StopDurableExecutionCommand(input);
  * const response = await client.send(command);
  * // { // StopDurableExecutionResponse
- * //   StopDate: new Date("TIMESTAMP"),
+ * //   StopTimestamp: new Date("TIMESTAMP"), // required
  * // };
  *
  * ```
@@ -104,15 +80,15 @@ declare const StopDurableExecutionCommand_base: {
  *
  */
 export declare class StopDurableExecutionCommand extends StopDurableExecutionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: StopDurableExecutionRequest;
-      output: StopDurableExecutionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: StopDurableExecutionRequest;
+            output: StopDurableExecutionResponse;
+        };
+        sdk: {
+            input: StopDurableExecutionCommandInput;
+            output: StopDurableExecutionCommandOutput;
+        };
     };
-    sdk: {
-      input: StopDurableExecutionCommandInput;
-      output: StopDurableExecutionCommandOutput;
-    };
-  };
 }

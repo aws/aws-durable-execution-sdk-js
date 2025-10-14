@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  EventSourceMappingConfiguration,
-  GetEventSourceMappingRequest,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { EventSourceMappingConfiguration, GetEventSourceMappingRequest } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetEventSourceMappingCommand}.
  */
-export interface GetEventSourceMappingCommandInput
-  extends GetEventSourceMappingRequest {}
+export interface GetEventSourceMappingCommandInput extends GetEventSourceMappingRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetEventSourceMappingCommand}.
  */
-export interface GetEventSourceMappingCommandOutput
-  extends EventSourceMappingConfiguration,
-    __MetadataBearer {}
+export interface GetEventSourceMappingCommandOutput extends EventSourceMappingConfiguration, __MetadataBearer {
+}
 declare const GetEventSourceMappingCommand_base: {
-  new (
-    input: GetEventSourceMappingCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetEventSourceMappingCommandInput,
-    GetEventSourceMappingCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetEventSourceMappingCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetEventSourceMappingCommandInput,
-    GetEventSourceMappingCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetEventSourceMappingCommandInput): import("@smithy/smithy-client").CommandImpl<GetEventSourceMappingCommandInput, GetEventSourceMappingCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetEventSourceMappingCommandInput): import("@smithy/smithy-client").CommandImpl<GetEventSourceMappingCommandInput, GetEventSourceMappingCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns details about an event source mapping. You can get the identifier of a mapping from the output of <a>ListEventSourceMappings</a>.</p>
@@ -233,15 +209,15 @@ declare const GetEventSourceMappingCommand_base: {
  * @public
  */
 export declare class GetEventSourceMappingCommand extends GetEventSourceMappingCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetEventSourceMappingRequest;
-      output: EventSourceMappingConfiguration;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetEventSourceMappingRequest;
+            output: EventSourceMappingConfiguration;
+        };
+        sdk: {
+            input: GetEventSourceMappingCommandInput;
+            output: GetEventSourceMappingCommandOutput;
+        };
     };
-    sdk: {
-      input: GetEventSourceMappingCommandInput;
-      output: GetEventSourceMappingCommandOutput;
-    };
-  };
 }

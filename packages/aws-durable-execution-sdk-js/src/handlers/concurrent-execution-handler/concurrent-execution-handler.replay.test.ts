@@ -5,7 +5,7 @@ import {
   DurableExecutionMode,
   ExecutionContext,
 } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 
 describe("ConcurrencyController - Replay Mode", () => {
   let controller: ConcurrencyController;
@@ -47,12 +47,20 @@ describe("ConcurrencyController - Replay Mode", () => {
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
       if (id === entityId) {
         return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.SUCCEEDED,
           ContextDetails: { Result: initialResultSummary },
         };
       }
       if (id === `${entityId}-1` || id === `${entityId}-2`) {
-        return { Status: OperationStatus.SUCCEEDED };
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
       }
       return undefined;
     });
@@ -104,15 +112,28 @@ describe("ConcurrencyController - Replay Mode", () => {
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
       if (id === entityId) {
         return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.SUCCEEDED,
           ContextDetails: { Result: initialResultSummary },
         };
       }
       if (id === `${entityId}-1`) {
-        return { Status: OperationStatus.SUCCEEDED };
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
       }
       if (id === `${entityId}-2`) {
-        return { Status: OperationStatus.FAILED };
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
       }
       return undefined;
     });
@@ -166,12 +187,20 @@ describe("ConcurrencyController - Replay Mode", () => {
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
       if (id === entityId) {
         return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.SUCCEEDED,
           ContextDetails: { Result: initialResultSummary },
         };
       }
       if (id === `${entityId}-1` || id === `${entityId}-2`) {
-        return { Status: OperationStatus.SUCCEEDED };
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
       }
       return undefined;
     });
@@ -214,12 +243,20 @@ describe("ConcurrencyController - Replay Mode", () => {
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
       if (id === entityId) {
         return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.SUCCEEDED,
           ContextDetails: { Result: initialResultSummary },
         };
       }
       if (id === `${entityId}-1`) {
-        return { Status: OperationStatus.SUCCEEDED };
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
       }
       // Item 1 incomplete (entityId-2)
       if (id === `${entityId}-2`) {
@@ -227,7 +264,12 @@ describe("ConcurrencyController - Replay Mode", () => {
       }
       // Item 2 completed (entityId-3)
       if (id === `${entityId}-3`) {
-        return { Status: OperationStatus.SUCCEEDED };
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
       }
       return undefined;
     });
@@ -276,6 +318,9 @@ describe("ConcurrencyController - Replay Mode", () => {
     const entityId = "parent-step";
 
     mockExecutionContext.getStepData.mockReturnValue({
+      Id: entityId,
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
       Status: OperationStatus.SUCCEEDED,
       ContextDetails: { Result: "invalid json" },
     });
@@ -334,12 +379,20 @@ describe("ConcurrencyController - Replay Mode", () => {
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
       if (id === entityId) {
         return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
           Status: OperationStatus.SUCCEEDED,
           ContextDetails: { Result: initialResultSummary },
         };
       }
       if (id === `${entityId}-1`) {
-        return { Status: OperationStatus.FAILED };
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
       }
       return undefined;
     });

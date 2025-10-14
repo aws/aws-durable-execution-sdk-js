@@ -3,23 +3,21 @@ import { getSerdePlugin } from "@smithy/middleware-serde";
 import { Command as $Command } from "@smithy/smithy-client";
 import { commonParams } from "../endpoint/EndpointParameters";
 import { GetFunctionResponseFilterSensitiveLog } from "../models/models_0";
-import {
-  de_GetFunctionCommand,
-  se_GetFunctionCommand,
-} from "../protocols/Aws_restJson1";
+import { de_GetFunctionCommand, se_GetFunctionCommand } from "../protocols/Aws_restJson1";
 export { $Command };
 export class GetFunctionCommand extends $Command
-  .classBuilder()
-  .ep(commonParams)
-  .m(function (Command, cs, config, o) {
+    .classBuilder()
+    .ep(commonParams)
+    .m(function (Command, cs, config, o) {
     return [
-      getSerdePlugin(config, this.serialize, this.deserialize),
-      getEndpointPlugin(config, Command.getEndpointParameterInstructions()),
+        getSerdePlugin(config, this.serialize, this.deserialize),
+        getEndpointPlugin(config, Command.getEndpointParameterInstructions()),
     ];
-  })
-  .s("AWSGirApiService", "GetFunction", {})
-  .n("LambdaClient", "GetFunctionCommand")
-  .f(void 0, GetFunctionResponseFilterSensitiveLog)
-  .ser(se_GetFunctionCommand)
-  .de(de_GetFunctionCommand)
-  .build() {}
+})
+    .s("AWSGirApiService", "GetFunction", {})
+    .n("LambdaClient", "GetFunctionCommand")
+    .f(void 0, GetFunctionResponseFilterSensitiveLog)
+    .ser(se_GetFunctionCommand)
+    .de(de_GetFunctionCommand)
+    .build() {
+}

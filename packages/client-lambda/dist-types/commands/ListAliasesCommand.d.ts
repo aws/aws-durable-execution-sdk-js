@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { ListAliasesRequest, ListAliasesResponse } from "../models/models_0";
 /**
  * @public
@@ -16,35 +12,19 @@ export { $Command };
  *
  * The input for {@link ListAliasesCommand}.
  */
-export interface ListAliasesCommandInput extends ListAliasesRequest {}
+export interface ListAliasesCommandInput extends ListAliasesRequest {
+}
 /**
  * @public
  *
  * The output of {@link ListAliasesCommand}.
  */
-export interface ListAliasesCommandOutput
-  extends ListAliasesResponse,
-    __MetadataBearer {}
+export interface ListAliasesCommandOutput extends ListAliasesResponse, __MetadataBearer {
+}
 declare const ListAliasesCommand_base: {
-  new (
-    input: ListAliasesCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListAliasesCommandInput,
-    ListAliasesCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: ListAliasesCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    ListAliasesCommandInput,
-    ListAliasesCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: ListAliasesCommandInput): import("@smithy/smithy-client").CommandImpl<ListAliasesCommandInput, ListAliasesCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: ListAliasesCommandInput): import("@smithy/smithy-client").CommandImpl<ListAliasesCommandInput, ListAliasesCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns a list of <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html">aliases</a> for a Lambda function.</p>
@@ -144,15 +124,15 @@ declare const ListAliasesCommand_base: {
  * @public
  */
 export declare class ListAliasesCommand extends ListAliasesCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: ListAliasesRequest;
-      output: ListAliasesResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: ListAliasesRequest;
+            output: ListAliasesResponse;
+        };
+        sdk: {
+            input: ListAliasesCommandInput;
+            output: ListAliasesCommandOutput;
+        };
     };
-    sdk: {
-      input: ListAliasesCommandInput;
-      output: ListAliasesCommandOutput;
-    };
-  };
 }

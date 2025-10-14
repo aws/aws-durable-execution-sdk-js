@@ -63,7 +63,7 @@ export class CheckpointApiClient {
   async updateCheckpointData(params: {
     executionId: ExecutionId;
     operationId: string;
-    operationData: Operation;
+    operationData: Partial<Operation>;
     payload?: string;
     error?: ErrorObject;
   }): Promise<void> {

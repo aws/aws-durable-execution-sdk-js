@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { UntagResourceRequest } from "../models/models_1";
 /**
  * @public
@@ -16,33 +12,19 @@ export { $Command };
  *
  * The input for {@link UntagResourceCommand}.
  */
-export interface UntagResourceCommandInput extends UntagResourceRequest {}
+export interface UntagResourceCommandInput extends UntagResourceRequest {
+}
 /**
  * @public
  *
  * The output of {@link UntagResourceCommand}.
  */
-export interface UntagResourceCommandOutput extends __MetadataBearer {}
+export interface UntagResourceCommandOutput extends __MetadataBearer {
+}
 declare const UntagResourceCommand_base: {
-  new (
-    input: UntagResourceCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    UntagResourceCommandInput,
-    UntagResourceCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: UntagResourceCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    UntagResourceCommandInput,
-    UntagResourceCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: UntagResourceCommandInput): import("@smithy/smithy-client").CommandImpl<UntagResourceCommandInput, UntagResourceCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: UntagResourceCommandInput): import("@smithy/smithy-client").CommandImpl<UntagResourceCommandInput, UntagResourceCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Removes <a href="https://docs.aws.amazon.com/lambda/latest/dg/tagging.html">tags</a> from a function, event source mapping, or code signing configuration.</p>
@@ -110,15 +92,15 @@ declare const UntagResourceCommand_base: {
  * @public
  */
 export declare class UntagResourceCommand extends UntagResourceCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: UntagResourceRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: UntagResourceRequest;
+            output: {};
+        };
+        sdk: {
+            input: UntagResourceCommandInput;
+            output: UntagResourceCommandOutput;
+        };
     };
-    sdk: {
-      input: UntagResourceCommandInput;
-      output: UntagResourceCommandOutput;
-    };
-  };
 }
