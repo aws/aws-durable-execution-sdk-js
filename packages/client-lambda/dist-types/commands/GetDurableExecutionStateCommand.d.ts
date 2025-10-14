@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetDurableExecutionStateRequest,
-  GetDurableExecutionStateResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetDurableExecutionStateRequest, GetDurableExecutionStateResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetDurableExecutionStateCommand}.
  */
-export interface GetDurableExecutionStateCommandInput
-  extends GetDurableExecutionStateRequest {}
+export interface GetDurableExecutionStateCommandInput extends GetDurableExecutionStateRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetDurableExecutionStateCommand}.
  */
-export interface GetDurableExecutionStateCommandOutput
-  extends GetDurableExecutionStateResponse,
-    __MetadataBearer {}
+export interface GetDurableExecutionStateCommandOutput extends GetDurableExecutionStateResponse, __MetadataBearer {
+}
 declare const GetDurableExecutionStateCommand_base: {
-  new (
-    input: GetDurableExecutionStateCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionStateCommandInput,
-    GetDurableExecutionStateCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetDurableExecutionStateCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionStateCommandInput,
-    GetDurableExecutionStateCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetDurableExecutionStateCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionStateCommandInput, GetDurableExecutionStateCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetDurableExecutionStateCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionStateCommandInput, GetDurableExecutionStateCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -70,16 +46,16 @@ declare const GetDurableExecutionStateCommand_base: {
  * const command = new GetDurableExecutionStateCommand(input);
  * const response = await client.send(command);
  * // { // GetDurableExecutionStateResponse
- * //   Operations: [ // Operations
+ * //   Operations: [ // Operations // required
  * //     { // Operation
- * //       Id: "STRING_VALUE",
+ * //       Id: "STRING_VALUE", // required
  * //       ParentId: "STRING_VALUE",
  * //       Name: "STRING_VALUE",
- * //       Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE",
+ * //       Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE", // required
  * //       SubType: "STRING_VALUE",
- * //       StartTimestamp: new Date("TIMESTAMP"),
+ * //       StartTimestamp: new Date("TIMESTAMP"), // required
  * //       EndTimestamp: new Date("TIMESTAMP"),
- * //       Status: "STARTED" || "PENDING" || "READY" || "SUCCEEDED" || "FAILED" || "CANCELLED" || "TIMED_OUT" || "STOPPED",
+ * //       Status: "STARTED" || "PENDING" || "READY" || "SUCCEEDED" || "FAILED" || "CANCELLED" || "TIMED_OUT" || "STOPPED", // required
  * //       ExecutionDetails: { // ExecutionDetails
  * //         InputPayload: "STRING_VALUE",
  * //       },
@@ -109,7 +85,7 @@ declare const GetDurableExecutionStateCommand_base: {
  * //         },
  * //       },
  * //       WaitDetails: { // WaitDetails
- * //         ScheduledTimestamp: new Date("TIMESTAMP"),
+ * //         ScheduledEndTimestamp: new Date("TIMESTAMP"),
  * //       },
  * //       CallbackDetails: { // CallbackDetails
  * //         CallbackId: "STRING_VALUE",
@@ -162,15 +138,15 @@ declare const GetDurableExecutionStateCommand_base: {
  *
  */
 export declare class GetDurableExecutionStateCommand extends GetDurableExecutionStateCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetDurableExecutionStateRequest;
-      output: GetDurableExecutionStateResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetDurableExecutionStateRequest;
+            output: GetDurableExecutionStateResponse;
+        };
+        sdk: {
+            input: GetDurableExecutionStateCommandInput;
+            output: GetDurableExecutionStateCommandOutput;
+        };
     };
-    sdk: {
-      input: GetDurableExecutionStateCommandInput;
-      output: GetDurableExecutionStateCommandOutput;
-    };
-  };
 }

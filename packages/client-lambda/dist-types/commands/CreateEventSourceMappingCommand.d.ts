@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  CreateEventSourceMappingRequest,
-  EventSourceMappingConfiguration,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { CreateEventSourceMappingRequest, EventSourceMappingConfiguration } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link CreateEventSourceMappingCommand}.
  */
-export interface CreateEventSourceMappingCommandInput
-  extends CreateEventSourceMappingRequest {}
+export interface CreateEventSourceMappingCommandInput extends CreateEventSourceMappingRequest {
+}
 /**
  * @public
  *
  * The output of {@link CreateEventSourceMappingCommand}.
  */
-export interface CreateEventSourceMappingCommandOutput
-  extends EventSourceMappingConfiguration,
-    __MetadataBearer {}
+export interface CreateEventSourceMappingCommandOutput extends EventSourceMappingConfiguration, __MetadataBearer {
+}
 declare const CreateEventSourceMappingCommand_base: {
-  new (
-    input: CreateEventSourceMappingCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CreateEventSourceMappingCommandInput,
-    CreateEventSourceMappingCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: CreateEventSourceMappingCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CreateEventSourceMappingCommandInput,
-    CreateEventSourceMappingCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: CreateEventSourceMappingCommandInput): import("@smithy/smithy-client").CommandImpl<CreateEventSourceMappingCommandInput, CreateEventSourceMappingCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: CreateEventSourceMappingCommandInput): import("@smithy/smithy-client").CommandImpl<CreateEventSourceMappingCommandInput, CreateEventSourceMappingCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Creates a mapping between an event source and an Lambda function. Lambda reads items from the event source and invokes the function.</p> <p>For details about how to configure different event sources, see the following topics. </p> <ul> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html#services-dynamodb-eventsourcemapping"> Amazon DynamoDB Streams</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-eventsourcemapping"> Amazon Kinesis</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html#events-sqs-eventsource"> Amazon SQS</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-mq.html#services-mq-eventsourcemapping"> Amazon MQ and RabbitMQ</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-msk.html"> Amazon MSK</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/kafka-smaa.html"> Apache Kafka</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-documentdb.html"> Amazon DocumentDB</a> </p> </li> </ul> <p>The following error handling options are available only for DynamoDB and Kinesis event sources:</p> <ul> <li> <p> <code>BisectBatchOnFunctionError</code> – If the function returns an error, split the batch in two and retry.</p> </li> <li> <p> <code>MaximumRecordAgeInSeconds</code> – Discard records older than the specified age. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record expires</p> </li> <li> <p> <code>MaximumRetryAttempts</code> – Discard records after the specified number of retries. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record expires.</p> </li> <li> <p> <code>ParallelizationFactor</code> – Process multiple batches from each shard concurrently.</p> </li> </ul> <p>For stream sources (DynamoDB, Kinesis, Amazon MSK, and self-managed Apache Kafka), the following option is also available:</p> <ul> <li> <p> <code>OnFailure</code> – Send discarded records to an Amazon SQS queue, Amazon SNS topic, or Amazon S3 bucket. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-retain-records.html#invocation-async-destinations">Adding a destination</a>.</p> </li> </ul> <p>For information about which configuration parameters apply to each event source, see the following topics.</p> <ul> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html#services-ddb-params"> Amazon DynamoDB Streams</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html#services-kinesis-params"> Amazon Kinesis</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html#services-sqs-params"> Amazon SQS</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-mq.html#services-mq-params"> Amazon MQ and RabbitMQ</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-msk.html#services-msk-parms"> Amazon MSK</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kafka.html#services-kafka-parms"> Apache Kafka</a> </p> </li> <li> <p> <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-documentdb.html#docdb-configuration"> Amazon DocumentDB</a> </p> </li> </ul>
@@ -338,15 +314,15 @@ declare const CreateEventSourceMappingCommand_base: {
  * @public
  */
 export declare class CreateEventSourceMappingCommand extends CreateEventSourceMappingCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: CreateEventSourceMappingRequest;
-      output: EventSourceMappingConfiguration;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: CreateEventSourceMappingRequest;
+            output: EventSourceMappingConfiguration;
+        };
+        sdk: {
+            input: CreateEventSourceMappingCommandInput;
+            output: CreateEventSourceMappingCommandOutput;
+        };
     };
-    sdk: {
-      input: CreateEventSourceMappingCommandInput;
-      output: CreateEventSourceMappingCommandOutput;
-    };
-  };
 }

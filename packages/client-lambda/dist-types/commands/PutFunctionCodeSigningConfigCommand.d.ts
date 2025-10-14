@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  PutFunctionCodeSigningConfigRequest,
-  PutFunctionCodeSigningConfigResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { PutFunctionCodeSigningConfigRequest, PutFunctionCodeSigningConfigResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link PutFunctionCodeSigningConfigCommand}.
  */
-export interface PutFunctionCodeSigningConfigCommandInput
-  extends PutFunctionCodeSigningConfigRequest {}
+export interface PutFunctionCodeSigningConfigCommandInput extends PutFunctionCodeSigningConfigRequest {
+}
 /**
  * @public
  *
  * The output of {@link PutFunctionCodeSigningConfigCommand}.
  */
-export interface PutFunctionCodeSigningConfigCommandOutput
-  extends PutFunctionCodeSigningConfigResponse,
-    __MetadataBearer {}
+export interface PutFunctionCodeSigningConfigCommandOutput extends PutFunctionCodeSigningConfigResponse, __MetadataBearer {
+}
 declare const PutFunctionCodeSigningConfigCommand_base: {
-  new (
-    input: PutFunctionCodeSigningConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    PutFunctionCodeSigningConfigCommandInput,
-    PutFunctionCodeSigningConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: PutFunctionCodeSigningConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    PutFunctionCodeSigningConfigCommandInput,
-    PutFunctionCodeSigningConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: PutFunctionCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutFunctionCodeSigningConfigCommandInput, PutFunctionCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: PutFunctionCodeSigningConfigCommandInput): import("@smithy/smithy-client").CommandImpl<PutFunctionCodeSigningConfigCommandInput, PutFunctionCodeSigningConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Update the code signing configuration for the function. Changes to the code signing configuration take effect the next time a user tries to deploy a code package to the function. </p>
@@ -104,15 +80,15 @@ declare const PutFunctionCodeSigningConfigCommand_base: {
  * @public
  */
 export declare class PutFunctionCodeSigningConfigCommand extends PutFunctionCodeSigningConfigCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: PutFunctionCodeSigningConfigRequest;
-      output: PutFunctionCodeSigningConfigResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: PutFunctionCodeSigningConfigRequest;
+            output: PutFunctionCodeSigningConfigResponse;
+        };
+        sdk: {
+            input: PutFunctionCodeSigningConfigCommandInput;
+            output: PutFunctionCodeSigningConfigCommandOutput;
+        };
     };
-    sdk: {
-      input: PutFunctionCodeSigningConfigCommandInput;
-      output: PutFunctionCodeSigningConfigCommandOutput;
-    };
-  };
 }

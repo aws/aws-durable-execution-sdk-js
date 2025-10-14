@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  DeleteEventSourceMappingRequest,
-  EventSourceMappingConfiguration,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { DeleteEventSourceMappingRequest, EventSourceMappingConfiguration } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link DeleteEventSourceMappingCommand}.
  */
-export interface DeleteEventSourceMappingCommandInput
-  extends DeleteEventSourceMappingRequest {}
+export interface DeleteEventSourceMappingCommandInput extends DeleteEventSourceMappingRequest {
+}
 /**
  * @public
  *
  * The output of {@link DeleteEventSourceMappingCommand}.
  */
-export interface DeleteEventSourceMappingCommandOutput
-  extends EventSourceMappingConfiguration,
-    __MetadataBearer {}
+export interface DeleteEventSourceMappingCommandOutput extends EventSourceMappingConfiguration, __MetadataBearer {
+}
 declare const DeleteEventSourceMappingCommand_base: {
-  new (
-    input: DeleteEventSourceMappingCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteEventSourceMappingCommandInput,
-    DeleteEventSourceMappingCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: DeleteEventSourceMappingCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteEventSourceMappingCommandInput,
-    DeleteEventSourceMappingCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: DeleteEventSourceMappingCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteEventSourceMappingCommandInput, DeleteEventSourceMappingCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: DeleteEventSourceMappingCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteEventSourceMappingCommandInput, DeleteEventSourceMappingCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Deletes an <a href="https://docs.aws.amazon.com/lambda/latest/dg/intro-invocation-modes.html">event source mapping</a>. You can get the identifier of a mapping from the output of <a>ListEventSourceMappings</a>.</p> <p>When you delete an event source mapping, it enters a <code>Deleting</code> state and might not be completely deleted for several seconds.</p>
@@ -234,15 +210,15 @@ declare const DeleteEventSourceMappingCommand_base: {
  * @public
  */
 export declare class DeleteEventSourceMappingCommand extends DeleteEventSourceMappingCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: DeleteEventSourceMappingRequest;
-      output: EventSourceMappingConfiguration;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: DeleteEventSourceMappingRequest;
+            output: EventSourceMappingConfiguration;
+        };
+        sdk: {
+            input: DeleteEventSourceMappingCommandInput;
+            output: DeleteEventSourceMappingCommandOutput;
+        };
     };
-    sdk: {
-      input: DeleteEventSourceMappingCommandInput;
-      output: DeleteEventSourceMappingCommandOutput;
-    };
-  };
 }

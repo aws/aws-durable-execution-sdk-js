@@ -278,6 +278,8 @@ describe("Run In Child Context Integration Tests", () => {
     mockExecutionContext._stepData = {
       [hashId("1")]: {
         Id: "1",
+        Type: OperationType.CONTEXT,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
           Result: "[Large payload summary]",

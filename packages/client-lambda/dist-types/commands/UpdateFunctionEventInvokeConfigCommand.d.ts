@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  FunctionEventInvokeConfig,
-  UpdateFunctionEventInvokeConfigRequest,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { FunctionEventInvokeConfig, UpdateFunctionEventInvokeConfigRequest } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link UpdateFunctionEventInvokeConfigCommand}.
  */
-export interface UpdateFunctionEventInvokeConfigCommandInput
-  extends UpdateFunctionEventInvokeConfigRequest {}
+export interface UpdateFunctionEventInvokeConfigCommandInput extends UpdateFunctionEventInvokeConfigRequest {
+}
 /**
  * @public
  *
  * The output of {@link UpdateFunctionEventInvokeConfigCommand}.
  */
-export interface UpdateFunctionEventInvokeConfigCommandOutput
-  extends FunctionEventInvokeConfig,
-    __MetadataBearer {}
+export interface UpdateFunctionEventInvokeConfigCommandOutput extends FunctionEventInvokeConfig, __MetadataBearer {
+}
 declare const UpdateFunctionEventInvokeConfigCommand_base: {
-  new (
-    input: UpdateFunctionEventInvokeConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    UpdateFunctionEventInvokeConfigCommandInput,
-    UpdateFunctionEventInvokeConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: UpdateFunctionEventInvokeConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    UpdateFunctionEventInvokeConfigCommandInput,
-    UpdateFunctionEventInvokeConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: UpdateFunctionEventInvokeConfigCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionEventInvokeConfigCommandInput, UpdateFunctionEventInvokeConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: UpdateFunctionEventInvokeConfigCommandInput): import("@smithy/smithy-client").CommandImpl<UpdateFunctionEventInvokeConfigCommandInput, UpdateFunctionEventInvokeConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Updates the configuration for asynchronous invocation for a function, version, or alias.</p> <p>To configure options for asynchronous invocation, use <a>PutFunctionEventInvokeConfig</a>.</p>
@@ -150,15 +126,15 @@ declare const UpdateFunctionEventInvokeConfigCommand_base: {
  * @public
  */
 export declare class UpdateFunctionEventInvokeConfigCommand extends UpdateFunctionEventInvokeConfigCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: UpdateFunctionEventInvokeConfigRequest;
-      output: FunctionEventInvokeConfig;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: UpdateFunctionEventInvokeConfigRequest;
+            output: FunctionEventInvokeConfig;
+        };
+        sdk: {
+            input: UpdateFunctionEventInvokeConfigCommandInput;
+            output: UpdateFunctionEventInvokeConfigCommandOutput;
+        };
     };
-    sdk: {
-      input: UpdateFunctionEventInvokeConfigCommandInput;
-      output: UpdateFunctionEventInvokeConfigCommandOutput;
-    };
-  };
 }

@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { AliasConfiguration, GetAliasRequest } from "../models/models_0";
 /**
  * @public
@@ -16,35 +12,19 @@ export { $Command };
  *
  * The input for {@link GetAliasCommand}.
  */
-export interface GetAliasCommandInput extends GetAliasRequest {}
+export interface GetAliasCommandInput extends GetAliasRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetAliasCommand}.
  */
-export interface GetAliasCommandOutput
-  extends AliasConfiguration,
-    __MetadataBearer {}
+export interface GetAliasCommandOutput extends AliasConfiguration, __MetadataBearer {
+}
 declare const GetAliasCommand_base: {
-  new (
-    input: GetAliasCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetAliasCommandInput,
-    GetAliasCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetAliasCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetAliasCommandInput,
-    GetAliasCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetAliasCommandInput): import("@smithy/smithy-client").CommandImpl<GetAliasCommandInput, GetAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetAliasCommandInput): import("@smithy/smithy-client").CommandImpl<GetAliasCommandInput, GetAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns details about a Lambda function <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html">alias</a>.</p>
@@ -122,15 +102,15 @@ declare const GetAliasCommand_base: {
  * @public
  */
 export declare class GetAliasCommand extends GetAliasCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetAliasRequest;
-      output: AliasConfiguration;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetAliasRequest;
+            output: AliasConfiguration;
+        };
+        sdk: {
+            input: GetAliasCommandInput;
+            output: GetAliasCommandOutput;
+        };
     };
-    sdk: {
-      input: GetAliasCommandInput;
-      output: GetAliasCommandOutput;
-    };
-  };
 }

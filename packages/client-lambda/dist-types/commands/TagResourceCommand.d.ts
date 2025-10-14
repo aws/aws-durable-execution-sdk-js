@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { TagResourceRequest } from "../models/models_1";
 /**
  * @public
@@ -16,33 +12,19 @@ export { $Command };
  *
  * The input for {@link TagResourceCommand}.
  */
-export interface TagResourceCommandInput extends TagResourceRequest {}
+export interface TagResourceCommandInput extends TagResourceRequest {
+}
 /**
  * @public
  *
  * The output of {@link TagResourceCommand}.
  */
-export interface TagResourceCommandOutput extends __MetadataBearer {}
+export interface TagResourceCommandOutput extends __MetadataBearer {
+}
 declare const TagResourceCommand_base: {
-  new (
-    input: TagResourceCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    TagResourceCommandInput,
-    TagResourceCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: TagResourceCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    TagResourceCommandInput,
-    TagResourceCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: TagResourceCommandInput): import("@smithy/smithy-client").CommandImpl<TagResourceCommandInput, TagResourceCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: TagResourceCommandInput): import("@smithy/smithy-client").CommandImpl<TagResourceCommandInput, TagResourceCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Adds <a href="https://docs.aws.amazon.com/lambda/latest/dg/tagging.html">tags</a> to a function, event source mapping, or code signing configuration.</p>
@@ -110,15 +92,15 @@ declare const TagResourceCommand_base: {
  * @public
  */
 export declare class TagResourceCommand extends TagResourceCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: TagResourceRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: TagResourceRequest;
+            output: {};
+        };
+        sdk: {
+            input: TagResourceCommandInput;
+            output: TagResourceCommandOutput;
+        };
     };
-    sdk: {
-      input: TagResourceCommandInput;
-      output: TagResourceCommandOutput;
-    };
-  };
 }

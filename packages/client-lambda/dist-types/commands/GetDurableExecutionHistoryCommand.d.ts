@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetDurableExecutionHistoryRequest,
-  GetDurableExecutionHistoryResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetDurableExecutionHistoryRequest, GetDurableExecutionHistoryResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetDurableExecutionHistoryCommand}.
  */
-export interface GetDurableExecutionHistoryCommandInput
-  extends GetDurableExecutionHistoryRequest {}
+export interface GetDurableExecutionHistoryCommandInput extends GetDurableExecutionHistoryRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetDurableExecutionHistoryCommand}.
  */
-export interface GetDurableExecutionHistoryCommandOutput
-  extends GetDurableExecutionHistoryResponse,
-    __MetadataBearer {}
+export interface GetDurableExecutionHistoryCommandOutput extends GetDurableExecutionHistoryResponse, __MetadataBearer {
+}
 declare const GetDurableExecutionHistoryCommand_base: {
-  new (
-    input: GetDurableExecutionHistoryCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionHistoryCommandInput,
-    GetDurableExecutionHistoryCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetDurableExecutionHistoryCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetDurableExecutionHistoryCommandInput,
-    GetDurableExecutionHistoryCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetDurableExecutionHistoryCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionHistoryCommandInput, GetDurableExecutionHistoryCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetDurableExecutionHistoryCommandInput): import("@smithy/smithy-client").CommandImpl<GetDurableExecutionHistoryCommandInput, GetDurableExecutionHistoryCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -71,7 +47,7 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * const command = new GetDurableExecutionHistoryCommand(input);
  * const response = await client.send(command);
  * // { // GetDurableExecutionHistoryResponse
- * //   Events: [ // Events
+ * //   Events: [ // Events // required
  * //     { // Event
  * //       EventType: "ExecutionStarted" || "ExecutionSucceeded" || "ExecutionFailed" || "ExecutionTimedOut" || "ExecutionStopped" || "ContextStarted" || "ContextSucceeded" || "ContextFailed" || "WaitStarted" || "WaitSucceeded" || "WaitCancelled" || "StepStarted" || "StepSucceeded" || "StepFailed" || "ChainedInvokePending" || "ChainedInvokeStarted" || "ChainedInvokeSucceeded" || "ChainedInvokeFailed" || "ChainedInvokeTimedOut" || "ChainedInvokeCancelled" || "CallbackStarted" || "CallbackSucceeded" || "CallbackFailed" || "CallbackTimedOut" || "InvocationCompleted",
  * //       SubType: "STRING_VALUE",
@@ -85,7 +61,7 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //           Payload: "STRING_VALUE",
  * //           Truncated: true || false,
  * //         },
- * //         ExecutionTimeout: Number("int"),
+ * //         ExecutionTimeout: Number("int"), // required
  * //       },
  * //       ExecutionSucceededDetails: { // ExecutionSucceededDetails
  * //         Result: { // EventResult
@@ -153,8 +129,8 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //         },
  * //       },
  * //       WaitStartedDetails: { // WaitStartedDetails
- * //         Duration: Number("int"),
- * //         ScheduledEndTimestamp: new Date("TIMESTAMP"),
+ * //         Duration: Number("int"), // required
+ * //         ScheduledEndTimestamp: new Date("TIMESTAMP"), // required
  * //       },
  * //       WaitSucceededDetails: { // WaitSucceededDetails
  * //         Duration: Number("int"),
@@ -184,7 +160,7 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //         },
  * //       },
  * //       StepFailedDetails: { // StepFailedDetails
- * //         Error: "<EventError>",
+ * //         Error: "<EventError>", // required
  * //         RetryDetails: {
  * //           CurrentAttempt: Number("int"),
  * //           NextAttemptDelaySeconds: Number("int"),
@@ -195,8 +171,7 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //           Payload: "STRING_VALUE",
  * //           Truncated: true || false,
  * //         },
- * //         FunctionName: "STRING_VALUE",
- * //         Timeout: Number("int"),
+ * //         FunctionName: "STRING_VALUE", // required
  * //       },
  * //       ChainedInvokeStartedDetails: { // ChainedInvokeStartedDetails
  * //         DurableExecutionArn: "STRING_VALUE",
@@ -208,16 +183,16 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //         },
  * //       },
  * //       ChainedInvokeFailedDetails: { // ChainedInvokeFailedDetails
- * //         Error: "<EventError>",
+ * //         Error: "<EventError>", // required
  * //       },
  * //       ChainedInvokeTimedOutDetails: { // ChainedInvokeTimedOutDetails
- * //         Error: "<EventError>",
+ * //         Error: "<EventError>", // required
  * //       },
  * //       ChainedInvokeStoppedDetails: { // ChainedInvokeStoppedDetails
- * //         Error: "<EventError>",
+ * //         Error: "<EventError>", // required
  * //       },
  * //       CallbackStartedDetails: { // CallbackStartedDetails
- * //         CallbackId: "STRING_VALUE",
+ * //         CallbackId: "STRING_VALUE", // required
  * //         HeartbeatTimeout: Number("int"),
  * //         Timeout: Number("int"),
  * //       },
@@ -228,15 +203,15 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //         },
  * //       },
  * //       CallbackFailedDetails: { // CallbackFailedDetails
- * //         Error: "<EventError>",
+ * //         Error: "<EventError>", // required
  * //       },
  * //       CallbackTimedOutDetails: { // CallbackTimedOutDetails
- * //         Error: "<EventError>",
+ * //         Error: "<EventError>", // required
  * //       },
  * //       InvocationCompletedDetails: { // InvocationCompletedDetails
  * //         StartTimestamp: new Date("TIMESTAMP"), // required
  * //         EndTimestamp: new Date("TIMESTAMP"), // required
- * //         RequestId: "STRING_VALUE",
+ * //         RequestId: "STRING_VALUE", // required
  * //         Error: "<EventError>",
  * //       },
  * //     },
@@ -270,15 +245,15 @@ declare const GetDurableExecutionHistoryCommand_base: {
  *
  */
 export declare class GetDurableExecutionHistoryCommand extends GetDurableExecutionHistoryCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetDurableExecutionHistoryRequest;
-      output: GetDurableExecutionHistoryResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetDurableExecutionHistoryRequest;
+            output: GetDurableExecutionHistoryResponse;
+        };
+        sdk: {
+            input: GetDurableExecutionHistoryCommandInput;
+            output: GetDurableExecutionHistoryCommandOutput;
+        };
     };
-    sdk: {
-      input: GetDurableExecutionHistoryCommandInput;
-      output: GetDurableExecutionHistoryCommandOutput;
-    };
-  };
 }

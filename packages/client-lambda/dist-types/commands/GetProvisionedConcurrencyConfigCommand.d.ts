@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetProvisionedConcurrencyConfigRequest,
-  GetProvisionedConcurrencyConfigResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetProvisionedConcurrencyConfigRequest, GetProvisionedConcurrencyConfigResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link GetProvisionedConcurrencyConfigCommand}.
  */
-export interface GetProvisionedConcurrencyConfigCommandInput
-  extends GetProvisionedConcurrencyConfigRequest {}
+export interface GetProvisionedConcurrencyConfigCommandInput extends GetProvisionedConcurrencyConfigRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetProvisionedConcurrencyConfigCommand}.
  */
-export interface GetProvisionedConcurrencyConfigCommandOutput
-  extends GetProvisionedConcurrencyConfigResponse,
-    __MetadataBearer {}
+export interface GetProvisionedConcurrencyConfigCommandOutput extends GetProvisionedConcurrencyConfigResponse, __MetadataBearer {
+}
 declare const GetProvisionedConcurrencyConfigCommand_base: {
-  new (
-    input: GetProvisionedConcurrencyConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetProvisionedConcurrencyConfigCommandInput,
-    GetProvisionedConcurrencyConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetProvisionedConcurrencyConfigCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetProvisionedConcurrencyConfigCommandInput,
-    GetProvisionedConcurrencyConfigCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetProvisionedConcurrencyConfigCommandInput): import("@smithy/smithy-client").CommandImpl<GetProvisionedConcurrencyConfigCommandInput, GetProvisionedConcurrencyConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetProvisionedConcurrencyConfigCommandInput): import("@smithy/smithy-client").CommandImpl<GetProvisionedConcurrencyConfigCommandInput, GetProvisionedConcurrencyConfigCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Retrieves the provisioned concurrency configuration for a function's alias or version.</p>
@@ -102,26 +78,6 @@ declare const GetProvisionedConcurrencyConfigCommand_base: {
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
- * @example To get a provisioned concurrency configuration
- * ```javascript
- * // The following example returns details for the provisioned concurrency configuration for the BLUE alias of the specified function.
- * const input = {
- *   FunctionName: "my-function",
- *   Qualifier: "BLUE"
- * };
- * const command = new GetProvisionedConcurrencyConfigCommand(input);
- * const response = await client.send(command);
- * /* response is
- * {
- *   AllocatedProvisionedConcurrentExecutions: 100,
- *   AvailableProvisionedConcurrentExecutions: 100,
- *   LastModified: "2019-12-31T20:28:49+0000",
- *   RequestedProvisionedConcurrentExecutions: 100,
- *   Status: "READY"
- * }
- * *\/
- * ```
- *
  * @example To view a provisioned concurrency configuration
  * ```javascript
  * // The following example displays details for the provisioned concurrency configuration for the BLUE alias of the specified function.
@@ -142,18 +98,38 @@ declare const GetProvisionedConcurrencyConfigCommand_base: {
  * *\/
  * ```
  *
+ * @example To get a provisioned concurrency configuration
+ * ```javascript
+ * // The following example returns details for the provisioned concurrency configuration for the BLUE alias of the specified function.
+ * const input = {
+ *   FunctionName: "my-function",
+ *   Qualifier: "BLUE"
+ * };
+ * const command = new GetProvisionedConcurrencyConfigCommand(input);
+ * const response = await client.send(command);
+ * /* response is
+ * {
+ *   AllocatedProvisionedConcurrentExecutions: 100,
+ *   AvailableProvisionedConcurrentExecutions: 100,
+ *   LastModified: "2019-12-31T20:28:49+0000",
+ *   RequestedProvisionedConcurrentExecutions: 100,
+ *   Status: "READY"
+ * }
+ * *\/
+ * ```
+ *
  * @public
  */
 export declare class GetProvisionedConcurrencyConfigCommand extends GetProvisionedConcurrencyConfigCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetProvisionedConcurrencyConfigRequest;
-      output: GetProvisionedConcurrencyConfigResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetProvisionedConcurrencyConfigRequest;
+            output: GetProvisionedConcurrencyConfigResponse;
+        };
+        sdk: {
+            input: GetProvisionedConcurrencyConfigCommandInput;
+            output: GetProvisionedConcurrencyConfigCommandOutput;
+        };
     };
-    sdk: {
-      input: GetProvisionedConcurrencyConfigCommandInput;
-      output: GetProvisionedConcurrencyConfigCommandOutput;
-    };
-  };
 }

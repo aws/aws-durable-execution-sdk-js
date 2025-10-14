@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { DeleteAliasRequest } from "../models/models_0";
 /**
  * @public
@@ -16,33 +12,19 @@ export { $Command };
  *
  * The input for {@link DeleteAliasCommand}.
  */
-export interface DeleteAliasCommandInput extends DeleteAliasRequest {}
+export interface DeleteAliasCommandInput extends DeleteAliasRequest {
+}
 /**
  * @public
  *
  * The output of {@link DeleteAliasCommand}.
  */
-export interface DeleteAliasCommandOutput extends __MetadataBearer {}
+export interface DeleteAliasCommandOutput extends __MetadataBearer {
+}
 declare const DeleteAliasCommand_base: {
-  new (
-    input: DeleteAliasCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteAliasCommandInput,
-    DeleteAliasCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: DeleteAliasCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteAliasCommandInput,
-    DeleteAliasCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: DeleteAliasCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteAliasCommandInput, DeleteAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: DeleteAliasCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteAliasCommandInput, DeleteAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Deletes a Lambda function <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html">alias</a>.</p>
@@ -103,15 +85,15 @@ declare const DeleteAliasCommand_base: {
  * @public
  */
 export declare class DeleteAliasCommand extends DeleteAliasCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: DeleteAliasRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: DeleteAliasRequest;
+            output: {};
+        };
+        sdk: {
+            input: DeleteAliasCommandInput;
+            output: DeleteAliasCommandOutput;
+        };
     };
-    sdk: {
-      input: DeleteAliasCommandInput;
-      output: DeleteAliasCommandOutput;
-    };
-  };
 }

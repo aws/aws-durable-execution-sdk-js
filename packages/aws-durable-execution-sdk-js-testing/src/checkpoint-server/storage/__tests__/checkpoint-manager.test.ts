@@ -56,6 +56,7 @@ describe("CheckpointManager", () => {
           Id: "mocked-uuid",
           Type: OperationType.EXECUTION,
           Status: OperationStatus.STARTED,
+          StartTimestamp: expect.any(Date),
           ExecutionDetails: {
             InputPayload: "{}",
           },
@@ -92,6 +93,7 @@ describe("CheckpointManager", () => {
           Id: "mocked-uuid",
           Type: OperationType.EXECUTION,
           Status: OperationStatus.STARTED,
+          StartTimestamp: expect.any(Date),
           ExecutionDetails: {
             InputPayload: customPayload,
           },
@@ -437,13 +439,13 @@ describe("CheckpointManager", () => {
       expect(result).toBeDefined();
       expect(result.operation.Id).toBe("wait-id");
       expect(result.operation.Type).toBe(OperationType.WAIT);
-      expect(result.operation.WaitDetails?.ScheduledTimestamp).toBeInstanceOf(
-        Date,
-      );
+      expect(
+        result.operation.WaitDetails?.ScheduledEndTimestamp,
+      ).toBeInstanceOf(Date);
 
-      // Make sure waitDetails exists and has a scheduledTimestamp
+      // Make sure waitDetails exists and has a scheduledEndTimestamp
       expect(result.operation.WaitDetails).toBeDefined();
-      expect(result.operation.WaitDetails?.ScheduledTimestamp).toBeDefined();
+      expect(result.operation.WaitDetails?.ScheduledEndTimestamp).toBeDefined();
 
       // Since we've already verified the timestamp exists and is a Date (earlier in this test),
       // we can now verify it's approximately 5 seconds in the future
@@ -451,7 +453,7 @@ describe("CheckpointManager", () => {
       // Create a reference time just before we call the function to compare against
       const now = new Date().getTime();
 
-      const timestamp = result.operation.WaitDetails?.ScheduledTimestamp;
+      const timestamp = result.operation.WaitDetails?.ScheduledEndTimestamp;
       expect(timestamp).toBeInstanceOf(Date);
 
       const scheduledTime = timestamp instanceof Date ? timestamp.getTime() : 0;
@@ -461,7 +463,7 @@ describe("CheckpointManager", () => {
       expect(scheduledTime).toBeLessThan(now + 6000);
     });
 
-    it("should return existing operation if it has waitDetails with scheduledTimestamp", () => {
+    it("should return existing operation if it has waitDetails with scheduledEndTimestamp", () => {
       // First register a wait operation
       const waitUpdate: OperationUpdate = {
         Id: "wait-id",

@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { AliasConfiguration, CreateAliasRequest } from "../models/models_0";
 /**
  * @public
@@ -16,35 +12,19 @@ export { $Command };
  *
  * The input for {@link CreateAliasCommand}.
  */
-export interface CreateAliasCommandInput extends CreateAliasRequest {}
+export interface CreateAliasCommandInput extends CreateAliasRequest {
+}
 /**
  * @public
  *
  * The output of {@link CreateAliasCommand}.
  */
-export interface CreateAliasCommandOutput
-  extends AliasConfiguration,
-    __MetadataBearer {}
+export interface CreateAliasCommandOutput extends AliasConfiguration, __MetadataBearer {
+}
 declare const CreateAliasCommand_base: {
-  new (
-    input: CreateAliasCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CreateAliasCommandInput,
-    CreateAliasCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: CreateAliasCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CreateAliasCommandInput,
-    CreateAliasCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: CreateAliasCommandInput): import("@smithy/smithy-client").CommandImpl<CreateAliasCommandInput, CreateAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: CreateAliasCommandInput): import("@smithy/smithy-client").CommandImpl<CreateAliasCommandInput, CreateAliasCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Creates an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-aliases.html">alias</a> for a Lambda function version. Use aliases to provide clients with a function identifier that you can update to invoke a different version.</p> <p>You can also map an alias to split invocation requests between two versions. Use the <code>RoutingConfig</code> parameter to specify a second version and the percentage of invocation requests that it receives.</p>
@@ -134,15 +114,15 @@ declare const CreateAliasCommand_base: {
  * @public
  */
 export declare class CreateAliasCommand extends CreateAliasCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: CreateAliasRequest;
-      output: AliasConfiguration;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: CreateAliasRequest;
+            output: AliasConfiguration;
+        };
+        sdk: {
+            input: CreateAliasCommandInput;
+            output: CreateAliasCommandOutput;
+        };
     };
-    sdk: {
-      input: CreateAliasCommandInput;
-      output: CreateAliasCommandOutput;
-    };
-  };
 }

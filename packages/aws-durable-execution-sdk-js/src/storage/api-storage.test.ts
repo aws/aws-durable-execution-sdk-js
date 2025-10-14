@@ -82,6 +82,7 @@ describe("ApiStorage", () => {
       CheckpointToken: "",
       Updates: [
         {
+          Id: "test-step-1",
           SubType: OperationSubType.STEP,
           Type: OperationType.STEP,
           Action: OperationAction.START,
@@ -129,6 +130,7 @@ describe("ApiStorage", () => {
         CheckpointToken: "",
         Updates: [
           {
+            Id: "test-step-2",
             SubType: OperationSubType.STEP,
             Type: OperationType.STEP,
             Action: OperationAction.START,

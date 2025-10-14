@@ -4,7 +4,7 @@ import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createMockExecutionContext } from "../../testing/mock-context";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 
 describe("Callback Handler Promise Interface", () => {
@@ -26,6 +26,9 @@ describe("Callback Handler Promise Interface", () => {
       // Simulate the API response by updating stepData
       const hashedStepId = hashId(stepId) as any;
       mockContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: "STARTED" as any,
         CallbackDetails: {
           CallbackId: `callback-${stepId}`,
@@ -193,6 +196,9 @@ describe("Callback Handler Promise Interface", () => {
       const expectedResult = "callback-result";
 
       mockContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         CallbackDetails: {
           CallbackId: "callback-123",
@@ -232,6 +238,9 @@ describe("Callback Handler Promise Interface", () => {
       const errorMessage = "Callback failed";
 
       mockContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
           CallbackId: "callback-123",
@@ -269,6 +278,9 @@ describe("Callback Handler Promise Interface", () => {
       const completedStepId = "step-1";
       const completedHashedStepId = hashId(completedStepId);
       mockContext._stepData[completedHashedStepId] = {
+        Id: completedHashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         CallbackDetails: {
           CallbackId: "callback-completed",
@@ -324,6 +336,9 @@ describe("Callback Handler Promise Interface", () => {
       const errorMessage = "Callback failed";
 
       mockContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
           CallbackId: "callback-123",
@@ -355,6 +370,9 @@ describe("Callback Handler Promise Interface", () => {
       const errorMessage = "Callback failed";
 
       mockContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
           CallbackId: "callback-123",
@@ -390,6 +408,9 @@ describe("Callback Handler Promise Interface", () => {
       const errorMessage = "Callback failed";
 
       mockContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
           CallbackId: "callback-123",
@@ -439,6 +460,9 @@ describe("Callback Handler Promise Interface", () => {
       const stepId = "step-1";
       const hashedStepId = hashId(stepId);
       mockContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
         Status: "STARTED" as any,
         CallbackDetails: {
           CallbackId: "callback-123",

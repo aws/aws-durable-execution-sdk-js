@@ -30,6 +30,22 @@ export class LocalOperationStorage extends OperationStorage<MockOperation> {
     return this.events;
   }
 
+  getOperation(operationId: string) {
+    const operationEvents = this.indexedOperations.getById(operationId);
+    if (!operationEvents) {
+      // Return a minimal operation with required fields
+      // Type and Status are undefined because they will be immediately set by the calling code
+      // based on the actual operation context (STEP, CALLBACK, EXECUTION, etc.)
+      return {
+        Id: operationId,
+        Type: undefined, // Will be set by calling code based on operation context
+        StartTimestamp: new Date(),
+        Status: undefined, // Will be set by calling code based on operation state
+      };
+    }
+    return operationEvents.operation;
+  }
+
   registerMocks(executionId: ExecutionId) {
     for (const mockOperation of this.getTrackedOperations()) {
       mockOperation.registerMocks(executionId);

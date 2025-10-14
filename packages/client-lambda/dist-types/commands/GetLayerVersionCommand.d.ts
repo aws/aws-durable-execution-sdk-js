@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  GetLayerVersionRequest,
-  GetLayerVersionResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { GetLayerVersionRequest, GetLayerVersionResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,35 +12,19 @@ export { $Command };
  *
  * The input for {@link GetLayerVersionCommand}.
  */
-export interface GetLayerVersionCommandInput extends GetLayerVersionRequest {}
+export interface GetLayerVersionCommandInput extends GetLayerVersionRequest {
+}
 /**
  * @public
  *
  * The output of {@link GetLayerVersionCommand}.
  */
-export interface GetLayerVersionCommandOutput
-  extends GetLayerVersionResponse,
-    __MetadataBearer {}
+export interface GetLayerVersionCommandOutput extends GetLayerVersionResponse, __MetadataBearer {
+}
 declare const GetLayerVersionCommand_base: {
-  new (
-    input: GetLayerVersionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetLayerVersionCommandInput,
-    GetLayerVersionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: GetLayerVersionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    GetLayerVersionCommandInput,
-    GetLayerVersionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: GetLayerVersionCommandInput): import("@smithy/smithy-client").CommandImpl<GetLayerVersionCommandInput, GetLayerVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: GetLayerVersionCommandInput): import("@smithy/smithy-client").CommandImpl<GetLayerVersionCommandInput, GetLayerVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Returns information about a version of an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a>, with a link to download the layer archive that's valid for 10 minutes.</p>
@@ -144,15 +121,15 @@ declare const GetLayerVersionCommand_base: {
  * @public
  */
 export declare class GetLayerVersionCommand extends GetLayerVersionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: GetLayerVersionRequest;
-      output: GetLayerVersionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: GetLayerVersionRequest;
+            output: GetLayerVersionResponse;
+        };
+        sdk: {
+            input: GetLayerVersionCommandInput;
+            output: GetLayerVersionCommandOutput;
+        };
     };
-    sdk: {
-      input: GetLayerVersionCommandInput;
-      output: GetLayerVersionCommandOutput;
-    };
-  };
 }

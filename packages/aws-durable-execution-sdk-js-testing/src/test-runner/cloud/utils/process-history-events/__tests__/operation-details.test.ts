@@ -130,14 +130,14 @@ describe("addOperationDetails", () => {
       Name: "test-operation",
     };
 
-    const scheduledTimestamp = new Date("2023-01-01T12:00:00Z");
+    const scheduledEndTimestamp = new Date("2023-01-01T12:00:00Z");
 
     addOperationDetails(operation, "WaitDetails", {
-      ScheduledTimestamp: scheduledTimestamp,
+      ScheduledEndTimestamp: scheduledEndTimestamp,
     });
 
     expect(operation.WaitDetails).toEqual({
-      ScheduledTimestamp: scheduledTimestamp,
+      ScheduledEndTimestamp: scheduledEndTimestamp,
     });
   });
 

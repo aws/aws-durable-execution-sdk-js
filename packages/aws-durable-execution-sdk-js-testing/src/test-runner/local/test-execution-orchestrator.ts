@@ -77,10 +77,12 @@ export class TestExecutionOrchestrator {
         );
       }
 
+      const existingOperation = this.operationStorage.getOperation(operationId);
       await this.checkpointApi.updateCheckpointData({
         executionId,
         operationId,
         operationData: {
+          ...existingOperation,
           Status: result.status,
         },
         error: result.error,
@@ -89,10 +91,12 @@ export class TestExecutionOrchestrator {
 
       return result;
     } catch (err) {
+      const existingOperation = this.operationStorage.getOperation(operationId);
       await this.checkpointApi.updateCheckpointData({
         executionId,
         operationId,
         operationData: {
+          ...existingOperation,
           Status: OperationStatus.FAILED,
         },
         error: {
@@ -317,10 +321,12 @@ export class TestExecutionOrchestrator {
       throw new Error("Missing operation id");
     }
 
+    const existingOperation = this.operationStorage.getOperation(update.Id);
     await this.checkpointApi.updateCheckpointData({
       executionId,
       operationId: update.Id,
       operationData: {
+        ...existingOperation,
         // todo: handle other operation types as well
         Status: result ? OperationStatus.SUCCEEDED : OperationStatus.FAILED,
         ChainedInvokeDetails: {
@@ -374,10 +380,12 @@ export class TestExecutionOrchestrator {
     }
 
     this.scheduleAsyncFunction(waitSeconds, async () => {
+      const existingOperation = this.operationStorage.getOperation(operationId);
       await this.checkpointApi.updateCheckpointData({
         executionId,
         operationId,
         operationData: {
+          ...existingOperation,
           Status: OperationStatus.SUCCEEDED,
         },
       });
@@ -434,10 +442,13 @@ export class TestExecutionOrchestrator {
           );
         },
         async () => {
+          const existingOperation =
+            this.operationStorage.getOperation(operationId);
           await this.checkpointApi.updateCheckpointData({
             executionId,
             operationId,
             operationData: {
+              ...existingOperation,
               Status: OperationStatus.READY,
             },
           });

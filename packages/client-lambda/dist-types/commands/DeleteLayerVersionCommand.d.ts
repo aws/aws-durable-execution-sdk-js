@@ -1,10 +1,6 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
 import { DeleteLayerVersionRequest } from "../models/models_0";
 /**
  * @public
@@ -16,34 +12,19 @@ export { $Command };
  *
  * The input for {@link DeleteLayerVersionCommand}.
  */
-export interface DeleteLayerVersionCommandInput
-  extends DeleteLayerVersionRequest {}
+export interface DeleteLayerVersionCommandInput extends DeleteLayerVersionRequest {
+}
 /**
  * @public
  *
  * The output of {@link DeleteLayerVersionCommand}.
  */
-export interface DeleteLayerVersionCommandOutput extends __MetadataBearer {}
+export interface DeleteLayerVersionCommandOutput extends __MetadataBearer {
+}
 declare const DeleteLayerVersionCommand_base: {
-  new (
-    input: DeleteLayerVersionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteLayerVersionCommandInput,
-    DeleteLayerVersionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: DeleteLayerVersionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    DeleteLayerVersionCommandInput,
-    DeleteLayerVersionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: DeleteLayerVersionCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteLayerVersionCommandInput, DeleteLayerVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: DeleteLayerVersionCommandInput): import("@smithy/smithy-client").CommandImpl<DeleteLayerVersionCommandInput, DeleteLayerVersionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * <p>Deletes a version of an <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a>. Deleted versions can no longer be viewed or added to functions. To avoid breaking functions, a copy of the version remains in Lambda until no functions refer to it.</p>
@@ -98,15 +79,15 @@ declare const DeleteLayerVersionCommand_base: {
  * @public
  */
 export declare class DeleteLayerVersionCommand extends DeleteLayerVersionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: DeleteLayerVersionRequest;
-      output: {};
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: DeleteLayerVersionRequest;
+            output: {};
+        };
+        sdk: {
+            input: DeleteLayerVersionCommandInput;
+            output: DeleteLayerVersionCommandOutput;
+        };
     };
-    sdk: {
-      input: DeleteLayerVersionCommandInput;
-      output: DeleteLayerVersionCommandOutput;
-    };
-  };
 }

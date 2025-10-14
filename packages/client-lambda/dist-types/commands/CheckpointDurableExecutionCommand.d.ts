@@ -1,14 +1,7 @@
 import { Command as $Command } from "@smithy/smithy-client";
 import { MetadataBearer as __MetadataBearer } from "@smithy/types";
-import {
-  LambdaClientResolvedConfig,
-  ServiceInputTypes,
-  ServiceOutputTypes,
-} from "../LambdaClient";
-import {
-  CheckpointDurableExecutionRequest,
-  CheckpointDurableExecutionResponse,
-} from "../models/models_0";
+import { LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes } from "../LambdaClient";
+import { CheckpointDurableExecutionRequest, CheckpointDurableExecutionResponse } from "../models/models_0";
 /**
  * @public
  */
@@ -19,36 +12,19 @@ export { $Command };
  *
  * The input for {@link CheckpointDurableExecutionCommand}.
  */
-export interface CheckpointDurableExecutionCommandInput
-  extends CheckpointDurableExecutionRequest {}
+export interface CheckpointDurableExecutionCommandInput extends CheckpointDurableExecutionRequest {
+}
 /**
  * @public
  *
  * The output of {@link CheckpointDurableExecutionCommand}.
  */
-export interface CheckpointDurableExecutionCommandOutput
-  extends CheckpointDurableExecutionResponse,
-    __MetadataBearer {}
+export interface CheckpointDurableExecutionCommandOutput extends CheckpointDurableExecutionResponse, __MetadataBearer {
+}
 declare const CheckpointDurableExecutionCommand_base: {
-  new (
-    input: CheckpointDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CheckpointDurableExecutionCommandInput,
-    CheckpointDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  new (
-    input: CheckpointDurableExecutionCommandInput,
-  ): import("@smithy/smithy-client").CommandImpl<
-    CheckpointDurableExecutionCommandInput,
-    CheckpointDurableExecutionCommandOutput,
-    LambdaClientResolvedConfig,
-    ServiceInputTypes,
-    ServiceOutputTypes
-  >;
-  getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
+    new (input: CheckpointDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<CheckpointDurableExecutionCommandInput, CheckpointDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    new (input: CheckpointDurableExecutionCommandInput): import("@smithy/smithy-client").CommandImpl<CheckpointDurableExecutionCommandInput, CheckpointDurableExecutionCommandOutput, LambdaClientResolvedConfig, ServiceInputTypes, ServiceOutputTypes>;
+    getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
  * @public
@@ -66,12 +42,12 @@ declare const CheckpointDurableExecutionCommand_base: {
  *   CheckpointToken: "STRING_VALUE", // required
  *   Updates: [ // OperationUpdates
  *     { // OperationUpdate
- *       Id: "STRING_VALUE",
+ *       Id: "STRING_VALUE", // required
  *       ParentId: "STRING_VALUE",
  *       Name: "STRING_VALUE",
- *       Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE",
+ *       Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE", // required
  *       SubType: "STRING_VALUE",
- *       Action: "START" || "SUCCEED" || "FAIL" || "RETRY" || "CANCEL",
+ *       Action: "START" || "SUCCEED" || "FAIL" || "RETRY" || "CANCEL", // required
  *       Payload: "STRING_VALUE",
  *       Error: { // ErrorObject
  *         ErrorMessage: "STRING_VALUE",
@@ -96,7 +72,6 @@ declare const CheckpointDurableExecutionCommand_base: {
  *       },
  *       ChainedInvokeOptions: { // ChainedInvokeOptions
  *         FunctionName: "STRING_VALUE",
- *         TimeoutSeconds: Number("int"),
  *       },
  *     },
  *   ],
@@ -109,14 +84,14 @@ declare const CheckpointDurableExecutionCommand_base: {
  * //   NewExecutionState: { // CheckpointUpdatedExecutionState
  * //     Operations: [ // Operations
  * //       { // Operation
- * //         Id: "STRING_VALUE",
+ * //         Id: "STRING_VALUE", // required
  * //         ParentId: "STRING_VALUE",
  * //         Name: "STRING_VALUE",
- * //         Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE",
+ * //         Type: "EXECUTION" || "CONTEXT" || "STEP" || "WAIT" || "CALLBACK" || "CHAINED_INVOKE", // required
  * //         SubType: "STRING_VALUE",
- * //         StartTimestamp: new Date("TIMESTAMP"),
+ * //         StartTimestamp: new Date("TIMESTAMP"), // required
  * //         EndTimestamp: new Date("TIMESTAMP"),
- * //         Status: "STARTED" || "PENDING" || "READY" || "SUCCEEDED" || "FAILED" || "CANCELLED" || "TIMED_OUT" || "STOPPED",
+ * //         Status: "STARTED" || "PENDING" || "READY" || "SUCCEEDED" || "FAILED" || "CANCELLED" || "TIMED_OUT" || "STOPPED", // required
  * //         ExecutionDetails: { // ExecutionDetails
  * //           InputPayload: "STRING_VALUE",
  * //         },
@@ -146,7 +121,7 @@ declare const CheckpointDurableExecutionCommand_base: {
  * //           },
  * //         },
  * //         WaitDetails: { // WaitDetails
- * //           ScheduledTimestamp: new Date("TIMESTAMP"),
+ * //           ScheduledEndTimestamp: new Date("TIMESTAMP"),
  * //         },
  * //         CallbackDetails: { // CallbackDetails
  * //           CallbackId: "STRING_VALUE",
@@ -200,15 +175,15 @@ declare const CheckpointDurableExecutionCommand_base: {
  *
  */
 export declare class CheckpointDurableExecutionCommand extends CheckpointDurableExecutionCommand_base {
-  /** @internal type navigation helper, not in runtime. */
-  protected static __types: {
-    api: {
-      input: CheckpointDurableExecutionRequest;
-      output: CheckpointDurableExecutionResponse;
+    /** @internal type navigation helper, not in runtime. */
+    protected static __types: {
+        api: {
+            input: CheckpointDurableExecutionRequest;
+            output: CheckpointDurableExecutionResponse;
+        };
+        sdk: {
+            input: CheckpointDurableExecutionCommandInput;
+            output: CheckpointDurableExecutionCommandOutput;
+        };
     };
-    sdk: {
-      input: CheckpointDurableExecutionCommandInput;
-      output: CheckpointDurableExecutionCommandOutput;
-    };
-  };
 }
