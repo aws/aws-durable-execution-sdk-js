@@ -2,6 +2,7 @@ import {
   CheckpointDurableExecutionRequest,
   OperationUpdate,
   Operation,
+  OperationStatus,
 } from "@aws-sdk/client-lambda";
 import { ExecutionContext } from "../../types";
 import { log } from "../logger/logger";
@@ -52,6 +53,19 @@ class CheckpointHandler {
     data: Partial<OperationUpdate>,
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
+      // Check if any ancestor is finished to maintain deterministic replay.
+      // Checkpointing operations whose ancestors have already completed (SUCCEEDED or FAILED)
+      // would alter the ancestor's outcome during replay, breaking workflow determinism.
+      // By skipping these checkpoints, we ensure replayed executions produce identical results.
+      if (this.hasFinishedAncestor(data.ParentId)) {
+        log("⚠️", "Checkpoint skipped - ancestor finished:", {
+          stepId,
+          parentId: data.ParentId,
+        });
+        // Don't resolve or reject - just return without queuing
+        return;
+      }
+
       const queuedItem: QueuedCheckpoint = {
         stepId,
         data,
@@ -75,6 +89,47 @@ class CheckpointHandler {
         });
       }
     });
+  }
+
+  /**
+   * Checks if any ancestor operation in the parent chain has finished (SUCCEEDED or FAILED).
+   *
+   * This is critical for maintaining deterministic workflow replay. When an ancestor operation
+   * completes, its outcome is finalized and checkpointed. If we allow child operations to
+   * checkpoint after their ancestor has finished, those child operations could be replayed
+   * and potentially change the ancestor's result, breaking determinism.
+   *
+   * For example, if a parallel branch completes and then a child operation within that branch
+   * tries to checkpoint, replaying that checkpoint could alter the parallel operation's outcome,
+   * leading to non-deterministic behavior across executions.
+   *
+   * @param parentId - The parent operation ID to start checking from (unhashed)
+   * @returns true if any ancestor has status SUCCEEDED or FAILED, false otherwise
+   */
+  private hasFinishedAncestor(parentId?: string): boolean {
+    if (!parentId) {
+      return false;
+    }
+
+    // Start with the unhashed parent ID, hash it to look up in _stepData
+    let currentHashedId: string | undefined = hashId(parentId);
+
+    while (currentHashedId) {
+      const parentOperation: Operation | undefined =
+        this.context._stepData[currentHashedId];
+
+      if (
+        parentOperation?.Status === OperationStatus.SUCCEEDED ||
+        parentOperation?.Status === OperationStatus.FAILED
+      ) {
+        return true;
+      }
+
+      // ParentId in the operation is already hashed
+      currentHashedId = parentOperation?.ParentId;
+    }
+
+    return false;
   }
 
   private async processQueue(): Promise<void> {
