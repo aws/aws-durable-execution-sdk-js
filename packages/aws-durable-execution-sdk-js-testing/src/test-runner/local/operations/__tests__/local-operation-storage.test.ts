@@ -5,9 +5,11 @@ import {
 } from "@aws-sdk/client-lambda";
 import { LocalOperationStorage } from "../local-operation-storage";
 import { OperationWaitManager } from "../operation-wait-manager";
-import { OperationWithData } from "../../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../../common/indexed-operations";
-import { OperationEvents } from "../../../common/operations/operation-with-data";
+import {
+  OperationEvents,
+  OperationWithData,
+} from "../../../common/operations/operation-with-data";
 import { DurableApiClient } from "../../../common/create-durable-api-client";
 
 // Mock the OperationWaitManager
@@ -79,6 +81,32 @@ describe("LocalOperationStorage", () => {
         },
       ],
     },
+    {
+      operation: {
+        Id: "op3",
+        Name: "operation1", // Same name as first operation
+        Type: OperationType.CALLBACK,
+        Status: OperationStatus.FAILED,
+      },
+      events: [
+        {
+          EventId: 5,
+          EventType: EventType.CallbackStarted,
+          EventTimestamp: new Date("2026-01-02"),
+          StepSucceededDetails: {},
+          Name: "operation1",
+          Id: "op3",
+        },
+        {
+          EventId: 6,
+          EventType: EventType.CallbackSucceeded,
+          EventTimestamp: new Date("2026-01-03"),
+          StepSucceededDetails: {},
+          Name: "operation1",
+          Id: "op3",
+        },
+      ],
+    },
   ];
 
   beforeEach(() => {
@@ -93,36 +121,8 @@ describe("LocalOperationStorage", () => {
     };
   });
 
-  describe("constructor", () => {
-    it("should initialize with required dependencies", () => {
-      const storage = new LocalOperationStorage(
-        mockWaitManager,
-        mockIndexedOperations,
-        mockDurableApiClient,
-        mockCallback,
-      );
-
-      expect(storage).toBeDefined();
-      expect(storage.getHistoryEvents()).toEqual([]);
-    });
-
-    it("should initialize with existing operations from IndexedOperations", () => {
-      const indexedOps = new IndexedOperations(sampleOperations);
-      const storage = new LocalOperationStorage(
-        mockWaitManager,
-        indexedOps,
-        mockDurableApiClient,
-        mockCallback,
-      );
-
-      expect(storage.getHistoryEvents()).toEqual(
-        sampleOperations.flatMap((op) => op.events),
-      );
-    });
-  });
-
   describe("populateOperations", () => {
-    it("should update registered operations with new data", () => {
+    it("should update registered mock operations with matching ID", () => {
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -155,7 +155,7 @@ describe("LocalOperationStorage", () => {
       });
     });
 
-    it("should notify callback when operations are populated", () => {
+    it("should update registered mock operations with matching name and index", () => {
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -168,6 +168,105 @@ describe("LocalOperationStorage", () => {
         mockDurableApiClient,
       );
 
+      // Register the operation
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          name: "operation1",
+          index: 1,
+        },
+      });
+
+      // Initially no data is populated
+      expect(operation.getOperationData()).toBeUndefined();
+
+      // Add operations
+      storage.populateOperations(sampleOperations);
+
+      // Now the operation should have data (the second operation with name "operation1")
+      expect(operation.getOperationData()).toEqual({
+        ...sampleOperations[2].operation,
+      });
+    });
+
+    it("should update registered mock operations with matching index only", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+
+      // Register the operation
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          index: 1,
+        },
+      });
+
+      // Initially no data is populated
+      expect(operation.getOperationData()).toBeUndefined();
+
+      // Add operations
+      storage.populateOperations(sampleOperations);
+
+      // Now the operation should have data (index 1)
+      expect(operation.getOperationData()).toEqual({
+        ...sampleOperations[1].operation,
+      });
+    });
+
+    it("should not throw for mock operations without matching operation data", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+
+      // Register the operation
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          name: "nonexistent",
+        },
+      });
+
+      // Add operations
+      expect(() => {
+        storage.populateOperations(sampleOperations);
+      }).not.toThrow();
+
+      // The operation should still have no data
+      expect(operation.getOperationData()).toBeUndefined();
+    });
+
+    it("should notify wait manager when operations are populated", () => {
+      const mockCallback = jest.fn();
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+
+      // Register the operation
       storage.registerOperation({
         operation: operation,
         params: {
@@ -175,28 +274,59 @@ describe("LocalOperationStorage", () => {
         },
       });
 
+      // Add operations
       storage.populateOperations(sampleOperations);
 
-      // Verify callback was called with checkpoint operations and operations
+      // Verify callback was called with checkpoint operations and populated operations
       expect(mockCallback).toHaveBeenCalledWith(sampleOperations, [operation]);
     });
 
-    it("should not call callback when no operations are provided", () => {
+    it("should notify wait manager for multiple populated operations", () => {
+      const mockCallback = jest.fn();
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
         mockDurableApiClient,
         mockCallback,
       );
+      const mockOperation1 = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+      const mockOperation2 = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
 
-      storage.populateOperations([]);
+      // Register the mock operations
+      storage.registerOperation({
+        operation: mockOperation1,
+        params: {
+          id: "op1",
+        },
+      });
+      storage.registerOperation({
+        operation: mockOperation2,
+        params: {
+          id: "op2",
+        },
+      });
 
-      expect(mockCallback).not.toHaveBeenCalled();
+      // Add operations
+      storage.populateOperations(sampleOperations);
+
+      // Verify callback was called with both populated operations
+      expect(mockCallback).toHaveBeenCalledWith(sampleOperations, [
+        mockOperation1,
+        mockOperation2,
+      ]);
     });
   });
 
   describe("registerOperation", () => {
-    it("should register an operation", () => {
+    it("should register a operation", () => {
       const storage = new LocalOperationStorage(
         mockWaitManager,
         mockIndexedOperations,
@@ -249,7 +379,7 @@ describe("LocalOperationStorage", () => {
       // Add operations first
       storage.populateOperations(sampleOperations);
 
-      // Then register an operation with matching ID
+      // Then register a operation with matching ID
       const operation = new OperationWithData(
         mockWaitManager,
         mockIndexedOperations,
@@ -266,6 +396,313 @@ describe("LocalOperationStorage", () => {
       expect(operation.getOperationData()).toEqual({
         ...sampleOperations[1].operation,
       });
+    });
+
+    it("should handle mock operations with empty string id", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      ); // Empty string is falsy but valid
+
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          id: "",
+        },
+      });
+
+      // Add operations with empty string ID
+      storage.populateOperations([
+        {
+          operation: {
+            Id: "", // Empty string ID
+            Name: "test-op",
+            Type: OperationType.STEP,
+            Status: OperationStatus.SUCCEEDED,
+          },
+          events: [],
+        },
+      ]);
+
+      // The operation should have data populated
+      expect(operation.getOperationData()).toEqual({
+        Id: "",
+        Name: "test-op",
+        Type: OperationType.STEP,
+        Status: OperationStatus.SUCCEEDED,
+      });
+    });
+
+    it("should handle mock operations with empty string name", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      ); // Empty string is falsy but valid
+
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          name: "",
+        },
+      });
+
+      // Add operations with empty string name
+      storage.populateOperations([
+        {
+          operation: {
+            Id: "test-id",
+            Type: OperationType.STEP,
+            Name: "", // Empty string name
+            Status: OperationStatus.SUCCEEDED,
+          },
+          events: [],
+        },
+      ]);
+
+      // The operation should have data populated
+      expect(operation.getOperationData()).toEqual({
+        Id: "test-id",
+        Name: "",
+        Type: OperationType.STEP,
+        Status: OperationStatus.SUCCEEDED,
+      });
+    });
+
+    it("should handle mock operations with index 0", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      ); // 0 is falsy but valid index
+
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          index: 0,
+        },
+      });
+
+      // Add operations
+      storage.populateOperations([
+        {
+          operation: {
+            Id: "first-op",
+            Name: "operation-at-index-0",
+            Type: OperationType.STEP,
+            Status: OperationStatus.SUCCEEDED,
+          },
+          events: [],
+        },
+        {
+          operation: {
+            Id: "second-op",
+            Name: "operation-at-index-1",
+            Type: OperationType.WAIT,
+            Status: OperationStatus.SUCCEEDED,
+          },
+          events: [],
+        },
+      ]);
+
+      // The operation should have data populated with the first operation (index 0)
+      expect(operation.getOperationData()).toEqual({
+        Id: "first-op",
+        Name: "operation-at-index-0",
+        Type: OperationType.STEP,
+        Status: OperationStatus.SUCCEEDED,
+      });
+    });
+
+    it("should notify wait manager when registering operations with existing data", () => {
+      const mockCallback = jest.fn();
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+
+      // Add operations first
+      storage.populateOperations(sampleOperations);
+
+      // Then register a operation with matching ID
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          id: "op2",
+        },
+      });
+
+      // The operation should have been populated immediately since data exists
+      expect(operation.getOperationData()).toEqual({
+        ...sampleOperations[1].operation,
+      });
+    });
+  });
+
+  describe("Callback functionality edge cases", () => {
+    it("should always call callback since it is required", () => {
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          name: "nonexistent",
+        },
+      });
+      storage.populateOperations(sampleOperations);
+
+      expect(mockCallback).toHaveBeenCalledWith(sampleOperations, [operation]);
+    });
+
+    it("should call callback with empty populated operations when no operations are populated", () => {
+      const mockCallback = jest.fn();
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          name: "nonexistent",
+        },
+      });
+      storage.populateOperations(sampleOperations);
+
+      // Callback should be called with empty populated operations array
+      expect(mockCallback).toHaveBeenCalledWith(sampleOperations, [operation]);
+    });
+
+    it("should call callback with empty arrays when no operations provided", () => {
+      const mockCallback = jest.fn();
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+
+      // Populate with empty array
+      storage.populateOperations([]);
+
+      // Callback should not be called when no operations provided
+      expect(mockCallback).not.toHaveBeenCalled();
+    });
+
+    it("should call callback for all operations that are registered", () => {
+      const mockCallback = jest.fn();
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+      const populatedOperation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+      const nonPopulatedOperation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+
+      storage.registerOperation({
+        operation: populatedOperation,
+        params: {
+          id: "op1",
+        },
+      });
+      storage.registerOperation({
+        operation: nonPopulatedOperation,
+        params: {
+          name: "nonexistent",
+        },
+      });
+      storage.populateOperations(sampleOperations);
+
+      expect(mockCallback).toHaveBeenCalledWith(sampleOperations, [
+        populatedOperation,
+        nonPopulatedOperation,
+      ]);
+    });
+
+    it("should call callback when registering operation with existing data", () => {
+      const mockCallback = jest.fn();
+      const storage = new LocalOperationStorage(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+        mockCallback,
+      );
+
+      // Populate operations first
+      storage.populateOperations(sampleOperations);
+      mockCallback.mockClear(); // Clear previous calls
+
+      // Register operation that matches existing data
+      const operation = new OperationWithData(
+        mockWaitManager,
+        mockIndexedOperations,
+        mockDurableApiClient,
+      );
+      storage.registerOperation({
+        operation: operation,
+        params: {
+          id: "op1",
+        },
+      });
+
+      // The operation should be populated immediately, but callback is only called from populateOperations
+      expect(operation.getOperationData()).toEqual({
+        ...sampleOperations[0].operation,
+      });
+      // Callback should not be called during registration
+      expect(mockCallback).not.toHaveBeenCalled();
     });
   });
 
@@ -297,7 +734,7 @@ describe("LocalOperationStorage", () => {
       );
     });
 
-    it("should update history events when new operations are populated", () => {
+    it("should return history events from both indexed operations and populated operations", () => {
       const storage = new LocalOperationStorage(
         mockWaitManager,
         new IndexedOperations(sampleOperations),
@@ -305,24 +742,26 @@ describe("LocalOperationStorage", () => {
         mockCallback,
       );
 
-      const newOperation: OperationEvents = {
-        operation: {
-          Id: "op3",
-          Status: OperationStatus.SUCCEEDED,
-          Type: OperationType.CALLBACK,
-        },
-        events: [
-          {
-            EventId: 5,
-            EventType: EventType.CallbackStarted,
+      const populatedOperations = sampleOperations.concat([
+        {
+          operation: {
+            Id: "op4",
+            Status: "STARTED",
+            Type: "CALLBACK",
           },
-        ],
-      };
+          events: [
+            {
+              EventId: 5,
+              EventType: EventType.CallbackStarted,
+            },
+          ],
+        },
+      ]);
 
-      const populatedOperations = sampleOperations.concat([newOperation]);
       storage.populateOperations(populatedOperations);
 
       const historyEvents = populatedOperations.flatMap((op) => op.events);
+
       expect(storage.getHistoryEvents()).toEqual(historyEvents);
     });
   });

@@ -30,7 +30,6 @@ export {
   Serdes,
 } from "./utils/serdes/serdes";
 export { ApiStorage } from "./storage/api-storage";
-export { OperationInterceptor } from "./mocks/operation-interceptor";
 export {
   createWaitStrategy,
   WaitStrategyConfig,
