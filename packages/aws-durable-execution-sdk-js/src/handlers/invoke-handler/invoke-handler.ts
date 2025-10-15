@@ -80,7 +80,8 @@ export const createInvokeHandler = (
 
       if (
         stepData?.Status === OperationStatus.FAILED ||
-        stepData?.Status == OperationStatus.TIMED_OUT
+        stepData?.Status === OperationStatus.TIMED_OUT ||
+        stepData?.Status === OperationStatus.STOPPED
       ) {
         // Operation failed, throw error
         const invokeDetails = stepData.ChainedInvokeDetails;
