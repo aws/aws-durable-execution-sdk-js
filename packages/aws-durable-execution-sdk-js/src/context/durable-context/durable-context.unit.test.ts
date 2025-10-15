@@ -551,4 +551,89 @@ describe("DurableContext", () => {
       expect(typeof context.promise.any).toBe("function");
     });
   });
+
+  describe("executeConcurrently", () => {
+    it("should pass skipNextOperation to concurrent execution handler", async () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+      );
+
+      const { createConcurrentExecutionHandler } = jest.requireMock(
+        "../../handlers/concurrent-execution-handler/concurrent-execution-handler",
+      );
+      const mockHandler = jest.fn().mockResolvedValue({ totalCount: 0 });
+      createConcurrentExecutionHandler.mockReturnValue(mockHandler);
+
+      await context.executeConcurrently([], async () => {});
+
+      expect(createConcurrentExecutionHandler).toHaveBeenCalledWith(
+        executionContext,
+        expect.any(Function),
+        expect.any(Function),
+      );
+    });
+
+    it("should increment step counter when skipNextOperation is called", async () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+      );
+
+      const { createConcurrentExecutionHandler } = jest.requireMock(
+        "../../handlers/concurrent-execution-handler/concurrent-execution-handler",
+      );
+
+      let capturedSkipNextOperation: (() => void) | null = null;
+      const mockHandler = jest.fn().mockResolvedValue({ totalCount: 0 });
+
+      createConcurrentExecutionHandler.mockImplementation(
+        (_ctx: any, _runInChild: any, skipNext: any) => {
+          capturedSkipNextOperation = skipNext;
+          return mockHandler;
+        },
+      );
+
+      await context.executeConcurrently([], async () => {});
+
+      // Capture the step ID before calling skipNextOperation
+      const { createStepHandler } = jest.requireMock(
+        "../../handlers/step-handler/step-handler",
+      );
+      let firstStepId: string | undefined;
+      let secondStepId: string | undefined;
+
+      const stepHandler = jest.fn().mockResolvedValue("result");
+      createStepHandler.mockImplementation(
+        (_ctx: any, _checkpoint: any, _lambdaCtx: any, createStepIdFn: any) => {
+          return async (name: any, fn: any, config: any): Promise<any> => {
+            const stepId = createStepIdFn();
+            if (!firstStepId) {
+              firstStepId = stepId;
+            } else if (!secondStepId) {
+              secondStepId = stepId;
+            }
+            return stepHandler(name, fn, config);
+          };
+        },
+      );
+
+      // First step should get ID "1"
+      await context.step("test1", async () => "value1");
+
+      // Call skipNextOperation to increment counter
+      expect(capturedSkipNextOperation).toBeDefined();
+      capturedSkipNextOperation!();
+
+      // Next step should get ID "3" (skipped "2")
+      await context.step("test2", async () => "value2");
+
+      expect(firstStepId).toBe("1");
+      expect(secondStepId).toBe("3");
+    });
+  });
 });
