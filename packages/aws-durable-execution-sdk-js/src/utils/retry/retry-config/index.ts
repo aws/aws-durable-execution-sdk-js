@@ -1,13 +1,23 @@
-import { RetryDecision } from "../../../types";
+import { RetryDecision, JitterStrategy } from "../../../types";
 
+/**
+ * Configuration options for creating a retry strategy
+ */
 interface RetryStrategyConfig {
-  maxAttempts?: number; // Maximum number of retry attempts
-  initialDelaySeconds?: number; // Initial delay before first retry
-  maxDelaySeconds?: number; // Maximum delay between retries
-  backoffRate?: number; // Multiplier for each subsequent retry
-  jitterSeconds?: number; // Random time range to add/subtract from delay
-  retryableErrors?: (string | RegExp)[]; // List of errors that are retryable
-  retryableErrorTypes?: (new () => Error)[]; // List of error types that are retryable
+  /** Maximum number of total attempts (including initial attempt). Default: 3 */
+  maxAttempts?: number;
+  /** Initial delay in seconds before first retry. Default: 5 */
+  initialDelaySeconds?: number;
+  /** Maximum delay in seconds between retries. Default: 300 (5 minutes) */
+  maxDelaySeconds?: number;
+  /** Multiplier for exponential backoff on each retry. Default: 2 */
+  backoffRate?: number;
+  /** Jitter strategy to apply to retry delays. Default: JitterStrategy.FULL */
+  jitter?: JitterStrategy;
+  /** List of error message patterns (strings or RegExp) that are retryable. Default: all errors */
+  retryableErrors?: (string | RegExp)[];
+  /** List of error class types that are retryable. Default: none */
+  retryableErrorTypes?: (new () => Error)[];
 }
 
 const DEFAULT_CONFIG: Required<RetryStrategyConfig> = {
@@ -15,11 +25,47 @@ const DEFAULT_CONFIG: Required<RetryStrategyConfig> = {
   initialDelaySeconds: 5,
   maxDelaySeconds: 300, // 5 minutes
   backoffRate: 2,
-  jitterSeconds: 1,
+  jitter: JitterStrategy.FULL,
   retryableErrors: [/.*/], // By default, retry all errors
   retryableErrorTypes: [],
 };
 
+const applyJitter = (delay: number, strategy: JitterStrategy): number => {
+  switch (strategy) {
+    case JitterStrategy.NONE:
+      return delay;
+    case JitterStrategy.FULL:
+      // Random between 0 and delay
+      return Math.random() * delay;
+    case JitterStrategy.HALF:
+      // Random between delay/2 and delay
+      return delay / 2 + Math.random() * (delay / 2);
+    default:
+      return delay;
+  }
+};
+
+/**
+ * Creates a retry strategy function with exponential backoff and configurable jitter
+ * @param config - Configuration options for the retry strategy
+ * @returns A function that determines whether to retry and calculates delay based on error and attempt count
+ * @example
+ * ```typescript
+ * // Create a custom retry strategy
+ * const customRetry = createRetryStrategy({
+ *   maxAttempts: 5,
+ *   initialDelaySeconds: 10,
+ *   backoffRate: 2,
+ *   jitter: JitterStrategy.HALF,
+ *   retryableErrors: [/timeout/i, /connection/i]
+ * });
+ *
+ * // Use in step configuration
+ * await context.step('api-call', async () => {
+ *   return await callExternalAPI();
+ * }, { retryStrategy: customRetry });
+ * ```
+ */
 export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
   const finalConfig: Required<RetryStrategyConfig> = {
     ...DEFAULT_CONFIG,
@@ -52,18 +98,21 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
     }
 
     // Calculate delay with exponential backoff
-    const delay = Math.min(
+    const baseDelay = Math.min(
       finalConfig.initialDelaySeconds *
         Math.pow(finalConfig.backoffRate, attemptsMade - 1),
       finalConfig.maxDelaySeconds,
     );
 
-    // Add jitter
-    const jitter = (Math.random() * 2 - 1) * finalConfig.jitterSeconds;
-    const finalDelay = Math.max(1, delay + jitter);
+    // Apply jitter
+    const delayWithJitter = applyJitter(baseDelay, finalConfig.jitter);
 
-    return { shouldRetry: true, delaySeconds: Math.round(finalDelay) };
+    // Ensure delay is an integer >= 1
+    const finalDelay = Math.max(1, Math.round(delayWithJitter));
+
+    return { shouldRetry: true, delaySeconds: finalDelay };
   };
 };
 
 export type { RetryStrategyConfig };
+export { JitterStrategy };
