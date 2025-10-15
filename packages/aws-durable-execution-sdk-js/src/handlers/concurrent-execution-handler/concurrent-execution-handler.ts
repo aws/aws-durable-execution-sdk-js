@@ -1,4 +1,10 @@
-import { ExecutionContext, DurableContext, BatchItemStatus } from "../../types";
+import {
+  ExecutionContext,
+  DurableContext,
+  BatchItemStatus,
+  DurableExecutionMode,
+} from "../../types";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import {
   BatchResult,
@@ -6,6 +12,7 @@ import {
   BatchResultImpl,
   restoreBatchResult,
 } from "./batch-result";
+import { defaultSerdes } from "../../utils/serdes/serdes";
 
 /**
  * Represents an item to be executed with metadata for deterministic replay
@@ -41,9 +48,197 @@ export type ConcurrentExecutor<TItem, TResult> = (
 ) => Promise<TResult>;
 
 export class ConcurrencyController {
-  constructor(private readonly operationName: string) {}
+  constructor(
+    private readonly operationName: string,
+    private readonly skipNextOperation: () => void,
+  ) {}
+
+  private isChildEntityCompleted(
+    executionContext: ExecutionContext,
+    parentEntityId: string,
+    completedCount: number,
+  ): boolean {
+    const childEntityId = `${parentEntityId}-${completedCount + 1}`;
+    const childStepData = executionContext.getStepData(childEntityId);
+
+    return !!(
+      childStepData &&
+      (childStepData.Status === OperationStatus.SUCCEEDED ||
+        childStepData.Status === OperationStatus.FAILED)
+    );
+  }
 
   async executeItems<T, R>(
+    items: ConcurrentExecutionItem<T>[],
+    executor: ConcurrentExecutor<T, R>,
+    parentContext: DurableContext,
+    config: ConcurrencyConfig<R>,
+    durableExecutionMode: DurableExecutionMode = DurableExecutionMode.ExecutionMode,
+    entityId?: string,
+    executionContext?: ExecutionContext,
+  ): Promise<BatchResult<R>> {
+    // In replay mode, we're reconstructing the result from child contexts
+    if (durableExecutionMode === DurableExecutionMode.ReplaySucceededContext) {
+      log("🔄", `Replay mode: Reconstructing ${this.operationName} result:`, {
+        itemCount: items.length,
+      });
+
+      // Try to get the target count from step data
+      let targetTotalCount: number | undefined;
+      if (entityId && executionContext) {
+        const stepData = executionContext.getStepData(entityId);
+        const summaryPayload = stepData?.ContextDetails?.Result;
+
+        if (summaryPayload) {
+          try {
+            // TODO: Use custom serdes from ConcurrencyConfig when available
+            const parsedSummary = await defaultSerdes.deserialize(
+              summaryPayload,
+              {
+                entityId: entityId,
+                durableExecutionArn: executionContext.durableExecutionArn,
+              },
+            );
+            if (parsedSummary && typeof parsedSummary === "object") {
+              const initialResult = restoreBatchResult<R>(parsedSummary);
+              targetTotalCount = initialResult.totalCount;
+              log("📊", "Found initial execution count:", {
+                targetTotalCount,
+              });
+            }
+          } catch (error) {
+            log("⚠️", "Could not parse initial result summary:", error);
+          }
+        }
+      }
+
+      // If we have target count and required context, use optimized replay; otherwise fallback to concurrent execution
+      if (targetTotalCount !== undefined && entityId && executionContext) {
+        return await this.replayItems(
+          items,
+          executor,
+          parentContext,
+          config,
+          targetTotalCount,
+          executionContext,
+          entityId,
+        );
+      } else {
+        log(
+          "⚠️",
+          "No target count or context found, falling back to concurrent execution",
+        );
+      }
+    }
+
+    // First-time execution or fallback: use normal concurrent execution logic
+    return await this.executeItemsConcurrently(
+      items,
+      executor,
+      parentContext,
+      config,
+    );
+  }
+
+  private async replayItems<T, R>(
+    items: ConcurrentExecutionItem<T>[],
+    executor: ConcurrentExecutor<T, R>,
+    parentContext: DurableContext,
+    config: ConcurrencyConfig<R>,
+    targetTotalCount: number,
+    executionContext: ExecutionContext,
+    parentEntityId: string,
+  ): Promise<BatchResult<R>> {
+    const resultItems: Array<BatchItem<R>> = [];
+
+    log("🔄", `Replaying ${items.length} items sequentially`, {
+      targetTotalCount,
+    });
+
+    let completedCount = 0;
+    let stepCounter = 0;
+
+    // Replay items sequentially until we reach the target count
+    for (const item of items) {
+      // Stop if we've replayed all items that completed in initial execution
+      if (completedCount >= targetTotalCount) {
+        log("✅", "Reached target count, stopping replay", {
+          completedCount,
+          targetTotalCount,
+        });
+        break;
+      }
+
+      // Calculate the child entity ID that runInChildContext will create
+      // It uses the parent's next step ID, which is parentEntityId-{counter}
+      const childEntityId = `${parentEntityId}-${stepCounter + 1}`;
+
+      if (
+        !this.isChildEntityCompleted(
+          executionContext,
+          parentEntityId,
+          stepCounter,
+        )
+      ) {
+        log("⏭️", `Skipping incomplete item:`, {
+          index: item.index,
+          itemId: item.id,
+          childEntityId,
+        });
+        // Increment step counter to maintain consistency
+        this.skipNextOperation();
+        stepCounter++;
+        continue;
+      }
+
+      try {
+        const result = await parentContext.runInChildContext(
+          item.name || item.id,
+          (childContext) => executor(item, childContext),
+          { subType: config.iterationSubType },
+        );
+
+        resultItems.push({
+          result,
+          index: item.index,
+          status: BatchItemStatus.SUCCEEDED,
+        });
+        completedCount++;
+        stepCounter++;
+
+        log("✅", `Replayed ${this.operationName} item:`, {
+          index: item.index,
+          itemId: item.id,
+          completedCount,
+        });
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        resultItems.push({
+          error: err,
+          index: item.index,
+          status: BatchItemStatus.FAILED,
+        });
+        completedCount++;
+        stepCounter++;
+
+        log("❌", `Replay failed for ${this.operationName} item:`, {
+          index: item.index,
+          itemId: item.id,
+          error: err.message,
+          completedCount,
+        });
+      }
+    }
+
+    log("🎉", `${this.operationName} replay completed:`, {
+      completedCount,
+      totalCount: resultItems.length,
+    });
+
+    return new BatchResultImpl(resultItems, "ALL_COMPLETED");
+  }
+
+  private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R>,
     parentContext: DurableContext,
@@ -225,6 +420,7 @@ export class ConcurrencyController {
 export const createConcurrentExecutionHandler = (
   context: ExecutionContext,
   runInChildContext: DurableContext["runInChildContext"],
+  skipNextOperation: () => void,
 ) => {
   return async <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
@@ -281,13 +477,38 @@ export const createConcurrentExecutionHandler = (
     ): Promise<BatchResult<TResult>> => {
       const concurrencyController = new ConcurrencyController(
         "concurrent-execution",
+        skipNextOperation,
       );
+
+      // Access durableExecutionMode from the context - it's set by runInChildContext
+      // based on determineChildReplayMode logic
+      const durableExecutionMode = (
+        executionContext as unknown as {
+          durableExecutionMode: DurableExecutionMode;
+        }
+      ).durableExecutionMode;
+
+      // Get the entity ID (step prefix) from the child context
+      const entityId = (
+        executionContext as unknown as {
+          _stepPrefix?: string;
+        }
+      )._stepPrefix;
+
+      log("🔄", "Concurrent execution mode:", {
+        mode: durableExecutionMode,
+        itemCount: items.length,
+        entityId,
+      });
 
       return await concurrencyController.executeItems(
         items,
         executor,
         executionContext,
         config || {},
+        durableExecutionMode,
+        entityId,
+        context,
       );
     };
 

@@ -99,6 +99,15 @@ class DurableContextImpl implements DurableContext {
       : `${nextCounter}`;
   }
 
+  /**
+   * Skips the next operation by incrementing the step counter.
+   * Used internally by concurrent execution handler during replay to skip incomplete items.
+   * @internal
+   */
+  private skipNextOperation(): void {
+    this._stepCounter++;
+  }
+
   private checkAndUpdateReplayMode(): void {
     if (this.durableExecutionMode === DurableExecutionMode.ReplayMode) {
       const nextStepId = this.getNextStepId();
@@ -375,6 +384,7 @@ class DurableContextImpl implements DurableContext {
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
         this.executionContext,
         this.runInChildContext.bind(this),
+        this.skipNextOperation.bind(this),
       );
       return concurrentExecutionHandler(
         nameOrItems,
