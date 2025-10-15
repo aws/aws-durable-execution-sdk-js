@@ -21,6 +21,7 @@ export {
   Logger,
   LambdaHandler,
   InvokeConfig,
+  JitterStrategy,
 } from "./types";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export {
@@ -35,3 +36,8 @@ export {
   createWaitStrategy,
   WaitStrategyConfig,
 } from "./utils/wait-strategy/wait-strategy-config";
+export {
+  createRetryStrategy,
+  RetryStrategyConfig,
+} from "./utils/retry/retry-config";
+export { retryPresets } from "./utils/retry/retry-presets/retry-presets";

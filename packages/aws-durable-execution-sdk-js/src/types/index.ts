@@ -693,6 +693,20 @@ export enum StepSemantics {
 }
 
 /**
+ * Jitter strategy for retry delays to prevent thundering herd problem
+ * @remarks
+ * Jitter adds randomness to retry delays to spread out retry attempts when multiple operations fail simultaneously
+ */
+export enum JitterStrategy {
+  /** No jitter - use exact calculated delay */
+  NONE = "NONE",
+  /** Full jitter - random delay between 0 and calculated delay */
+  FULL = "FULL",
+  /** Half jitter - random delay between 50% and 100% of calculated delay */
+  HALF = "HALF",
+}
+
+/**
  * Configuration options for step operations
  */
 export interface StepConfig<T> {

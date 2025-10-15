@@ -1,4 +1,4 @@
-import { createRetryStrategy } from ".";
+import { createRetryStrategy, JitterStrategy } from ".";
 
 describe("RetryStrategy", () => {
   describe("createRetryStrategy", () => {
@@ -6,20 +6,20 @@ describe("RetryStrategy", () => {
       const strategy = createRetryStrategy();
       const error = new Error("Test error");
 
-      // First attempt should retry
+      // First attempt should retry with FULL jitter (0 to delay)
       const decision1 = strategy(error, 1);
       expect(decision1.shouldRetry).toBe(true);
       if (decision1.shouldRetry) {
-        expect(decision1.delaySeconds).toBeGreaterThanOrEqual(4); // 5 seconds - 1 second jitter
-        expect(decision1.delaySeconds).toBeLessThanOrEqual(6); // 5 seconds + 1 second jitter
+        expect(decision1.delaySeconds).toBeGreaterThanOrEqual(1); // Min 1 second
+        expect(decision1.delaySeconds).toBeLessThanOrEqual(5); // Max 5 seconds (FULL jitter)
       }
 
       // Second attempt should retry
       const decision2 = strategy(error, 2);
       expect(decision2.shouldRetry).toBe(true);
       if (decision2.shouldRetry) {
-        expect(decision2.delaySeconds).toBeGreaterThanOrEqual(9); // 10 seconds - 1 second jitter
-        expect(decision2.delaySeconds).toBeLessThanOrEqual(11); // 10 seconds + 1 second jitter
+        expect(decision2.delaySeconds).toBeGreaterThanOrEqual(1); // Min 1 second
+        expect(decision2.delaySeconds).toBeLessThanOrEqual(10); // Max 10 seconds (FULL jitter)
       }
 
       // Third attempt should not retry (maxAttempts = 3)
@@ -43,7 +43,7 @@ describe("RetryStrategy", () => {
     it("should respect custom initialDelaySeconds", () => {
       const strategy = createRetryStrategy({
         initialDelaySeconds: 10,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE,
       });
       const error = new Error("Test error");
 
@@ -58,7 +58,7 @@ describe("RetryStrategy", () => {
       const strategy = createRetryStrategy({
         initialDelaySeconds: 5,
         backoffRate: 3,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE,
       });
       const error = new Error("Test error");
 
@@ -82,7 +82,7 @@ describe("RetryStrategy", () => {
         initialDelaySeconds: 100,
         maxDelaySeconds: 150,
         backoffRate: 2,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE,
       });
       const error = new Error("Test error");
 
@@ -101,18 +101,61 @@ describe("RetryStrategy", () => {
       }
     });
 
-    it("should apply jitter correctly", () => {
+    it("should apply FULL jitter correctly", () => {
       const strategy = createRetryStrategy({
         initialDelaySeconds: 10,
-        jitterSeconds: 5,
+        jitter: JitterStrategy.FULL,
       });
       const error = new Error("Test error");
 
       const decision = strategy(error, 1);
       expect(decision.shouldRetry).toBe(true);
       if (decision.shouldRetry) {
-        expect(decision.delaySeconds).toBeGreaterThanOrEqual(5); // 10 - 5
-        expect(decision.delaySeconds).toBeLessThanOrEqual(15); // 10 + 5
+        expect(decision.delaySeconds).toBeGreaterThanOrEqual(1); // Min 1 second
+        expect(decision.delaySeconds).toBeLessThanOrEqual(10); // Max delay
+      }
+    });
+
+    it("should apply HALF jitter correctly", () => {
+      const strategy = createRetryStrategy({
+        initialDelaySeconds: 10,
+        jitter: JitterStrategy.HALF,
+      });
+      const error = new Error("Test error");
+
+      const decision = strategy(error, 1);
+      expect(decision.shouldRetry).toBe(true);
+      if (decision.shouldRetry) {
+        expect(decision.delaySeconds).toBeGreaterThanOrEqual(5); // delay/2
+        expect(decision.delaySeconds).toBeLessThanOrEqual(10); // delay
+      }
+    });
+
+    it("should apply NONE jitter correctly", () => {
+      const strategy = createRetryStrategy({
+        initialDelaySeconds: 10,
+        jitter: JitterStrategy.NONE,
+      });
+      const error = new Error("Test error");
+
+      const decision = strategy(error, 1);
+      expect(decision.shouldRetry).toBe(true);
+      if (decision.shouldRetry) {
+        expect(decision.delaySeconds).toBe(10); // Exact delay
+      }
+    });
+
+    it("should handle invalid jitter strategy by returning delay unchanged", () => {
+      const strategy = createRetryStrategy({
+        initialDelaySeconds: 10,
+        jitter: "INVALID" as any, // Force invalid value
+      });
+      const error = new Error("Test error");
+
+      const decision = strategy(error, 1);
+      expect(decision.shouldRetry).toBe(true);
+      if (decision.shouldRetry) {
+        expect(decision.delaySeconds).toBe(10); // Should return delay unchanged
       }
     });
 
@@ -183,7 +226,7 @@ describe("RetryStrategy", () => {
     it("should ensure minimum delay of 1 second", () => {
       const strategy = createRetryStrategy({
         initialDelaySeconds: 2,
-        jitterSeconds: 3, // This could potentially make delay negative
+        jitter: JitterStrategy.FULL,
       });
       const error = new Error("Test error");
 
@@ -200,7 +243,7 @@ describe("RetryStrategy", () => {
     it("should round delay to whole seconds", () => {
       const strategy = createRetryStrategy({
         initialDelaySeconds: 1.7,
-        jitterSeconds: 0,
+        jitter: JitterStrategy.NONE,
       });
       const error = new Error("Test error");
 
@@ -208,6 +251,24 @@ describe("RetryStrategy", () => {
       expect(decision.shouldRetry).toBe(true);
       if (decision.shouldRetry) {
         expect(decision.delaySeconds).toBe(2); // 1.7 rounded to 2
+      }
+    });
+
+    it("should always return integer delays >= 1", () => {
+      const strategy = createRetryStrategy({
+        initialDelaySeconds: 0.3, // Very small delay
+        jitter: JitterStrategy.FULL,
+      });
+      const error = new Error("Test error");
+
+      // Test multiple times to ensure all random values are integers >= 1
+      for (let i = 0; i < 20; i++) {
+        const decision = strategy(error, 1);
+        expect(decision.shouldRetry).toBe(true);
+        if (decision.shouldRetry) {
+          expect(Number.isInteger(decision.delaySeconds)).toBe(true);
+          expect(decision.delaySeconds).toBeGreaterThanOrEqual(1);
+        }
       }
     });
   });
