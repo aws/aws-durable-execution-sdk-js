@@ -136,8 +136,6 @@ export class TestExecutionOrchestrator {
         throw new Error("Could not get Id for EXECUTION operation");
       }
 
-      this.operationStorage.registerMocks(executionId);
-
       // Start polling for checkpoint data before invoking the handler
       void this.pollForCheckpointData(abortController, executionId);
 

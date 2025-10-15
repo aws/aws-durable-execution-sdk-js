@@ -1,6 +1,4 @@
-import { MockOperation } from "./mock-operation";
 import { IndexedOperations } from "../../common/indexed-operations";
-import { ExecutionId } from "../../../checkpoint-server/utils/tagged-strings";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { DurableOperation } from "../../durable-test-runner";
 import { OperationWaitManager } from "./operation-wait-manager";
@@ -8,7 +6,7 @@ import { OperationStorage } from "../../common/operation-storage";
 import { Event } from "@aws-sdk/client-lambda";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 
-export class LocalOperationStorage extends OperationStorage<MockOperation> {
+export class LocalOperationStorage extends OperationStorage {
   private readonly events: Event[] = [];
 
   constructor(
@@ -28,12 +26,6 @@ export class LocalOperationStorage extends OperationStorage<MockOperation> {
 
   getHistoryEvents(): Event[] {
     return this.events;
-  }
-
-  registerMocks(executionId: ExecutionId) {
-    for (const mockOperation of this.getTrackedOperations()) {
-      mockOperation.registerMocks(executionId);
-    }
   }
 
   /**

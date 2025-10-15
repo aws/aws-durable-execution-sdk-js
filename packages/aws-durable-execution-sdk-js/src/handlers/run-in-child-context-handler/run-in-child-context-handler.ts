@@ -20,7 +20,6 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 
 // Checkpoint size limit in bytes (256KB)
@@ -165,9 +164,7 @@ export const handleCompletedChildContext = async <T>(
       entityId, // parentId
     );
 
-    return await OperationInterceptor.forExecution(
-      context.durableExecutionArn,
-    ).execute(stepName, () => fn(durableChildContext));
+    return await fn(durableChildContext);
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
@@ -233,9 +230,7 @@ export const executeChildContext = async <T>(
 
   try {
     // Execute the child context function
-    const result = await OperationInterceptor.forExecution(
-      context.durableExecutionArn,
-    ).execute(name, () => fn(durableChildContext));
+    const result = await fn(durableChildContext);
 
     // Always checkpoint at finish with adaptive mode
     // Serialize the result for consistency

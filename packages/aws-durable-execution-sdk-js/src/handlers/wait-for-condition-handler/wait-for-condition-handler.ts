@@ -21,7 +21,6 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
@@ -269,9 +268,7 @@ export const executeWaitForCondition = async <T>(
     addRunningOperation(stepId);
     let newState: T;
     try {
-      newState = await OperationInterceptor.forExecution(
-        context.durableExecutionArn,
-      ).execute(name, () => check(currentState, waitForConditionContext));
+      newState = await check(currentState, waitForConditionContext);
     } finally {
       removeRunningOperation(stepId);
     }

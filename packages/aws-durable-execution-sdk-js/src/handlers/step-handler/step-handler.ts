@@ -29,7 +29,6 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
@@ -313,9 +312,7 @@ export const executeStep = async <T>(
     addRunningOperation(stepId);
     let result: T;
     try {
-      result = await OperationInterceptor.forExecution(
-        context.durableExecutionArn,
-      ).execute(name, () => fn(stepContext));
+      result = await fn(stepContext);
     } finally {
       removeRunningOperation(stepId);
     }

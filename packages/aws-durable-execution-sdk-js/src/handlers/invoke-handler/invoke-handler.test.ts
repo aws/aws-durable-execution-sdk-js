@@ -6,12 +6,10 @@ import {
   OperationAction,
 } from "@aws-sdk/client-lambda";
 import { TerminationReason } from "../../termination-manager/types";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 
 // Mock dependencies
 jest.mock("../../utils/checkpoint/checkpoint");
 jest.mock("../../utils/termination-helper/termination-helper");
-jest.mock("../../mocks/operation-interceptor");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
 jest.mock("../../utils/wait-before-continue/wait-before-continue");
@@ -41,7 +39,6 @@ describe("InvokeHandler", () => {
   let mockCreateStepId: jest.Mock;
   let mockHasRunningOperations: jest.Mock;
   let mockCheckpointFn: any;
-  let mockOperationInterceptor: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -69,14 +66,6 @@ describe("InvokeHandler", () => {
       parentId: "parent-123",
       getStepData: jest.fn().mockReturnValue(undefined),
     } as any;
-
-    // Mock OperationInterceptor
-    mockOperationInterceptor = {
-      execute: jest.fn(),
-    };
-    (OperationInterceptor.forExecution as jest.Mock).mockReturnValue(
-      mockOperationInterceptor,
-    );
 
     // Mock serdes functions
     mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
@@ -313,12 +302,6 @@ describe("InvokeHandler", () => {
       mockContext.getStepData = mockGetStepData;
       mockHasRunningOperations.mockReturnValue(false); // No other operations running
 
-      mockOperationInterceptor.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          return await fn();
-        },
-      );
-
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpointFn,
@@ -368,12 +351,6 @@ describe("InvokeHandler", () => {
       mockContext.getStepData = mockGetStepData;
       mockHasRunningOperations.mockReturnValue(false); // No other operations running
 
-      mockOperationInterceptor.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          return await fn();
-        },
-      );
-
       const invokeHandler = createInvokeHandler(
         mockContext,
         mockCheckpointFn,
@@ -408,12 +385,6 @@ describe("InvokeHandler", () => {
 
       mockContext.getStepData = mockGetStepData;
       mockHasRunningOperations.mockReturnValue(false); // No other operations running
-
-      mockOperationInterceptor.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          return await fn();
-        },
-      );
 
       const invokeHandler = createInvokeHandler(
         mockContext,
