@@ -16,10 +16,9 @@ export interface TrackedOperation<Operation extends OperationWithData> {
   };
 }
 
-export class OperationStorage<
-  Operation extends OperationWithData = OperationWithData,
-> {
-  private readonly trackedOperations: TrackedOperation<Operation>[] = [];
+export class OperationStorage {
+  private readonly trackedOperations: TrackedOperation<OperationWithData>[] =
+    [];
 
   constructor(
     private readonly waitManager: OperationWaitManager,
@@ -27,7 +26,9 @@ export class OperationStorage<
     private readonly apiClient: DurableApiClient,
   ) {}
 
-  private populateOperation(trackedOperation: TrackedOperation<Operation>) {
+  private populateOperation(
+    trackedOperation: TrackedOperation<OperationWithData>,
+  ) {
     const strategies = [
       () =>
         trackedOperation.params.id !== undefined
@@ -55,7 +56,7 @@ export class OperationStorage<
     }
   }
 
-  getTrackedOperations(): Operation[] {
+  getTrackedOperations(): OperationWithData[] {
     return this.trackedOperations.map((op) => op.operation);
   }
 
@@ -77,7 +78,7 @@ export class OperationStorage<
     );
   }
 
-  registerOperation(trackedOperation: TrackedOperation<Operation>) {
+  registerOperation(trackedOperation: TrackedOperation<OperationWithData>) {
     this.trackedOperations.push(trackedOperation);
     this.populateOperation(trackedOperation);
   }

@@ -1,12 +1,5 @@
-import {
-  createRunInChildContextHandler,
-  determineChildReplayMode,
-} from "./run-in-child-context-handler";
-import {
-  ExecutionContext,
-  OperationSubType,
-  DurableExecutionMode,
-} from "../../types";
+import { createRunInChildContextHandler } from "./run-in-child-context-handler";
+import { ExecutionContext, OperationSubType } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import {
   createMockCheckpoint,
@@ -18,7 +11,6 @@ import {
   OperationStatus,
   OperationAction,
 } from "@aws-sdk/client-lambda";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 

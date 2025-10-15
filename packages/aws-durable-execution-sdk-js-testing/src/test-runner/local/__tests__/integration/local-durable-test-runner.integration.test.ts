@@ -55,7 +55,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operation for the wait call
+    // Get operation for the wait call
     const waitOperation = runner.getOperation("wait");
 
     const result = await runner.run({ payload: { test: "wait-operation" } });
@@ -69,7 +69,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const completedOperations = result.getOperations();
     expect(completedOperations.length).toEqual(1);
 
-    // Verify MockOperation data can be accessed
+    // Verify operation data can be accessed
     expect(waitOperation.getType()).toBe(OperationType.WAIT);
   });
 
@@ -152,7 +152,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operations for the wait calls
+    // Get operations for the wait calls
     const firstWait = runner.getOperation("wait-1");
     const secondWait = runner.getOperation("wait-2");
 
@@ -167,7 +167,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const operations = result.getOperations();
     expect(operations.length).toEqual(2);
 
-    // Verify MockOperation data for both wait operations
+    // Verify operation data for both wait operations
     expect(firstWait.getWaitDetails()?.waitSeconds).toBe(50);
     expect(firstWait.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
       Date,
@@ -178,7 +178,7 @@ describe("LocalDurableTestRunner Integration", () => {
     );
   });
 
-  it("should handle step operations with MockOperation assertions", async () => {
+  it("should handle step operations with operation assertions", async () => {
     const handler = withDurableFunctions(
       async (event: unknown, context: DurableContext) => {
         const stepResult = await context.step("fetch-user", () => {
@@ -197,7 +197,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operation for the step call
+    // Get operation for the step call
     const fetchUserStep = runner.getOperation("fetch-user");
 
     const result = await runner.run({ payload: { test: "step-operations" } });
@@ -211,7 +211,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const operations = result.getOperations();
     expect(operations.length).toEqual(1);
 
-    // Verify MockOperation data for step operation
+    // Verify operation data for step operation
     expect(fetchUserStep.getStepDetails()).toBeDefined();
   });
 
@@ -289,7 +289,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operation for the parent context
+    // Get operations for the parent context
     const parentContextStep = runner.getOperation("parent-context");
     const waitStep = runner.getOperation("child-wait");
 
@@ -304,7 +304,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const operations = result.getOperations();
     expect(operations.length).toEqual(2);
 
-    // Verify MockOperation data for context operation
+    // Verify operation data for context operation
     expect(parentContextStep.getContextDetails()?.result).toEqual({
       userId: 123,
       name: "John Doe",
@@ -337,7 +337,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operation for the wait call
+    // Get operation for the wait call
     const retriesOperation = runner.getOperation("retries");
 
     const result = await runner.run();
@@ -389,7 +389,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operation for the wait call
+    // Get operation for the wait call
     const retriesOperation = runner.getOperation("retries");
 
     const result = await runner.run();
@@ -441,7 +441,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operation for the parent context
+    // Get operation for the parent context
     const parentContextStep = runner.getOperation("parent-context");
 
     const result = await runner.run({ payload: { test: "step-operations" } });
@@ -494,7 +494,7 @@ describe("LocalDurableTestRunner Integration", () => {
       skipTime: true,
     });
 
-    // Get mock operations for verification
+    // Get operations for verification
     const firstWaitOp = runner.getOperation("wait-invocation-1");
     const stepOp = runner.getOperation("process-data-step");
     const secondWaitOp = runner.getOperation("wait-invocation-2");

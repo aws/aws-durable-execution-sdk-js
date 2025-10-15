@@ -1,5 +1,5 @@
 import { LocalDurableTestRunner } from "../local-durable-test-runner";
-import { MockOperation } from "../operations/mock-operation";
+import { OperationWithData } from "../../common/operations/operation-with-data";
 import { TestExecutionOrchestrator } from "../test-execution-orchestrator";
 import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
@@ -260,15 +260,14 @@ describe("LocalDurableTestRunner", () => {
   });
 
   describe("getOperation methods", () => {
-    it("should create and register mock operation by name", () => {
+    it("should create and register operation by name", () => {
       const runner = new LocalDurableTestRunner<{ success: boolean }>({
         handlerFunction: mockHandlerFunction,
       });
 
       const operation = runner.getOperation("testOp");
 
-      expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation.getMockParameters().name).toBe("testOp");
+      expect(operation).toBeInstanceOf(OperationWithData);
       expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
         operation,
         params: {
@@ -277,16 +276,14 @@ describe("LocalDurableTestRunner", () => {
       });
     });
 
-    it("should create and register mock operation by index", () => {
+    it("should create and register operation by index", () => {
       const runner = new LocalDurableTestRunner<{ success: boolean }>({
         handlerFunction: mockHandlerFunction,
       });
 
       const operation = runner.getOperationByIndex(2);
 
-      expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation.getMockParameters().name).toBeUndefined();
-      expect(operation.getMockParameters().index).toBe(2);
+      expect(operation).toBeInstanceOf(OperationWithData);
       expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
         operation,
         params: {
@@ -295,16 +292,14 @@ describe("LocalDurableTestRunner", () => {
       });
     });
 
-    it("should create and register mock operation by name and index", () => {
+    it("should create and register operation by name and index", () => {
       const runner = new LocalDurableTestRunner<{ success: boolean }>({
         handlerFunction: mockHandlerFunction,
       });
 
       const operation = runner.getOperationByNameAndIndex("testOp", 2);
 
-      expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation.getMockParameters().name).toBe("testOp");
-      expect(operation.getMockParameters().index).toBe(2);
+      expect(operation).toBeInstanceOf(OperationWithData);
       expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
         operation,
         params: {
@@ -314,15 +309,14 @@ describe("LocalDurableTestRunner", () => {
       });
     });
 
-    it("should create and register mock operation by ID", () => {
+    it("should create and register operation by ID", () => {
       const runner = new LocalDurableTestRunner<{ success: boolean }>({
         handlerFunction: mockHandlerFunction,
       });
 
       const operation = runner.getOperationById("op-123");
 
-      expect(operation).toBeInstanceOf(MockOperation);
-      expect(operation.getMockParameters().id).toBe("op-123");
+      expect(operation).toBeInstanceOf(OperationWithData);
       expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
         operation,
         params: {

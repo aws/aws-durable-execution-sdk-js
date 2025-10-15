@@ -13,7 +13,6 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
 export const createInvokeHandler = (
@@ -119,37 +118,35 @@ export const createInvokeHandler = (
         );
       }
 
-      // Execute with potential interception (testing)
-      await OperationInterceptor.forExecution(
+      // Serialize the input payload
+      const serializedPayload = await safeSerialize(
+        config?.payloadSerdes || defaultSerdes,
+        input,
+        stepId,
+        name,
+        context.terminationManager,
+
         context.durableExecutionArn,
-      ).execute(name, async (): Promise<void> => {
-        // Serialize the input payload
-        const serializedPayload = await safeSerialize(
-          config?.payloadSerdes || defaultSerdes,
-          input,
-          stepId,
-          name,
-          context.terminationManager,
+      );
 
-          context.durableExecutionArn,
-        );
-
-        // Create checkpoint for the invoke operation
-        await checkpoint(stepId, {
-          Id: stepId,
-          ParentId: parentId,
-          Action: OperationAction.START,
-          SubType: OperationSubType.CHAINED_INVOKE,
-          Type: OperationType.CHAINED_INVOKE,
-          Name: name,
-          Payload: serializedPayload,
-          ChainedInvokeOptions: {
-            FunctionName: funcId,
-          },
-        });
-
-        log("🚀", `Invoke ${name || funcId} started, re-checking status`);
+      // Create checkpoint for the invoke operation
+      await checkpoint(stepId, {
+        Id: stepId,
+        ParentId: parentId,
+        Action: OperationAction.START,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
+        Name: name,
+        Payload: serializedPayload,
+        ChainedInvokeOptions: {
+          FunctionName: funcId,
+          ...(config?.timeoutSeconds && {
+            TimeoutSeconds: config.timeoutSeconds,
+          }),
+        },
       });
+
+      log("🚀", `Invoke ${name || funcId} started, re-checking status`);
 
       // Continue the loop to re-evaluate status (will hit STARTED case)
       continue;

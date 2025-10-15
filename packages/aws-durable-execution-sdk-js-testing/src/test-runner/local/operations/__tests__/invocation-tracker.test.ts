@@ -4,8 +4,7 @@ import { LocalOperationStorage } from "../local-operation-storage";
 import { createInvocationId } from "../../../../checkpoint-server/utils/tagged-strings";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";
-import { MockOperation } from "../mock-operation";
-import { OperationEvents } from "../../../common/operations/operation-with-data";
+import { OperationEvents, OperationWithData } from "../../../common/operations/operation-with-data";
 import { DurableApiClient } from "../../../common/create-durable-api-client";
 
 describe("InvocationTracker", () => {
@@ -20,12 +19,11 @@ describe("InvocationTracker", () => {
   };
 
   // Helper function to create test operations
-  const createMockOperation = (
+  const createOperation = (
     id: string,
     status: OperationStatus = OperationStatus.SUCCEEDED,
-  ): MockOperation => {
-    const operation = new MockOperation(
-      { id },
+  ): OperationWithData => {
+    const operation = new OperationWithData(
       waitManager,
       indexedOperations,
       durableApiClient,
@@ -85,8 +83,8 @@ describe("InvocationTracker", () => {
       expect(invocationTracker.getInvocations()).toEqual([]);
 
       // Set up operations in storage
-      const op1 = createMockOperation("op1");
-      const op2 = createMockOperation("op2");
+      const op1 = createOperation("op1");
+      const op2 = createOperation("op2");
       jest.spyOn(operationStorage, "getOperations").mockReturnValue([op1, op2]);
 
       // Verify that operation mappings are cleared
@@ -139,7 +137,7 @@ describe("InvocationTracker", () => {
       const operationId = "test-operation";
 
       // Setup an operation in storage
-      const mockOperation = createMockOperation(operationId);
+      const mockOperation = createOperation(operationId);
       jest
         .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
@@ -162,7 +160,7 @@ describe("InvocationTracker", () => {
       const operationId = "shared-operation";
 
       // Setup an operation in storage
-      const mockOperation = createMockOperation(operationId);
+      const mockOperation = createOperation(operationId);
       jest
         .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
@@ -193,8 +191,8 @@ describe("InvocationTracker", () => {
       const operationId2 = "operation-2";
 
       // Setup operations in storage
-      const mockOperation1 = createMockOperation(operationId1);
-      const mockOperation2 = createMockOperation(operationId2);
+      const mockOperation1 = createOperation(operationId1);
+      const mockOperation2 = createOperation(operationId2);
       jest
         .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation1, mockOperation2]);
@@ -219,7 +217,7 @@ describe("InvocationTracker", () => {
       const operationId = "test-operation";
 
       // Setup an operation in storage
-      const mockOperation = createMockOperation(operationId);
+      const mockOperation = createOperation(operationId);
       jest
         .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
@@ -247,9 +245,9 @@ describe("InvocationTracker", () => {
       invocationId2 = createInvocationId("test-invocation-2");
 
       // Create mock operations with different statuses
-      const op1 = createMockOperation("op1", OperationStatus.SUCCEEDED);
-      const op2 = createMockOperation("op2", OperationStatus.FAILED);
-      const op3 = createMockOperation("op3", OperationStatus.SUCCEEDED);
+      const op1 = createOperation("op1", OperationStatus.SUCCEEDED);
+      const op2 = createOperation("op2", OperationStatus.FAILED);
+      const op3 = createOperation("op3", OperationStatus.SUCCEEDED);
 
       jest
         .spyOn(operationStorage, "getOperations")
@@ -326,7 +324,7 @@ describe("InvocationTracker", () => {
 
     it("should handle the case when an operation ID is missing", () => {
       // Create a mock operation without an ID
-      const mockOpWithoutId = createMockOperation("missing-id");
+      const mockOpWithoutId = createOperation("missing-id");
       // Override the getId method to return undefined
       jest.spyOn(mockOpWithoutId, "getId").mockReturnValue(undefined);
 
@@ -352,7 +350,7 @@ describe("InvocationTracker", () => {
       const operationId = "test-operation";
 
       // Setup an operation in storage
-      const mockOperation = createMockOperation(operationId);
+      const mockOperation = createOperation(operationId);
       jest
         .spyOn(operationStorage, "getOperations")
         .mockReturnValue([mockOperation]);
@@ -374,8 +372,8 @@ describe("InvocationTracker", () => {
       const invocationId = createInvocationId("test-invocation");
 
       // Setup operations with different statuses
-      const successOp = createMockOperation("op1", OperationStatus.SUCCEEDED);
-      const failedOp = createMockOperation("op2", OperationStatus.FAILED);
+      const successOp = createOperation("op1", OperationStatus.SUCCEEDED);
+      const failedOp = createOperation("op2", OperationStatus.FAILED);
       jest
         .spyOn(operationStorage, "getOperations")
         .mockReturnValue([successOp, failedOp]);

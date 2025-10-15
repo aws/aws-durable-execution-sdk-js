@@ -8,8 +8,6 @@ import {
 import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
-import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
 export const createWaitHandler = (
@@ -45,13 +43,6 @@ export const createWaitHandler = (
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Wait already completed:", { stepId });
         return;
-      }
-
-      const wouldBeMocked = OperationInterceptor.forExecution(
-        context.durableExecutionArn,
-      ).recordOnly(actualName);
-      if (wouldBeMocked) {
-        throw new CheckpointFailedError("Wait step cannot be mocked");
       }
 
       // Only checkpoint START if we haven't started this wait before

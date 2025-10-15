@@ -10,7 +10,7 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { OperationWaitManager } from "./operations/operation-wait-manager";
-import { MockOperation } from "./operations/mock-operation";
+import { OperationWithData } from "../common/operations/operation-with-data";
 import { TestExecutionOrchestrator } from "./test-execution-orchestrator";
 import { ResultFormatter } from "./result-formatter";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
@@ -53,7 +53,7 @@ export class LocalDurableTestRunnerFactory
  * with a local checkpoint server for development and testing scenarios.
  */
 export class LocalDurableTestRunner<ResultType>
-  implements DurableTestRunner<MockOperation, ResultType>
+  implements DurableTestRunner<OperationWithData, ResultType>
 {
   private operationStorage: LocalOperationStorage;
   private readonly waitManager: OperationWaitManager;
@@ -194,87 +194,73 @@ export class LocalDurableTestRunner<ResultType>
   getOperation<OperationResult>(
     name: string,
     index?: number,
-  ): MockOperation<OperationResult> {
-    const mockOperation = new MockOperation<OperationResult>(
-      {
-        name,
-        index,
-      },
+  ): OperationWithData<OperationResult> {
+    const operation = new OperationWithData<OperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
     );
     this.operationStorage.registerOperation({
-      operation: mockOperation,
+      operation,
       params: {
         name,
         index,
       },
     });
-    return mockOperation;
+    return operation;
   }
 
   getOperationByIndex<OperationResult>(
     index: number,
-  ): MockOperation<OperationResult> {
-    const mockOperation = new MockOperation<OperationResult>(
-      {
-        index,
-      },
+  ): OperationWithData<OperationResult> {
+    const operation = new OperationWithData<OperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
     );
     this.operationStorage.registerOperation({
-      operation: mockOperation,
+      operation,
       params: {
         index,
       },
     });
-    return mockOperation;
+    return operation;
   }
 
   getOperationByNameAndIndex<OperationResult>(
     name: string,
     index: number,
-  ): MockOperation<OperationResult> {
-    const mockOperation = new MockOperation<OperationResult>(
-      {
-        name,
-        index,
-      },
+  ): OperationWithData<OperationResult> {
+    const operation = new OperationWithData<OperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
     );
     this.operationStorage.registerOperation({
-      operation: mockOperation,
+      operation: operation,
       params: {
         name,
         index,
       },
     });
-    return mockOperation;
+    return operation;
   }
 
   getOperationById<OperationResult>(
     id: string,
-  ): MockOperation<OperationResult> {
-    const mockOperation = new MockOperation<OperationResult>(
-      {
-        id,
-      },
+  ): OperationWithData<OperationResult> {
+    const operation = new OperationWithData<OperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
     );
     this.operationStorage.registerOperation({
-      operation: mockOperation,
+      operation,
       params: {
         id,
       },
     });
-    return mockOperation;
+    return operation;
   }
 
   reset() {

@@ -13,11 +13,8 @@ import {
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationType, OperationStatus } from "@aws-sdk/client-lambda";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
-
-jest.mock("../../mocks/operation-interceptor");
 
 describe("WaitForCondition Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -26,7 +23,6 @@ describe("WaitForCondition Handler", () => {
   let createStepId: jest.Mock;
   let waitForConditionHandler: ReturnType<typeof createWaitForConditionHandler>;
   let mockTerminationManager: jest.Mocked<TerminationManager>;
-  let mockExecutionRunner: any;
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -55,14 +51,6 @@ describe("WaitForCondition Handler", () => {
     mockCheckpoint = createMockCheckpoint();
     _mockParentContext = {};
     createStepId = jest.fn().mockReturnValue("step-1");
-
-    mockExecutionRunner = {
-      execute: jest.fn(),
-    };
-
-    (OperationInterceptor.forExecution as jest.Mock).mockReturnValue(
-      mockExecutionRunner,
-    );
 
     const mockLogger = {
       log: jest.fn(),
@@ -95,8 +83,6 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      mockExecutionRunner.execute.mockResolvedValue("ready");
-
       await waitForConditionHandler("test-name", checkFunc, config);
 
       expect(mockCheckpoint).toHaveBeenCalledWith("step-1", {
@@ -118,8 +104,6 @@ describe("WaitForCondition Handler", () => {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
       };
-
-      mockExecutionRunner.execute.mockResolvedValue("ready");
 
       await waitForConditionHandler(checkFunc, config);
 
@@ -254,15 +238,9 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      mockExecutionRunner.execute.mockResolvedValue("ready");
-
       const result = await waitForConditionHandler(checkFunc, config);
 
       expect(result).toBe("ready");
-      expect(mockExecutionRunner.execute).toHaveBeenCalledWith(
-        undefined,
-        expect.any(Function),
-      );
       expect(mockCheckpoint).toHaveBeenCalledWith("step-1", {
         Id: "step-1",
         ParentId: "parent-123",
@@ -286,8 +264,6 @@ describe("WaitForCondition Handler", () => {
         },
         initialState: "initial",
       };
-
-      mockExecutionRunner.execute.mockResolvedValue("not-ready");
 
       const _promise = waitForConditionHandler(checkFunc, config);
 
@@ -339,19 +315,9 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      // Mock the execution to call the check function with the restored state
-      mockExecutionRunner.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          const result = await fn();
-          return result;
-        },
-      );
-
       const result = await waitForConditionHandler(checkFunc, config);
 
       expect(result).toBe("ready");
-      // Verify the execution runner was called
-      expect(mockExecutionRunner.execute).toHaveBeenCalled();
     });
 
     it("should restore state from valid checkpoint data when status is READY", async () => {
@@ -378,19 +344,9 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      // Mock the execution to call the check function with the restored state
-      mockExecutionRunner.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          const result = await fn();
-          return result;
-        },
-      );
-
       const result = await waitForConditionHandler(checkFunc, config);
 
       expect(result).toBe("ready");
-      // Verify the execution runner was called
-      expect(mockExecutionRunner.execute).toHaveBeenCalled();
     });
 
     it("should use initial state when checkpoint data is invalid JSON", async () => {
@@ -417,17 +373,9 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      mockExecutionRunner.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          const result = await fn();
-          return result;
-        },
-      );
-
       const result = await waitForConditionHandler(checkFunc, config);
 
       expect(result).toBe("ready");
-      expect(mockExecutionRunner.execute).toHaveBeenCalled();
     });
 
     it("should use initial state when checkpoint data is missing", async () => {
@@ -454,17 +402,9 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      mockExecutionRunner.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          const result = await fn();
-          return result;
-        },
-      );
-
       const result = await waitForConditionHandler(checkFunc, config);
 
       expect(result).toBe("ready");
-      expect(mockExecutionRunner.execute).toHaveBeenCalled();
     });
 
     it("should default to attempt 1 when system attempt is missing", async () => {
@@ -491,17 +431,9 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      mockExecutionRunner.execute.mockImplementation(
-        async (name: any, fn: any) => {
-          const result = await fn();
-          return result;
-        },
-      );
-
       const result = await waitForConditionHandler(checkFunc, config);
 
       expect(result).toBe("ready");
-      expect(mockExecutionRunner.execute).toHaveBeenCalled();
     });
 
     it("should return never-resolving promise when scheduling retry", async () => {
@@ -512,8 +444,6 @@ describe("WaitForCondition Handler", () => {
         waitStrategy: () => ({ shouldContinue: true, delaySeconds: 30 }),
         initialState: "initial",
       };
-
-      mockExecutionRunner.execute.mockResolvedValue("not-ready");
 
       const promise = waitForConditionHandler(checkFunc, config);
 
@@ -585,8 +515,6 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      mockExecutionRunner.execute.mockRejectedValue(error);
-
       await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
         "Check function failed",
       );
@@ -611,8 +539,6 @@ describe("WaitForCondition Handler", () => {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
       };
-
-      mockExecutionRunner.execute.mockRejectedValue(nonErrorException);
 
       // The original exception is re-thrown, but the checkpoint gets "Unknown error"
       await expect(waitForConditionHandler(checkFunc, config)).rejects.toBe(

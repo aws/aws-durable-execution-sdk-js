@@ -12,7 +12,6 @@ import {
 import { ExecutionContext, OperationSubType } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import { OperationInterceptor } from "../../mocks/operation-interceptor";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 
 // Mock the logger to avoid console output during tests
@@ -136,110 +135,6 @@ describe("Wait Handler", () => {
     expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
       reason: TerminationReason.WAIT_SCHEDULED,
       message: "Operation test-step-id scheduled to wait",
-    });
-  });
-
-  describe("Mock Integration", () => {
-    beforeEach(() => {
-      // Clear mocks before each test
-      OperationInterceptor.clearAll();
-      mockExecutionContext.durableExecutionArn = "test-execution-arn";
-    });
-
-    test("should throw error when trying to mock wait operations", async () => {
-      const mockCallback = jest.fn().mockResolvedValue("mocked-wait");
-
-      // Register a mock for the wait operation
-      OperationInterceptor.forExecution(
-        mockExecutionContext.durableExecutionArn,
-      )
-        .onName("test-wait")
-        .mock(mockCallback);
-
-      // Wait handler should throw an error when mocks are detected
-      await expect(waitHandler("test-wait", 1)).rejects.toThrow(
-        "Wait step cannot be mocked",
-      );
-
-      // Mock should not have been called
-      expect(mockCallback).not.toHaveBeenCalled();
-      // Checkpoint should not have been called due to early error
-      expect(mockCheckpoint).not.toHaveBeenCalled();
-    });
-
-    test("should throw error for index-based mocks on wait operations", async () => {
-      const mockCallback = jest.fn().mockResolvedValue("mocked-wait");
-
-      // Register an index-based mock (first operation = index 0)
-      OperationInterceptor.forExecution(
-        mockExecutionContext.durableExecutionArn,
-      )
-        .onIndex(0)
-        .mock(mockCallback);
-
-      // Wait handler should throw an error when mocks are detected
-      await expect(waitHandler(1)).rejects.toThrow(
-        "Wait step cannot be mocked",
-      );
-
-      // Mock should not have been called
-      expect(mockCallback).not.toHaveBeenCalled();
-    });
-
-    test("should prevent mocking on all wait operations", async () => {
-      const mockCallback1 = jest.fn().mockResolvedValue("wait-1");
-      const mockCallback2 = jest.fn().mockResolvedValue("wait-2");
-
-      // Register mocks for different wait operations
-      OperationInterceptor.forExecution(
-        mockExecutionContext.durableExecutionArn,
-      )
-        .onName("wait-1")
-        .mock(mockCallback1);
-
-      OperationInterceptor.forExecution(
-        mockExecutionContext.durableExecutionArn,
-      )
-        .onName("wait-2")
-        .mock(mockCallback2);
-
-      // Both should throw errors
-      await expect(waitHandler("wait-1", 500)).rejects.toThrow(
-        "Wait step cannot be mocked",
-      );
-
-      await expect(waitHandler("wait-2", 1)).rejects.toThrow(
-        "Wait step cannot be mocked",
-      );
-
-      // No mocks should have been called
-      expect(mockCallback1).not.toHaveBeenCalled();
-      expect(mockCallback2).not.toHaveBeenCalled();
-    });
-
-    test("should skip already completed wait operations regardless of mocks", async () => {
-      const mockCallback = jest.fn().mockResolvedValue("mocked-wait");
-
-      // Register a mock
-      OperationInterceptor.forExecution(
-        mockExecutionContext.durableExecutionArn,
-      )
-        .onName("completed-wait")
-        .mock(mockCallback);
-
-      // Set up a wait that was already completed
-      const stepData = mockExecutionContext._stepData as any;
-      stepData[hashId("test-step-id")] = {
-        Id: "test-step-id",
-        Status: OperationStatus.SUCCEEDED,
-      } as Operation;
-
-      await waitHandler("completed-wait", 1);
-
-      // Should skip execution entirely (no mock check occurs for completed operations)
-      expect(mockCheckpoint).not.toHaveBeenCalled();
-      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
-      expect(mockCallback).not.toHaveBeenCalled();
     });
   });
 
