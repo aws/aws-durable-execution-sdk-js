@@ -8,6 +8,9 @@
   "engines": {
     "node": ">=20"
   },
+  "bin": {
+    "run-durable": "./dist/cli/run-durable.js"
+  },
   "scripts": {
     "clean": "rm -rf dist dist-cjs node_modules",
     "build": "concurrently npm:build:esm npm:build:cjs && npm run build:types",
@@ -17,7 +20,8 @@
     "prepublishOnly": "npm run build && npm run test",
     "lint": "eslint",
     "pretest": "npm run lint",
-    "test": "jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}"
+    "test": "jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
+    "run-durable": "tsx src/cli/run-durable.ts"
   },
   "exports": {
     ".": {

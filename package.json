@@ -13,7 +13,8 @@
     "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing && npm run build -w packages/aws-durable-execution-sdk-js-examples && npm run build -w packages/eslint-plugin-durable-functions",
     "postpublish": "git restore .",
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "run-durable": "ORIGINAL_CWD=$PWD npm run run-durable -w packages/aws-durable-execution-sdk-js-testing --"
   },
   "repository": {
     "type": "git",
