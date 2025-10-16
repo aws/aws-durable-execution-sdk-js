@@ -26,6 +26,7 @@ class CheckpointHandler {
     reject: (error: Error) => void;
   }> = [];
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
+  private isTerminating = false;
 
   constructor(
     private context: ExecutionContext,
@@ -34,7 +35,17 @@ class CheckpointHandler {
     this.currentTaskToken = initialTaskToken;
   }
 
+  setTerminating(): void {
+    this.isTerminating = true;
+    log("🛑", "Checkpoint handler marked as terminating");
+  }
+
   async forceCheckpoint(): Promise<void> {
+    if (this.isTerminating) {
+      log("⚠️", "Force checkpoint skipped - termination in progress");
+      return Promise.resolve();
+    }
+
     return new Promise<void>((resolve, reject) => {
       this.forceCheckpointPromises.push({ resolve, reject });
 
@@ -52,6 +63,11 @@ class CheckpointHandler {
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<void> {
+    if (this.isTerminating) {
+      log("⚠️", "Checkpoint skipped - termination in progress:", { stepId });
+      return Promise.resolve();
+    }
+
     return new Promise<void>((resolve, reject) => {
       // Check if any ancestor is finished to maintain deterministic replay.
       // Checkpointing operations whose ancestors have already completed (SUCCEEDED or FAILED)
@@ -334,6 +350,7 @@ export const createCheckpoint = (
 ): {
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;
+  setTerminating(): void;
 } => {
   // Return existing handler if it exists, otherwise create new one
   if (!singletonCheckpointHandler) {
@@ -351,11 +368,21 @@ export const createCheckpoint = (
     return await singletonCheckpointHandler!.forceCheckpoint();
   };
 
+  checkpoint.setTerminating = (): void => {
+    singletonCheckpointHandler!.setTerminating();
+  };
+
   return checkpoint;
 };
 
 export const deleteCheckpoint = (): void => {
   singletonCheckpointHandler = null;
+};
+
+export const setCheckpointTerminating = (): void => {
+  if (singletonCheckpointHandler) {
+    singletonCheckpointHandler.setTerminating();
+  }
 };
 
 // Export the CheckpointHandler class for testing purposes

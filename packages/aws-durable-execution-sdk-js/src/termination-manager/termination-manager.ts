@@ -18,6 +18,7 @@ import {
   TerminationResponse,
   TerminationReason,
 } from "./types";
+import { setCheckpointTerminating } from "../utils/checkpoint/checkpoint";
 
 export class TerminationManager extends EventEmitter {
   private isTerminated = false;
@@ -37,6 +38,10 @@ export class TerminationManager extends EventEmitter {
     if (this.isTerminated) return;
 
     this.isTerminated = true;
+
+    // Set checkpoint termination flag before any other termination logic
+    setCheckpointTerminating();
+
     this.terminationDetails = {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,
       message: options.message ?? "Operation terminated",
