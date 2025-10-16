@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 
 import { Context } from "aws-lambda";
-import { withDurableFunctions } from "./with-durable-functions";
+import { withDurableExecution } from "./with-durable-execution";
 import { resolve } from "path";
 import { DurableExecutionInvocationInput } from "./types";
 
@@ -24,7 +24,7 @@ async function runHandler(
     }
 
     // Wrap the handler with durableFunctions
-    const wrappedHandler = withDurableFunctions(handler);
+    const wrappedHandler = withDurableExecution(handler);
 
     // Create test event
     const event = lambdaRequestJson

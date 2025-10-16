@@ -6,7 +6,7 @@ import {
 import {
   DurableExecutionInvocationInput,
   LambdaHandler,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { OperationWaitManager } from "./operations/operation-wait-manager";
@@ -30,7 +30,7 @@ import {
 import { getDurableExecutionsClient } from "./api-client/durable-executions-client";
 
 export type LocalTestRunnerHandlerFunction = ReturnType<
-  typeof withDurableFunctions
+  typeof withDurableExecution
 >;
 
 export type { LocalDurableTestRunnerParameters };
@@ -155,20 +155,20 @@ export class LocalDurableTestRunner<ResultType>
    * Registers a durable function handler that can be invoked during durable execution testing.
    *
    * @param functionName - The name/ARN of the function that will be used in context.invoke() calls
-   * @param durableHandler - The durable function handler created with withDurableFunctions
+   * @param durableHandler - The durable function handler created with withDurableExecution
    * @returns This LocalDurableTestRunner instance for method chaining
    *
    * @example
    * ```typescript
    * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';
-   * import { withDurableFunctions } from '@aws/durable-execution-sdk-js';
+   * import { withDurableExecution } from '@aws/durable-execution-sdk-js';
    *
    * const testRunner = new LocalDurableTestRunner({
    *   handlerFunction: mainHandler
    * });
    *
    * // Register a durable function
-   * const processWorkflow = withDurableFunctions(async (input, context) => {
+   * const processWorkflow = withDurableExecution(async (input, context) => {
    *   const step1 = await context.step('validate', () => validate(input));
    *   const step2 = await context.step('process', () => process(step1));
    *   return step2;

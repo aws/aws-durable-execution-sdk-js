@@ -1,4 +1,4 @@
-import { withDurableFunctions } from "@aws/durable-execution-sdk-js";
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
@@ -6,7 +6,7 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe("LocalDurableTestRunner Invoke operations integration", () => {
   it("should invoke a function with no input and return the result", async () => {
-    const handler = withDurableFunctions(async (_, ctx) => {
+    const handler = withDurableExecution(async (_, ctx) => {
       const result = await ctx.invoke(
         "durableOperation",
         "myDurableFunctionArn",
@@ -28,7 +28,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
 
     runner.registerDurableFunction(
       "myDurableFunctionArn",
-      withDurableFunctions(async ({ durableInput }, ctx) => {
+      withDurableExecution(async ({ durableInput }, ctx) => {
         const stepResult = await ctx.step("hello world", () => {
           return Promise.resolve("durable test result");
         });
@@ -118,7 +118,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
 
   // TODO: handling errors for callback and checkpoint updates
   it.skip("should fail execution if invoking a function that does not exist", async () => {
-    const handler = withDurableFunctions(async (_, ctx) => {
+    const handler = withDurableExecution(async (_, ctx) => {
       await ctx.invoke("durableOperation", "nonExistentFunction", {
         durableInput: "bar",
       });
@@ -131,7 +131,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
 
     runner.registerDurableFunction(
       "myFunctionArn",
-      withDurableFunctions(async ({ nonDurableInput }) => {
+      withDurableExecution(async ({ nonDurableInput }) => {
         return Promise.resolve({
           type: "non-durable",
           input: nonDurableInput,

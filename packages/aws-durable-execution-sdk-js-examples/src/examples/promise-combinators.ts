@@ -1,6 +1,6 @@
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
 interface PromiseCombinatorsInput {
@@ -15,7 +15,7 @@ interface PromiseCombinatorsInput {
  * - context.promise.any: Get the first successful promise
  *
  */
-export const handler = withDurableFunctions(
+export const handler = withDurableExecution(
   async (event: PromiseCombinatorsInput, context: DurableContext) => {
     console.log("Starting promise combinators example with event:", event);
 

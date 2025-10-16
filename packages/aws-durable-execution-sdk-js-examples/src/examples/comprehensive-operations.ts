@@ -1,6 +1,6 @@
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
 interface ComprehensiveExampleInput {
@@ -14,7 +14,7 @@ interface ComprehensiveExampleInput {
  * - ctx.map: Map operation with multiple iterations
  * - ctx.parallel: Parallel execution of multiple branches
  */
-export const handler = withDurableFunctions(
+export const handler = withDurableExecution(
   async (event: ComprehensiveExampleInput, context: DurableContext) => {
     console.log("Starting comprehensive operations example with event:", event);
 

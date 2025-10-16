@@ -1,8 +1,8 @@
 import { loggerExample } from "../logger-example";
-import { withDurableFunctions } from "@aws/durable-execution-sdk-js";
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 
-const handler = withDurableFunctions(loggerExample);
+const handler = withDurableExecution(loggerExample);
 
 describe("logger-example test (local)", () => {
   beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());

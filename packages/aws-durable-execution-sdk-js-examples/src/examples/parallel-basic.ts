@@ -1,9 +1,9 @@
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
-export const handler = withDurableFunctions(
+export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     const results = await context.parallel(
       "parallel",

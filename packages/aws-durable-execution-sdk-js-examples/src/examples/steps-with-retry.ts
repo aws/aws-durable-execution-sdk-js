@@ -1,6 +1,6 @@
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
 
@@ -27,7 +27,7 @@ interface HandlerInput {
   name: string;
 }
 
-export const handler = withDurableFunctions(
+export const handler = withDurableExecution(
   async (event: HandlerInput, context: DurableContext) => {
     let item;
     try {

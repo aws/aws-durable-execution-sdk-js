@@ -1,13 +1,13 @@
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
 const mySubmitterFunction = async (callbackId: string): Promise<void> => {
   console.log(`Calling my external system with callback id: ${callbackId}`);
 };
 
-export const handler = withDurableFunctions(
+export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     console.log("Hello world before callback!");
     const result = await context.waitForCallback(

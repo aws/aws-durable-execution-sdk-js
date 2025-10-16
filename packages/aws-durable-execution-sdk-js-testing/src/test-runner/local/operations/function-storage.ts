@@ -55,7 +55,7 @@ export class FunctionStorage {
    * Durable functions are executed with their own LocalDurableTestRunner instance.
    *
    * @param functionName - The name/ARN of the function to register
-   * @param durableHandler - The durable function handler created with withDurableFunctions
+   * @param durableHandler - The durable function handler created with withDurableExecution
    */
   registerDurableFunction(
     functionName: string,
