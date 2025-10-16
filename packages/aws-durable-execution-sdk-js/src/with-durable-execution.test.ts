@@ -1,4 +1,4 @@
-import { withDurableFunctions } from "./with-durable-functions";
+import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { CheckpointFailedError } from "./errors/checkpoint-errors/checkpoint-errors";
@@ -29,7 +29,7 @@ jest.mock("./utils/logger/logger", () => ({
 const mockCheckpointToken = "test-checkpoint-token";
 const mockDurableExecutionArn = "test-durable-execution-arn";
 
-describe("withDurableFunctions", () => {
+describe("withDurableExecution", () => {
   // Setup common test variables
   const mockEvent: DurableExecutionInvocationInput = {
     CheckpointToken: mockCheckpointToken,
@@ -91,7 +91,7 @@ describe("withDurableFunctions", () => {
     ); // Never resolves
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
     // Verify
@@ -114,7 +114,7 @@ describe("withDurableFunctions", () => {
     ); // Never resolves
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
     // Verify
@@ -137,7 +137,7 @@ describe("withDurableFunctions", () => {
     ); // Never resolves
 
     // Execute & Verify
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
       CheckpointFailedError,
     );
@@ -156,7 +156,7 @@ describe("withDurableFunctions", () => {
     });
 
     // Execute & Verify
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
       CheckpointFailedError,
     );
@@ -175,7 +175,7 @@ describe("withDurableFunctions", () => {
     });
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
     // Verify
@@ -218,7 +218,7 @@ describe("withDurableFunctions", () => {
     });
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     await wrappedHandler(mockEvent, mockContext);
 
     // Verify setTimeout was called
@@ -248,7 +248,7 @@ describe("withDurableFunctions", () => {
     );
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
     // Verify
@@ -266,7 +266,7 @@ describe("withDurableFunctions", () => {
     );
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
     // Verify - should use fallback "undefined" string
@@ -288,7 +288,7 @@ describe("withDurableFunctions", () => {
     );
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
     // Verify
@@ -328,7 +328,7 @@ describe("withDurableFunctions", () => {
     );
 
     // Execute & Verify
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
       CheckpointFailedError,
     );
@@ -366,7 +366,7 @@ describe("withDurableFunctions", () => {
     );
 
     // Execute & Verify
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
       CheckpointFailedError,
     );
@@ -393,7 +393,7 @@ describe("withDurableFunctions", () => {
     ); // Never resolves
 
     // Execute & Verify
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
       SerializationFailedError,
     );
@@ -419,7 +419,7 @@ describe("withDurableFunctions", () => {
     ); // Never resolves
 
     // Execute & Verify
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
       CustomInvocationError,
     );
@@ -445,7 +445,7 @@ describe("withDurableFunctions", () => {
     ); // Never resolves
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
     // Verify - UnrecoverableExecutionError should be returned as failed invocation, not thrown
@@ -468,7 +468,7 @@ describe("withDurableFunctions", () => {
     ); // Never resolves
 
     // Execute
-    const wrappedHandler = withDurableFunctions(mockHandler);
+    const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
     expect(deleteCheckpoint).toHaveBeenCalledTimes(1);
 

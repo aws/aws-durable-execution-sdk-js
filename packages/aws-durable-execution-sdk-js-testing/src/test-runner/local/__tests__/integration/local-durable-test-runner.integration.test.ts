@@ -1,7 +1,7 @@
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 
@@ -22,7 +22,7 @@ describe("LocalDurableTestRunner Integration", () => {
   it("should complete execution with no environment variables set", async () => {
     process.env = {};
 
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const result = await context.step(() => Promise.resolve("completed"));
         return { success: true, step: result };
@@ -43,7 +43,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should complete execution with wait operations", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         await context.wait("wait", 100);
         return { success: true, step: "completed" };
@@ -74,7 +74,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should handle handler errors gracefully", async () => {
-    const handler = withDurableFunctions(() => {
+    const handler = withDurableExecution(() => {
       throw new Error("Intentional handler failure");
     });
 
@@ -98,7 +98,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should execute simple handler without opAerations", async () => {
-    const handler = withDurableFunctions((event: unknown) =>
+    const handler = withDurableExecution((event: unknown) =>
       Promise.resolve({
         received: JSON.stringify(event),
         timestamp: Date.now(),
@@ -135,7 +135,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should handle multiple wait operations", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         await context.wait("wait-1", 50);
         await context.wait("wait-2", 50);
@@ -179,7 +179,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should handle step operations with operation assertions", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const stepResult = await context.step("fetch-user", () => {
           return Promise.resolve({ userId: 123, name: "John Doe" });
@@ -216,7 +216,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should handle step operations with undefined result after replay", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         await context.step("fetch-user", () => Promise.resolve(undefined));
 
@@ -241,7 +241,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should handle step operations when no replay occurs", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         await context.step("fetch-user-1", () => Promise.resolve("user-1"));
         await context.step("fetch-user-2", () => Promise.resolve("user-2"));
@@ -266,7 +266,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should handle child context operations with checkpoints", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const stepResult = await context.runInChildContext(
           "parent-context",
@@ -318,7 +318,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should handle steps with retry and failure", async () => {
-    const handler = withDurableFunctions(async (_, context: DurableContext) => {
+    const handler = withDurableExecution(async (_, context: DurableContext) => {
       await context.step(
         "retries",
         () => Promise.reject(new Error("There was an error")),
@@ -365,7 +365,7 @@ describe("LocalDurableTestRunner Integration", () => {
 
   it("should handle steps with retry and success", async () => {
     let i = 0;
-    const handler = withDurableFunctions(async (_, context: DurableContext) => {
+    const handler = withDurableExecution(async (_, context: DurableContext) => {
       await context.step(
         "retries",
         () => {
@@ -410,7 +410,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should get child operations from nested child context", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const stepResult = await context.runInChildContext(
           "parent-context",
@@ -468,7 +468,7 @@ describe("LocalDurableTestRunner Integration", () => {
   it("should track operations across multiple invocations", async () => {
     // This test creates a workflow with multiple wait operations
     // which cause separate invocations, and verifies that invocation tracking works
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         // First wait operation - this will run in invocation index 0
         await context.wait("wait-invocation-1", 1);
@@ -652,7 +652,7 @@ describe("LocalDurableTestRunner Integration", () => {
   it.skip("should prevent scheduled function interference in parallel wait scenario", async () => {
     // This test creates a scenario where multiple wait operations could create
     // scheduled functions that fire while invocations are still active.
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         // Use parallel to create multiple wait operations that schedule functions concurrently
         const results = await context.parallel([

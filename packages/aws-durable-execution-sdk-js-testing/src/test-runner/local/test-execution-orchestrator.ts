@@ -4,7 +4,7 @@ import {
   OperationStatus,
 } from "@aws-sdk/client-lambda";
 import {
-  withDurableFunctions,
+  withDurableExecution,
   InvocationStatus,
 } from "@aws/durable-execution-sdk-js";
 import { InvocationResult } from "../../checkpoint-server/storage/execution-manager";
@@ -44,7 +44,7 @@ export class TestExecutionOrchestrator {
   private invocationTracker: InvocationTracker;
 
   constructor(
-    private handlerFunction: ReturnType<typeof withDurableFunctions>,
+    private handlerFunction: ReturnType<typeof withDurableExecution>,
     private operationStorage: LocalOperationStorage,
     private readonly checkpointApi: CheckpointApiClient,
     private readonly scheduler: Scheduler,

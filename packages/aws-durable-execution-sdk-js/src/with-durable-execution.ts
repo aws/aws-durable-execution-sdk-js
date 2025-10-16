@@ -183,7 +183,7 @@ async function runHandler<Input, Output>(
   }
 }
 
-export const withDurableFunctions = <Input, Output>(
+export const withDurableExecution = <Input, Output>(
   handler: DurableHandler<Input, Output>,
 ): LambdaHandler<DurableExecutionInvocationInput> => {
   return async (
@@ -208,3 +208,8 @@ export const withDurableFunctions = <Input, Output>(
     }
   };
 };
+
+/**
+ * @deprecated Use `withDurableExecution` instead. This alias will be removed in a future version.
+ */
+export const withDurableFunctions = withDurableExecution;

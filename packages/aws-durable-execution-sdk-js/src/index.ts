@@ -1,4 +1,4 @@
-export * from "./with-durable-functions";
+export * from "./with-durable-execution";
 export {
   DurableContext,
   StepConfig,

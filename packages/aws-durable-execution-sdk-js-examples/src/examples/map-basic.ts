@@ -1,9 +1,9 @@
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
-export const handler = withDurableFunctions(
+export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     const items = [1, 2, 3, 4, 5];
 

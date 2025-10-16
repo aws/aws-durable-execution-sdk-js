@@ -1,7 +1,7 @@
 import { Operation } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
 import {
-  withDurableFunctions,
+  withDurableExecution,
   DurableExecutionInvocationOutput,
 } from "@aws/durable-execution-sdk-js";
 import { randomUUID } from "node:crypto";
@@ -55,7 +55,7 @@ export class InvokeHandler {
    * @returns Promise resolving to the handler's output
    */
   async invoke(
-    handler: ReturnType<typeof withDurableFunctions>,
+    handler: ReturnType<typeof withDurableExecution>,
     parameters: HandlerParameters,
   ): Promise<DurableExecutionInvocationOutput> {
     const invocationEvent = this.buildInvocationEvent(parameters);

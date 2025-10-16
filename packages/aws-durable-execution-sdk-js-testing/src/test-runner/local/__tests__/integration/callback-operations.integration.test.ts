@@ -2,7 +2,7 @@ import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import { WaitingOperationStatus } from "../../../durable-test-runner";
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { OperationType } from "@aws-sdk/client-lambda";
 
@@ -15,7 +15,7 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
  */
 describe("Callback Operations Integration", () => {
   it("should handle callback operations with success completion", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         // Create callback - returns [promise, callbackId]
         const [callbackPromise, callbackId] = await context.createCallback(
@@ -77,7 +77,7 @@ describe("Callback Operations Integration", () => {
   });
 
   it("should handle callback operations with failure", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         try {
           const [callbackPromise] = await context.createCallback(
@@ -131,7 +131,7 @@ describe("Callback Operations Integration", () => {
 
   // todo: should use time skipping instead of real timers to reduce the length of this test
   it("should handle callback heartbeats", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
@@ -179,7 +179,7 @@ describe("Callback Operations Integration", () => {
   });
 
   it("should time out if there are no callback heartbeats", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
@@ -207,7 +207,7 @@ describe("Callback Operations Integration", () => {
   });
 
   it("should time out if callback times out", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
@@ -235,7 +235,7 @@ describe("Callback Operations Integration", () => {
   });
 
   it("should handle multiple concurrent callback operations", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         // Start multiple callbacks concurrently
         const [promise1] = await context.createCallback("api-call-1", {
@@ -315,7 +315,7 @@ describe("Callback Operations Integration", () => {
   });
 
   it("should handle callback operations mixed with other operation types", async () => {
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         // Mix callback with step and wait operations
         await context.wait("initial-wait", 100);
@@ -410,7 +410,7 @@ describe("Callback Operations Integration", () => {
       },
     };
 
-    const handler = withDurableFunctions(
+    const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         const [callbackPromise] = await context.createCallback<CustomData>(
           "custom-serdes-callback",

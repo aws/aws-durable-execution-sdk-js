@@ -42,4 +42,4 @@ The CLI will:
 ## Requirements
 
 - The file must export a `handler` or `default` export
-- The handler must be wrapped with `withDurableFunctions()`
+- The handler must be wrapped with `withDurableExecution()`

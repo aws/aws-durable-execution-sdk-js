@@ -11,10 +11,10 @@ Create your example in `src/examples/your-example.ts`:
 ```typescript
 import {
   DurableContext,
-  withDurableFunctions,
+  withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 
-export const handler = withDurableFunctions(
+export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     // Your durable function logic here
     const result = await context.step(async () => {
