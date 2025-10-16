@@ -3,7 +3,6 @@ import {
   OperationType,
   OperationUpdate,
 } from "@aws-sdk/client-lambda";
-import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationSubType, ExecutionContext } from "../../types";
@@ -379,18 +378,18 @@ describe("CheckpointHandler", () => {
   });
 
   describe("error handling", () => {
-    it("should reject all promises in batch when checkpoint fails", async () => {
+    it("should terminate execution when checkpoint fails", async () => {
       const error = new Error("Checkpoint API failed");
       mockState.checkpoint.mockRejectedValueOnce(error);
 
-      const promise = checkpointHandler.checkpoint("step-1", {
+      checkpointHandler.checkpoint("step-1", {
         Action: OperationAction.START,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
       });
 
-      // Promise should reject with CheckpointFailedError
-      await expect(promise).rejects.toThrow(CheckpointFailedError);
+      // Wait for async processing
+      await new Promise((resolve) => setImmediate(resolve));
 
       // Should terminate execution
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
@@ -409,13 +408,14 @@ describe("CheckpointHandler", () => {
         CheckpointToken: mockNewTaskToken,
       });
 
-      const firstPromise = checkpointHandler.checkpoint("step-1", {
+      checkpointHandler.checkpoint("step-1", {
         Action: OperationAction.START,
         SubType: OperationSubType.STEP,
         Type: OperationType.STEP,
       });
 
-      await expect(firstPromise).rejects.toThrow(CheckpointFailedError);
+      // Wait for first batch to fail
+      await new Promise((resolve) => setImmediate(resolve));
 
       // Add second checkpoint after first fails
       const secondPromise = checkpointHandler.checkpoint("step-2", {
@@ -429,7 +429,7 @@ describe("CheckpointHandler", () => {
       expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
     });
 
-    it("should include original error message in CheckpointFailedError", async () => {
+    it("should include original error message when terminating", async () => {
       // Setup
       const originalError = new Error("Specific checkpoint error message");
       mockState.checkpoint.mockRejectedValue(originalError);
@@ -439,18 +439,16 @@ describe("CheckpointHandler", () => {
       };
 
       // Execute
-      const promise = checkpointHandler.checkpoint("test-step", checkpointData);
+      checkpointHandler.checkpoint("test-step", checkpointData);
 
-      try {
-        await promise;
-        fail("Expected checkpoint to throw an error");
-      } catch (error) {
-        // Verify
-        expect(error).toBeInstanceOf(CheckpointFailedError);
-        expect((error as Error).message).toBe(
-          "[Unrecoverable Invocation] Checkpoint batch failed: Specific checkpoint error message",
-        );
-      }
+      // Wait for async processing
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Verify termination was called with correct message
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.CHECKPOINT_FAILED,
+        message: "Checkpoint batch failed: Specific checkpoint error message",
+      });
     });
 
     it("should handle non-Error objects thrown during checkpoint", async () => {
@@ -462,18 +460,16 @@ describe("CheckpointHandler", () => {
       };
 
       // Execute
-      const promise = checkpointHandler.checkpoint("test-step", checkpointData);
+      checkpointHandler.checkpoint("test-step", checkpointData);
 
-      try {
-        await promise;
-        fail("Expected checkpoint to throw an error");
-      } catch (error) {
-        // Verify
-        expect(error).toBeInstanceOf(CheckpointFailedError);
-        expect((error as Error).message).toBe(
-          "[Unrecoverable Invocation] Checkpoint batch failed: String error",
-        );
-      }
+      // Wait for async processing
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Verify termination was called with correct message
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.CHECKPOINT_FAILED,
+        message: "Checkpoint batch failed: String error",
+      });
     });
   });
 
@@ -774,12 +770,16 @@ describe("deleteCheckpointHandler", () => {
       });
     });
 
-    it("should reject force checkpoint promises when checkpoint fails", async () => {
+    it("should terminate execution when force checkpoint fails", async () => {
       const checkpoint = createCheckpoint(mockContext1, "test-token");
       const error = new Error("Checkpoint failed");
       mockState1.checkpoint.mockRejectedValue(error);
 
-      await expect(checkpoint.force()).rejects.toThrow(CheckpointFailedError);
+      checkpoint.force();
+
+      // Wait for async processing
+      await new Promise((resolve) => setImmediate(resolve));
+
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.CHECKPOINT_FAILED,
         message: "Checkpoint batch failed: Checkpoint failed",

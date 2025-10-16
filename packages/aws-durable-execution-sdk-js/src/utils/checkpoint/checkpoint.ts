@@ -6,7 +6,6 @@ import {
 } from "@aws-sdk/client-lambda";
 import { ExecutionContext } from "../../types";
 import { log } from "../logger/logger";
-import { CheckpointFailedError } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";
 
@@ -219,22 +218,9 @@ class CheckpointHandler {
       // Preserve the original error details
       const originalError =
         error instanceof Error ? error : new Error(String(error));
-      const checkpointError = new CheckpointFailedError(
-        `Checkpoint batch failed: ${originalError.message}`,
-        originalError,
-      );
-
-      batch.forEach((item) => {
-        item.reject(checkpointError);
-      });
-
-      // Reject ALL force promises (including ones added during processing)
-      const forcePromises = this.forceCheckpointPromises.splice(0);
-      forcePromises.forEach((promise) => {
-        promise.reject(checkpointError);
-      });
 
       // Terminate execution on checkpoint failure with detailed message
+      // No need to reject individual promises - termination will handle cleanup
       this.context.terminationManager.terminate({
         reason: TerminationReason.CHECKPOINT_FAILED,
         message: `Checkpoint batch failed: ${originalError.message}`,
