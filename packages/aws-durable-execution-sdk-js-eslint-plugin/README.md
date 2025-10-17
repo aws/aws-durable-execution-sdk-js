@@ -1,11 +1,11 @@
-# @amzn/lambda-durable-functions-eslint-js
+# @aws/durable-execution-sdk-js-eslint-plugin
 
 ESLint plugin for AWS Lambda Durable Functions best practices.
 
 ## Installation
 
 ```bash
-npm install --save-dev @amzn/lambda-durable-functions-eslint-js
+npm install --save-dev @aws/durable-execution-sdk-js-eslint-plugin
 ```
 
 ## Usage
@@ -14,9 +14,9 @@ Add the plugin to your ESLint configuration:
 
 ```json
 {
-  "plugins": ["@amzn/lambda-durable-functions-eslint-js"],
+  "plugins": ["@aws/durable-execution-sdk-js-eslint-plugin"],
   "rules": {
-    "@amzn/lambda-durable-functions-eslint-js/no-nested-durable-operations": "error"
+    "@aws/durable-execution-sdk-js-eslint-plugin/no-nested-durable-operations": "error"
   }
 }
 ```
@@ -25,7 +25,7 @@ Or use the recommended configuration:
 
 ```json
 {
-  "extends": ["plugin:@amzn/lambda-durable-functions-eslint-js/recommended"]
+  "extends": ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]
 }
 ```
 

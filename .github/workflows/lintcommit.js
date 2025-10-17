@@ -24,7 +24,7 @@ const types = new Set([
   "types",
 ]);
 
-const scopes = new Set(["testing-sdk", "sdk", "examples"]);
+const scopes = new Set(["testing-sdk", "sdk", "examples", "eslint-plugin"]);
 
 /**
  * Checks that a pull request title, or commit message subject, follows the expected format:
@@ -145,7 +145,7 @@ function _test() {
     "types: add type definitions": undefined,
     "Merge staging into feature/lambda-get-started": undefined,
     "feat(foo): fix the types":
-      'invalid scope "foo" (valid scopes are testing-sdk, sdk, examples)',
+      'invalid scope "foo" (valid scopes are testing-sdk, sdk, examples, eslint-plugin)',
   };
 
   let passed = 0;
