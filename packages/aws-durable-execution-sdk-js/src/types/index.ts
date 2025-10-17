@@ -100,11 +100,36 @@ export interface DurableContext {
   logger: Logger;
   /**
    * Executes a function as a durable step with automatic retry and state persistence
+   *
+   * @remarks
+   * **IMPORTANT**: `step()` is designed for single atomic operations and cannot be used to group
+   * multiple durable operations (like other steps, waits, or child contexts). The step function
+   * receives a simple `StepContext` (for logging only), not a full `DurableContext`.
+   *
+   * **To group multiple durable operations, use `runInChildContext()` instead:**
+   * ```typescript
+   * // ❌ WRONG: Cannot call durable operations inside step
+   * await context.step("process-order", async (ctx) => {
+   *   await context.wait(1000);              // ERROR: context not available
+   *   await context.step(async () => ...);   // ERROR: context not available
+   *   return result;
+   * });
+   *
+   * // ✅ CORRECT: Use runInChildContext to group operations
+   * await context.runInChildContext("process-order", async (childCtx) => {
+   *   await childCtx.wait(1000);
+   *   const step1 = await childCtx.step(async () => validateOrder(order));
+   *   const step2 = await childCtx.step(async () => chargePayment(step1));
+   *   return step2;
+   * });
+   * ```
+   *
    * @param name - Step name for tracking and debugging
    * @param fn - Function to execute as a durable step
    * @param config - Optional configuration for retry strategy, semantics, and serialization
    * @example
    * ```typescript
+   * // ✅ Good: Single atomic operation
    * const result = await context.step(
    *   "fetch-user-data",
    *   async (ctx) => {
@@ -122,6 +147,11 @@ export interface DurableContext {
 
   /**
    * Executes a function as a durable step with automatic retry and state persistence
+   *
+   * @remarks
+   * **IMPORTANT**: `step()` cannot group multiple durable operations. Use `runInChildContext()`
+   * to group steps, waits, or other durable operations together. See the named overload for details.
+   *
    * @param fn - Function to execute as a durable step
    * @param config - Optional configuration for retry strategy, semantics, and serialization
    * @example
@@ -462,17 +492,46 @@ export interface DurableContext {
   promise: {
     /**
      * Waits for all promises to resolve and returns an array of all results
+     *
+     * @remarks
+     * **IMPORTANT**: Promise combinators accept already-created promises that start executing immediately.
+     * They cannot control concurrency, implement completion policies, or provide durability.
+     *
+     * **Consider using `map()` or `parallel()` instead if you need:**
+     * - Concurrency control (limit simultaneous executions)
+     * - Completion policies (minSuccessful, toleratedFailureCount)
+     * - Durability (survive Lambda timeouts and resume from checkpoints)
+     * - Per-item retry strategies
+     * - Progress tracking for long-running operations
+     *
+     * **Use promise combinators only for:**
+     * - Fast, in-memory operations (less than a few seconds)
+     * - Operations that must all start immediately
+     * - Simple coordination of already-running promises
+     *
      * @param name - Step name for tracking and debugging
-     * @param promises - Array of promises to wait for
+     * @param promises - Array of promises to wait for (already executing)
      * @example
      * ```typescript
+     * // ❌ All promises start immediately - no concurrency control
      * const [user, posts, comments] = await context.promise.all(
      *   "fetch-user-data",
      *   [
-     *     fetchUser(userId),
-     *     fetchUserPosts(userId),
-     *     fetchUserComments(userId)
+     *     fetchUser(userId),        // Already running
+     *     fetchUserPosts(userId),   // Already running
+     *     fetchUserComments(userId) // Already running
      *   ]
+     * );
+     *
+     * // ✅ Better: Use map() for controlled, durable execution
+     * const results = await context.map(
+     *   [userId, userId, userId],
+     *   async (ctx, id, index) => {
+     *     if (index === 0) return fetchUser(id);
+     *     if (index === 1) return fetchUserPosts(id);
+     *     return fetchUserComments(id);
+     *   },
+     *   { maxConcurrency: 2 } // Control concurrency, survives timeouts
      * );
      * ```
      */
@@ -480,12 +539,24 @@ export interface DurableContext {
 
     /**
      * Waits for all promises to resolve and returns an array of all results
-     * @param promises - Array of promises to wait for
+     *
+     * @remarks
+     * **IMPORTANT**: Promises start executing immediately when created. Consider using `map()` or `parallel()`
+     * for concurrency control, durability, and completion policies. See the named overload for details.
+     *
+     * @param promises - Array of promises to wait for (already executing)
      * @example
      * ```typescript
+     * // ❌ Limited: No concurrency control or durability
      * const results = await context.promise.all([
      *   fetchUser(userId),
      *   fetchUserPosts(userId)
+     * ]);
+     *
+     * // ✅ Better: Use parallel() for durable execution
+     * const results = await context.parallel([
+     *   async (ctx) => ctx.step(async () => fetchUser(userId)),
+     *   async (ctx) => ctx.step(async () => fetchUserPosts(userId))
      * ]);
      * ```
      */
@@ -493,26 +564,38 @@ export interface DurableContext {
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
+     *
+     * @remarks
+     * **IMPORTANT**: Promise combinators accept already-created promises that start executing immediately.
+     * Consider using `map()` or `parallel()` with completion policies for better control over failure handling.
+     *
      * @param name - Step name for tracking and debugging
-     * @param promises - Array of promises to wait for
+     * @param promises - Array of promises to wait for (already executing)
      * @example
      * ```typescript
+     * // ❌ All promises start immediately
      * const results = await context.promise.allSettled(
      *   "fetch-all-data",
      *   [
      *     fetchUser(userId),
-     *     fetchUserPosts(userId), // might fail
+     *     fetchUserPosts(userId),
      *     fetchUserComments(userId)
      *   ]
      * );
-     * // Handle both successful and failed results
-     * results.forEach((result, index) => {
-     *   if (result.status === 'fulfilled') {
-     *     console.log(`Result ${index}:`, result.value);
-     *   } else {
-     *     console.error(`Error ${index}:`, result.reason);
+     *
+     * // ✅ Better: Use map() with completion config
+     * const results = await context.map(
+     *   [userId, userId, userId],
+     *   async (ctx, id, index) => {
+     *     // Fetch different data based on index
+     *   },
+     *   {
+     *     completionConfig: {
+     *       minSuccessful: 2, // Stop early if 2 succeed
+     *       toleratedFailureCount: 1
+     *     }
      *   }
-     * });
+     * );
      * ```
      */
     allSettled<T>(
@@ -522,24 +605,29 @@ export interface DurableContext {
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
-     * @param promises - Array of promises to wait for
-     * @example
-     * ```typescript
-     * const results = await context.promise.allSettled([
-     *   fetchUser(userId),
-     *   fetchUserPosts(userId)
-     * ]);
-     * ```
+     *
+     * @remarks
+     * **IMPORTANT**: Promises start executing immediately. Consider using `map()` or `parallel()`
+     * for better failure handling and durability. See the named overload for details.
+     *
+     * @param promises - Array of promises to wait for (already executing)
      */
     allSettled<T>(promises: Promise<T>[]): Promise<PromiseSettledResult<T>[]>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
+     *
+     * @remarks
+     * **IMPORTANT**: Promise combinators accept already-created promises that start executing immediately.
+     * All promises race simultaneously with no control over execution order or resource usage.
+     *
+     * **Consider using `parallel()` with completion policies instead** for controlled racing with durability.
+     *
      * @param name - Step name for tracking and debugging
-     * @param promises - Array of promises to race
+     * @param promises - Array of promises to race (already executing)
      * @example
      * ```typescript
-     * // Try multiple data sources, use the first successful one
+     * // ❌ All sources queried immediately
      * const userData = await context.promise.any(
      *   "fetch-from-any-source",
      *   [
@@ -548,35 +636,58 @@ export interface DurableContext {
      *     fetchFromCache(userId)
      *   ]
      * );
+     *
+     * // ✅ Better: Use parallel() with early completion
+     * const result = await context.parallel(
+     *   [
+     *     async (ctx) => ctx.step(async () => fetchFromPrimaryDB(userId)),
+     *     async (ctx) => ctx.step(async () => fetchFromSecondaryDB(userId)),
+     *     async (ctx) => ctx.step(async () => fetchFromCache(userId))
+     *   ],
+     *   {
+     *     completionConfig: { minSuccessful: 1 } // Stop after first success
+     *   }
+     * );
      * ```
      */
     any<T>(name: string | undefined, promises: Promise<T>[]): Promise<T>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
-     * @param promises - Array of promises to race
-     * @example
-     * ```typescript
-     * const result = await context.promise.any([
-     *   fetchFromPrimaryDB(userId),
-     *   fetchFromCache(userId)
-     * ]);
-     * ```
+     *
+     * @remarks
+     * **IMPORTANT**: Promises start executing immediately. Consider using `parallel()` with
+     * `minSuccessful: 1` for durable racing. See the named overload for details.
+     *
+     * @param promises - Array of promises to race (already executing)
      */
     any<T>(promises: Promise<T>[]): Promise<T>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
+     *
+     * @remarks
+     * **IMPORTANT**: Promise combinators accept already-created promises that start executing immediately.
+     * All promises race simultaneously with no control over execution.
+     *
+     * **Use promise.race() only for:**
+     * - Racing against timeouts or deadlines
+     * - Simple coordination of already-running operations
+     *
+     * **For durable racing with control, use `parallel()` with `minSuccessful: 1`**
+     *
      * @param name - Step name for tracking and debugging
-     * @param promises - Array of promises to race
+     * @param promises - Array of promises to race (already executing)
      * @example
      * ```typescript
-     * // Use fastest response, whether success or failure
+     * // ✅ Good use case: Racing against timeout
      * const result = await context.promise.race(
-     *   "fastest-response",
+     *   "fetch-with-timeout",
      *   [
-     *     fetchFromFastAPI(userId),
-     *     fetchFromSlowAPI(userId)
+     *     fetchFromAPI(userId),
+     *     new Promise((_, reject) =>
+     *       setTimeout(() => reject(new Error("Timeout")), 5000)
+     *     )
      *   ]
      * );
      * ```
@@ -585,14 +696,12 @@ export interface DurableContext {
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
-     * @param promises - Array of promises to race
-     * @example
-     * ```typescript
-     * const result = await context.promise.race([
-     *   fetchFromAPI(userId),
-     *   timeout(5000) // Race against timeout
-     * ]);
-     * ```
+     *
+     * @remarks
+     * **IMPORTANT**: Promises start executing immediately. Use only for simple timeout patterns.
+     * See the named overload for details.
+     *
+     * @param promises - Array of promises to race (already executing)
      */
     race<T>(promises: Promise<T>[]): Promise<T>;
   };
