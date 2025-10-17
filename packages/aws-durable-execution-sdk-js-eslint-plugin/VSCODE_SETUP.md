@@ -16,7 +16,7 @@ Install the official ESLint extension:
 First, make sure the plugin is built:
 
 ```bash
-cd packages/eslint-plugin-durable-functions
+cd packages/aws-durable-execution-sdk-js-eslint-plugin
 npm run build
 ```
 

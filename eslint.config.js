@@ -1,7 +1,7 @@
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
-const durableFunctionsPlugin = require("./packages/eslint-plugin-durable-functions/dist/index.js");
+const durableFunctionsPlugin = require("./packages/aws-durable-execution-sdk-js-eslint-plugin/dist/index.js");
 const typescriptParser = require("@typescript-eslint/parser");
 
 export default [
