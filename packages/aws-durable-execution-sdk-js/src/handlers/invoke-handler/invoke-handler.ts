@@ -92,7 +92,10 @@ export const createInvokeHandler = (
         throw error;
       }
 
-      if (stepData?.Status === OperationStatus.STARTED) {
+      if (
+        stepData?.Status === OperationStatus.STARTED ||
+        stepData?.Status === OperationStatus.PENDING
+      ) {
         // Operation is still running, check for other operations before terminating
         if (hasRunningOperations()) {
           log(

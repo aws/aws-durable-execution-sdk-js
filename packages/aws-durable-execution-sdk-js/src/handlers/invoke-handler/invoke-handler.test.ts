@@ -296,6 +296,72 @@ describe("InvokeHandler", () => {
         context: mockContext,
         hasRunningOperations: mockHasRunningOperations,
       });
+      expect(mockTerminate).toHaveBeenCalledTimes(0);
+    });
+
+    it("should terminate when operation is PENDING", async () => {
+      const mockGetStepData = jest.fn().mockReturnValue({
+        Status: OperationStatus.PENDING,
+      });
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(false); // No other operations running
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpointFn,
+        mockCreateStepId,
+        mockHasRunningOperations,
+      );
+
+      await expect(
+        invokeHandler("test-function", { test: "data" }),
+      ).rejects.toThrow("Execution terminated");
+
+      expect(mockTerminate).toHaveBeenCalledWith(
+        mockContext,
+        TerminationReason.OPERATION_TERMINATED,
+        "test-step-1",
+      );
+    });
+
+    it("should wait when operation is PENDING and other operations are running", async () => {
+      const mockGetStepData = jest
+        .fn()
+        .mockReturnValueOnce({ Status: OperationStatus.PENDING })
+        .mockReturnValueOnce({
+          Status: OperationStatus.SUCCEEDED,
+          ChainedInvokeDetails: { Result: '{"result":"success"}' },
+        });
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(true); // Other operations running
+      mockWaitBeforeContinue.mockResolvedValue({ reason: "status" });
+      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpointFn,
+        mockCreateStepId,
+        mockHasRunningOperations,
+      );
+
+      const result = await invokeHandler("test-function", { test: "data" });
+
+      expect(result).toEqual({ result: "success" });
+      expect(mockLog).toHaveBeenCalledWith(
+        "⏳",
+        "Invoke test-function still in progress, waiting for other operations",
+      );
+      expect(mockWaitBeforeContinue).toHaveBeenCalledWith({
+        checkHasRunningOperations: true,
+        checkStepStatus: true,
+        checkTimer: false,
+        stepId: "test-step-1",
+        context: mockContext,
+        hasRunningOperations: mockHasRunningOperations,
+      });
+      expect(mockTerminate).toHaveBeenCalledTimes(0);
     });
 
     it("should create checkpoint and terminate for new invoke without name", async () => {
