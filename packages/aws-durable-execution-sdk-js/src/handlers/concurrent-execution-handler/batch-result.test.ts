@@ -16,7 +16,7 @@ describe("BatchResult", () => {
         { index: 0, result: "success1", status: BatchItemStatus.SUCCEEDED },
         { index: 1, result: "success2", status: BatchItemStatus.SUCCEEDED },
       ];
-      const result = new BatchResultImpl(items);
+      const result = new BatchResultImpl(items, "ALL_COMPLETED");
 
       expect(result.all).toEqual(items);
       expect(result.succeeded()).toEqual(items);
@@ -37,7 +37,7 @@ describe("BatchResult", () => {
         { index: 0, result: "success", status: BatchItemStatus.SUCCEEDED },
         { index: 1, error, status: BatchItemStatus.FAILED },
       ];
-      const result = new BatchResultImpl(items);
+      const result = new BatchResultImpl(items, "ALL_COMPLETED");
 
       expect(result.succeeded()).toHaveLength(1);
       expect(result.failed()).toHaveLength(1);
@@ -53,7 +53,7 @@ describe("BatchResult", () => {
         { index: 0, result: "success", status: BatchItemStatus.SUCCEEDED },
         { index: 1, status: BatchItemStatus.STARTED },
       ];
-      const result = new BatchResultImpl(items);
+      const result = new BatchResultImpl(items, "ALL_COMPLETED");
 
       expect(result.started()).toHaveLength(1);
       expect(result.startedCount).toBe(1);
@@ -64,7 +64,7 @@ describe("BatchResult", () => {
       const items: BatchItem<string>[] = [
         { index: 0, error: new Error("test"), status: BatchItemStatus.FAILED },
       ];
-      const result = new BatchResultImpl(items);
+      const result = new BatchResultImpl(items, "ALL_COMPLETED");
 
       expect(() => result.throwIfError()).toThrow("test");
     });
@@ -73,7 +73,7 @@ describe("BatchResult", () => {
       const items: BatchItem<string>[] = [
         { index: 0, result: "success", status: BatchItemStatus.SUCCEEDED },
       ];
-      const result = new BatchResultImpl(items);
+      const result = new BatchResultImpl(items, "ALL_COMPLETED");
 
       expect(() => result.throwIfError()).not.toThrow();
     });

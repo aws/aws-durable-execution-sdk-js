@@ -37,7 +37,7 @@ export class BatchResultImpl<R> implements BatchResult<R> {
     public readonly completionReason:
       | "ALL_COMPLETED"
       | "MIN_SUCCESSFUL_REACHED"
-      | "FAILURE_TOLERANCE_EXCEEDED" = "ALL_COMPLETED",
+      | "FAILURE_TOLERANCE_EXCEEDED",
   ) {}
 
   succeeded(): Array<BatchItem<R> & { result: R }> {
@@ -149,5 +149,5 @@ export function restoreBatchResult<R>(data: unknown): BatchResult<R> {
     );
   }
 
-  return new BatchResultImpl<R>([]);
+  return new BatchResultImpl<R>([], "ALL_COMPLETED");
 }

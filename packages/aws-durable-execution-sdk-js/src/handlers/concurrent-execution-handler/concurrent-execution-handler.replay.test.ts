@@ -413,4 +413,71 @@ describe("ConcurrencyController - Replay Mode", () => {
     expect(result.failed()[0].error).toBeInstanceOf(Error);
     expect(result.failed()[0].error?.message).toBe("string error");
   });
+
+  it("should reconstruct MIN_SUCCESSFUL_REACHED completion reason in replay", async () => {
+    const items = [
+      { id: "item-0", data: "data1", index: 0 },
+      { id: "item-1", data: "data2", index: 1 },
+      { id: "item-2", data: "data3", index: 2 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      all: [
+        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+        { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
+      ],
+      completionReason: "MIN_SUCCESSFUL_REACHED",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      if (id === `${entityId}-1`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: "result1" },
+        };
+      }
+      if (id === `${entityId}-2`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: "result2" },
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext
+      .mockResolvedValueOnce("result1")
+      .mockResolvedValueOnce("result2");
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      { completionConfig: { minSuccessful: 2 } },
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
+    expect(result.successCount).toBe(2);
+    expect(result.totalCount).toBe(2);
+  });
 });

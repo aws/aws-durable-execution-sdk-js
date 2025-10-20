@@ -235,7 +235,25 @@ export class ConcurrencyController {
       totalCount: resultItems.length,
     });
 
-    return new BatchResultImpl(resultItems, "ALL_COMPLETED");
+    // Reconstruct the completion reason based on replay results
+    const successCount = resultItems.filter(
+      (item) => item.status === BatchItemStatus.SUCCEEDED,
+    ).length;
+
+    const getCompletionReason = ():
+      | "ALL_COMPLETED"
+      | "MIN_SUCCESSFUL_REACHED"
+      | "FAILURE_TOLERANCE_EXCEEDED" => {
+      if (completedCount === items.length) return "ALL_COMPLETED";
+      if (
+        config.completionConfig?.minSuccessful !== undefined &&
+        successCount >= config.completionConfig.minSuccessful
+      )
+        return "MIN_SUCCESSFUL_REACHED";
+      return "FAILURE_TOLERANCE_EXCEEDED";
+    };
+
+    return new BatchResultImpl(resultItems, getCompletionReason());
   }
 
   private async executeItemsConcurrently<T, R>(
