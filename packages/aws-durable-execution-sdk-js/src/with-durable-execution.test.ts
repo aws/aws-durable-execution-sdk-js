@@ -269,10 +269,11 @@ describe("withDurableExecution", () => {
     const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
 
-    // Verify - should use fallback "undefined" string
+    // Verify - Result should be undefined (not empty string) when handler returns undefined
+    // JSON.stringify(undefined) returns undefined, which is preserved in the Result field
     expect(response).toEqual({
       Status: InvocationStatus.SUCCEEDED,
-      Result: "",
+      Result: undefined,
     });
   });
 

@@ -162,7 +162,7 @@ async function runHandler<Input, Output>(
     // If response size is acceptable, return the response
     return {
       Status: InvocationStatus.SUCCEEDED,
-      Result: serializedResult || "",
+      Result: serializedResult,
     };
   } catch (error) {
     log("❌", "Handler threw an error:", error);
