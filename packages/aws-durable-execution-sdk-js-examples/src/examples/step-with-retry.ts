@@ -3,6 +3,12 @@ import {
   withDurableExecution,
   StepSemantics,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Step with Retry",
+  description: "Advanced step configuration with retry strategy and semantics",
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {

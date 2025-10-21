@@ -7,6 +7,9 @@
       ],
       "@aws/durable-execution-sdk-js-testing": [
         "./packages/aws-durable-execution-sdk-js-testing"
+      ],
+      "@aws/durable-execution-sdk-js-examples": [
+        "./packages/aws-durable-execution-sdk-js-examples"
       ]
     },
     "target": "ES2022",

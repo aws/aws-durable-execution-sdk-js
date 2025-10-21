@@ -1,7 +1,10 @@
 /node_modules
 /build
 /dist
+/dist-cjs
 /coverage
 *.iml
 .aws-sam/*
 *.zip
+
+src/utils/examples-catalog.json

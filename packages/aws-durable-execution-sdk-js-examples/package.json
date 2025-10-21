@@ -14,6 +14,11 @@
     "./*": {
       "require": "./dist/examples/*",
       "types": "./dist/examples/*"
+    },
+    "./catalog": {
+      "require": "./dist/examples-catalog.js",
+      "import": "./dist/examples-catalog.js",
+      "types": "./dist/utils/examples-catalog.d.ts"
     }
   },
   "scripts": {
@@ -21,8 +26,9 @@
     "release": "npm run build && mkdir -p build/aws-durable-execution-sdk-js-examples && npm run copy-files",
     "prebuild": "rm -rf build/aws-durable-execution-sdk-js-examples",
     "package": "node scripts/package.js",
-    "build": "rollup --config rollup.config.mjs",
-    "deploy": "bash scripts/deploy-lambda.sh",
+    "generate-examples": "tsx ./scripts/generate-examples.ts",
+    "build": "npm run generate-examples && rollup --config rollup.config.mjs",
+    "deploy": "tsx scripts/deploy-lambda.ts",
     "prerelease": "npm run generate-template",
     "copy-files": "npm run copy-lambda && npm run copy-examples && npm run copy-source && npm run copy-catalog",
     "copy-lambda": "cp -r configuration/aws_lambda build",
@@ -38,8 +44,10 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.777.0",
+    "@aws-sdk/client-lambda": "^3.777.0",
     "@aws/durable-execution-sdk-js": "*",
-    "@aws/durable-execution-sdk-js-testing": "*"
+    "@aws/durable-execution-sdk-js-testing": "*",
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.23.0",
@@ -56,6 +64,7 @@
     "prettier": "^3.5.2",
     "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.29.0"
   },

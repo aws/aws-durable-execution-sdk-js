@@ -2,6 +2,13 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Comprehensive Operations",
+  description:
+    "Complex multi-operation example demonstrating all major operations",
+};
 
 interface ComprehensiveExampleInput {
   message?: string;

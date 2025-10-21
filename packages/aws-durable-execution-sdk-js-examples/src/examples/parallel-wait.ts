@@ -2,6 +2,12 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Parallel wait",
+  description: "Start parallel waits with context.parallel",
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {

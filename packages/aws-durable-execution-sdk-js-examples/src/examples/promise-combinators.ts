@@ -2,6 +2,12 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Promise Combinators",
+  description: "Complex promise combinator example",
+};
 
 interface PromiseCombinatorsInput {
   message?: string;

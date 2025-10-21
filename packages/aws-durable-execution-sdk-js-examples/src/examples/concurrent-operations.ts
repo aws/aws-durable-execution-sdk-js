@@ -2,6 +2,12 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Concurrent Operations",
+  description: "Start multiple concurrent operations using runInChildContext",
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {

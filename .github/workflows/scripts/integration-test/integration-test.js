@@ -5,7 +5,7 @@ import { appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
-import examplesCatalog from "../../../../packages/aws-durable-execution-sdk-js-examples/examples-catalog.json" with { type: "json" };
+import examplesCatalog from "@aws/durable-execution-sdk-js-examples/catalog";
 import {
   LambdaClient,
   DeleteFunctionCommand,
@@ -135,11 +135,7 @@ class IntegrationTestRunner {
   // Get integration examples from catalog
   getIntegrationExamples() {
     log.info("Getting integration examples...");
-
-    const integrationExamples = examplesCatalog.examples.filter(
-      (example) => example.integration === true,
-    );
-    return integrationExamples;
+    return examplesCatalog;
   }
 
   getFunctionNameMap() {

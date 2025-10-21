@@ -3,6 +3,12 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Steps With Retry",
+  description: "An example demonstrating retry functionality with steps",
+};
 
 const ddbClient = new DynamoDBClient();
 

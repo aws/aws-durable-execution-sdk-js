@@ -13,6 +13,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
@@ -23,34 +24,23 @@ export const handler = withDurableExecution(
     return result;
   },
 );
+
+export const config: ExampleConfig = {
+  name: "Block Example",
+  description: "Advanced child context example",
+};
 ```
 
-### 2. Add Entry to Examples Catalog
+### 2. Add the example config
 
-Add your example to `examples-catalog.json`:
-
-```json
-{
-  "name": "Your Example Name",
-  "description": "Brief description of what this example demonstrates",
-  "handler": "your-example.handler",
-  "integration": false,
-  "durableConfig": {
-    "RetentionPeriodInDays": 7,
-    "ExecutionTimeout": 300
-  },
-  "path": "./src/examples/your-example.ts"
-}
-```
+The example config must be added to the export of the main file. This will automatically generate a catalog which will be used by our tests.
 
 **Configuration options:**
 
 - `name`: Human-readable name (used in function naming)
 - `description`: What the example demonstrates
-- `handler`: Must match filename + `.handler`
-- `integration`: Set to `true` to enable integration tests (see below)
-- `durableConfig.RetentionPeriodInDays`: How long to keep execution history (7-90 days)
-- `durableConfig.ExecutionTimeout`: Max execution time in seconds
+- `durableConfig.RetentionPeriodInDays`: (Default to 7) How long to keep execution history (7-90 days)
+- `durableConfig.ExecutionTimeout`: (Default to 60) Max execution time in seconds
 
 ### 3. Create the Test File
 
@@ -91,37 +81,16 @@ npm test
 
 This runs all tests locally using the testing SDK.
 
-## Making It an Integration Test
-
-To run your example as an integration test against real Lambda:
-
-### 1. Enable Integration in Catalog
-
-Update `examples-catalog.json` and set `"integration": true`:
-
-```json
-{
-  "name": "Your Example Name",
-  "handler": "your-example.handler",
-  "integration": true, // ← Enable integration testing
-  "durableConfig": {
-    "RetentionPeriodInDays": 7,
-    "ExecutionTimeout": 300
-  },
-  "path": "./src/examples/your-example.ts"
-}
-```
-
-### 2. What Happens in CI/CD
+## Integration Tests
 
 When you push to GitHub, the integration test workflow (`.github/workflows/integration-tests.yml`) will:
 
 1. **Setup Stage**:
    - Build all packages
-   - Read `examples-catalog.json`
-   - For each example where `integration: true`:
+   - Generate the examples catalog from the config
+   - For each example:
      - Package the function code
-     - Deploy/update Lambda function using `scripts/deploy-lambda.sh`
+     - Deploy/update Lambda function using `scripts/deploy-lambda.ts`
      - Function name format: `YourExampleName-TypeScript` (or with `-PR-{number}` suffix for PRs)
 
 2. **Test Stage**:
@@ -132,7 +101,7 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
 3. **Cleanup Stage**:
    - Delete all deployed Lambda functions
 
-### 3. Run Integration Tests Locally
+### Run Integration Tests Locally
 
 You can run integration tests locally using the `act` tool:
 
@@ -196,16 +165,12 @@ tests: (runner, isCloud) => {
 ## Example Checklist
 
 - [ ] Created example file in `src/examples/`
-- [ ] Added entry to `examples-catalog.json`
 - [ ] Created test file in `src/examples/__tests__/`
 - [ ] Local tests pass (`npm test`)
-- [ ] Set `"integration": true` if needed
 - [ ] Integration tests pass in CI/CD
 
 ## Troubleshooting
 
 **Test not found in integration run:**
 
-- Verify `functionName` in test matches handler filename (without `.ts`)
-- Check `examples-catalog.json` has `"integration": true`
-- Ensure handler format is `"your-example.handler"`
+- Verify `functionName` in test matches the example name

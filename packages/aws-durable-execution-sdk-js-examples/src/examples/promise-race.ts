@@ -2,6 +2,12 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Promise Race",
+  description: "Racing promises to completion",
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {

@@ -2,6 +2,12 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../types";
+
+export const config: ExampleConfig = {
+  name: "Block Example",
+  description: "Advanced child context example",
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
