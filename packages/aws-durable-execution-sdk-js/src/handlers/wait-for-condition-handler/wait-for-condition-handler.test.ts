@@ -15,6 +15,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { OperationType, OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { EventEmitter } from "events";
 
 describe("WaitForCondition Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -69,6 +70,7 @@ describe("WaitForCondition Handler", () => {
       jest.fn(), // addRunningOperation
       jest.fn(), // removeRunningOperation
       jest.fn(() => false), // hasRunningOperations
+      () => new EventEmitter(), // getOperationsEmitter
       "parent-123", // parentId
     );
   });

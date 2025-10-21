@@ -636,4 +636,44 @@ describe("DurableContext", () => {
       expect(secondStepId).toBe("3");
     });
   });
+
+  describe("operationsEmitter", () => {
+    it("should pass operationsEmitter to step handler", async () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+      );
+
+      const { createStepHandler } = jest.requireMock(
+        "../../handlers/step-handler/step-handler",
+      );
+
+      let capturedGetOperationsEmitter: (() => any) | undefined;
+      createStepHandler.mockImplementation(
+        (
+          _ctx: any,
+          _checkpoint: any,
+          _parentCtx: any,
+          _createStepId: any,
+          _createLogger: any,
+          _addOp: any,
+          _removeOp: any,
+          _hasOp: any,
+          getOperationsEmitter: () => any,
+        ): (() => Promise<string>) => {
+          capturedGetOperationsEmitter = getOperationsEmitter;
+          return async () => "result";
+        },
+      );
+
+      await context.step("test", async () => "value");
+
+      expect(capturedGetOperationsEmitter).toBeDefined();
+      const emitter = capturedGetOperationsEmitter!();
+      expect(emitter).toBeDefined();
+      expect(typeof emitter.emit).toBe("function");
+    });
+  });
 });

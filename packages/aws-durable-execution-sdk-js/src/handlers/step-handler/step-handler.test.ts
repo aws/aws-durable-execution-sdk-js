@@ -17,6 +17,7 @@ import {
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { EventEmitter } from "events";
 
 jest.mock("../../utils/retry/retry-presets/retry-presets", () => ({
   retryPresets: {
@@ -31,10 +32,13 @@ describe("Step Handler", () => {
   let createStepId: jest.Mock;
   let stepHandler: ReturnType<typeof createStepHandler>;
   let mockTerminationManager: jest.Mocked<TerminationManager>;
+  let mockOperationsEmitter: EventEmitter;
 
   beforeEach(() => {
     // Reset all mocks before each test to ensure isolation
     jest.resetAllMocks();
+
+    mockOperationsEmitter = new EventEmitter();
 
     // Create a mock termination manager
     mockTerminationManager = {
@@ -79,6 +83,7 @@ describe("Step Handler", () => {
       jest.fn(), // addRunningOperation
       jest.fn(), // removeRunningOperation
       jest.fn(() => false), // hasRunningOperations
+      () => mockOperationsEmitter,
     );
 
     // Reset the mock for retryPresets.default

@@ -24,6 +24,7 @@ jest.mock("../../utils/wait-before-continue/wait-before-continue", () => ({
   waitBeforeContinue: jest.fn().mockResolvedValue({ reason: "operations" }),
 }));
 import { TEST_CONSTANTS } from "../../testing/test-constants";
+import { EventEmitter } from "events";
 
 // Mock the logger to avoid console output during tests
 jest.mock("../../utils/logger/logger", () => ({
@@ -75,6 +76,7 @@ describe("Callback Handler", () => {
       mockCheckpoint,
       createStepId,
       mockHasRunningOperations,
+      () => new EventEmitter(),
     );
   });
 
@@ -415,6 +417,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       // Initially STARTED, then becomes the target status after waitBeforeContinue
@@ -877,6 +880,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         jest.fn().mockReturnValue(false),
+        () => new EventEmitter(),
       );
 
       const result = callbackHandler(undefined, config);
@@ -914,6 +918,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       // Set up a started callback
@@ -938,15 +943,17 @@ describe("Callback Handler", () => {
       promise.then(() => {}).catch(() => {});
 
       // Verify waitBeforeContinue was called with correct parameters
-      expect(mockWaitBeforeContinue).toHaveBeenCalledWith({
-        checkHasRunningOperations: true,
-        checkStepStatus: true,
-        checkTimer: false,
-        stepId: expect.any(String),
-        context: mockExecutionContext,
-        hasRunningOperations: mockHasRunningOperations,
-        pollingInterval: 1000,
-      });
+      expect(mockWaitBeforeContinue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: false,
+          stepId: expect.any(String),
+          context: mockExecutionContext,
+          hasRunningOperations: mockHasRunningOperations,
+          pollingInterval: 1000,
+        }),
+      );
     });
 
     test("should check both operations and status when operations are running", async () => {
@@ -957,6 +964,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -997,6 +1005,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       // Set up a started callback that remains started
@@ -1028,6 +1037,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1061,6 +1071,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1083,15 +1094,17 @@ describe("Callback Handler", () => {
       promise.catch(() => {});
 
       // Should call waitBeforeContinue through catch -> then delegation
-      expect(mockWaitBeforeContinue).toHaveBeenCalledWith({
-        checkHasRunningOperations: true,
-        checkStepStatus: true,
-        checkTimer: false,
-        stepId: expect.any(String),
-        context: mockExecutionContext,
-        hasRunningOperations: mockHasRunningOperations,
-        pollingInterval: 1000,
-      });
+      expect(mockWaitBeforeContinue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: false,
+          stepId: expect.any(String),
+          context: mockExecutionContext,
+          hasRunningOperations: mockHasRunningOperations,
+          pollingInterval: 1000,
+        }),
+      );
     });
 
     test("should handle finally() method with same logic as then()", async () => {
@@ -1102,6 +1115,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1124,15 +1138,17 @@ describe("Callback Handler", () => {
       promise.finally(() => {});
 
       // Should call waitBeforeContinue through finally -> then delegation
-      expect(mockWaitBeforeContinue).toHaveBeenCalledWith({
-        checkHasRunningOperations: true,
-        checkStepStatus: true,
-        checkTimer: false,
-        stepId: expect.any(String),
-        context: mockExecutionContext,
-        hasRunningOperations: mockHasRunningOperations,
-        pollingInterval: 1000,
-      });
+      expect(mockWaitBeforeContinue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: false,
+          stepId: expect.any(String),
+          context: mockExecutionContext,
+          hasRunningOperations: mockHasRunningOperations,
+          pollingInterval: 1000,
+        }),
+      );
     });
 
     test("should pass hasRunningOperations function to createCallback", async () => {
@@ -1145,6 +1161,7 @@ describe("Callback Handler", () => {
           mockCheckpoint,
           createStepId,
           mockHasRunningOperations,
+          () => new EventEmitter(),
         );
       }).not.toThrow();
 
@@ -1154,6 +1171,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1178,6 +1196,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1215,6 +1234,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       // Initially STARTED, then becomes SUCCEEDED after waitBeforeContinue
@@ -1273,6 +1293,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       // Initially STARTED, then becomes FAILED after waitBeforeContinue
@@ -1334,6 +1355,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1465,6 +1487,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       let callCount = 0;
@@ -1510,6 +1533,7 @@ describe("Callback Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       let callCount = 0;

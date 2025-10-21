@@ -12,6 +12,7 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { EventEmitter } from "events";
 
 describe("WaitForCondition Handler Timing Tests", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -51,6 +52,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
       jest.fn(),
       jest.fn(),
       jest.fn().mockReturnValue(false),
+      () => new EventEmitter(),
       undefined, // parentId
     );
   });
@@ -76,6 +78,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
         undefined, // parentId
       );
 
@@ -133,6 +136,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
         undefined, // parentId
       );
 
@@ -194,6 +198,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
         undefined, // parentId
       );
 
@@ -270,6 +275,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
         undefined, // parentId
       );
 
@@ -343,6 +349,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
         undefined, // parentId
       );
 

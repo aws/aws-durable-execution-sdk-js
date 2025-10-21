@@ -6,6 +6,7 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { EventEmitter } from "events";
 
 describe("Callback Handler Promise Interface", () => {
   let mockContext: ExecutionContext;
@@ -47,6 +48,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -60,6 +62,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -85,6 +88,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -111,6 +115,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -137,6 +142,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -156,6 +162,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -211,6 +218,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepIdCounter = 0; // Reset to ensure we get step-1
@@ -253,6 +261,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepIdCounter = 0;
@@ -293,6 +302,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       // Create completed callback (step-1)
@@ -351,6 +361,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepIdCounter = 0;
@@ -385,6 +396,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepIdCounter = 0;
@@ -423,6 +435,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepIdCounter = 0;
@@ -476,6 +489,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       // Force the step ID to be "step-1" to match our mock
@@ -492,6 +506,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepIdCounter = 0;
@@ -509,6 +524,7 @@ describe("Callback Handler Promise Interface", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepIdCounter = 0;

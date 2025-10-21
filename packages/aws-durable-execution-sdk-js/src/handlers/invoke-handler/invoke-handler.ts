@@ -14,12 +14,14 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
+import { EventEmitter } from "events";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ): {
   <I, O>(funcId: string, input: I, config?: InvokeConfig<I, O>): Promise<O>;
@@ -109,6 +111,7 @@ export const createInvokeHandler = (
             stepId,
             context,
             hasRunningOperations,
+            operationsEmitter: getOperationsEmitter(),
           });
           continue; // Re-evaluate status after waiting
         }

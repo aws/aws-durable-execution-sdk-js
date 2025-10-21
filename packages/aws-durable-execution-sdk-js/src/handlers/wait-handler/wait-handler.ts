@@ -9,12 +9,14 @@ import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
+import { EventEmitter } from "events";
 
 export const createWaitHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ): {
   (name: string, seconds: number): Promise<void>;
@@ -81,6 +83,7 @@ export const createWaitHandler = (
         stepId,
         context,
         hasRunningOperations,
+        operationsEmitter: getOperationsEmitter(),
         checkpoint,
       });
 

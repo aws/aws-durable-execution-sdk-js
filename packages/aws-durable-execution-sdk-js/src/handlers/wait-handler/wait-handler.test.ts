@@ -13,6 +13,7 @@ import { ExecutionContext, OperationSubType } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
+import { EventEmitter } from "events";
 
 // Mock the logger to avoid console output during tests
 jest.mock("../../utils/logger/logger", () => ({
@@ -25,6 +26,7 @@ describe("Wait Handler", () => {
   let createStepId: jest.Mock;
   let waitHandler: ReturnType<typeof createWaitHandler>;
   let mockTerminationManager: jest.Mocked<TerminationManager>;
+  let mockOperationsEmitter: EventEmitter;
 
   beforeEach(() => {
     // Reset all mocks before each test to ensure isolation
@@ -35,6 +37,8 @@ describe("Wait Handler", () => {
       terminate: jest.fn(),
       getTerminationPromise: jest.fn(),
     } as unknown as jest.Mocked<TerminationManager>;
+
+    mockOperationsEmitter = new EventEmitter();
 
     const stepData = {};
     mockExecutionContext = {
@@ -52,6 +56,7 @@ describe("Wait Handler", () => {
       mockCheckpoint,
       createStepId,
       jest.fn(() => false), // hasRunningOperations
+      () => mockOperationsEmitter,
     );
   });
 
@@ -146,6 +151,7 @@ describe("Wait Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => mockOperationsEmitter,
       );
 
       waitHandler("test-wait", 1);
@@ -172,6 +178,7 @@ describe("Wait Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => mockOperationsEmitter,
       );
 
       waitHandler("test-wait", 1);
@@ -189,6 +196,7 @@ describe("Wait Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => mockOperationsEmitter,
       );
 
       waitHandler("test-wait", 1);
@@ -222,6 +230,7 @@ describe("Wait Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => mockOperationsEmitter,
       );
 
       // Start the wait handler (don't await - it will wait for operations)
@@ -239,9 +248,10 @@ describe("Wait Handler", () => {
       // Simulate operations completing after 150ms
       setTimeout(() => {
         operationsRunning = false;
+        mockOperationsEmitter.emit("allOperationsComplete");
       }, 150);
 
-      // Wait for the polling to detect the change and terminate
+      // Wait for the event to be processed and terminate
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Should eventually terminate when operations complete
@@ -275,6 +285,7 @@ describe("Wait Handler", () => {
         mockCheckpoint,
         createStepId,
         mockHasRunningOperations,
+        () => mockOperationsEmitter,
       );
 
       // Start wait handler - should detect running operations and wait
@@ -292,6 +303,7 @@ describe("Wait Handler", () => {
       // Simulate step operation completing (after 1 second)
       setTimeout(() => {
         operationsRunning = false;
+        mockOperationsEmitter.emit("allOperationsComplete");
       }, 100);
 
       // Wait for operations to complete and handler to terminate

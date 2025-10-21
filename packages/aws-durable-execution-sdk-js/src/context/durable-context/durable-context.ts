@@ -41,12 +41,14 @@ import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
+import { EventEmitter } from "events";
 
 class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
   private contextLogger: Logger | null;
   private runningOperations = new Set<string>();
+  private operationsEmitter = new EventEmitter();
   private checkpoint: ReturnType<typeof createCheckpoint>;
   private createContextLogger: ReturnType<typeof createContextLoggerFactory>;
   private durableExecutionMode: DurableExecutionMode;
@@ -154,10 +156,17 @@ class DurableContextImpl implements DurableContext {
 
   private removeRunningOperation(stepId: string): void {
     this.runningOperations.delete(stepId);
+    if (this.runningOperations.size === 0) {
+      this.operationsEmitter.emit("allOperationsComplete");
+    }
   }
 
   private hasRunningOperations(): boolean {
     return this.runningOperations.size > 0;
+  }
+
+  private getOperationsEmitter(): EventEmitter {
+    return this.operationsEmitter;
   }
 
   private withModeManagement<T>(operation: () => Promise<T>): Promise<T> {
@@ -191,6 +200,7 @@ class DurableContextImpl implements DurableContext {
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
+        this.getOperationsEmitter.bind(this),
         this._parentId,
       );
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -209,6 +219,7 @@ class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
+        this.getOperationsEmitter.bind(this),
         this._parentId,
       );
       return invokeHandler<I, O>(
@@ -248,6 +259,7 @@ class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
+        this.getOperationsEmitter.bind(this),
         this._parentId,
       );
       if (typeof nameOrSeconds === "string") {
@@ -272,6 +284,7 @@ class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
+        this.getOperationsEmitter.bind(this),
         this._parentId,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
@@ -312,6 +325,7 @@ class DurableContextImpl implements DurableContext {
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
+        this.getOperationsEmitter.bind(this),
         this._parentId,
       );
 
