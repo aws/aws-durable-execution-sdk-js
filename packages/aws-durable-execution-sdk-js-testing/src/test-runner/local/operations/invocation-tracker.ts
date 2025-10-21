@@ -1,19 +1,26 @@
-import { Invocation } from "../../durable-test-runner";
-import { InvocationId } from "../../../checkpoint-server/utils/tagged-strings";
+import { ErrorObject, Event } from "@aws-sdk/client-lambda";
+import {
+  ExecutionId,
+  InvocationId,
+} from "../../../checkpoint-server/utils/tagged-strings";
+import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 
 /**
- * Manages tracking of invocations and their relationship to operations.
- * Provides functionality to filter operations by invocation.
+ * Manages tracking of invocations in local runner.
  */
 export class InvocationTracker {
-  private invocations = new Map<InvocationId, Invocation>();
+  private invocations = new Set<InvocationId>();
+  private invocationOperationsMap = new Map<InvocationId, Set<string>>(); // invocationId -> Set of operationIds
   private completedInvocations = new Set<InvocationId>();
+
+  constructor(private readonly checkpointApi: CheckpointApiClient) {}
 
   /**
    * Reset all invocation tracking data.
    */
   reset(): void {
-    this.invocations = new Map();
+    this.invocations.clear();
+    this.invocationOperationsMap.clear();
     this.completedInvocations.clear();
   }
 
@@ -21,19 +28,13 @@ export class InvocationTracker {
    * Create a new invocation with the given ID.
    *
    * @param invocationId The ID of the invocation
-   * @returns The created invocation object
    */
-  createInvocation(invocationId: InvocationId): Invocation {
-    const invocation: Invocation = {
-      id: invocationId,
-    };
-
-    this.invocations.set(invocationId, invocation);
-    return invocation;
+  createInvocation(invocationId: InvocationId): void {
+    this.invocations.add(invocationId);
   }
 
   hasActiveInvocation(): boolean {
-    for (const invocationIds of this.invocations.keys()) {
+    for (const invocationIds of this.invocations) {
       if (!this.completedInvocations.has(invocationIds)) {
         return true;
       }
@@ -42,16 +43,25 @@ export class InvocationTracker {
     return false;
   }
 
-  completeInvocation(invocationId: InvocationId): void {
-    this.completedInvocations.add(invocationId);
-  }
+  async completeInvocation(
+    executionId: ExecutionId,
+    invocationId: InvocationId,
+    error: ErrorObject | undefined,
+  ): Promise<Event> {
+    if (!this.invocations.has(invocationId)) {
+      throw new Error(`Invocation with ID ${invocationId} not found`);
+    }
 
-  /**
-   * Get all tracked invocations.
-   *
-   * @returns Array of all invocations
-   */
-  getInvocations(): Invocation[] {
-    return [...this.invocations.values()];
+    // Must add to completed to completed invocations synchronously, otherwise the handler
+    // could try to re-invoke the function before an async operation completes.
+    this.completedInvocations.add(invocationId);
+
+    const invocationEvent = await this.checkpointApi.completeInvocation(
+      executionId,
+      invocationId,
+      error,
+    );
+
+    return invocationEvent;
   }
 }

@@ -9,6 +9,8 @@ describe("IndexedOperations", () => {
         Id: "op1",
         Name: "operation1",
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: new Date(),
+        Type: OperationType.STEP,
       },
       events: [
         {
@@ -21,6 +23,8 @@ describe("IndexedOperations", () => {
         Id: "op2",
         Name: "operation2",
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: new Date(),
+        Type: OperationType.STEP,
       },
       events: [
         {
@@ -33,6 +37,8 @@ describe("IndexedOperations", () => {
         Id: "op3",
         Name: "operation1", // Same name as first operation
         Status: OperationStatus.FAILED,
+        StartTimestamp: new Date(),
+        Type: OperationType.STEP,
       },
       events: [
         {
@@ -53,6 +59,54 @@ describe("IndexedOperations", () => {
       const indexed = new IndexedOperations([]);
 
       expect(indexed.getOperations()).toHaveLength(0);
+    });
+  });
+
+  describe("addHistoryEvent", () => {
+    it("should add all events when adding new operations", () => {
+      const indexed = new IndexedOperations([]);
+
+      const operations = [
+        {
+          operation: {
+            Id: "op1",
+            Name: "operation1",
+            Status: OperationStatus.STARTED,
+            StartTimestamp: new Date(),
+            Type: OperationType.STEP,
+          },
+          events: [{ EventId: 1 }, { EventId: 2 }],
+        },
+        {
+          operation: {
+            Id: "op2",
+            Name: "operation2",
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: new Date(),
+            Type: OperationType.STEP,
+          },
+          events: [{ EventId: 3 }, { EventId: 4 }],
+        },
+      ];
+
+      indexed.addOperations(operations);
+      const historyEvents = indexed.getHistoryEvents();
+
+      indexed.addHistoryEvent({
+        EventId: 5,
+      });
+
+      expect(historyEvents).toHaveLength(5);
+      expect(historyEvents.map((e) => e.EventId)).toEqual([1, 2, 3, 4, 5]);
+    });
+
+    it("should add history event correctly", () => {
+      const indexed = new IndexedOperations([]);
+      indexed.addHistoryEvent({
+        EventId: 1,
+      });
+
+      expect(indexed.getHistoryEvents()).toHaveLength(1);
     });
   });
 

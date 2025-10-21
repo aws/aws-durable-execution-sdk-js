@@ -23,6 +23,10 @@ export class IndexedOperations {
     this.addOperations(operations);
   }
 
+  addHistoryEvent(event: Event) {
+    this.historyEvents.push(event);
+  }
+
   getHistoryEvents(): Event[] {
     return this.historyEvents;
   }

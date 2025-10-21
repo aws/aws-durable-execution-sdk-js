@@ -142,9 +142,14 @@ export class LocalDurableTestRunner<ResultType>
       const lambdaResponse = await orchestrator.executeHandler(params);
       return this.resultFormatter.formatTestResult(
         lambdaResponse,
-        this.operationStorage.getHistoryEvents(),
+        this.operationStorage
+          .getHistoryEvents()
+          // TODO: the history events are not ordered because of the checkpoint polling loop
+          // occurring in a different orderfrom the invocation completion.
+          // We need to sort the events until the polling loop is fixed. Without the sort, InvocationCompleted
+          // will come before some checkpoint events that occurred previously.
+          .sort((a, b) => (a.EventId && b.EventId ? a.EventId - b.EventId : 0)),
         this.operationStorage,
-        orchestrator.getInvocations(),
       );
     } finally {
       this.waitManager.clearWaitingOperations();

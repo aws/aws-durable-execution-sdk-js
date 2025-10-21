@@ -1,12 +1,9 @@
-import {
-  TestResult,
-  TestResultError,
-  Invocation,
-} from "../durable-test-runner";
+import { TestResult, TestResultError } from "../durable-test-runner";
 import { tryJsonParse } from "../common/utils";
 import { TestExecutionResult } from "../common/test-execution-state";
-import { OperationStatus, Event } from "@aws-sdk/client-lambda";
+import { OperationStatus, Event, EventType } from "@aws-sdk/client-lambda";
 import { OperationStorage } from "../common/operation-storage";
+import { transformErrorObjectToErrorResult } from "../../utils";
 
 /**
  * Handles formatting and processing of execution results for LocalDurableTestRunner.
@@ -25,8 +22,17 @@ export class ResultFormatter<ResultType> {
     lambdaResponse: TestExecutionResult,
     events: Event[],
     operationStorage: OperationStorage,
-    invocations: Invocation[],
   ): TestResult<ResultType> {
+    const invocations = events
+      .filter((event) => event.EventType === EventType.InvocationCompleted)
+      .map((event) => ({
+        startTimestamp: event.InvocationCompletedDetails?.StartTimestamp,
+        endTimestamp: event.InvocationCompletedDetails?.EndTimestamp,
+        requestId: event.InvocationCompletedDetails?.RequestId,
+        error: transformErrorObjectToErrorResult(
+          event.InvocationCompletedDetails?.Error?.Payload,
+        ),
+      }));
     return {
       getStatus: () => lambdaResponse.status,
       getOperations: (params) => {

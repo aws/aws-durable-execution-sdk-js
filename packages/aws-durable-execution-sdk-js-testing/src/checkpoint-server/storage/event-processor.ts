@@ -57,18 +57,18 @@ export class EventProcessor {
    */
   createHistoryEvent<T extends keyof Event>(
     eventType: EventType,
-    operation: Operation,
+    operation: Operation | undefined,
     detailPlace: T,
     details: Event[T],
   ): Event {
     return {
       EventType: eventType,
-      SubType: operation.SubType,
+      SubType: operation?.SubType,
       EventId: this.eventId++,
-      Id: operation.Id,
-      Name: operation.Name,
+      Id: operation?.Id,
+      Name: operation?.Name,
       EventTimestamp: new Date(),
-      ParentId: operation.ParentId,
+      ParentId: operation?.ParentId,
       [detailPlace]: details,
     };
   }

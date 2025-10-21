@@ -9,7 +9,7 @@ import {
   OperationUpdate,
 } from "@aws-sdk/client-lambda";
 import { randomUUID } from "node:crypto";
-import { CallbackId, ExecutionId } from "../utils/tagged-strings";
+import { CallbackId, ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";
 import { EventProcessor } from "./event-processor";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
@@ -33,15 +33,38 @@ export class CheckpointManager {
   private readonly callbackManager: CallbackManager;
   // TODO: add execution timeout
   readonly eventProcessor = new EventProcessor();
+  private readonly invocationsMap = new Map<InvocationId, Date>();
 
   private _isExecutionCompleted = false;
+
+  constructor(executionId: ExecutionId) {
+    this.callbackManager = new CallbackManager(executionId, this);
+  }
 
   isExecutionCompleted() {
     return this._isExecutionCompleted;
   }
 
-  constructor(executionId: ExecutionId) {
-    this.callbackManager = new CallbackManager(executionId, this);
+  startInvocation(invocationId: InvocationId) {
+    this.invocationsMap.set(invocationId, new Date());
+  }
+
+  completeInvocation(invocationId: InvocationId): {
+    startTimestamp: Date;
+    endTimestamp: Date;
+  } {
+    const startTimestamp = this.invocationsMap.get(invocationId);
+
+    if (!startTimestamp) {
+      throw new Error(`Invocation with ID ${invocationId} not found`);
+    }
+
+    this.invocationsMap.delete(invocationId);
+
+    return {
+      startTimestamp,
+      endTimestamp: new Date(),
+    };
   }
 
   getState(): Operation[] {

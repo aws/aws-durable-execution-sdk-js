@@ -28,6 +28,10 @@ export class LocalOperationStorage extends OperationStorage {
     return this.events;
   }
 
+  addHistoryEvent(event: Event) {
+    this.indexedOperations.addHistoryEvent(event);
+  }
+
   /**
    * Will be run every time checkpoint data is received.
    * @param newCheckpointOperations

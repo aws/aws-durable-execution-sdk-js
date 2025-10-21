@@ -18,24 +18,20 @@ createTests<string>({
       expect(result).toBe("first success");
     });
 
-    (isCloud ? it : it.skip)(
-      "should fail if all promises fail - failure case",
-      async () => {
-        const execution = await runner.run({
-          payload: {
-            shouldFail: true,
-          },
-        });
+    it("should fail if all promises fail - failure case", async () => {
+      const execution = await runner.run({
+        payload: {
+          shouldFail: true,
+        },
+      });
 
-        expect(execution.getError()).toEqual({
-          errorMessage: "All promises were rejected",
-          errorType: "StepError",
-          errorData: undefined,
-          stackTrace: undefined,
-        });
-        expect(execution.getOperations()).toHaveLength(4);
-      },
-      30000,
-    );
+      expect(execution.getError()).toEqual({
+        errorMessage: "All promises were rejected",
+        errorType: "StepError",
+        errorData: undefined,
+        stackTrace: undefined,
+      });
+      expect(execution.getOperations()).toHaveLength(4);
+    });
   },
 });

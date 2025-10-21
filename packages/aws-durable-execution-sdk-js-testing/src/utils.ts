@@ -55,7 +55,7 @@ export function convertDatesToTimestamps<T>(obj: T): ConvertDatesToNumbers<T> {
   const result = mapValuesDeep(obj, (value) => {
     // Handle Date objects and convert them to numbers
     if (value instanceof Date) {
-      return Math.floor(value.getTime() / 1000);
+      return value.getTime() / 1000;
     }
 
     // Return unchanged for other types

@@ -22,6 +22,14 @@ describe("convertDatesToTimestamps", () => {
     expect(convertDatesToTimestamps(input)).toEqual(expected);
   });
 
+  it("should convert Date objects to timestamps with milliseconds", () => {
+    const date = new Date("2023-01-01T12:00:00.123Z");
+    const input = { date };
+    const expected = { date: date.getTime() / 1000 };
+
+    expect(convertDatesToTimestamps(input)).toEqual(expected);
+  });
+
   it("should handle nested objects with dates", () => {
     const date = new Date("2023-01-01T12:00:00Z");
     const nestedDate = new Date("2023-02-01T12:00:00.000Z");

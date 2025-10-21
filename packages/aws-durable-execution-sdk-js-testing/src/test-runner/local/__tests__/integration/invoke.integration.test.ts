@@ -75,11 +75,21 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
           },
         },
       },
-      // TODO: add support for PENDING chained invoke operation
+      {
+        EventId: 3,
+        EventTimestamp: expect.any(Date),
+        EventType: "InvocationCompleted",
+        InvocationCompletedDetails: {
+          EndTimestamp: expect.any(Date),
+          Error: {},
+          RequestId: expect.any(String),
+          StartTimestamp: expect.any(Date),
+        },
+      },
       {
         EventType: "ChainedInvokeSucceeded",
         SubType: "ChainedInvoke",
-        EventId: 3,
+        EventId: 4,
         Id: "c4ca4238a0b92382",
         Name: "durableOperation",
         EventTimestamp: expect.any(Date),
@@ -94,7 +104,18 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
         },
       },
       {
-        EventId: 4,
+        EventId: 5,
+        EventTimestamp: expect.any(Date),
+        EventType: "InvocationCompleted",
+        InvocationCompletedDetails: {
+          EndTimestamp: expect.any(Date),
+          Error: {},
+          RequestId: expect.any(String),
+          StartTimestamp: expect.any(Date),
+        },
+      },
+      {
+        EventId: 6,
         EventTimestamp: expect.any(Date),
         EventType: "ExecutionSucceeded",
         ExecutionSucceededDetails: {

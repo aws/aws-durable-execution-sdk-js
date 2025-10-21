@@ -1,7 +1,12 @@
 import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import { OperationStatus, OperationType, Event } from "@aws-sdk/client-lambda";
+import {
+  OperationStatus,
+  OperationType,
+  Event,
+  EventType,
+} from "@aws-sdk/client-lambda";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { TestExecutionResult } from "../../common/test-execution-state";
@@ -43,6 +48,7 @@ describe("ResultFormatter", () => {
               Name: "operation1",
               Type: OperationType.STEP,
               Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: new Date(),
             },
             events: [],
           },
@@ -56,21 +62,14 @@ describe("ResultFormatter", () => {
         result: JSON.stringify({ success: true }),
       };
 
-      // Create mock invocations
-      const mockInvocations = [
-        { id: "inv-1", getOperations: jest.fn() },
-        { id: "inv-2", getOperations: jest.fn() },
-      ];
-
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
         [],
         mockOperationStorage,
-        mockInvocations,
       );
 
       expect(testResult.getOperations()).toEqual(mockOperations);
-      expect(testResult.getInvocations()).toEqual(mockInvocations);
+      expect(testResult.getInvocations()).toEqual([]);
       expect(testResult.getResult()).toEqual({
         success: true,
       });
@@ -88,6 +87,7 @@ describe("ResultFormatter", () => {
             Name: "succeededOp",
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: new Date(),
           },
           events: [],
         },
@@ -103,6 +103,7 @@ describe("ResultFormatter", () => {
             Name: "failedOp",
             Type: OperationType.STEP,
             Status: OperationStatus.FAILED,
+            StartTimestamp: new Date(),
           },
           events: [],
         },
@@ -120,7 +121,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       // Test filtering by SUCCEEDED status
@@ -138,7 +138,7 @@ describe("ResultFormatter", () => {
       expect(failedOps[0].getStatus()).toBe(OperationStatus.FAILED);
     });
 
-    it("should pass invocations from parameters to test result", () => {
+    it("should pass invocations from history to test result", () => {
       mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
@@ -146,34 +146,104 @@ describe("ResultFormatter", () => {
         result: JSON.stringify({ success: true }),
       };
 
-      const mockInvocations = [
+      const invocationCompletedDate1 = {
+        startTimestamp: new Date(1),
+        endTimestamp: new Date(2),
+      };
+
+      const invocationCompletedDate2 = {
+        startTimestamp: new Date(3),
+        endTimestamp: new Date(4),
+      };
+
+      const invocationCompletedDate3 = {
+        startTimestamp: new Date(5),
+      };
+
+      const mockEvents: Event[] = [
         {
-          id: "inv-1",
-          getOperations: jest.fn().mockReturnValue([]),
+          EventType: EventType.StepStarted,
+          StepStartedDetails: {},
         },
         {
-          id: "inv-2",
-          getOperations: jest.fn().mockReturnValue([]),
+          EventType: EventType.InvocationCompleted,
+          InvocationCompletedDetails: {
+            StartTimestamp: invocationCompletedDate1.startTimestamp,
+            EndTimestamp: invocationCompletedDate1.endTimestamp,
+            Error: undefined,
+            RequestId: "inv-1",
+          },
         },
         {
-          id: "inv-3",
-          getOperations: jest.fn().mockReturnValue([]),
+          EventType: EventType.StepStarted,
+          StepStartedDetails: {},
+        },
+        {
+          EventType: EventType.InvocationCompleted,
+          InvocationCompletedDetails: {
+            StartTimestamp: invocationCompletedDate2.startTimestamp,
+            EndTimestamp: invocationCompletedDate2.endTimestamp,
+            Error: {
+              Payload: {
+                ErrorMessage: "hello world",
+              },
+            },
+            RequestId: "inv-2",
+          },
+        },
+        {
+          EventType: EventType.StepSucceeded,
+          StepSucceededDetails: {
+            Result: {},
+            RetryDetails: {},
+          },
+        },
+        {
+          EventType: EventType.InvocationCompleted,
+          InvocationCompletedDetails: {
+            StartTimestamp: invocationCompletedDate3.startTimestamp,
+            EndTimestamp: undefined,
+            Error: {
+              Payload: {},
+            },
+            RequestId: "inv-3",
+          },
         },
       ];
 
       const testResult = resultFormatter.formatTestResult(
         lambdaResponse,
-        [],
+        mockEvents,
         mockOperationStorage,
-        mockInvocations,
       );
 
       const returnedInvocations = testResult.getInvocations();
-      expect(returnedInvocations).toEqual(mockInvocations);
+      expect(returnedInvocations).toEqual([
+        {
+          startTimestamp: invocationCompletedDate1.startTimestamp,
+          endTimestamp: invocationCompletedDate1.endTimestamp,
+          error: undefined,
+          requestId: "inv-1",
+        },
+        {
+          startTimestamp: invocationCompletedDate2.startTimestamp,
+          endTimestamp: invocationCompletedDate2.endTimestamp,
+          error: {
+            errorMessage: "hello world",
+          },
+          requestId: "inv-2",
+        },
+        {
+          startTimestamp: invocationCompletedDate3.startTimestamp,
+          endTimestamp: undefined,
+          error: {},
+          requestId: "inv-3",
+        },
+      ]);
       expect(returnedInvocations).toHaveLength(3);
-      expect(returnedInvocations[0].id).toBe("inv-1");
-      expect(returnedInvocations[1].id).toBe("inv-2");
-      expect(returnedInvocations[2].id).toBe("inv-3");
+      expect(returnedInvocations[0].requestId).toBe("inv-1");
+      expect(returnedInvocations[1].requestId).toBe("inv-2");
+      expect(returnedInvocations[2].requestId).toBe("inv-3");
     });
 
     it("should handle undefined value", () => {
@@ -188,7 +258,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getResult()).toEqual("");
@@ -206,7 +275,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getResult()).toEqual("raw-string-value");
@@ -224,7 +292,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getResult()).toEqual("{ invalid json");
@@ -238,6 +305,7 @@ describe("ResultFormatter", () => {
             Name: "operation1",
             Status: OperationStatus.SUCCEEDED,
             Type: OperationType.STEP,
+            StartTimestamp: new Date(),
           },
           update: {},
           events: [],
@@ -248,6 +316,7 @@ describe("ResultFormatter", () => {
             Name: "operation2",
             Status: OperationStatus.SUCCEEDED,
             Type: OperationType.WAIT,
+            StartTimestamp: new Date(),
           },
           update: {},
           events: [],
@@ -273,7 +342,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getOperations()).toEqual(mockOperations);
@@ -302,7 +370,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getResult()).toEqual(complexData);
@@ -318,7 +385,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(() => testResult.getResult()).toThrow("Execution failed");
@@ -334,7 +400,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       let thrownError: Error;
@@ -343,7 +408,6 @@ describe("ResultFormatter", () => {
       } catch (error) {
         thrownError = error as Error;
       }
-
       // The stack should be cleaned to remove ResultFormatter references
       expect(thrownError!.stack).toBeDefined();
       expect(thrownError!.stack).not.toContain("ResultFormatter");
@@ -363,7 +427,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getError()).toEqual({
@@ -381,7 +444,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(() => testResult.getError()).toThrow(
@@ -399,7 +461,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(() => testResult.getError()).toThrow(
@@ -417,7 +478,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(() => testResult.getError()).toThrow(
@@ -441,7 +501,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getError()).toEqual({
@@ -479,7 +538,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         mockEvents,
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getHistoryEvents()).toEqual(mockEvents);
@@ -497,7 +555,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getHistoryEvents()).toEqual([]);
@@ -517,7 +574,6 @@ describe("ResultFormatter", () => {
         lambdaResponse,
         [],
         mockOperationStorage,
-        [],
       );
 
       expect(testResult.getStatus()).toBe(OperationStatus.SUCCEEDED);

@@ -120,5 +120,8 @@ export interface TestResult<T> {
 
 // Tracks a single invocation of the handler function
 export interface Invocation {
-  id: string;
+  startTimestamp: Date | undefined;
+  endTimestamp: Date | undefined;
+  requestId: string | undefined;
+  error: TestResultError | undefined;
 }

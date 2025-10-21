@@ -130,6 +130,15 @@ describe("TestExecutionOrchestrator", () => {
       operationEvents: [],
     });
 
+    jest.spyOn(checkpointApi, "completeInvocation").mockResolvedValue({
+      EventType: "InvocationCompleted",
+      InvocationCompletedDetails: {
+        RequestId: "invocation-request-id",
+        StartTimestamp: new Date(),
+        EndTimestamp: new Date(),
+      },
+    });
+
     const mockInvocationResult = {
       Status: InvocationStatus.SUCCEEDED,
       Result: JSON.stringify({ success: true }),
