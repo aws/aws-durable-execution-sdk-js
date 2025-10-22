@@ -1,4 +1,4 @@
-import { BatchResult } from "../../handlers/concurrent-execution-handler/batch-result";
+import { BatchResult } from "../../types";
 
 /**
  * Creates a predefined summary generator for parallel operations

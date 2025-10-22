@@ -1,35 +1,4 @@
-import { BatchItemStatus } from "../../types";
-
-export interface BatchItem<R> {
-  result?: R;
-  error?: Error;
-  index: number;
-  status: BatchItemStatus;
-}
-
-export interface BatchResult<R> {
-  all: Array<BatchItem<R>>;
-
-  succeeded(): Array<BatchItem<R> & { result: R }>;
-  failed(): Array<BatchItem<R> & { error: Error }>;
-  started(): Array<BatchItem<R> & { status: BatchItemStatus.STARTED }>;
-
-  status: BatchItemStatus.SUCCEEDED | BatchItemStatus.FAILED;
-  completionReason:
-    | "ALL_COMPLETED"
-    | "MIN_SUCCESSFUL_REACHED"
-    | "FAILURE_TOLERANCE_EXCEEDED";
-  hasFailure: boolean;
-
-  throwIfError(): void;
-  getResults(): Array<R>;
-  getErrors(): Array<Error>;
-
-  successCount: number;
-  failureCount: number;
-  startedCount: number;
-  totalCount: number;
-}
+import { BatchItemStatus, BatchItem, BatchResult } from "../../types";
 
 export class BatchResultImpl<R> implements BatchResult<R> {
   constructor(

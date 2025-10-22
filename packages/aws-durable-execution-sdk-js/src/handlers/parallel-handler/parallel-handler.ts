@@ -7,9 +7,9 @@ import {
   ConcurrentExecutor,
   OperationSubType,
   NamedParallelBranch,
+  BatchResult,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
-import { BatchResult } from "../concurrent-execution-handler/batch-result";
 import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
 
 export const createParallelHandler = (
@@ -23,12 +23,12 @@ export const createParallelHandler = (
       | (ParallelFunc<T> | NamedParallelBranch<T>)[],
     branchesOrConfig?:
       | (ParallelFunc<T> | NamedParallelBranch<T>)[]
-      | ParallelConfig,
-    maybeConfig?: ParallelConfig,
+      | ParallelConfig<T>,
+    maybeConfig?: ParallelConfig<T>,
   ): Promise<BatchResult<T>> => {
     let name: string | undefined;
     let branches: (ParallelFunc<T> | NamedParallelBranch<T>)[];
-    let config: ParallelConfig | undefined;
+    let config: ParallelConfig<T> | undefined;
 
     // Parse overloaded parameters
     if (typeof nameOrBranches === "string" || nameOrBranches === undefined) {
@@ -42,7 +42,7 @@ export const createParallelHandler = (
     } else {
       // Case: parallel(branches, config?)
       branches = nameOrBranches;
-      config = branchesOrConfig as ParallelConfig;
+      config = branchesOrConfig as ParallelConfig<T>;
     }
 
     // Validate inputs
@@ -111,6 +111,8 @@ export const createParallelHandler = (
       iterationSubType: OperationSubType.PARALLEL_BRANCH,
       summaryGenerator: createParallelSummaryGenerator(),
       completionConfig: config?.completionConfig,
+      serdes: config?.serdes,
+      itemSerdes: config?.itemSerdes,
     });
 
     log("🔀", "Parallel operation completed successfully:", {

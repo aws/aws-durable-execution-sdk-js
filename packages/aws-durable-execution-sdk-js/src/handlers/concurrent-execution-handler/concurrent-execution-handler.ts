@@ -3,49 +3,16 @@ import {
   DurableContext,
   BatchItemStatus,
   DurableExecutionMode,
+  ConcurrencyConfig,
+  ConcurrentExecutionItem,
+  ConcurrentExecutor,
+  BatchResult,
+  BatchItem,
 } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import {
-  BatchResult,
-  BatchItem,
-  BatchResultImpl,
-  restoreBatchResult,
-} from "./batch-result";
+import { BatchResultImpl, restoreBatchResult } from "./batch-result";
 import { defaultSerdes } from "../../utils/serdes/serdes";
-
-/**
- * Represents an item to be executed with metadata for deterministic replay
- */
-export interface ConcurrentExecutionItem<T> {
-  id: string;
-  data: T;
-  index: number;
-  name?: string;
-}
-
-/**
- * Configuration for concurrency control
- */
-export interface ConcurrencyConfig<TResult = unknown> {
-  maxConcurrency?: number;
-  topLevelSubType?: string;
-  iterationSubType?: string;
-  summaryGenerator?: (result: BatchResult<TResult>) => string;
-  completionConfig?: {
-    minSuccessful?: number;
-    toleratedFailureCount?: number;
-    toleratedFailurePercentage?: number;
-  };
-}
-
-/**
- * Executor function type for concurrent execution
- */
-export type ConcurrentExecutor<TItem, TResult> = (
-  item: ConcurrentExecutionItem<TItem>,
-  childContext: DurableContext,
-) => Promise<TResult>;
 
 export class ConcurrencyController {
   constructor(
@@ -91,14 +58,11 @@ export class ConcurrencyController {
 
         if (summaryPayload) {
           try {
-            // TODO: Use custom serdes from ConcurrencyConfig when available
-            const parsedSummary = await defaultSerdes.deserialize(
-              summaryPayload,
-              {
-                entityId: entityId,
-                durableExecutionArn: executionContext.durableExecutionArn,
-              },
-            );
+            const serdes = config.serdes || defaultSerdes;
+            const parsedSummary = await serdes.deserialize(summaryPayload, {
+              entityId: entityId,
+              durableExecutionArn: executionContext.durableExecutionArn,
+            });
             if (parsedSummary && typeof parsedSummary === "object") {
               const initialResult = restoreBatchResult<R>(parsedSummary);
               targetTotalCount = initialResult.totalCount;
@@ -195,7 +159,7 @@ export class ConcurrencyController {
         const result = await parentContext.runInChildContext(
           item.name || item.id,
           (childContext) => executor(item, childContext),
-          { subType: config.iterationSubType },
+          { subType: config.iterationSubType, serdes: config.itemSerdes },
         );
 
         resultItems.push({
@@ -359,7 +323,7 @@ export class ConcurrencyController {
             .runInChildContext(
               item.name || item.id,
               (childContext) => executor(item, childContext),
-              { subType: config.iterationSubType },
+              { subType: config.iterationSubType, serdes: config.itemSerdes },
             )
             .then(
               (result) => {
@@ -533,6 +497,7 @@ export const createConcurrentExecutionHandler = (
     return await runInChildContext(name, executeOperation, {
       subType: config?.topLevelSubType,
       summaryGenerator: config?.summaryGenerator,
+      serdes: config?.serdes,
     }).then((result) => {
       // Restore BatchResult methods if the result came from deserialized data
       if (

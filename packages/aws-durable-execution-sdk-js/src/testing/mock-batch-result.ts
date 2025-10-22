@@ -1,8 +1,4 @@
-import {
-  BatchResult,
-  BatchItem,
-} from "../handlers/concurrent-execution-handler/batch-result";
-import { BatchItemStatus } from "../types";
+import { BatchResult, BatchItem, BatchItemStatus } from "../types";
 
 export class MockBatchResult<R> implements BatchResult<R> {
   constructor(
