@@ -1,4 +1,8 @@
-import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
+import {
+  LocalDurableTestRunner,
+  OperationType,
+  OperationStatus,
+} from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "../step-with-retry";
 
 const EXPECTED_RESULT = "step succeeded";
@@ -43,5 +47,36 @@ describe("step-with-retry test", () => {
     // verify durable step completed with an error
     const stepOp = durableTestRunner.getOperationByIndex(0);
     expect(stepOp.getStepDetails()?.error).toBeDefined();
+  });
+
+  it("should track retry attempts and success details", async () => {
+    // Mock to fail twice, then succeed
+    jest
+      .spyOn(Math, "random")
+      .mockReturnValueOnce(0.1)
+      .mockReturnValueOnce(0.1)
+      .mockReturnValue(1);
+
+    const execution = await durableTestRunner.run();
+    const retryStepOp = durableTestRunner.getOperationByIndex(0);
+
+    // The step should eventually succeed
+    expect(execution.getResult()).toBe(EXPECTED_RESULT);
+
+    // Verify operation details
+    expect(retryStepOp.getType()).toBe(OperationType.STEP);
+    expect(retryStepOp.getStatus()).toBe(OperationStatus.SUCCEEDED);
+
+    // Verify retry details are tracked
+    const stepDetails = retryStepOp.getStepDetails();
+    expect(stepDetails).toBeDefined();
+    expect(stepDetails?.result).toEqual(EXPECTED_RESULT);
+
+    execution.print();
+
+    // Verify retry attempt tracking (should be 2 attempts before success)
+    expect(typeof stepDetails?.attempt).toBe("number");
+    expect(stepDetails?.attempt).toBeGreaterThanOrEqual(1);
+    expect(stepDetails?.attempt).toBeLessThanOrEqual(3);
   });
 });
