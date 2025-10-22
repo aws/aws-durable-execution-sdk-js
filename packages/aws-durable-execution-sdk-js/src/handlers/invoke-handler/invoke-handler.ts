@@ -15,6 +15,7 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
+import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -65,6 +66,18 @@ export const createInvokeHandler = (
     while (true) {
       // Check if we have existing step data
       const stepData = context.getStepData(stepId);
+
+      // Validate replay consistency
+      validateReplayConsistency(
+        stepId,
+        {
+          type: OperationType.CHAINED_INVOKE,
+          name,
+          subType: OperationSubType.CHAINED_INVOKE,
+        },
+        stepData,
+        context,
+      );
 
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         // Return cached result - no need to check for errors in successful operations

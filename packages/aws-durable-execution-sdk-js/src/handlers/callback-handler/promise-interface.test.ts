@@ -1,5 +1,5 @@
 import { createCallback } from "./callback";
-import { ExecutionContext } from "../../types";
+import { ExecutionContext, OperationSubType } from "../../types";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
@@ -28,7 +28,9 @@ describe("Callback Handler Promise Interface", () => {
       const hashedStepId = hashId(stepId) as any;
       mockContext._stepData[hashedStepId] = {
         Id: hashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: "STARTED" as any,
         CallbackDetails: {
@@ -204,7 +206,9 @@ describe("Callback Handler Promise Interface", () => {
 
       mockContext._stepData[hashedStepId] = {
         Id: hashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         CallbackDetails: {
@@ -247,7 +251,9 @@ describe("Callback Handler Promise Interface", () => {
 
       mockContext._stepData[hashedStepId] = {
         Id: hashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
@@ -288,7 +294,9 @@ describe("Callback Handler Promise Interface", () => {
       const completedHashedStepId = hashId(completedStepId);
       mockContext._stepData[completedHashedStepId] = {
         Id: completedHashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         CallbackDetails: {
@@ -347,7 +355,9 @@ describe("Callback Handler Promise Interface", () => {
 
       mockContext._stepData[hashedStepId] = {
         Id: hashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
@@ -382,7 +392,9 @@ describe("Callback Handler Promise Interface", () => {
 
       mockContext._stepData[hashedStepId] = {
         Id: hashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
@@ -421,7 +433,9 @@ describe("Callback Handler Promise Interface", () => {
 
       mockContext._stepData[hashedStepId] = {
         Id: hashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: OperationStatus.FAILED,
         CallbackDetails: {
@@ -474,7 +488,9 @@ describe("Callback Handler Promise Interface", () => {
       const hashedStepId = hashId(stepId);
       mockContext._stepData[hashedStepId] = {
         Id: hashedStepId,
-        Type: OperationType.STEP,
+        Type: OperationType.CALLBACK,
+        SubType: OperationSubType.CALLBACK,
+        Name: "test-callback",
         StartTimestamp: new Date(),
         Status: "STARTED" as any,
         CallbackDetails: {

@@ -1,9 +1,9 @@
 import {
   createParallelSummaryGenerator,
   createMapSummaryGenerator,
-} from "./summary-generators/summary-generators";
-import { BatchResultImpl } from "../handlers/concurrent-execution-handler/batch-result";
-import { BatchItemStatus } from "../types";
+} from "./summary-generators";
+import { BatchResultImpl } from "../../handlers/concurrent-execution-handler/batch-result";
+import { BatchItemStatus } from "../../types";
 
 describe("Summary Generators", () => {
   describe("createParallelSummaryGenerator", () => {
