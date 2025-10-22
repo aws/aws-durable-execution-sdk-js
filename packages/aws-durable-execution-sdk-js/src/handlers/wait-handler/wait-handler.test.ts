@@ -14,6 +14,7 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
 
 // Mock the logger to avoid console output during tests
 jest.mock("../../utils/logger/logger", () => ({
@@ -248,7 +249,7 @@ describe("Wait Handler", () => {
       // Simulate operations completing after 150ms
       setTimeout(() => {
         operationsRunning = false;
-        mockOperationsEmitter.emit("allOperationsComplete");
+        mockOperationsEmitter.emit(OPERATIONS_COMPLETE_EVENT);
       }, 150);
 
       // Wait for the event to be processed and terminate
@@ -303,7 +304,7 @@ describe("Wait Handler", () => {
       // Simulate step operation completing (after 1 second)
       setTimeout(() => {
         operationsRunning = false;
-        mockOperationsEmitter.emit("allOperationsComplete");
+        mockOperationsEmitter.emit(OPERATIONS_COMPLETE_EVENT);
       }, 100);
 
       // Wait for operations to complete and handler to terminate

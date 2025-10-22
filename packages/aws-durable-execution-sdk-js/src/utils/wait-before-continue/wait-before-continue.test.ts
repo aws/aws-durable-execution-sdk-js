@@ -2,6 +2,7 @@ import { waitBeforeContinue } from "./wait-before-continue";
 import { ExecutionContext } from "../../types";
 import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
+import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
 
 describe("waitBeforeContinue", () => {
   let mockContext: jest.Mocked<ExecutionContext>;
@@ -42,7 +43,7 @@ describe("waitBeforeContinue", () => {
     // Complete operations after 50ms
     const timer = setTimeout(() => {
       operationsRunning = false;
-      mockOperationsEmitter.emit("allOperationsComplete");
+      mockOperationsEmitter.emit(OPERATIONS_COMPLETE_EVENT);
     }, 50);
     timers.push(timer);
 

@@ -43,6 +43,8 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 import { EventEmitter } from "events";
 
+export const OPERATIONS_COMPLETE_EVENT = "allOperationsComplete";
+
 class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
@@ -157,7 +159,7 @@ class DurableContextImpl implements DurableContext {
   private removeRunningOperation(stepId: string): void {
     this.runningOperations.delete(stepId);
     if (this.runningOperations.size === 0) {
-      this.operationsEmitter.emit("allOperationsComplete");
+      this.operationsEmitter.emit(OPERATIONS_COMPLETE_EVENT);
     }
   }
 
