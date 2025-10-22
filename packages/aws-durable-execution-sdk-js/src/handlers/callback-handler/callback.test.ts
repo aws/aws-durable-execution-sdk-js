@@ -951,7 +951,6 @@ describe("Callback Handler", () => {
           stepId: expect.any(String),
           context: mockExecutionContext,
           hasRunningOperations: mockHasRunningOperations,
-          pollingInterval: 1000,
         }),
       );
     });
@@ -1102,7 +1101,6 @@ describe("Callback Handler", () => {
           stepId: expect.any(String),
           context: mockExecutionContext,
           hasRunningOperations: mockHasRunningOperations,
-          pollingInterval: 1000,
         }),
       );
     });
@@ -1146,7 +1144,6 @@ describe("Callback Handler", () => {
           stepId: expect.any(String),
           context: mockExecutionContext,
           hasRunningOperations: mockHasRunningOperations,
-          pollingInterval: 1000,
         }),
       );
     });
@@ -1186,44 +1183,6 @@ describe("Callback Handler", () => {
       promise.then(() => {}).catch(() => {});
 
       expect(mockHasRunningOperations).toHaveBeenCalled();
-    });
-
-    test("should use 1000ms polling interval for waitBeforeContinue", async () => {
-      const mockHasRunningOperations = jest.fn().mockReturnValue(true);
-
-      const callbackHandler = createCallback(
-        mockExecutionContext,
-        mockCheckpoint,
-        createStepId,
-        mockHasRunningOperations,
-        () => new EventEmitter(),
-      );
-
-      mockExecutionContext.getStepData.mockReturnValue({
-        Id: TEST_CONSTANTS.CALLBACK_ID,
-        Type: OperationType.CALLBACK,
-        StartTimestamp: new Date(),
-        Status: OperationStatus.STARTED,
-        CallbackDetails: { CallbackId: "callback-123" },
-      });
-
-      const [promise] = await callbackHandler<string>("test-callback");
-
-      // Mock waitBeforeContinue
-      const mockWaitBeforeContinue = (
-        await import("../../utils/wait-before-continue/wait-before-continue")
-      ).waitBeforeContinue as jest.Mock;
-      mockWaitBeforeContinue.mockResolvedValue({ reason: "operations" });
-
-      // Trigger the promise
-      promise.then(() => {}).catch(() => {});
-
-      // Verify 1000ms polling interval is used
-      expect(mockWaitBeforeContinue).toHaveBeenCalledWith(
-        expect.objectContaining({
-          pollingInterval: 1000,
-        }),
-      );
     });
 
     test("should handle callback completion during operation wait (SUCCEEDED path)", async () => {

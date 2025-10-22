@@ -68,7 +68,11 @@ class DurableContextImpl implements DurableContext {
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
     this.contextLogger = inheritedLogger || null;
-    this.checkpoint = createCheckpoint(executionContext, checkpointToken || "");
+    this.checkpoint = createCheckpoint(
+      executionContext,
+      checkpointToken || "",
+      this.operationsEmitter,
+    );
     this.durableExecutionMode = durableExecutionMode;
 
     const getLogger = (): Logger => {

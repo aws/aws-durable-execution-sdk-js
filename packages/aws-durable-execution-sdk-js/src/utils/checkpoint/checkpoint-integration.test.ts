@@ -5,6 +5,7 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { hashId } from "../step-id-utils/step-id-utils";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
+import { EventEmitter } from "events";
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
@@ -15,11 +16,13 @@ describe("Checkpoint Integration Tests", () => {
   let mockTerminationManager: TerminationManager;
   let mockState: any;
   let mockContext: ExecutionContext;
+  let mockEmitter: EventEmitter;
 
   const mockNewTaskToken = "new-task-token";
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
     jest.spyOn(mockTerminationManager, "terminate");
@@ -41,6 +44,7 @@ describe("Checkpoint Integration Tests", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Create many concurrent checkpoint requests
@@ -71,6 +75,7 @@ describe("Checkpoint Integration Tests", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Create checkpoints with different operation types and actions
@@ -148,6 +153,7 @@ describe("Checkpoint Integration Tests", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Create many requests (previously would have been split by max batch size)
@@ -180,6 +186,7 @@ describe("Checkpoint Integration Tests", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Create many requests (previously would have required multiple batches)
@@ -216,10 +223,12 @@ describe("Checkpoint Integration Tests", () => {
     const checkpoint1 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     ); // Should return same handler (first context)
 
     // Execute checkpoints - both should use the first context (mockContext)

@@ -4,6 +4,7 @@ import { ExecutionContext } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { CheckpointHandler } from "./checkpoint";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
+import { EventEmitter } from "events";
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
@@ -15,11 +16,13 @@ describe("CheckpointHandler - Ancestor Checking", () => {
   let mockState: any;
   let mockContext: ExecutionContext;
   let checkpointHandler: CheckpointHandler;
+  let mockEmitter: EventEmitter;
 
   const mockNewTaskToken = "new-task-token";
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
     jest.spyOn(mockTerminationManager, "terminate");
@@ -44,6 +47,7 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     checkpointHandler = new CheckpointHandler(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
   });
 

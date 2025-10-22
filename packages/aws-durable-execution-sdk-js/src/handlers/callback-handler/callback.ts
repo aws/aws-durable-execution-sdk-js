@@ -49,7 +49,6 @@ export class TerminatingPromise<T> implements Promise<T> {
           context: this.context,
           hasRunningOperations: this.hasRunningOperations,
           operationsEmitter: this.operationsEmitter,
-          pollingInterval: 1000,
         });
       }
 

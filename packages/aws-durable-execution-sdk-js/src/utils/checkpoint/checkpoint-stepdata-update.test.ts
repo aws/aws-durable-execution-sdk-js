@@ -9,13 +9,16 @@ import {
 } from "@aws-sdk/client-lambda";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { getStepData } from "../step-id-utils/step-id-utils";
+import { EventEmitter } from "events";
 
 describe("CheckpointHandler - StepData Update", () => {
   let mockContext: ExecutionContext;
   let mockState: any;
   let checkpointHandler: CheckpointHandler;
+  let mockEmitter: EventEmitter;
 
   beforeEach(() => {
+    mockEmitter = new EventEmitter();
     mockState = {
       checkpoint: jest.fn(),
     };
@@ -43,6 +46,7 @@ describe("CheckpointHandler - StepData Update", () => {
     checkpointHandler = new CheckpointHandler(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
   });
 

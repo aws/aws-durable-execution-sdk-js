@@ -300,6 +300,7 @@ describe("withDurableExecution", () => {
     expect(createCheckpoint).toHaveBeenCalledWith(
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      expect.any(Object),
     );
     expect(mockCheckpoint).toHaveBeenCalledWith(
       expect.stringMatching(/^execution-result-\d+$/),
@@ -344,6 +345,7 @@ describe("withDurableExecution", () => {
     expect(createCheckpoint).toHaveBeenCalledWith(
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      expect.any(Object),
     );
     expect(mockCheckpoint).toHaveBeenCalledWith(
       expect.stringMatching(/^execution-result-\d+$/),
@@ -382,6 +384,7 @@ describe("withDurableExecution", () => {
     expect(createCheckpoint).toHaveBeenCalledWith(
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      expect.any(Object), // EventEmitter
     );
   });
 

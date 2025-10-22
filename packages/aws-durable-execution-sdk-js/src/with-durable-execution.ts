@@ -1,6 +1,7 @@
 import { OperationType } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
 import { createDurableContext } from "./context/durable-context/durable-context";
+import { EventEmitter } from "events";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { CheckpointFailedError } from "./errors/checkpoint-errors/checkpoint-errors";
@@ -129,7 +130,12 @@ async function runHandler<Input, Output>(
       );
 
       // Create a checkpoint handler to save the large result
-      const checkpoint = createCheckpoint(executionContext, checkpointToken);
+      const stepDataEmitter = new EventEmitter();
+      const checkpoint = createCheckpoint(
+        executionContext,
+        checkpointToken,
+        stepDataEmitter,
+      );
       const stepId = `execution-result-${Date.now()}`;
 
       try {

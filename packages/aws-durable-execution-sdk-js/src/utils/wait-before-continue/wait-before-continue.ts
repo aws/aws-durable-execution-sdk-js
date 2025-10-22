@@ -1,7 +1,11 @@
 import { ExecutionContext } from "../../types";
-import { createCheckpoint } from "../checkpoint/checkpoint";
+import {
+  createCheckpoint,
+  STEP_DATA_UPDATED_EVENT,
+} from "../checkpoint/checkpoint";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
+import { hashId } from "../step-id-utils/step-id-utils";
 
 export interface WaitBeforeContinueOptions {
   /** Check if operations are still running */
@@ -22,8 +26,6 @@ export interface WaitBeforeContinueOptions {
   operationsEmitter: EventEmitter;
   /** Checkpoint object to force refresh when timer expires */
   checkpoint?: ReturnType<typeof createCheckpoint>;
-  /** Polling interval in ms (default: 100) - only used for status checks */
-  pollingInterval?: number;
 }
 
 export interface WaitBeforeContinueResult {
@@ -33,16 +35,8 @@ export interface WaitBeforeContinueResult {
 
 /**
  * High-level helper that waits for conditions before continuing execution.
- * Uses event-driven approach for operations completion and polling for status changes.
- *
- * TODO: We still have setTimeout to re-evaluate the latest status.
- * Better way is a event driven way that we will implement separately
- * Cons of our current implementation (polling)
- *   • ❌ CPU overhead from constant polling
- *   • ❌ 100ms delay in detecting changes
- *   • ❌ Not scalable with many concurrent operations
+ * Uses event-driven approach for both operations completion and status changes.
  */
-
 export async function waitBeforeContinue(
   options: WaitBeforeContinueOptions,
 ): Promise<WaitBeforeContinueResult> {
@@ -56,7 +50,6 @@ export async function waitBeforeContinue(
     hasRunningOperations,
     operationsEmitter,
     checkpoint,
-    pollingInterval = 100,
   } = options;
 
   const promises: Promise<WaitBeforeContinueResult>[] = [];
@@ -107,21 +100,31 @@ export async function waitBeforeContinue(
     promises.push(operationsPromise);
   }
 
-  // Step status promise - still uses polling (status changes come from external API)
+  // Step status promise - event-driven approach
   if (checkStepStatus) {
     const originalStatus = context.getStepData(stepId)?.Status;
+    const hashedStepId = hashId(stepId);
     const stepStatusPromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
-        const checkStepStatus = (): void => {
-          const currentStatus = context.getStepData(stepId)?.Status;
-          if (originalStatus !== currentStatus) {
-            resolve({ reason: "status" });
-          } else {
-            const timer = setTimeout(checkStepStatus, pollingInterval);
-            timers.push(timer);
-          }
-        };
-        checkStepStatus();
+        // Check if status already changed
+        const currentStatus = context.getStepData(stepId)?.Status;
+        if (originalStatus !== currentStatus) {
+          resolve({ reason: "status" });
+        } else {
+          // Event-driven: listen for step data updates
+          const handler = (updatedStepId: string): void => {
+            if (updatedStepId === hashedStepId) {
+              const newStatus = context.getStepData(stepId)?.Status;
+              if (originalStatus !== newStatus) {
+                resolve({ reason: "status" });
+              }
+            }
+          };
+          operationsEmitter.on(STEP_DATA_UPDATED_EVENT, handler);
+          cleanupFns.push(() =>
+            operationsEmitter.off(STEP_DATA_UPDATED_EVENT, handler),
+          );
+        }
       },
     );
     promises.push(stepStatusPromise);
