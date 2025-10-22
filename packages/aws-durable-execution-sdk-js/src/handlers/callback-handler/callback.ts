@@ -13,6 +13,7 @@ import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/callback-error/callback-error";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
+import { EventEmitter } from "events";
 
 const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -30,6 +31,7 @@ export class TerminatingPromise<T> implements Promise<T> {
     private readonly message: string,
     private readonly hasRunningOperations: () => boolean,
     private readonly serdes: Serdes<T>,
+    private readonly operationsEmitter: EventEmitter,
   ) {}
 
   async then<TResult1 = T, TResult2 = never>(
@@ -46,6 +48,7 @@ export class TerminatingPromise<T> implements Promise<T> {
           stepId: this.stepId,
           context: this.context,
           hasRunningOperations: this.hasRunningOperations,
+          operationsEmitter: this.operationsEmitter,
           pollingInterval: 1000,
         });
       }
@@ -135,6 +138,7 @@ const createTerminatingThenable = <T>(
   message: string,
   hasRunningOperations: () => boolean,
   serdes: Serdes<T>,
+  operationsEmitter: EventEmitter,
 ): TerminatingPromise<T> => {
   return new TerminatingPromise<T>(
     context,
@@ -143,6 +147,7 @@ const createTerminatingThenable = <T>(
     message,
     hasRunningOperations,
     serdes,
+    operationsEmitter,
   );
 };
 
@@ -151,6 +156,7 @@ export const createCallback = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ) => {
   return async <T>(
@@ -198,6 +204,7 @@ export const createCallback = (
         name,
         serdes,
         hasRunningOperations,
+        getOperationsEmitter,
       );
     }
 
@@ -210,6 +217,7 @@ export const createCallback = (
       config,
       serdes,
       hasRunningOperations,
+      getOperationsEmitter,
       parentId,
     );
   };
@@ -276,6 +284,7 @@ const handleStartedCallback = async <T>(
   stepName: string | undefined,
   serdes: Serdes<T>,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
 ): Promise<CreateCallbackResult<T>> => {
   log("⏳", "Callback already started, returning existing promise:", {
     stepId,
@@ -295,6 +304,7 @@ const handleStartedCallback = async <T>(
     `Callback ${stepName || stepId} is pending external completion`,
     hasRunningOperations,
     serdes,
+    getOperationsEmitter(),
   );
 
   return [callbackPromise, callbackData.CallbackId];
@@ -308,6 +318,7 @@ const createNewCallback = async <T>(
   config: CreateCallbackConfig<T> | undefined,
   serdes: Serdes<T>,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ): Promise<CreateCallbackResult<T>> => {
   log("🆕", "Creating new callback:", {
@@ -349,6 +360,7 @@ const createNewCallback = async <T>(
     `Callback ${name || stepId} created and pending external completion`,
     hasRunningOperations,
     serdes,
+    getOperationsEmitter(),
   );
 
   log("✅", "Callback created successfully:", {

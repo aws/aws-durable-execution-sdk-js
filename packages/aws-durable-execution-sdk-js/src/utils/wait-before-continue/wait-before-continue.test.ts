@@ -1,10 +1,12 @@
 import { waitBeforeContinue } from "./wait-before-continue";
 import { ExecutionContext } from "../../types";
 import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
+import { EventEmitter } from "events";
 
 describe("waitBeforeContinue", () => {
   let mockContext: jest.Mocked<ExecutionContext>;
   let mockHasRunningOperations: jest.Mock;
+  let mockOperationsEmitter: EventEmitter;
   let timers: NodeJS.Timeout[] = [];
 
   beforeEach(() => {
@@ -12,6 +14,7 @@ describe("waitBeforeContinue", () => {
       getStepData: jest.fn(),
     } as any;
     mockHasRunningOperations = jest.fn();
+    mockOperationsEmitter = new EventEmitter();
     timers = [];
   });
 
@@ -32,12 +35,14 @@ describe("waitBeforeContinue", () => {
       stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
       pollingInterval: 10, // Fast polling for test
     });
 
     // Complete operations after 50ms
     const timer = setTimeout(() => {
       operationsRunning = false;
+      mockOperationsEmitter.emit("allOperationsComplete");
     }, 50);
     timers.push(timer);
 
@@ -56,6 +61,7 @@ describe("waitBeforeContinue", () => {
       stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
     });
 
     expect(result.reason).toBe("timer");
@@ -73,6 +79,7 @@ describe("waitBeforeContinue", () => {
       stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
     });
 
     expect(result.reason).toBe("timer");
@@ -92,6 +99,7 @@ describe("waitBeforeContinue", () => {
       stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
       pollingInterval: 10, // Fast polling for test
     });
 
@@ -113,6 +121,7 @@ describe("waitBeforeContinue", () => {
       stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
     });
 
     expect(result.reason).toBe("timeout");
@@ -132,6 +141,7 @@ describe("waitBeforeContinue", () => {
       stepId: "test-step",
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
       checkpoint: mockCheckpoint,
     });
 

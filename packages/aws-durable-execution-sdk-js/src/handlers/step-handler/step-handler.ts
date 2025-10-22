@@ -28,6 +28,7 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
+import { EventEmitter } from "events";
 import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
@@ -40,6 +41,7 @@ const waitForContinuation = async (
   stepId: string,
   name: string | undefined,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   checkpoint: ReturnType<typeof createCheckpoint>,
 ): Promise<void> => {
   const stepData = context.getStepData(stepId);
@@ -63,6 +65,7 @@ const waitForContinuation = async (
     stepId,
     context,
     hasRunningOperations,
+    operationsEmitter: getOperationsEmitter(),
     checkpoint,
   });
 
@@ -78,6 +81,7 @@ export const createStepHandler = (
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ) => {
   return async <T>(
@@ -128,6 +132,7 @@ export const createStepHandler = (
             stepId,
             name,
             hasRunningOperations,
+            getOperationsEmitter,
             checkpoint,
           );
           continue; // Re-evaluate step status after waiting
@@ -197,6 +202,7 @@ export const createStepHandler = (
                 stepId,
                 name,
                 hasRunningOperations,
+                getOperationsEmitter,
                 checkpoint,
               );
               continue; // Re-evaluate step status after waiting
@@ -215,6 +221,7 @@ export const createStepHandler = (
           addRunningOperation,
           removeRunningOperation,
           hasRunningOperations,
+          getOperationsEmitter,
           parentId,
           options,
         );
@@ -265,6 +272,7 @@ export const executeStep = async <T>(
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
   options?: StepConfig<T>,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
@@ -438,6 +446,7 @@ export const executeStep = async <T>(
         stepId,
         name,
         hasRunningOperations,
+        getOperationsEmitter,
         checkpoint,
       );
       return CONTINUE_MAIN_LOOP;

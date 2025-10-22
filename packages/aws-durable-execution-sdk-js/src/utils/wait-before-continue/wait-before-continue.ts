@@ -1,5 +1,6 @@
 import { ExecutionContext } from "../../types";
 import { createCheckpoint } from "../checkpoint/checkpoint";
+import { EventEmitter } from "events";
 
 export interface WaitBeforeContinueOptions {
   /** Check if operations are still running */
@@ -16,9 +17,11 @@ export interface WaitBeforeContinueOptions {
   context: ExecutionContext;
   /** Function to check if operations are running */
   hasRunningOperations: () => boolean;
+  /** EventEmitter for operations completion events */
+  operationsEmitter: EventEmitter;
   /** Checkpoint object to force refresh when timer expires */
   checkpoint?: ReturnType<typeof createCheckpoint>;
-  /** Polling interval in ms (default: 100) */
+  /** Polling interval in ms (default: 100) - only used for status checks */
   pollingInterval?: number;
 }
 
@@ -29,15 +32,16 @@ export interface WaitBeforeContinueResult {
 
 /**
  * High-level helper that waits for conditions before continuing execution.
- * Hides all the complexity of checking timers, operations, and status changes.
+ * Uses event-driven approach for operations completion and polling for status changes.
  *
- * TODO: The next 3 promise use setTimeout to re-evaluate the latest status.
+ * TODO: We still have setTimeout to re-evaluate the latest status.
  * Better way is a event driven way that we will implement separately
  * Cons of our current implementation (polling)
  *   • ❌ CPU overhead from constant polling
  *   • ❌ 100ms delay in detecting changes
  *   • ❌ Not scalable with many concurrent operations
  */
+
 export async function waitBeforeContinue(
   options: WaitBeforeContinueOptions,
 ): Promise<WaitBeforeContinueResult> {
@@ -49,16 +53,19 @@ export async function waitBeforeContinue(
     stepId,
     context,
     hasRunningOperations,
+    operationsEmitter,
     checkpoint,
     pollingInterval = 100,
   } = options;
 
   const promises: Promise<WaitBeforeContinueResult>[] = [];
   const timers: NodeJS.Timeout[] = [];
+  const cleanupFns: (() => void)[] = [];
 
-  // Cleanup function to clear all timers
+  // Cleanup function to clear all timers and listeners
   const cleanup = (): void => {
     timers.forEach((timer) => clearTimeout(timer));
+    cleanupFns.forEach((fn) => fn());
   };
 
   // Timer promise - resolves when scheduled time is reached
@@ -78,25 +85,28 @@ export async function waitBeforeContinue(
     promises.push(timerPromise);
   }
 
-  // Operations promise - resolves when no operations are running
+  // Operations promise - event-driven approach
   if (checkHasRunningOperations) {
     const operationsPromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
-        const checkOperations = (): void => {
-          if (!hasRunningOperations()) {
+        if (!hasRunningOperations()) {
+          resolve({ reason: "operations" });
+        } else {
+          // Event-driven: listen for completion event
+          const handler = (): void => {
             resolve({ reason: "operations" });
-          } else {
-            const timer = setTimeout(checkOperations, pollingInterval);
-            timers.push(timer);
-          }
-        };
-        checkOperations();
+          };
+          operationsEmitter.once("allOperationsComplete", handler);
+          cleanupFns.push(() =>
+            operationsEmitter.off("allOperationsComplete", handler),
+          );
+        }
       },
     );
     promises.push(operationsPromise);
   }
 
-  // Step status promise - resolves when status changes
+  // Step status promise - still uses polling (status changes come from external API)
   if (checkStepStatus) {
     const originalStatus = context.getStepData(stepId)?.Status;
     const stepStatusPromise = new Promise<WaitBeforeContinueResult>(
@@ -121,7 +131,7 @@ export async function waitBeforeContinue(
     return { reason: "timeout" };
   }
 
-  // Wait for any condition to be met, then cleanup timers
+  // Wait for any condition to be met, then cleanup timers and listeners
   const result = await Promise.race(promises);
   cleanup();
 

@@ -23,6 +23,7 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
+import { EventEmitter } from "events";
 
 // Special symbol to indicate that the main loop should continue
 const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
@@ -33,6 +34,7 @@ const waitForContinuation = async (
   name: string | undefined,
   hasRunningOperations: () => boolean,
   checkpoint: ReturnType<typeof createCheckpoint>,
+  operationsEmitter: EventEmitter,
 ): Promise<void> => {
   const stepData = context.getStepData(stepId);
 
@@ -55,6 +57,7 @@ const waitForContinuation = async (
     stepId,
     context,
     hasRunningOperations,
+    operationsEmitter,
     checkpoint,
   });
 
@@ -69,6 +72,7 @@ export const createWaitForConditionHandler = (
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
 ) => {
   return async <T>(
@@ -132,6 +136,7 @@ export const createWaitForConditionHandler = (
             name,
             hasRunningOperations,
             checkpoint,
+            getOperationsEmitter(),
           );
           continue; // Re-evaluate step status after waiting
         }
@@ -148,6 +153,7 @@ export const createWaitForConditionHandler = (
           addRunningOperation,
           removeRunningOperation,
           hasRunningOperations,
+          getOperationsEmitter,
           parentId,
         );
 
@@ -200,6 +206,7 @@ export const executeWaitForCondition = async <T>(
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
+  getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   const serdes = config.serdes || defaultSerdes;
@@ -352,6 +359,7 @@ export const executeWaitForCondition = async <T>(
         name,
         hasRunningOperations,
         checkpoint,
+        getOperationsEmitter(),
       );
       return CONTINUE_MAIN_LOOP;
     }

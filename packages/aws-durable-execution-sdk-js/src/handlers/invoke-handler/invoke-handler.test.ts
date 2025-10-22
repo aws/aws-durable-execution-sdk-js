@@ -6,6 +6,7 @@ import {
   OperationAction,
 } from "@aws-sdk/client-lambda";
 import { TerminationReason } from "../../termination-manager/types";
+import { EventEmitter } from "events";
 
 // Mock dependencies
 jest.mock("../../utils/checkpoint/checkpoint");
@@ -94,6 +95,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -126,6 +128,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await invokeHandler("test-invoke", "test-function", {
@@ -159,6 +162,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -196,6 +200,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       await expect(
@@ -222,6 +227,7 @@ describe("InvokeHandler", () => {
           mockCheckpointFn,
           mockCreateStepId,
           mockHasRunningOperations,
+          () => new EventEmitter(),
         );
 
         await expect(
@@ -243,6 +249,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       await expect(
@@ -279,6 +286,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -288,14 +296,16 @@ describe("InvokeHandler", () => {
         "⏳",
         "Invoke test-function still in progress, waiting for other operations",
       );
-      expect(mockWaitBeforeContinue).toHaveBeenCalledWith({
-        checkHasRunningOperations: true,
-        checkStepStatus: true,
-        checkTimer: false,
-        stepId: "test-step-1",
-        context: mockContext,
-        hasRunningOperations: mockHasRunningOperations,
-      });
+      expect(mockWaitBeforeContinue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: false,
+          stepId: "test-step-1",
+          context: mockContext,
+          hasRunningOperations: mockHasRunningOperations,
+        }),
+      );
       expect(mockTerminate).toHaveBeenCalledTimes(0);
     });
 
@@ -312,6 +322,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       await expect(
@@ -344,6 +355,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -353,14 +365,16 @@ describe("InvokeHandler", () => {
         "⏳",
         "Invoke test-function still in progress, waiting for other operations",
       );
-      expect(mockWaitBeforeContinue).toHaveBeenCalledWith({
-        checkHasRunningOperations: true,
-        checkStepStatus: true,
-        checkTimer: false,
-        stepId: "test-step-1",
-        context: mockContext,
-        hasRunningOperations: mockHasRunningOperations,
-      });
+      expect(mockWaitBeforeContinue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: false,
+          stepId: "test-step-1",
+          context: mockContext,
+          hasRunningOperations: mockHasRunningOperations,
+        }),
+      );
       expect(mockTerminate).toHaveBeenCalledTimes(0);
     });
 
@@ -378,6 +392,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
         "parent-123",
       );
 
@@ -427,6 +442,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
         "parent-123",
       );
 
@@ -462,6 +478,7 @@ describe("InvokeHandler", () => {
         mockCheckpointFn,
         mockCreateStepId,
         mockHasRunningOperations,
+        () => new EventEmitter(),
         "parent-123",
       );
 

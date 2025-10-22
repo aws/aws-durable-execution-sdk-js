@@ -8,6 +8,7 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { EventEmitter } from "events";
 
 describe("Step Handler Timing Tests", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -55,6 +56,7 @@ describe("Step Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       stepHandlerWithMocks("test-step", stepFn, {
@@ -103,6 +105,7 @@ describe("Step Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await stepHandlerWithMocks("test-step", stepFn);
@@ -157,6 +160,7 @@ describe("Step Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await stepHandlerWithMocks("test-step", stepFn, {
@@ -207,6 +211,7 @@ describe("Step Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
+        () => new EventEmitter(),
       );
 
       const result = await stepHandlerWithMocks("test-step", stepFn, {
