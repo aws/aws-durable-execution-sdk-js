@@ -6,14 +6,17 @@ import {
 import { ExecutionContext } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import * as logger from "../logger/logger";
+import { EventEmitter } from "events";
 
 describe("Checkpoint Termination Flag", () => {
   let mockContext: ExecutionContext;
   let logSpy: jest.SpyInstance;
+  let mockEmitter: EventEmitter;
 
   beforeEach(() => {
     deleteCheckpoint();
     logSpy = jest.spyOn(logger, "log").mockImplementation();
+    mockEmitter = new EventEmitter();
 
     mockContext = {
       durableExecutionArn: "test-arn",
@@ -34,7 +37,11 @@ describe("Checkpoint Termination Flag", () => {
   });
 
   test("should skip checkpoint when termination flag is set", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     setCheckpointTerminating();
 
@@ -47,7 +54,11 @@ describe("Checkpoint Termination Flag", () => {
   });
 
   test("should skip forceCheckpoint when termination flag is set", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     setCheckpointTerminating();
 
@@ -57,7 +68,11 @@ describe("Checkpoint Termination Flag", () => {
   });
 
   test("should allow checkpoint before termination flag is set", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     await checkpoint("test-step", {
       Action: "START",
@@ -71,7 +86,11 @@ describe("Checkpoint Termination Flag", () => {
   });
 
   test("should prevent new checkpoints after setTerminating is called", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     // First checkpoint should work
     await checkpoint("step-1", {
@@ -96,7 +115,11 @@ describe("Checkpoint Termination Flag", () => {
   });
 
   test("should call setCheckpointTerminating through checkpoint.setTerminating", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     checkpoint.setTerminating();
 
@@ -109,7 +132,11 @@ describe("Checkpoint Termination Flag", () => {
   });
 
   test("should log when checkpoint is skipped due to termination", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     setCheckpointTerminating();
 
@@ -126,7 +153,11 @@ describe("Checkpoint Termination Flag", () => {
   });
 
   test("should log when force checkpoint is skipped due to termination", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     setCheckpointTerminating();
 

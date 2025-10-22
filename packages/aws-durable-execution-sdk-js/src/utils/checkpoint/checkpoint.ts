@@ -8,6 +8,9 @@ import { ExecutionContext } from "../../types";
 import { log } from "../logger/logger";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";
+import { EventEmitter } from "events";
+
+export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
 interface QueuedCheckpoint {
   stepId: string;
@@ -30,6 +33,7 @@ class CheckpointHandler {
   constructor(
     private context: ExecutionContext,
     initialTaskToken: string,
+    private stepDataEmitter: EventEmitter,
   ) {
     this.currentTaskToken = initialTaskToken;
   }
@@ -307,6 +311,9 @@ class CheckpointHandler {
         this.context._stepData[operation.Id] = operation;
 
         log("📝", "Updated stepData entry:", operation);
+
+        // Emit event for this step's data update
+        this.stepDataEmitter.emit(STEP_DATA_UPDATED_EVENT, operation.Id);
       }
     });
 
@@ -333,6 +340,7 @@ let singletonCheckpointHandler: CheckpointHandler | null = null;
 export const createCheckpoint = (
   context: ExecutionContext,
   taskToken: string,
+  stepDataEmitter: EventEmitter,
 ): {
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;
@@ -340,7 +348,11 @@ export const createCheckpoint = (
 } => {
   // Return existing handler if it exists, otherwise create new one
   if (!singletonCheckpointHandler) {
-    singletonCheckpointHandler = new CheckpointHandler(context, taskToken);
+    singletonCheckpointHandler = new CheckpointHandler(
+      context,
+      taskToken,
+      stepDataEmitter,
+    );
   }
 
   const checkpoint = async (

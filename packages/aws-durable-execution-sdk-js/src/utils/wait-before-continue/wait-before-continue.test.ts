@@ -3,6 +3,8 @@ import { ExecutionContext } from "../../types";
 import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
+import { STEP_DATA_UPDATED_EVENT } from "../checkpoint/checkpoint";
+import { hashId } from "../step-id-utils/step-id-utils";
 
 describe("waitBeforeContinue", () => {
   let mockContext: jest.Mocked<ExecutionContext>;
@@ -37,7 +39,6 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
-      pollingInterval: 10, // Fast polling for test
     });
 
     // Complete operations after 50ms
@@ -101,16 +102,36 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
-      pollingInterval: 10, // Fast polling for test
     });
 
     // Change status after 50ms
     const timer = setTimeout(() => {
       stepStatus = OperationStatus.SUCCEEDED;
+      mockOperationsEmitter.emit(STEP_DATA_UPDATED_EVENT, hashId("test-step"));
     }, 50);
     timers.push(timer);
 
     const result = await resultPromise;
+    expect(result.reason).toBe("status");
+  });
+
+  test("should resolve immediately when step status already changed", async () => {
+    // Status starts as STARTED
+    mockContext.getStepData
+      .mockReturnValueOnce({ Status: OperationStatus.STARTED } as Operation)
+      // Then immediately returns SUCCEEDED on next call
+      .mockReturnValueOnce({ Status: OperationStatus.SUCCEEDED } as Operation);
+
+    const result = await waitBeforeContinue({
+      checkHasRunningOperations: false,
+      checkStepStatus: true,
+      checkTimer: false,
+      stepId: "test-step",
+      context: mockContext,
+      hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
+    });
+
     expect(result.reason).toBe("status");
   });
 

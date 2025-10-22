@@ -13,6 +13,7 @@ import {
   deleteCheckpoint,
 } from "./checkpoint";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
+import { EventEmitter } from "events";
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
@@ -24,11 +25,13 @@ describe("CheckpointHandler", () => {
   let mockState: any;
   let mockContext: ExecutionContext;
   let checkpointHandler: CheckpointHandler;
+  let mockEmitter: EventEmitter;
 
   const mockNewTaskToken = "new-task-token";
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
     jest.spyOn(mockTerminationManager, "terminate");
@@ -53,6 +56,7 @@ describe("CheckpointHandler", () => {
     checkpointHandler = new CheckpointHandler(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
   });
 
@@ -554,10 +558,12 @@ describe("deleteCheckpointHandler", () => {
   let mockState2: any;
   let mockContext1: ExecutionContext;
   let mockContext2: ExecutionContext;
+  let mockEmitter: EventEmitter;
 
   beforeEach(() => {
     jest.clearAllMocks();
     deleteCheckpoint(); // Clear singleton before each test
+    mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
     jest.spyOn(mockTerminationManager, "terminate");
@@ -605,6 +611,7 @@ describe("deleteCheckpointHandler", () => {
     const checkpoint1 = createCheckpoint(
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Verify handler exists by using it
@@ -618,6 +625,7 @@ describe("deleteCheckpointHandler", () => {
     const checkpoint1New = createCheckpoint(
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // The new handler should be a different instance, evidenced by separate batching behavior
@@ -633,10 +641,12 @@ describe("deleteCheckpointHandler", () => {
     const checkpoint1 = createCheckpoint(
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     ); // This replaces the first
 
     // Use the first handler (checkpoint1's context) - both calls will be batched
@@ -660,6 +670,7 @@ describe("deleteCheckpointHandler", () => {
     const checkpoint3 = createCheckpoint(
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
     await checkpoint3("step-3", { Action: OperationAction.START });
     // After cleanup, new handler is created, so this is a separate call
@@ -674,12 +685,14 @@ describe("deleteCheckpointHandler", () => {
     const checkpoint1 = createCheckpoint(
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Try to create with second context - should return same handler (first context)
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Both checkpoint functions should use the first context (mockContext1)
@@ -703,7 +716,11 @@ describe("deleteCheckpointHandler", () => {
 
   describe("forceCheckpoint", () => {
     it("should call checkpoint API with empty updates when no items in queue", async () => {
-      const checkpoint = createCheckpoint(mockContext1, "test-token");
+      const checkpoint = createCheckpoint(
+        mockContext1,
+        "test-token",
+        mockEmitter,
+      );
 
       await checkpoint.force();
 
@@ -715,7 +732,11 @@ describe("deleteCheckpointHandler", () => {
     });
 
     it("should not make additional checkpoint call when force is called during ongoing checkpoint", async () => {
-      const checkpoint = createCheckpoint(mockContext1, "test-token");
+      const checkpoint = createCheckpoint(
+        mockContext1,
+        "test-token",
+        mockEmitter,
+      );
 
       // Make checkpoint API slow to simulate ongoing processing
       let resolveCheckpoint!: (value: any) => void;
@@ -771,7 +792,11 @@ describe("deleteCheckpointHandler", () => {
     });
 
     it("should terminate execution when force checkpoint fails", async () => {
-      const checkpoint = createCheckpoint(mockContext1, "test-token");
+      const checkpoint = createCheckpoint(
+        mockContext1,
+        "test-token",
+        mockEmitter,
+      );
       const error = new Error("Checkpoint failed");
       mockState1.checkpoint.mockRejectedValue(error);
 
@@ -799,10 +824,12 @@ describe("createCheckpointHandler", () => {
   let mockTerminationManager: TerminationManager;
   let mockState: any;
   let mockContext: ExecutionContext;
+  let mockEmitter: EventEmitter;
 
   beforeEach(() => {
     jest.clearAllMocks();
     deleteCheckpoint(); // Clear singleton before each test
+    mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
     jest.spyOn(mockTerminationManager, "terminate");
@@ -836,6 +863,7 @@ describe("createCheckpointHandler", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
     await checkpoint(mockStepId, checkpointData);
 
@@ -862,6 +890,7 @@ describe("createCheckpointHandler", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Mock checkpoint to delay so we can test batching
@@ -912,10 +941,12 @@ describe("createCheckpointHandler", () => {
     const checkpoint1 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
     const checkpoint2 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Mock to delay first checkpoint
@@ -953,10 +984,12 @@ describe("createCheckpointHandler", () => {
     const checkpoint1 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     ); // Should return same handler (first context)
 
     // Execute checkpoints - both should use the first context (mockContext)
@@ -989,10 +1022,12 @@ describe("createCheckpointHandler", () => {
     const checkpoint1 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Execute checkpoints from both contexts
@@ -1018,6 +1053,7 @@ describe("createCheckpointHandler", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Create large payload data that will exceed 750KB when combined
@@ -1051,6 +1087,7 @@ describe("createCheckpointHandler", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Create items where first is large enough to trigger size limit
@@ -1095,6 +1132,7 @@ describe("createCheckpointHandler", () => {
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
     );
 
     // Mock checkpoint response with operations

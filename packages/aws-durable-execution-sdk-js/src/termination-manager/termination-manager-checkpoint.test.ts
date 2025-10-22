@@ -5,14 +5,17 @@ import {
   deleteCheckpoint,
 } from "../utils/checkpoint/checkpoint";
 import { ExecutionContext } from "../types";
+import { EventEmitter } from "events";
 
 describe("TerminationManager Checkpoint Integration", () => {
   let terminationManager: TerminationManager;
   let mockContext: ExecutionContext;
+  let mockEmitter: EventEmitter;
 
   beforeEach(() => {
     deleteCheckpoint();
     terminationManager = new TerminationManager();
+    mockEmitter = new EventEmitter();
 
     mockContext = {
       durableExecutionArn: "test-arn",
@@ -32,7 +35,11 @@ describe("TerminationManager Checkpoint Integration", () => {
   });
 
   test("should set checkpoint terminating flag when terminate is called", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     // Checkpoint should work before termination
     await checkpoint("step-1", {
@@ -60,7 +67,11 @@ describe("TerminationManager Checkpoint Integration", () => {
   });
 
   test("should prevent force checkpoint after termination", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
     const mockCheckpointFn = mockContext.state.checkpoint as jest.Mock;
 
     // Queue a checkpoint first
@@ -94,7 +105,11 @@ describe("TerminationManager Checkpoint Integration", () => {
   });
 
   test("should set terminating flag immediately when terminate is called", () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     // Terminate
     terminationManager.terminate();
@@ -112,7 +127,11 @@ describe("TerminationManager Checkpoint Integration", () => {
   });
 
   test("should handle multiple terminate calls gracefully", async () => {
-    const checkpoint = createCheckpoint(mockContext, "initial-token");
+    const checkpoint = createCheckpoint(
+      mockContext,
+      "initial-token",
+      mockEmitter,
+    );
 
     terminationManager.terminate();
     terminationManager.terminate();
