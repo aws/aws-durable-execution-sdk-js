@@ -10,6 +10,7 @@ import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
+import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -42,6 +43,19 @@ export const createWaitHandler = (
     // Main wait logic - can be re-executed if step data changes
     while (true) {
       let stepData = context.getStepData(stepId);
+
+      // Validate replay consistency
+      validateReplayConsistency(
+        stepId,
+        {
+          type: OperationType.WAIT,
+          name: actualName,
+          subType: OperationSubType.WAIT,
+        },
+        stepData,
+        context,
+      );
+
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Wait already completed:", { stepId });
         return;

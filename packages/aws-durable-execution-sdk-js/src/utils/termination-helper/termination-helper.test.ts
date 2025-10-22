@@ -1,10 +1,10 @@
 import {
   terminate,
   terminateForUnrecoverableError,
-} from "./termination-helper/termination-helper";
-import { ExecutionContext } from "../types";
-import { UnrecoverableError } from "../errors/unrecoverable-error/unrecoverable-error";
-import { TerminationReason } from "../termination-manager/types";
+} from "./termination-helper";
+import { ExecutionContext } from "../../types";
+import { UnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
+import { TerminationReason } from "../../termination-manager/types";
 
 describe("termination helpers", () => {
   let mockContext: jest.Mocked<ExecutionContext>;

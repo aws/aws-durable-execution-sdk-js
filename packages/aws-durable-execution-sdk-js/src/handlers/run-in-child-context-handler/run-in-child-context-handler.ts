@@ -21,6 +21,7 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -94,8 +95,24 @@ export const createRunInChildContextHandler = (
       name,
     });
 
+    const stepData = context.getStepData(entityId);
+
+    // Validate replay consistency
+    validateReplayConsistency(
+      entityId,
+      {
+        type: OperationType.CONTEXT,
+        name,
+        subType:
+          (options?.subType as OperationSubType) ||
+          OperationSubType.RUN_IN_CHILD_CONTEXT,
+      },
+      stepData,
+      context,
+    );
+
     // Check if this child context has already completed
-    if (context.getStepData(entityId)?.Status === OperationStatus.SUCCEEDED) {
+    if (stepData?.Status === OperationStatus.SUCCEEDED) {
       return handleCompletedChildContext<T>(
         context,
         parentContext,

@@ -14,6 +14,7 @@ import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/callback-error/callback-error";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
+import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 
 const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -182,6 +183,18 @@ export const createCallback = (
     });
 
     const stepData = context.getStepData(stepId);
+
+    // Validate replay consistency
+    validateReplayConsistency(
+      stepId,
+      {
+        type: OperationType.CALLBACK,
+        name,
+        subType: OperationSubType.CALLBACK,
+      },
+      stepData,
+      context,
+    );
 
     // Check if callback already exists and is completed
     if (stepData?.Status === OperationStatus.SUCCEEDED) {

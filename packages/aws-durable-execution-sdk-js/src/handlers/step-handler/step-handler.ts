@@ -32,6 +32,7 @@ import { EventEmitter } from "events";
 import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
+import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 
 // Special symbol to indicate that the main loop should continue
 const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
@@ -110,6 +111,18 @@ export const createStepHandler = (
     while (true) {
       try {
         const stepData = context.getStepData(stepId);
+
+        // Validate replay consistency
+        validateReplayConsistency(
+          stepId,
+          {
+            type: OperationType.STEP,
+            name,
+            subType: OperationSubType.STEP,
+          },
+          stepData,
+          context,
+        );
 
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
           return await handleCompletedStep<T>(
