@@ -1,6 +1,7 @@
 import { ExecutionContext } from "../../types";
 import { createCheckpoint } from "../checkpoint/checkpoint";
 import { EventEmitter } from "events";
+import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
 
 export interface WaitBeforeContinueOptions {
   /** Check if operations are still running */
@@ -96,9 +97,9 @@ export async function waitBeforeContinue(
           const handler = (): void => {
             resolve({ reason: "operations" });
           };
-          operationsEmitter.once("allOperationsComplete", handler);
+          operationsEmitter.once(OPERATIONS_COMPLETE_EVENT, handler);
           cleanupFns.push(() =>
-            operationsEmitter.off("allOperationsComplete", handler),
+            operationsEmitter.off(OPERATIONS_COMPLETE_EVENT, handler),
           );
         }
       },
