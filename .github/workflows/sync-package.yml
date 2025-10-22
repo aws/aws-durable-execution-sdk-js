@@ -61,7 +61,7 @@ jobs:
         run: |
           aws lambda invoke \
             --function-name ${{ secrets.SYNC_LAMBDA_ARN }} \
-            --payload '{"gitFarmRepo":"${{ secrets.GITFARM_LAN_SDK_REPO }}","gitFarmBranch":"${{ secrets.GITFARM_LAN_SDK_BRANCH }}","gitFarmFilepath":"${{ inputs.package_name }}-${{ steps.package-version.outputs.current-version }}.tgz","s3Bucket":"${{ secrets.S3_BUCKET_NAME }}","s3FilePath":"${{ inputs.package_name }}-${{ steps.package-version.outputs.current-version }}.tgz","prLink":"${{ github.event.pull_request.html_url }}"}' \
+            --payload '{"gitFarmRepo":"${{ secrets.GITFARM_LAN_SDK_REPO }}","gitFarmBranch":"${{ secrets.GITFARM_LAN_SDK_BRANCH }}","gitFarmFilepath":"${{ inputs.package_name }}-${{ steps.package-version.outputs.current-version }}.tgz","s3Bucket":"${{ secrets.S3_BUCKET_NAME }}","s3FilePath":"${{ inputs.package_name }}-${{ steps.package-version.outputs.current-version }}.tgz", "gitHubRepo": "aws-durable-execution-sdk-js", "gitHubCommit":"${{ github.sha }}"}' \
             --cli-binary-format raw-in-base64-out \
             output.txt
       - name: Check for specific text in a file
