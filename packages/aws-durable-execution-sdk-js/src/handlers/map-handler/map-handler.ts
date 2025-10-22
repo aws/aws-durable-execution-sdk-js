@@ -6,9 +6,9 @@ import {
   ConcurrentExecutionItem,
   ConcurrentExecutor,
   OperationSubType,
+  BatchResult,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
-import { BatchResult } from "../concurrent-execution-handler/batch-result";
 import { createMapSummaryGenerator } from "../../utils/summary-generators/summary-generators";
 
 export const createMapHandler = (
@@ -18,13 +18,13 @@ export const createMapHandler = (
   return async <TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],
     itemsOrMapFunc?: TInput[] | MapFunc<TInput, TOutput>,
-    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput>,
-    maybeConfig?: MapConfig<TInput>,
+    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
+    maybeConfig?: MapConfig<TInput, TOutput>,
   ): Promise<BatchResult<TOutput>> => {
     let name: string | undefined;
     let items: TInput[];
     let mapFunc: MapFunc<TInput, TOutput>;
-    let config: MapConfig<TInput> | undefined;
+    let config: MapConfig<TInput, TOutput> | undefined;
 
     // Parse overloaded parameters
     if (typeof nameOrItems === "string" || nameOrItems === undefined) {
@@ -37,7 +37,7 @@ export const createMapHandler = (
       // Case: map(items, mapFunc, config?)
       items = nameOrItems;
       mapFunc = itemsOrMapFunc as MapFunc<TInput, TOutput>;
-      config = mapFuncOrConfig as MapConfig<TInput>;
+      config = mapFuncOrConfig as MapConfig<TInput, TOutput>;
     }
 
     log("🗺️", "Starting map operation:", {
@@ -78,6 +78,8 @@ export const createMapHandler = (
       iterationSubType: OperationSubType.MAP_ITERATION,
       summaryGenerator: createMapSummaryGenerator(),
       completionConfig: config?.completionConfig,
+      serdes: config?.serdes,
+      itemSerdes: config?.itemSerdes,
     });
 
     log("🗺️", "Map operation completed successfully:", {

@@ -22,8 +22,8 @@ import {
   Logger,
   InvokeConfig,
   DurableExecutionMode,
+  BatchResult,
 } from "../../types";
-import { BatchResult } from "../../handlers/concurrent-execution-handler/batch-result";
 import { Context } from "aws-lambda";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
@@ -356,8 +356,8 @@ class DurableContextImpl implements DurableContext {
   map<TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],
     itemsOrMapFunc: TInput[] | MapFunc<TInput, TOutput>,
-    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput>,
-    maybeConfig?: MapConfig<TInput>,
+    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
+    maybeConfig?: MapConfig<TInput, TOutput>,
   ): Promise<BatchResult<TOutput>> {
     return this.withModeManagement(() => {
       const mapHandler = createMapHandler(
@@ -380,8 +380,8 @@ class DurableContextImpl implements DurableContext {
       | (ParallelFunc<T> | NamedParallelBranch<T>)[],
     branchesOrConfig?:
       | (ParallelFunc<T> | NamedParallelBranch<T>)[]
-      | ParallelConfig,
-    maybeConfig?: ParallelConfig,
+      | ParallelConfig<T>,
+    maybeConfig?: ParallelConfig<T>,
   ): Promise<BatchResult<T>> {
     return this.withModeManagement(() => {
       const parallelHandler = createParallelHandler(
@@ -397,8 +397,10 @@ class DurableContextImpl implements DurableContext {
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
       | ConcurrentExecutor<TItem, TResult>,
-    executorOrConfig?: ConcurrentExecutor<TItem, TResult> | ConcurrencyConfig,
-    maybeConfig?: ConcurrencyConfig,
+    executorOrConfig?:
+      | ConcurrentExecutor<TItem, TResult>
+      | ConcurrencyConfig<TResult>,
+    maybeConfig?: ConcurrencyConfig<TResult>,
   ): Promise<BatchResult<TResult>> {
     return this.withModeManagement(() => {
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
