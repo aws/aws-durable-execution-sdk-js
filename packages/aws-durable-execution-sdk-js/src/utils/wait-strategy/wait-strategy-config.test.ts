@@ -1,4 +1,5 @@
 import { createWaitStrategy } from "./wait-strategy-config";
+import { JitterStrategy } from "../../types";
 
 describe("createWaitStrategy", () => {
   describe("Basic functionality", () => {
@@ -36,9 +37,9 @@ describe("createWaitStrategy", () => {
 
       expect(decision.shouldContinue).toBe(true);
       if (decision.shouldContinue) {
-        // Default initialDelaySeconds is 5
-        expect(decision.delaySeconds).toBeGreaterThanOrEqual(4); // 5 - 1 (jitter)
-        expect(decision.delaySeconds).toBeLessThanOrEqual(6); // 5 + 1 (jitter)
+        // Default initialDelaySeconds is 5 with FULL jitter (0 to 5)
+        expect(decision.delaySeconds).toBeGreaterThanOrEqual(1); // Min 1 second
+        expect(decision.delaySeconds).toBeLessThanOrEqual(5); // Max 5 seconds
       }
     });
 
@@ -76,7 +77,7 @@ describe("createWaitStrategy", () => {
     it("should use custom initialDelaySeconds", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 10,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
       });
 
@@ -92,7 +93,7 @@ describe("createWaitStrategy", () => {
         initialDelaySeconds: 100,
         maxDelaySeconds: 50,
         backoffRate: 2,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
       });
 
@@ -108,7 +109,7 @@ describe("createWaitStrategy", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 10,
         backoffRate: 3,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
       });
 
@@ -133,7 +134,7 @@ describe("createWaitStrategy", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 2,
         backoffRate: 2,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
       });
 
@@ -160,7 +161,7 @@ describe("createWaitStrategy", () => {
         initialDelaySeconds: 10,
         maxDelaySeconds: 25,
         backoffRate: 2,
-        jitterSeconds: 0, // Remove jitter for predictable testing
+        jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
       });
 
@@ -181,10 +182,10 @@ describe("createWaitStrategy", () => {
   });
 
   describe("Jitter", () => {
-    it("should apply jitter to delay", () => {
+    it("should apply FULL jitter to delay", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 10,
-        jitterSeconds: 2,
+        jitter: JitterStrategy.FULL,
         shouldContinuePolling: () => true,
       });
 
@@ -197,10 +198,10 @@ describe("createWaitStrategy", () => {
         }
       }
 
-      // All delays should be within jitter range [8, 12]
+      // FULL jitter: random between 0 and delay (0 to 10), but min 1
       delays.forEach((delay) => {
-        expect(delay).toBeGreaterThanOrEqual(8); // 10 - 2
-        expect(delay).toBeLessThanOrEqual(12); // 10 + 2
+        expect(delay).toBeGreaterThanOrEqual(1); // Min 1 second
+        expect(delay).toBeLessThanOrEqual(10); // Max 10 seconds
       });
 
       // Should have some variation (not all the same)
@@ -208,10 +209,63 @@ describe("createWaitStrategy", () => {
       expect(uniqueDelays.size).toBeGreaterThan(1);
     });
 
+    it("should apply HALF jitter to delay", () => {
+      const strategy = createWaitStrategy({
+        initialDelaySeconds: 10,
+        jitter: JitterStrategy.HALF,
+        shouldContinuePolling: () => true,
+      });
+
+      // Run multiple times to test jitter randomness
+      const delays = [];
+      for (let i = 0; i < 10; i++) {
+        const decision = strategy("test", 1);
+        if (decision.shouldContinue) {
+          delays.push(decision.delaySeconds);
+        }
+      }
+
+      // HALF jitter: random between delay/2 and delay (5 to 10)
+      delays.forEach((delay) => {
+        expect(delay).toBeGreaterThanOrEqual(5); // Min delay/2
+        expect(delay).toBeLessThanOrEqual(10); // Max delay
+      });
+
+      // Should have some variation (not all the same)
+      const uniqueDelays = new Set(delays);
+      expect(uniqueDelays.size).toBeGreaterThan(1);
+    });
+
+    it("should apply NONE jitter (no randomness)", () => {
+      const strategy = createWaitStrategy({
+        initialDelaySeconds: 10,
+        jitter: JitterStrategy.NONE,
+        shouldContinuePolling: () => true,
+      });
+
+      // Run multiple times - should always be the same
+      const delays = [];
+      for (let i = 0; i < 10; i++) {
+        const decision = strategy("test", 1);
+        if (decision.shouldContinue) {
+          delays.push(decision.delaySeconds);
+        }
+      }
+
+      // NONE jitter: always exact delay
+      delays.forEach((delay) => {
+        expect(delay).toBe(10);
+      });
+
+      // Should have no variation (all the same)
+      const uniqueDelays = new Set(delays);
+      expect(uniqueDelays.size).toBe(1);
+    });
+
     it("should ensure minimum delay of 1 second even with negative jitter", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 1,
-        jitterSeconds: 2, // Could make delay negative
+        jitter: JitterStrategy.FULL, // Could make delay negative
         shouldContinuePolling: () => true,
       });
 
@@ -304,7 +358,7 @@ describe("createWaitStrategy", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 10,
         backoffRate: 2,
-        jitterSeconds: 0,
+        jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
       });
 
@@ -319,7 +373,7 @@ describe("createWaitStrategy", () => {
     it("should handle zero jitter", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 5,
-        jitterSeconds: 0,
+        jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
       });
 
@@ -334,7 +388,7 @@ describe("createWaitStrategy", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 10,
         backoffRate: 1,
-        jitterSeconds: 0,
+        jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
       });
 
@@ -358,7 +412,7 @@ describe("createWaitStrategy", () => {
       const strategy = createWaitStrategy({
         initialDelaySeconds: 1.7,
         backoffRate: 1.5,
-        jitterSeconds: 0,
+        jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
       });
 

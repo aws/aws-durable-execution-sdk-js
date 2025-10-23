@@ -1,11 +1,11 @@
-import { WaitForConditionDecision } from "../../types";
+import { WaitForConditionDecision, JitterStrategy } from "../../types";
 
 interface WaitStrategyConfig<T> {
   maxAttempts?: number; // Maximum number of attempts
   initialDelaySeconds?: number; // Initial delay before first retry
   maxDelaySeconds?: number; // Maximum delay between retries
   backoffRate?: number; // Multiplier for each subsequent retry
-  jitterSeconds?: number; // Random time range to add/subtract from delay
+  jitter?: JitterStrategy; // Jitter strategy to apply to retry delays
   shouldContinuePolling: (result: T) => boolean; // Function to determine if polling should continue
   timeoutSeconds?: number; // Maximum total time to wait (not implemented in this version)
 }
@@ -15,8 +15,21 @@ const DEFAULT_CONFIG = {
   initialDelaySeconds: 5,
   maxDelaySeconds: 300, // 5 minutes
   backoffRate: 1.5,
-  jitterSeconds: 1,
+  jitter: JitterStrategy.FULL,
   timeoutSeconds: undefined, // No timeout by default
+};
+
+const applyJitter = (delay: number, strategy: JitterStrategy): number => {
+  switch (strategy) {
+    case JitterStrategy.NONE:
+      return delay;
+    case JitterStrategy.FULL:
+      // Random between 0 and delay
+      return Math.random() * delay;
+    case JitterStrategy.HALF:
+      // Random between delay/2 and delay
+      return delay / 2 + Math.random() * (delay / 2);
+  }
 };
 
 export const createWaitStrategy = <T>(config: WaitStrategyConfig<T>) => {
@@ -39,17 +52,19 @@ export const createWaitStrategy = <T>(config: WaitStrategyConfig<T>) => {
     }
 
     // Calculate delay with exponential backoff
-    const delay = Math.min(
+    const baseDelay = Math.min(
       finalConfig.initialDelaySeconds *
         Math.pow(finalConfig.backoffRate, attemptsMade - 1),
       finalConfig.maxDelaySeconds,
     );
 
-    // Add jitter
-    const jitter = (Math.random() * 2 - 1) * finalConfig.jitterSeconds;
-    const finalDelay = Math.max(1, delay + jitter);
+    // Apply jitter
+    const delayWithJitter = applyJitter(baseDelay, finalConfig.jitter);
 
-    return { shouldContinue: true, delaySeconds: Math.round(finalDelay) };
+    // Ensure delay is an integer >= 1
+    const finalDelay = Math.max(1, Math.round(delayWithJitter));
+
+    return { shouldContinue: true, delaySeconds: finalDelay };
   };
 };
 
