@@ -180,6 +180,23 @@ export class CheckpointManager {
     };
   }
 
+  private processRetryOperation(
+    operation: Operation,
+    attempt: number,
+    retryDelaySeconds = 0,
+  ): void {
+    const scheduledEndTimestamp = new Date();
+    scheduledEndTimestamp.setSeconds(
+      scheduledEndTimestamp.getSeconds() + retryDelaySeconds,
+    );
+    operation.Status = OperationStatus.PENDING;
+    operation.StepDetails = {
+      ...operation.StepDetails,
+      Attempt: attempt,
+      NextAttemptTimestamp: scheduledEndTimestamp,
+    };
+  }
+
   /**
    * Used for marking an operation as complete. Can be used for wait steps.
    * @returns the updated operation data
@@ -220,21 +237,22 @@ export class CheckpointManager {
           OperationStatus.FAILED,
         );
         break;
-      case OperationAction.RETRY:
-        copied.operation.Status = OperationStatus.PENDING;
-        break;
     }
 
     switch (operation.Type) {
       case OperationType.STEP:
         copied.operation.StepDetails = {
+          ...copied.operation.StepDetails,
           Result: inputUpdate.Payload,
           Error: inputUpdate.Error,
-          Attempt:
-            inputUpdate.Action === OperationAction.RETRY
-              ? (operation.StepDetails?.Attempt ?? 0) + 1
-              : operation.StepDetails?.Attempt,
         };
+        if (inputUpdate.Action === OperationAction.RETRY) {
+          this.processRetryOperation(
+            copied.operation,
+            (operation.StepDetails?.Attempt ?? 0) + 1,
+            inputUpdate.StepOptions?.NextAttemptDelaySeconds,
+          );
+        }
         break;
       case OperationType.CONTEXT:
         copied.operation.ContextDetails = {
@@ -285,7 +303,7 @@ export class CheckpointManager {
    */
   updateOperation(
     id: string,
-    newOperation: Operation,
+    newOperation: Partial<Operation>,
     payload: string | undefined,
     error: ErrorObject | undefined,
   ): OperationEvents {
@@ -400,6 +418,7 @@ export class CheckpointManager {
         newOperationData.events.push(historyEvent);
       }
     }
+
     this.operationDataMap.set(id, newOperationData);
 
     this.addOperationUpdate({
@@ -485,10 +504,11 @@ export class CheckpointManager {
       }
       case OperationType.STEP: {
         if (update.Action === OperationAction.RETRY) {
-          operation.Status = OperationStatus.PENDING;
-          operation.StepDetails = {
-            Attempt: operation.StepDetails?.Attempt ?? 1,
-          };
+          this.processRetryOperation(
+            operation,
+            1,
+            update.StepOptions?.NextAttemptDelaySeconds,
+          );
         }
         break;
       }
@@ -532,6 +552,7 @@ export class CheckpointManager {
       ...updatedResult,
       update,
     });
+
     return updatedResult;
   }
 
