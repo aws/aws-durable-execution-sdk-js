@@ -371,24 +371,29 @@ export class TestExecutionOrchestrator {
       throw new Error("Missing operation id");
     }
 
-    this.scheduleAsyncFunction(waitSeconds, async () => {
-      await this.checkpointApi.updateCheckpointData({
-        executionId,
-        operationId,
-        operationData: {
-          Status: OperationStatus.SUCCEEDED,
-        },
-      });
-      const newInvocationData =
-        await this.checkpointApi.startInvocation(executionId);
-      // Re-invoke handler after waitSeconds
-      await this.invokeHandler(
-        executionId,
-        newInvocationData.checkpointToken,
-        newInvocationData.invocationId,
-        newInvocationData.operationEvents.map((op) => op.operation),
-      );
-    });
+    this.scheduleAsyncFunction(
+      waitSeconds,
+      async () => {
+        const newInvocationData =
+          await this.checkpointApi.startInvocation(executionId);
+        // Re-invoke handler after waitSeconds
+        await this.invokeHandler(
+          executionId,
+          newInvocationData.checkpointToken,
+          newInvocationData.invocationId,
+          newInvocationData.operationEvents.map((op) => op.operation),
+        );
+      },
+      () => {
+        return this.checkpointApi.updateCheckpointData({
+          executionId,
+          operationId,
+          operationData: {
+            Status: OperationStatus.SUCCEEDED,
+          },
+        });
+      },
+    );
   }
 
   /**
@@ -508,11 +513,11 @@ export class TestExecutionOrchestrator {
   private scheduleAsyncFunction(
     delaySeconds: number,
     invocationFunction: () => Promise<void>,
-    callback?: () => Promise<void>,
+    callback: () => Promise<void>,
   ): void {
     this.scheduler.scheduleFunction(
       async () => {
-        await callback?.();
+        await callback();
         // When skipping time, it's possible an invocation hasn't fully wrapped up before another invocation starts.
         // TODO: add more time skipping options instead of completely skipping all time
         if (this.invocationTracker.hasActiveInvocation() && !this.skipTime) {

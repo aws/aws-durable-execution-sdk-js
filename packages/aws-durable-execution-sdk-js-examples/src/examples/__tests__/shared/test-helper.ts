@@ -16,6 +16,9 @@ export interface TestDefinition<ResultType> {
     isCloud: boolean,
   ) => void;
   invocationType?: InvocationType;
+  localRunnerConfig?: {
+    skipTime?: boolean;
+  };
 }
 
 /**
@@ -66,7 +69,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     const runner: LocalDurableTestRunner<ResultType> =
       new LocalDurableTestRunner({
         handlerFunction: testDef.handler,
-        skipTime: true,
+        skipTime: testDef.localRunnerConfig?.skipTime ?? true,
       });
 
     beforeEach(() => {
