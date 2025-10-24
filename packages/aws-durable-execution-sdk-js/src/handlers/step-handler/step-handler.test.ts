@@ -955,7 +955,7 @@ describe("Step Handler", () => {
 
       // Verify termination was called directly by safeSerialize
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Serialization failed for step "test-step" (test-step-id): Serialization failed',
       });
@@ -982,7 +982,7 @@ describe("Step Handler", () => {
 
       // Verify termination was called directly by safeDeserialize
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Deserialization failed for step "test-step" (test-step-id): Deserialization failed',
       });

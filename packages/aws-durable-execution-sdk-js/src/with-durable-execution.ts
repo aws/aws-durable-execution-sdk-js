@@ -5,6 +5,7 @@ import { EventEmitter } from "events";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { CheckpointFailedError } from "./errors/checkpoint-errors/checkpoint-errors";
+import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import {
   createCheckpoint,
@@ -103,6 +104,15 @@ async function runHandler<Input, Output>(
     ) {
       log("🛑", "Checkpoint failed - terminating Lambda execution");
       throw new CheckpointFailedError(result.message);
+    }
+
+    // If termination was due to serdes failure, throw an error to terminate the Lambda
+    if (
+      resultType === "termination" &&
+      result.reason === TerminationReason.SERDES_FAILED
+    ) {
+      log("🛑", "Serdes failed - terminating Lambda execution");
+      throw new SerdesFailedError(result.message);
     }
 
     if (resultType === "termination") {

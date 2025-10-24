@@ -6,7 +6,6 @@ import {
   UnrecoverableInvocationError,
   UnrecoverableExecutionError,
 } from "./errors/unrecoverable-error/unrecoverable-error";
-import { SerializationFailedError } from "./errors/serdes-errors/serdes-errors";
 import { TerminationReason } from "./termination-manager/types";
 import { Context } from "aws-lambda";
 import { log } from "./utils/logger/logger";
@@ -388,10 +387,32 @@ describe("withDurableExecution", () => {
     );
   });
 
+  it("should throw SerdesFailedError when termination reason is SERDES_FAILED", async () => {
+    // Setup - handler never resolves so termination wins the race
+    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason: TerminationReason.SERDES_FAILED,
+      message: "Serialization failed for step test-step",
+    });
+
+    // Execute & Verify
+    const wrappedHandler = withDurableExecution(mockHandler);
+    await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
+      "Serialization failed for step test-step",
+    );
+  });
+
   it("should throw error when handler throws UnrecoverableInvocationError", async () => {
-    // Setup
-    const serdesError = new SerializationFailedError("step-1", "test-step");
-    const mockHandler = jest.fn().mockRejectedValue(serdesError);
+    // Setup - Create a test UnrecoverableInvocationError
+    class TestInvocationError extends UnrecoverableInvocationError {
+      readonly terminationReason = TerminationReason.CUSTOM;
+      constructor(message: string) {
+        super(message);
+      }
+    }
+
+    const testError = new TestInvocationError("Test invocation error");
+    const mockHandler = jest.fn().mockRejectedValue(testError);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     ); // Never resolves
@@ -399,7 +420,7 @@ describe("withDurableExecution", () => {
     // Execute & Verify
     const wrappedHandler = withDurableExecution(mockHandler);
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
-      SerializationFailedError,
+      TestInvocationError,
     );
     expect(mockHandler).toHaveBeenCalledWith(
       mockCustomerHandlerEvent,
