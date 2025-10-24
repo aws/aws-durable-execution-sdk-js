@@ -330,6 +330,8 @@ describe("Run In Child Context Handler", () => {
     const childFn = jest
       .fn()
       .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+    // Remove function name to test unnamed behavior
+    Object.defineProperty(childFn, "name", { value: "" });
 
     await runInChildContextHandler(childFn, {});
 
@@ -366,6 +368,8 @@ describe("Run In Child Context Handler", () => {
     const childFn = jest
       .fn()
       .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+    // Remove function name to test unnamed behavior
+    Object.defineProperty(childFn, "name", { value: "" });
 
     await runInChildContextHandler(undefined, childFn, {});
 

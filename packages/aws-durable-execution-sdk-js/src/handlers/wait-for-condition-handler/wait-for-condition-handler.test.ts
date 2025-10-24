@@ -102,6 +102,9 @@ describe("WaitForCondition Handler", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest
         .fn()
         .mockResolvedValue("ready");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(checkFunc, "name", { value: "" });
+
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
@@ -231,6 +234,9 @@ describe("WaitForCondition Handler", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest
         .fn()
         .mockResolvedValue("ready");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(checkFunc, "name", { value: "" });
+
       const config: WaitForConditionConfig<string> = {
         waitStrategy: (state, attempt) => {
           expect(state).toBe("ready");
@@ -258,6 +264,9 @@ describe("WaitForCondition Handler", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest
         .fn()
         .mockResolvedValue("not-ready");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(checkFunc, "name", { value: "" });
+
       const config: WaitForConditionConfig<string> = {
         waitStrategy: (state, attempt) => {
           expect(state).toBe("not-ready");
@@ -442,6 +451,9 @@ describe("WaitForCondition Handler", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest
         .fn()
         .mockResolvedValue("not-ready");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(checkFunc, "name", { value: "" });
+
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: true, delaySeconds: 30 }),
         initialState: "initial",
@@ -482,6 +494,9 @@ describe("WaitForCondition Handler", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest
         .fn()
         .mockResolvedValue("ready");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(checkFunc, "name", { value: "" });
+
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
@@ -512,6 +527,9 @@ describe("WaitForCondition Handler", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest
         .fn()
         .mockRejectedValue(error);
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(checkFunc, "name", { value: "" });
+
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",
@@ -537,6 +555,9 @@ describe("WaitForCondition Handler", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest
         .fn()
         .mockRejectedValue(nonErrorException);
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(checkFunc, "name", { value: "" });
+
       const config: WaitForConditionConfig<string> = {
         waitStrategy: () => ({ shouldContinue: false }),
         initialState: "initial",

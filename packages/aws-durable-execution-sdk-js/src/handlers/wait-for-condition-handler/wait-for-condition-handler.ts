@@ -94,6 +94,11 @@ export const createWaitForConditionHandler = (
       config = checkOrConfig as WaitForConditionConfig<T>;
     }
 
+    // Extract function name if name is not provided
+    if (!name && check.name) {
+      name = check.name;
+    }
+
     if (!config || !config.waitStrategy || config.initialState === undefined) {
       throw new Error(
         "waitForCondition requires config with waitStrategy and initialState",

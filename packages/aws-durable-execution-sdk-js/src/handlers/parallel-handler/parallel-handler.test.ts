@@ -44,6 +44,9 @@ describe("Parallel Handler", () => {
       const branch1: ParallelFunc<string> = jest
         .fn()
         .mockResolvedValue("result1");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(branch1, "name", { value: "" });
+
       const branches = [branch1];
 
       mockExecuteConcurrently.mockResolvedValue(
@@ -79,6 +82,9 @@ describe("Parallel Handler", () => {
       const branch1: ParallelFunc<string> = jest
         .fn()
         .mockResolvedValue("result1");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(branch1, "name", { value: "" });
+
       const branches = [branch1];
       const config = { maxConcurrency: 2 };
 
@@ -115,6 +121,9 @@ describe("Parallel Handler", () => {
       const branch1: ParallelFunc<string> = jest
         .fn()
         .mockResolvedValue("result1");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(branch1, "name", { value: "" });
+
       const branches = [branch1];
       const config = { maxConcurrency: 3 };
 
@@ -300,6 +309,9 @@ describe("Parallel Handler", () => {
       const unnamedBranch: ParallelFunc<string> = jest
         .fn()
         .mockResolvedValue("result2");
+      // Remove function name to test unnamed behavior
+      Object.defineProperty(unnamedBranch, "name", { value: "" });
+
       const branches = [namedBranch, unnamedBranch];
 
       mockExecuteConcurrently.mockResolvedValue(
@@ -345,6 +357,10 @@ describe("Parallel Handler", () => {
       const branch2: ParallelFunc<string> = jest
         .fn()
         .mockResolvedValue("result2");
+      // Remove function names to test unnamed behavior
+      Object.defineProperty(branch1, "name", { value: "" });
+      Object.defineProperty(branch2, "name", { value: "" });
+
       const branches = [branch1, branch2];
 
       mockExecuteConcurrently.mockResolvedValue(
@@ -370,6 +386,94 @@ describe("Parallel Handler", () => {
             data: branch2,
             index: 1,
             name: undefined,
+          },
+        ],
+        expect.any(Function),
+        {
+          completionConfig: undefined,
+          iterationSubType: "ParallelBranch",
+          maxConcurrency: undefined,
+          summaryGenerator: expect.any(Function),
+          topLevelSubType: "Parallel",
+        },
+      );
+    });
+
+    it("should extract function names when no explicit name provided", async () => {
+      const branch1: ParallelFunc<string> = jest
+        .fn()
+        .mockResolvedValue("result1");
+      const branch2: ParallelFunc<string> = jest
+        .fn()
+        .mockResolvedValue("result2");
+      Object.defineProperty(branch1, "name", { value: "myBranch1" });
+      Object.defineProperty(branch2, "name", { value: "myBranch2" });
+
+      const branches = [branch1, branch2];
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await parallelHandler(branches);
+
+      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+        undefined,
+        [
+          {
+            id: "parallel-branch-0",
+            data: branch1,
+            index: 0,
+            name: "myBranch1",
+          },
+          {
+            id: "parallel-branch-1",
+            data: branch2,
+            index: 1,
+            name: "myBranch2",
+          },
+        ],
+        expect.any(Function),
+        {
+          completionConfig: undefined,
+          iterationSubType: "ParallelBranch",
+          maxConcurrency: undefined,
+          summaryGenerator: expect.any(Function),
+          topLevelSubType: "Parallel",
+        },
+      );
+    });
+
+    it("should prioritize explicit name over function name", async () => {
+      const namedBranch: NamedParallelBranch<string> = {
+        name: "explicit-name",
+        func: jest.fn().mockResolvedValue("result1"),
+      };
+      Object.defineProperty(namedBranch.func, "name", {
+        value: "functionName",
+      });
+
+      const branches = [namedBranch];
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await parallelHandler(branches);
+
+      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+        undefined,
+        [
+          {
+            id: "parallel-branch-0",
+            data: namedBranch.func,
+            index: 0,
+            name: "explicit-name",
           },
         ],
         expect.any(Function),

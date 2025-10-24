@@ -75,7 +75,12 @@ export const createParallelHandler = (
       branches.map((branch, index) => {
         const isNamedBranch = typeof branch === "object" && "func" in branch;
         const func = isNamedBranch ? branch.func : branch;
-        const branchName = isNamedBranch ? branch.name : undefined;
+        let branchName = isNamedBranch ? branch.name : undefined;
+
+        // Extract function name if branch name is not provided
+        if (!branchName && func.name) {
+          branchName = func.name;
+        }
 
         return {
           id: `parallel-branch-${index}`,

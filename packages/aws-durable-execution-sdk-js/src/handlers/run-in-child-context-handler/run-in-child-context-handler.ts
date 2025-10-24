@@ -88,6 +88,11 @@ export const createRunInChildContextHandler = (
       options = fnOrOptions as ChildConfig<T>;
     }
 
+    // Extract function name if name is not provided
+    if (!name && fn.name) {
+      name = fn.name;
+    }
+
     const entityId = createStepId();
 
     log("🔄", "Running child context:", {
