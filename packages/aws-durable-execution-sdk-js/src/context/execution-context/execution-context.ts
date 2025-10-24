@@ -26,7 +26,7 @@ export const initializeExecutionContext = async (
   const checkpointToken = event.CheckpointToken;
   const durableExecutionArn = event.DurableExecutionArn;
 
-  const state = ExecutionStateFactory.createExecutionState(isLocalRunner);
+  const state = ExecutionStateFactory.createExecutionState();
 
   const operationsArray = [...(event.InitialExecutionState.Operations || [])];
   let nextMarker = event.InitialExecutionState.NextMarker;

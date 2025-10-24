@@ -1,11 +1,16 @@
 import { ApiStorage } from "./api-storage";
-import { LocalRunnerStorage } from "./local-runner-storage";
 import { ExecutionState } from "./storage-provider";
 
+let customStorage: ExecutionState | undefined;
+
+export function setCustomStorage(storage: ExecutionState): void {
+  customStorage = storage;
+}
+
 export class ExecutionStateFactory {
-  static createExecutionState(isLocalRunner?: boolean): ExecutionState {
-    if (isLocalRunner) {
-      return new LocalRunnerStorage();
+  static createExecutionState(): ExecutionState {
+    if (customStorage) {
+      return customStorage;
     }
 
     return new ApiStorage();

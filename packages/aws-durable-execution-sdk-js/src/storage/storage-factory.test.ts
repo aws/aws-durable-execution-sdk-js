@@ -1,8 +1,12 @@
 import { ApiStorage } from "./api-storage";
-import { LocalRunnerStorage } from "./local-runner-storage";
-import { ExecutionStateFactory } from "./storage-factory";
+import { ExecutionStateFactory, setCustomStorage } from "./storage-factory";
 
 describe("ExecutionStateFactory", () => {
+  afterEach(() => {
+    // Reset custom storage after each test
+    setCustomStorage(undefined as any);
+  });
+
   test("should create ApiStorage by default", () => {
     // Create the execution state
     const executionState = ExecutionStateFactory.createExecutionState();
@@ -11,19 +15,11 @@ describe("ExecutionStateFactory", () => {
     expect(executionState).toBeInstanceOf(ApiStorage);
   });
 
-  test("should create LocalRunnerStorage when isLocalRunner is true", () => {
-    // Create the execution state with LocalRunner flag
-    const executionState = ExecutionStateFactory.createExecutionState(true);
+  test("should return custom storage when set", () => {
+    const customStorage = new ApiStorage();
+    setCustomStorage(customStorage);
 
-    // Verify that it's an instance of LocalRunnerStorage
-    expect(executionState).toBeInstanceOf(LocalRunnerStorage);
-  });
-
-  test("should create ApiStorage when isLocalRunner is false", () => {
-    // Create the execution state with LocalRunner flag set to false
-    const executionState = ExecutionStateFactory.createExecutionState(false);
-
-    // Verify that it's an instance of ApiStorage
-    expect(executionState).toBeInstanceOf(ApiStorage);
+    const executionState = ExecutionStateFactory.createExecutionState();
+    expect(executionState).toBe(customStorage);
   });
 });

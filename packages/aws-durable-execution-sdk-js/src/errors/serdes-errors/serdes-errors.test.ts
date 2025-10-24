@@ -1,189 +1,13 @@
 import {
-  SerializationFailedError,
-  DeserializationFailedError,
-  isSerdesError,
   safeSerialize,
   safeDeserialize,
+  SerdesFailedError,
 } from "./serdes-errors";
-import {
-  UnrecoverableError,
-  UnrecoverableInvocationError,
-  isUnrecoverableError,
-  isUnrecoverableInvocationError,
-} from "../unrecoverable-error/unrecoverable-error";
 import { TerminationReason } from "../../termination-manager/types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 
 describe("Serdes Errors", () => {
-  describe("SerializationFailedError", () => {
-    it("should create error with correct properties", () => {
-      const originalError = new Error("JSON.stringify failed");
-      const error = new SerializationFailedError(
-        TEST_CONSTANTS.STEP_ID_1,
-        TEST_CONSTANTS.STEP_NAME,
-        originalError,
-      );
-
-      expect(error.name).toBe("SerializationFailedError");
-      expect(error.message).toContain("[Unrecoverable Invocation]");
-      expect(error.message).toContain(
-        'Serialization failed for step "test-step" (step-1)',
-      );
-      expect(error.message).toContain("JSON.stringify failed");
-      expect(error.terminationReason).toBe(TerminationReason.CUSTOM);
-      expect(error.isUnrecoverable).toBe(true);
-      expect(error.isUnrecoverableInvocation).toBe(true);
-      expect(error.originalError).toBe(originalError);
-      expect(error).toBeInstanceOf(UnrecoverableError);
-      expect(error).toBeInstanceOf(UnrecoverableInvocationError);
-    });
-
-    it("should create error without step name", () => {
-      const error = new SerializationFailedError("step-1");
-
-      expect(error.message).toContain("Serialization failed for step (step-1)");
-      expect(error.message).not.toContain('"');
-    });
-
-    it("should preserve original stack trace", () => {
-      const originalError = new Error("Original error");
-      const error = new SerializationFailedError(
-        TEST_CONSTANTS.STEP_ID_1,
-        TEST_CONSTANTS.STEP_NAME,
-        originalError,
-      );
-
-      expect(error.stack).toContain("Caused by:");
-      expect(error.stack).toContain(originalError.stack);
-    });
-
-    it("should create error without originalError", () => {
-      const error = new SerializationFailedError("step-1", "test-step");
-
-      expect(error.message).toContain("[Unrecoverable Invocation]");
-      expect(error.message).toContain(
-        'Serialization failed for step "test-step" (step-1)',
-      );
-      expect(error.message).toContain("Unknown serialization error");
-      expect(error.originalError).toBeUndefined();
-    });
-
-    it("should create error with originalError that has no message", () => {
-      const originalError = new Error("");
-      const error = new SerializationFailedError(
-        TEST_CONSTANTS.STEP_ID_1,
-        TEST_CONSTANTS.STEP_NAME,
-        originalError,
-      );
-
-      expect(error.message).toContain("[Unrecoverable Invocation]");
-      expect(error.message).toContain(
-        'Serialization failed for step "test-step" (step-1)',
-      );
-      expect(error.message).toContain("Unknown serialization error");
-      expect(error.originalError).toBe(originalError);
-    });
-  });
-
-  describe("DeserializationFailedError", () => {
-    it("should create error with correct properties", () => {
-      const originalError = new Error("JSON.parse failed");
-      const error = new DeserializationFailedError(
-        TEST_CONSTANTS.STEP_ID_1,
-        TEST_CONSTANTS.STEP_NAME,
-        originalError,
-      );
-
-      expect(error.name).toBe("DeserializationFailedError");
-      expect(error.message).toContain("[Unrecoverable Invocation]");
-      expect(error.message).toContain(
-        'Deserialization failed for step "test-step" (step-1)',
-      );
-      expect(error.message).toContain("JSON.parse failed");
-      expect(error.terminationReason).toBe(TerminationReason.CUSTOM);
-      expect(error.isUnrecoverable).toBe(true);
-      expect(error.isUnrecoverableInvocation).toBe(true);
-      expect(error.originalError).toBe(originalError);
-      expect(error).toBeInstanceOf(UnrecoverableError);
-      expect(error).toBeInstanceOf(UnrecoverableInvocationError);
-    });
-
-    it("should create error without step name", () => {
-      const error = new DeserializationFailedError("step-1");
-
-      expect(error.message).toContain(
-        "Deserialization failed for step (step-1)",
-      );
-      expect(error.message).not.toContain('"');
-    });
-
-    it("should create error without originalError", () => {
-      const error = new DeserializationFailedError("step-1", "test-step");
-
-      expect(error.message).toContain("[Unrecoverable Invocation]");
-      expect(error.message).toContain(
-        'Deserialization failed for step "test-step" (step-1)',
-      );
-      expect(error.message).toContain("Unknown deserialization error");
-      expect(error.originalError).toBeUndefined();
-    });
-
-    it("should create error with originalError that has no message", () => {
-      const originalError = new Error("");
-      const error = new DeserializationFailedError(
-        TEST_CONSTANTS.STEP_ID_1,
-        TEST_CONSTANTS.STEP_NAME,
-        originalError,
-      );
-
-      expect(error.message).toContain("[Unrecoverable Invocation]");
-      expect(error.message).toContain(
-        'Deserialization failed for step "test-step" (step-1)',
-      );
-      expect(error.message).toContain("Unknown deserialization error");
-      expect(error.originalError).toBe(originalError);
-    });
-  });
-
-  describe("isSerdesError", () => {
-    it("should return true for SerializationFailedError", () => {
-      const error = new SerializationFailedError("step-1");
-      expect(isSerdesError(error)).toBe(true);
-    });
-
-    it("should return true for DeserializationFailedError", () => {
-      const error = new DeserializationFailedError("step-1");
-      expect(isSerdesError(error)).toBe(true);
-    });
-
-    it("should return false for regular Error", () => {
-      const error = new Error("Regular error");
-      expect(isSerdesError(error)).toBe(false);
-    });
-
-    it("should return false for non-Error objects", () => {
-      expect(isSerdesError("string")).toBe(false);
-      expect(isSerdesError(null)).toBe(false);
-      expect(isSerdesError(undefined)).toBe(false);
-      expect(isSerdesError({})).toBe(false);
-    });
-  });
-
-  describe("isUnrecoverableError integration", () => {
-    it("should return true for SerializationFailedError", () => {
-      const error = new SerializationFailedError("step-1");
-      expect(isUnrecoverableError(error)).toBe(true);
-      expect(isUnrecoverableInvocationError(error)).toBe(true);
-    });
-
-    it("should return true for DeserializationFailedError", () => {
-      const error = new DeserializationFailedError("step-1");
-      expect(isUnrecoverableError(error)).toBe(true);
-      expect(isUnrecoverableInvocationError(error)).toBe(true);
-    });
-  });
-
   describe("safeSerialize", () => {
     const mockSerdes = {
       serialize: jest.fn(),
@@ -243,7 +67,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Serialization failed for step "test-step" (step-1): Circular reference',
       });
@@ -270,7 +94,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Serialization failed for step "test-step" (step-1): Unknown serialization error',
       });
@@ -297,7 +121,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           "Serialization failed for step (step-1): Unknown serialization error",
       });
@@ -323,7 +147,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Serialization failed for step "test-step" (step-1): Async serialization failed',
       });
@@ -348,7 +172,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Serialization failed for step "test-step" (step-1): Unknown serialization error',
       });
@@ -373,7 +197,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           "Serialization failed for step (step-1): Unknown serialization error",
       });
@@ -439,7 +263,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Deserialization failed for step "test-step" (step-1): Unexpected token',
       });
@@ -466,7 +290,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Deserialization failed for step "test-step" (step-1): Unknown deserialization error',
       });
@@ -493,7 +317,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           "Deserialization failed for step (step-1): Unknown deserialization error",
       });
@@ -519,7 +343,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Deserialization failed for step "test-step" (step-1): Async deserialization failed',
       });
@@ -544,7 +368,7 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           'Deserialization failed for step "test-step" (step-1): Unknown deserialization error',
       });
@@ -569,10 +393,34 @@ describe("Serdes Errors", () => {
 
       // Verify termination was called
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CUSTOM,
+        reason: TerminationReason.SERDES_FAILED,
         message:
           "Deserialization failed for step (step-1): Unknown deserialization error",
       });
     }, 10000);
+  });
+
+  describe("SerdesFailedError", () => {
+    it("should create error with custom message", () => {
+      const error = new SerdesFailedError("Custom serdes error");
+
+      expect(error.message).toContain("Custom serdes error");
+      expect(error.terminationReason).toBe(TerminationReason.SERDES_FAILED);
+    });
+
+    it("should create error with default message", () => {
+      const error = new SerdesFailedError();
+
+      expect(error.message).toContain("Serdes operation failed");
+      expect(error.terminationReason).toBe(TerminationReason.SERDES_FAILED);
+    });
+
+    it("should create error with original error", () => {
+      const originalError = new Error("Original error");
+      const error = new SerdesFailedError("Custom message", originalError);
+
+      expect(error.message).toContain("Custom message");
+      expect(error.originalError).toBe(originalError);
+    });
   });
 });

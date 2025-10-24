@@ -5,44 +5,15 @@ import { log } from "../../utils/logger/logger";
 import { SerdesContext } from "../../utils/serdes/serdes";
 
 /**
- * Error thrown when serialization fails
- * This is an unrecoverable invocation error that will terminate the current Lambda invocation
- * because data corruption or incompatible formats indicate a fundamental problem
+ * Error thrown when serdes operation fails and terminates Lambda invocation
+ * This is used by withDurableExecution to terminate the Lambda when serdes fails
  */
-export class SerializationFailedError extends UnrecoverableInvocationError {
-  readonly terminationReason = TerminationReason.CUSTOM;
+export class SerdesFailedError extends UnrecoverableInvocationError {
+  readonly terminationReason = TerminationReason.SERDES_FAILED;
 
-  constructor(stepId: string, stepName?: string, originalError?: Error) {
-    const message = `Serialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${originalError?.message || "Unknown serialization error"}`;
-    super(message, originalError);
+  constructor(message?: string, originalError?: Error) {
+    super(message || "Serdes operation failed", originalError);
   }
-}
-
-/**
- * Error thrown when deserialization fails
- * This is an unrecoverable invocation error that will terminate the current Lambda invocation
- * because data corruption or incompatible formats indicate a fundamental problem
- */
-export class DeserializationFailedError extends UnrecoverableInvocationError {
-  readonly terminationReason = TerminationReason.CUSTOM;
-
-  constructor(stepId: string, stepName?: string, originalError?: Error) {
-    const message = `Deserialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${originalError?.message || "Unknown deserialization error"}`;
-    super(message, originalError);
-  }
-}
-
-/**
- * Type guard to check if an error is a Serdes error
- * @deprecated Use isUnrecoverableInvocationError instead for broader error detection
- */
-export function isSerdesError(
-  error: unknown,
-): error is SerializationFailedError | DeserializationFailedError {
-  return (
-    error instanceof SerializationFailedError ||
-    error instanceof DeserializationFailedError
-  );
 }
 
 /**
@@ -78,7 +49,7 @@ export async function safeSerialize<T>(
     });
 
     terminationManager.terminate({
-      reason: TerminationReason.CUSTOM,
+      reason: TerminationReason.SERDES_FAILED,
       message: message,
     });
 
@@ -120,7 +91,7 @@ export async function safeDeserialize<T>(
     });
 
     terminationManager.terminate({
-      reason: TerminationReason.CUSTOM,
+      reason: TerminationReason.SERDES_FAILED,
       message: message,
     });
 

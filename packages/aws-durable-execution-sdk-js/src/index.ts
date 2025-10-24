@@ -31,6 +31,8 @@ export {
   Serdes,
 } from "./utils/serdes/serdes";
 export { ApiStorage } from "./storage/api-storage";
+export { ExecutionState } from "./storage/storage-provider";
+export { setCustomStorage } from "./storage/storage-factory";
 export {
   createWaitStrategy,
   WaitStrategyConfig,
