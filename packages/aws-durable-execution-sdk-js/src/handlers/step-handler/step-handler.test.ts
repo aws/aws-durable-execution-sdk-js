@@ -102,50 +102,6 @@ describe("Step Handler", () => {
     expect(stepFn.mock.calls[0][0]).toHaveProperty("logger");
   });
 
-  test("should extract function name when no explicit name is provided", async () => {
-    async function myStepFunction(): Promise<string> {
-      return "step-result";
-    }
-
-    await stepHandler(myStepFunction);
-
-    // Verify checkpoint was called with the extracted function name
-    expect(mockCheckpoint).toHaveBeenCalledWith(
-      "test-step-id",
-      expect.objectContaining({
-        Name: "myStepFunction",
-      }),
-    );
-  });
-
-  test("should use explicit name over function name", async () => {
-    async function myStepFunction(): Promise<string> {
-      return "step-result";
-    }
-
-    await stepHandler("explicit-name", myStepFunction);
-
-    // Verify checkpoint was called with the explicit name, not the function name
-    expect(mockCheckpoint).toHaveBeenCalledWith(
-      "test-step-id",
-      expect.objectContaining({
-        Name: "explicit-name",
-      }),
-    );
-  });
-
-  test("should handle anonymous functions without name", async () => {
-    await stepHandler(async () => "step-result");
-
-    // Verify checkpoint was called without a name (arrow functions have empty string name, which is falsy)
-    expect(mockCheckpoint).toHaveBeenCalledWith(
-      "test-step-id",
-      expect.objectContaining({
-        Name: undefined,
-      }),
-    );
-  });
-
   test("should checkpoint at start and finish with AT_MOST_ONCE_PER_RETRY semantics", async () => {
     const stepFn = jest.fn().mockResolvedValue("step-result");
 

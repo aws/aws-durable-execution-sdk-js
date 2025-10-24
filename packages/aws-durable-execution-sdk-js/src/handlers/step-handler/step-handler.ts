@@ -103,11 +103,6 @@ export const createStepHandler = (
       options = fnOrOptions as StepConfig<T>;
     }
 
-    // Extract function name if name is not provided
-    if (!name && fn.name) {
-      name = fn.name;
-    }
-
     const stepId = createStepId();
 
     log("▶️", "Running step:", { stepId, name, options });

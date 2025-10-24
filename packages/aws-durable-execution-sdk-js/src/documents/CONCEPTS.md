@@ -300,12 +300,7 @@ All durable operations accept an optional `name` parameter for operational visib
 // With name
 await context.step("fetch-user", async () => fetchUser(userId));
 
-// Without name (uses function name if available)
-await context.step(async function fetchUser() {
-  return fetchUser(userId);
-});
-
-// Anonymous (name remains unset)
+// Without name (name remains unset)
 await context.step(async () => fetchUser(userId));
 ```
 
