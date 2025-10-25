@@ -6,24 +6,26 @@ import {
   GetDurableExecutionStateResponse,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
-import { ExecutionState } from "./storage";
+import { ExecutionState } from "@aws/durable-execution-sdk-js";
 
 /**
- * Implementation of ExecutionState that uses the new \@aws-sdk/client-lambda
+ * Local storage implementation that connects to the local checkpoint server
+ * instead of real AWS Lambda API for testing purposes.
  */
-export class ApiStorage implements ExecutionState {
-  protected client: LambdaClient;
+export class LocalRunnerStorage implements ExecutionState {
+  private client: LambdaClient;
 
   constructor() {
-    this.client = new LambdaClient();
+    const endpoint =
+      process.env.DURABLE_LOCAL_RUNNER_ENDPOINT ?? "http://localhost:3000";
+    const region = process.env.DURABLE_LOCAL_RUNNER_REGION ?? "us-east-1";
+
+    this.client = new LambdaClient({
+      endpoint,
+      region,
+    });
   }
 
-  /**
-   * Gets step data from the durable execution
-   * @param checkpointToken - The checkpoint token
-   * @param nextMarker - The pagination token
-   * @returns Response with operations data
-   */
   async getStepData(
     checkpointToken: string,
     durableExecutionArn: string,
@@ -41,12 +43,6 @@ export class ApiStorage implements ExecutionState {
     return response;
   }
 
-  /**
-   * Checkpoints the durable execution with operation updates
-   * @param checkpointToken - The checkpoint token
-   * @param data - The checkpoint data
-   * @returns Checkpoint response
-   */
   async checkpoint(
     checkpointToken: string,
     data: CheckpointDurableExecutionRequest,
@@ -59,6 +55,7 @@ export class ApiStorage implements ExecutionState {
         Updates: data.Updates,
       }),
     );
+
     return response;
   }
 }

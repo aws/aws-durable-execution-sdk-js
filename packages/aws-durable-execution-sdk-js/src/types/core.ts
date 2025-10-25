@@ -1,6 +1,6 @@
 import { Context } from "aws-lambda";
 import { TerminationManager } from "../termination-manager/termination-manager";
-import { ExecutionState } from "../storage/storage-provider";
+import { ExecutionState } from "../storage/storage";
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 
 export enum DurableExecutionMode {
