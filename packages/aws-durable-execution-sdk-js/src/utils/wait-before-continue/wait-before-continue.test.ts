@@ -2,7 +2,7 @@ import { waitBeforeContinue } from "./wait-before-continue";
 import { ExecutionContext } from "../../types";
 import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
-import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
+import { OPERATIONS_COMPLETE_EVENT } from "../constants";
 import { STEP_DATA_UPDATED_EVENT } from "../checkpoint/checkpoint";
 import { hashId } from "../step-id-utils/step-id-utils";
 

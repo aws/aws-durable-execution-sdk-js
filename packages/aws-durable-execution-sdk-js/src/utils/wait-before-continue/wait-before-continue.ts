@@ -4,7 +4,7 @@ import {
   STEP_DATA_UPDATED_EVENT,
 } from "../checkpoint/checkpoint";
 import { EventEmitter } from "events";
-import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
+import { OPERATIONS_COMPLETE_EVENT } from "../constants";
 import { hashId } from "../step-id-utils/step-id-utils";
 
 export interface WaitBeforeContinueOptions {

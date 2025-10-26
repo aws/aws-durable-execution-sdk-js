@@ -14,7 +14,7 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
-import { OPERATIONS_COMPLETE_EVENT } from "../../context/durable-context/durable-context";
+import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants";
 
 // Mock the logger to avoid console output during tests
 jest.mock("../../utils/logger/logger", () => ({
