@@ -78,7 +78,6 @@ export class InvokeHandler {
         Operations: parameters.operations,
         NextMarker: "",
       },
-      LocalRunner: true,
     };
   }
 

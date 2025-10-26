@@ -3,13 +3,13 @@ import {
   OperationStatus,
   OperationType,
 } from "@aws-sdk/client-lambda";
-import { ExecutionStateFactory } from "../../storage/storage-factory";
+import { getExecutionState } from "../../storage/storage";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { initializeExecutionContext } from "./execution-context";
 
 // Mock dependencies
-jest.mock("../../storage/storage-factory");
+jest.mock("../../storage/storage");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../termination-manager/termination-manager");
 
@@ -71,9 +71,7 @@ describe("initializeExecutionContext", () => {
     jest.clearAllMocks();
 
     // Setup default mocks
-    (ExecutionStateFactory.createExecutionState as jest.Mock).mockReturnValue(
-      mockExecutionState,
-    );
+    (getExecutionState as jest.Mock).mockReturnValue(mockExecutionState);
 
     // Mock environment variables
     process.env.DURABLE_VERBOSE_MODE = "false";
@@ -89,9 +87,7 @@ describe("initializeExecutionContext", () => {
     const result = await initializeExecutionContext(mockEvent);
 
     // Verify
-    expect(ExecutionStateFactory.createExecutionState).toHaveBeenCalledWith(
-      false,
-    );
+    expect(getExecutionState).toHaveBeenCalled();
     expect(result).toEqual(
       expect.objectContaining({
         executionContext: expect.objectContaining({
@@ -390,9 +386,7 @@ describe("initializeExecutionContext", () => {
     await initializeExecutionContext(eventWithLocalRunner);
 
     // Verify
-    expect(ExecutionStateFactory.createExecutionState).toHaveBeenCalledWith(
-      true,
-    );
+    expect(getExecutionState).toHaveBeenCalled();
   });
 
   it("should handle undefined operations in paginated response", async () => {

@@ -1,5 +1,5 @@
 import { Operation } from "@aws-sdk/client-lambda";
-import { ExecutionStateFactory } from "../../storage/storage-factory";
+import { getExecutionState } from "../../storage/storage";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   DurableExecutionInvocationInput,
@@ -16,17 +16,13 @@ export const initializeExecutionContext = async (
   durableExecutionMode: DurableExecutionMode;
   checkpointToken: string;
 }> => {
-  const isLocalRunner = event.LocalRunner || false;
-
   log("🔵", "Initializing durable function with event:", event);
-  log("🔧", `Running in mode: ${isLocalRunner ? "LOCAL" : "LAMBDA"}`);
-  log("🔧", `Local runner mode: ${isLocalRunner ? "ENABLED" : "DISABLED"}`);
   log("📍", "Function Input:", event);
 
   const checkpointToken = event.CheckpointToken;
   const durableExecutionArn = event.DurableExecutionArn;
 
-  const state = ExecutionStateFactory.createExecutionState(isLocalRunner);
+  const state = getExecutionState();
 
   const operationsArray = [...(event.InitialExecutionState.Operations || [])];
   let nextMarker = event.InitialExecutionState.NextMarker;

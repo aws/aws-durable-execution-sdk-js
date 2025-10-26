@@ -4,7 +4,7 @@ import {
   CheckpointDurableExecutionResponse,
 } from "@aws-sdk/client-lambda";
 import { createDurableContext } from "../context/durable-context/durable-context";
-import { ExecutionState } from "../storage/storage-provider";
+import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import {
   DurableContext,
