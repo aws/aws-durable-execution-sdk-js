@@ -15,15 +15,15 @@ export default [
   },
   {
     files: [
-      "packages/examples/src/examples/**/*.ts",
-      "packages/examples/src/examples/**/*.js",
+      "packages/aws-durable-execution-sdk-js-examples/src/examples/**/*.ts",
+      "packages/aws-durable-execution-sdk-js-examples/src/examples/**/*.js",
+      "test-eslint.ts",
     ],
     plugins: {
-      "lambda-durable-functions-eslint-js": durableFunctionsPlugin,
+      "aws-durable-execution-eslint": durableFunctionsPlugin,
     },
     rules: {
-      "lambda-durable-functions-eslint-js/no-nested-durable-operations":
-        "error",
+      "aws-durable-execution-eslint/no-nested-durable-operations": "error",
     },
     languageOptions: {
       parser: typescriptParser,

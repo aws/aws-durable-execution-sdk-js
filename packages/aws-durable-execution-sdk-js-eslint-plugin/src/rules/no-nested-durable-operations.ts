@@ -26,11 +26,12 @@ export const noNestedDurableOperations: Rule.RuleModule = {
       "runInChildContext",
     ]);
 
-    let contextStack: string[] = [];
+    // Track context variables by name and their declaration node
+    let contextStack: { name: string; declarationNode: any }[] = [];
 
     function isDurableOperation(
       node: any,
-    ): { operation: string; contextName: string } | null {
+    ): { operation: string; contextName: string; contextNode: any } | null {
       if (
         node.callee &&
         node.callee.type === "MemberExpression" &&
@@ -43,7 +44,34 @@ export const noNestedDurableOperations: Rule.RuleModule = {
         return {
           operation: node.callee.property.name,
           contextName: node.callee.object.name,
+          contextNode: node.callee.object,
         };
+      }
+      return null;
+    }
+
+    function findVariableDeclaration(node: any, name: string): any {
+      // Simple heuristic: find the closest function parameter or variable declaration
+      let current = node;
+      while (current && current.parent) {
+        current = current.parent;
+
+        // Check if this is a function with parameters
+        if (
+          current.type === "ArrowFunctionExpression" ||
+          current.type === "FunctionExpression"
+        ) {
+          const param = current.params?.find((p: any) => p.name === name);
+          if (param) return param;
+        }
+
+        // Check for variable declarations
+        if (
+          current.type === "VariableDeclarator" &&
+          current.id?.name === name
+        ) {
+          return current.id;
+        }
       }
       return null;
     }
@@ -53,10 +81,18 @@ export const noNestedDurableOperations: Rule.RuleModule = {
         const durableOp = isDurableOperation(node);
 
         if (durableOp) {
-          const { contextName } = durableOp;
+          const { contextName, contextNode } = durableOp;
 
-          // Check if we're using the same context that's already on the stack
-          if (contextStack.includes(contextName)) {
+          // Find the declaration of this context variable
+          const declaration = findVariableDeclaration(contextNode, contextName);
+
+          // Check if we're using the same variable declaration that's already on the stack
+          const isAlreadyInStack = contextStack.some(
+            (stackItem) =>
+              stackItem.declarationNode === declaration && declaration !== null,
+          );
+
+          if (isAlreadyInStack) {
             context.report({
               node,
               messageId: "sameContextUsage",
@@ -67,7 +103,10 @@ export const noNestedDurableOperations: Rule.RuleModule = {
           }
 
           // Add this context to the stack
-          contextStack.push(contextName);
+          contextStack.push({
+            name: contextName,
+            declarationNode: declaration,
+          });
         }
       },
       "CallExpression:exit"(node: any) {
