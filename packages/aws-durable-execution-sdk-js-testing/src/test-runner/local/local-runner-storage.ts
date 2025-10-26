@@ -23,6 +23,10 @@ export class LocalRunnerStorage implements ExecutionState {
     this.client = new LambdaClient({
       endpoint,
       region,
+      credentials: {
+        accessKeyId: "test",
+        secretAccessKey: "test",
+      },
     });
   }
 
