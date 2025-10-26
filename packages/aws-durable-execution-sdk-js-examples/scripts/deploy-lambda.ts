@@ -11,7 +11,7 @@ import {
   UpdateFunctionCodeCommand,
   UpdateFunctionConfigurationCommand,
   GetPolicyCommand,
-  AddPermissionCommand,
+  PutResourcePolicyCommand,
   Runtime,
   GetFunctionConfigurationCommandOutput,
 } from "@aws-sdk/client-lambda";
@@ -257,39 +257,32 @@ async function checkAndAddResourcePolicy(
   lambdaClient: LambdaClient,
   functionName: string,
   invokeAccountId: string,
+  env: EnvironmentVariables,
 ): Promise<void> {
-  console.log("Checking resource policy...");
+  console.log("Setting resource policy...");
 
-  try {
-    const getPolicyCommand = new GetPolicyCommand({
-      FunctionName: functionName,
-    });
-    const policyResult = await lambdaClient.send(getPolicyCommand);
+  const functionArn = `arn:aws:lambda:${env.AWS_REGION}:${env.AWS_ACCOUNT_ID}:function:${functionName}`;
+  
+  const policyDocument = {
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Sid: "dex-invoke-permission",
+        Effect: "Allow",
+        Principal: { AWS: invokeAccountId },
+        Action: ["lambda:InvokeFunction", "lambda:GetFunctionConfiguration"],
+        Resource: `${functionArn}:*`,
+      },
+    ],
+  };
 
-    if (
-      policyResult.Policy &&
-      policyResult.Policy.includes("dex-invoke-permission")
-    ) {
-      console.log("Resource policy already exists, skipping");
-      return;
-    }
-  } catch (error: any) {
-    if (error.name !== "ResourceNotFoundException") {
-      throw error;
-    }
-    // Policy doesn't exist, we'll add it below
-  }
-
-  console.log("Adding resource policy to invoke function...");
-  const addPermissionCommand = new AddPermissionCommand({
-    FunctionName: functionName,
-    StatementId: "dex-invoke-permission",
-    Action: "lambda:InvokeFunction",
-    Principal: invokeAccountId,
+  const putResourcePolicyCommand = new PutResourcePolicyCommand({
+    ResourceArn: functionArn,
+    Policy: JSON.stringify(policyDocument),
   });
 
-  await lambdaClient.send(addPermissionCommand);
-  console.log("Resource policy added successfully");
+  await lambdaClient.send(putResourcePolicyCommand);
+  console.log("Resource policy set successfully");
 }
 
 async function showFinalConfiguration(
@@ -370,6 +363,7 @@ async function main(): Promise<void> {
       lambdaClient,
       functionName,
       env.INVOKE_ACCOUNT_ID,
+      env,
     );
 
     // Set GITHUB_ENV if running in GitHub Actions
