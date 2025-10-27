@@ -224,8 +224,3 @@ export const withDurableExecution = <Input, Output>(
     }
   };
 };
-
-/**
- * @deprecated Use `withDurableExecution` instead. This alias will be removed in a future version.
- */
-export const withDurableFunctions = withDurableExecution;
