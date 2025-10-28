@@ -11,7 +11,8 @@ import {
   UpdateFunctionCodeCommand,
   UpdateFunctionConfigurationCommand,
   GetPolicyCommand,
-  AddPermissionCommand,
+  // TODO: Add PutResourcePolicyCommand to client-lambda package
+  // PutResourcePolicyCommand,
   Runtime,
   GetFunctionConfigurationCommandOutput,
 } from "@aws-sdk/client-lambda";
@@ -131,6 +132,24 @@ async function checkFunctionExists(
   }
 }
 
+async function retryOnConflict<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 10,
+): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      if (error.name === "ResourceConflictException" && attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
 async function getCurrentConfiguration(
   lambdaClient: LambdaClient,
   functionName: string,
@@ -232,7 +251,7 @@ async function updateFunction(
   const updateEnvCommand = new UpdateFunctionConfigurationCommand(
     updateEnvParams,
   );
-  await lambdaClient.send(updateEnvCommand);
+  await retryOnConflict(() => lambdaClient.send(updateEnvCommand));
 
   // Check if DurableConfig needs updating
   if (
@@ -247,7 +266,7 @@ async function updateFunction(
         ExecutionTimeout: targetTimeout,
       },
     });
-    await lambdaClient.send(updateConfigCommand);
+    await retryOnConflict(() => lambdaClient.send(updateConfigCommand));
   } else {
     console.log("DurableConfig is up to date");
   }
@@ -257,39 +276,36 @@ async function checkAndAddResourcePolicy(
   lambdaClient: LambdaClient,
   functionName: string,
   invokeAccountId: string,
+  env: EnvironmentVariables,
 ): Promise<void> {
-  console.log("Checking resource policy...");
+  console.log("Setting resource policy...");
 
-  try {
-    const getPolicyCommand = new GetPolicyCommand({
-      FunctionName: functionName,
-    });
-    const policyResult = await lambdaClient.send(getPolicyCommand);
+  const functionArn = `arn:aws:lambda:${env.AWS_REGION}:${env.AWS_ACCOUNT_ID}:function:${functionName}`;
+  
+  const policyDocument = {
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Sid: "dex-invoke-permission",
+        Effect: "Allow",
+        Principal: { AWS: invokeAccountId },
+        Action: [
+          "lambda:InvokeFunction",
+          "lambda:GetFunctionConfiguration"
+        ],
+        Resource: `${functionArn}:*`,
+      },
+    ],
+  };
 
-    if (
-      policyResult.Policy &&
-      policyResult.Policy.includes("dex-invoke-permission")
-    ) {
-      console.log("Resource policy already exists, skipping");
-      return;
-    }
-  } catch (error: any) {
-    if (error.name !== "ResourceNotFoundException") {
-      throw error;
-    }
-    // Policy doesn't exist, we'll add it below
-  }
+  // TODO: Add PutResourcePolicyCommand to client-lambda package
+  // const putResourcePolicyCommand = new PutResourcePolicyCommand({
+  //   ResourceArn: functionArn,
+  //   Policy: JSON.stringify(policyDocument),
+  // });
 
-  console.log("Adding resource policy to invoke function...");
-  const addPermissionCommand = new AddPermissionCommand({
-    FunctionName: functionName,
-    StatementId: "dex-invoke-permission",
-    Action: "lambda:InvokeFunction",
-    Principal: invokeAccountId,
-  });
-
-  await lambdaClient.send(addPermissionCommand);
-  console.log("Resource policy added successfully");
+  // await lambdaClient.send(putResourcePolicyCommand);
+  // console.log("Resource policy set successfully");
 }
 
 async function showFinalConfiguration(
@@ -370,6 +386,7 @@ async function main(): Promise<void> {
       lambdaClient,
       functionName,
       env.INVOKE_ACCOUNT_ID,
+      env,
     );
 
     // Set GITHUB_ENV if running in GitHub Actions

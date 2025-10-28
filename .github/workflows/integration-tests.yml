@@ -71,8 +71,8 @@ jobs:
       - name: Deploy functions
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-          INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID }}
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT_BETA }}
+          INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID_BETA }}
           KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
@@ -112,7 +112,7 @@ jobs:
 
       - name: Run Jest integration tests
         env:
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT_BETA }}
           FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
@@ -154,7 +154,7 @@ jobs:
 
       - name: Cleanup Lambda functions
         env:
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT_BETA }}
           FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
