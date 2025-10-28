@@ -248,7 +248,9 @@ describe("checkpoint-manager registerUpdate", () => {
           : OperationStatus.FAILED,
       );
       expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
-      expect(result.operation.StepDetails).toEqual({});
+      expect(result.operation.StepDetails).toEqual({
+        Attempt: 1,
+      });
       expect(result.operation.EndTimestamp).toBeInstanceOf(Date);
 
       expect(storage.operationDataMap.get("step-id")).toBe(result);

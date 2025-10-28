@@ -173,11 +173,20 @@ export class CheckpointManager {
     operation: Operation,
     status: OperationStatus,
   ): Operation {
-    return {
+    const result: Operation = {
       ...operation,
       Status: status,
       EndTimestamp: new Date(),
     };
+
+    if (operation.Type === OperationType.STEP) {
+      result.StepDetails = {
+        ...result.StepDetails,
+        Attempt: (result.StepDetails?.Attempt ?? 0) + 1,
+      };
+    }
+
+    return result;
   }
 
   private processRetryOperation(

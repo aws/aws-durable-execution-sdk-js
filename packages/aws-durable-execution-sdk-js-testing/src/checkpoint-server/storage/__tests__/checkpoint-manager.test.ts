@@ -234,7 +234,7 @@ describe("CheckpointManager", () => {
         expect(result.operation.StepDetails?.Result).toBe("retry result");
       });
 
-      it("should preserve retry attempt when completing with non-RETRY action", () => {
+      it("should increment retry attempt when completing with non-RETRY action", () => {
         storage.initialize();
 
         // Register a step operation with existing retry attempts
@@ -253,7 +253,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.STEP,
         });
 
-        expect(result.operation.StepDetails?.Attempt).toBe(1); // Preserved from register
+        expect(result.operation.StepDetails?.Attempt).toBe(2);
         expect(result.operation.StepDetails?.Result).toBe("final result");
         expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
       });
@@ -311,7 +311,7 @@ describe("CheckpointManager", () => {
 
         const result = storage.registerUpdate(normalUpdate, mockInvocationId);
 
-        expect(result.operation.StepDetails?.Attempt).toBeUndefined();
+        expect(result.operation.StepDetails?.Attempt).toBe(1);
         expect(result.operation.StepDetails?.Result).toBe("normal payload");
       });
 
@@ -336,7 +336,7 @@ describe("CheckpointManager", () => {
         const result = storage.registerUpdate(secondUpdate, mockInvocationId);
 
         // Should complete the existing operation, preserving retry count
-        expect(result.operation.StepDetails?.Attempt).toBe(1);
+        expect(result.operation.StepDetails?.Attempt).toBe(2);
         expect(result.operation.StepDetails?.Result).toBe("final result");
         expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
       });
@@ -387,7 +387,7 @@ describe("CheckpointManager", () => {
           ErrorMessage: "Step execution failed",
           ErrorType: "StepExecutionError",
         });
-        expect(result.operation.StepDetails?.Attempt).toBeUndefined();
+        expect(result.operation.StepDetails?.Attempt).toBe(1);
       });
 
       it("should update STEP operation with both result and error", () => {
@@ -422,7 +422,7 @@ describe("CheckpointManager", () => {
           ErrorMessage: "Partial failure occurred",
           ErrorType: "PartialFailure",
         });
-        expect(result.operation.StepDetails?.Attempt).toBeUndefined();
+        expect(result.operation.StepDetails?.Attempt).toBe(1);
       });
 
       it("should update STEP operation with error during retry", () => {
@@ -492,7 +492,7 @@ describe("CheckpointManager", () => {
           ErrorType: "NewError",
         });
         expect(result.operation.StepDetails?.Result).toBeUndefined();
-        expect(result.operation.StepDetails?.Attempt).toBeUndefined();
+        expect(result.operation.StepDetails?.Attempt).toBe(1);
       });
     });
   });
@@ -1043,9 +1043,10 @@ describe("CheckpointManager", () => {
       expect(completedOperation.StartTimestamp).toBe(
         originalOperation.StartTimestamp,
       );
-      expect(completedOperation.StepDetails).toEqual(
-        originalOperation.StepDetails,
-      );
+      expect(completedOperation.StepDetails).toEqual({
+        ...originalOperation.StepDetails,
+        Attempt: 3,
+      });
       expect(completedOperation.Status).toBe(OperationStatus.SUCCEEDED);
       expect(completedOperation.EndTimestamp).toBeInstanceOf(Date);
     });

@@ -299,4 +299,122 @@ describe("checkpoint-manager completeOperation", () => {
       expect(operation.StepDetails?.NextAttemptTimestamp).toBeInstanceOf(Date);
     });
   });
+
+  describe("markOperationCompleted with STEP operation type", () => {
+    it("should initialize Attempt to 1 when StepDetails is undefined", () => {
+      const stepOperation = {
+        Id: "step-3",
+        Type: OperationType.STEP,
+        Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
+      };
+
+      const result = storage.markOperationCompleted(
+        stepOperation,
+        OperationStatus.SUCCEEDED,
+      );
+
+      expect(result.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.EndTimestamp).toBeInstanceOf(Date);
+      expect(result.StepDetails?.Attempt).toBe(1);
+    });
+
+    it("should not modify the original operation object", () => {
+      const stepOperation = {
+        Id: "step-5",
+        Type: OperationType.STEP,
+        Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
+        StepDetails: {
+          Attempt: 1,
+        },
+      };
+
+      const originalAttempt = stepOperation.StepDetails.Attempt;
+      const originalStatus = stepOperation.Status;
+
+      const result = storage.markOperationCompleted(
+        stepOperation,
+        OperationStatus.SUCCEEDED,
+      );
+
+      // Original object should not be modified
+      expect(stepOperation.Status).toBe(originalStatus);
+      expect(stepOperation.StepDetails.Attempt).toBe(originalAttempt);
+      expect("EndTimestamp" in stepOperation).toBe(false);
+
+      // Result should be different
+      expect(result).not.toBe(stepOperation);
+      expect(result.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.StepDetails?.Attempt).toBe(2);
+      expect(result.EndTimestamp).toBeInstanceOf(Date);
+    });
+
+    it("should preserve all StepDetails properties while incrementing attempt", () => {
+      const stepOperation = {
+        Id: "step-6",
+        Type: OperationType.STEP,
+        Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
+        StepDetails: {
+          Attempt: 3,
+          Result: "test result",
+          Error: {
+            ErrorType: "SomeError",
+            ErrorMessage: "Error occurred",
+          },
+          NextAttemptTimestamp: new Date("2023-01-01T01:00:00.000Z"),
+        },
+      };
+
+      const result = storage.markOperationCompleted(
+        stepOperation,
+        OperationStatus.SUCCEEDED,
+      );
+
+      expect(result.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.EndTimestamp).toBeInstanceOf(Date);
+      expect(result.StepDetails?.Attempt).toBe(4);
+      expect(result.StepDetails?.Result).toBe("test result");
+      expect(result.StepDetails?.Error).toEqual({
+        ErrorType: "SomeError",
+        ErrorMessage: "Error occurred",
+      });
+      expect(result.StepDetails?.NextAttemptTimestamp).toEqual(
+        new Date("2023-01-01T01:00:00.000Z"),
+      );
+    });
+
+    it("should preserve operation properties other than Status and EndTimestamp", () => {
+      const stepOperation = {
+        Id: "step-8",
+        Name: "TestStep",
+        Type: OperationType.STEP,
+        SubType: "CustomSubType",
+        Status: OperationStatus.STARTED,
+        StartTimestamp: new Date("2023-01-01T00:00:00.000Z"),
+        ParentId: "parent-id",
+        StepDetails: {
+          Attempt: 1,
+        },
+      };
+
+      const result = storage.markOperationCompleted(
+        stepOperation,
+        OperationStatus.SUCCEEDED,
+      );
+
+      expect(result.Id).toBe("step-8");
+      expect(result.Name).toBe("TestStep");
+      expect(result.Type).toBe(OperationType.STEP);
+      expect(result.SubType).toBe("CustomSubType");
+      expect(result.StartTimestamp).toEqual(
+        new Date("2023-01-01T00:00:00.000Z"),
+      );
+      expect(result.ParentId).toBe("parent-id");
+      expect(result.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.EndTimestamp).toBeInstanceOf(Date);
+      expect(result.StepDetails?.Attempt).toBe(2);
+    });
+  });
 });

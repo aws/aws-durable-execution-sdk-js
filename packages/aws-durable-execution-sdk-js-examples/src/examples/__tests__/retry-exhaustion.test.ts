@@ -40,7 +40,7 @@ createTests({
       // Verify retries - should exhaust all attempts
       const stepDetails = retriesOperation.getStepDetails();
       expect(stepDetails).toBeDefined();
-      expect(stepDetails?.attempt).toEqual(5);
+      expect(stepDetails?.attempt).toEqual(6);
       expect(stepDetails?.error).toBeDefined();
 
       expect(result.getStatus()).toBe(ExecutionStatus.FAILED);
