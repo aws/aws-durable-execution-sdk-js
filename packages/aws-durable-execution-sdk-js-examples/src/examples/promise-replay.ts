@@ -5,14 +5,15 @@ import {
 import { ExampleConfig } from "../types";
 
 export const config: ExampleConfig = {
-  name: "Promise AllSettled Unhandled Rejection",
+  name: "Promise Replay",
   description:
-    "Reproduces bug where failed step in allSettled causes unhandled rejection on replay",
+    "Replaying failed promise operations. There should be no unhandled rejections.",
 };
 
 export const handler = withDurableExecution(
-  async (_event: any, context: DurableContext) => {
+  async (_event, context: DurableContext) => {
     const failurePromise = context.step(
+      "failure-step",
       async () => {
         throw new Error("This step failed");
       },
@@ -27,6 +28,7 @@ export const handler = withDurableExecution(
     await context.wait(1);
 
     const successStep = await context.step(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
       return "Success";
     });
 
