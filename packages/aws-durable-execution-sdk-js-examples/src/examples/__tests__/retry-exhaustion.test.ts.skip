@@ -6,7 +6,7 @@ import {
 import { handler } from "../retry-exhaustion";
 import { createTests } from "./shared/test-helper";
 
-createTests.skip({
+createTests({
   name: "retry-exhaustion test",
   functionName: "retry-exhaustion",
   handler,
