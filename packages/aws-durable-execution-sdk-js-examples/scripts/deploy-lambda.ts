@@ -11,7 +11,8 @@ import {
   UpdateFunctionCodeCommand,
   UpdateFunctionConfigurationCommand,
   GetPolicyCommand,
-  PutResourcePolicyCommand,
+  // TODO: Add PutResourcePolicyCommand to client-lambda package
+  // PutResourcePolicyCommand,
   Runtime,
   GetFunctionConfigurationCommandOutput,
 } from "@aws-sdk/client-lambda";
@@ -270,19 +271,23 @@ async function checkAndAddResourcePolicy(
         Sid: "dex-invoke-permission",
         Effect: "Allow",
         Principal: { AWS: invokeAccountId },
-        Action: ["lambda:InvokeFunction", "lambda:GetFunctionConfiguration"],
+        Action: [
+          "lambda:InvokeFunction",
+          "lambda:GetFunctionConfiguration"
+        ],
         Resource: `${functionArn}:*`,
       },
     ],
   };
 
-  const putResourcePolicyCommand = new PutResourcePolicyCommand({
-    ResourceArn: functionArn,
-    Policy: JSON.stringify(policyDocument),
-  });
+  // TODO: Add PutResourcePolicyCommand to client-lambda package
+  // const putResourcePolicyCommand = new PutResourcePolicyCommand({
+  //   ResourceArn: functionArn,
+  //   Policy: JSON.stringify(policyDocument),
+  // });
 
-  await lambdaClient.send(putResourcePolicyCommand);
-  console.log("Resource policy set successfully");
+  // await lambdaClient.send(putResourcePolicyCommand);
+  // console.log("Resource policy set successfully");
 }
 
 async function showFinalConfiguration(
