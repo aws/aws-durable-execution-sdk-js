@@ -132,24 +132,22 @@ async function checkFunctionExists(
   }
 }
 
-async function waitForFunctionReady(
-  lambdaClient: LambdaClient,
-  functionName: string,
-): Promise<void> {
-  let attempts = 0;
-  const maxAttempts = 30;
-  
-  while (attempts < maxAttempts) {
-    const config = await getCurrentConfiguration(lambdaClient, functionName);
-    if (config.State === "Active") {
-      return;
+async function retryOnConflict<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 10,
+): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      if (error.name === "ResourceConflictException" && attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      throw error;
     }
-    
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    attempts++;
   }
-  
-  throw new Error(`Function ${functionName} did not become ready within ${maxAttempts * 2} seconds`);
+  throw new Error("Max retries exceeded");
 }
 
 async function getCurrentConfiguration(
@@ -235,10 +233,6 @@ async function updateFunction(
   });
   await lambdaClient.send(updateCodeCommand);
 
-  // Wait for function to be ready after code update
-  console.log("Waiting for function to be ready...");
-  await waitForFunctionReady(lambdaClient, functionName);
-
   // Update environment variables
   console.log("Updating environment variables...");
   const updateEnvParams: any = {
@@ -257,7 +251,7 @@ async function updateFunction(
   const updateEnvCommand = new UpdateFunctionConfigurationCommand(
     updateEnvParams,
   );
-  await lambdaClient.send(updateEnvCommand);
+  await retryOnConflict(() => lambdaClient.send(updateEnvCommand));
 
   // Check if DurableConfig needs updating
   if (
@@ -272,7 +266,7 @@ async function updateFunction(
         ExecutionTimeout: targetTimeout,
       },
     });
-    await lambdaClient.send(updateConfigCommand);
+    await retryOnConflict(() => lambdaClient.send(updateConfigCommand));
   } else {
     console.log("DurableConfig is up to date");
   }
