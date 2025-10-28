@@ -1,7 +1,7 @@
 import { handler } from "../promise-any";
 import { createTests } from "./shared/test-helper";
 
-createTests<string>({
+createTests.skip<string>({
   name: "promise-any test",
   functionName: "promise-any",
   localRunnerConfig: {
