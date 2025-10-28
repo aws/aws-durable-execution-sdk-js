@@ -46,7 +46,7 @@ class CheckpointHandler {
   async forceCheckpoint(): Promise<void> {
     if (this.isTerminating) {
       log("⚠️", "Force checkpoint skipped - termination in progress");
-      return Promise.resolve();
+      return new Promise(() => {}); // Never resolves during termination
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -68,7 +68,7 @@ class CheckpointHandler {
   ): Promise<void> {
     if (this.isTerminating) {
       log("⚠️", "Checkpoint skipped - termination in progress:", { stepId });
-      return Promise.resolve();
+      return new Promise(() => {}); // Never resolves during termination
     }
 
     return new Promise<void>((resolve, reject) => {
