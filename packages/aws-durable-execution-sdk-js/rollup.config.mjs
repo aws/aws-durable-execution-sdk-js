@@ -5,7 +5,7 @@ import { createBuildOptions } from "../../rollup.config.js";
 const config = {
   input: "./src/index.ts",
   output: {
-    file: "index.js",
+    file: "index",
     inlineDynamicImports: true,
   },
 };

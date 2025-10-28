@@ -6,8 +6,6 @@ import json from "@rollup/plugin-json";
 const plugins = [json()];
 
 const commonOutputOptions = {
-  entryFileNames: "[name].js",
-  chunkFileNames: "[name].js",
   assetFileNames: "[name].[ext]",
   sourcemap: true,
   sourcemapExcludeSources: true,
@@ -66,8 +64,12 @@ export function createBuildOptions(options, mode) {
       output: {
         ...commonOutputOptions,
         ...options.output,
+        entryFileNames: "[name].mjs",
+        chunkFileNames: "[name].mjs",
         dir: options.output?.file ? undefined : "dist",
-        file: options.output?.file ? `dist/${options.output.file}` : undefined,
+        file: options.output?.file
+          ? `dist/${options.output.file}.mjs`
+          : undefined,
         format: "esm",
       },
     };
@@ -89,9 +91,11 @@ export function createBuildOptions(options, mode) {
     output: {
       ...commonOutputOptions,
       ...options.output,
+      entryFileNames: "[name].js",
+      chunkFileNames: "[name].js",
       dir: options.output?.file ? undefined : "dist-cjs",
       file: options.output?.file
-        ? `dist-cjs/${options.output.file}`
+        ? `dist-cjs/${options.output.file}.js`
         : undefined,
       format: "cjs",
     },
