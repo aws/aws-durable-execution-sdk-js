@@ -132,6 +132,26 @@ async function checkFunctionExists(
   }
 }
 
+async function waitForFunctionReady(
+  lambdaClient: LambdaClient,
+  functionName: string,
+): Promise<void> {
+  let attempts = 0;
+  const maxAttempts = 30;
+  
+  while (attempts < maxAttempts) {
+    const config = await getCurrentConfiguration(lambdaClient, functionName);
+    if (config.State === "Active") {
+      return;
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    attempts++;
+  }
+  
+  throw new Error(`Function ${functionName} did not become ready within ${maxAttempts * 2} seconds`);
+}
+
 async function getCurrentConfiguration(
   lambdaClient: LambdaClient,
   functionName: string,
@@ -214,6 +234,10 @@ async function updateFunction(
     ZipFile: zipBuffer,
   });
   await lambdaClient.send(updateCodeCommand);
+
+  // Wait for function to be ready after code update
+  console.log("Waiting for function to be ready...");
+  await waitForFunctionReady(lambdaClient, functionName);
 
   // Update environment variables
   console.log("Updating environment variables...");
