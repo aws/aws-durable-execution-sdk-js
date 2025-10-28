@@ -1,171 +1,190 @@
-import {
-  createCheckpoint,
-  deleteCheckpoint,
-  setCheckpointTerminating,
-} from "./checkpoint";
+import { CheckpointHandler } from "./checkpoint";
 import { ExecutionContext } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
-import * as logger from "../logger/logger";
 import { EventEmitter } from "events";
 
-describe("Checkpoint Termination Flag", () => {
+describe("CheckpointHandler Termination Behavior", () => {
   let mockContext: ExecutionContext;
-  let logSpy: jest.SpyInstance;
-  let mockEmitter: EventEmitter;
+  let stepDataEmitter: EventEmitter;
+  let checkpointHandler: CheckpointHandler;
 
   beforeEach(() => {
-    deleteCheckpoint();
-    logSpy = jest.spyOn(logger, "log").mockImplementation();
-    mockEmitter = new EventEmitter();
-
+    stepDataEmitter = new EventEmitter();
     mockContext = {
-      durableExecutionArn: "test-arn",
+      executionContextId: "test-id",
+      customerHandlerEvent: {},
       state: {
-        checkpoint: jest.fn().mockResolvedValue({
-          CheckpointToken: "new-token",
-          NewExecutionState: { Operations: [] },
-        }),
+        checkpoint: jest.fn(),
+        getStepData: jest.fn(),
       },
       _stepData: {},
+      _durableExecutionMode: "ExecutionMode" as any,
       terminationManager: new TerminationManager(),
-    } as unknown as ExecutionContext;
-  });
+      isVerbose: false,
+      durableExecutionArn: "test-arn",
+      getStepData: jest.fn(),
+    } as any;
 
-  afterEach(() => {
-    deleteCheckpoint();
-    logSpy.mockRestore();
-  });
-
-  test("should skip checkpoint when termination flag is set", async () => {
-    const checkpoint = createCheckpoint(
+    checkpointHandler = new (CheckpointHandler as any)(
       mockContext,
-      "initial-token",
-      mockEmitter,
+      "test-token",
+      stepDataEmitter,
     );
+  });
 
-    setCheckpointTerminating();
+  describe("checkpoint() during termination", () => {
+    it("should return never-resolving promise when terminating", async () => {
+      // Set terminating state
+      checkpointHandler.setTerminating();
 
-    await checkpoint("test-step", {
-      Action: "START",
-      Type: "STEP",
+      // Call checkpoint
+      const checkpointPromise = checkpointHandler.checkpoint("test-step", {
+        Action: "START",
+        Type: "STEP",
+      });
+
+      // Promise should not resolve within reasonable time
+      let resolved = false;
+      checkpointPromise.then(() => {
+        resolved = true;
+      });
+
+      // Wait a bit to ensure it doesn't resolve
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(resolved).toBe(false);
     });
 
-    expect(mockContext.state.checkpoint).not.toHaveBeenCalled();
+    it("should resolve normally when not terminating", async () => {
+      // Mock successful checkpoint
+      (mockContext.state.checkpoint as jest.Mock).mockResolvedValue({
+        CheckpointToken: "new-token",
+        NewExecutionState: { Operations: [] },
+      });
+
+      // Call checkpoint without terminating
+      const checkpointPromise = checkpointHandler.checkpoint("test-step", {
+        Action: "START",
+        Type: "STEP",
+      });
+
+      // Should resolve normally
+      await expect(checkpointPromise).resolves.toBeUndefined();
+    });
   });
 
-  test("should skip forceCheckpoint when termination flag is set", async () => {
-    const checkpoint = createCheckpoint(
-      mockContext,
-      "initial-token",
-      mockEmitter,
-    );
+  describe("forceCheckpoint() during termination", () => {
+    it("should return never-resolving promise when terminating", async () => {
+      // Set terminating state
+      checkpointHandler.setTerminating();
 
-    setCheckpointTerminating();
+      // Call forceCheckpoint
+      const forcePromise = checkpointHandler.forceCheckpoint();
 
-    await checkpoint.force();
+      // Promise should not resolve within reasonable time
+      let resolved = false;
+      forcePromise.then(() => {
+        resolved = true;
+      });
 
-    expect(mockContext.state.checkpoint).not.toHaveBeenCalled();
-  });
+      // Wait a bit to ensure it doesn't resolve
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-  test("should allow checkpoint before termination flag is set", async () => {
-    const checkpoint = createCheckpoint(
-      mockContext,
-      "initial-token",
-      mockEmitter,
-    );
-
-    await checkpoint("test-step", {
-      Action: "START",
-      Type: "STEP",
+      expect(resolved).toBe(false);
     });
 
-    // Wait for async processing
-    await new Promise((resolve) => setImmediate(resolve));
+    it("should resolve normally when not terminating", async () => {
+      // Mock successful checkpoint
+      (mockContext.state.checkpoint as jest.Mock).mockResolvedValue({
+        CheckpointToken: "new-token",
+        NewExecutionState: { Operations: [] },
+      });
 
-    expect(mockContext.state.checkpoint).toHaveBeenCalled();
+      // Call forceCheckpoint without terminating
+      const forcePromise = checkpointHandler.forceCheckpoint();
+
+      // Should resolve normally
+      await expect(forcePromise).resolves.toBeUndefined();
+    });
   });
 
-  test("should prevent new checkpoints after setTerminating is called", async () => {
-    const checkpoint = createCheckpoint(
-      mockContext,
-      "initial-token",
-      mockEmitter,
-    );
+  describe("setTerminating()", () => {
+    it("should prevent new checkpoints from resolving", async () => {
+      // First checkpoint should work normally
+      (mockContext.state.checkpoint as jest.Mock).mockResolvedValue({
+        CheckpointToken: "new-token",
+        NewExecutionState: { Operations: [] },
+      });
 
-    // First checkpoint should work
-    await checkpoint("step-1", {
-      Action: "START",
-      Type: "STEP",
+      const firstCheckpoint = checkpointHandler.checkpoint("step1", {
+        Action: "START",
+        Type: "STEP",
+      });
+      await expect(firstCheckpoint).resolves.toBeUndefined();
+
+      // Set terminating
+      checkpointHandler.setTerminating();
+
+      // Second checkpoint should never resolve
+      const secondCheckpoint = checkpointHandler.checkpoint("step2", {
+        Action: "START",
+        Type: "STEP",
+      });
+
+      let resolved = false;
+      secondCheckpoint.then(() => {
+        resolved = true;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(resolved).toBe(false);
     });
-
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(mockContext.state.checkpoint).toHaveBeenCalledTimes(1);
-
-    // Set termination flag
-    setCheckpointTerminating();
-
-    // Second checkpoint should be skipped
-    await checkpoint("step-2", {
-      Action: "START",
-      Type: "STEP",
-    });
-
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(mockContext.state.checkpoint).toHaveBeenCalledTimes(1);
   });
 
-  test("should call setCheckpointTerminating through checkpoint.setTerminating", async () => {
-    const checkpoint = createCheckpoint(
-      mockContext,
-      "initial-token",
-      mockEmitter,
-    );
+  describe("race condition prevention", () => {
+    it("should handle termination during checkpoint processing", async () => {
+      // Mock slow checkpoint
+      (mockContext.state.checkpoint as jest.Mock).mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  CheckpointToken: "new-token",
+                  NewExecutionState: { Operations: [] },
+                }),
+              200,
+            ),
+          ),
+      );
 
-    checkpoint.setTerminating();
+      // Start checkpoint
+      const checkpointPromise = checkpointHandler.checkpoint("test-step", {
+        Action: "START",
+        Type: "STEP",
+      });
 
-    await checkpoint("test-step", {
-      Action: "START",
-      Type: "STEP",
+      // Set terminating while checkpoint is processing
+      setTimeout(() => {
+        checkpointHandler.setTerminating();
+      }, 50);
+
+      // Original checkpoint should still complete
+      await expect(checkpointPromise).resolves.toBeUndefined();
+
+      // New checkpoints should not resolve
+      const newCheckpoint = checkpointHandler.checkpoint("new-step", {
+        Action: "START",
+        Type: "STEP",
+      });
+
+      let resolved = false;
+      newCheckpoint.then(() => {
+        resolved = true;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(resolved).toBe(false);
     });
-
-    expect(mockContext.state.checkpoint).not.toHaveBeenCalled();
-  });
-
-  test("should log when checkpoint is skipped due to termination", async () => {
-    const checkpoint = createCheckpoint(
-      mockContext,
-      "initial-token",
-      mockEmitter,
-    );
-
-    setCheckpointTerminating();
-
-    await checkpoint("test-step", {
-      Action: "START",
-      Type: "STEP",
-    });
-
-    expect(logSpy).toHaveBeenCalledWith(
-      "⚠️",
-      "Checkpoint skipped - termination in progress:",
-      { stepId: "test-step" },
-    );
-  });
-
-  test("should log when force checkpoint is skipped due to termination", async () => {
-    const checkpoint = createCheckpoint(
-      mockContext,
-      "initial-token",
-      mockEmitter,
-    );
-
-    setCheckpointTerminating();
-
-    await checkpoint.force();
-
-    expect(logSpy).toHaveBeenCalledWith(
-      "⚠️",
-      "Force checkpoint skipped - termination in progress",
-    );
   });
 });

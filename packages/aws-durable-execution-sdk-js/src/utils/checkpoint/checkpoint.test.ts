@@ -486,6 +486,92 @@ describe("CheckpointHandler", () => {
     });
   });
 
+  describe("termination behavior", () => {
+    it("should return never-resolving promise when checkpoint is called during termination", async () => {
+      // Set terminating state
+      checkpointHandler.setTerminating();
+
+      // Call checkpoint
+      const checkpointPromise = checkpointHandler.checkpoint("test-step", {
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+      });
+
+      // Promise should not resolve within reasonable time
+      let resolved = false;
+      checkpointPromise.then(() => {
+        resolved = true;
+      });
+
+      // Wait to ensure it doesn't resolve
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(resolved).toBe(false);
+      expect(mockState.checkpoint).not.toHaveBeenCalled();
+    });
+
+    it("should return never-resolving promise when forceCheckpoint is called during termination", async () => {
+      // Set terminating state
+      checkpointHandler.setTerminating();
+
+      // Call forceCheckpoint
+      const forcePromise = checkpointHandler.forceCheckpoint();
+
+      // Promise should not resolve within reasonable time
+      let resolved = false;
+      forcePromise.then(() => {
+        resolved = true;
+      });
+
+      // Wait to ensure it doesn't resolve
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(resolved).toBe(false);
+      expect(mockState.checkpoint).not.toHaveBeenCalled();
+    });
+
+    it("should allow ongoing checkpoints to complete before termination takes effect", async () => {
+      // Mock slow checkpoint
+      let resolveCheckpoint: (value: any) => void;
+      const checkpointPromise = new Promise((resolve) => {
+        resolveCheckpoint = resolve;
+      });
+      mockState.checkpoint.mockReturnValue(checkpointPromise);
+
+      // Start checkpoint
+      const ongoingCheckpoint = checkpointHandler.checkpoint("test-step", {
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+      });
+
+      // Allow checkpoint to start processing
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // Set terminating while checkpoint is processing
+      checkpointHandler.setTerminating();
+
+      // Resolve the ongoing checkpoint
+      resolveCheckpoint!({ CheckpointToken: "new-token" });
+
+      // Ongoing checkpoint should complete normally
+      await expect(ongoingCheckpoint).resolves.toBeUndefined();
+
+      // New checkpoints should not resolve
+      const newCheckpoint = checkpointHandler.checkpoint("new-step", {
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+      });
+
+      let newResolved = false;
+      newCheckpoint.then(() => {
+        newResolved = true;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(newResolved).toBe(false);
+    });
+  });
+
   describe("default values", () => {
     it("should use default action and type when not provided", async () => {
       await checkpointHandler.checkpoint("step-1", {});
