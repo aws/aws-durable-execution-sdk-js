@@ -7,6 +7,7 @@ import {
   LambdaClient,
 } from "@aws-sdk/client-lambda";
 import { ExecutionState } from "./storage";
+import { log } from "../utils/logger/logger";
 
 /**
  * Implementation of ExecutionState that uses the new \@aws-sdk/client-lambda
@@ -29,16 +30,28 @@ export class ApiStorage implements ExecutionState {
     durableExecutionArn: string,
     nextMarker: string,
   ): Promise<GetDurableExecutionStateResponse> {
-    const response = await this.client.send(
-      new GetDurableExecutionStateCommand({
+    try {
+      const response = await this.client.send(
+        new GetDurableExecutionStateCommand({
+          DurableExecutionArn: durableExecutionArn,
+          CheckpointToken: checkpointToken,
+          Marker: nextMarker,
+          MaxItems: 1000,
+        }),
+      );
+
+      return response;
+    } catch (error) {
+      log("❌", "GetDurableExecutionState failed", {
+        error,
+        requestId: (error as { $metadata?: { requestId?: string } })?.$metadata
+          ?.requestId,
         DurableExecutionArn: durableExecutionArn,
         CheckpointToken: checkpointToken,
         Marker: nextMarker,
-        MaxItems: 1000,
-      }),
-    );
-
-    return response;
+      });
+      throw error;
+    }
   }
 
   /**
@@ -51,14 +64,26 @@ export class ApiStorage implements ExecutionState {
     checkpointToken: string,
     data: CheckpointDurableExecutionRequest,
   ): Promise<CheckpointDurableExecutionResponse> {
-    const response = await this.client.send(
-      new CheckpointDurableExecutionCommand({
+    try {
+      const response = await this.client.send(
+        new CheckpointDurableExecutionCommand({
+          DurableExecutionArn: data.DurableExecutionArn,
+          CheckpointToken: checkpointToken,
+          ClientToken: data.ClientToken,
+          Updates: data.Updates,
+        }),
+      );
+      return response;
+    } catch (error) {
+      log("❌", "CheckpointDurableExecution failed", {
+        error,
+        requestId: (error as { $metadata?: { requestId?: string } })?.$metadata
+          ?.requestId,
         DurableExecutionArn: data.DurableExecutionArn,
         CheckpointToken: checkpointToken,
         ClientToken: data.ClientToken,
-        Updates: data.Updates,
-      }),
-    );
-    return response;
+      });
+      throw error;
+    }
   }
 }

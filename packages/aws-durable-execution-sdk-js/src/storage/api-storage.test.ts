@@ -8,6 +8,12 @@ import {
 } from "@aws-sdk/client-lambda";
 import { OperationSubType } from "../types";
 import { ApiStorage } from "./api-storage";
+import { log } from "../utils/logger/logger";
+
+// Mock the logger
+jest.mock("../utils/logger/logger", () => ({
+  log: jest.fn(),
+}));
 
 // Mock the LambdaClient
 jest.mock("@aws-sdk/client-lambda", () => {
@@ -25,16 +31,27 @@ jest.mock("@aws-sdk/client-lambda", () => {
 describe("ApiStorage", () => {
   let apiStorage: ApiStorage;
   let mockLambdaClient: { send: jest.Mock };
+  let logSpy: jest.MockedFunction<typeof log>;
 
   beforeEach(() => {
     // Reset all mocks
     jest.clearAllMocks();
 
+    // Get the mocked log function
+    logSpy = log as jest.MockedFunction<typeof log>;
+
+    // Get the mocked LambdaClient instance before creating ApiStorage
+    mockLambdaClient = {
+      send: jest.fn(),
+    };
+    (LambdaClient as jest.Mock).mockImplementation(() => mockLambdaClient);
+
     // Create a new instance of ApiStorage
     apiStorage = new ApiStorage();
+  });
 
-    // Get the mocked LambdaClient instance
-    mockLambdaClient = (LambdaClient as jest.Mock).mock.results[0].value;
+  afterEach(() => {
+    // No cleanup needed for mocked functions
   });
 
   test("should initialize with correct endpoint and region", () => {
@@ -138,5 +155,92 @@ describe("ApiStorage", () => {
         ],
       }),
     ).rejects.toThrow("Lambda client error");
+  });
+
+  test("should log getStepData errors with request ID", async () => {
+    // Setup mock error with AWS metadata
+    const mockError = {
+      message: "GetDurableExecutionState failed",
+      $metadata: { requestId: "test-request-id-123" },
+    };
+    mockLambdaClient.send.mockRejectedValue(mockError);
+
+    // Call getStepData and expect it to throw
+    try {
+      await apiStorage.getStepData(
+        "checkpoint-token",
+        "test-execution-arn",
+        "next-marker",
+      );
+    } catch (_error) {
+      // Expected to throw
+    }
+
+    // Verify error was logged
+    expect(logSpy).toHaveBeenCalledWith(
+      "❌",
+      "GetDurableExecutionState failed",
+      expect.objectContaining({
+        requestId: "test-request-id-123",
+        DurableExecutionArn: "test-execution-arn",
+      }),
+    );
+  });
+
+  test("should log checkpoint errors with request ID", async () => {
+    // Setup mock error with AWS metadata
+    const mockError = {
+      message: "CheckpointDurableExecution failed",
+      $metadata: { requestId: "test-request-id-456" },
+    };
+    mockLambdaClient.send.mockRejectedValue(mockError);
+
+    const checkpointData: CheckpointDurableExecutionRequest = {
+      DurableExecutionArn: "test-execution-arn-2",
+      CheckpointToken: "",
+      Updates: [],
+    };
+
+    // Call checkpoint and expect it to throw
+    try {
+      await apiStorage.checkpoint("checkpoint-token", checkpointData);
+    } catch (_error) {
+      // Expected to throw
+    }
+
+    // Verify error was logged
+    expect(logSpy).toHaveBeenCalledWith(
+      "❌",
+      "CheckpointDurableExecution failed",
+      expect.objectContaining({
+        requestId: "test-request-id-456",
+        DurableExecutionArn: "test-execution-arn-2",
+      }),
+    );
+  });
+
+  test("should handle errors without request ID metadata", async () => {
+    // Setup mock error without metadata
+    const mockError = new Error("Network error");
+    mockLambdaClient.send.mockRejectedValue(mockError);
+
+    // Call getStepData and expect it to throw
+    await expect(
+      apiStorage.getStepData(
+        "checkpoint-token",
+        "test-execution-arn",
+        "next-marker",
+      ),
+    ).rejects.toThrow("Network error");
+
+    // Verify error was logged
+    expect(logSpy).toHaveBeenCalledWith(
+      "❌",
+      "GetDurableExecutionState failed",
+      expect.objectContaining({
+        requestId: undefined,
+        DurableExecutionArn: "test-execution-arn",
+      }),
+    );
   });
 });
