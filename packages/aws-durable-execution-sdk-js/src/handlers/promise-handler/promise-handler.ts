@@ -86,7 +86,13 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
     maybePromises?: Promise<T>[],
   ): Promise<T[]> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
-    return step(name, () => Promise.all(promises), stepConfig);
+
+    // Execute Promise.all immediately to consume promises
+    // This prevents unhandled rejections during replay
+    const allPromise = Promise.all(promises);
+
+    // Wrap the result in a step for persistence
+    return step(name, () => allPromise, stepConfig);
   };
 
   const allSettled = <T>(
@@ -94,7 +100,13 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
     maybePromises?: Promise<T>[],
   ): Promise<PromiseSettledResult<T>[]> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
-    return step(name, () => Promise.allSettled(promises), {
+
+    // Execute Promise.allSettled immediately to consume promises
+    // This prevents unhandled rejections during replay
+    const settledPromise = Promise.allSettled(promises);
+
+    // Wrap the result in a step for persistence
+    return step(name, () => settledPromise, {
       ...stepConfig,
       serdes: createErrorAwareSerdes<T>(),
     });
@@ -105,7 +117,13 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
     maybePromises?: Promise<T>[],
   ): Promise<T> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
-    return step(name, () => Promise.any(promises), stepConfig);
+
+    // Execute Promise.any immediately to consume promises
+    // This prevents unhandled rejections during replay
+    const anyPromise = Promise.any(promises);
+
+    // Wrap the result in a step for persistence
+    return step(name, () => anyPromise, stepConfig);
   };
 
   const race = <T>(
@@ -113,7 +131,13 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
     maybePromises?: Promise<T>[],
   ): Promise<T> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
-    return step(name, () => Promise.race(promises), stepConfig);
+
+    // Execute Promise.race immediately to consume promises
+    // This prevents unhandled rejections during replay
+    const racePromise = Promise.race(promises);
+
+    // Wrap the result in a step for persistence
+    return step(name, () => racePromise, stepConfig);
   };
 
   return {

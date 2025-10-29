@@ -98,13 +98,15 @@ export const createInvokeHandler = (
         stepData?.Status === OperationStatus.TIMED_OUT ||
         stepData?.Status === OperationStatus.STOPPED
       ) {
-        // Operation failed, throw error
+        // Operation failed, return async rejected promise
         const invokeDetails = stepData.ChainedInvokeDetails;
-        const error = new Error(
-          invokeDetails?.Error?.ErrorMessage || "Invoke failed",
-        );
-        error.name = invokeDetails?.Error?.ErrorType || "InvokeError";
-        throw error;
+        return (async (): Promise<O> => {
+          const error = new Error(
+            invokeDetails?.Error?.ErrorMessage || "Invoke failed",
+          );
+          error.name = invokeDetails?.Error?.ErrorType || "InvokeError";
+          throw error;
+        })();
       }
 
       if (

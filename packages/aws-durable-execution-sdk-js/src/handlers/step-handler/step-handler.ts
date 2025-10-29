@@ -135,7 +135,10 @@ export const createStepHandler = (
 
         if (stepData?.Status === OperationStatus.FAILED) {
           const errorMessage = stepData?.StepDetails?.Result;
-          throw new Error(errorMessage || "Unknown error");
+          // Return an async rejected promise to ensure it's handled asynchronously
+          return (async (): Promise<T> => {
+            throw new Error(errorMessage || "Unknown error");
+          })();
         }
 
         // If PENDING, wait for timer to complete
