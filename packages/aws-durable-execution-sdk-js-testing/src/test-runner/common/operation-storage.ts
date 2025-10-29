@@ -35,14 +35,17 @@ export class OperationStorage {
           ? this.indexedOperations.getById(trackedOperation.params.id)
           : null,
       () =>
-        trackedOperation.params.name !== undefined
+        trackedOperation.params.name !== undefined &&
+        trackedOperation.params.id === undefined
           ? this.indexedOperations.getByNameAndIndex(
               trackedOperation.params.name,
               trackedOperation.params.index,
             )
           : null,
       () =>
-        trackedOperation.params.index !== undefined
+        trackedOperation.params.index !== undefined &&
+        trackedOperation.params.name === undefined &&
+        trackedOperation.params.id === undefined
           ? this.indexedOperations.getByIndex(trackedOperation.params.index)
           : null,
     ];

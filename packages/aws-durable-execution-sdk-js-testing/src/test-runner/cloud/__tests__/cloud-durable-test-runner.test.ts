@@ -616,8 +616,8 @@ describe("CloudDurableTestRunner", () => {
         EventType: EventType.StepStarted,
         EventId: 1,
         Id: "1",
+        Name: "processData",
         StepStartedDetails: {
-          Name: "processData",
           Input: '{"input": "test"}',
         },
       };
@@ -631,6 +631,7 @@ describe("CloudDurableTestRunner", () => {
           Result: {
             Payload: '{"result": "processed"}',
           },
+          RetryDetails: {},
         },
       };
 
@@ -643,6 +644,10 @@ describe("CloudDurableTestRunner", () => {
           Status: ExecutionStatus.SUCCEEDED,
           Result: '{"result": "processed"}',
           $metadata: {},
+          StartTimestamp: new Date(),
+          DurableExecutionArn: "",
+          DurableExecutionName: "",
+          FunctionArn: "",
         },
       });
 
@@ -660,6 +665,7 @@ describe("CloudDurableTestRunner", () => {
       expect(result.getResult()).toBeDefined();
       expect(operation.getOperationData()).toEqual({
         Id: "1",
+        Name: "processData",
         StartTimestamp: expect.any(Date),
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.STEP,

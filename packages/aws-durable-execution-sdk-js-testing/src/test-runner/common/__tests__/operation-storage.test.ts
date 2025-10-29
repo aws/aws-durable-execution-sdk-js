@@ -24,6 +24,7 @@ describe("OperationStorage", () => {
         Name: "operation1",
         Type: OperationType.STEP,
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: new Date(),
       },
       events: [],
     },
@@ -33,6 +34,7 @@ describe("OperationStorage", () => {
         Name: "operation2",
         Type: OperationType.WAIT,
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: new Date(),
       },
       events: [],
     },
@@ -42,6 +44,7 @@ describe("OperationStorage", () => {
         Name: "operation1", // Same name as first operation
         Type: OperationType.CALLBACK,
         Status: OperationStatus.FAILED,
+        StartTimestamp: new Date(),
       },
       events: [],
     },
@@ -91,6 +94,8 @@ describe("OperationStorage", () => {
           operation: {
             Id: "Execution-operation-id",
             Type: OperationType.EXECUTION,
+            StartTimestamp: new Date(),
+            Status: OperationStatus.STARTED,
           },
           events: [],
         }),
@@ -330,6 +335,91 @@ describe("OperationStorage", () => {
       storage.registerOperation(trackedOperation);
 
       expect(populateDataSpy).not.toHaveBeenCalled();
+    });
+
+    describe("populateOperation priority behavior", () => {
+      it("should not populate by index if name is defined", () => {
+        const storage = new OperationStorage(
+          mockWaitManager,
+          mockIndexedOperations,
+          mockApiClient,
+        );
+
+        storage.populateOperations(sampleOperations);
+
+        const mockOperation = new OperationWithData(
+          mockWaitManager,
+          mockIndexedOperations,
+          mockApiClient,
+        );
+        const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+
+        // Mock the IndexedOperations to track which lookup methods are called
+        const getByIdSpy = jest.spyOn(mockIndexedOperations, "getById");
+        const getByNameAndIndexSpy = jest.spyOn(
+          mockIndexedOperations,
+          "getByNameAndIndex",
+        );
+        const getByIndexSpy = jest.spyOn(mockIndexedOperations, "getByIndex");
+
+        const trackedOperation: TrackedOperation<OperationWithData> = {
+          operation: mockOperation,
+          params: {
+            // id is undefined
+            name: "operation1", // Name is defined
+            index: 0, // Index is also defined but should be ignored in favor of name
+          },
+        };
+
+        storage.registerOperation(trackedOperation);
+
+        expect(getByIdSpy).not.toHaveBeenCalled();
+        expect(getByNameAndIndexSpy).toHaveBeenCalledWith("operation1", 0);
+        expect(getByIndexSpy).not.toHaveBeenCalled();
+        expect(populateDataSpy).toHaveBeenCalledWith(sampleOperations[0]);
+      });
+
+      it("should populate by index only when both name and id are undefined", () => {
+        const storage = new OperationStorage(
+          mockWaitManager,
+          mockIndexedOperations,
+          mockApiClient,
+        );
+
+        storage.populateOperations(sampleOperations);
+
+        const mockOperation = new OperationWithData(
+          mockWaitManager,
+          mockIndexedOperations,
+          mockApiClient,
+        );
+        const populateDataSpy = jest.spyOn(mockOperation, "populateData");
+
+        // Mock the IndexedOperations to track which lookup methods are called
+        const getByIdSpy = jest.spyOn(mockIndexedOperations, "getById");
+        const getByNameAndIndexSpy = jest.spyOn(
+          mockIndexedOperations,
+          "getByNameAndIndex",
+        );
+        const getByIndexSpy = jest.spyOn(mockIndexedOperations, "getByIndex");
+
+        const trackedOperation: TrackedOperation<OperationWithData> = {
+          operation: mockOperation,
+          params: {
+            // id is undefined
+            // name is undefined
+            index: 1, // Only index is defined
+          },
+        };
+
+        storage.registerOperation(trackedOperation);
+
+        // Should skip getById since id is undefined, skip getByNameAndIndex since name is undefined, then use getByIndex
+        expect(getByIdSpy).not.toHaveBeenCalled();
+        expect(getByNameAndIndexSpy).not.toHaveBeenCalled();
+        expect(getByIndexSpy).toHaveBeenCalledWith(1);
+        expect(populateDataSpy).toHaveBeenCalledWith(sampleOperations[1]);
+      });
     });
   });
 });
