@@ -1,5 +1,6 @@
 import {
   DurableContext,
+  StepConfig,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../types";
@@ -12,6 +13,15 @@ export const config: ExampleConfig = {
 interface PromiseCombinatorsInput {
   message?: string;
 }
+
+const stepConfig: StepConfig<any> = {
+  retryStrategy: (_error, attemptCount) => {
+    return {
+      shouldRetry: attemptCount < 3,
+      delaySeconds: 1,
+    };
+  },
+};
 
 /**
  * Example demonstrating promise combinators:
@@ -74,9 +84,13 @@ export const handler = withDurableExecution(
       return "Success!";
     });
 
-    const failurePromise = context.step("failure-step", async () => {
-      throw new Error("This step failed");
-    });
+    const failurePromise = context.step(
+      "failure-step",
+      async () => {
+        throw new Error("This step failed");
+      },
+      stepConfig,
+    );
 
     const settledResults = await context.promise.allSettled("settled-steps", [
       successPromise,
@@ -86,13 +100,21 @@ export const handler = withDurableExecution(
 
     // Example 4: Promise.any - get the first successful promise
     console.log("Testing Promise.any...");
-    const failPromise1 = context.step("fail1", async () => {
-      throw new Error("First failure");
-    });
+    const failPromise1 = context.step(
+      "fail1",
+      async () => {
+        throw new Error("First failure");
+      },
+      stepConfig,
+    );
 
-    const failPromise2 = context.step("fail2", async () => {
-      throw new Error("Second failure");
-    });
+    const failPromise2 = context.step(
+      "fail2",
+      async () => {
+        throw new Error("Second failure");
+      },
+      stepConfig,
+    );
 
     const successPromise2 = context.step("success2", async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
