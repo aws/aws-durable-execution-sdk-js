@@ -125,7 +125,10 @@ export const createWaitForConditionHandler = (
 
         if (stepData?.Status === OperationStatus.FAILED) {
           const errorMessage = stepData?.StepDetails?.Result;
-          throw new Error(errorMessage || "waitForCondition failed");
+          // Return async rejected promise to ensure it's handled asynchronously
+          return (async (): Promise<T> => {
+            throw new Error(errorMessage || "waitForCondition failed");
+          })();
         }
 
         // If PENDING, wait for timer to complete
