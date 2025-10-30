@@ -53,6 +53,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "*",
+    "@smithy/smithy-client": "^4.9.1",
     "express": "^5.1.0"
   },
   "peerDependencies": {

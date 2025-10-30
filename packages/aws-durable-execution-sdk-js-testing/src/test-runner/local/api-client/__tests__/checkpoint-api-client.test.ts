@@ -1,10 +1,20 @@
-import { CheckpointApiClient } from "../checkpoint-api-client";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import {
+  CheckpointApiClient,
+  SerializedPollCheckpointResponse,
+} from "../checkpoint-api-client";
+import { OperationAction, OperationStatus } from "@aws-sdk/client-lambda";
 import {
   API_PATHS,
   HTTP_METHODS,
 } from "../../../../checkpoint-server/constants";
-import { createExecutionId } from "../../../../checkpoint-server/utils/tagged-strings";
+import {
+  createCheckpointToken,
+  createExecutionId,
+  createInvocationId,
+} from "../../../../checkpoint-server/utils/tagged-strings";
+import { SerializedInvocationResult } from "../../../../checkpoint-server/types/serialized-invocation-result";
+import { SerializedCheckpointOperation } from "../../../../checkpoint-server/types/operation-event";
+import { CheckpointOperation } from "../../../../checkpoint-server/storage/checkpoint-manager";
 
 // Mock the global fetch
 const mockFetch = jest.fn();
@@ -15,16 +25,42 @@ describe("CheckpointApiClient", () => {
   const apiClient = new CheckpointApiClient(mockBaseUrl);
   const mockExecutionId = createExecutionId("mock-execution-id");
   const mockOperationId = "mock-operation-id";
-  const mockInvocationResult = {
-    checkpointToken: "mock-token",
+  const mockInvocationResultSerialized: SerializedInvocationResult = {
+    checkpointToken: createCheckpointToken("mock-token"),
     executionId: mockExecutionId,
-    invocationId: "mock-invocation-id",
-    operations: [],
+    invocationId: createInvocationId("mock-invocation-id"),
+    operationEvents: [],
   };
-  const mockOperations = [
+  const mockOperationsSerialized: SerializedCheckpointOperation[] = [
     {
-      operation: { id: "op1", type: "STEP" },
-      update: { id: "op1", type: "STEP" },
+      operation: {
+        Id: "op1",
+        Type: "STEP",
+        StartTimestamp: new Date().getTime() / 1000,
+        Status: OperationStatus.STARTED,
+      },
+      update: {
+        Id: "op1",
+        Type: "STEP",
+        Action: OperationAction.START,
+      },
+      events: [],
+    },
+  ];
+  const mockOperations: CheckpointOperation[] = [
+    {
+      operation: {
+        Id: "op1",
+        Type: "STEP",
+        StartTimestamp: new Date(),
+        Status: OperationStatus.STARTED,
+      },
+      update: {
+        Id: "op1",
+        Type: "STEP",
+        Action: OperationAction.START,
+      },
+      events: [],
     },
   ];
 
@@ -36,7 +72,7 @@ describe("CheckpointApiClient", () => {
     it("should make a POST request to the correct endpoint without payload", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValue(mockInvocationResult),
+        json: jest.fn().mockResolvedValue(mockInvocationResultSerialized),
       });
 
       const result = await apiClient.startDurableExecution();
@@ -52,14 +88,104 @@ describe("CheckpointApiClient", () => {
           signal: undefined,
         },
       );
-      expect(result).toEqual(mockInvocationResult);
+      expect(result).toEqual(mockInvocationResultSerialized);
+    });
+
+    it("should deserialize timestamps from epoch seconds to Date objects", async () => {
+      const startTime = new Date("2021-01-01T00:00:00.000Z");
+      const endTime = new Date("2021-01-01T00:01:00.000Z");
+      const eventTime1 = new Date("2021-01-01T00:00:10.000Z");
+      const eventTime2 = new Date("2021-01-01T00:00:50.000Z");
+
+      const serializedResult: SerializedInvocationResult = {
+        checkpointToken: createCheckpointToken("mock-token"),
+        executionId: mockExecutionId,
+        invocationId: createInvocationId("mock-invocation-id"),
+        operationEvents: [
+          {
+            operation: {
+              Id: "op-123",
+              Name: "TestOperation",
+              Type: "STEP",
+              Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: Math.floor(startTime.getTime() / 1000),
+              EndTimestamp: Math.floor(endTime.getTime() / 1000),
+              StepDetails: {
+                Attempt: 1,
+                Result: "test-result",
+              },
+            },
+            events: [
+              {
+                EventId: 1,
+                EventTimestamp: Math.floor(eventTime1.getTime() / 1000),
+                EventType: "StepStarted",
+                Id: "event-1",
+                Name: "Start",
+              },
+              {
+                EventId: 2,
+                EventTimestamp: Math.floor(eventTime2.getTime() / 1000),
+                EventType: "StepSucceeded",
+                Id: "event-2",
+                Name: "Success",
+              },
+            ],
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue(serializedResult),
+      });
+
+      const result = await apiClient.startDurableExecution();
+
+      expect(result).toEqual({
+        checkpointToken: createCheckpointToken("mock-token"),
+        executionId: mockExecutionId,
+        invocationId: createInvocationId("mock-invocation-id"),
+        operationEvents: [
+          {
+            operation: {
+              Id: "op-123",
+              Name: "TestOperation",
+              Type: "STEP",
+              Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: startTime,
+              EndTimestamp: endTime,
+              StepDetails: {
+                Attempt: 1,
+                Result: "test-result",
+              },
+            },
+            events: [
+              {
+                EventId: 1,
+                EventTimestamp: eventTime1,
+                EventType: "StepStarted",
+                Id: "event-1",
+                Name: "Start",
+              },
+              {
+                EventId: 2,
+                EventTimestamp: eventTime2,
+                EventType: "StepSucceeded",
+                Id: "event-2",
+                Name: "Success",
+              },
+            ],
+          },
+        ],
+      });
     });
 
     it("should make a POST request to the correct endpoint with payload", async () => {
       const payload = JSON.stringify({ testKey: "testValue" });
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValue(mockInvocationResult),
+        json: jest.fn().mockResolvedValue(mockInvocationResultSerialized),
       });
 
       const result = await apiClient.startDurableExecution(payload);
@@ -75,7 +201,7 @@ describe("CheckpointApiClient", () => {
           signal: undefined,
         },
       );
-      expect(result).toEqual(mockInvocationResult);
+      expect(result).toEqual(mockInvocationResultSerialized);
     });
 
     it("should throw an error when the request fails", async () => {
@@ -94,6 +220,10 @@ describe("CheckpointApiClient", () => {
 
   describe("pollCheckpointData", () => {
     it("should make a GET request to the correct endpoint", async () => {
+      const mockResponseDataSerialized: SerializedPollCheckpointResponse = {
+        operations: mockOperationsSerialized,
+        operationInvocationIdMap: { op1: [createInvocationId("invocation-1")] },
+      };
       const mockResponseData = {
         operations: mockOperations,
         operationInvocationIdMap: { op1: ["invocation-1"] },
@@ -101,7 +231,7 @@ describe("CheckpointApiClient", () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValue(mockResponseData),
+        json: jest.fn().mockResolvedValue(mockResponseDataSerialized),
       });
 
       const result = await apiClient.pollCheckpointData(mockExecutionId);
@@ -120,9 +250,75 @@ describe("CheckpointApiClient", () => {
       expect(result).toEqual(mockResponseData);
     });
 
+    it("should deserialize timestamps from epoch seconds to Date objects", async () => {
+      const startTime = new Date("2021-01-01T00:00:00.000Z");
+      const eventTime = new Date("2021-01-01T00:00:30.000Z");
+
+      const serializedResponse: SerializedPollCheckpointResponse = {
+        operations: [
+          {
+            operation: {
+              Id: "op-456",
+              Type: "STEP",
+              Status: OperationStatus.STARTED,
+              StartTimestamp: Math.floor(startTime.getTime() / 1000),
+            },
+            update: {
+              Id: "op-456",
+              Type: "STEP",
+              Action: OperationAction.START,
+            },
+            events: [
+              {
+                EventId: 1,
+                EventTimestamp: Math.floor(eventTime.getTime() / 1000),
+                EventType: "StepStarted",
+                Id: "event-1",
+              },
+            ],
+          },
+        ],
+        operationInvocationIdMap: {},
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue(serializedResponse),
+      });
+
+      const result = await apiClient.pollCheckpointData(mockExecutionId);
+
+      expect(result).toEqual({
+        operations: [
+          {
+            operation: {
+              Id: "op-456",
+              Type: "STEP",
+              Status: OperationStatus.STARTED,
+              StartTimestamp: startTime,
+            },
+            update: {
+              Id: "op-456",
+              Type: "STEP",
+              Action: OperationAction.START,
+            },
+            events: [
+              {
+                EventId: 1,
+                EventTimestamp: eventTime,
+                EventType: "StepStarted",
+                Id: "event-1",
+              },
+            ],
+          },
+        ],
+        operationInvocationIdMap: {},
+      });
+    });
+
     it("should pass the abort signal when provided", async () => {
       const mockResponseData = {
-        operations: mockOperations,
+        operations: mockOperationsSerialized,
         operationInvocationIdMap: { op1: ["invocation-1"] },
       };
 
@@ -151,7 +347,7 @@ describe("CheckpointApiClient", () => {
 
     it("should handle response with operationInvocationIdMap", async () => {
       const mockResponseData = {
-        operations: mockOperations,
+        operations: mockOperationsSerialized,
         operationInvocationIdMap: {
           op1: ["invocation-1", "invocation-2"],
           op2: ["invocation-3"],
@@ -173,8 +369,8 @@ describe("CheckpointApiClient", () => {
     });
 
     it("should handle response with empty operationInvocationIdMap", async () => {
-      const mockResponseData = {
-        operations: mockOperations,
+      const mockResponseData: SerializedPollCheckpointResponse = {
+        operations: mockOperationsSerialized,
         operationInvocationIdMap: {},
       };
 
@@ -185,7 +381,7 @@ describe("CheckpointApiClient", () => {
 
       const result = await apiClient.pollCheckpointData(mockExecutionId);
 
-      expect(result.operations).toEqual(mockOperations);
+      expect(result.operations).toStrictEqual(mockOperations);
       expect(result.operationInvocationIdMap).toEqual({});
     });
 
@@ -405,7 +601,7 @@ describe("CheckpointApiClient", () => {
     it("should make a POST request to the correct endpoint", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValue(mockInvocationResult),
+        json: jest.fn().mockResolvedValue(mockInvocationResultSerialized),
       });
 
       const result = await apiClient.startInvocation(mockExecutionId);
@@ -421,7 +617,55 @@ describe("CheckpointApiClient", () => {
           signal: undefined,
         },
       );
-      expect(result).toEqual(mockInvocationResult);
+      expect(result).toEqual(mockInvocationResultSerialized);
+    });
+
+    it("should deserialize timestamps from epoch seconds to Date objects", async () => {
+      const startTime = new Date("2021-01-01T00:00:00.000Z");
+      const endTime = new Date("2021-01-01T00:01:00.000Z");
+
+      const serializedResult: SerializedInvocationResult = {
+        checkpointToken: createCheckpointToken("mock-token"),
+        executionId: mockExecutionId,
+        invocationId: createInvocationId("mock-invocation-id"),
+        operationEvents: [
+          {
+            operation: {
+              Id: "op-789",
+              Type: "WAIT",
+              Status: OperationStatus.STARTED,
+              StartTimestamp: Math.floor(startTime.getTime() / 1000),
+              EndTimestamp: Math.floor(endTime.getTime() / 1000),
+            },
+            events: [],
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue(serializedResult),
+      });
+
+      const result = await apiClient.startInvocation(mockExecutionId);
+
+      expect(result).toEqual({
+        checkpointToken: createCheckpointToken("mock-token"),
+        executionId: mockExecutionId,
+        invocationId: createInvocationId("mock-invocation-id"),
+        operationEvents: [
+          {
+            operation: {
+              Id: "op-789",
+              Type: "WAIT",
+              Status: OperationStatus.STARTED,
+              StartTimestamp: startTime,
+              EndTimestamp: endTime,
+            },
+            events: [],
+          },
+        ],
+      });
     });
 
     it("should throw an error when the request fails", async () => {
@@ -440,7 +684,12 @@ describe("CheckpointApiClient", () => {
 
   describe("makeRequest", () => {
     it("should parse JSON response when available", async () => {
-      const responseData = { success: true };
+      const responseData: SerializedInvocationResult = {
+        checkpointToken: createCheckpointToken("test-token"),
+        executionId: createExecutionId(),
+        invocationId: createInvocationId(),
+        operationEvents: [],
+      };
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue(responseData),
