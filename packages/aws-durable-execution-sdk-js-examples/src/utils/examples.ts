@@ -60,26 +60,80 @@ export class Examples {
       return this.examples;
     }
 
-    const filesInDir = await fs.readdir(EXAMPLES_DIR, {
+    const dirEntries = await fs.readdir(EXAMPLES_DIR, {
       withFileTypes: true,
     });
 
-    const exampleFiles = filesInDir.filter(
-      (dirent) => dirent.isFile() && dirent.name.endsWith(".ts"),
+    // Filter out non-directories and special directories
+    const exampleDirs = dirEntries.filter(
+      (dirent) =>
+        dirent.isDirectory() &&
+        dirent.name !== "shared" &&
+        !dirent.name.startsWith("."),
     );
 
-    for (const exampleFile of exampleFiles) {
-      const examplePath = path.resolve(EXAMPLES_DIR, exampleFile.name);
+    for (const dir of exampleDirs) {
+      const dirPath = path.resolve(EXAMPLES_DIR, dir.name);
+      const subEntries = await fs.readdir(dirPath, {
+        withFileTypes: true,
+      });
 
-      const exampleConfig = await Examples.parseExample(
-        exampleFile.name,
-        examplePath,
+      // Check if this directory contains TypeScript files directly (standalone examples)
+      const directTsFiles = subEntries.filter(
+        (dirent) =>
+          dirent.isFile() &&
+          dirent.name.endsWith(".ts") &&
+          !dirent.name.endsWith(".test.ts"),
       );
-      if (!exampleConfig) {
-        continue;
-      }
 
-      this.examples.push(exampleConfig);
+      if (directTsFiles.length > 0) {
+        // Standalone example directory
+        for (const exampleFile of directTsFiles) {
+          const examplePath = path.resolve(dirPath, exampleFile.name);
+
+          const exampleConfig = await Examples.parseExample(
+            exampleFile.name,
+            examplePath,
+          );
+          if (!exampleConfig) {
+            continue;
+          }
+
+          this.examples.push(exampleConfig);
+        }
+      } else {
+        // Nested structure - scan subdirectories
+        const subDirs = subEntries.filter((dirent) => dirent.isDirectory());
+
+        for (const subDir of subDirs) {
+          const subDirPath = path.resolve(dirPath, subDir.name);
+          const filesInSubDir = await fs.readdir(subDirPath, {
+            withFileTypes: true,
+          });
+
+          // Find TypeScript files (excluding test files)
+          const exampleFiles = filesInSubDir.filter(
+            (dirent) =>
+              dirent.isFile() &&
+              dirent.name.endsWith(".ts") &&
+              !dirent.name.endsWith(".test.ts"),
+          );
+
+          for (const exampleFile of exampleFiles) {
+            const examplePath = path.resolve(subDirPath, exampleFile.name);
+
+            const exampleConfig = await Examples.parseExample(
+              exampleFile.name,
+              examplePath,
+            );
+            if (!exampleConfig) {
+              continue;
+            }
+
+            this.examples.push(exampleConfig);
+          }
+        }
+      }
     }
 
     return this.examples;

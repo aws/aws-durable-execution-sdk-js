@@ -2,18 +2,58 @@
 
 This guide explains how to add new durable function examples with tests.
 
+## Directory Structure
+
+Examples are organized in two ways:
+
+1. **Nested Group Examples**: Related examples are organized in nested subdirectories within a group
+
+   ```
+   src/examples/
+     wait-for-callback/
+       basic/
+         wait-for-callback.ts
+         wait-for-callback.test.ts
+       timeout/
+         wait-for-callback-timeout.ts
+         wait-for-callback-timeout.test.ts
+       heartbeat/
+         wait-for-callback-heartbeat.ts
+         wait-for-callback-heartbeat.test.ts
+       ...
+   ```
+
+2. **Standalone Examples**: Individual examples in their own directory
+   ```
+   src/examples/
+     hello-world/
+       hello-world.ts
+       hello-world.test.ts
+       hello-world.history.json
+   ```
+
 ## Steps to Add a New Example
 
-### 1. Create the Example File
+### 1. Create the Example Directory
 
-Create your example in `src/examples/your-example.ts`:
+Decide if your example belongs to an existing group or should be standalone:
+
+- **For grouped examples**: Create a new subdirectory within the group (e.g., `src/examples/wait-for-callback/my-variant/`)
+- **For standalone examples**: Create a new directory (e.g., `src/examples/my-example/`)
+
+### 2. Create the Example File
+
+Create your example TypeScript file in the chosen directory:
+
+**For Nested Groups**: `src/examples/{group}/{subdirectory}/{example-name}.ts`
+**For Standalone**: `src/examples/{example-name}/{example-name}.ts`
 
 ```typescript
 import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExampleConfig } from "../types";
+import { ExampleConfig } from "../../types"; // For nested: "../../../types"
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
@@ -26,33 +66,32 @@ export const handler = withDurableExecution(
 );
 
 export const config: ExampleConfig = {
-  name: "Block Example",
-  description: "Advanced child context example",
+  name: "My Example",
+  description: "Description of what this example demonstrates",
 };
 ```
-
-### 2. Add the example config
-
-The example config must be added to the export of the main file. This will automatically generate a catalog which will be used by our tests.
 
 **Configuration options:**
 
 - `name`: Human-readable name (used in function naming)
 - `description`: What the example demonstrates
-- `durableConfig.RetentionPeriodInDays`: (Default to 7) How long to keep execution history (7-90 days)
-- `durableConfig.ExecutionTimeout`: (Default to 60) Max execution time in seconds
+- `durableConfig.RetentionPeriodInDays`: (Default: 7) How long to keep execution history (7-90 days)
+- `durableConfig.ExecutionTimeout`: (Default: 60) Max execution time in seconds
 
 ### 3. Create the Test File
 
-Create `src/examples/__tests__/your-example.test.ts`:
+Create a test file in the same directory:
+
+**For Nested Groups**: `src/examples/{group}/{subdirectory}/{example-name}.test.ts`
+**For Standalone**: `src/examples/{example-name}/{example-name}.test.ts`
 
 ```typescript
-import { handler } from "../your-example";
-import { createTests } from "./shared/test-helper";
+import { handler } from "./{example-name}";
+import { createTests } from "../../shared/test-helper"; // For nested: "../../../shared/test-helper"
 
 createTests({
-  name: "your-example test",
-  functionName: "your-example",
+  name: "my-example test",
+  functionName: "{example-name}",
   handler,
   tests: (runner) => {
     it("should return expected result", async () => {
@@ -68,12 +107,19 @@ createTests({
 });
 ```
 
+### 4. (Optional) Add History File
+
+If you want to validate execution history, create a history file:
+
+**For Nested Groups**: `src/examples/{group}/{subdirectory}/{example-name}.history.json`
+**For Standalone**: `src/examples/{example-name}/{example-name}.history.json`
+
 The `createTests` helper automatically runs tests with:
 
 - **LocalDurableTestRunner** for unit tests (default)
 - **CloudDurableTestRunner** for integration tests (when `NODE_ENV=integration`)
 
-### 4. Run Local Tests
+### 5. Run Local Tests
 
 ```bash
 npm test
@@ -164,8 +210,9 @@ tests: (runner, isCloud) => {
 
 ## Example Checklist
 
-- [ ] Created example file in `src/examples/`
-- [ ] Created test file in `src/examples/__tests__/`
+- [ ] Created example file in appropriate directory structure
+- [ ] Created test file in same directory
+- [ ] Used correct import paths for test-helper and types
 - [ ] Local tests pass (`npm test`)
 - [ ] Integration tests pass in CI/CD
 

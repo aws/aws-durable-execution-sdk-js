@@ -1,5 +1,4 @@
 const fs = require("fs");
-const path = require("path");
 
 const handlerFile = process.argv[2];
 const historyFile = process.argv[3];
@@ -10,7 +9,10 @@ if (!handlerFile || !historyFile) {
 }
 
 const fileName = handlerFile.replace(".handler", "");
-const expectedHistoryPath = path.join("src/__histories__", `${fileName}.json`);
+
+// History files are located alongside the example files
+// If handler is "some/path/example.handler", history should be "some/path/example.history.json"
+const expectedHistoryPath = handlerFile.replace(".handler", ".history.json");
 
 if (!fs.existsSync(expectedHistoryPath)) {
   console.log(

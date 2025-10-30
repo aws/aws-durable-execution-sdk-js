@@ -46,16 +46,55 @@ function getExampleFiles() {
     throw new Error(`Examples directory not found: ${examplesDir}`);
   }
 
-  return fs
-    .readdirSync(examplesDir)
-    .filter(
-      (file) =>
-        file.endsWith(".ts") &&
-        !file.includes(".test.") &&
-        !file.includes(".spec."),
-    )
-    .map((file) => path.basename(file, ".ts"))
-    .sort(); // Sort for consistent output
+  const exampleFiles = [];
+
+  // Read all directories in examples
+  const entries = fs.readdirSync(examplesDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    // Skip non-directories and special directories
+    if (!entry.isDirectory() || entry.name.startsWith(".")) {
+      continue;
+    }
+
+    const dirPath = path.join(examplesDir, entry.name);
+    const subEntries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+    // Check if this directory contains TypeScript files directly (standalone examples)
+    const directTsFiles = subEntries.filter(
+      (dirent) =>
+        dirent.isFile() &&
+        dirent.name.endsWith(".ts") &&
+        !dirent.name.includes(".test"),
+    );
+
+    if (directTsFiles.length > 0) {
+      // Standalone example directory
+      directTsFiles.forEach((file) => {
+        exampleFiles.push(path.basename(file.name, ".ts"));
+      });
+    } else {
+      // Nested structure - scan subdirectories
+      const subDirs = subEntries.filter((dirent) => dirent.isDirectory());
+
+      for (const subDir of subDirs) {
+        const subDirPath = path.join(dirPath, subDir.name);
+        const filesInSubDir = fs.readdirSync(subDirPath);
+
+        // Find TypeScript files (excluding test files)
+        const tsFiles = filesInSubDir.filter(
+          (file) => file.endsWith(".ts") && !file.includes(".test."),
+        );
+
+        // Add each example file (without .ts extension)
+        tsFiles.forEach((file) => {
+          exampleFiles.push(path.basename(file, ".ts"));
+        });
+      }
+    }
+  }
+
+  return exampleFiles.sort(); // Sort for consistent output
 }
 
 /**
