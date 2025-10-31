@@ -20,20 +20,14 @@ createTests({
         payload: { test: "multiple-invocations" },
       });
 
-      // Wait for first callback and complete it
-      await firstCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-
-      // Give time for callback to be submitted (TODO: https://github.com/aws/aws-durable-execution-sdk-js/issues/187)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Wait for first callback to be submitted, then complete it
+      await firstCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
 
       const firstCallbackResult = JSON.stringify({ step: 1 });
       await firstCallbackOp.sendCallbackSuccess(firstCallbackResult);
 
-      // Wait for second callback and complete it
-      await secondCallbackOp.waitForData(WaitingOperationStatus.STARTED);
-
-      // Give time for callback to be submitted (TODO: https://github.com/aws/aws-durable-execution-sdk-js/issues/187)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Wait for second callback to be submitted, then complete it
+      await secondCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
 
       const secondCallbackResult = JSON.stringify({ step: 2 });
       await secondCallbackOp.sendCallbackSuccess(secondCallbackResult);

@@ -28,9 +28,10 @@ describe("doesStatusMatch", () => {
     });
   });
 
-  describe("when expectedStatus is COMPLETED", () => {
-    const expectedStatus = WaitingOperationStatus.COMPLETED;
-
+  describe.each([
+    ["COMPLETED", WaitingOperationStatus.COMPLETED],
+    ["SUBMITTED", WaitingOperationStatus.SUBMITTED],
+  ])("when expectedStatus is %s", (statusName, expectedStatus) => {
     it.each([
       OperationStatus.CANCELLED,
       OperationStatus.FAILED,
@@ -78,7 +79,7 @@ describe("doesStatusMatch", () => {
         );
       });
 
-      // Test that only completed statuses resolve COMPLETED
+      // Test that only completed statuses resolve COMPLETED and SUBMITTED
       const completedStatuses = [
         OperationStatus.CANCELLED,
         OperationStatus.FAILED,
@@ -97,10 +98,16 @@ describe("doesStatusMatch", () => {
         expect(doesStatusMatch(status, WaitingOperationStatus.COMPLETED)).toBe(
           true,
         );
+        expect(doesStatusMatch(status, WaitingOperationStatus.SUBMITTED)).toBe(
+          true,
+        );
       });
 
       nonCompletedStatuses.forEach((status) => {
         expect(doesStatusMatch(status, WaitingOperationStatus.COMPLETED)).toBe(
+          false,
+        );
+        expect(doesStatusMatch(status, WaitingOperationStatus.SUBMITTED)).toBe(
           false,
         );
       });

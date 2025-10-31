@@ -29,7 +29,8 @@ export function doesStatusMatch(
     STARTED_STATUSES.includes(status);
 
   const hasCompletedStatus =
-    expectedStatus === WaitingOperationStatus.COMPLETED &&
+    (expectedStatus === WaitingOperationStatus.COMPLETED ||
+      expectedStatus === WaitingOperationStatus.SUBMITTED) &&
     COMPLETED_STATUSES.includes(status);
 
   return hasStartedStatus || hasCompletedStatus;

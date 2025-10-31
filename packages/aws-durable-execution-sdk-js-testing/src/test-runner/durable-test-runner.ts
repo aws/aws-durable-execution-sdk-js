@@ -13,7 +13,19 @@ import {
 import { OperationWithData } from "./common/operations/operation-with-data";
 
 export enum WaitingOperationStatus {
+  /**
+   * Fires when the operation starts.
+   */
   STARTED = "STARTED",
+  /**
+   * Submitted is the same as COMPLETED, except for the case where the operation is waitForCallback.
+   * In that case, SUBMITTED will fire when the waitForCallback submitter is completed.
+   */
+  SUBMITTED = "SUBMITTED",
+  /**
+   * Fires when the operation is completed. This includes a status of CANCELLED, FAILED, STOPPED,
+   * SUCCEEDED, or TIMED_OUT.
+   */
   COMPLETED = "COMPLETED",
 }
 

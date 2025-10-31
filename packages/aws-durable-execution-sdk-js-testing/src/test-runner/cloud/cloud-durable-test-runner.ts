@@ -49,8 +49,8 @@ export class CloudDurableTestRunner<ResultType>
   private readonly functionArn: string;
   private readonly client: LambdaClient;
   private readonly formatter = new ResultFormatter<ResultType>();
-  private readonly waitManager = new OperationWaitManager();
   private indexedOperations = new IndexedOperations([]);
+  private waitManager = new OperationWaitManager(this.indexedOperations);
   private operationStorage: OperationStorage;
   private readonly apiClient: DurableApiClient;
   private readonly config: CloudDurableTestRunnerConfigInternal;
@@ -190,6 +190,7 @@ export class CloudDurableTestRunner<ResultType>
 
   reset() {
     this.indexedOperations = new IndexedOperations([]);
+    this.waitManager = new OperationWaitManager(this.indexedOperations);
     this.operationStorage = new OperationStorage(
       this.waitManager,
       this.indexedOperations,

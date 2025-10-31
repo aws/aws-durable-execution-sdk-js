@@ -9,6 +9,8 @@ import {
 } from "../../durable-test-runner";
 import { doesStatusMatch } from "./status-matcher";
 import { OperationEvents } from "../../common/operations/operation-with-data";
+import { IndexedOperations } from "../../common/indexed-operations";
+import { OperationSubType } from "@aws/durable-execution-sdk-js";
 
 interface WaitingOperation {
   operation: DurableOperation<unknown>;
@@ -21,6 +23,8 @@ interface WaitingOperation {
  */
 export class OperationWaitManager {
   private readonly waitingOperations = new Set<WaitingOperation>();
+
+  constructor(private readonly indexedOperations: IndexedOperations) {}
 
   /**
    * Creates a promise that resolves when the specified operation reaches the expected status.
@@ -43,7 +47,23 @@ export class OperationWaitManager {
     });
   }
 
-  private shouldResolveParent(operation: Operation): boolean {
+  private isSubmitterOfWaitForCallback(operation: Operation): boolean {
+    if (
+      operation.Type === OperationType.STEP &&
+      operation.ParentId !== undefined
+    ) {
+      const parentOperation = this.indexedOperations.getById(
+        operation.ParentId,
+      );
+      return (
+        parentOperation?.operation.Type === OperationType.CONTEXT &&
+        parentOperation.operation.SubType === OperationSubType.WAIT_FOR_CALLBACK
+      );
+    }
+    return false;
+  }
+
+  private isCallbackOperation(operation: Operation): boolean {
     return (
       operation.Type === OperationType.CALLBACK &&
       operation.ParentId !== undefined
@@ -59,15 +79,23 @@ export class OperationWaitManager {
     checkpointOperationsReceived: OperationEvents[],
     trackedDurableOperations: DurableOperation<unknown>[],
   ): void {
-    // Handle callback operations
-    checkpointOperationsReceived
-      .filter(({ operation }) => this.shouldResolveParent(operation))
-      .forEach(({ operation }) => {
-        const parentId = operation.ParentId;
-        if (parentId) {
-          this.resolveOperationsByParentId(parentId, operation.Status);
-        }
-      });
+    for (const { operation } of checkpointOperationsReceived) {
+      const parentId = operation.ParentId;
+      if (!parentId) {
+        continue;
+      }
+
+      // Handle submitter operations (STEP) - these resolve STARTED and SUBMITTED, but NOT COMPLETED
+      if (this.isSubmitterOfWaitForCallback(operation)) {
+        this.resolveOperationsByParentId(parentId, operation.Status, [
+          WaitingOperationStatus.STARTED,
+          WaitingOperationStatus.SUBMITTED,
+        ]);
+        // Handle callback operations - these resolve all statuses (STARTED, SUBMITTED, and COMPLETED)
+      } else if (this.isCallbackOperation(operation)) {
+        this.resolveOperationsByParentId(parentId, operation.Status);
+      }
+    }
 
     // Handle operations that are tracked
     trackedDurableOperations.forEach((op) => {
@@ -103,16 +131,19 @@ export class OperationWaitManager {
   }
 
   /**
-   * Resolves waiting operations by matching parent operation ID (for callbacks).
+   * Resolves parent operations by matching parent ID and allowed statuses.
    */
   private resolveOperationsByParentId(
     parentId: string,
-    status?: OperationStatus,
+    status: OperationStatus | undefined,
+    allowedStatuses?: WaitingOperationStatus[],
   ): void {
     const toResolve = Array.from(this.waitingOperations).filter(
       (waiting) =>
         waiting.operation.getId() === parentId &&
         this.shouldBeResolvedByParent(waiting.operation) &&
+        (allowedStatuses === undefined ||
+          allowedStatuses.includes(waiting.expectedStatus)) &&
         doesStatusMatch(status, waiting.expectedStatus),
     );
 

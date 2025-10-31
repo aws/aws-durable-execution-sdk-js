@@ -56,7 +56,7 @@ export class LocalDurableTestRunner<ResultType>
   implements DurableTestRunner<OperationWithData, ResultType>
 {
   private operationStorage: LocalOperationStorage;
-  private readonly waitManager: OperationWaitManager;
+  private waitManager: OperationWaitManager;
   private readonly resultFormatter: ResultFormatter<ResultType>;
   private operationIndex: IndexedOperations;
   private readonly skipTime: boolean;
@@ -75,8 +75,8 @@ export class LocalDurableTestRunner<ResultType>
     handlerFunction,
     skipTime = false,
   }: LocalDurableTestRunnerParameters) {
-    this.waitManager = new OperationWaitManager();
     this.operationIndex = new IndexedOperations([]);
+    this.waitManager = new OperationWaitManager(this.operationIndex);
     this.resultFormatter = new ResultFormatter<ResultType>();
 
     this.skipTime = skipTime;
@@ -270,6 +270,7 @@ export class LocalDurableTestRunner<ResultType>
 
   reset() {
     this.operationIndex = new IndexedOperations([]);
+    this.waitManager = new OperationWaitManager(this.operationIndex);
     this.operationStorage = new LocalOperationStorage(
       this.waitManager,
       this.operationIndex,

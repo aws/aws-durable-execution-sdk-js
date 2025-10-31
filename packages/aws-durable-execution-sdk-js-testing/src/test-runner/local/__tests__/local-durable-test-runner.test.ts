@@ -9,6 +9,7 @@ import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manag
 import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 import { FunctionStorage } from "../operations/function-storage";
+import { IndexedOperations } from "../../common/indexed-operations";
 
 jest.mock("../test-execution-orchestrator");
 jest.mock("../result-formatter");
@@ -121,7 +122,9 @@ describe("LocalDurableTestRunner", () => {
       });
 
       expect(runner).toBeDefined();
-      expect(OperationWaitManager).toHaveBeenCalledWith();
+      expect(OperationWaitManager).toHaveBeenCalledWith(
+        expect.any(IndexedOperations),
+      );
       expect(LocalOperationStorage).toHaveBeenCalledWith(
         mockWaitManager,
         expect.any(Object),
