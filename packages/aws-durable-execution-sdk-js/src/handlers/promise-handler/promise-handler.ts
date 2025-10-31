@@ -87,12 +87,13 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
   ): Promise<T[]> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Execute Promise.all immediately to consume promises
-    // This prevents unhandled rejections during replay
-    const allPromise = Promise.all(promises);
+    // Immediately attach catch handlers to prevent unhandled rejections
+    // while preserving the original promise behavior for Promise.all
+    promises.forEach((p) => p.catch(() => {}));
 
-    // Wrap the result in a step for persistence
-    return step(name, () => allPromise, stepConfig);
+    // Wrap Promise.all execution in a step for persistence
+    // This ensures Promise.all is called inside the step where errors can be handled
+    return step(name, () => Promise.all(promises), stepConfig);
   };
 
   const allSettled = <T>(
@@ -101,12 +102,12 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
   ): Promise<PromiseSettledResult<T>[]> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Execute Promise.allSettled immediately to consume promises
-    // This prevents unhandled rejections during replay
-    const settledPromise = Promise.allSettled(promises);
+    // Immediately attach catch handlers to prevent unhandled rejections
+    // while preserving the original promise behavior for Promise.allSettled
+    promises.forEach((p) => p.catch(() => {}));
 
-    // Wrap the result in a step for persistence
-    return step(name, () => settledPromise, {
+    // Wrap Promise.allSettled execution in a step for persistence
+    return step(name, () => Promise.allSettled(promises), {
       ...stepConfig,
       serdes: createErrorAwareSerdes<T>(),
     });
@@ -118,12 +119,12 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
   ): Promise<T> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Execute Promise.any immediately to consume promises
-    // This prevents unhandled rejections during replay
-    const anyPromise = Promise.any(promises);
+    // Immediately attach catch handlers to prevent unhandled rejections
+    // while preserving the original promise behavior for Promise.any
+    promises.forEach((p) => p.catch(() => {}));
 
-    // Wrap the result in a step for persistence
-    return step(name, () => anyPromise, stepConfig);
+    // Wrap Promise.any execution in a step for persistence
+    return step(name, () => Promise.any(promises), stepConfig);
   };
 
   const race = <T>(
@@ -132,12 +133,12 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
   ): Promise<T> => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Execute Promise.race immediately to consume promises
-    // This prevents unhandled rejections during replay
-    const racePromise = Promise.race(promises);
+    // Immediately attach catch handlers to prevent unhandled rejections
+    // while preserving the original promise behavior for Promise.race
+    promises.forEach((p) => p.catch(() => {}));
 
-    // Wrap the result in a step for persistence
-    return step(name, () => racePromise, stepConfig);
+    // Wrap Promise.race execution in a step for persistence
+    return step(name, () => Promise.race(promises), stepConfig);
   };
 
   return {
