@@ -129,13 +129,12 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(invocationOperations[2]).toEqual([]);
 
     // Assert history events
-    // TODO: update timestamps to Date objects
     expect(result.getHistoryEvents()).toEqual([
       {
         EventType: "ExecutionStarted",
         EventId: 1,
         Id: expect.any(String),
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         ExecutionStartedDetails: {
           Input: {
             Payload: "{}",
@@ -148,10 +147,10 @@ describe("LocalDurableTestRunner Integration", () => {
         EventId: 2,
         Id: "c4ca4238a0b92382",
         Name: "wait-invocation-1",
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         WaitStartedDetails: {
           Duration: 1,
-          ScheduledEndTimestamp: expect.any(Number),
+          ScheduledEndTimestamp: expect.any(Date),
         },
       },
       {
@@ -160,7 +159,7 @@ describe("LocalDurableTestRunner Integration", () => {
         Id: "c4ca4238a0b92382",
         Name: "wait-invocation-1",
         SubType: "Wait",
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         WaitSucceededDetails: { Duration: 1 },
       },
       {
@@ -169,7 +168,7 @@ describe("LocalDurableTestRunner Integration", () => {
         EventId: 4,
         Id: "c81e728d9d4c2f63",
         Name: "process-data-step",
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         StepStartedDetails: {},
       },
       {
@@ -178,7 +177,7 @@ describe("LocalDurableTestRunner Integration", () => {
         EventId: 5,
         Id: "c81e728d9d4c2f63",
         Name: "process-data-step",
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         StepSucceededDetails: {
           Result: {
             Payload: JSON.stringify(resultData.result),
@@ -192,10 +191,10 @@ describe("LocalDurableTestRunner Integration", () => {
         EventId: 6,
         Id: "eccbc87e4b5ce2fe",
         Name: "wait-invocation-2",
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         WaitStartedDetails: {
           Duration: 1,
-          ScheduledEndTimestamp: expect.any(Number),
+          ScheduledEndTimestamp: expect.any(Date),
         },
       },
       {
@@ -204,14 +203,14 @@ describe("LocalDurableTestRunner Integration", () => {
         SubType: "Wait",
         Id: "eccbc87e4b5ce2fe",
         Name: "wait-invocation-2",
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         WaitSucceededDetails: { Duration: 1 },
       },
       {
         EventType: "ExecutionSucceeded",
         EventId: 8,
         Id: expect.any(String),
-        EventTimestamp: expect.any(Number),
+        EventTimestamp: expect.any(Date),
         ExecutionSucceededDetails: {
           Result: {
             Payload: JSON.stringify(resultData),

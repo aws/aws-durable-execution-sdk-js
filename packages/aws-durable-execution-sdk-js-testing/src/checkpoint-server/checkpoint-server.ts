@@ -81,8 +81,10 @@ export async function startCheckpointServer(port: number) {
    */
   app.post(`${API_PATHS.START_INVOCATION}/:executionId`, (req, res) => {
     res.json(
-      executionManager.startInvocation(
-        createExecutionId(req.params.executionId),
+      convertDatesToTimestamps(
+        executionManager.startInvocation(
+          createExecutionId(req.params.executionId),
+        ),
       ),
     );
   });

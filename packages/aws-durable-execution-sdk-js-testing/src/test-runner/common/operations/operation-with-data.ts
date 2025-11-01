@@ -232,11 +232,7 @@ export class OperationWithData<OperationResultValue = unknown>
 
     return {
       waitSeconds: details.Duration,
-      // TODO: fix serialization of dates in API responses
-      scheduledEndTimestamp:
-        details.ScheduledEndTimestamp !== undefined
-          ? new Date(details.ScheduledEndTimestamp)
-          : undefined,
+      scheduledEndTimestamp: details.ScheduledEndTimestamp,
     };
   }
 
@@ -313,26 +309,10 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   getStartTimestamp(): Date | undefined {
-    // TODO: remove this when the local runner converts to Date correctly
-    if (
-      typeof this.checkpointOperationData?.operation.StartTimestamp === "number"
-    ) {
-      return new Date(
-        this.checkpointOperationData.operation.StartTimestamp * 1000,
-      );
-    }
     return this.checkpointOperationData?.operation.StartTimestamp;
   }
 
   getEndTimestamp(): Date | undefined {
-    // TODO: remove this when the local runner converts to Date correctly
-    if (
-      typeof this.checkpointOperationData?.operation.EndTimestamp === "number"
-    ) {
-      return new Date(
-        this.checkpointOperationData.operation.EndTimestamp * 1000,
-      );
-    }
     return this.checkpointOperationData?.operation.EndTimestamp;
   }
 

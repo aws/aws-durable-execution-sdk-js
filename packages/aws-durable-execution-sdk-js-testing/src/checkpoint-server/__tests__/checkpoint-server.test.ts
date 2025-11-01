@@ -139,6 +139,98 @@ describe("checkpoint-server", () => {
         operationEvents: [],
       });
     });
+
+    it("should serialize operationEvents with timestamp conversions", async () => {
+      const executionId = "test-execution-id";
+      const startTime = new Date("2021-01-01T00:00:00.000Z");
+      const endTime = new Date("2021-01-01T00:01:00.000Z");
+      const eventTime1 = new Date("2021-01-01T00:00:10.000Z");
+      const eventTime2 = new Date("2021-01-01T00:00:50.000Z");
+
+      // Mock response with Date objects (as returned by CheckpointManager)
+      mockExecutionManager.startInvocation.mockReturnValueOnce({
+        checkpointToken: createCheckpointToken("mockToken"),
+        executionId: createExecutionId(executionId),
+        invocationId: createInvocationId("mockInvocationId"),
+        operationEvents: [
+          {
+            operation: {
+              Id: "op-123",
+              Name: "TestOperation",
+              Type: OperationType.STEP,
+              Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: startTime,
+              EndTimestamp: endTime,
+              StepDetails: {
+                Attempt: 1,
+                Result: "test-result",
+              },
+            },
+            events: [
+              {
+                EventId: 1,
+                EventTimestamp: eventTime1,
+                EventType: "StepStarted",
+                Id: "event-1",
+                Name: "Start",
+              },
+              {
+                EventId: 2,
+                EventTimestamp: eventTime2,
+                EventType: "StepSucceeded",
+                Id: "event-2",
+                Name: "Success",
+              },
+            ],
+          },
+        ],
+      });
+
+      const response = await request(server).post(
+        `${API_PATHS.START_INVOCATION}/${executionId}`,
+      );
+
+      expect(response.status).toBe(200);
+
+      // Verify the serialized response matches expected structure with timestamp conversions
+      expect(response.body).toEqual({
+        checkpointToken: "mockToken",
+        executionId,
+        invocationId: "mockInvocationId",
+        operationEvents: [
+          {
+            operation: {
+              Id: "op-123",
+              Name: "TestOperation",
+              Type: OperationType.STEP,
+              Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: Math.floor(startTime.getTime() / 1000),
+              EndTimestamp: Math.floor(endTime.getTime() / 1000),
+              StepDetails: {
+                Attempt: 1,
+                Result: "test-result",
+              },
+            },
+            events: [
+              {
+                EventId: 1,
+                EventTimestamp: Math.floor(eventTime1.getTime() / 1000),
+                EventType: "StepStarted",
+                Id: "event-1",
+                Name: "Start",
+              },
+              {
+                EventId: 2,
+                EventTimestamp: Math.floor(eventTime2.getTime() / 1000),
+                EventType: "StepSucceeded",
+                Id: "event-2",
+                Name: "Success",
+              },
+            ],
+          },
+        ],
+      });
+    });
   });
 
   describe(`${API_PATHS.POLL_CHECKPOINT_DATA}/:executionId`, () => {
@@ -147,12 +239,23 @@ describe("checkpoint-server", () => {
       const mockStorage = new CheckpointManager(
         createExecutionId("test-execution-id"),
       );
+      const startTimestamp = new Date("2021-01-01T00:00:00.000Z");
+
       jest
         .spyOn(mockStorage, "getPendingCheckpointUpdates")
         .mockResolvedValueOnce([
           {
-            operation: { Id: "op1", Type: OperationType.STEP },
-            update: { Id: "op1", Type: OperationType.STEP },
+            operation: {
+              Id: "op1",
+              Type: OperationType.STEP,
+              StartTimestamp: startTimestamp,
+              Status: "STARTED",
+            },
+            update: {
+              Id: "op1",
+              Type: OperationType.STEP,
+              Action: "START",
+            },
             events: [],
           },
         ]);
@@ -174,8 +277,17 @@ describe("checkpoint-server", () => {
         operations: [
           {
             events: [],
-            operation: { Id: "op1", Type: OperationType.STEP },
-            update: { Id: "op1", Type: OperationType.STEP },
+            operation: {
+              Id: "op1",
+              Type: OperationType.STEP,
+              StartTimestamp: Math.floor(startTimestamp.getTime() / 1000),
+              Status: "STARTED",
+            },
+            update: {
+              Id: "op1",
+              Type: OperationType.STEP,
+              Action: "START",
+            },
           },
         ],
       });

@@ -12,6 +12,17 @@ import {
   getUpdateCheckpointDataPath,
 } from "../../../checkpoint-server/constants";
 import { ExecutionId } from "../../../checkpoint-server/utils/tagged-strings";
+import { SerializedCheckpointOperation } from "../../../checkpoint-server/types/operation-event";
+import { SerializedInvocationResult } from "../../../checkpoint-server/types/serialized-invocation-result";
+import {
+  deserializeCheckpointOperation,
+  deserializeOperationEvents,
+} from "./deserialize/deserialize-operation-events";
+
+export interface SerializedPollCheckpointResponse {
+  operations: SerializedCheckpointOperation[];
+  operationInvocationIdMap: OperationInvocationIdMap;
+}
 
 /**
  * Client for interacting with the checkpoint server API
@@ -27,11 +38,16 @@ export class CheckpointApiClient {
    * Start a new durable invocation
    */
   async startDurableExecution(payload?: string): Promise<InvocationResult> {
-    return this.makeRequest<InvocationResult>({
+    const result = await this.makeRequest<SerializedInvocationResult>({
       path: API_PATHS.START_DURABLE_EXECUTION,
       method: HTTP_METHODS.POST,
       body: JSON.stringify({ payload }),
     });
+
+    return {
+      ...result,
+      operationEvents: deserializeOperationEvents(result.operationEvents),
+    };
   }
 
   /**
@@ -44,11 +60,18 @@ export class CheckpointApiClient {
     operations: CheckpointOperation[];
     operationInvocationIdMap: OperationInvocationIdMap;
   }> {
-    return this.makeRequest({
+    const result = await this.makeRequest<SerializedPollCheckpointResponse>({
       path: getPollCheckpointDataPath(executionId),
       method: HTTP_METHODS.GET,
       signal,
     });
+
+    return {
+      operations: result.operations.map((operationEvents) =>
+        deserializeCheckpointOperation(operationEvents),
+      ),
+      operationInvocationIdMap: result.operationInvocationIdMap,
+    };
   }
 
   /**
@@ -82,10 +105,15 @@ export class CheckpointApiClient {
    * Start a new invocation for an existing execution
    */
   async startInvocation(executionId: ExecutionId): Promise<InvocationResult> {
-    return this.makeRequest<InvocationResult>({
+    const result = await this.makeRequest<SerializedInvocationResult>({
       path: getStartInvocationPath(executionId),
       method: HTTP_METHODS.POST,
     });
+
+    return {
+      ...result,
+      operationEvents: deserializeOperationEvents(result.operationEvents),
+    };
   }
 
   /**
