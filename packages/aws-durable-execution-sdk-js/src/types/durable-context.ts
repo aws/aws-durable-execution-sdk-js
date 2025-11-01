@@ -161,7 +161,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   invoke<I, O>(
     name: string,
     funcId: string,
-    input: I,
+    input?: I,
     config?: InvokeConfig<I, O>,
   ): DurablePromise<O>;
 
@@ -181,7 +181,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    */
   invoke<I, O>(
     funcId: string,
-    input: I,
+    input?: I,
     config?: InvokeConfig<I, O>,
   ): DurablePromise<O>;
 

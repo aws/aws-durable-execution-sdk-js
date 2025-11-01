@@ -5,13 +5,12 @@ export interface ExampleConfig {
   description?: string;
   /**
    * The durable config of the function. By default, RetentionPeriodInDays will be set to 7 days
-   * and ExecutionTimeout will be set to 60 seconds.
+   * and ExecutionTimeout will be set to 60 seconds. Null if function is not durable.
    */
-  durableConfig?: DurableConfig;
+  durableConfig?: DurableConfig | null;
 }
 
 export type ExamplesWithConfig = ExampleConfig & {
-  durableConfig: DurableConfig;
   path: string;
   handler: string;
 };

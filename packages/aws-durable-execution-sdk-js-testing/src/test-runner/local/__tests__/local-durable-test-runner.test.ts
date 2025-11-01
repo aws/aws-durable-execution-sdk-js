@@ -363,7 +363,7 @@ describe("LocalDurableTestRunner", () => {
   });
 
   describe("registerFunctions", () => {
-    it("should register functions with function storage", () => {
+    it("should register durable functions with function storage", () => {
       const runner = new LocalDurableTestRunner({
         handlerFunction: mockHandlerFunction,
       });
@@ -372,6 +372,43 @@ describe("LocalDurableTestRunner", () => {
 
       runner.registerDurableFunction("durableFunction", mockDurableHandler);
 
+      expect(mockFunctionStorage.registerDurableFunction).toHaveBeenCalledWith(
+        "durableFunction",
+        mockDurableHandler,
+      );
+    });
+
+    it("should register functions with function storage", () => {
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: mockHandlerFunction,
+      });
+
+      const mockHandler = jest.fn();
+
+      runner.registerFunction("function", mockHandler);
+
+      expect(mockFunctionStorage.registerFunction).toHaveBeenCalledWith(
+        "function",
+        mockHandler,
+      );
+    });
+
+    it("should register durable and non-durable functions with function storage", () => {
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: mockHandlerFunction,
+      });
+
+      const mockHandler = jest.fn();
+      const mockDurableHandler = jest.fn();
+
+      runner
+        .registerFunction("function", mockHandler)
+        .registerDurableFunction("durableFunction", mockDurableHandler);
+
+      expect(mockFunctionStorage.registerFunction).toHaveBeenCalledWith(
+        "function",
+        mockHandler,
+      );
       expect(mockFunctionStorage.registerDurableFunction).toHaveBeenCalledWith(
         "durableFunction",
         mockDurableHandler,

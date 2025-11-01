@@ -7,18 +7,39 @@ import {
   InvocationType,
 } from "@aws/durable-execution-sdk-js-testing";
 
+type TestCallback<ResultType> = (
+  runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
+  isCloud: boolean,
+  functionNameMap: FunctionNameMap,
+) => void;
+
 export interface TestDefinition<ResultType> {
   name: string;
   functionName: string;
   handler: LocalTestRunnerHandlerFunction;
-  tests: (
-    runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
-    isCloud: boolean,
-  ) => void;
+  tests: TestCallback<ResultType>;
   invocationType?: InvocationType;
   localRunnerConfig?: {
     skipTime?: boolean;
   };
+}
+
+export interface FunctionNameMap {
+  getFunctionName(functionName: string): string;
+}
+
+class CloudFunctionNameMap implements FunctionNameMap {
+  constructor(private readonly functionNameMap: Record<string, string>) {}
+
+  getFunctionName(functionName: string): string {
+    return this.functionNameMap[functionName];
+  }
+}
+
+class LocalFunctionNameMap implements FunctionNameMap {
+  getFunctionName(functionName: string): string {
+    return functionName;
+  }
 }
 
 /**
@@ -32,7 +53,10 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       throw new Error("FUNCTION_NAME_MAP is not set for integration tests");
     }
 
-    const functionNames = JSON.parse(process.env.FUNCTION_NAME_MAP!);
+    const functionNames = JSON.parse(process.env.FUNCTION_NAME_MAP!) as Record<
+      string,
+      string
+    >;
     const functionName = functionNames[testDef.functionName];
     if (!functionName) {
       throw new Error(
@@ -57,7 +81,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     });
 
     describe(`${testDef.name} (cloud)`, () => {
-      testDef.tests(runner, true);
+      testDef.tests(runner, true, new CloudFunctionNameMap(functionNames));
     });
     return;
   }
@@ -81,6 +105,6 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       runner.reset();
     });
 
-    testDef.tests(runner, false);
+    testDef.tests(runner, false, new LocalFunctionNameMap());
   });
 }
