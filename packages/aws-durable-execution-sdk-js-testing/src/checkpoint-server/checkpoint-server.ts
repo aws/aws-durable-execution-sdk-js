@@ -47,7 +47,8 @@ export async function startCheckpointServer(port: number) {
     next();
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" })); // Increase limit to handle large step results
+  app.use(express.raw({ limit: "1mb" })); // Also increase raw body limit
 
   /**
    * Starts a durable execution. Returns the data needed for the handler invocation event.
@@ -266,7 +267,7 @@ export async function startCheckpointServer(port: number) {
 
   app.post(
     `${API_PATHS.CALLBACKS}/:callbackId/succeed`,
-    express.raw(),
+    express.raw({ limit: "1mb" }),
     handleCallbackSuccess,
   );
 
