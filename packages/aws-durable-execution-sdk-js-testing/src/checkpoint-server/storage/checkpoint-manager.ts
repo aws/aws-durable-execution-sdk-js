@@ -268,6 +268,10 @@ export class CheckpointManager {
           ...copied.operation.ContextDetails,
           Result: inputUpdate.Payload,
           Error: inputUpdate.Error,
+          // Preserve ReplayChildren from ContextOptions if provided
+          ReplayChildren:
+            inputUpdate.ContextOptions?.ReplayChildren ??
+            copied.operation.ContextDetails?.ReplayChildren,
         };
         break;
     }

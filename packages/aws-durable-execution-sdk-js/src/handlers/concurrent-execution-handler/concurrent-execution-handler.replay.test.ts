@@ -1,7 +1,6 @@
 import { ConcurrencyController } from "./concurrent-execution-handler";
 import {
   DurableContext,
-  BatchItemStatus,
   DurableExecutionMode,
   ExecutionContext,
 } from "../../types";
@@ -37,11 +36,12 @@ describe("ConcurrencyController - Replay Mode", () => {
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
-      all: [
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
-      ],
+      type: "MapResult",
+      totalCount: 2,
+      successCount: 2,
+      failureCount: 0,
       completionReason: "ALL_COMPLETED",
+      status: "SUCCEEDED",
     });
 
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
@@ -98,15 +98,12 @@ describe("ConcurrencyController - Replay Mode", () => {
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
-      all: [
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        {
-          index: 1,
-          error: { message: "error" },
-          status: BatchItemStatus.FAILED,
-        },
-      ],
+      type: "MapResult",
+      totalCount: 2,
+      successCount: 1,
+      failureCount: 1,
       completionReason: "ALL_COMPLETED",
+      status: "FAILED",
     });
 
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
@@ -177,11 +174,12 @@ describe("ConcurrencyController - Replay Mode", () => {
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
-      all: [
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
-      ],
+      type: "MapResult",
+      totalCount: 2,
+      successCount: 2,
+      failureCount: 0,
       completionReason: "ALL_COMPLETED",
+      status: "SUCCEEDED",
     });
 
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
@@ -233,11 +231,12 @@ describe("ConcurrencyController - Replay Mode", () => {
 
     // Items 0 and 2 completed, item 1 was incomplete
     const initialResultSummary = JSON.stringify({
-      all: [
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        { index: 2, result: "result3", status: BatchItemStatus.SUCCEEDED },
-      ],
+      type: "MapResult",
+      totalCount: 2,
+      successCount: 2,
+      failureCount: 0,
       completionReason: "ALL_COMPLETED",
+      status: "SUCCEEDED",
     });
 
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
@@ -366,14 +365,12 @@ describe("ConcurrencyController - Replay Mode", () => {
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
-      all: [
-        {
-          index: 0,
-          error: { message: "string error" },
-          status: BatchItemStatus.FAILED,
-        },
-      ],
+      type: "MapResult",
+      totalCount: 1,
+      successCount: 0,
+      failureCount: 1,
       completionReason: "ALL_COMPLETED",
+      status: "FAILED",
     });
 
     mockExecutionContext.getStepData.mockImplementation((id: string) => {
@@ -424,11 +421,12 @@ describe("ConcurrencyController - Replay Mode", () => {
     const entityId = "parent-step";
 
     const initialResultSummary = JSON.stringify({
-      all: [
-        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        { index: 1, result: "result2", status: BatchItemStatus.SUCCEEDED },
-      ],
+      type: "MapResult",
+      totalCount: 2,
+      successCount: 2,
+      failureCount: 0,
       completionReason: "MIN_SUCCESSFUL_REACHED",
+      status: "SUCCEEDED",
     });
 
     mockExecutionContext.getStepData.mockImplementation((id: string) => {

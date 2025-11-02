@@ -1,10 +1,6 @@
 import { handler } from "../map-large-scale";
 import { createTests } from "./shared/test-helper";
 
-// Skip this test in unit tests due to ReplayChildren not being implemented in testing library
-// This test should only run in integration tests against real AWS Lambda
-const testMethod = process.env.TEST_TYPE === "integration" ? it : it.skip;
-
 createTests({
   name: "map-large-scale test",
   functionName: "map-large-scale",
@@ -13,7 +9,7 @@ createTests({
     skipTime: true, // Skip wait delays for faster testing
   },
   tests: (runner) => {
-    testMethod("should handle 50 items with 100KB each using map", async () => {
+    it("should handle 50 items with 100KB each using map", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
 
