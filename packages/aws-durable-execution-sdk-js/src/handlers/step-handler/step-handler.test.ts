@@ -8,6 +8,7 @@ import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
+import { StepError } from "../../errors/durable-error/durable-error";
 import { TerminationReason } from "../../termination-manager/types";
 import {
   UnrecoverableError,
@@ -415,7 +416,7 @@ describe("Step Handler", () => {
 
     (retryPresets.default as jest.Mock).mockReturnValue({ shouldRetry: false });
 
-    await expect(stepHandler("test-step", stepFn)).rejects.toBe(nonErrorObject);
+    await expect(stepHandler("test-step", stepFn)).rejects.toThrow(StepError);
 
     // Verify the default retry strategy was called with an Error wrapper
     expect(retryPresets.default).toHaveBeenCalledTimes(1);

@@ -11,7 +11,7 @@ import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { TerminationReason } from "../../termination-manager/types";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-import { CallbackError } from "../../errors/callback-error/callback-error";
+import { CallbackError } from "../../errors/durable-error/durable-error";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
@@ -285,7 +285,18 @@ const handleFailedCallback = async <T>(
 
   // Return rejected promise with the error
   const rejectedPromise = Promise.reject(
-    new CallbackError(stepData?.CallbackDetails?.Error),
+    stepData?.CallbackDetails?.Error
+      ? ((): CallbackError => {
+          const cause = new Error(stepData.CallbackDetails.Error.ErrorMessage);
+          cause.name = stepData.CallbackDetails.Error.ErrorType || "Error";
+          cause.stack = stepData.CallbackDetails.Error.StackTrace?.join("\n");
+          return new CallbackError(
+            stepData.CallbackDetails.Error.ErrorMessage || "Callback failed",
+            cause,
+            stepData.CallbackDetails.Error.ErrorData,
+          );
+        })()
+      : new CallbackError("Callback failed"),
   ) as Promise<T>;
   return [rejectedPromise, callbackData.CallbackId];
 };

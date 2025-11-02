@@ -25,6 +25,12 @@ export {
 } from "./types";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export {
+  DurableOperationError,
+  StepError,
+  CallbackError,
+  InvokeError,
+} from "./errors/durable-error/durable-error";
+export {
   defaultSerdes,
   createClassSerdes,
   createClassSerdesWithDates,
