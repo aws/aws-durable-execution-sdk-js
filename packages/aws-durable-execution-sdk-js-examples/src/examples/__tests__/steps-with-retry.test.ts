@@ -105,7 +105,17 @@ describe("steps-with-retry", () => {
   it("should fail after exhausting retry attempts", async () => {
     // Mock DynamoDB to always fail
     mockSend.mockRejectedValue(new Error("Persistent failure"));
-    const expectedErrorObject = {
+
+    // Execution result returns StepError
+    const expectedExecutionError = {
+      errorMessage: "Persistent failure",
+      errorType: "StepError",
+      errorData: undefined,
+      stackTrace: expect.any(Array),
+    };
+
+    // Step details contain original Error
+    const expectedStepError = {
       errorMessage: "Persistent failure",
       errorType: "Error",
       stackTrace: expect.any(Array),
@@ -113,13 +123,13 @@ describe("steps-with-retry", () => {
 
     const result = await durableTestRunner.run();
     const error = result.getError();
-    expect(error).toEqual(expectedErrorObject);
+    expect(error).toEqual(expectedExecutionError);
     expect(error.stackTrace?.length).toBeGreaterThan(1);
 
     // Verify that step operations were attempted
     const stepOp = durableTestRunner.getOperationByIndex(0);
     expect(stepOp.getStepDetails()?.result).toBeUndefined();
-    expect(stepOp.getStepDetails()?.error).toEqual(expectedErrorObject);
+    expect(stepOp.getStepDetails()?.error).toEqual(expectedStepError);
   });
 
   it("should fail when item is not found after maximum polls", async () => {

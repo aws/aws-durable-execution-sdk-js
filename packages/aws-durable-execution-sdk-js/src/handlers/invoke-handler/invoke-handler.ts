@@ -1,4 +1,5 @@
 import { ExecutionContext, InvokeConfig, OperationSubType } from "../../types";
+import { InvokeError } from "../../errors/durable-error/durable-error";
 import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationAction,
@@ -101,11 +102,17 @@ export const createInvokeHandler = (
         // Operation failed, return async rejected promise
         const invokeDetails = stepData.ChainedInvokeDetails;
         return (async (): Promise<O> => {
-          const error = new Error(
-            invokeDetails?.Error?.ErrorMessage || "Invoke failed",
-          );
-          error.name = invokeDetails?.Error?.ErrorType || "InvokeError";
-          throw error;
+          if (invokeDetails?.Error) {
+            throw new InvokeError(
+              invokeDetails.Error.ErrorMessage || "Invoke failed",
+              invokeDetails.Error.ErrorMessage
+                ? new Error(invokeDetails.Error.ErrorMessage)
+                : undefined,
+              invokeDetails.Error.ErrorData,
+            );
+          } else {
+            throw new InvokeError("Invoke failed");
+          }
         })();
       }
 

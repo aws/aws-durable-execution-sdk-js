@@ -37,7 +37,7 @@ jest.mock("../../errors/serdes-errors/serdes-errors", () => ({
 }));
 
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-import { CallbackError } from "../../errors/callback-error/callback-error";
+import { CallbackError } from "../../errors/durable-error/durable-error";
 
 describe("Callback Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -357,8 +357,8 @@ describe("Callback Handler", () => {
         })
         .catch((err: CallbackError) => {
           expect(err).toBeInstanceOf(CallbackError);
-          expect(err.message).toEqual("Callback failed");
-          expect(err.data).toEqual(testData.errorData);
+          expect(err.message).toEqual(testData.errorMessage);
+          expect(err.errorData).toEqual(testData.errorData);
 
           const cause = err.cause;
           expect(cause).toBeInstanceOf(Error);
@@ -1414,7 +1414,7 @@ describe("Callback Handler", () => {
       const result = await promise.then(null, onrejected);
 
       expect(onrejected).toHaveBeenCalledWith(expect.any(CallbackError));
-      expect(result).toBe("handled-Callback failed");
+      expect(result).toBe("handled-Test error");
     });
 
     test("should return result directly when onfulfilled is not provided", async () => {

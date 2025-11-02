@@ -30,7 +30,7 @@ createTests({
 
       expect(result.getResult()).toEqual({
         success: false,
-        error: "Callback failed",
+        error: "External API failure",
       });
 
       const completedOperations = result.getOperations();

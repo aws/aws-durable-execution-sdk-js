@@ -27,7 +27,8 @@ createTests<string>({
 
       expect(execution.getError()).toEqual({
         errorMessage: "All promises were rejected",
-        errorType: "AggregateError",
+        errorType: "StepError",
+        errorData: undefined,
         stackTrace: expect.any(Array),
       });
       expect(execution.getOperations()).toHaveLength(4);
