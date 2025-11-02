@@ -63,9 +63,13 @@ export class ConcurrencyController {
               entityId: entityId,
               durableExecutionArn: executionContext.durableExecutionArn,
             });
-            if (parsedSummary && typeof parsedSummary === "object") {
-              const initialResult = restoreBatchResult<R>(parsedSummary);
-              targetTotalCount = initialResult.totalCount;
+            if (
+              parsedSummary &&
+              typeof parsedSummary === "object" &&
+              "totalCount" in parsedSummary
+            ) {
+              // Read totalCount directly from summary metadata
+              targetTotalCount = parsedSummary.totalCount as number;
               log("📊", "Found initial execution count:", {
                 targetTotalCount,
               });
@@ -90,7 +94,7 @@ export class ConcurrencyController {
       } else {
         log(
           "⚠️",
-          "No target count or context found, falling back to concurrent execution",
+          "No valid target count or context found, falling back to concurrent execution",
         );
       }
     }
