@@ -24,7 +24,7 @@ createTests<PromiseSettledResult<any>[]>({
         {
           status: "rejected",
           reason: {
-            name: "Error",
+            name: "StepError",
           },
         },
         {

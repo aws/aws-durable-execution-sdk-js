@@ -118,15 +118,11 @@ describe("Callback Operations Integration", () => {
 
     const result = await executionPromise;
 
-    // TODO: update with actual error message when language sdk is updated to use it
+    // Expect the actual error message sent via sendCallbackFailure
     expect(result.getResult()).toEqual({
       success: false,
-      error: "Callback failed",
+      error: "External API failure",
     });
-    // expect(result.getResult()).toEqual({
-    //   success: false,
-    //   error: "External API failure",
-    // });
   });
 
   // todo: should use time skipping instead of real timers to reduce the length of this test

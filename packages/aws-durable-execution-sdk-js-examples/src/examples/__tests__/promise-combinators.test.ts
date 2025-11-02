@@ -28,7 +28,7 @@ createTests({
           {
             status: "rejected",
             reason: {
-              name: "Error",
+              name: "StepError",
             },
           },
         ],

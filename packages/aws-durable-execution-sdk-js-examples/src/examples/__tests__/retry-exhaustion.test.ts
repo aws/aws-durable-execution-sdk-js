@@ -20,7 +20,7 @@ createTests({
       // Verify final error state after retry exhaustion
       const error = result.getError();
       expect(error).toMatchObject({
-        errorType: "Error",
+        errorType: "StepError",
         errorMessage: "There was an error",
         stackTrace: expect.any(Array),
       });

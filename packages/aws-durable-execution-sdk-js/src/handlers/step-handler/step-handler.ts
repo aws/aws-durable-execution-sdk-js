@@ -22,6 +22,10 @@ import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
+import {
+  DurableOperationError,
+  StepError,
+} from "../../errors/durable-error/durable-error";
 import { TerminationReason } from "../../termination-manager/types";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
@@ -134,10 +138,18 @@ export const createStepHandler = (
         }
 
         if (stepData?.Status === OperationStatus.FAILED) {
-          const errorMessage = stepData?.StepDetails?.Result;
           // Return an async rejected promise to ensure it's handled asynchronously
           return (async (): Promise<T> => {
-            throw new Error(errorMessage || "Unknown error");
+            // Reconstruct the original error from stored ErrorObject
+            if (stepData.StepDetails?.Error) {
+              throw DurableOperationError.fromErrorObject(
+                stepData.StepDetails.Error,
+              );
+            } else {
+              // Fallback for legacy data without Error field
+              const errorMessage = stepData?.StepDetails?.Result;
+              throw new StepError(errorMessage || "Unknown error");
+            }
           })();
         }
 
@@ -440,7 +452,10 @@ export const executeStep = async <T>(
         Name: name,
       });
 
-      throw error;
+      throw new StepError(
+        error instanceof Error ? error.message : "Unknown error",
+        error instanceof Error ? error : undefined,
+      );
     } else {
       // Retry
       await checkpoint(stepId, {
