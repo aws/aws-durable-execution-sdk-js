@@ -64,6 +64,7 @@ export interface DurableContext {
    * @param name - Step name for tracking and debugging
    * @param fn - Function to execute as a durable step
    * @param config - Optional configuration for retry strategy, semantics, and serialization
+   * @throws \{StepError\} When the step function fails after all retry attempts are exhausted
    * @example
    * ```typescript
    * // ✅ Good: Single atomic operation
@@ -91,6 +92,7 @@ export interface DurableContext {
    *
    * @param fn - Function to execute as a durable step
    * @param config - Optional configuration for retry strategy, semantics, and serialization
+   * @throws \{StepError\} When the step function fails after all retry attempts are exhausted
    * @example
    * ```typescript
    * const result = await context.step(
@@ -108,6 +110,7 @@ export interface DurableContext {
    * @param funcId - Function ID or ARN of the durable function to invoke
    * @param input - Input data to pass to the invoked function
    * @param config - Optional configuration for serialization
+   * @throws \{InvokeError\} When the invoked function fails or times out
    * @example
    * ```typescript
    * const result = await context.invoke(
@@ -129,6 +132,7 @@ export interface DurableContext {
    * @param funcId - Function ID or ARN of the durable function to invoke
    * @param input - Input data to pass to the invoked function
    * @param config - Optional configuration for serialization
+   * @throws \{InvokeError\} When the invoked function fails or times out
    * @example
    * ```typescript
    * const result = await context.invoke(
@@ -266,6 +270,7 @@ export interface DurableContext {
    * @param name - Step name for tracking and debugging
    * @param config - Optional configuration for timeout and serialization
    * @returns Tuple of [promise that resolves when callback is submitted, callback ID]
+   * @throws \{CallbackError\} When callback fails, times out, or external system reports failure (thrown by the returned promise)
    * @example
    * ```typescript
    * const [callbackPromise, callbackId] = await context.createCallback(
@@ -289,6 +294,7 @@ export interface DurableContext {
    * Creates a callback that external systems can complete
    * @param config - Optional configuration for timeout and serialization
    * @returns Tuple of [promise that resolves when callback is submitted, callback ID]
+   * @throws \{CallbackError\} When callback fails, times out, or external system reports failure (thrown by the returned promise)
    * @example
    * ```typescript
    * const [promise, callbackId] = await context.createCallback({
@@ -307,6 +313,7 @@ export interface DurableContext {
    * @param name - Step name for tracking and debugging
    * @param submitter - Function that receives the callback ID and submits the callback
    * @param config - Optional configuration for timeout and retry behavior
+   * @throws \{CallbackError\} When callback fails, times out, or external system reports failure
    * @example
    * ```typescript
    * const result = await context.waitForCallback(
@@ -329,6 +336,7 @@ export interface DurableContext {
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
    * @param submitter - Function that receives the callback ID and submits the callback
    * @param config - Optional configuration for timeout and retry behavior
+   * @throws \{CallbackError\} When callback fails, times out, or external system reports failure
    * @example
    * ```typescript
    * const result = await context.waitForCallback(
