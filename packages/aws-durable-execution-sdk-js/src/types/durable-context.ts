@@ -25,6 +25,30 @@ import {
   BatchResult,
 } from "./batch";
 
+// Enhanced parallel types for automatic union type inference
+/**
+ * Extract return type from parallel branch functions
+ */
+type ExtractBranchReturnType<BranchType> = BranchType extends (
+  context: DurableContext,
+) => Promise<infer ReturnType>
+  ? ReturnType
+  : BranchType extends {
+        name?: string;
+        func: (context: DurableContext) => Promise<infer ReturnType>;
+      }
+    ? ReturnType
+    : never;
+
+/**
+ * Create union type from array of branches
+ */
+type UnionFromBranches<BranchesArray extends readonly unknown[]> = {
+  [BranchIndex in keyof BranchesArray]: ExtractBranchReturnType<
+    BranchesArray[BranchIndex]
+  >;
+}[number];
+
 export interface DurableContext {
   /**
    * The underlying AWS Lambda context
@@ -389,13 +413,56 @@ export interface DurableContext {
   ): Promise<BatchResult<TOutput>>;
 
   /**
-   * Executes multiple functions in parallel with optional concurrency control
+   * Executes multiple functions in parallel with automatic union type inference
+   * @param name - Step name for tracking and debugging
+   * @param branches - Array of functions or named branches to execute in parallel (can return different types)
+   * @param config - Optional configuration for concurrency and completion behavior
+   * @example
+   * ```typescript
+   * // Automatically infers BatchResult<string | number | boolean>
+   * const results = await context.parallel(
+   *   "mixed-operations",
+   *   [
+   *     async (ctx) => ctx.step(async () => "string result"),
+   *     async (ctx) => ctx.step(async () => 42),
+   *     async (ctx) => ctx.step(async () => true)
+   *   ]
+   * );
+   * ```
+   */
+  parallel<BranchesArray extends readonly unknown[]>(
+    name: string,
+    branches: BranchesArray,
+    config?: ParallelConfig<UnionFromBranches<BranchesArray>>,
+  ): Promise<BatchResult<UnionFromBranches<BranchesArray>>>;
+
+  /**
+   * Executes multiple functions in parallel with automatic union type inference
+   * @param branches - Array of functions or named branches to execute in parallel (can return different types)
+   * @param config - Optional configuration for concurrency and completion behavior
+   * @example
+   * ```typescript
+   * // Automatically infers BatchResult<User | Order | number>
+   * const results = await context.parallel([
+   *   async (ctx) => ctx.step(async (): Promise<User> => fetchUser()),
+   *   { name: "order", func: async (ctx) => ctx.step(async (): Promise<Order> => fetchOrder()) },
+   *   async (ctx) => ctx.step(async () => 100)
+   * ]);
+   * ```
+   */
+  parallel<BranchesArray extends readonly unknown[]>(
+    branches: BranchesArray,
+    config?: ParallelConfig<UnionFromBranches<BranchesArray>>,
+  ): Promise<BatchResult<UnionFromBranches<BranchesArray>>>;
+
+  /**
+   * Executes multiple functions in parallel with optional concurrency control (legacy overload)
    * @param name - Step name for tracking and debugging
    * @param branches - Array of functions or named branches to execute in parallel
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
-   * const results = await context.parallel(
+   * const results = await context.parallel<string>(
    *   "parallel-operations",
    *   [
    *     { name: "task1", func: async (ctx) => ctx.step(async () => "result1") },
@@ -405,19 +472,22 @@ export interface DurableContext {
    * );
    * ```
    */
-  parallel<T>(
+  parallel<LegacyReturnType>(
     name: string | undefined,
-    branches: (ParallelFunc<T> | NamedParallelBranch<T>)[],
-    config?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>>;
+    branches: (
+      | ParallelFunc<LegacyReturnType>
+      | NamedParallelBranch<LegacyReturnType>
+    )[],
+    config?: ParallelConfig<LegacyReturnType>,
+  ): Promise<BatchResult<LegacyReturnType>>;
 
   /**
-   * Executes multiple functions in parallel with optional concurrency control
+   * Executes multiple functions in parallel with optional concurrency control (legacy overload)
    * @param branches - Array of functions or named branches to execute in parallel
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
-   * const results = await context.parallel(
+   * const results = await context.parallel<string>(
    *   [
    *     async (ctx) => ctx.step(async () => "task1"),
    *     async (ctx) => ctx.step(async () => "task2")
@@ -425,10 +495,13 @@ export interface DurableContext {
    * );
    * ```
    */
-  parallel<T>(
-    branches: (ParallelFunc<T> | NamedParallelBranch<T>)[],
-    config?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>>;
+  parallel<LegacyReturnType>(
+    branches: (
+      | ParallelFunc<LegacyReturnType>
+      | NamedParallelBranch<LegacyReturnType>
+    )[],
+    config?: ParallelConfig<LegacyReturnType>,
+  ): Promise<BatchResult<LegacyReturnType>>;
 
   promise: {
     /**

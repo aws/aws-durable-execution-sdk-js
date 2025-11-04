@@ -13,9 +13,7 @@ import {
   WaitForConditionConfig,
   MapFunc,
   MapConfig,
-  ParallelFunc,
   ParallelConfig,
-  NamedParallelBranch,
   ConcurrentExecutionItem,
   ConcurrentExecutor,
   ConcurrencyConfig,
@@ -43,6 +41,24 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants";
+
+// Utility types for parallel union type inference
+type ExtractBranchReturnType<BranchType> = BranchType extends (
+  context: DurableContext,
+) => Promise<infer ReturnType>
+  ? ReturnType
+  : BranchType extends {
+        name?: string;
+        func: (context: DurableContext) => Promise<infer ReturnType>;
+      }
+    ? ReturnType
+    : never;
+
+type UnionFromBranches<BranchesArray extends readonly unknown[]> = {
+  [BranchIndex in keyof BranchesArray]: ExtractBranchReturnType<
+    BranchesArray[BranchIndex]
+  >;
+}[number];
 
 class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
@@ -372,22 +388,44 @@ class DurableContextImpl implements DurableContext {
     });
   }
 
-  parallel<T>(
-    nameOrBranches:
-      | string
-      | undefined
-      | (ParallelFunc<T> | NamedParallelBranch<T>)[],
+  parallel<BranchesOrReturnType>(
+    nameOrBranches: string | undefined | BranchesOrReturnType,
     branchesOrConfig?:
-      | (ParallelFunc<T> | NamedParallelBranch<T>)[]
-      | ParallelConfig<T>,
-    maybeConfig?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>> {
+      | BranchesOrReturnType
+      | ParallelConfig<
+          BranchesOrReturnType extends readonly unknown[]
+            ? UnionFromBranches<BranchesOrReturnType>
+            : BranchesOrReturnType
+        >,
+    maybeConfig?: ParallelConfig<
+      BranchesOrReturnType extends readonly unknown[]
+        ? UnionFromBranches<BranchesOrReturnType>
+        : BranchesOrReturnType
+    >,
+  ): Promise<
+    BatchResult<
+      BranchesOrReturnType extends readonly unknown[]
+        ? UnionFromBranches<BranchesOrReturnType>
+        : BranchesOrReturnType
+    >
+  > {
     return this.withModeManagement(() => {
       const parallelHandler = createParallelHandler(
         this.executionContext,
         this.executeConcurrently.bind(this),
       );
-      return parallelHandler(nameOrBranches, branchesOrConfig, maybeConfig);
+      // Use type assertion to handle the complex overload resolution
+      return parallelHandler(
+        nameOrBranches as never,
+        branchesOrConfig as never,
+        maybeConfig as never,
+      ) as Promise<
+        BatchResult<
+          BranchesOrReturnType extends readonly unknown[]
+            ? UnionFromBranches<BranchesOrReturnType>
+            : BranchesOrReturnType
+        >
+      >;
     });
   }
 
