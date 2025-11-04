@@ -242,12 +242,22 @@ describe("Step Handler", () => {
     const mockRetryStrategy = jest.fn().mockReturnValue({ shouldRetry: false });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics
-    await expect(
-      stepHandler("test-step", stepFn, {
+    let thrownError: any;
+    try {
+      await stepHandler("test-step", stepFn, {
         semantics: StepSemantics.AtMostOncePerRetry,
         retryStrategy: mockRetryStrategy,
-      }),
-    ).rejects.toThrow(StepInterruptedError);
+      });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    // Verify the final error is StepError wrapping StepInterruptedError
+    expect(thrownError).toBeInstanceOf(StepError);
+    expect(thrownError.cause).toBeInstanceOf(StepInterruptedError);
+    expect(thrownError.message).toBe(
+      "The step execution process was initiated but failed to reach completion due to an interruption.",
+    );
 
     // Verify the step function was not called
     expect(stepFn).not.toHaveBeenCalled();
@@ -429,6 +439,23 @@ describe("Step Handler", () => {
       ...TEST_CONSTANTS.DEFAULT_STEP_FAIL_CHECKPOINT,
       Error: createErrorObjectFromError("Unknown error"),
     });
+  });
+
+  test("should wrap Error objects thrown by step function in StepError", async () => {
+    const originalError = new Error("original-step-error");
+    const stepFn = jest.fn().mockRejectedValue(originalError);
+
+    (retryPresets.default as jest.Mock).mockReturnValue({ shouldRetry: false });
+
+    await expect(stepHandler("test-step", stepFn)).rejects.toThrow(StepError);
+
+    try {
+      await stepHandler("test-step", stepFn);
+    } catch (error) {
+      expect(error).toBeInstanceOf(StepError);
+      expect((error as StepError).message).toBe("original-step-error");
+      expect((error as StepError).cause).toBe(originalError);
+    }
   });
 
   test("should checkpoint failure when retry is not needed", async () => {

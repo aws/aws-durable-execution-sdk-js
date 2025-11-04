@@ -152,6 +152,7 @@ export interface DurableContext {
    * @param name - Step name for tracking and debugging
    * @param fn - Function to execute in the child context
    * @param config - Optional configuration for serialization and sub-typing
+   * @throws \{ChildContextError\} When the child context function fails
    * @example
    * ```typescript
    * const result = await context.runInChildContext(
@@ -176,6 +177,7 @@ export interface DurableContext {
    * Runs a function in a child context with isolated state and execution tracking
    * @param fn - Function to execute in the child context
    * @param config - Optional configuration for serialization and sub-typing
+   * @throws \{ChildContextError\} When the child context function fails
    * @example
    * ```typescript
    * const result = await context.runInChildContext(

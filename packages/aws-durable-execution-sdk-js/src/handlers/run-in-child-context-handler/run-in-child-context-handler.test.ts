@@ -296,7 +296,7 @@ describe("Run In Child Context Handler", () => {
 
     await expect(
       runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {}),
-    ).rejects.toBe(nonErrorObject);
+    ).rejects.toThrow("Child context failed");
 
     expect(mockCheckpoint).toHaveBeenCalledTimes(2);
     expect(mockCheckpoint).toHaveBeenNthCalledWith(
@@ -550,5 +550,53 @@ describe("runInChildContext with custom serdes", () => {
     expect(result).toEqual(testResult);
     expect(result).toBeInstanceOf(TestResult);
     expect(childFunction).not.toHaveBeenCalled(); // Should not execute function for cached result
+  });
+
+  test("should throw error for failed child context during replay", async () => {
+    const error = new Error("child-context-failed");
+    const errorObject = createErrorObjectFromError(error);
+
+    // Set up the mock execution context with a failed child context
+    const stepData = mockExecutionContext._stepData;
+    stepData[hashId("test-step-id")] = {
+      Id: "test-step-id",
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
+      Status: OperationStatus.FAILED,
+      ContextDetails: {
+        Error: errorObject,
+      },
+    };
+
+    const childFn = jest.fn(); // Should not be called for failed context
+
+    // Execute the child context - should throw the stored error
+    await expect(runInChildContext("test-child", childFn)).rejects.toThrow(
+      "child-context-failed",
+    );
+
+    expect(childFn).not.toHaveBeenCalled(); // Should not execute function for failed context
+    expect(mockCheckpoint).not.toHaveBeenCalled(); // Should not checkpoint during replay
+  });
+
+  test("should throw ChildContextError for failed child context without Error field", async () => {
+    // Set up the mock execution context with a failed child context (legacy format)
+    const stepData = mockExecutionContext._stepData;
+    stepData[hashId("test-step-id")] = {
+      Id: "test-step-id",
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
+      Status: OperationStatus.FAILED,
+      ContextDetails: {}, // No Error field (legacy data)
+    };
+
+    const childFn = jest.fn();
+
+    await expect(runInChildContext("test-child", childFn)).rejects.toThrow(
+      "Child context failed",
+    );
+
+    expect(childFn).not.toHaveBeenCalled();
+    expect(mockCheckpoint).not.toHaveBeenCalled();
   });
 });
