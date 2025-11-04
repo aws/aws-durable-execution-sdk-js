@@ -208,7 +208,10 @@ class DurableContextImpl implements DurableContext {
         this.getOperationsEmitter.bind(this),
         this._parentId,
       );
-      return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
+      const promise = stepHandler(nameOrFn, fnOrOptions, maybeOptions);
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
@@ -227,7 +230,7 @@ class DurableContextImpl implements DurableContext {
         this.getOperationsEmitter.bind(this),
         this._parentId,
       );
-      return invokeHandler<I, O>(
+      const promise = invokeHandler<I, O>(
         ...([
           nameOrFuncId,
           funcIdOrInput,
@@ -235,6 +238,9 @@ class DurableContextImpl implements DurableContext {
           maybeConfig,
         ] as Parameters<typeof invokeHandler<I, O>>),
       );
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
@@ -253,7 +259,10 @@ class DurableContextImpl implements DurableContext {
         createDurableContext,
         this._parentId,
       );
-      return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
+      const promise = blockHandler(nameOrFn, fnOrOptions, maybeOptions);
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
@@ -267,11 +276,13 @@ class DurableContextImpl implements DurableContext {
         this.getOperationsEmitter.bind(this),
         this._parentId,
       );
-      if (typeof nameOrSeconds === "string") {
-        return waitHandler(nameOrSeconds, maybeSeconds!);
-      } else {
-        return waitHandler(nameOrSeconds);
-      }
+      const promise =
+        typeof nameOrSeconds === "string"
+          ? waitHandler(nameOrSeconds, maybeSeconds!)
+          : waitHandler(nameOrSeconds);
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
@@ -292,7 +303,10 @@ class DurableContextImpl implements DurableContext {
         this.getOperationsEmitter.bind(this),
         this._parentId,
       );
-      return callbackFactory(nameOrConfig, maybeConfig);
+      const promise = callbackFactory(nameOrConfig, maybeConfig);
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
@@ -306,11 +320,14 @@ class DurableContextImpl implements DurableContext {
         this.executionContext,
         this.runInChildContext.bind(this),
       );
-      return waitForCallbackHandler(
+      const promise = waitForCallbackHandler(
         nameOrSubmitter!,
         submitterOrConfig,
         maybeConfig,
       );
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
@@ -334,21 +351,20 @@ class DurableContextImpl implements DurableContext {
         this._parentId,
       );
 
-      if (
-        typeof nameOrCheckFunc === "string" ||
-        nameOrCheckFunc === undefined
-      ) {
-        return waitForConditionHandler(
-          nameOrCheckFunc,
-          checkFuncOrConfig as WaitForConditionCheckFunc<T>,
-          maybeConfig!,
-        );
-      } else {
-        return waitForConditionHandler(
-          nameOrCheckFunc,
-          checkFuncOrConfig as WaitForConditionConfig<T>,
-        );
-      }
+      const promise =
+        typeof nameOrCheckFunc === "string" || nameOrCheckFunc === undefined
+          ? waitForConditionHandler(
+              nameOrCheckFunc,
+              checkFuncOrConfig as WaitForConditionCheckFunc<T>,
+              maybeConfig!,
+            )
+          : waitForConditionHandler(
+              nameOrCheckFunc,
+              checkFuncOrConfig as WaitForConditionConfig<T>,
+            );
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
@@ -407,12 +423,15 @@ class DurableContextImpl implements DurableContext {
         this.runInChildContext.bind(this),
         this.skipNextOperation.bind(this),
       );
-      return concurrentExecutionHandler(
+      const promise = concurrentExecutionHandler(
         nameOrItems,
         itemsOrExecutor,
         executorOrConfig,
         maybeConfig,
       );
+      // Prevent unhandled promise rejections
+      promise?.catch(() => {});
+      return promise;
     });
   }
 
