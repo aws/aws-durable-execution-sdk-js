@@ -29,6 +29,7 @@ export {
   StepError,
   CallbackError,
   InvokeError,
+  ChildContextError,
 } from "./errors/durable-error/durable-error";
 export {
   defaultSerdes,

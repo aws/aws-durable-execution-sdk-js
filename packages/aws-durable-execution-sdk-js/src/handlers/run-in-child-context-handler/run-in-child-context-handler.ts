@@ -22,6 +22,10 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import {
+  DurableOperationError,
+  ChildContextError,
+} from "../../errors/durable-error/durable-error";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -123,6 +127,21 @@ export const createRunInChildContextHandler = (
         getParentLogger,
         createChildContext,
       );
+    }
+
+    if (stepData?.Status === OperationStatus.FAILED) {
+      // Return an async rejected promise to ensure it's handled asynchronously
+      return (async (): Promise<T> => {
+        // Reconstruct the original error from stored ErrorObject
+        if (stepData.ContextDetails?.Error) {
+          throw DurableOperationError.fromErrorObject(
+            stepData.ContextDetails.Error,
+          );
+        } else {
+          // Fallback for legacy data without Error field
+          throw new ChildContextError("Child context failed");
+        }
+      })();
     }
 
     return executeChildContext(
@@ -323,6 +342,9 @@ export const executeChildContext = async <T>(
       Name: name,
     });
 
-    throw error;
+    throw new ChildContextError(
+      error instanceof Error ? error.message : "Child context failed",
+      error instanceof Error ? error : undefined,
+    );
   }
 };

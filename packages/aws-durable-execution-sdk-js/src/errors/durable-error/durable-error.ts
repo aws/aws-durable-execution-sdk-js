@@ -49,6 +49,12 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "ChildContextError":
+        return new ChildContextError(
+          errorObject.ErrorMessage || "Child context failed",
+          cause,
+          errorObject.ErrorData,
+        );
       default:
         return new StepError(
           errorObject.ErrorMessage || "Unknown error",
@@ -102,5 +108,16 @@ export class InvokeError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Invoke failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when a child context operation fails
+ */
+export class ChildContextError extends DurableOperationError {
+  readonly errorType = "ChildContextError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Child context failed", cause, errorData);
   }
 }

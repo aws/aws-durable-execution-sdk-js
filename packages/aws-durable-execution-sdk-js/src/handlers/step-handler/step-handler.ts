@@ -209,7 +209,8 @@ export const createStepHandler = (
                 Name: name,
               });
 
-              throw error;
+              // Wrap StepInterruptedError in StepError when retry is exhausted
+              throw new StepError(error.message, error);
             } else {
               // Retry
               await checkpoint(stepId, {
@@ -261,8 +262,16 @@ export const createStepHandler = (
 
         return result;
       } catch (error) {
-        // For any error from executeStep, re-throw it
-        throw error;
+        // Preserve DurableOperationError instances (StepInterruptedError is handled specifically where it's thrown)
+        if (error instanceof DurableOperationError) {
+          throw error;
+        }
+
+        // For any other error from executeStep, wrap it in StepError for consistency
+        throw new StepError(
+          error instanceof Error ? error.message : "Step failed",
+          error instanceof Error ? error : undefined,
+        );
       }
     }
   };
