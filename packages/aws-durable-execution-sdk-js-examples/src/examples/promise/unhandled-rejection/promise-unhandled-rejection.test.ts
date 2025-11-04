@@ -3,6 +3,7 @@ import { createTests } from "../../../utils/test-helper";
 
 interface PromiseUnhandledRejectionResult {
   successStep: string;
+  scenariosTested: string[];
 }
 
 createTests({
@@ -17,9 +18,14 @@ createTests({
       const execution = await runner.run();
       const result = execution.getResult() as PromiseUnhandledRejectionResult;
 
-      // The customer's example should return this exact result
       expect(result).toStrictEqual({
         successStep: "Success",
+        scenariosTested: [
+          "basic-promise-all",
+          "immediate-combinator-usage",
+          "combinator-after-operations",
+          "combinator-after-wait-replay",
+        ],
       });
     }, 30000);
   },
