@@ -395,11 +395,14 @@ describe("CheckpointHandler", () => {
       // Wait for async processing
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Should terminate execution
-      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CHECKPOINT_FAILED,
-        message: "Checkpoint batch failed: Checkpoint API failed",
-      });
+      // Should terminate execution with error object
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: TerminationReason.CHECKPOINT_FAILED,
+          message: expect.stringContaining("Checkpoint failed"),
+          error: expect.any(Error),
+        }),
+      );
     });
 
     it("should continue processing subsequent batches after an error", async () => {
@@ -448,11 +451,14 @@ describe("CheckpointHandler", () => {
       // Wait for async processing
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify termination was called with correct message
-      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CHECKPOINT_FAILED,
-        message: "Checkpoint batch failed: Specific checkpoint error message",
-      });
+      // Verify termination was called with error object
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: TerminationReason.CHECKPOINT_FAILED,
+          message: expect.stringContaining("Specific checkpoint error message"),
+          error: expect.any(Error),
+        }),
+      );
     });
 
     it("should handle non-Error objects thrown during checkpoint", async () => {
@@ -469,11 +475,14 @@ describe("CheckpointHandler", () => {
       // Wait for async processing
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify termination was called with correct message
-      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CHECKPOINT_FAILED,
-        message: "Checkpoint batch failed: String error",
-      });
+      // Verify termination was called with error object
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: TerminationReason.CHECKPOINT_FAILED,
+          message: expect.stringContaining("String error"),
+          error: expect.any(Error),
+        }),
+      );
     });
   });
 
@@ -891,10 +900,13 @@ describe("deleteCheckpointHandler", () => {
       // Wait for async processing
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.CHECKPOINT_FAILED,
-        message: "Checkpoint batch failed: Checkpoint failed",
-      });
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: TerminationReason.CHECKPOINT_FAILED,
+          message: expect.stringContaining("Checkpoint failed"),
+          error: expect.any(Error),
+        }),
+      );
     });
   });
 });

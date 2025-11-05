@@ -4,7 +4,6 @@ import { createDurableContext } from "./context/durable-context/durable-context"
 import { EventEmitter } from "events";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
-import { CheckpointFailedError } from "./errors/checkpoint-errors/checkpoint-errors";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import {
@@ -97,13 +96,14 @@ async function runHandler<Input, Output>(
       resultType,
     });
 
-    // If termination was due to checkpoint failure, throw an error to terminate the Lambda
+    // If termination was due to checkpoint failure, throw the appropriate error
     if (
       resultType === "termination" &&
       result.reason === TerminationReason.CHECKPOINT_FAILED
     ) {
-      log("🛑", "Checkpoint failed - terminating Lambda execution");
-      throw new CheckpointFailedError(result.message);
+      log("🛑", "Checkpoint failed - handling termination");
+      // checkpoint.ts always provides classified error
+      throw result.error;
     }
 
     // If termination was due to serdes failure, throw an error to terminate the Lambda
@@ -165,13 +165,8 @@ async function runHandler<Input, Output>(
         };
       } catch (checkpointError) {
         log("❌", "Failed to checkpoint large result:", checkpointError);
-
-        // Throw CheckpointFailedError to terminate Lambda execution
-        throw new CheckpointFailedError(
-          checkpointError instanceof Error
-            ? `Failed to checkpoint large result: ${checkpointError.message}`
-            : "Failed to checkpoint large result: Unknown error",
-        );
+        // Re-throw - checkpoint.ts always classifies errors before terminating
+        throw checkpointError;
       }
     }
 
@@ -183,7 +178,7 @@ async function runHandler<Input, Output>(
   } catch (error) {
     log("❌", "Handler threw an error:", error);
 
-    // Check if this is an unrecoverable invocation error (includes checkpoint failures and serdes errors)
+    // Check if this is an unrecoverable invocation error (includes checkpoint invocation failures)
     if (isUnrecoverableInvocationError(error)) {
       log(
         "🛑",

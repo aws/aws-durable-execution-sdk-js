@@ -23,11 +23,13 @@ export enum TerminationReason {
 export interface TerminationResponse {
   reason: TerminationReason;
   message: string;
+  error?: Error;
 }
 
 export interface TerminationOptions {
   reason?: TerminationReason;
   message?: string;
+  error?: Error;
   cleanup?: () => Promise<void>;
 }
 
