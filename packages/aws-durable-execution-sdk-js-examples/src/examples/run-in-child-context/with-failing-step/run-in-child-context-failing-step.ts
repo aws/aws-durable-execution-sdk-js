@@ -15,9 +15,20 @@ export const handler = withDurableExecution(
   async (_event, context: DurableContext) => {
     try {
       await context.runInChildContext("child-with-failure", async (ctx) => {
-        await ctx.step("failing-step", async () => {
-          throw new Error("Step failed in child context");
-        });
+        await ctx.step(
+          "failing-step",
+          async () => {
+            throw new Error("Step failed in child context");
+          },
+          {
+            retryStrategy: (_, attemptCount) => {
+              return {
+                shouldRetry: attemptCount < 3,
+                delaySeconds: 1 * attemptCount,
+              };
+            },
+          },
+        );
       });
     } catch (error) {
       if (!(error instanceof ChildContextError)) {
