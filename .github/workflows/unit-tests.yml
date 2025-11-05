@@ -1,55 +1,36 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
-
 name: Unit Tests
 
 on:
-  push:
-    branches: ["main", "development"]
-  pull_request:
-    branches: ["main", "development"]
+  workflow_call:
+    inputs:
+      node-version:
+        required: true
+        type: string
 
-# permission can be added at job level or workflow level
 permissions:
-  contents: read # This is required for actions/checkout
+  contents: read # Required for actions/checkout
 
-# Cancel old jobs when a pull request is updated.
+# Cancel when pull request is updated for this node version
 concurrency:
-  group: ${{ github.head_ref || github.run_id }}
+  group: ${{ github.head_ref }}-${{ github.run_id}}-${{ inputs.node-version }}-unit
   cancel-in-progress: true
 
 jobs:
-  lint-commits:
-    # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Use Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ inputs.node-version }}
           cache: "npm"
-      - name: Check PR title
-        run: |
-          node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
-
-  build:
-    needs: lint-commits
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: "npm"
-      - run: npm run install-all
-      - run: npm run build
-      - run: npm run test
+          name: built-artifacts
+          path: .
+      - name: Install dependencies
+        run: npm run install-all
+      - name: Run tests
+        run: npm run test

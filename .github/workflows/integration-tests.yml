@@ -1,84 +1,62 @@
 name: Integration Tests
 
 on:
-  push:
-    branches: ["main", "development"]
-    paths:
-      - "packages/aws-durable-execution-**"
-      - "packages/client-lambda/**"
-      - ".github/workflows/integration-tests.yml"
-      - ".github/workflows/scripts/integration-test/**"
-      - ".github/model/**"
-  pull_request:
-    branches: ["main", "development"]
-    paths:
-      - "packages/aws-durable-execution-**"
-      - "packages/client-lambda/**"
-      - ".github/workflows/integration-tests.yml"
-      - ".github/workflows/scripts/integration-test/**"
-      - ".github/model/**"
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      node-version:
+        required: true
+        type: string
 
-env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-
-# permission can be added at job level or workflow level
 permissions:
-  id-token: write # This is required for requesting the JWT
-  contents: read # This is required for actions/checkout
+  id-token: write # Required for AWS credentials
+  contents: read # Required for actions/checkout
+
+# Cancel when pull request is updated for this node version
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.run_id }}-${{ inputs.node-version }}-integ
+  cancel-in-progress: true
 
 jobs:
-  setup:
+  deploy:
     runs-on: ubuntu-latest
-    outputs:
-      function-name-map: ${{ steps.deploy-functions.outputs.function-name-map }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.x"
+          node-version: ${{ inputs.node-version }}
           cache: "npm"
 
-      - name: Configure AWS credentials (OIDC for main workflow)
-        if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
+      - name: Get AWS Credentials
+        id: credentials
+        if: github.actor != 'nektos/act'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
           role-session-name: githubIntegrationTest
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Install custom Lambda model
-        run: |
-          aws configure add-model --service-model file://.github/model/lambda.json --service-name lambda
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: .
 
       - name: Install dependencies
         run: npm run install-all
 
-      - name: Build project
-        run: npm run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-artifacts
-          path: |
-            packages/**/dist*/*
-            package.json
-
       - name: Deploy functions
+        id: deploy-functions
         env:
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-          INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID_BETA }}
-          KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
-        run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --runtime ${{ inputs.node-version }}
 
   jest-integration-test:
-    needs: setup
+    needs: deploy
     runs-on: ubuntu-latest
     name: Jest Integration Tests
 
@@ -88,16 +66,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.x"
+          node-version: ${{ inputs.node-version }}
           cache: "npm"
 
-      - name: Configure AWS credentials (OIDC for main workflow)
-        if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
+      - name: Get AWS Credentials
+        id: credentials
+        if: github.actor != 'nektos/act'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
           role-session-name: githubIntegrationTest
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -112,51 +91,7 @@ jobs:
       - name: Run Jest integration tests
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-          FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
-          node .github/workflows/scripts/integration-test/integration-test.js --test-only
-
-  cleanup:
-    needs: [setup, jest-integration-test]
-    runs-on: ubuntu-latest
-    if: ${{ !failure() }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.x"
-          cache: "npm"
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: built-artifacts
-          path: .
-
-      - name: Install dependencies
-        run: |
-          npm run install-all
-
-      - name: Configure AWS credentials (OIDC for main workflow)
-        if: github.event_name != 'workflow_dispatch' || github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
-          role-session-name: githubIntegrationTest
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Cleanup Lambda functions
-        env:
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-          FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-        run: |
-          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only
+          node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}

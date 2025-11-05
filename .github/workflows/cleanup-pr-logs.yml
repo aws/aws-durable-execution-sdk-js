@@ -10,9 +10,6 @@ permissions:
   id-token: write # This is required for requesting the JWT
   contents: read # This is required for actions/checkout
 
-env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-
 jobs:
   cleanup-logs:
     if: github.event.pull_request.merged == true
@@ -24,7 +21,7 @@ jobs:
         with:
           role-to-assume: "${{ secrets.ACTIONS_WEBHOOK_ROLE_ARN }}"
           role-session-name: "GitHub-PR-${{ github.event.pull_request.number }}-Cleanup"
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Install awscurl
         run: pip install awscurl
@@ -32,8 +29,8 @@ jobs:
       - name: Cleanup PR log group
         run: |
           awscurl --service execute-api \
-            --region ${{ env.AWS_REGION }} \
+            --region ${{ vars.AWS_REGION }} \
             -X POST \
             -H "Content-Type: application/json" \
-            -d '{"logGroupSuffix": "-TypeScript-PR-${{ github.event.pull_request.number }}"}' \
+            -d '{"logGroupSuffix": "-NodeJS-PR-${{ github.event.pull_request.number }}"}' \
             "${{ secrets.LOG_GROUP_CLEANUP_WEBHOOK }}"

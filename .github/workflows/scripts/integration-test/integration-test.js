@@ -4,6 +4,7 @@ import { execSync } from "child_process";
 import { appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { ArgumentParser } from "argparse";
 
 import examplesCatalog from "@aws/durable-execution-sdk-js-examples/catalog";
 import {
@@ -49,20 +50,17 @@ const CONFIG = {
     __dirname,
     "../../../../packages/aws-durable-execution-sdk-js-examples",
   ),
-  AWS_ACCOUNT_ID: process.env.AWS_ACCOUNT_ID,
 };
-
-if (!CONFIG.AWS_ACCOUNT_ID) {
-  throw new Error("AWS_ACCOUNT_ID environment variable must be set.");
-}
 
 class IntegrationTestRunner {
   /**
    * @param {Object} options
    * @param {boolean} [options.cleanupOnExit]
+   * @param {string} options.runtime
    */
-  constructor(options = {}) {
+  constructor(options) {
     this.cleanupOnExit = options.cleanupOnExit !== false;
+    this.runtime = options.runtime;
     this.isGitHubActions = !!process.env.GITHUB_ACTIONS;
     /** @type {Record<string, string> | undefined} */
     this.functionNameMap = undefined;
@@ -145,27 +143,33 @@ class IntegrationTestRunner {
     /** @type {Record<string, string>} */
     const functionNameMap = {};
 
+    // Get runtime suffix from argument or environment variable
+    const lambdaRuntime = this.runtime.replace(".", "");
+
     for (const example of examples) {
       const exampleName = example.name;
       const exampleHandler = example.handler;
 
-      // Build function name
+      // Build function name with runtime suffix
       let functionName;
       if (this.isGitHubActions) {
-        const baseName = exampleName.replace(/\s/g, "") + "-TypeScript";
+        // Functions are named with the runtime first since the log scrubber cleans logs by the NodeJS- suffix
+        const baseName =
+          exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS`;
         if (process.env.GITHUB_EVENT_NAME === "pull_request") {
           if (!process.env.GITHUB_EVENT_NUMBER) {
             throw new Error(
               "Could not find GITHUB_EVENT_NUMBER environment variable",
             );
           }
-          functionName = `arn:aws:lambda:${CONFIG.AWS_REGION}:${CONFIG.AWS_ACCOUNT_ID}:${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
+          functionName = `${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
         } else {
-          functionName = `arn:aws:lambda:${CONFIG.AWS_REGION}:${CONFIG.AWS_ACCOUNT_ID}:${baseName}`;
+          functionName = baseName;
         }
       } else {
-        const name = exampleName.replace(/\s/g, "") + "-TypeScript-Local";
-        functionName = `arn:aws:lambda:${CONFIG.AWS_REGION}:${CONFIG.AWS_ACCOUNT_ID}:${name}`;
+        const name =
+          exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS-Local`;
+        functionName = name;
       }
 
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
@@ -179,6 +183,10 @@ class IntegrationTestRunner {
   // Deploy Lambda functions
   async deployFunctions() {
     log.info("Deploying Lambda functions...");
+
+    if (!process.env.AWS_ACCOUNT_ID) {
+      throw new Error("Missing required AWS_ACCOUNT_ID for deployment");
+    }
 
     const examples = this.getIntegrationExamples();
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
@@ -199,8 +207,10 @@ class IntegrationTestRunner {
         cwd: examplesDir,
       });
 
-      // Deploy using npm script
-      this.execCommand(`npm run deploy -- "${handlerFile}" '${functionName}'`, {
+      // Deploy using npm script with runtime parameter
+      const deployCommand = `npm run deploy -- "${handlerFile}" '${functionName}' --runtime ${this.runtime}`;
+
+      this.execCommand(deployCommand, {
         cwd: examplesDir,
       });
       log.success(`Deployed function: ${functionName}`);
@@ -228,21 +238,20 @@ class IntegrationTestRunner {
 
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
 
-    const functionsWithLatestArn = Object.fromEntries(
+    const functionsWithQualifier = Object.fromEntries(
       Object.entries(this.getFunctionNameMap()).map(([key, value]) => {
         return [key, `${value}:$LATEST`];
       }),
     );
 
-    // Set environment variables
+    // Set additional environment variables
     const env = {
-      ...process.env,
-      FUNCTION_NAME_MAP: JSON.stringify(functionsWithLatestArn),
+      FUNCTION_NAME_MAP: JSON.stringify(functionsWithQualifier),
       LAMBDA_ENDPOINT: CONFIG.LAMBDA_ENDPOINT,
     };
 
     log.info("Running Jest integration tests with function map:");
-    console.log(JSON.stringify(functionsWithLatestArn, null, 2));
+    console.log(JSON.stringify(functionsWithQualifier, null, 2));
     log.info(`Lambda Endpoint: ${CONFIG.LAMBDA_ENDPOINT}`);
 
     // Build test command with optional pattern
@@ -337,72 +346,61 @@ class IntegrationTestRunner {
   }
 }
 
-// CLI interface
-function showUsage() {
-  console.log("Usage: node integration-test.js [OPTIONS] [TEST_PATTERN]");
-  console.log("");
-  console.log("Options:");
-  console.log("  --deploy-only   Only deploy functions, don't run tests");
-  console.log(
-    "  --test-only [pattern]  Only run tests (assumes functions are already deployed)",
-  );
-  console.log(
-    "                         Optional test pattern to filter specific tests",
-  );
-  console.log("  --cleanup-only  Only cleanup existing functions");
-  console.log("  --help          Show this help message");
-  console.log("");
-  console.log("Examples:");
-  console.log("  node integration-test.js --test-only my-test-name");
-  console.log("  node integration-test.js --test-only");
-  console.log("");
-  console.log("Environment Variables:");
-  console.log("  AWS_REGION      AWS region (default: us-west-2)");
-  console.log("  LAMBDA_ENDPOINT Custom Lambda endpoint URL");
-  console.log("");
-}
-
 async function main() {
-  const args = process.argv.slice(2);
+  // Set up argument parser
+  const parser = new ArgumentParser({
+    description: "Integration test runner for Lambda Durable Functions SDK",
+    epilog: `Environment Variables:
+  AWS_REGION      AWS region (default: us-east-1)
+  LAMBDA_ENDPOINT Custom Lambda endpoint URL`,
+  });
+
+  // Add mutually exclusive group for operation modes
+  const group = parser.add_mutually_exclusive_group();
+
+  group.add_argument("--deploy-only", {
+    action: "store_true",
+    help: "Only deploy functions, don't run tests",
+  });
+
+  group.add_argument("--test-only", {
+    action: "store_true",
+    help: "Only run tests (assumes functions are already deployed)",
+  });
+
+  group.add_argument("--cleanup-only", {
+    action: "store_true",
+    help: "Only cleanup existing functions",
+  });
+
+  // Add test pattern argument
+  parser.add_argument("--test-pattern", {
+    help: "Optional test pattern to filter specific tests (used with --test-only)",
+  });
+
+  // Add runtime argument
+  parser.add_argument("--runtime", {
+    help: "Node runtime version (e.g., 20.x, 22.x, 24.x)",
+    default: "22.x",
+    required: true,
+  });
 
   // Parse command line arguments
-  /** @type {{ cleanupOnExit: boolean, deployOnly: boolean, testOnly: boolean, cleanupOnly: boolean, testPattern?: string }} */
+  const args = parser.parse_args();
+
+  // Configure options based on parsed arguments
   const options = {
     cleanupOnExit: true,
-    deployOnly: false,
-    testOnly: false,
-    cleanupOnly: false,
-    testPattern: undefined,
+    deployOnly: args.deploy_only || false,
+    testOnly: args.test_only || false,
+    cleanupOnly: args.cleanup_only || false,
+    testPattern: args.test_pattern,
+    runtime: args.runtime,
   };
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    switch (arg) {
-      case "--deploy-only":
-        options.deployOnly = true;
-        options.cleanupOnExit = false;
-        break;
-      case "--test-only":
-        options.testOnly = true;
-        options.cleanupOnExit = false;
-        // Check if the next argument is a test pattern (not another flag)
-        if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
-          options.testPattern = args[i + 1];
-          i++; // Skip the next argument since we consumed it as test pattern
-        }
-        break;
-      case "--cleanup-only":
-        options.cleanupOnly = true;
-        break;
-      case "--help":
-        showUsage();
-        process.exit(0);
-      default:
-        log.error(`Unknown option: ${arg}`);
-        showUsage();
-        process.exit(1);
-    }
+  // Disable cleanup on exit for deploy-only and test-only modes
+  if (options.deployOnly || options.testOnly) {
+    options.cleanupOnExit = false;
   }
 
   const runner = new IntegrationTestRunner(options);

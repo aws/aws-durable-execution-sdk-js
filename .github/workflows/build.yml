@@ -1,0 +1,120 @@
+name: Build
+
+on:
+  push:
+    branches: ["main", "development"]
+  pull_request:
+    branches: ["main", "development"]
+
+permissions:
+  id-token: write
+  contents: read # This is required for actions/checkout
+
+# Cancel when pull request is updated
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.run_id}}
+  cancel-in-progress: true
+
+jobs:
+  lint-commits:
+    # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Check PR title
+        run: |
+          node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
+
+  build:
+    needs: lint-commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        run: npm run install-all
+      - name: Build project
+        run: npm run build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-artifacts
+          path: |
+            packages/**/dist*/*
+            package.json
+            package-lock.json
+
+  unit-tests:
+    needs: build
+    strategy:
+      matrix:
+        node-version: ["20.x", "22.x", "24.x"]
+    uses: "./.github/workflows/unit-tests.yml"
+    with:
+      node-version: ${{ matrix.node-version }}
+
+  integration-tests:
+    needs: build
+    strategy:
+      matrix:
+        node-version: ["20.x", "22.x", "24.x"]
+    uses: "./.github/workflows/integration-tests.yml"
+    with:
+      node-version: ${{ matrix.node-version }}
+    secrets: inherit
+
+  cleanup-integration-tests:
+    needs: [integration-tests]
+    runs-on: ubuntu-latest
+
+    strategy:
+      max-parallel: 1
+      matrix:
+        node-version: ["20.x", "22.x", "24.x"]
+
+    if: ${{ !failure() }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: |
+          npm run install-all
+
+      - name: Get AWS Credentials
+        id: credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-session-name: githubIntegrationTest
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Cleanup Lambda functions
+        env:
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+        run: |
+          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only --runtime ${{ matrix.node-version }}

@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { config as dotenvConfig } from "dotenv";
+import { ArgumentParser } from "argparse";
 import {
   LambdaClient,
   GetFunctionCommand,
@@ -12,9 +13,12 @@ import {
   UpdateFunctionConfigurationCommand,
   Runtime,
   GetFunctionConfigurationCommandOutput,
+  ResourceNotFoundException,
+  ResourceConflictException,
+  UpdateFunctionConfigurationCommandInput,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
-import catalog from "../src/utils/examples-catalog";
+import catalog from "@aws/durable-execution-sdk-js-examples/catalog";
 
 // Types
 interface EnvironmentVariables {
@@ -26,20 +30,37 @@ interface EnvironmentVariables {
 }
 
 // Configuration and validation
-function validateArgs(): { example: string; functionName: string } {
-  const args = process.argv.slice(2);
+function parseArgs(): {
+  example: string;
+  functionName: string;
+  runtime?: string;
+} {
+  const parser = new ArgumentParser({
+    description: "Deploy Lambda function with AWS Durable Execution SDK",
+    add_help: true,
+  });
 
-  if (args.length < 1 || args.length > 2) {
-    console.error("Usage: deploy-lambda.ts <example-name> [function-name]");
-    console.error("Example: deploy-lambda.ts hello-world");
-    console.error("Example: deploy-lambda.ts hello-world custom-function-name");
-    process.exit(1);
-  }
+  parser.add_argument("example", {
+    help: "Example name to deploy (e.g., hello-world)",
+  });
 
-  const example = args[0];
-  const functionName = args[1] || example;
+  parser.add_argument("function_name", {
+    nargs: "?",
+    help: "Custom function name (defaults to example name)",
+  });
 
-  return { example, functionName };
+  parser.add_argument("--runtime", {
+    choices: ["20.x", "22.x", "24.x"],
+    help: "Lambda nodejs runtime version (default: 24.x)",
+  });
+
+  const args = parser.parse_args();
+
+  return {
+    example: args.example,
+    functionName: args.function_name || args.example,
+    runtime: args.runtime,
+  };
 }
 
 function loadEnvironmentVariables(): EnvironmentVariables {
@@ -103,6 +124,25 @@ function validateZipFile(exampleName: string): void {
   }
 }
 
+function mapRuntimeToEnum(runtimeString?: string): Runtime {
+  if (!runtimeString) {
+    return Runtime.nodejs22x; // Default runtime
+  }
+
+  switch (runtimeString) {
+    case "20.x":
+      return Runtime.nodejs20x;
+    case "22.x":
+      return Runtime.nodejs22x;
+    case "24.x":
+      return "nodejs24.x" as Runtime;
+    default:
+      console.error(`Invalid runtime: ${runtimeString}`);
+      console.error("Available runtimes: 20x, 22x, 24x");
+      process.exit(1);
+  }
+}
+
 // Lambda operations
 async function checkFunctionExists(
   lambdaClient: LambdaClient,
@@ -113,8 +153,8 @@ async function checkFunctionExists(
       new GetFunctionCommand({ FunctionName: functionName }),
     );
     return true;
-  } catch (error: any) {
-    if (error.name === "ResourceNotFoundException") {
+  } catch (error: unknown) {
+    if (error instanceof ResourceNotFoundException) {
       return false;
     }
     throw error;
@@ -128,9 +168,9 @@ async function retryOnConflict<T>(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await operation();
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (
-        error.name === "ResourceConflictException" &&
+        error instanceof ResourceConflictException &&
         attempt < maxRetries - 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -158,15 +198,18 @@ async function createFunction(
   exampleConfig: ExamplesWithConfig,
   zipFile: string,
   env: EnvironmentVariables,
+  runtime?: Runtime,
 ): Promise<void> {
-  console.log(`Deploying function: ${functionName} (creating new)`);
+  console.log(
+    `Deploying function: ${functionName} (creating new) with runtime: ${runtime}`,
+  );
 
   const zipBuffer = readFileSync(zipFile);
   const roleArn = `arn:aws:iam::${env.AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole`;
 
-  const createParams: any = {
+  const createParams = {
     FunctionName: functionName,
-    Runtime: Runtime.nodejs22x,
+    Runtime: runtime,
     Role: roleArn,
     Handler: exampleConfig.handler,
     Description: exampleConfig.description,
@@ -182,7 +225,7 @@ async function createFunction(
         AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
       },
     },
-  };
+  } as const;
 
   const command = new CreateFunctionCommand(createParams);
   await lambdaClient.send(command);
@@ -195,7 +238,8 @@ async function updateFunction(
   exampleConfig: ExamplesWithConfig,
   zipFile: string,
   env: EnvironmentVariables,
-  currentConfig: any,
+  currentConfig: GetFunctionConfigurationCommandOutput,
+  runtime?: Runtime,
 ): Promise<void> {
   console.log(`Deploying function: ${functionName} (updating existing)`);
 
@@ -219,12 +263,13 @@ async function updateFunction(
     FunctionName: functionName,
     ZipFile: zipBuffer,
   });
-  await lambdaClient.send(updateCodeCommand);
+  await retryOnConflict(() => lambdaClient.send(updateCodeCommand));
 
   // Update environment variables
   console.log("Updating environment variables...");
-  const updateEnvParams: any = {
+  const updateEnvParams: UpdateFunctionConfigurationCommandInput = {
     FunctionName: functionName,
+    Runtime: runtime,
     Environment: {
       Variables: {
         AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
@@ -272,7 +317,7 @@ async function showFinalConfiguration(
 async function main(): Promise<void> {
   try {
     // Parse arguments and load configuration
-    const { example, functionName } = validateArgs();
+    const { example, functionName, runtime } = parseArgs();
     const env = loadEnvironmentVariables();
     const exampleConfig = loadExampleConfiguration(example);
 
@@ -281,6 +326,9 @@ async function main(): Promise<void> {
     console.log(`  Function Name: ${functionName}`);
     console.log(`  Handler: ${exampleConfig.handler}`);
     console.log(`  Description: ${exampleConfig.description}`);
+    if (runtime) {
+      console.log(`  Runtime: ${runtime}`);
+    }
     console.log(
       `  Retention: ${exampleConfig.durableConfig.RetentionPeriodInDays} days`,
     );
@@ -305,6 +353,8 @@ async function main(): Promise<void> {
 
     const zipFile = `${example}.zip`;
 
+    const selectedRuntime = mapRuntimeToEnum(runtime);
+
     if (functionExists) {
       const currentConfig = await getCurrentConfiguration(
         lambdaClient,
@@ -317,6 +367,7 @@ async function main(): Promise<void> {
         zipFile,
         env,
         currentConfig,
+        selectedRuntime,
       );
     } else {
       console.log("Function does not exist");
@@ -326,6 +377,7 @@ async function main(): Promise<void> {
         exampleConfig,
         zipFile,
         env,
+        selectedRuntime,
       );
     }
 
