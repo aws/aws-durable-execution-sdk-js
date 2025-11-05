@@ -25,7 +25,6 @@ interface EnvironmentVariables {
   LAMBDA_ENDPOINT: string;
   INVOKE_ACCOUNT_ID: string;
   AWS_REGION: string;
-  KMS_KEY_ARN?: string;
   GITHUB_ACTIONS?: string;
   GITHUB_ENV?: string;
 }
@@ -79,7 +78,6 @@ function loadEnvironmentVariables(): EnvironmentVariables {
     LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT!,
     INVOKE_ACCOUNT_ID: process.env.INVOKE_ACCOUNT_ID!,
     AWS_REGION: process.env.AWS_REGION || "us-west-2",
-    KMS_KEY_ARN: process.env.KMS_KEY_ARN,
     GITHUB_ACTIONS: process.env.GITHUB_ACTIONS,
     GITHUB_ENV: process.env.GITHUB_ENV,
   };
@@ -140,8 +138,11 @@ async function retryOnConflict<T>(
     try {
       return await operation();
     } catch (error: any) {
-      if (error.name === "ResourceConflictException" && attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      if (
+        error.name === "ResourceConflictException" &&
+        attempt < maxRetries - 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         continue;
       }
       throw error;
@@ -192,10 +193,6 @@ async function createFunction(
     },
   };
 
-  if (env.KMS_KEY_ARN) {
-    createParams.KMSKeyArn = env.KMS_KEY_ARN;
-  }
-
   const command = new CreateFunctionCommand(createParams);
   await lambdaClient.send(command);
   console.log("Function created successfully");
@@ -244,10 +241,6 @@ async function updateFunction(
     },
   };
 
-  if (env.KMS_KEY_ARN) {
-    updateEnvParams.KMSKeyArn = env.KMS_KEY_ARN;
-  }
-
   const updateEnvCommand = new UpdateFunctionConfigurationCommand(
     updateEnvParams,
   );
@@ -281,7 +274,7 @@ async function checkAndAddResourcePolicy(
   console.log("Setting resource policy...");
 
   const functionArn = `arn:aws:lambda:${env.AWS_REGION}:${env.AWS_ACCOUNT_ID}:function:${functionName}`;
-  
+
   const policyDocument = {
     Version: "2012-10-17",
     Statement: [
@@ -289,10 +282,7 @@ async function checkAndAddResourcePolicy(
         Sid: "dex-invoke-permission",
         Effect: "Allow",
         Principal: { AWS: invokeAccountId },
-        Action: [
-          "lambda:InvokeFunction",
-          "lambda:GetFunctionConfiguration"
-        ],
+        Action: ["lambda:InvokeFunction", "lambda:GetFunctionConfiguration"],
         Resource: `${functionArn}:*`,
       },
     ],

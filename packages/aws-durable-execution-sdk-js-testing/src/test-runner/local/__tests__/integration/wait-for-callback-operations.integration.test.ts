@@ -158,6 +158,7 @@ describe("WaitForCallback Operations Integration", () => {
             step: number;
           }>("first-callback", async (callbackId) => {
             firstCallbackId = callbackId;
+            await new Promise((resolve) => setTimeout(resolve, 100));
             return Promise.resolve();
           });
 
@@ -222,31 +223,27 @@ describe("WaitForCallback Operations Integration", () => {
 
       // Verify invocations were tracked - should be exactly 3 invocations
       const invocations = result.getInvocations();
-      expect(invocations).toHaveLength(5);
+      expect(invocations).toHaveLength(4);
 
       // Verify operations distribution across invocations
       const invocationOperations = invocations.map(
         (inv) => inv.getOperations().length,
       );
 
-      expect(invocationOperations).toHaveLength(5);
-
       // Invocation 0: wait
       expect(invocationOperations[0]).toBe(1);
-      // Invocation 1: callback context, callback, submitter
-      expect(invocationOperations[1]).toBe(3);
-      // Invocation 2: previous callback context, step, wait
-      expect(invocationOperations[2]).toBe(3);
+      // Invocation 1: callback context, callback, submitter, step, wait
+      expect(invocationOperations[1]).toBe(5);
       // Invocation 3: new callback context, callback, submitter
-      expect(invocationOperations[3]).toBe(3);
+      expect(invocationOperations[2]).toBe(3);
       // Invocation 4: previous callback context
-      expect(invocationOperations[4]).toBe(1);
+      expect(invocationOperations[3]).toBe(1);
 
       // Verify callback IDs are unique
       expect(firstCallbackId).toBeDefined();
       expect(secondCallbackId).toBeDefined();
       expect(firstCallbackId).not.toBe(secondCallbackId);
-    }, 10000); // Complex test with 5 invocations needs extra time in CI
+    });
 
     describe("Error Handling & Submitter Function Variants", () => {
       it("should handle waitForCallback with submitter function synchronous errors", async () => {

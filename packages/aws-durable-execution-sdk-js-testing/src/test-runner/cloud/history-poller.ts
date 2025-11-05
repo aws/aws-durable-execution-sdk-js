@@ -62,17 +62,44 @@ export class HistoryPoller {
     return this.events;
   }
 
+  static getMaxRetryAttempts() {
+    return 3;
+  }
+
+  private async callWithRetries<Result>(
+    fn: () => Promise<Result>,
+  ): Promise<Promise<Result>> {
+    let failedAttempts = 0;
+    while (true) {
+      try {
+        return await fn();
+      } catch (err: unknown) {
+        failedAttempts++;
+        if (failedAttempts >= HistoryPoller.getMaxRetryAttempts()) {
+          throw err;
+        }
+
+        // Wait with exponential backoff
+        await new Promise((resolve) =>
+          setTimeout(resolve, (failedAttempts ** 2 - 1) * 150 + 1000),
+        );
+      }
+    }
+  }
+
   private async getExecutionData() {
     const pages: Event[][] = [];
     let currentHistoryMarker: string | undefined = this.lastHistoryMarker;
     let previousHistoryMarker: string | undefined = undefined;
     do {
-      const historyResult = await this.apiClient.getHistory({
-        DurableExecutionArn: this.durableExecutionArn,
-        IncludeExecutionData: true,
-        MaxItems: 1000,
-        Marker: currentHistoryMarker,
-      });
+      const historyResult = await this.callWithRetries(() =>
+        this.apiClient.getHistory({
+          DurableExecutionArn: this.durableExecutionArn,
+          IncludeExecutionData: true,
+          MaxItems: 1000,
+          Marker: currentHistoryMarker,
+        }),
+      );
       previousHistoryMarker = currentHistoryMarker;
       currentHistoryMarker = historyResult.NextMarker;
       pages.push(historyResult.Events ?? []);
@@ -85,9 +112,11 @@ export class HistoryPoller {
 
     this.lastHistoryMarker = previousHistoryMarker;
 
-    const executionResult = await this.apiClient.getExecution({
-      DurableExecutionArn: this.durableExecutionArn,
-    });
+    const executionResult = await this.callWithRetries(() =>
+      this.apiClient.getExecution({
+        DurableExecutionArn: this.durableExecutionArn,
+      }),
+    );
 
     this.processEvents(pages.flat());
 
