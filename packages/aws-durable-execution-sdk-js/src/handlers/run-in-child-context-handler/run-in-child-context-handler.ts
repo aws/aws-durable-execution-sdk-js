@@ -132,11 +132,12 @@ export const createRunInChildContextHandler = (
     if (stepData?.Status === OperationStatus.FAILED) {
       // Return an async rejected promise to ensure it's handled asynchronously
       return (async (): Promise<T> => {
-        // Reconstruct the original error from stored ErrorObject
+        // Reconstruct the original error and wrap in ChildContextError for consistency
         if (stepData.ContextDetails?.Error) {
-          throw DurableOperationError.fromErrorObject(
+          const originalError = DurableOperationError.fromErrorObject(
             stepData.ContextDetails.Error,
           );
+          throw new ChildContextError(originalError.message, originalError);
         } else {
           // Fallback for legacy data without Error field
           throw new ChildContextError("Child context failed");

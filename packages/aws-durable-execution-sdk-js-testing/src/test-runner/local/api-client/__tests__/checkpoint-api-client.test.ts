@@ -31,12 +31,13 @@ describe("CheckpointApiClient", () => {
     invocationId: createInvocationId("mock-invocation-id"),
     operationEvents: [],
   };
+  const fixedTimestamp = new Date("2025-01-01T00:00:00.000Z");
   const mockOperationsSerialized: SerializedCheckpointOperation[] = [
     {
       operation: {
         Id: "op1",
         Type: "STEP",
-        StartTimestamp: new Date().getTime() / 1000,
+        StartTimestamp: fixedTimestamp.getTime() / 1000,
         Status: OperationStatus.STARTED,
       },
       update: {
@@ -52,7 +53,7 @@ describe("CheckpointApiClient", () => {
       operation: {
         Id: "op1",
         Type: "STEP",
-        StartTimestamp: new Date(),
+        StartTimestamp: fixedTimestamp,
         Status: OperationStatus.STARTED,
       },
       update: {

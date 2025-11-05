@@ -246,17 +246,128 @@ describe("WaitForCallback Operations Integration", () => {
       expect(firstCallbackId).toBeDefined();
       expect(secondCallbackId).toBeDefined();
       expect(firstCallbackId).not.toBe(secondCallbackId);
-    });
-  });
+    }, 10000); // Complex test with 5 invocations needs extra time in CI
 
-  describe("Error Handling & Submitter Function Variants", () => {
-    it("should handle waitForCallback with submitter function synchronous errors", async () => {
+    describe("Error Handling & Submitter Function Variants", () => {
+      it("should handle waitForCallback with submitter function synchronous errors", async () => {
+        const handler = withDurableExecution<unknown, unknown>(
+          async (_event: unknown, context: DurableContext) => {
+            try {
+              const result = await context.waitForCallback<{ data: string }>(
+                () => {
+                  throw new Error("Submitter failed immediately");
+                },
+              );
+
+              return {
+                callbackResult: result,
+                success: true,
+              };
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              };
+            }
+          },
+        );
+
+        const runner = new LocalDurableTestRunner({
+          handlerFunction: handler,
+          skipTime: true,
+        });
+
+        const result = await runner.run({
+          payload: { test: "submitter-sync-error" },
+        });
+
+        expect(result.getResult()).toEqual({
+          success: false,
+          error: "Submitter failed immediately",
+        });
+
+        // Should have no succeeded operations since submitter failed before callback was created
+        const succeededOperations = result.getOperations({
+          status: OperationStatus.SUCCEEDED,
+        });
+        expect(succeededOperations.length).toEqual(0);
+      });
+
+      it("should handle waitForCallback with submitter function returning rejected promises", async () => {
+        const handler = withDurableExecution<unknown, unknown>(
+          async (_event: unknown, context: DurableContext) => {
+            try {
+              const result = await context.waitForCallback<{ data: string }>(
+                () => {
+                  return Promise.reject(new Error("Async submitter failure"));
+                },
+              );
+
+              return {
+                callbackResult: result,
+                success: true,
+              };
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              };
+            }
+          },
+        );
+
+        const runner = new LocalDurableTestRunner({
+          handlerFunction: handler,
+          skipTime: true,
+        });
+
+        const result = await runner.run({
+          payload: { test: "submitter-async-error" },
+        });
+
+        expect(result.getResult()).toEqual({
+          success: false,
+          error: "Async submitter failure",
+        });
+
+        // Should have no succeeded operations since submitter failed
+        const succeededOperations = result.getOperations({
+          status: OperationStatus.SUCCEEDED,
+        });
+        expect(succeededOperations.length).toEqual(0);
+      });
+    });
+
+    it("should handle waitForCallback with complex submitter function errors", async () => {
+      let callbackId: string | undefined;
+      let sideEffectCounter = 0;
+
       const handler = withDurableExecution<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
             const result = await context.waitForCallback<{ data: string }>(
-              () => {
-                throw new Error("Submitter failed immediately");
+              async (id) => {
+                callbackId = id;
+
+                // Simulate complex submitter that performs multiple operations
+                sideEffectCounter++;
+
+                // First async operation succeeds
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                sideEffectCounter++;
+
+                // Second async operation succeeds
+                await Promise.resolve({ step: 1 });
+                sideEffectCounter++;
+
+                // Third operation fails
+                throw new Error("Complex submitter failed at step 3");
+              },
+              {
+                retryStrategy: (_, attemptCount) => ({
+                  shouldRetry: attemptCount < 3,
+                  delaySeconds: 1,
+                }),
               },
             );
 
@@ -268,6 +379,8 @@ describe("WaitForCallback Operations Integration", () => {
             return {
               success: false,
               error: error instanceof Error ? error.message : String(error),
+              sideEffects: sideEffectCounter,
+              callbackId: callbackId,
             };
           }
         },
@@ -279,139 +392,26 @@ describe("WaitForCallback Operations Integration", () => {
       });
 
       const result = await runner.run({
-        payload: { test: "submitter-sync-error" },
+        payload: { test: "complex-submitter-error" },
       });
 
       expect(result.getResult()).toEqual({
         success: false,
-        error: "Submitter failed immediately",
+        error: "Complex submitter failed at step 3",
+        // Retries 6 times (default maxAttempts)
+        sideEffects: 18,
+        callbackId: expect.any(String),
       });
 
-      // Should have no succeeded operations since submitter failed before callback was created
-      const succeededOperations = result.getOperations({
-        status: OperationStatus.SUCCEEDED,
-      });
-      expect(succeededOperations.length).toEqual(0);
-    });
-
-    it("should handle waitForCallback with submitter function returning rejected promises", async () => {
-      const handler = withDurableExecution<unknown, unknown>(
-        async (_event: unknown, context: DurableContext) => {
-          try {
-            const result = await context.waitForCallback<{ data: string }>(
-              () => {
-                return Promise.reject(new Error("Async submitter failure"));
-              },
-            );
-
-            return {
-              callbackResult: result,
-              success: true,
-            };
-          } catch (error) {
-            return {
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-            };
-          }
-        },
-      );
-
-      const runner = new LocalDurableTestRunner({
-        handlerFunction: handler,
-        skipTime: true,
-      });
-
-      const result = await runner.run({
-        payload: { test: "submitter-async-error" },
-      });
-
-      expect(result.getResult()).toEqual({
-        success: false,
-        error: "Async submitter failure",
-      });
+      // Verify that callback ID was generated before failure
+      expect(callbackId).toBeDefined();
+      expect(sideEffectCounter).toBe(18);
 
       // Should have no succeeded operations since submitter failed
-      const succeededOperations = result.getOperations({
+      const completedOperations = result.getOperations({
         status: OperationStatus.SUCCEEDED,
       });
-      expect(succeededOperations.length).toEqual(0);
+      expect(completedOperations.length).toEqual(0);
     });
-  });
-
-  it("should handle waitForCallback with complex submitter function errors", async () => {
-    let callbackId: string | undefined;
-    let sideEffectCounter = 0;
-
-    const handler = withDurableExecution<unknown, unknown>(
-      async (_event: unknown, context: DurableContext) => {
-        try {
-          const result = await context.waitForCallback<{ data: string }>(
-            async (id) => {
-              callbackId = id;
-
-              // Simulate complex submitter that performs multiple operations
-              sideEffectCounter++;
-
-              // First async operation succeeds
-              await new Promise((resolve) => setTimeout(resolve, 10));
-              sideEffectCounter++;
-
-              // Second async operation succeeds
-              await Promise.resolve({ step: 1 });
-              sideEffectCounter++;
-
-              // Third operation fails
-              throw new Error("Complex submitter failed at step 3");
-            },
-            {
-              retryStrategy: (_, attemptCount) => ({
-                shouldRetry: attemptCount < 3,
-                delaySeconds: 1,
-              }),
-            },
-          );
-
-          return {
-            callbackResult: result,
-            success: true,
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-            sideEffects: sideEffectCounter,
-            callbackId: callbackId,
-          };
-        }
-      },
-    );
-
-    const runner = new LocalDurableTestRunner({
-      handlerFunction: handler,
-      skipTime: true,
-    });
-
-    const result = await runner.run({
-      payload: { test: "complex-submitter-error" },
-    });
-
-    expect(result.getResult()).toEqual({
-      success: false,
-      error: "Complex submitter failed at step 3",
-      // Retries 6 times (default maxAttempts)
-      sideEffects: 18,
-      callbackId: expect.any(String),
-    });
-
-    // Verify that callback ID was generated before failure
-    expect(callbackId).toBeDefined();
-    expect(sideEffectCounter).toBe(18);
-
-    // Should have no succeeded operations since submitter failed
-    const completedOperations = result.getOperations({
-      status: OperationStatus.SUCCEEDED,
-    });
-    expect(completedOperations.length).toEqual(0);
   });
 });
