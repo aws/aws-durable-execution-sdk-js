@@ -17,6 +17,7 @@ var regionConfigResolver = require("@aws-sdk/region-config-resolver");
 var protocolHttp = require("@smithy/protocol-http");
 var middlewareSerde = require("@smithy/middleware-serde");
 var core$1 = require("@aws-sdk/core");
+var uuid = require("@smithy/uuid");
 var utilWaiter = require("@smithy/util-waiter");
 
 const resolveClientEndpointParameters = (options) => {
@@ -1035,10 +1036,9 @@ const EventType = {
   CallbackStarted: "CallbackStarted",
   CallbackSucceeded: "CallbackSucceeded",
   CallbackTimedOut: "CallbackTimedOut",
-  ChainedInvokeCancelled: "ChainedInvokeCancelled",
   ChainedInvokeFailed: "ChainedInvokeFailed",
-  ChainedInvokePending: "ChainedInvokePending",
   ChainedInvokeStarted: "ChainedInvokeStarted",
+  ChainedInvokeStopped: "ChainedInvokeStopped",
   ChainedInvokeSucceeded: "ChainedInvokeSucceeded",
   ChainedInvokeTimedOut: "ChainedInvokeTimedOut",
   ContextFailed: "ContextFailed",
@@ -1322,7 +1322,7 @@ const EventInputFilterSensitiveLog = (obj) => ({
   ...obj,
   ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
 });
-const ChainedInvokePendingDetailsFilterSensitiveLog = (obj) => ({
+const ChainedInvokeStartedDetailsFilterSensitiveLog = (obj) => ({
   ...obj,
   ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input) }),
 });
@@ -1434,9 +1434,9 @@ const EventFilterSensitiveLog = (obj) => ({
       obj.StepFailedDetails,
     ),
   }),
-  ...(obj.ChainedInvokePendingDetails && {
-    ChainedInvokePendingDetails: ChainedInvokePendingDetailsFilterSensitiveLog(
-      obj.ChainedInvokePendingDetails,
+  ...(obj.ChainedInvokeStartedDetails && {
+    ChainedInvokeStartedDetails: ChainedInvokeStartedDetailsFilterSensitiveLog(
+      obj.ChainedInvokeStartedDetails,
     ),
   }),
   ...(obj.ChainedInvokeSucceededDetails && {
@@ -1504,6 +1504,10 @@ const PublishLayerVersionRequestFilterSensitiveLog = (obj) => ({
     Content: LayerVersionContentInputFilterSensitiveLog(obj.Content),
   }),
 });
+const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog = (obj) => ({
+  ...obj,
+  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
 
 const se_AddLayerVersionPermissionCommand = async (input, context) => {
   const b = core.requestBuilder(input, context);
@@ -1549,6 +1553,7 @@ const se_AddPermissionCommand = async (input, context) => {
       Action: [],
       EventSourceToken: [],
       FunctionUrlAuthType: [],
+      InvokedViaFunctionUrl: [],
       Principal: [],
       PrincipalOrgID: [],
       RevisionId: [],
@@ -1576,7 +1581,7 @@ const se_CheckpointDurableExecutionCommand = async (input, context) => {
   body = JSON.stringify(
     smithyClient.take(input, {
       CheckpointToken: [],
-      ClientToken: [],
+      ClientToken: [true, (_) => _ ?? uuid.v4()],
       Updates: (_) => smithyClient._json(_),
     }),
   );
@@ -5298,7 +5303,6 @@ const de_Event = (output, context) => {
     CallbackSucceededDetails: smithyClient._json,
     CallbackTimedOutDetails: smithyClient._json,
     ChainedInvokeFailedDetails: smithyClient._json,
-    ChainedInvokePendingDetails: smithyClient._json,
     ChainedInvokeStartedDetails: smithyClient._json,
     ChainedInvokeStoppedDetails: smithyClient._json,
     ChainedInvokeSucceededDetails: smithyClient._json,
@@ -6714,19 +6718,6 @@ class RemovePermissionCommand extends smithyClient.Command.classBuilder()
   .de(de_RemovePermissionCommand)
   .build() {}
 
-const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-const SendDurableExecutionCallbackSuccessRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
-});
-const StopDurableExecutionRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-
 class SendDurableExecutionCallbackFailureCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
@@ -6762,6 +6753,15 @@ class SendDurableExecutionCallbackHeartbeatCommand extends smithyClient.Command.
   .ser(se_SendDurableExecutionCallbackHeartbeatCommand)
   .de(de_SendDurableExecutionCallbackHeartbeatCommand)
   .build() {}
+
+const SendDurableExecutionCallbackSuccessRequestFilterSensitiveLog = (obj) => ({
+  ...obj,
+  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
+});
+const StopDurableExecutionRequestFilterSensitiveLog = (obj) => ({
+  ...obj,
+  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
+});
 
 class SendDurableExecutionCallbackSuccessCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
@@ -7487,8 +7487,8 @@ exports.ChainedInvokeDetailsFilterSensitiveLog =
   ChainedInvokeDetailsFilterSensitiveLog;
 exports.ChainedInvokeFailedDetailsFilterSensitiveLog =
   ChainedInvokeFailedDetailsFilterSensitiveLog;
-exports.ChainedInvokePendingDetailsFilterSensitiveLog =
-  ChainedInvokePendingDetailsFilterSensitiveLog;
+exports.ChainedInvokeStartedDetailsFilterSensitiveLog =
+  ChainedInvokeStartedDetailsFilterSensitiveLog;
 exports.ChainedInvokeStoppedDetailsFilterSensitiveLog =
   ChainedInvokeStoppedDetailsFilterSensitiveLog;
 exports.ChainedInvokeSucceededDetailsFilterSensitiveLog =

@@ -207,6 +207,9 @@ describe("WaitForCallback Operations Integration", () => {
       const firstCallbackResult = JSON.stringify({ step: 1 });
       await firstCallbackOp.sendCallbackSuccess(firstCallbackResult);
 
+      // Add small delay to ensure previous invocation completes before next callback
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Wait for second callback and complete it
       await secondCallbackOp.waitForData(WaitingOperationStatus.STARTED);
       const secondCallbackResult = JSON.stringify({ step: 2 });

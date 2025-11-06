@@ -318,6 +318,7 @@ export interface AddPermissionRequest {
    * @public
    */
   FunctionUrlAuthType?: FunctionUrlAuthType | undefined;
+  InvokedViaFunctionUrl?: boolean | undefined;
 }
 /**
  * @public
@@ -552,7 +553,8 @@ export interface CallbackOptions {
  * @public
  */
 export interface ChainedInvokeOptions {
-  FunctionName?: string | undefined;
+  FunctionName: string | undefined;
+  TenantId?: string | undefined;
 }
 /**
  * @public
@@ -3775,7 +3777,7 @@ export interface InvokeAsyncRequest {
 /**
  * <p>A success response (<code>202 Accepted</code>) indicates that the request is queued for invocation.</p>
  *
- * @deprecated
+ * @deprecated deprecated
  * @public
  */
 export interface InvokeAsyncResponse {
@@ -4919,14 +4921,11 @@ export interface EventInput {
 /**
  * @public
  */
-export interface ChainedInvokePendingDetails {
-  Input: EventInput | undefined;
-  FunctionName: string | undefined;
-}
-/**
- * @public
- */
 export interface ChainedInvokeStartedDetails {
+  FunctionName: string | undefined;
+  TenantId?: string | undefined;
+  Input?: EventInput | undefined;
+  ExecutedVersion?: string | undefined;
   DurableExecutionArn?: string | undefined;
 }
 /**
@@ -4972,10 +4971,9 @@ export declare const EventType: {
   readonly CallbackStarted: "CallbackStarted";
   readonly CallbackSucceeded: "CallbackSucceeded";
   readonly CallbackTimedOut: "CallbackTimedOut";
-  readonly ChainedInvokeCancelled: "ChainedInvokeCancelled";
   readonly ChainedInvokeFailed: "ChainedInvokeFailed";
-  readonly ChainedInvokePending: "ChainedInvokePending";
   readonly ChainedInvokeStarted: "ChainedInvokeStarted";
+  readonly ChainedInvokeStopped: "ChainedInvokeStopped";
   readonly ChainedInvokeSucceeded: "ChainedInvokeSucceeded";
   readonly ChainedInvokeTimedOut: "ChainedInvokeTimedOut";
   readonly ContextFailed: "ContextFailed";
@@ -5107,7 +5105,6 @@ export interface Event {
   StepStartedDetails?: StepStartedDetails | undefined;
   StepSucceededDetails?: StepSucceededDetails | undefined;
   StepFailedDetails?: StepFailedDetails | undefined;
-  ChainedInvokePendingDetails?: ChainedInvokePendingDetails | undefined;
   ChainedInvokeStartedDetails?: ChainedInvokeStartedDetails | undefined;
   ChainedInvokeSucceededDetails?: ChainedInvokeSucceededDetails | undefined;
   ChainedInvokeFailedDetails?: ChainedInvokeFailedDetails | undefined;
@@ -5807,6 +5804,13 @@ export declare class CallbackTimeoutException extends __BaseException {
   );
 }
 /**
+ * @public
+ */
+export interface SendDurableExecutionCallbackFailureRequest {
+  CallbackId: string | undefined;
+  Error?: ErrorObject | undefined;
+}
+/**
  * @internal
  */
 export declare const ErrorObjectFilterSensitiveLog: (obj: ErrorObject) => any;
@@ -6039,8 +6043,8 @@ export declare const EventInputFilterSensitiveLog: (obj: EventInput) => any;
 /**
  * @internal
  */
-export declare const ChainedInvokePendingDetailsFilterSensitiveLog: (
-  obj: ChainedInvokePendingDetails,
+export declare const ChainedInvokeStartedDetailsFilterSensitiveLog: (
+  obj: ChainedInvokeStartedDetails,
 ) => any;
 /**
  * @internal
@@ -6153,4 +6157,10 @@ export declare const LayerVersionContentInputFilterSensitiveLog: (
  */
 export declare const PublishLayerVersionRequestFilterSensitiveLog: (
   obj: PublishLayerVersionRequest,
+) => any;
+/**
+ * @internal
+ */
+export declare const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog: (
+  obj: SendDurableExecutionCallbackFailureRequest,
 ) => any;

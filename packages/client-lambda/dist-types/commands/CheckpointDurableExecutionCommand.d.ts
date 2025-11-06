@@ -95,7 +95,8 @@ declare const CheckpointDurableExecutionCommand_base: {
  *         HeartbeatTimeoutSeconds: Number("int"),
  *       },
  *       ChainedInvokeOptions: { // ChainedInvokeOptions
- *         FunctionName: "STRING_VALUE",
+ *         FunctionName: "STRING_VALUE", // required
+ *         TenantId: "STRING_VALUE",
  *       },
  *     },
  *   ],

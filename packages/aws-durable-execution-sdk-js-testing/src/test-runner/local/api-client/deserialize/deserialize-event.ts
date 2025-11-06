@@ -35,7 +35,6 @@ export const deserializeEvent = (output: SerializedEvent) => {
     CallbackSucceededDetails: _json,
     CallbackTimedOutDetails: _json,
     ChainedInvokeFailedDetails: _json,
-    ChainedInvokePendingDetails: _json,
     ChainedInvokeStartedDetails: _json,
     ChainedInvokeStoppedDetails: _json,
     ChainedInvokeSucceededDetails: _json,

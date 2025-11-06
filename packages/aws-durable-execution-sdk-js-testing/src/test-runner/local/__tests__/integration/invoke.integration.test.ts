@@ -69,6 +69,10 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
         EventTimestamp: expect.any(Date),
         ChainedInvokeStartedDetails: {
           DurableExecutionArn: "",
+          FunctionName: "",
+          Input: {
+            Payload: "",
+          },
         },
       },
       // TODO: add support for PENDING chained invoke operation

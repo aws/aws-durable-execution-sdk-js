@@ -5,10 +5,8 @@ import {
   ServiceInputTypes,
   ServiceOutputTypes,
 } from "../LambdaClient";
-import {
-  SendDurableExecutionCallbackFailureRequest,
-  SendDurableExecutionCallbackFailureResponse,
-} from "../models/models_1";
+import { SendDurableExecutionCallbackFailureRequest } from "../models/models_0";
+import { SendDurableExecutionCallbackFailureResponse } from "../models/models_1";
 /**
  * @public
  */

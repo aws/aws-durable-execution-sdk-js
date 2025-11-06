@@ -14,9 +14,7 @@ export declare const getRuntimeConfig: (config: LambdaClientConfig) => {
     | ((input: any) => import("@smithy/types").AwsCredentialIdentityProvider)
     | ((
         init?: import("@aws-sdk/credential-provider-node").DefaultProviderInit,
-      ) => import("@smithy/types").MemoizedProvider<
-        import("@smithy/types").AwsCredentialIdentity
-      >);
+      ) => import("@aws-sdk/credential-provider-node/dist-types/runtime/memoize-chain").MemoizedRuntimeConfigAwsCredentialIdentityProvider);
   defaultUserAgentProvider: (
     config?: import("@aws-sdk/util-user-agent-node").PreviouslyResolved,
   ) => Promise<import("@smithy/types").UserAgent>;

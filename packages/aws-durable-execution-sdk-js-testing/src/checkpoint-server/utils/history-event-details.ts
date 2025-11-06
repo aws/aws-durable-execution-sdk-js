@@ -155,7 +155,12 @@ const historyEventDetailMap = {
       EventType.ChainedInvokeStarted,
       "ChainedInvokeStartedDetails",
       () => ({
-        DurableExecutionArn: "", // TODO: add the execution ARN
+        // TODO: populate the fields
+        FunctionName: "",
+        Input: {
+          Payload: "",
+        },
+        DurableExecutionArn: "",
       }),
     ),
 

@@ -882,10 +882,9 @@ export const EventType = {
   CallbackStarted: "CallbackStarted",
   CallbackSucceeded: "CallbackSucceeded",
   CallbackTimedOut: "CallbackTimedOut",
-  ChainedInvokeCancelled: "ChainedInvokeCancelled",
   ChainedInvokeFailed: "ChainedInvokeFailed",
-  ChainedInvokePending: "ChainedInvokePending",
   ChainedInvokeStarted: "ChainedInvokeStarted",
+  ChainedInvokeStopped: "ChainedInvokeStopped",
   ChainedInvokeSucceeded: "ChainedInvokeSucceeded",
   ChainedInvokeTimedOut: "ChainedInvokeTimedOut",
   ContextFailed: "ContextFailed",
@@ -1171,7 +1170,7 @@ export const EventInputFilterSensitiveLog = (obj) => ({
   ...obj,
   ...(obj.Payload && { Payload: SENSITIVE_STRING }),
 });
-export const ChainedInvokePendingDetailsFilterSensitiveLog = (obj) => ({
+export const ChainedInvokeStartedDetailsFilterSensitiveLog = (obj) => ({
   ...obj,
   ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input) }),
 });
@@ -1283,9 +1282,9 @@ export const EventFilterSensitiveLog = (obj) => ({
       obj.StepFailedDetails,
     ),
   }),
-  ...(obj.ChainedInvokePendingDetails && {
-    ChainedInvokePendingDetails: ChainedInvokePendingDetailsFilterSensitiveLog(
-      obj.ChainedInvokePendingDetails,
+  ...(obj.ChainedInvokeStartedDetails && {
+    ChainedInvokeStartedDetails: ChainedInvokeStartedDetailsFilterSensitiveLog(
+      obj.ChainedInvokeStartedDetails,
     ),
   }),
   ...(obj.ChainedInvokeSucceededDetails && {
@@ -1352,4 +1351,10 @@ export const PublishLayerVersionRequestFilterSensitiveLog = (obj) => ({
   ...(obj.Content && {
     Content: LayerVersionContentInputFilterSensitiveLog(obj.Content),
   }),
+});
+export const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog = (
+  obj,
+) => ({
+  ...obj,
+  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
 });

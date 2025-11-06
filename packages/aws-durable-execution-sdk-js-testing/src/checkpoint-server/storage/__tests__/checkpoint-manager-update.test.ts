@@ -189,7 +189,7 @@ describe("checkpoint-manager updateOperation", () => {
         });
       });
 
-      it("should update CHAINED_INVOKE operation with CANCELLED status", () => {
+      it("should update CHAINED_INVOKE operation with STOPPED status", () => {
         storage.initialize();
 
         // Register an CHAINED_INVOKE operation first
@@ -203,7 +203,7 @@ describe("checkpoint-manager updateOperation", () => {
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
-          Status: OperationStatus.CANCELLED,
+          Status: OperationStatus.STOPPED,
           EndTimestamp: new Date(),
         };
 
@@ -216,16 +216,16 @@ describe("checkpoint-manager updateOperation", () => {
 
         // Should return the updated CheckpointOperation
         expect(result.operation.Id).toBe("invoke-cancel-op");
-        expect(result.operation.Status).toBe(OperationStatus.CANCELLED);
+        expect(result.operation.Status).toBe(OperationStatus.STOPPED);
         expect(result.operation.EndTimestamp).toEqual(
           newOperationData.EndTimestamp,
         );
 
-        // Should have added InvokeCancelled event
-        expect(result.events).toHaveLength(2); // Start event + Cancelled event
-        const cancelledEvent = result.events[1];
-        expect(cancelledEvent.EventType).toBe("ChainedInvokeCancelled");
-        expect(cancelledEvent.ChainedInvokeStoppedDetails).toEqual({
+        // Should have added InvokeStopped event
+        expect(result.events).toHaveLength(2); // Start event + Stopped event
+        const stoppedEvent = result.events[1];
+        expect(stoppedEvent.EventType).toBe("ChainedInvokeStopped");
+        expect(stoppedEvent.ChainedInvokeStoppedDetails).toEqual({
           Result: undefined,
           Error: undefined,
         });
@@ -413,7 +413,7 @@ describe("checkpoint-manager updateOperation", () => {
       it.each([
         OperationStatus.PENDING,
         OperationStatus.READY,
-        OperationStatus.STOPPED,
+        OperationStatus.CANCELLED,
         OperationStatus.STARTED,
       ])(
         `should throw error for invalid CHAINED_INVOKE status %s`,

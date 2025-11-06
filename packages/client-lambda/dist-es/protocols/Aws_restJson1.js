@@ -24,6 +24,7 @@ import {
   take,
   withBaseException,
 } from "@smithy/smithy-client";
+import { v4 as generateIdempotencyToken } from "@smithy/uuid";
 import { LambdaServiceException as __BaseException } from "../models/LambdaServiceException";
 import {
   CallbackTimeoutException,
@@ -111,6 +112,7 @@ export const se_AddPermissionCommand = async (input, context) => {
       Action: [],
       EventSourceToken: [],
       FunctionUrlAuthType: [],
+      InvokedViaFunctionUrl: [],
       Principal: [],
       PrincipalOrgID: [],
       RevisionId: [],
@@ -138,7 +140,7 @@ export const se_CheckpointDurableExecutionCommand = async (input, context) => {
   body = JSON.stringify(
     take(input, {
       CheckpointToken: [],
-      ClientToken: [],
+      ClientToken: [true, (_) => _ ?? generateIdempotencyToken()],
       Updates: (_) => _json(_),
     }),
   );
@@ -3932,7 +3934,6 @@ const de_Event = (output, context) => {
     CallbackSucceededDetails: _json,
     CallbackTimedOutDetails: _json,
     ChainedInvokeFailedDetails: _json,
-    ChainedInvokePendingDetails: _json,
     ChainedInvokeStartedDetails: _json,
     ChainedInvokeStoppedDetails: _json,
     ChainedInvokeSucceededDetails: _json,

@@ -261,7 +261,11 @@ describe("history-event-details", () => {
         const details = detail!.getDetails(update, operation, mockMetadata);
 
         expect(details).toEqual({
+          FunctionName: "",
           DurableExecutionArn: "",
+          Input: {
+            Payload: "",
+          },
         });
       });
 
@@ -275,7 +279,11 @@ describe("history-event-details", () => {
         const details = detail!.getDetails(update, operation, mockMetadata);
 
         expect(details).toEqual({
+          FunctionName: "",
           DurableExecutionArn: "",
+          Input: {
+            Payload: "",
+          },
         });
       });
     });

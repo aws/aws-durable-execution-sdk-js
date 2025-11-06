@@ -842,7 +842,8 @@
       "errors": [
         { "shape": "InvalidParameterValueException" },
         { "shape": "TooManyRequestsException" },
-        { "shape": "ServiceException" }
+        { "shape": "ServiceException" },
+        { "shape": "ResourceNotFoundException" }
       ],
       "readonly": true
     },
@@ -1594,7 +1595,8 @@
         "FunctionUrlAuthType": {
           "shape": "FunctionUrlAuthType",
           "documentation": "<p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href=\"https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html\">Security and auth model for Lambda function URLs</a>.</p>"
-        }
+        },
+        "InvokedViaFunctionUrl": { "shape": "InvokedViaFunctionUrl" }
       }
     },
     "AddPermissionResponse": {
@@ -1765,6 +1767,7 @@
     },
     "CallbackFailedDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
@@ -1772,7 +1775,8 @@
     "CallbackId": {
       "type": "string",
       "max": 1024,
-      "min": 1
+      "min": 1,
+      "pattern": "[A-Za-z0-9+/]+={0,2}"
     },
     "CallbackOptions": {
       "type": "structure",
@@ -1783,6 +1787,7 @@
     },
     "CallbackStartedDetails": {
       "type": "structure",
+      "required": ["CallbackId"],
       "members": {
         "CallbackId": { "shape": "CallbackId" },
         "HeartbeatTimeout": { "shape": "DurationSeconds" },
@@ -1791,21 +1796,23 @@
     },
     "CallbackSucceededDetails": {
       "type": "structure",
+      "required": ["Result"],
       "members": {
         "Result": { "shape": "EventResult" }
       }
     },
     "CallbackTimedOutDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
     },
     "CallbackTimeoutException": {
       "type": "structure",
-      "required": ["message"],
       "members": {
-        "message": { "shape": "String" }
+        "Type": { "shape": "String" },
+        "Message": { "shape": "String" }
       },
       "error": {
         "httpStatusCode": 400,
@@ -1822,45 +1829,47 @@
     },
     "ChainedInvokeFailedDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
     },
     "ChainedInvokeOptions": {
       "type": "structure",
+      "required": ["FunctionName"],
       "members": {
         "FunctionName": { "shape": "FunctionName" },
-        "TimeoutSeconds": { "shape": "DurationSeconds" }
-      }
-    },
-    "ChainedInvokePendingDetails": {
-      "type": "structure",
-      "members": {
-        "Input": { "shape": "EventInput" },
-        "FunctionName": { "shape": "FunctionName" },
-        "Timeout": { "shape": "DurationSeconds" }
+        "TenantId": { "shape": "TenantId" }
       }
     },
     "ChainedInvokeStartedDetails": {
       "type": "structure",
+      "required": ["FunctionName"],
       "members": {
+        "FunctionName": { "shape": "FunctionName" },
+        "TenantId": { "shape": "TenantId" },
+        "Input": { "shape": "EventInput" },
+        "ExecutedVersion": { "shape": "Version" },
         "DurableExecutionArn": { "shape": "DurableExecutionArn" }
       }
     },
     "ChainedInvokeStoppedDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
     },
     "ChainedInvokeSucceededDetails": {
       "type": "structure",
+      "required": ["Result"],
       "members": {
         "Result": { "shape": "EventResult" }
       }
     },
     "ChainedInvokeTimedOutDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
@@ -1876,11 +1885,15 @@
         },
         "CheckpointToken": { "shape": "CheckpointToken" },
         "Updates": { "shape": "OperationUpdates" },
-        "ClientToken": { "shape": "ClientToken" }
+        "ClientToken": {
+          "shape": "ClientToken",
+          "idempotencyToken": true
+        }
       }
     },
     "CheckpointDurableExecutionResponse": {
       "type": "structure",
+      "required": ["NewExecutionState"],
       "members": {
         "CheckpointToken": { "shape": "CheckpointToken" },
         "NewExecutionState": { "shape": "CheckpointUpdatedExecutionState" }
@@ -1888,8 +1901,9 @@
     },
     "CheckpointToken": {
       "type": "string",
-      "max": 1024,
-      "min": 1
+      "max": 2048,
+      "min": 1,
+      "pattern": "[A-Za-z0-9+/]+={0,2}"
     },
     "CheckpointUpdatedExecutionState": {
       "type": "structure",
@@ -1901,7 +1915,8 @@
     "ClientToken": {
       "type": "string",
       "max": 64,
-      "min": 1
+      "min": 1,
+      "pattern": "[\\x21-\\x7E]+"
     },
     "CodeSigningConfig": {
       "type": "structure",
@@ -2047,6 +2062,7 @@
     },
     "ContextFailedDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
@@ -2063,6 +2079,7 @@
     },
     "ContextSucceededDetails": {
       "type": "structure",
+      "required": ["Result"],
       "members": {
         "Result": { "shape": "EventResult" }
       }
@@ -2676,7 +2693,8 @@
     "DurableExecutionArn": {
       "type": "string",
       "max": 1024,
-      "min": 1
+      "min": 1,
+      "pattern": "arn:([a-zA-Z0-9-]+):lambda:([a-zA-Z0-9-]+):(\\d{12}):function:([a-zA-Z0-9_-]+):(\\$LATEST(?:\\.PUBLISHED)?|[0-9]+)/durable-execution/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)"
     },
     "DurableExecutionName": {
       "type": "string",
@@ -2932,9 +2950,6 @@
         "StepStartedDetails": { "shape": "StepStartedDetails" },
         "StepSucceededDetails": { "shape": "StepSucceededDetails" },
         "StepFailedDetails": { "shape": "StepFailedDetails" },
-        "ChainedInvokePendingDetails": {
-          "shape": "ChainedInvokePendingDetails"
-        },
         "ChainedInvokeStartedDetails": {
           "shape": "ChainedInvokeStartedDetails"
         },
@@ -3172,12 +3187,11 @@
         "StepStarted",
         "StepSucceeded",
         "StepFailed",
-        "ChainedInvokePending",
         "ChainedInvokeStarted",
         "ChainedInvokeSucceeded",
         "ChainedInvokeFailed",
         "ChainedInvokeTimedOut",
-        "ChainedInvokeCancelled",
+        "ChainedInvokeStopped",
         "CallbackStarted",
         "CallbackSucceeded",
         "CallbackFailed",
@@ -3191,6 +3205,13 @@
     },
     "Execution": {
       "type": "structure",
+      "required": [
+        "DurableExecutionArn",
+        "DurableExecutionName",
+        "FunctionArn",
+        "Status",
+        "StartTimestamp"
+      ],
       "members": {
         "DurableExecutionArn": { "shape": "DurableExecutionArn" },
         "DurableExecutionName": { "shape": "DurableExecutionName" },
@@ -3208,12 +3229,14 @@
     },
     "ExecutionFailedDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
     },
     "ExecutionStartedDetails": {
       "type": "structure",
+      "required": ["Input", "ExecutionTimeout"],
       "members": {
         "Input": { "shape": "EventInput" },
         "ExecutionTimeout": { "shape": "DurationSeconds" }
@@ -3229,12 +3252,14 @@
     },
     "ExecutionStoppedDetails": {
       "type": "structure",
+      "required": ["Error"],
       "members": {
         "Error": { "shape": "EventError" }
       }
     },
     "ExecutionSucceededDetails": {
       "type": "structure",
+      "required": ["Result"],
       "members": {
         "Result": { "shape": "EventResult" }
       }
@@ -3337,7 +3362,7 @@
       "type": "string",
       "max": 10000,
       "min": 0,
-      "pattern": "arn:(aws[a-zA-Z-]*)?:lambda:(eusc-)?[a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\\d{1}:\\d{12}:function:[a-zA-Z0-9-_]+(:(\\$LATEST|[a-zA-Z0-9-_]+))?"
+      "pattern": "arn:(aws[a-zA-Z-]*)?:lambda:[a-z]{2}(-gov)?-[a-z]+-\\d{1}:\\d{12}:function:[a-zA-Z0-9-_]+(:(\\$LATEST|[a-zA-Z0-9-_]+))?"
     },
     "FunctionArnList": {
       "type": "list",
@@ -3587,7 +3612,7 @@
       "type": "string",
       "max": 140,
       "min": 1,
-      "pattern": "(arn:(aws[a-zA-Z-]*)?:lambda:)?((eusc-)?[a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)(:(\\$LATEST|[a-zA-Z0-9-_]+))?"
+      "pattern": "(arn:(aws[a-zA-Z-]*)?:lambda:)?([a-z]{2}(-gov)?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)(:(\\$LATEST|[a-zA-Z0-9-_]+))?"
     },
     "FunctionResponseType": {
       "type": "string",
@@ -3753,6 +3778,7 @@
     },
     "GetDurableExecutionHistoryResponse": {
       "type": "structure",
+      "required": ["Events"],
       "members": {
         "Events": { "shape": "Events" },
         "NextMarker": { "shape": "String" }
@@ -3771,6 +3797,13 @@
     },
     "GetDurableExecutionResponse": {
       "type": "structure",
+      "required": [
+        "DurableExecutionArn",
+        "DurableExecutionName",
+        "FunctionArn",
+        "StartTimestamp",
+        "Status"
+      ],
       "members": {
         "DurableExecutionArn": { "shape": "DurableExecutionArn" },
         "DurableExecutionName": { "shape": "DurableExecutionName" },
@@ -3812,6 +3845,7 @@
     },
     "GetDurableExecutionStateResponse": {
       "type": "structure",
+      "required": ["Operations"],
       "members": {
         "Operations": { "shape": "Operations" },
         "NextMarker": { "shape": "String" }
@@ -4422,7 +4456,7 @@
     },
     "InvocationCompletedDetails": {
       "type": "structure",
-      "required": ["StartTimestamp", "EndTimestamp"],
+      "required": ["StartTimestamp", "EndTimestamp", "RequestId"],
       "members": {
         "StartTimestamp": { "shape": "ExecutionTimestamp" },
         "EndTimestamp": { "shape": "ExecutionTimestamp" },
@@ -4666,8 +4700,13 @@
       "documentation": "<p>An object that includes a chunk of the response payload. When the stream has ended, Lambda includes a <code>InvokeComplete</code> object.</p>",
       "eventstream": true
     },
+    "InvokedViaFunctionUrl": {
+      "type": "boolean",
+      "box": true
+    },
     "ItemCount": {
       "type": "integer",
+      "max": 1000,
       "min": 0
     },
     "KMSAccessDeniedException": {
@@ -5079,20 +5118,20 @@
           "location": "querystring",
           "locationName": "DurableExecutionName"
         },
-        "StatusFilter": {
+        "Statuses": {
           "shape": "ExecutionStatusList",
           "location": "querystring",
-          "locationName": "StatusFilter"
+          "locationName": "Statuses"
         },
-        "TimeAfter": {
+        "StartedAfter": {
           "shape": "ExecutionTimestamp",
           "location": "querystring",
-          "locationName": "TimeAfter"
+          "locationName": "StartedAfter"
         },
-        "TimeBefore": {
+        "StartedBefore": {
           "shape": "ExecutionTimestamp",
           "location": "querystring",
-          "locationName": "TimeBefore"
+          "locationName": "StartedBefore"
         },
         "ReverseOrder": {
           "shape": "ReverseOrder",
@@ -5691,6 +5730,7 @@
     },
     "Operation": {
       "type": "structure",
+      "required": ["Id", "Type", "StartTimestamp", "Status"],
       "members": {
         "Id": { "shape": "OperationId" },
         "ParentId": { "shape": "OperationId" },
@@ -5714,13 +5754,15 @@
     },
     "OperationId": {
       "type": "string",
-      "max": 1024,
-      "min": 1
+      "max": 64,
+      "min": 1,
+      "pattern": "[a-zA-Z0-9-_]+"
     },
     "OperationName": {
       "type": "string",
-      "max": 1024,
-      "min": 1
+      "max": 256,
+      "min": 1,
+      "pattern": "[\\x20-\\x7E]+"
     },
     "OperationPayload": {
       "type": "string",
@@ -5743,8 +5785,9 @@
     },
     "OperationSubType": {
       "type": "string",
-      "max": 128,
-      "min": 1
+      "max": 32,
+      "min": 1,
+      "pattern": "[a-zA-Z0-9-_]+"
     },
     "OperationType": {
       "type": "string",
@@ -5759,6 +5802,7 @@
     },
     "OperationUpdate": {
       "type": "structure",
+      "required": ["Id", "Type", "Action"],
       "members": {
         "Id": { "shape": "OperationId" },
         "ParentId": { "shape": "OperationId" },
@@ -6810,7 +6854,8 @@
         "EFSMountTimeout",
         "InvalidRuntime",
         "InvalidZipFileException",
-        "FunctionError"
+        "FunctionError",
+        "DrainingDurableExecutions"
       ]
     },
     "StatementId": {
@@ -6830,6 +6875,7 @@
     },
     "StepFailedDetails": {
       "type": "structure",
+      "required": ["Error", "RetryDetails"],
       "members": {
         "Error": { "shape": "EventError" },
         "RetryDetails": { "shape": "RetryDetails" }
@@ -6838,8 +6884,16 @@
     "StepOptions": {
       "type": "structure",
       "members": {
-        "NextAttemptDelaySeconds": { "shape": "DurationSeconds" }
+        "NextAttemptDelaySeconds": {
+          "shape": "StepOptionsNextAttemptDelaySecondsInteger"
+        }
       }
+    },
+    "StepOptionsNextAttemptDelaySecondsInteger": {
+      "type": "integer",
+      "box": true,
+      "max": 31622400,
+      "min": 1
     },
     "StepStartedDetails": {
       "type": "structure",
@@ -6847,6 +6901,7 @@
     },
     "StepSucceededDetails": {
       "type": "structure",
+      "required": ["Result", "RetryDetails"],
       "members": {
         "Result": { "shape": "EventResult" },
         "RetryDetails": { "shape": "RetryDetails" }
@@ -6867,8 +6922,9 @@
     },
     "StopDurableExecutionResponse": {
       "type": "structure",
+      "required": ["StopTimestamp"],
       "members": {
-        "StopDate": { "shape": "ExecutionTimestamp" }
+        "StopTimestamp": { "shape": "ExecutionTimestamp" }
       }
     },
     "String": { "type": "string" },
@@ -6959,6 +7015,12 @@
       "max": 1000,
       "min": 84,
       "pattern": ".*"
+    },
+    "TenantId": {
+      "type": "string",
+      "max": 256,
+      "min": 1,
+      "pattern": "[a-zA-Z0-9\\._:\\/=+\\-@ ]+"
     },
     "ThrottleReason": {
       "type": "string",
@@ -7053,7 +7115,7 @@
       "type": "string",
       "max": 140,
       "min": 1,
-      "pattern": "(arn:(aws[a-zA-Z-]*)?:lambda:)?((eusc-)?[a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)(\\.durable)?"
+      "pattern": "(arn:(aws[a-zA-Z-]*)?:lambda:)?([a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)"
     },
     "UnreservedConcurrentExecutions": {
       "type": "integer",
@@ -7552,11 +7614,18 @@
     "WaitOptions": {
       "type": "structure",
       "members": {
-        "WaitSeconds": { "shape": "DurationSeconds" }
+        "WaitSeconds": { "shape": "WaitOptionsWaitSecondsInteger" }
       }
+    },
+    "WaitOptionsWaitSecondsInteger": {
+      "type": "integer",
+      "box": true,
+      "max": 31622400,
+      "min": 1
     },
     "WaitStartedDetails": {
       "type": "structure",
+      "required": ["Duration", "ScheduledEndTimestamp"],
       "members": {
         "Duration": { "shape": "DurationSeconds" },
         "ScheduledEndTimestamp": { "shape": "ExecutionTimestamp" }

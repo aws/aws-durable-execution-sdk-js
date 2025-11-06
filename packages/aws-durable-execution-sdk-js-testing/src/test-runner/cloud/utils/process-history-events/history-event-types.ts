@@ -147,15 +147,6 @@ export const historyEventTypes = {
     operationDetailPlace: undefined,
     hasResult: true,
   },
-  ChainedInvokePending: {
-    operationType: OperationType.CHAINED_INVOKE,
-    operationStatus: OperationStatus.SUCCEEDED,
-    detailPlace: "ChainedInvokePendingDetails",
-    isStartEvent: false,
-    isEndEvent: false,
-    operationDetailPlace: undefined,
-    hasResult: false,
-  },
   ChainedInvokeTimedOut: {
     operationType: OperationType.CHAINED_INVOKE,
     operationStatus: OperationStatus.TIMED_OUT,
@@ -165,9 +156,9 @@ export const historyEventTypes = {
     operationDetailPlace: undefined,
     hasResult: true,
   },
-  ChainedInvokeCancelled: {
+  ChainedInvokeStopped: {
     operationType: OperationType.CHAINED_INVOKE,
-    operationStatus: OperationStatus.CANCELLED,
+    operationStatus: OperationStatus.STOPPED,
     detailPlace: "ChainedInvokeStoppedDetails",
     isStartEvent: false,
     isEndEvent: true,

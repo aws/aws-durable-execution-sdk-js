@@ -258,13 +258,13 @@ describe("historyEventTypes", () => {
     });
   });
 
-  describe("ChainedInvokeCancelled", () => {
+  describe("ChainedInvokeStopped", () => {
     it("should have correct configuration", () => {
-      const config = historyEventTypes.ChainedInvokeCancelled;
+      const config = historyEventTypes.ChainedInvokeStopped;
 
       expect(config).toEqual({
         operationType: OperationType.CHAINED_INVOKE,
-        operationStatus: OperationStatus.CANCELLED,
+        operationStatus: OperationStatus.STOPPED,
         detailPlace: "ChainedInvokeStoppedDetails",
         isStartEvent: false,
         isEndEvent: true,

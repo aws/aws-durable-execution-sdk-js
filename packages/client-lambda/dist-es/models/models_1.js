@@ -1,11 +1,5 @@
 import { SENSITIVE_STRING } from "@smithy/smithy-client";
 import { ErrorObjectFilterSensitiveLog } from "./models_0";
-export const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog = (
-  obj,
-) => ({
-  ...obj,
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
 export const SendDurableExecutionCallbackSuccessRequestFilterSensitiveLog = (
   obj,
 ) => ({

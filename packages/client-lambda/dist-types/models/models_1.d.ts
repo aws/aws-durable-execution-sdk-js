@@ -2,13 +2,6 @@ import { ErrorObject } from "./models_0";
 /**
  * @public
  */
-export interface SendDurableExecutionCallbackFailureRequest {
-  CallbackId: string | undefined;
-  Error?: ErrorObject | undefined;
-}
-/**
- * @public
- */
 export interface SendDurableExecutionCallbackFailureResponse {}
 /**
  * @public
@@ -74,12 +67,6 @@ export interface UntagResourceRequest {
    */
   TagKeys: string[] | undefined;
 }
-/**
- * @internal
- */
-export declare const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog: (
-  obj: SendDurableExecutionCallbackFailureRequest,
-) => any;
 /**
  * @internal
  */

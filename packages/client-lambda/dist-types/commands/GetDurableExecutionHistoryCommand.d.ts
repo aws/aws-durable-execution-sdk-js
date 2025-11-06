@@ -73,7 +73,7 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * // { // GetDurableExecutionHistoryResponse
  * //   Events: [ // Events // required
  * //     { // Event
- * //       EventType: "ExecutionStarted" || "ExecutionSucceeded" || "ExecutionFailed" || "ExecutionTimedOut" || "ExecutionStopped" || "ContextStarted" || "ContextSucceeded" || "ContextFailed" || "WaitStarted" || "WaitSucceeded" || "WaitCancelled" || "StepStarted" || "StepSucceeded" || "StepFailed" || "ChainedInvokePending" || "ChainedInvokeStarted" || "ChainedInvokeSucceeded" || "ChainedInvokeFailed" || "ChainedInvokeTimedOut" || "ChainedInvokeCancelled" || "CallbackStarted" || "CallbackSucceeded" || "CallbackFailed" || "CallbackTimedOut" || "InvocationCompleted",
+ * //       EventType: "ExecutionStarted" || "ExecutionSucceeded" || "ExecutionFailed" || "ExecutionTimedOut" || "ExecutionStopped" || "ContextStarted" || "ContextSucceeded" || "ContextFailed" || "WaitStarted" || "WaitSucceeded" || "WaitCancelled" || "StepStarted" || "StepSucceeded" || "StepFailed" || "ChainedInvokeStarted" || "ChainedInvokeSucceeded" || "ChainedInvokeFailed" || "ChainedInvokeTimedOut" || "ChainedInvokeStopped" || "CallbackStarted" || "CallbackSucceeded" || "CallbackFailed" || "CallbackTimedOut" || "InvocationCompleted",
  * //       SubType: "STRING_VALUE",
  * //       EventId: Number("int"),
  * //       Id: "STRING_VALUE",
@@ -190,14 +190,14 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * //           NextAttemptDelaySeconds: Number("int"),
  * //         },
  * //       },
- * //       ChainedInvokePendingDetails: { // ChainedInvokePendingDetails
+ * //       ChainedInvokeStartedDetails: { // ChainedInvokeStartedDetails
+ * //         FunctionName: "STRING_VALUE", // required
+ * //         TenantId: "STRING_VALUE",
  * //         Input: {
  * //           Payload: "STRING_VALUE",
  * //           Truncated: true || false,
  * //         },
- * //         FunctionName: "STRING_VALUE", // required
- * //       },
- * //       ChainedInvokeStartedDetails: { // ChainedInvokeStartedDetails
+ * //         ExecutedVersion: "STRING_VALUE",
  * //         DurableExecutionArn: "STRING_VALUE",
  * //       },
  * //       ChainedInvokeSucceededDetails: { // ChainedInvokeSucceededDetails
