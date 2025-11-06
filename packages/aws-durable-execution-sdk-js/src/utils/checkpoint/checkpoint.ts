@@ -3,6 +3,7 @@ import {
   OperationUpdate,
   Operation,
   OperationStatus,
+  OperationAction,
 } from "@aws-sdk/client-lambda";
 import { ExecutionContext } from "../../types";
 import { log } from "../logger/logger";
@@ -33,6 +34,7 @@ class CheckpointHandler {
   }> = [];
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
+  private pendingCompletions = new Set<string>(); // Track stepIds with pending SUCCEED/FAIL
 
   constructor(
     private context: ExecutionContext,
@@ -76,17 +78,12 @@ class CheckpointHandler {
     }
 
     return new Promise<void>((resolve, reject) => {
-      // Check if any ancestor is finished to maintain deterministic replay.
-      // Checkpointing operations whose ancestors have already completed (SUCCEEDED or FAILED)
-      // would alter the ancestor's outcome during replay, breaking workflow determinism.
-      // By skipping these checkpoints, we ensure replayed executions produce identical results.
-      if (this.hasFinishedAncestor(data.ParentId)) {
-        log("⚠️", "Checkpoint skipped - ancestor finished:", {
-          stepId,
-          parentId: data.ParentId,
-        });
-        // Don't resolve or reject - just return without queuing
-        return;
+      // Track pending completions for ancestor checking
+      if (
+        data.Action === OperationAction.SUCCEED ||
+        data.Action === OperationAction.FAIL
+      ) {
+        this.pendingCompletions.add(stepId);
       }
 
       const queuedItem: QueuedCheckpoint = {
@@ -232,6 +229,7 @@ class CheckpointHandler {
 
     // Pick items from queue up to size limit
     const batch: QueuedCheckpoint[] = [];
+    let skippedCount = 0;
     const baseSize = this.currentTaskToken.length + 100; // Base payload overhead
     let currentSize = baseSize;
 
@@ -243,7 +241,19 @@ class CheckpointHandler {
         break;
       }
 
-      batch.push(this.queue.shift()!);
+      this.queue.shift();
+
+      // Check if ancestor is finished - skip if so
+      if (this.hasFinishedAncestor(nextItem.data.ParentId)) {
+        log("⚠️", "Checkpoint skipped - ancestor finished:", {
+          stepId: nextItem.stepId,
+          parentId: nextItem.data.ParentId,
+        });
+        skippedCount++;
+        continue;
+      }
+
+      batch.push(nextItem);
       currentSize += itemSize;
     }
 
@@ -260,8 +270,14 @@ class CheckpointHandler {
         await this.processBatch(batch);
       }
 
-      // Resolve all promises in the batch
+      // Remove processed items from pendingCompletions
       batch.forEach((item) => {
+        if (
+          item.data.Action === OperationAction.SUCCEED ||
+          item.data.Action === OperationAction.FAIL
+        ) {
+          this.pendingCompletions.delete(item.stepId);
+        }
         item.resolve();
       });
 
@@ -274,6 +290,7 @@ class CheckpointHandler {
 
       log("✅", "Checkpoint batch processed successfully:", {
         batchSize: batch.length,
+        skippedCount,
         forceRequests: forcePromises.length,
         newTaskToken: this.currentTaskToken,
       });

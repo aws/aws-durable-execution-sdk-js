@@ -372,10 +372,11 @@ export class ConcurrencyController {
         if (isComplete() || !shouldContinue()) {
           // Convert sparse array to dense array - items are already in correct order by index
           // Include all items that were started (have a value in resultItems)
+          // Create shallow copy to prevent mutations from affecting the returned result
           const finalBatchItems: BatchItem<R>[] = [];
           for (let i = 0; i < resultItems.length; i++) {
             if (resultItems[i] !== undefined) {
-              finalBatchItems.push(resultItems[i]!);
+              finalBatchItems.push({ ...resultItems[i]! });
             }
           }
 
