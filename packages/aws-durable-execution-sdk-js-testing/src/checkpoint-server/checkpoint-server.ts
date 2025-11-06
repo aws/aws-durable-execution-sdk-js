@@ -27,6 +27,8 @@ import {
 import type { Server } from "http";
 import { validateCheckpointUpdates } from "./validators/checkpoint-durable-execution-input-validator";
 import { randomUUID } from "crypto";
+import { createRequestLogger } from "./middleware/request-logger";
+import { defaultLogger } from "../logger";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -39,6 +41,7 @@ declare global {
 
 export async function startCheckpointServer(port: number) {
   const executionManager = new ExecutionManager();
+  const logger = defaultLogger.child("Server");
 
   const app = express();
 
@@ -47,6 +50,7 @@ export async function startCheckpointServer(port: number) {
     next();
   });
 
+  app.use(createRequestLogger());
   app.use(express.json({ limit: "1mb" })); // Increase limit to handle large step results
   app.use(express.raw({ limit: "1mb" })); // Also increase raw body limit
 
@@ -294,7 +298,7 @@ export async function startCheckpointServer(port: number) {
       }
 
       const address = server.address();
-      console.info(
+      logger.debug(
         `Checkpoint server listening ${
           address && typeof address !== "string"
             ? `on port ${address.port}`

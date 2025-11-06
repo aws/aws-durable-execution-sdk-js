@@ -1,3 +1,4 @@
+import { defaultLogger } from "../logger";
 import { CheckpointServerWorker } from "./worker/checkpoint-server-worker";
 import { parentPort } from "worker_threads";
 
@@ -5,7 +6,7 @@ import { parentPort } from "worker_threads";
 if (parentPort) {
   const worker = new CheckpointServerWorker(parentPort);
   worker.initialize().catch((err: unknown) => {
-    console.error("Error initializing the worker: ", err);
+    defaultLogger.error("Error initializing the worker: ", err);
     process.exit(1);
   });
 }

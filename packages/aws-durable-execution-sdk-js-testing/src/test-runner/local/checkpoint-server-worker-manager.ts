@@ -12,6 +12,7 @@ import {
   ServerStartedData,
 } from "../../checkpoint-server/worker/worker-message-types";
 import { access, constants } from "fs/promises";
+import { defaultLogger } from "../../logger";
 
 interface ServerInfo {
   url: string;
@@ -164,13 +165,13 @@ export class CheckpointServerWorkerManager {
     this.worker = worker;
 
     worker.on("error", (err) => {
-      console.warn("There was a worker error: ", err);
+      defaultLogger.warn("There was a worker error: ", err);
       this.worker = null;
       this.serverInfo = null;
     });
     worker.on("exit", (code) => {
       if (code !== 0) {
-        console.warn(`Worker exited with code: ${code}`);
+        defaultLogger.warn(`Worker exited with code: ${code}`);
       }
       this.worker = null;
       this.serverInfo = null;

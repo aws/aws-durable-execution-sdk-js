@@ -56,6 +56,18 @@ jest.mock("node:crypto", () => ({
   })),
 }));
 
+// Mock the default logger
+jest.mock("../../logger", () => ({
+  defaultLogger: {
+    child: () => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    }),
+  },
+}));
+
 describe("checkpoint-server", () => {
   let server: Server;
   let mockExecutionManager: jest.Mocked<ExecutionManager>;
