@@ -1,6 +1,7 @@
 import {
   DurableContext,
   withDurableExecution,
+  Duration,
   StepSemantics,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";

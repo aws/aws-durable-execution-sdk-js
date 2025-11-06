@@ -3,6 +3,7 @@ import { WaitingOperationStatus } from "../../../durable-test-runner";
 import {
   DurableContext,
   withDurableExecution,
+  Duration,
 } from "@aws/durable-execution-sdk-js";
 import { OperationType } from "@aws-sdk/client-lambda";
 
@@ -21,8 +22,8 @@ describe("Callback Operations Integration", () => {
         const [callbackPromise, callbackId] = await context.createCallback(
           "external-api-call",
           {
-            timeout: 300, // 5 minutes
-            heartbeatTimeout: 60, // 1 minute
+            timeout: Duration.ofSeconds(300), // 5 minutes
+            heartbeatTimeout: Duration.ofSeconds(60), // 1 minute
           },
         );
 
@@ -83,7 +84,7 @@ describe("Callback Operations Integration", () => {
           const [callbackPromise] = await context.createCallback(
             "failing-operation",
             {
-              timeout: 60,
+              timeout: Duration.ofSeconds(60),
             },
           );
 
@@ -132,7 +133,7 @@ describe("Callback Operations Integration", () => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
           {
-            heartbeatTimeout: 1,
+            heartbeatTimeout: Duration.ofSeconds(1),
           },
         );
 
@@ -180,7 +181,7 @@ describe("Callback Operations Integration", () => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
           {
-            heartbeatTimeout: 1,
+            heartbeatTimeout: Duration.ofSeconds(1),
           },
         );
 
@@ -208,7 +209,7 @@ describe("Callback Operations Integration", () => {
         const [callbackPromise] = await context.createCallback(
           "long-running-task",
           {
-            timeout: 1,
+            timeout: Duration.ofSeconds(1),
           },
         );
 
@@ -235,13 +236,13 @@ describe("Callback Operations Integration", () => {
       async (event: unknown, context: DurableContext) => {
         // Start multiple callbacks concurrently
         const [promise1] = await context.createCallback("api-call-1", {
-          timeout: 300,
+          timeout: Duration.ofSeconds(300),
         });
         const [promise2] = await context.createCallback("api-call-2", {
-          timeout: 300,
+          timeout: Duration.ofSeconds(300),
         });
         const [promise3] = await context.createCallback("api-call-3", {
-          timeout: 300,
+          timeout: Duration.ofSeconds(300),
         });
 
         const [result1, result2, result3] = await Promise.all([
@@ -314,14 +315,14 @@ describe("Callback Operations Integration", () => {
     const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         // Mix callback with step and wait operations
-        await context.wait("initial-wait", 100);
+        await context.wait("initial-wait", Duration.ofSeconds(0.1));
 
         const stepResult = await context.step("fetch-data", () => {
           return Promise.resolve({ userId: 123, name: "John Doe" });
         });
 
         const [callbackPromise] = await context.createCallback("process-user", {
-          timeout: 300,
+          timeout: Duration.ofSeconds(300),
         });
 
         const callbackResult = await callbackPromise;
@@ -411,7 +412,7 @@ describe("Callback Operations Integration", () => {
         const [callbackPromise] = await context.createCallback<CustomData>(
           "custom-serdes-callback",
           {
-            timeout: 300,
+            timeout: Duration.ofSeconds(300),
             serdes: customSerdes,
           },
         );

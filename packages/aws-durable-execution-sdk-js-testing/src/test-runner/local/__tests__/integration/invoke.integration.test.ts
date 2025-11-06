@@ -1,4 +1,4 @@
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { withDurableExecution, Duration } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
@@ -32,7 +32,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
         const stepResult = await ctx.step("hello world", () => {
           return Promise.resolve("durable test result");
         });
-        await ctx.wait(1000);
+        await ctx.wait(Duration.ofSeconds(1));
         return {
           type: "durable",
           input: durableInput,

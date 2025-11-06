@@ -277,9 +277,9 @@ class DurableContextImpl implements DurableContext {
         this._parentId,
       );
       const promise =
-        typeof nameOrSeconds === "string"
-          ? waitHandler(nameOrSeconds, maybeSeconds!)
-          : waitHandler(nameOrSeconds);
+        typeof nameOrDuration === "string"
+          ? waitHandler(nameOrDuration, maybeDuration!.toSeconds())
+          : waitHandler(nameOrDuration.toSeconds());
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
       return promise;

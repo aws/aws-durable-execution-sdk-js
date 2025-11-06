@@ -2,6 +2,7 @@ import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import {
   DurableContext,
   withDurableExecution,
+  Duration,
 } from "@aws/durable-execution-sdk-js";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 
@@ -44,7 +45,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         // First wait operation - this will run in invocation index 0
-        await context.wait("wait-invocation-1", 1);
+        await context.wait("wait-invocation-1", Duration.ofSeconds(1));
 
         // This will execute in invocation index 1
         const stepResult = await context.step("process-data-step", () => {
@@ -52,7 +53,7 @@ describe("LocalDurableTestRunner Integration", () => {
         });
 
         // Second wait operation - this will run in invocation index 1
-        await context.wait("wait-invocation-2", 1);
+        await context.wait("wait-invocation-2", Duration.ofSeconds(1));
 
         // Third invocation will only return the result
         return {
@@ -149,7 +150,7 @@ describe("LocalDurableTestRunner Integration", () => {
         Name: "wait-invocation-1",
         EventTimestamp: expect.any(Date),
         WaitStartedDetails: {
-          Duration: 1,
+          Duration: 1000,
           ScheduledEndTimestamp: expect.any(Date),
         },
       },
@@ -160,7 +161,7 @@ describe("LocalDurableTestRunner Integration", () => {
         Name: "wait-invocation-1",
         SubType: "Wait",
         EventTimestamp: expect.any(Date),
-        WaitSucceededDetails: { Duration: 1 },
+        WaitSucceededDetails: { Duration: 1000 },
       },
       {
         EventType: "StepStarted",
@@ -193,7 +194,7 @@ describe("LocalDurableTestRunner Integration", () => {
         Name: "wait-invocation-2",
         EventTimestamp: expect.any(Date),
         WaitStartedDetails: {
-          Duration: 1,
+          Duration: 1000,
           ScheduledEndTimestamp: expect.any(Date),
         },
       },
@@ -204,7 +205,7 @@ describe("LocalDurableTestRunner Integration", () => {
         Id: "eccbc87e4b5ce2fe",
         Name: "wait-invocation-2",
         EventTimestamp: expect.any(Date),
-        WaitSucceededDetails: { Duration: 1 },
+        WaitSucceededDetails: { Duration: 1000 },
       },
       {
         EventType: "ExecutionSucceeded",
