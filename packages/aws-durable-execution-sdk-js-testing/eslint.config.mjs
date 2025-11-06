@@ -41,6 +41,12 @@ export default defineConfig([
           allowBoolean: true,
         },
       ],
+      "@typescript-eslint/no-unnecessary-condition": [
+        "error",
+        {
+          allowConstantLoopConditions: "only-allowed-literals",
+        },
+      ],
     },
   },
   {

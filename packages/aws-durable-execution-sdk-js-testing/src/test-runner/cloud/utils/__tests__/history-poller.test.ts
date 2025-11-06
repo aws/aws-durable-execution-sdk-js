@@ -479,9 +479,11 @@ describe("HistoryPoller", () => {
   describe("Error handling", () => {
     it("should reject test execution state on history API error", async () => {
       const testError = new Error("History API failed");
-      const { poller, testExecutionState } = createHistoryPoller({
-        historyError: testError,
-      });
+      const { poller, testExecutionState, mockApiClient } = createHistoryPoller(
+        {
+          historyError: testError,
+        },
+      );
 
       const executionPromise = testExecutionState.createExecutionPromise();
 
@@ -489,14 +491,22 @@ describe("HistoryPoller", () => {
 
       jest.advanceTimersByTime(100);
 
-      await expect(executionPromise).rejects.toThrow("History API failed");
+      await Promise.all([
+        jest.advanceTimersByTimeAsync(30000),
+        expect(executionPromise).rejects.toThrow("History API failed"),
+      ]);
+      expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
+        HistoryPoller.getMaxRetryAttempts(),
+      );
     });
 
     it("should reject test execution state on execution API error", async () => {
       const testError = new Error("Execution API failed");
-      const { poller, testExecutionState } = createHistoryPoller({
-        executionError: testError,
-      });
+      const { poller, testExecutionState, mockApiClient } = createHistoryPoller(
+        {
+          executionError: testError,
+        },
+      );
 
       const executionPromise = testExecutionState.createExecutionPromise();
 
@@ -504,23 +514,13 @@ describe("HistoryPoller", () => {
 
       jest.advanceTimersByTime(100);
 
-      await expect(executionPromise).rejects.toThrow("Execution API failed");
-    });
-
-    it("should stop polling after error", async () => {
-      const testError = new Error("API failed");
-      const { poller, mockApiClient } = createHistoryPoller({
-        historyError: testError,
-      });
-
-      poller.startPolling();
-      await waitForPollerCycles(1);
-
-      const callsAfterError = mockApiClient.getHistory.mock.calls.length;
-
-      await waitForPollerCycles(2);
-
-      expect(mockApiClient.getHistory).toHaveBeenCalledTimes(callsAfterError);
+      await Promise.all([
+        jest.advanceTimersByTimeAsync(30000),
+        expect(executionPromise).rejects.toThrow("Execution API failed"),
+      ]);
+      expect(mockApiClient.getExecution).toHaveBeenCalledTimes(
+        HistoryPoller.getMaxRetryAttempts(),
+      );
     });
   });
 

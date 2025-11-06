@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-west-2
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 # permission can be added at job level or workflow level
 permissions:
@@ -71,7 +71,7 @@ jobs:
       - name: Deploy functions
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT_BETA }}
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           INVOKE_ACCOUNT_ID: ${{ secrets.INVOKE_ACCOUNT_ID_BETA }}
           KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -112,7 +112,7 @@ jobs:
 
       - name: Run Jest integration tests
         env:
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT_BETA }}
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
@@ -154,7 +154,7 @@ jobs:
 
       - name: Cleanup Lambda functions
         env:
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT_BETA }}
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           FUNCTION_NAME_MAP: ${{ needs.setup.outputs.function-name-map }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}

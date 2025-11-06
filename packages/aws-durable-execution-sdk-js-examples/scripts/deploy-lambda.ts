@@ -10,9 +10,6 @@ import {
   CreateFunctionCommand,
   UpdateFunctionCodeCommand,
   UpdateFunctionConfigurationCommand,
-  GetPolicyCommand,
-  // TODO: Add PutResourcePolicyCommand to client-lambda package
-  // PutResourcePolicyCommand,
   Runtime,
   GetFunctionConfigurationCommandOutput,
 } from "@aws-sdk/client-lambda";
@@ -23,9 +20,7 @@ import catalog from "../src/utils/examples-catalog";
 interface EnvironmentVariables {
   AWS_ACCOUNT_ID: string;
   LAMBDA_ENDPOINT: string;
-  INVOKE_ACCOUNT_ID: string;
   AWS_REGION: string;
-  KMS_KEY_ARN?: string;
   GITHUB_ACTIONS?: string;
   GITHUB_ENV?: string;
 }
@@ -60,11 +55,7 @@ function loadEnvironmentVariables(): EnvironmentVariables {
   }
 
   // Validate required environment variables
-  const requiredVars = [
-    "AWS_ACCOUNT_ID",
-    "LAMBDA_ENDPOINT",
-    "INVOKE_ACCOUNT_ID",
-  ];
+  const requiredVars = ["AWS_ACCOUNT_ID", "LAMBDA_ENDPOINT"];
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
   if (missingVars.length > 0) {
@@ -77,9 +68,7 @@ function loadEnvironmentVariables(): EnvironmentVariables {
   return {
     AWS_ACCOUNT_ID: process.env.AWS_ACCOUNT_ID!,
     LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT!,
-    INVOKE_ACCOUNT_ID: process.env.INVOKE_ACCOUNT_ID!,
-    AWS_REGION: process.env.AWS_REGION || "us-west-2",
-    KMS_KEY_ARN: process.env.KMS_KEY_ARN,
+    AWS_REGION: process.env.AWS_REGION!,
     GITHUB_ACTIONS: process.env.GITHUB_ACTIONS,
     GITHUB_ENV: process.env.GITHUB_ENV,
   };
@@ -140,8 +129,11 @@ async function retryOnConflict<T>(
     try {
       return await operation();
     } catch (error: any) {
-      if (error.name === "ResourceConflictException" && attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      if (
+        error.name === "ResourceConflictException" &&
+        attempt < maxRetries - 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         continue;
       }
       throw error;
@@ -192,10 +184,6 @@ async function createFunction(
     },
   };
 
-  if (env.KMS_KEY_ARN) {
-    createParams.KMSKeyArn = env.KMS_KEY_ARN;
-  }
-
   const command = new CreateFunctionCommand(createParams);
   await lambdaClient.send(command);
   console.log("Function created successfully");
@@ -244,10 +232,6 @@ async function updateFunction(
     },
   };
 
-  if (env.KMS_KEY_ARN) {
-    updateEnvParams.KMSKeyArn = env.KMS_KEY_ARN;
-  }
-
   const updateEnvCommand = new UpdateFunctionConfigurationCommand(
     updateEnvParams,
   );
@@ -270,42 +254,6 @@ async function updateFunction(
   } else {
     console.log("DurableConfig is up to date");
   }
-}
-
-async function checkAndAddResourcePolicy(
-  lambdaClient: LambdaClient,
-  functionName: string,
-  invokeAccountId: string,
-  env: EnvironmentVariables,
-): Promise<void> {
-  console.log("Setting resource policy...");
-
-  const functionArn = `arn:aws:lambda:${env.AWS_REGION}:${env.AWS_ACCOUNT_ID}:function:${functionName}`;
-  
-  const policyDocument = {
-    Version: "2012-10-17",
-    Statement: [
-      {
-        Sid: "dex-invoke-permission",
-        Effect: "Allow",
-        Principal: { AWS: invokeAccountId },
-        Action: [
-          "lambda:InvokeFunction",
-          "lambda:GetFunctionConfiguration"
-        ],
-        Resource: `${functionArn}:*`,
-      },
-    ],
-  };
-
-  // TODO: Add PutResourcePolicyCommand to client-lambda package
-  // const putResourcePolicyCommand = new PutResourcePolicyCommand({
-  //   ResourceArn: functionArn,
-  //   Policy: JSON.stringify(policyDocument),
-  // });
-
-  // await lambdaClient.send(putResourcePolicyCommand);
-  // console.log("Resource policy set successfully");
 }
 
 async function showFinalConfiguration(
@@ -380,14 +328,6 @@ async function main(): Promise<void> {
         env,
       );
     }
-
-    // Add resource policy
-    await checkAndAddResourcePolicy(
-      lambdaClient,
-      functionName,
-      env.INVOKE_ACCOUNT_ID,
-      env,
-    );
 
     // Set GITHUB_ENV if running in GitHub Actions
     if (env.GITHUB_ENV) {

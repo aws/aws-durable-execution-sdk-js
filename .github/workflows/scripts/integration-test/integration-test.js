@@ -37,10 +37,8 @@ const __dirname = dirname(__filename);
 
 // Configuration
 const CONFIG = {
-  AWS_REGION: process.env.AWS_REGION || "us-west-2",
-  LAMBDA_ENDPOINT:
-    process.env.LAMBDA_ENDPOINT ||
-    "https://durable.durable-functions.devo.us-west-2.lambda.aws.a2z.com",
+  AWS_REGION: process.env.AWS_REGION || "us-east-1",
+  LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT,
   PROJECT_ROOT: join(__dirname, "../../../.."),
   // Package directory paths
   SDK_PACKAGE_PATH: join(
