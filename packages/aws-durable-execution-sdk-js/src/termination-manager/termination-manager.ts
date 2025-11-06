@@ -45,6 +45,7 @@ export class TerminationManager extends EventEmitter {
     this.terminationDetails = {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,
       message: options.message ?? "Operation terminated",
+      error: options.error,
       cleanup: options.cleanup,
     };
 
@@ -72,6 +73,7 @@ export class TerminationManager extends EventEmitter {
     return {
       reason: details.reason,
       message: details.message,
+      error: details.error,
     };
   }
 }

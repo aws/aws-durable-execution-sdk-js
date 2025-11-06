@@ -9,6 +9,10 @@ import { log } from "../logger/logger";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import {
+  CheckpointUnrecoverableInvocationError,
+  CheckpointUnrecoverableExecutionError,
+} from "../../errors/checkpoint-errors/checkpoint-errors";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -151,6 +155,66 @@ class CheckpointHandler {
     return false;
   }
 
+  /**
+   * Classifies checkpoint errors based on AWS SDK error response
+   * - 4xx with "Invalid Checkpoint Token" -\> CheckpointUnrecoverableInvocationError
+   * - Other 4xx -\> CheckpointUnrecoverableExecutionError
+   * - 5xx -\> CheckpointUnrecoverableInvocationError
+   */
+  private classifyCheckpointError(
+    error: unknown,
+  ):
+    | CheckpointUnrecoverableInvocationError
+    | CheckpointUnrecoverableExecutionError {
+    const originalError =
+      error instanceof Error ? error : new Error(String(error));
+
+    // Check if it's an AWS SDK error with status code
+    const awsError = error as {
+      name?: string;
+      $metadata?: { httpStatusCode?: number };
+      message?: string;
+    };
+
+    const statusCode = awsError.$metadata?.httpStatusCode;
+    const errorName = awsError.name;
+    const errorMessage = awsError.message || originalError.message;
+
+    log("🔍", "Classifying checkpoint error:", {
+      statusCode,
+      errorName,
+      errorMessage,
+    });
+
+    // 4xx error with InvalidParameterValueException and "Invalid Checkpoint Token" message
+    if (
+      statusCode &&
+      statusCode >= 400 &&
+      statusCode < 500 &&
+      errorName === "InvalidParameterValueException" &&
+      errorMessage.startsWith("Invalid Checkpoint Token")
+    ) {
+      return new CheckpointUnrecoverableInvocationError(
+        `Checkpoint failed: ${errorMessage}`,
+        originalError,
+      );
+    }
+
+    // Other 4xx errors
+    if (statusCode && statusCode >= 400 && statusCode < 500) {
+      return new CheckpointUnrecoverableExecutionError(
+        `Checkpoint failed: ${errorMessage}`,
+        originalError,
+      );
+    }
+
+    // 5xx errors or unknown errors (treat as invocation errors)
+    return new CheckpointUnrecoverableInvocationError(
+      `Checkpoint failed: ${errorMessage}`,
+      originalError,
+    );
+  }
+
   private async processQueue(): Promise<void> {
     if (this.isProcessing) {
       return;
@@ -219,15 +283,15 @@ class CheckpointHandler {
         error,
       });
 
-      // Preserve the original error details
-      const originalError =
-        error instanceof Error ? error : new Error(String(error));
+      // Classify the error and terminate with appropriate error type
+      const checkpointError = this.classifyCheckpointError(error);
 
       // Terminate execution on checkpoint failure with detailed message
       // No need to reject individual promises - termination will handle cleanup
       this.context.terminationManager.terminate({
         reason: TerminationReason.CHECKPOINT_FAILED,
-        message: `Checkpoint batch failed: ${originalError.message}`,
+        message: checkpointError.message,
+        error: checkpointError,
       });
     } finally {
       this.isProcessing = false;
