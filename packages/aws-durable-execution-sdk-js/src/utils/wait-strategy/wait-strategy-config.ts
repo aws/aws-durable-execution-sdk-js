@@ -1,9 +1,14 @@
-import { WaitForConditionDecision, JitterStrategy } from "../../types";
+import {
+  WaitForConditionDecision,
+  JitterStrategy,
+  Duration,
+} from "../../types";
+import { durationToSeconds } from "../duration/duration";
 
 interface WaitStrategyConfig<T> {
   maxAttempts?: number; // Maximum number of attempts
-  initialDelaySeconds?: number; // Initial delay before first retry
-  maxDelaySeconds?: number; // Maximum delay between retries
+  initialDelay?: Duration; // Initial delay before first retry
+  maxDelay?: Duration; // Maximum delay between retries
   backoffRate?: number; // Multiplier for each subsequent retry
   jitter?: JitterStrategy; // Jitter strategy to apply to retry delays
   shouldContinuePolling: (result: T) => boolean; // Function to determine if polling should continue
@@ -12,8 +17,8 @@ interface WaitStrategyConfig<T> {
 
 const DEFAULT_CONFIG = {
   maxAttempts: 60,
-  initialDelaySeconds: 5,
-  maxDelaySeconds: 300, // 5 minutes
+  initialDelay: { seconds: 5 },
+  maxDelay: { seconds: 300 }, // 5 minutes
   backoffRate: 1.5,
   jitter: JitterStrategy.FULL,
   timeoutSeconds: undefined, // No timeout by default
@@ -52,10 +57,12 @@ export const createWaitStrategy = <T>(config: WaitStrategyConfig<T>) => {
     }
 
     // Calculate delay with exponential backoff
+    const initialDelaySeconds = durationToSeconds(finalConfig.initialDelay);
+    const maxDelaySeconds = durationToSeconds(finalConfig.maxDelay);
+
     const baseDelay = Math.min(
-      finalConfig.initialDelaySeconds *
-        Math.pow(finalConfig.backoffRate, attemptsMade - 1),
-      finalConfig.maxDelaySeconds,
+      initialDelaySeconds * Math.pow(finalConfig.backoffRate, attemptsMade - 1),
+      maxDelaySeconds,
     );
 
     // Apply jitter
@@ -64,7 +71,7 @@ export const createWaitStrategy = <T>(config: WaitStrategyConfig<T>) => {
     // Ensure delay is an integer >= 1
     const finalDelay = Math.max(1, Math.round(delayWithJitter));
 
-    return { shouldContinue: true, delaySeconds: finalDelay };
+    return { shouldContinue: true, delay: { seconds: finalDelay } };
   };
 };
 

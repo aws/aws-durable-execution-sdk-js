@@ -24,7 +24,7 @@ export const handler = withDurableExecution(
           if (attemptCount >= 3) {
             return { shouldRetry: false };
           }
-          return { shouldRetry: true, delaySeconds: attemptCount };
+          return { shouldRetry: true, delay: { seconds: attemptCount } };
         },
         semantics: StepSemantics.AtMostOncePerRetry,
       },

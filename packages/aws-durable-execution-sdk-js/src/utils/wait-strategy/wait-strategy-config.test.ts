@@ -22,7 +22,7 @@ describe("createWaitStrategy", () => {
 
       expect(decision.shouldContinue).toBe(true);
       if (decision.shouldContinue) {
-        expect(decision.delaySeconds).toBeGreaterThan(0);
+        expect(decision.delay.seconds).toBeGreaterThan(0);
       }
     });
   });
@@ -38,8 +38,8 @@ describe("createWaitStrategy", () => {
       expect(decision.shouldContinue).toBe(true);
       if (decision.shouldContinue) {
         // Default initialDelaySeconds is 5 with FULL jitter (0 to 5)
-        expect(decision.delaySeconds).toBeGreaterThanOrEqual(1); // Min 1 second
-        expect(decision.delaySeconds).toBeLessThanOrEqual(5); // Max 5 seconds
+        expect(decision.delay.seconds).toBeGreaterThanOrEqual(1); // Min 1 second
+        expect(decision.delay.seconds).toBeLessThanOrEqual(5); // Max 5 seconds
       }
     });
 
@@ -76,7 +76,7 @@ describe("createWaitStrategy", () => {
 
     it("should use custom initialDelaySeconds", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
+        initialDelay: { seconds: 10 },
         jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
       });
@@ -84,14 +84,14 @@ describe("createWaitStrategy", () => {
       const decision = strategy("test", 1);
 
       if (decision.shouldContinue) {
-        expect(decision.delaySeconds).toBe(10);
+        expect(decision.delay.seconds).toBe(10);
       }
     });
 
     it("should use custom maxDelaySeconds", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 100,
-        maxDelaySeconds: 50,
+        initialDelay: { seconds: 100 },
+        maxDelay: { seconds: 50 },
         backoffRate: 2,
         jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
@@ -101,13 +101,13 @@ describe("createWaitStrategy", () => {
 
       if (decision.shouldContinue) {
         // Should be capped at maxDelaySeconds
-        expect(decision.delaySeconds).toBe(50);
+        expect(decision.delay.seconds).toBe(50);
       }
     });
 
     it("should use custom backoffRate", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
+        initialDelay: { seconds: 10 },
         backoffRate: 3,
         jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
@@ -122,9 +122,9 @@ describe("createWaitStrategy", () => {
         decision2.shouldContinue &&
         decision3.shouldContinue
       ) {
-        expect(decision1.delaySeconds).toBe(10); // 10 * 3^0 = 10
-        expect(decision2.delaySeconds).toBe(30); // 10 * 3^1 = 30
-        expect(decision3.delaySeconds).toBe(90); // 10 * 3^2 = 90
+        expect(decision1.delay.seconds).toBe(10); // 10 * 3^0 = 10
+        expect(decision2.delay.seconds).toBe(30); // 10 * 3^1 = 30
+        expect(decision3.delay.seconds).toBe(90); // 10 * 3^2 = 90
       }
     });
   });
@@ -132,7 +132,7 @@ describe("createWaitStrategy", () => {
   describe("Exponential backoff", () => {
     it("should implement exponential backoff correctly", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 2,
+        initialDelay: { seconds: 2 },
         backoffRate: 2,
         jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
@@ -149,17 +149,17 @@ describe("createWaitStrategy", () => {
         decision3.shouldContinue &&
         decision4.shouldContinue
       ) {
-        expect(decision1.delaySeconds).toBe(2); // 2 * 2^0 = 2
-        expect(decision2.delaySeconds).toBe(4); // 2 * 2^1 = 4
-        expect(decision3.delaySeconds).toBe(8); // 2 * 2^2 = 8
-        expect(decision4.delaySeconds).toBe(16); // 2 * 2^3 = 16
+        expect(decision1.delay.seconds).toBe(2); // 2 * 2^0 = 2
+        expect(decision2.delay.seconds).toBe(4); // 2 * 2^1 = 4
+        expect(decision3.delay.seconds).toBe(8); // 2 * 2^2 = 8
+        expect(decision4.delay.seconds).toBe(16); // 2 * 2^3 = 16
       }
     });
 
     it("should cap delay at maxDelaySeconds", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
-        maxDelaySeconds: 25,
+        initialDelay: { seconds: 10 },
+        maxDelay: { seconds: 25 },
         backoffRate: 2,
         jitter: JitterStrategy.NONE, // Remove jitter for predictable testing
         shouldContinuePolling: () => true,
@@ -174,9 +174,9 @@ describe("createWaitStrategy", () => {
         decision2.shouldContinue &&
         decision3.shouldContinue
       ) {
-        expect(decision1.delaySeconds).toBe(10); // 10 * 2^0 = 10
-        expect(decision2.delaySeconds).toBe(20); // 10 * 2^1 = 20
-        expect(decision3.delaySeconds).toBe(25); // 10 * 2^2 = 40, capped at 25
+        expect(decision1.delay.seconds).toBe(10); // 10 * 2^0 = 10
+        expect(decision2.delay.seconds).toBe(20); // 10 * 2^1 = 20
+        expect(decision3.delay.seconds).toBe(25); // 10 * 2^2 = 40, capped at 25
       }
     });
   });
@@ -184,7 +184,7 @@ describe("createWaitStrategy", () => {
   describe("Jitter", () => {
     it("should apply FULL jitter to delay", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
+        initialDelay: { seconds: 10 },
         jitter: JitterStrategy.FULL,
         shouldContinuePolling: () => true,
       });
@@ -194,7 +194,7 @@ describe("createWaitStrategy", () => {
       for (let i = 0; i < 10; i++) {
         const decision = strategy("test", 1);
         if (decision.shouldContinue) {
-          delays.push(decision.delaySeconds);
+          delays.push(decision.delay.seconds);
         }
       }
 
@@ -211,7 +211,7 @@ describe("createWaitStrategy", () => {
 
     it("should apply HALF jitter to delay", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
+        initialDelay: { seconds: 10 },
         jitter: JitterStrategy.HALF,
         shouldContinuePolling: () => true,
       });
@@ -221,7 +221,7 @@ describe("createWaitStrategy", () => {
       for (let i = 0; i < 10; i++) {
         const decision = strategy("test", 1);
         if (decision.shouldContinue) {
-          delays.push(decision.delaySeconds);
+          delays.push(decision.delay.seconds);
         }
       }
 
@@ -238,7 +238,7 @@ describe("createWaitStrategy", () => {
 
     it("should apply NONE jitter (no randomness)", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
+        initialDelay: { seconds: 10 },
         jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
       });
@@ -248,7 +248,7 @@ describe("createWaitStrategy", () => {
       for (let i = 0; i < 10; i++) {
         const decision = strategy("test", 1);
         if (decision.shouldContinue) {
-          delays.push(decision.delaySeconds);
+          delays.push(decision.delay.seconds);
         }
       }
 
@@ -264,7 +264,7 @@ describe("createWaitStrategy", () => {
 
     it("should ensure minimum delay of 1 second even with negative jitter", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 1,
+        initialDelay: { seconds: 1 },
         jitter: JitterStrategy.FULL, // Could make delay negative
         shouldContinuePolling: () => true,
       });
@@ -273,7 +273,7 @@ describe("createWaitStrategy", () => {
       for (let i = 0; i < 20; i++) {
         const decision = strategy("test", 1);
         if (decision.shouldContinue) {
-          expect(decision.delaySeconds).toBeGreaterThanOrEqual(1);
+          expect(decision.delay.seconds).toBeGreaterThanOrEqual(1);
         }
       }
     });
@@ -356,7 +356,7 @@ describe("createWaitStrategy", () => {
   describe("Edge cases", () => {
     it("should handle attempt number 1 correctly", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
+        initialDelay: { seconds: 10 },
         backoffRate: 2,
         jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
@@ -366,13 +366,13 @@ describe("createWaitStrategy", () => {
 
       if (decision.shouldContinue) {
         // First attempt should use initialDelaySeconds without backoff
-        expect(decision.delaySeconds).toBe(10);
+        expect(decision.delay.seconds).toBe(10);
       }
     });
 
     it("should handle zero jitter", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 5,
+        initialDelay: { seconds: 5 },
         jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
       });
@@ -380,13 +380,13 @@ describe("createWaitStrategy", () => {
       const decision = strategy("test", 1);
 
       if (decision.shouldContinue) {
-        expect(decision.delaySeconds).toBe(5);
+        expect(decision.delay.seconds).toBe(5);
       }
     });
 
     it("should handle backoffRate of 1 (no exponential growth)", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 10,
+        initialDelay: { seconds: 10 },
         backoffRate: 1,
         jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
@@ -402,15 +402,15 @@ describe("createWaitStrategy", () => {
         decision3.shouldContinue
       ) {
         // All should be the same with backoffRate = 1
-        expect(decision1.delaySeconds).toBe(10);
-        expect(decision2.delaySeconds).toBe(10);
-        expect(decision3.delaySeconds).toBe(10);
+        expect(decision1.delay.seconds).toBe(10);
+        expect(decision2.delay.seconds).toBe(10);
+        expect(decision3.delay.seconds).toBe(10);
       }
     });
 
     it("should round delay to nearest integer", () => {
       const strategy = createWaitStrategy({
-        initialDelaySeconds: 1.7,
+        initialDelay: { seconds: 1.7 },
         backoffRate: 1.5,
         jitter: JitterStrategy.NONE,
         shouldContinuePolling: () => true,
@@ -420,8 +420,8 @@ describe("createWaitStrategy", () => {
 
       if (decision.shouldContinue) {
         // 1.7 * 1.5^1 = 2.55, should be rounded
-        expect(decision.delaySeconds).toBe(3);
-        expect(Number.isInteger(decision.delaySeconds)).toBe(true);
+        expect(decision.delay.seconds).toBe(3);
+        expect(Number.isInteger(decision.delay.seconds)).toBe(true);
       }
     });
   });
@@ -435,8 +435,8 @@ describe("createWaitStrategy", () => {
 
       const strategy = createWaitStrategy({
         maxAttempts: 30,
-        initialDelaySeconds: 15,
-        maxDelaySeconds: 60,
+        initialDelay: { seconds: 15 },
+        maxDelay: { seconds: 60 },
         backoffRate: 1.2,
         shouldContinuePolling: (result: StackStatus) =>
           !["CREATE_COMPLETE", "CREATE_FAILED"].includes(result.status),
@@ -473,8 +473,8 @@ describe("createWaitStrategy", () => {
 
       const strategy = createWaitStrategy({
         maxAttempts: 100,
-        initialDelaySeconds: 5,
-        maxDelaySeconds: 30,
+        initialDelay: { seconds: 5 },
+        maxDelay: { seconds: 30 },
         shouldContinuePolling: (result: JobStatus) =>
           !["COMPLETED", "FAILED"].includes(result.status),
       });
@@ -497,7 +497,7 @@ describe("createWaitStrategy", () => {
     it("should work for simple boolean conditions", () => {
       const strategy = createWaitStrategy({
         maxAttempts: 5,
-        initialDelaySeconds: 2,
+        initialDelay: { seconds: 2 },
         shouldContinuePolling: (isReady: boolean) => !isReady,
       });
 

@@ -238,7 +238,7 @@ export interface DurableContext {
    *       if (state.status === "completed") {
    *         return { shouldContinue: false };
    *       }
-   *       return { shouldContinue: true, delaySeconds: Math.min(attempt * 2, 60) };
+   *       return { shouldContinue: true, delay: { seconds: Math.min(attempt * 2, 60) } };
    *     }
    *   }
    * );
@@ -264,7 +264,7 @@ export interface DurableContext {
    *   {
    *     initialState: { requestId: "req-456", ready: false },
    *     waitStrategy: (state, attempt) =>
-   *       state.ready ? { shouldContinue: false } : { shouldContinue: true, delaySeconds: 10 }
+   *       state.ready ? { shouldContinue: false } : { shouldContinue: true, delay: { seconds: 10 } }
    *   }
    * );
    * ```

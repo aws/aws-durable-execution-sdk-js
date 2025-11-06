@@ -43,7 +43,7 @@ describe("Step Handler Timing Tests", () => {
       const stepFn = jest.fn().mockRejectedValue(new Error("Test error"));
       const mockRetryStrategy = jest
         .fn()
-        .mockReturnValue({ shouldRetry: true, delaySeconds: 1 });
+        .mockReturnValue({ shouldRetry: true, delay: { seconds: 1 } });
 
       const mockHasRunningOperations = jest.fn().mockReturnValue(false);
 
@@ -142,7 +142,7 @@ describe("Step Handler Timing Tests", () => {
       // Mock retry strategy that decides to retry the interrupted step
       const mockRetryStrategy = jest.fn().mockReturnValue({
         shouldRetry: true,
-        delaySeconds: 2,
+        delay: { seconds: 2 },
       });
 
       // Mock hasRunningOperations to trigger waitForContinuation, then allow execution
@@ -195,7 +195,7 @@ describe("Step Handler Timing Tests", () => {
 
       const mockRetryStrategy = jest
         .fn()
-        .mockReturnValue({ shouldRetry: true, delaySeconds: 1 });
+        .mockReturnValue({ shouldRetry: true, delay: { seconds: 1 } });
 
       const mockHasRunningOperations = jest
         .fn()

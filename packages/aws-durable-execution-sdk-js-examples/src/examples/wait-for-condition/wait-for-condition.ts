@@ -20,7 +20,7 @@ export const handler = withDurableExecution(
           if (state >= 3) {
             return { shouldContinue: false };
           }
-          return { shouldContinue: true, delaySeconds: 1 };
+          return { shouldContinue: true, delay: { seconds: 1 } };
         },
         initialState: 0,
       },

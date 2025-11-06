@@ -27,8 +27,8 @@ export const retryPresets = {
    */
   default: createRetryStrategy({
     maxAttempts: 6,
-    initialDelaySeconds: 5,
-    maxDelaySeconds: 60,
+    initialDelay: { seconds: 5 },
+    maxDelay: { seconds: 60 },
     backoffRate: 2,
     jitter: JitterStrategy.FULL,
   }),

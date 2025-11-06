@@ -22,7 +22,7 @@ const STEP_CONFIG_WITH_RETRY_FAILURES_AFTER_1_SECOND_5_TIMES = {
       `. Retry? ${shouldRetry}. `,
     );
     if (shouldRetry) {
-      return { shouldRetry: true, delaySeconds: 1 };
+      return { shouldRetry: true, delay: { seconds: 1 } };
     } else {
       return { shouldRetry: false };
     }

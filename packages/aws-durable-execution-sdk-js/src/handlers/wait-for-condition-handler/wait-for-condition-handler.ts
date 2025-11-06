@@ -7,6 +7,7 @@ import {
   WaitForConditionContext,
   Logger,
 } from "../../types";
+import { durationToSeconds } from "../../utils/duration/duration";
 import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationAction,
@@ -316,7 +317,9 @@ export const executeWaitForCondition = async <T>(
       name,
       currentAttempt: currentAttempt,
       shouldContinue: decision.shouldContinue,
-      delaySeconds: decision.shouldContinue ? decision.delaySeconds : undefined,
+      delaySeconds: decision.shouldContinue
+        ? durationToSeconds(decision.delay)
+        : undefined,
     });
 
     if (!decision.shouldContinue) {
@@ -351,7 +354,7 @@ export const executeWaitForCondition = async <T>(
         Payload: serializedState, // Just the state, not wrapped in an object
         Name: name,
         StepOptions: {
-          NextAttemptDelaySeconds: decision.delaySeconds,
+          NextAttemptDelaySeconds: durationToSeconds(decision.delay),
         },
       });
 

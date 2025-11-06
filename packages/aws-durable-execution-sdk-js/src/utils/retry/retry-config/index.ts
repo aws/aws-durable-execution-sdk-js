@@ -1,4 +1,5 @@
-import { RetryDecision, JitterStrategy } from "../../../types";
+import { RetryDecision, JitterStrategy, Duration } from "../../../types";
+import { durationToSeconds } from "../../duration/duration";
 
 /**
  * Configuration options for creating a retry strategy
@@ -6,10 +7,10 @@ import { RetryDecision, JitterStrategy } from "../../../types";
 interface RetryStrategyConfig {
   /** Maximum number of total attempts (including initial attempt). Default: 3 */
   maxAttempts?: number;
-  /** Initial delay in seconds before first retry. Default: 5 */
-  initialDelaySeconds?: number;
-  /** Maximum delay in seconds between retries. Default: 300 (5 minutes) */
-  maxDelaySeconds?: number;
+  /** Initial delay before first retry. Default: \{ seconds: 5 \} */
+  initialDelay?: Duration;
+  /** Maximum delay between retries. Default: \{ minutes: 5 \} */
+  maxDelay?: Duration;
   /** Multiplier for exponential backoff on each retry. Default: 2 */
   backoffRate?: number;
   /** Jitter strategy to apply to retry delays. Default: JitterStrategy.FULL */
@@ -22,8 +23,8 @@ interface RetryStrategyConfig {
 
 const DEFAULT_CONFIG: Required<RetryStrategyConfig> = {
   maxAttempts: 3,
-  initialDelaySeconds: 5,
-  maxDelaySeconds: 300, // 5 minutes
+  initialDelay: { seconds: 5 },
+  maxDelay: { minutes: 5 },
   backoffRate: 2,
   jitter: JitterStrategy.FULL,
   retryableErrors: [/.*/], // By default, retry all errors
@@ -54,7 +55,7 @@ const applyJitter = (delay: number, strategy: JitterStrategy): number => {
  * // Create a custom retry strategy
  * const customRetry = createRetryStrategy({
  *   maxAttempts: 5,
- *   initialDelaySeconds: 10,
+ *   initialDelay: { seconds: 10 },
  *   backoffRate: 2,
  *   jitter: JitterStrategy.HALF,
  *   retryableErrors: [/timeout/i, /connection/i]
@@ -98,10 +99,12 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
     }
 
     // Calculate delay with exponential backoff
+    const initialDelaySeconds = durationToSeconds(finalConfig.initialDelay);
+    const maxDelaySeconds = durationToSeconds(finalConfig.maxDelay);
+
     const baseDelay = Math.min(
-      finalConfig.initialDelaySeconds *
-        Math.pow(finalConfig.backoffRate, attemptsMade - 1),
-      finalConfig.maxDelaySeconds,
+      initialDelaySeconds * Math.pow(finalConfig.backoffRate, attemptsMade - 1),
+      maxDelaySeconds,
     );
 
     // Apply jitter
@@ -110,7 +113,7 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
     // Ensure delay is an integer >= 1
     const finalDelay = Math.max(1, Math.round(delayWithJitter));
 
-    return { shouldRetry: true, delaySeconds: finalDelay };
+    return { shouldRetry: true, delay: { seconds: finalDelay } };
   };
 };
 

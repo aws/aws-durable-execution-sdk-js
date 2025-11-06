@@ -18,7 +18,7 @@ export const handler = withDurableExecution(
       {
         retryStrategy: (_, attemptsMade: number) => {
           const shouldRetry = attemptsMade <= 5;
-          return { shouldRetry, delaySeconds: 1 + attemptsMade };
+          return { shouldRetry, delay: { seconds: 1 + attemptsMade } };
         },
       },
     );

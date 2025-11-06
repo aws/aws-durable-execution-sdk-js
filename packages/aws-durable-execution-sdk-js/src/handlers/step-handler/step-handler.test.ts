@@ -180,7 +180,7 @@ describe("Step Handler", () => {
     const stepFn = jest.fn().mockResolvedValue("step-result");
     const mockRetryStrategy = jest
       .fn()
-      .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
+      .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics
     stepHandler("test-step", stepFn, {
@@ -357,7 +357,7 @@ describe("Step Handler", () => {
     const stepFn = jest.fn().mockRejectedValue(error);
     const mockRetryStrategy = jest
       .fn()
-      .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
+      .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler but don't await it (it will never resolve)
     stepHandler("test-step", stepFn, {
@@ -392,7 +392,7 @@ describe("Step Handler", () => {
 
     (retryPresets.default as jest.Mock).mockReturnValue({
       shouldRetry: true,
-      delaySeconds: 5,
+      delay: { seconds: 5 },
     });
 
     // Call the step handler but don't await it (it will never resolve)
@@ -556,7 +556,7 @@ describe("Step Handler", () => {
     // Mock the default retry strategy
     (retryPresets.default as jest.Mock).mockReturnValue({
       shouldRetry: true,
-      delaySeconds: 5,
+      delay: { seconds: 5 },
     });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics but no custom retry strategy
@@ -649,7 +649,7 @@ describe("Step Handler", () => {
 
     (retryPresets.default as jest.Mock).mockReturnValue({
       shouldRetry: true,
-      delaySeconds: 5,
+      delay: { seconds: 5 },
     });
 
     // Call the step handler without a name
@@ -686,7 +686,7 @@ describe("Step Handler", () => {
     // Mock the default retry strategy
     (retryPresets.default as jest.Mock).mockReturnValue({
       shouldRetry: true,
-      delaySeconds: 5,
+      delay: { seconds: 5 },
     });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics but no name
@@ -751,7 +751,7 @@ describe("Step Handler", () => {
     const stepFn = jest.fn().mockResolvedValue("step-result");
     const mockRetryStrategy = jest
       .fn()
-      .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
+      .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics
     stepHandler("test-step", stepFn, {
@@ -773,7 +773,7 @@ describe("Step Handler", () => {
     const stepFn = jest.fn().mockRejectedValue(nonErrorObject);
     const mockRetryStrategy = jest
       .fn()
-      .mockReturnValue({ shouldRetry: true, delaySeconds: 10 });
+      .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler with custom retry strategy
     stepHandler("test-step", stepFn, {
@@ -805,7 +805,7 @@ describe("Step Handler", () => {
 
     (retryPresets.default as jest.Mock).mockReturnValue({
       shouldRetry: true,
-      delaySeconds: 5,
+      delay: { seconds: 5 },
     });
 
     // Call the step handler with default retry strategy

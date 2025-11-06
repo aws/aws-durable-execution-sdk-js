@@ -58,7 +58,7 @@ export const handler = withDurableExecution(
               if (attemptCount < 2) {
                 return {
                   shouldRetry: true,
-                  delaySeconds: 1,
+                  delay: { seconds: 1 },
                 };
               }
               return {

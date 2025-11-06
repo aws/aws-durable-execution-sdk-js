@@ -65,7 +65,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
 
       const config: WaitForConditionConfig<{ complete: boolean }> = {
         initialState: { complete: false },
-        waitStrategy: () => ({ shouldContinue: true, delaySeconds: 1 }),
+        waitStrategy: () => ({ shouldContinue: true, delay: { seconds: 1 } }),
       };
 
       const mockHasRunningOperations = jest.fn().mockReturnValue(false);
@@ -118,7 +118,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
 
       const config: WaitForConditionConfig<{ complete: boolean }> = {
         initialState: { complete: false },
-        waitStrategy: () => ({ shouldContinue: false, delaySeconds: 0 }),
+        waitStrategy: () => ({ shouldContinue: false, delay: { seconds: 0 } }),
       };
 
       // Mock hasRunningOperations to return true initially (to trigger waitForContinuation)
@@ -164,7 +164,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         initialState: { count: 0 },
         waitStrategy: (state, _attempt) => ({
           shouldContinue: state.count < 2, // Continue until count reaches 2
-          delaySeconds: 1,
+          delay: { seconds: 1 },
         }),
       };
 
@@ -238,7 +238,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         initialState: { progress: 0 },
         waitStrategy: (state, _attempt) => ({
           shouldContinue: state.progress < 100,
-          delaySeconds: 2,
+          delay: { seconds: 2 },
         }),
       };
 
@@ -303,7 +303,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         initialState: { attempts: 0 },
         waitStrategy: (state) => ({
           shouldContinue: state.attempts < 3,
-          delaySeconds: 1,
+          delay: { seconds: 1 },
         }),
       };
 

@@ -1,5 +1,6 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { WaitForConditionContext } from "./logger";
+import { Duration } from "../types";
 
 /**
  * Function that checks and updates state for waitForCondition operations
@@ -27,7 +28,7 @@ export type WaitForConditionWaitStrategyFunc<T> = (
  * Decision object for waitForCondition wait strategy
  */
 export type WaitForConditionDecision =
-  | { shouldContinue: true; delaySeconds: number }
+  | { shouldContinue: true; delay: Duration }
   | { shouldContinue: false };
 
 /**

@@ -1,5 +1,5 @@
 import { createDurableContext } from "./durable-context";
-import { DurableExecutionMode } from "../../types";
+import { DurableExecutionMode, Duration } from "../../types";
 import { Context } from "aws-lambda";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createMockExecutionContext } from "../../testing/mock-context";
@@ -363,10 +363,10 @@ describe("DurableContext", () => {
         initialState: {},
         waitStrategy: (): {
           shouldContinue: boolean;
-          delaySeconds: number;
+          delay: Duration;
         } => ({
           shouldContinue: true,
-          delaySeconds: 1,
+          delay: { seconds: 1 },
         }),
       };
 
@@ -397,10 +397,10 @@ describe("DurableContext", () => {
         initialState: {},
         waitStrategy: (): {
           shouldContinue: boolean;
-          delaySeconds: number;
+          delay: Duration;
         } => ({
           shouldContinue: true,
-          delaySeconds: 1,
+          delay: { seconds: 1 },
         }),
       };
 

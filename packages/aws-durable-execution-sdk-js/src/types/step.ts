@@ -1,9 +1,10 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { StepContext } from "./logger";
+import { Duration } from "../types";
 
 export interface RetryDecision {
   shouldRetry: boolean;
-  delaySeconds?: number;
+  delay?: Duration;
 }
 
 export enum StepSemantics {

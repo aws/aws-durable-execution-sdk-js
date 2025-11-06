@@ -8,6 +8,7 @@ import {
   StepContext,
   Logger,
 } from "../../types";
+import { durationToSeconds } from "../../utils/duration/duration";
 import {
   terminate,
   terminateForUnrecoverableError,
@@ -193,7 +194,9 @@ export const createStepHandler = (
               currentAttempt,
               shouldRetry: retryDecision.shouldRetry,
               delaySeconds: retryDecision.shouldRetry
-                ? retryDecision.delaySeconds
+                ? retryDecision.delay
+                  ? durationToSeconds(retryDecision.delay)
+                  : undefined
                 : undefined,
             });
 
@@ -222,7 +225,9 @@ export const createStepHandler = (
                 Error: createErrorObjectFromError(error),
                 Name: name,
                 StepOptions: {
-                  NextAttemptDelaySeconds: retryDecision.delaySeconds,
+                  NextAttemptDelaySeconds: retryDecision.delay
+                    ? durationToSeconds(retryDecision.delay)
+                    : 1,
                 },
               });
 
@@ -444,7 +449,9 @@ export const executeStep = async <T>(
       currentAttempt,
       shouldRetry: retryDecision.shouldRetry,
       delaySeconds: retryDecision.shouldRetry
-        ? retryDecision.delaySeconds
+        ? retryDecision.delay
+          ? durationToSeconds(retryDecision.delay)
+          : undefined
         : undefined,
       semantics,
     });
@@ -476,7 +483,9 @@ export const executeStep = async <T>(
         Error: createErrorObjectFromError(error),
         Name: name,
         StepOptions: {
-          NextAttemptDelaySeconds: retryDecision.delaySeconds,
+          NextAttemptDelaySeconds: retryDecision.delay
+            ? durationToSeconds(retryDecision.delay)
+            : 1,
         },
       });
 

@@ -18,7 +18,7 @@ const stepConfig: StepConfig<any> = {
   retryStrategy: (_error, attemptCount) => {
     return {
       shouldRetry: attemptCount < 3,
-      delaySeconds: 1,
+      delay: { seconds: 1 },
     };
   },
 };

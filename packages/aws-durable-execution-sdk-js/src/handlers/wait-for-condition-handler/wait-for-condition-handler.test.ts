@@ -262,7 +262,7 @@ describe("WaitForCondition Handler", () => {
         waitStrategy: (state, attempt) => {
           expect(state).toBe("not-ready");
           expect(attempt).toBe(1);
-          return { shouldContinue: true, delaySeconds: 30 };
+          return { shouldContinue: true, delay: { seconds: 30 } };
         },
         initialState: "initial",
       };
@@ -443,7 +443,7 @@ describe("WaitForCondition Handler", () => {
         .fn()
         .mockResolvedValue("not-ready");
       const config: WaitForConditionConfig<string> = {
-        waitStrategy: () => ({ shouldContinue: true, delaySeconds: 30 }),
+        waitStrategy: () => ({ shouldContinue: true, delay: { seconds: 30 } }),
         initialState: "initial",
       };
 
