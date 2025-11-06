@@ -249,14 +249,9 @@ const handleCompletedCallback = async <T>(
     throw new Error(`No callback ID found for completed callback: ${stepId}`);
   }
 
-  const result = callbackData.Result;
-  if (result === undefined) {
-    throw new Error(`No result found for completed callback: ${stepId}`);
-  }
-
   const deserializedResult = await safeDeserialize(
     serdes,
-    result,
+    callbackData.Result,
     stepId,
     stepName,
     context.terminationManager,

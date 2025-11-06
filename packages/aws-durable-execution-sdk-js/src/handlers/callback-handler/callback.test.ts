@@ -125,6 +125,49 @@ describe("Callback Handler", () => {
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
+    test("should return cached result for already completed callback with undefined result", async () => {
+      // Set up a callback that was already completed
+      const stepId = TEST_CONSTANTS.CALLBACK_ID;
+      const hashedStepId = hashId(stepId);
+      mockExecutionContext._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: OperationStatus.SUCCEEDED,
+          CallbackDetails: {
+            CallbackId: "callback-123",
+          },
+        } as Operation,
+      };
+
+      const [promise, callbackId] =
+        await callbackHandler<string>("test-callback");
+
+      // Verify the callback ID is returned immediately
+      expect(callbackId).toBe("callback-123");
+
+      // Verify the promise resolves to the deserialized result
+      const result = await promise;
+      expect(result).toBe("deserialized-result");
+
+      // Verify safeDeserialize was called with correct parameters
+      expect(mockSafeDeserialize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          serialize: expect.any(Function),
+          deserialize: expect.any(Function),
+        }),
+        undefined,
+        TEST_CONSTANTS.CALLBACK_ID,
+        "test-callback",
+        mockTerminationManager,
+        "test-arn",
+      );
+
+      // Verify checkpoint was not called for completed callback
+      expect(mockCheckpoint).not.toHaveBeenCalled();
+      // Verify terminate was not called for completed callback
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+    });
+
     test("should handle completed callback without name", async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
@@ -236,24 +279,6 @@ describe("Callback Handler", () => {
 
       await expect(callbackHandler<string>("test-callback")).rejects.toThrow(
         "No callback ID found for completed callback: test-callback-id",
-      );
-    });
-
-    test("should throw error if completed callback has no result", async () => {
-      const stepId = TEST_CONSTANTS.CALLBACK_ID;
-      const hashedStepId = hashId(stepId);
-      mockExecutionContext._stepData = {
-        [hashedStepId]: {
-          Id: hashedStepId,
-          Status: OperationStatus.SUCCEEDED,
-          CallbackDetails: {
-            CallbackId: "callback-789",
-          },
-        } as Operation,
-      };
-
-      await expect(callbackHandler<string>("test-callback")).rejects.toThrow(
-        "No result found for completed callback: test-callback-id",
       );
     });
 

@@ -53,10 +53,10 @@ export interface DurableOperation<Value> extends OperationWithData<Value> {
 
   // Callback APIs
   sendCallbackSuccess(
-    result: string,
+    result?: string,
   ): Promise<SendDurableExecutionCallbackSuccessCommandOutput>;
   sendCallbackFailure(
-    error: ErrorObject,
+    error?: ErrorObject,
   ): Promise<SendDurableExecutionCallbackFailureCommandOutput>;
   sendCallbackHeartbeat(): Promise<SendDurableExecutionCallbackHeartbeatCommandOutput>;
 }
