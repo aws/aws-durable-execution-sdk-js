@@ -10,9 +10,6 @@ import {
   CreateFunctionCommand,
   UpdateFunctionCodeCommand,
   UpdateFunctionConfigurationCommand,
-  GetPolicyCommand,
-  // TODO: Add PutResourcePolicyCommand to client-lambda package
-  // PutResourcePolicyCommand,
   Runtime,
   GetFunctionConfigurationCommandOutput,
 } from "@aws-sdk/client-lambda";
@@ -23,7 +20,6 @@ import catalog from "../src/utils/examples-catalog";
 interface EnvironmentVariables {
   AWS_ACCOUNT_ID: string;
   LAMBDA_ENDPOINT: string;
-  INVOKE_ACCOUNT_ID: string;
   AWS_REGION: string;
   GITHUB_ACTIONS?: string;
   GITHUB_ENV?: string;
@@ -59,11 +55,7 @@ function loadEnvironmentVariables(): EnvironmentVariables {
   }
 
   // Validate required environment variables
-  const requiredVars = [
-    "AWS_ACCOUNT_ID",
-    "LAMBDA_ENDPOINT",
-    "INVOKE_ACCOUNT_ID",
-  ];
+  const requiredVars = ["AWS_ACCOUNT_ID", "LAMBDA_ENDPOINT"];
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
   if (missingVars.length > 0) {
@@ -76,8 +68,7 @@ function loadEnvironmentVariables(): EnvironmentVariables {
   return {
     AWS_ACCOUNT_ID: process.env.AWS_ACCOUNT_ID!,
     LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT!,
-    INVOKE_ACCOUNT_ID: process.env.INVOKE_ACCOUNT_ID!,
-    AWS_REGION: process.env.AWS_REGION || "us-west-2",
+    AWS_REGION: process.env.AWS_REGION!,
     GITHUB_ACTIONS: process.env.GITHUB_ACTIONS,
     GITHUB_ENV: process.env.GITHUB_ENV,
   };
@@ -265,39 +256,6 @@ async function updateFunction(
   }
 }
 
-async function checkAndAddResourcePolicy(
-  lambdaClient: LambdaClient,
-  functionName: string,
-  invokeAccountId: string,
-  env: EnvironmentVariables,
-): Promise<void> {
-  console.log("Setting resource policy...");
-
-  const functionArn = `arn:aws:lambda:${env.AWS_REGION}:${env.AWS_ACCOUNT_ID}:function:${functionName}`;
-
-  const policyDocument = {
-    Version: "2012-10-17",
-    Statement: [
-      {
-        Sid: "dex-invoke-permission",
-        Effect: "Allow",
-        Principal: { AWS: invokeAccountId },
-        Action: ["lambda:InvokeFunction", "lambda:GetFunctionConfiguration"],
-        Resource: `${functionArn}:*`,
-      },
-    ],
-  };
-
-  // TODO: Add PutResourcePolicyCommand to client-lambda package
-  // const putResourcePolicyCommand = new PutResourcePolicyCommand({
-  //   ResourceArn: functionArn,
-  //   Policy: JSON.stringify(policyDocument),
-  // });
-
-  // await lambdaClient.send(putResourcePolicyCommand);
-  // console.log("Resource policy set successfully");
-}
-
 async function showFinalConfiguration(
   lambdaClient: LambdaClient,
   functionName: string,
@@ -370,14 +328,6 @@ async function main(): Promise<void> {
         env,
       );
     }
-
-    // Add resource policy
-    await checkAndAddResourcePolicy(
-      lambdaClient,
-      functionName,
-      env.INVOKE_ACCOUNT_ID,
-      env,
-    );
 
     // Set GITHUB_ENV if running in GitHub Actions
     if (env.GITHUB_ENV) {

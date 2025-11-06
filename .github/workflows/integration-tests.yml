@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 # permission can be added at job level or workflow level
 permissions:
