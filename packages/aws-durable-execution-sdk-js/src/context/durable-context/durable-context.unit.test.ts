@@ -291,7 +291,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.wait(5);
+      context.wait({ seconds: 5 });
 
       const { createWaitHandler } = jest.requireMock(
         "../../handlers/wait-handler/wait-handler",
@@ -313,9 +313,9 @@ describe("DurableContext", () => {
       const mockHandler = jest.fn();
       createWaitHandler.mockReturnValue(mockHandler);
 
-      context.wait("wait-name", 5);
+      context.wait("wait-name", { seconds: 5 });
 
-      expect(mockHandler).toHaveBeenCalledWith("wait-name", 5);
+      expect(mockHandler).toHaveBeenCalledWith("wait-name", { seconds: 5 });
     });
 
     it("should call createCallback handler", () => {

@@ -3,6 +3,7 @@ import { Logger } from "./logger";
 import { StepFunc, StepConfig } from "./step";
 import { ChildFunc, ChildConfig } from "./child-context";
 import { InvokeConfig } from "./invoke";
+import { Duration } from "./core";
 import {
   CreateCallbackConfig,
   CreateCallbackResult,
@@ -47,14 +48,14 @@ export interface DurableContext {
    * ```typescript
    * // ❌ WRONG: Cannot call durable operations inside step
    * await context.step("process-order", async (ctx) => {
-   *   await context.wait(1000);              // ERROR: context not available
+   *   await context.wait({ seconds: 1 });    // ERROR: context not available
    *   await context.step(async () => ...);   // ERROR: context not available
    *   return result;
    * });
    *
    * // ✅ CORRECT: Use runInChildContext to group operations
    * await context.runInChildContext("process-order", async (childCtx) => {
-   *   await childCtx.wait(1000);
+   *   await childCtx.wait({ seconds: 1 });
    *   const step1 = await childCtx.step(async () => validateOrder(order));
    *   const step2 = await childCtx.step(async () => chargePayment(step1));
    *   return step2;
@@ -192,25 +193,31 @@ export interface DurableContext {
   /**
    * Pauses execution for the specified duration
    * @param name - Step name for tracking and debugging
-   * @param millis - Duration to wait in milliseconds
+   * @param duration - Duration to wait
    * @example
    * ```typescript
    * // Wait 5 seconds before retrying
-   * await context.wait("retry-delay", 5000);
+   * await context.wait("retry-delay", { seconds: 5 });
+   *
+   * // Wait for a longer duration
+   * await context.wait("long-delay", { minutes: 5, seconds: 30 });
    * ```
    */
-  wait(name: string, millis: number): Promise<void>;
+  wait(name: string, duration: Duration): Promise<void>;
 
   /**
    * Pauses execution for the specified duration
-   * @param millis - Duration to wait in milliseconds
+   * @param duration - Duration to wait
    * @example
    * ```typescript
    * // Wait 30 seconds for rate limiting
-   * await context.wait(30000);
+   * await context.wait({ seconds: 30 });
+   *
+   * // Wait using multiple units
+   * await context.wait({ hours: 1, minutes: 30 });
    * ```
    */
-  wait(millis: number): Promise<void>;
+  wait(duration: Duration): Promise<void>;
 
   /**
    * Waits for a condition to be met by periodically checking state

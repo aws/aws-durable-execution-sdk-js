@@ -68,6 +68,12 @@ export type DurableExecutionInvocationOutput =
   | DurableExecutionInvocationOutputFailed
   | DurableExecutionInvocationOutputPending;
 
+export type Duration =
+  | { days: number; hours?: number; minutes?: number; seconds?: number }
+  | { hours: number; minutes?: number; seconds?: number }
+  | { minutes: number; seconds?: number }
+  | { seconds: number };
+
 export interface ExecutionContext {
   state: ExecutionState;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead

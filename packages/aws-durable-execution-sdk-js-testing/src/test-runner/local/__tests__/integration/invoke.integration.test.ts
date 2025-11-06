@@ -32,7 +32,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
         const stepResult = await ctx.step("hello world", () => {
           return Promise.resolve("durable test result");
         });
-        await ctx.wait(1000);
+        await ctx.wait({ seconds: 1 });
         return {
           type: "durable",
           input: durableInput,

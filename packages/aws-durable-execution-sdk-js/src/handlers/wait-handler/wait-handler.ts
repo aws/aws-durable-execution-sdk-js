@@ -1,4 +1,4 @@
-import { ExecutionContext, OperationSubType } from "../../types";
+import { ExecutionContext, OperationSubType, Duration } from "../../types";
 import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationStatus,
@@ -11,6 +11,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import { durationToSeconds } from "../../utils/duration/duration";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -20,23 +21,25 @@ export const createWaitHandler = (
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ): {
-  (name: string, seconds: number): Promise<void>;
-  (seconds: number): Promise<void>;
+  (name: string, duration: Duration): Promise<void>;
+  (duration: Duration): Promise<void>;
 } => {
-  function waitHandler(name: string, seconds: number): Promise<void>;
-  function waitHandler(seconds: number): Promise<void>;
+  function waitHandler(name: string, duration: Duration): Promise<void>;
+  function waitHandler(duration: Duration): Promise<void>;
   async function waitHandler(
-    nameOrSeconds: string | number,
-    seconds?: number,
+    nameOrDuration: string | Duration,
+    duration?: Duration,
   ): Promise<void> {
-    const isNameFirst = typeof nameOrSeconds === "string";
-    const actualName = isNameFirst ? nameOrSeconds : undefined;
-    const actualSeconds = isNameFirst ? seconds! : nameOrSeconds;
+    const isNameFirst = typeof nameOrDuration === "string";
+    const actualName = isNameFirst ? nameOrDuration : undefined;
+    const actualDuration = isNameFirst ? duration! : nameOrDuration;
+    const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();
 
     log("⏲️", "Wait requested:", {
       stepId,
       name: actualName,
+      duration: actualDuration,
       seconds: actualSeconds,
     });
 

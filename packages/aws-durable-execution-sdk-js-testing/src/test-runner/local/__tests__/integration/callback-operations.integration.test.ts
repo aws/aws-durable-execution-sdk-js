@@ -314,7 +314,7 @@ describe("Callback Operations Integration", () => {
     const handler = withDurableExecution(
       async (event: unknown, context: DurableContext) => {
         // Mix callback with step and wait operations
-        await context.wait("initial-wait", 100);
+        await context.wait("initial-wait", { seconds: 1 });
 
         const stepResult = await context.step("fetch-data", () => {
           return Promise.resolve({ userId: 123, name: "John Doe" });

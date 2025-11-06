@@ -69,7 +69,7 @@ describe("Wait Handler", () => {
       Status: OperationStatus.SUCCEEDED,
     } as Operation;
 
-    await waitHandler("test-wait", 1);
+    await waitHandler("test-wait", { seconds: 1 });
 
     // Verify checkpoint was not called
     expect(mockCheckpoint).not.toHaveBeenCalled();
@@ -79,7 +79,7 @@ describe("Wait Handler", () => {
 
   test("should accept undefined as name parameter", async () => {
     // Call the wait handler with undefined name
-    waitHandler(500);
+    waitHandler({ seconds: 1 });
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -93,7 +93,7 @@ describe("Wait Handler", () => {
       Type: OperationType.WAIT,
       Name: undefined,
       WaitOptions: {
-        WaitSeconds: 500,
+        WaitSeconds: 1,
       },
     });
 
@@ -106,7 +106,7 @@ describe("Wait Handler", () => {
 
   test("should checkpoint at start and terminate with WAIT_SCHEDULED reason", async () => {
     // Call the wait handler but don't await it (it will never resolve)
-    waitHandler("test-wait", 1);
+    waitHandler("test-wait", { seconds: 1 });
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -132,7 +132,7 @@ describe("Wait Handler", () => {
 
   test("should use stepId as message when name is not provided", async () => {
     // Call the wait handler but don't await it (it will never resolve)
-    waitHandler(1);
+    waitHandler({ seconds: 1 });
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -155,7 +155,7 @@ describe("Wait Handler", () => {
         () => mockOperationsEmitter,
       );
 
-      waitHandler("test-wait", 1);
+      waitHandler("test-wait", { seconds: 1 });
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(
@@ -182,7 +182,7 @@ describe("Wait Handler", () => {
         () => mockOperationsEmitter,
       );
 
-      waitHandler("test-wait", 1);
+      waitHandler("test-wait", { seconds: 1 });
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(mockCheckpoint).not.toHaveBeenCalled();
@@ -200,7 +200,7 @@ describe("Wait Handler", () => {
         () => mockOperationsEmitter,
       );
 
-      waitHandler("test-wait", 1);
+      waitHandler("test-wait", { seconds: 1 });
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(mockCheckpoint).toHaveBeenCalledWith("test-step-id", {
@@ -235,7 +235,7 @@ describe("Wait Handler", () => {
       );
 
       // Start the wait handler (don't await - it will wait for operations)
-      waitHandler("test-wait", 1);
+      waitHandler("test-wait", { seconds: 1 });
 
       // Give it time to enter the waiting logic
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -290,7 +290,7 @@ describe("Wait Handler", () => {
       );
 
       // Start wait handler - should detect running operations and wait
-      waitHandler("parallel-wait", 2000);
+      waitHandler("parallel-wait", { seconds: 2 });
 
       // Give time for wait handler to enter complex waiting logic
       await new Promise((resolve) => setTimeout(resolve, 50));

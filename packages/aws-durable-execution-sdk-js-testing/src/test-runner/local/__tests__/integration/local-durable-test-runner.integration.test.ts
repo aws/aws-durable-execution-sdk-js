@@ -44,7 +44,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         // First wait operation - this will run in invocation index 0
-        await context.wait("wait-invocation-1", 1);
+        await context.wait("wait-invocation-1", { seconds: 1 });
 
         // This will execute in invocation index 1
         const stepResult = await context.step("process-data-step", () => {
@@ -52,7 +52,7 @@ describe("LocalDurableTestRunner Integration", () => {
         });
 
         // Second wait operation - this will run in invocation index 1
-        await context.wait("wait-invocation-2", 1);
+        await context.wait("wait-invocation-2", { seconds: 1 });
 
         // Third invocation will only return the result
         return {
@@ -228,9 +228,9 @@ describe("LocalDurableTestRunner Integration", () => {
       async (_event: unknown, context: DurableContext) => {
         // Use parallel to create multiple wait operations that schedule functions concurrently
         const results = await context.parallel([
-          () => context.wait("parallel-wait-1", 10),
-          () => context.wait("parallel-wait-2", 15),
-          () => context.wait("parallel-wait-3", 5),
+          () => context.wait("parallel-wait-1", { seconds: 10 }),
+          () => context.wait("parallel-wait-2", { seconds: 15 }),
+          () => context.wait("parallel-wait-3", { seconds: 5 }),
         ]);
 
         // This step runs after all parallel waits complete

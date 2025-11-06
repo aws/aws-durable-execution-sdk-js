@@ -12,8 +12,8 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {
-    await context.wait("wait-1", 5);
-    await context.wait("wait-2", 5);
+    await context.wait("wait-1", { seconds: 5 });
+    await context.wait("wait-2", { seconds: 5 });
 
     return {
       completedWaits: 2,

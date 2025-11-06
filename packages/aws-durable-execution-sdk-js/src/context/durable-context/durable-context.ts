@@ -13,6 +13,7 @@ import {
   WaitForConditionConfig,
   MapFunc,
   MapConfig,
+  Duration,
   ParallelFunc,
   ParallelConfig,
   NamedParallelBranch,
@@ -266,7 +267,10 @@ class DurableContextImpl implements DurableContext {
     });
   }
 
-  wait(nameOrSeconds: string | number, maybeSeconds?: number): Promise<void> {
+  wait(
+    nameOrDuration: string | Duration,
+    maybeDuration?: Duration,
+  ): Promise<void> {
     return this.withModeManagement(() => {
       const waitHandler = createWaitHandler(
         this.executionContext,
@@ -277,9 +281,9 @@ class DurableContextImpl implements DurableContext {
         this._parentId,
       );
       const promise =
-        typeof nameOrSeconds === "string"
-          ? waitHandler(nameOrSeconds, maybeSeconds!)
-          : waitHandler(nameOrSeconds);
+        typeof nameOrDuration === "string"
+          ? waitHandler(nameOrDuration, maybeDuration!)
+          : waitHandler(nameOrDuration);
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
       return promise;
