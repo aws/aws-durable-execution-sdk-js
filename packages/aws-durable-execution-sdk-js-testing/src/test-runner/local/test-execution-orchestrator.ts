@@ -35,6 +35,7 @@ import {
 } from "../../checkpoint-server/storage/checkpoint-manager";
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
+import { defaultLogger } from "../../logger";
 
 /**
  * Orchestrates test execution lifecycle, polling, and handler invocation for LocalDurableTestRunner.
@@ -463,7 +464,7 @@ export class TestExecutionOrchestrator {
     }
 
     if (this.invocationTracker.hasActiveInvocation()) {
-      console.warn(
+      defaultLogger.warn(
         "Skipping scheduled function execution due to current active invocation",
       );
       return;
@@ -526,7 +527,7 @@ export class TestExecutionOrchestrator {
         // When skipping time, it's possible an invocation hasn't fully wrapped up before another invocation starts.
         // TODO: add more time skipping options instead of completely skipping all time
         if (this.invocationTracker.hasActiveInvocation() && !this.skipTime) {
-          console.warn(
+          defaultLogger.warn(
             "Skipping scheduled function execution due to current active invocation",
           );
           return;

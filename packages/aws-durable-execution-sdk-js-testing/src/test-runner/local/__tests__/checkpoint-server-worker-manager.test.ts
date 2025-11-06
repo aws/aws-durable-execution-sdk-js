@@ -8,6 +8,7 @@ import {
 } from "../../../checkpoint-server/worker/worker-message-types";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { defaultLogger } from "../../../logger";
 
 // Mock worker_threads
 jest.mock("worker_threads");
@@ -30,8 +31,8 @@ describe("CheckpointServerWorkerManager", () => {
     jest.clearAllMocks();
     jest.resetModules();
 
-    // Mock console.warn to avoid noise in test output
-    console.warn = jest.fn();
+    // Mock defaultLogger.warn to avoid noise in test output
+    defaultLogger.warn = jest.fn();
 
     // Create a simplified mock worker
     mockWorker = {
@@ -404,7 +405,7 @@ describe("CheckpointServerWorkerManager", () => {
       const testError = new Error("Worker runtime error");
       errorHandler!(testError);
 
-      expect(console.warn).toHaveBeenCalledWith(
+      expect(defaultLogger.warn).toHaveBeenCalledWith(
         "There was a worker error: ",
         testError,
       );
@@ -437,7 +438,9 @@ describe("CheckpointServerWorkerManager", () => {
       // Simulate worker exit with non-zero code
       exitHandler!(1);
 
-      expect(console.warn).toHaveBeenCalledWith("Worker exited with code: 1");
+      expect(defaultLogger.warn).toHaveBeenCalledWith(
+        "Worker exited with code: 1",
+      );
       expect(manager.getServerInfo()).toBeNull(); // Worker should be nullified
     });
 
@@ -467,7 +470,7 @@ describe("CheckpointServerWorkerManager", () => {
       // Simulate worker exit with zero code (normal exit)
       exitHandler!(0);
 
-      expect(console.warn).not.toHaveBeenCalledWith(
+      expect(defaultLogger.warn).not.toHaveBeenCalledWith(
         expect.stringContaining("Worker exited with code:"),
       );
       expect(manager.getServerInfo()).toBeNull(); // Worker should still be nullified

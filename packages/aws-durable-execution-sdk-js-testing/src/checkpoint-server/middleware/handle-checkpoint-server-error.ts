@@ -8,7 +8,7 @@ export const handleCheckpointServerError: ErrorRequestHandler = (
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next,
 ) => {
-  console.error("Checkpoint server error:", err);
+  req.logger.error("Checkpoint server error:", err);
   res.status(500).json({
     message:
       typeof err === "object" && err && "message" in err

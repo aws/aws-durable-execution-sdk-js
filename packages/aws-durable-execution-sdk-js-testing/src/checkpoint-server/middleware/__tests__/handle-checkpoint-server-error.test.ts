@@ -1,16 +1,24 @@
 import { Request, Response } from "express";
 import { handleCheckpointServerError } from "../handle-checkpoint-server-error";
+import { Logger } from "../../../logger";
 
 describe("Handle Checkpoint Server Error Middleware", () => {
   // Mock Express objects
   let req: Partial<Request>;
   let res: Partial<Response>;
   let next: jest.Mock;
+  let mockLogger: Logger;
   let jsonMock: jest.Mock;
   let statusMock: jest.Mock;
 
   beforeEach(() => {
-    req = {};
+    // Setup request mock with logger
+    mockLogger = new Logger();
+    mockLogger.error = jest.fn();
+
+    req = {
+      logger: mockLogger as unknown as Logger,
+    };
 
     // Setup response mock with chained methods
     jsonMock = jest.fn();
@@ -27,6 +35,21 @@ describe("Handle Checkpoint Server Error Middleware", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it("should log the error", () => {
+    const error = new Error("Test error");
+    void handleCheckpointServerError(
+      error,
+      req as Request,
+      res as Response,
+      next,
+    );
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      "Checkpoint server error:",
+      error,
+    );
   });
 
   it("should set status code to 500", () => {
