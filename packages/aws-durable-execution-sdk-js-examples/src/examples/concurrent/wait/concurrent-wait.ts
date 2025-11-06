@@ -13,9 +13,9 @@ export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     console.log("Before waits");
     await Promise.all([
-      context.wait("wait-1-second", 1),
-      context.wait("wait-5-seconds", 5),
-      context.wait("wait-10-seconds", 10),
+      context.wait("wait-1-second", { seconds: 1 }),
+      context.wait("wait-5-seconds", { seconds: 5 }),
+      context.wait("wait-10-seconds", { seconds: 10 }),
     ]);
     console.log("After waits");
     return "Completed waits";

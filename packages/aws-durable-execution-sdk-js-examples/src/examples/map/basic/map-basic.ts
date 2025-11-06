@@ -28,7 +28,7 @@ export const handler = withDurableExecution(
 
     // context.wait() terminates the current execution and restarts it later,
     // ensuring getResults() functions correctly during workflow replay
-    await context.wait(1);
+    await context.wait({ seconds: 1 });
 
     return results.getResults();
   },

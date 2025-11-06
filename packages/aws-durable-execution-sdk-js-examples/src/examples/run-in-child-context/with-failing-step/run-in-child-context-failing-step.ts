@@ -36,7 +36,7 @@ export const handler = withDurableExecution(
       }
     }
 
-    await context.wait("wait-after-failure", 1);
+    await context.wait("wait-after-failure", { seconds: 1 });
 
     return { success: true };
   },

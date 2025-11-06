@@ -66,7 +66,7 @@ export const handler = withDurableExecution(
         }
 
         // Wait 1 second until next poll
-        await context.wait(1);
+        await context.wait({ seconds: 1 });
       }
     } catch (e) {
       console.error("Failing - DDB Retries Exhausted. ", e);

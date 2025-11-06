@@ -47,7 +47,7 @@ export const handler = withDurableExecution(
       },
     );
 
-    await context.wait("wait1", 1);
+    await context.wait("wait1", { seconds: 1 });
 
     // Process results immediately after map operation
     // Note: After wait operations, the BatchResult may be summarized and lose getResults() method
@@ -74,7 +74,7 @@ export const handler = withDurableExecution(
       allItemsProcessed: allItemsProcessed,
     };
 
-    await context.wait("wait2", 1);
+    await context.wait("wait2", { seconds: 1 });
 
     return {
       success: true,

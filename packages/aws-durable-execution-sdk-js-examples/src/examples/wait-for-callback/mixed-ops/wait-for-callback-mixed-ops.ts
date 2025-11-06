@@ -13,7 +13,7 @@ export const config: ExampleConfig = {
 export const handler = withDurableExecution(
   async (event: unknown, context: DurableContext) => {
     // Mix waitForCallback with other operation types
-    await context.wait("initial-wait", 1);
+    await context.wait("initial-wait", { seconds: 1 });
 
     const stepResult = await context.step("fetch-user-data", () => {
       return Promise.resolve({ userId: 123, name: "John Doe" });
@@ -27,7 +27,7 @@ export const handler = withDurableExecution(
       return Promise.resolve();
     });
 
-    await context.wait("final-wait", 2);
+    await context.wait("final-wait", { seconds: 2 });
 
     const finalStep = await context.step("finalize-processing", () => {
       return Promise.resolve({

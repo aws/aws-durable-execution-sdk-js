@@ -35,7 +35,7 @@ export const handler = withDurableExecution(
             console.log("Inside nested block");
 
             // Use the grandchild context for further nested operations
-            await grandchildContext.wait(1);
+            await grandchildContext.wait({ seconds: 1 });
 
             return "nested block result";
           },

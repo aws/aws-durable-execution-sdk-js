@@ -19,7 +19,7 @@ export const handler = withDurableExecution(
           "step-1",
           async () => "task 1 result",
         );
-        await childContext.wait("wait-1", 1);
+        await childContext.wait("wait-1", { seconds: 1 });
         return result;
       },
     );
@@ -31,7 +31,7 @@ export const handler = withDurableExecution(
           "step-2",
           async () => "task 2 result",
         );
-        await childContext.wait("wait-2", 2);
+        await childContext.wait("wait-2", { seconds: 2 });
         return result;
       },
     );

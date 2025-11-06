@@ -32,7 +32,7 @@ export const handler = withDurableExecution(
     });
 
     // Step 2: ctx.wait - Wait for 1 second
-    await context.wait(1);
+    await context.wait({ seconds: 1 });
 
     // Step 3: ctx.map - Map with 5 iterations returning numbers 1 to 5
     const mapInput = [1, 2, 3, 4, 5];

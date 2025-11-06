@@ -20,7 +20,7 @@ export const handler = withDurableExecution(
     const childContextResult = await context.runInChildContext(
       "child-context-with-callback",
       async (childContext) => {
-        await childContext.wait("child-wait", 1);
+        await childContext.wait("child-wait", { seconds: 1 });
 
         const childCallbackResult = await childContext.waitForCallback<{
           childData: number;

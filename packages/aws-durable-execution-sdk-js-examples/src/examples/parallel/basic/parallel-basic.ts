@@ -25,7 +25,7 @@ export const handler = withDurableExecution(
           });
         },
         async (childContext) => {
-          await childContext.wait(1);
+          await childContext.wait({ seconds: 1 });
           return "task 3 completed after wait";
         },
       ],

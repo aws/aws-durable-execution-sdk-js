@@ -32,7 +32,7 @@ export const handler = withDurableExecution(
         const deepNestedResult = await outerChildContext.runInChildContext(
           "inner-child-context",
           async (innerChildContext) => {
-            await innerChildContext.wait("deep-wait", 5);
+            await innerChildContext.wait("deep-wait", { seconds: 5 });
 
             const nestedCallbackResult =
               await innerChildContext.waitForCallback<{

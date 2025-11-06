@@ -25,7 +25,7 @@ export const handler = withDurableExecution(
     );
 
     await context.promise.allSettled([failurePromise]);
-    await context.wait(1);
+    await context.wait({ seconds: 1 });
 
     const successStep = await context.step(async () => {
       await new Promise((resolve) => setTimeout(resolve, 500));

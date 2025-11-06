@@ -31,7 +31,7 @@ export const handler = withDurableExecution(
       // ignoring error should not fail execution
     }
 
-    await context.wait("wait-after-basic", 1);
+    await context.wait("wait-after-basic", { seconds: 1 });
 
     // Scenario 2: Multiple timing patterns
     const step1 = context.step(
@@ -86,7 +86,7 @@ export const handler = withDurableExecution(
       // ignoring error should not cause unhandled rejection
     }
 
-    await context.wait("wait-middle", 1);
+    await context.wait("wait-middle", { seconds: 1 });
 
     try {
       await context.promise.any([step4]);
@@ -111,7 +111,7 @@ export const handler = withDurableExecution(
       { retryStrategy: () => ({ shouldRetry: false }) },
     );
 
-    await context.wait("wait-before-final", 1);
+    await context.wait("wait-before-final", { seconds: 1 });
 
     try {
       await context.promise.all([step5]);

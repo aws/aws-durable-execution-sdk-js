@@ -58,7 +58,7 @@ export const handler = withDurableExecution(
     );
 
     // Add a wait after runInChildContext to test persistence across invocations
-    await context.wait("post-processing-wait", 1);
+    await context.wait("post-processing-wait", { seconds: 1 });
 
     // Verify the data is still intact after the wait
     const dataIntegrityCheck =

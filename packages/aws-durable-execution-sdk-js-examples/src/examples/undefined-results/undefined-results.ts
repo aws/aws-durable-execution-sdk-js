@@ -16,7 +16,7 @@ export const handler = withDurableExecution(
 
     await context.runInChildContext("parent", () => Promise.resolve(undefined));
 
-    await context.wait(1);
+    await context.wait({ seconds: 1 });
 
     return "result";
   },

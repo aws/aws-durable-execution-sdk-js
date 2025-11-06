@@ -11,8 +11,8 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    const promise1 = context.wait("wait-1", 1);
-    const promise2 = context.wait("wait-2", 2);
+    const promise1 = context.wait("wait-1", { seconds: 1 });
+    const promise2 = context.wait("wait-2", { seconds: 2 });
     const promise3 = context.step(
       "wait-3",
       () => new Promise((resolve) => setTimeout(resolve, 3000)),
