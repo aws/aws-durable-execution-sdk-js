@@ -111,20 +111,19 @@ describe("steps-with-retry", () => {
       errorMessage: "Persistent failure",
       errorType: "StepError",
       errorData: undefined,
-      stackTrace: expect.any(Array),
+      stackTrace: undefined,
     };
 
     // Step details contain original Error
     const expectedStepError = {
       errorMessage: "Persistent failure",
       errorType: "Error",
-      stackTrace: expect.any(Array),
+      stackTrace: undefined,
     };
 
     const result = await durableTestRunner.run();
     const error = result.getError();
     expect(error).toEqual(expectedExecutionError);
-    expect(error.stackTrace?.length).toBeGreaterThan(1);
 
     // Verify that step operations were attempted
     const stepOp = durableTestRunner.getOperationByIndex(0);
@@ -141,9 +140,8 @@ describe("steps-with-retry", () => {
     expect(error).toEqual({
       errorMessage: "Item Not Found",
       errorType: "Error",
-      stackTrace: expect.any(Array),
+      stackTrace: undefined,
     });
-    expect(error.stackTrace?.length).toBeGreaterThan(1);
 
     // Verify that multiple operations were created for polling
     const firstStepOp = durableTestRunner.getOperationByIndex(0);

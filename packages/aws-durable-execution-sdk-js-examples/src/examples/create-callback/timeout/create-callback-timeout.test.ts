@@ -12,9 +12,10 @@ createTests({
       });
 
       expect(result.getError()).toEqual({
+        errorData: undefined,
         errorMessage: "Callback timed out on heartbeat",
         errorType: "CallbackError",
-        stackTrace: expect.any(Array),
+        stackTrace: undefined,
       });
     });
 
@@ -24,9 +25,10 @@ createTests({
       });
 
       expect(result.getError()).toEqual({
+        errorData: undefined,
         errorMessage: "Callback timed out",
         errorType: "CallbackError",
-        stackTrace: expect.any(Array),
+        stackTrace: undefined,
       });
     });
   },

@@ -212,8 +212,9 @@ export const createStepHandler = (
                 Name: name,
               });
 
-              // Wrap StepInterruptedError in StepError when retry is exhausted
-              throw new StepError(error.message, error);
+              // Reconstruct error from ErrorObject for deterministic behavior
+              const errorObject = createErrorObjectFromError(error);
+              throw DurableOperationError.fromErrorObject(errorObject);
             } else {
               // Retry
               await checkpoint(stepId, {
@@ -468,10 +469,9 @@ export const executeStep = async <T>(
         Name: name,
       });
 
-      throw new StepError(
-        error instanceof Error ? error.message : "Unknown error",
-        error instanceof Error ? error : undefined,
-      );
+      // Reconstruct error from ErrorObject for deterministic behavior
+      const errorObject = createErrorObjectFromError(error);
+      throw DurableOperationError.fromErrorObject(errorObject);
     } else {
       // Retry
       await checkpoint(stepId, {

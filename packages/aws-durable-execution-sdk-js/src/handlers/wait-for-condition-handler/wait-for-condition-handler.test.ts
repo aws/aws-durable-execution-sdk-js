@@ -16,6 +16,11 @@ import { OperationType, OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { EventEmitter } from "events";
+import {
+  WaitForConditionError,
+  DurableOperationError,
+  StepError,
+} from "../../errors/durable-error/durable-error";
 
 describe("WaitForCondition Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -199,6 +204,9 @@ describe("WaitForCondition Handler", () => {
       };
 
       await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
+        WaitForConditionError,
+      );
+      await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
         "Operation failed",
       );
     });
@@ -221,8 +229,42 @@ describe("WaitForCondition Handler", () => {
       };
 
       await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
+        WaitForConditionError,
+      );
+      await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
         "waitForCondition failed",
       );
+    });
+
+    it("should reconstruct error from ErrorObject for failed operation", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+      const originalError = new Error("Original error message");
+      const errorObject = createErrorObjectFromError(originalError);
+
+      mockExecutionContext._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.FAILED,
+        StepDetails: {
+          Error: errorObject,
+        },
+      } as any;
+
+      const checkFunc: WaitForConditionCheckFunc<string> = jest.fn();
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
+        "Original error message",
+      );
+
+      try {
+        await waitForConditionHandler(checkFunc, config);
+      } catch (error) {
+        expect(error).toBeInstanceOf(DurableOperationError);
+      }
     });
   });
 
@@ -518,6 +560,9 @@ describe("WaitForCondition Handler", () => {
       };
 
       await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
+        StepError, // After reconstruction, generic errors become StepError
+      );
+      await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
         "Check function failed",
       );
 
@@ -542,9 +587,12 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      // The original exception is re-thrown, but the checkpoint gets "Unknown error"
-      await expect(waitForConditionHandler(checkFunc, config)).rejects.toBe(
-        "String error",
+      // The original exception is wrapped in StepError after reconstruction
+      await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
+        StepError, // After reconstruction, generic errors become StepError
+      );
+      await expect(waitForConditionHandler(checkFunc, config)).rejects.toThrow(
+        "Unknown error", // Default message for non-Error exceptions
       );
 
       expect(mockCheckpoint).toHaveBeenCalledWith("step-1", {

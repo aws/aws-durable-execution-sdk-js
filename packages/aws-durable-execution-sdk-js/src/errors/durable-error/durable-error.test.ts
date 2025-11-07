@@ -41,7 +41,7 @@ describe("DurableOperationError", () => {
         ErrorType: "StepError",
         ErrorMessage: "Step failed",
         ErrorData: "error-data",
-        StackTrace: ["line1", "line2", "line3"],
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 

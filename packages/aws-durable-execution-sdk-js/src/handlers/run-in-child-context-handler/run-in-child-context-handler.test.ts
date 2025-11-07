@@ -296,7 +296,7 @@ describe("Run In Child Context Handler", () => {
 
     await expect(
       runInChildContextHandler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {}),
-    ).rejects.toThrow("Child context failed");
+    ).rejects.toThrow("Unknown error"); // After reconstruction, non-Error objects become "Unknown error"
 
     expect(mockCheckpoint).toHaveBeenCalledTimes(2);
     expect(mockCheckpoint).toHaveBeenNthCalledWith(

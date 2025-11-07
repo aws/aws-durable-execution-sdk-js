@@ -15,13 +15,7 @@ createTests({
       expect(error).toEqual({
         errorMessage: "Intentional handler failure",
         errorType: "Error",
-        stackTrace: expect.any(Array),
-      });
-
-      // Verify stack trace structure
-      expect(error.stackTrace?.length).toBeGreaterThan(1);
-      error.stackTrace?.forEach((value) => {
-        expect(typeof value).toBe("string");
+        stackTrace: undefined,
       });
 
       // Verify no operations were completed due to early error

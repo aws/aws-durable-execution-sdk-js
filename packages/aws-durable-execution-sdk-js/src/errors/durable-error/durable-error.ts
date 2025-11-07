@@ -1,4 +1,5 @@
 import { ErrorObject } from "@aws-sdk/client-lambda";
+import { STORE_STACK_TRACES } from "../../utils/constants/constants";
 
 /**
  * Base class for all durable operation errors
@@ -15,8 +16,8 @@ export abstract class DurableOperationError extends Error {
     this.cause = cause;
     this.errorData = errorData;
 
-    // Preserve original stack trace if cause exists
-    if (cause?.stack) {
+    // Preserve original stack trace if cause exists and stack traces are enabled
+    if (STORE_STACK_TRACES && cause?.stack) {
       this.stackTrace = cause.stack.split(/\r?\n/);
     }
   }
@@ -55,6 +56,12 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "WaitForConditionError":
+        return new WaitForConditionError(
+          errorObject.ErrorMessage || "Wait for condition failed",
+          cause,
+          errorObject.ErrorData,
+        );
       default:
         return new StepError(
           errorObject.ErrorMessage || "Unknown error",
@@ -72,8 +79,9 @@ export abstract class DurableOperationError extends Error {
       ErrorType: this.errorType,
       ErrorMessage: this.message,
       ErrorData: this.errorData,
-      StackTrace:
-        this.cause?.stack?.split(/\r?\n/) || this.stack?.split(/\r?\n/),
+      StackTrace: STORE_STACK_TRACES
+        ? this.cause?.stack?.split(/\r?\n/) || this.stack?.split(/\r?\n/)
+        : undefined,
     };
   }
 }
@@ -119,5 +127,16 @@ export class ChildContextError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Child context failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when a wait for condition operation fails
+ */
+export class WaitForConditionError extends DurableOperationError {
+  readonly errorType = "WaitForConditionError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Wait for condition failed", cause, errorData);
   }
 }

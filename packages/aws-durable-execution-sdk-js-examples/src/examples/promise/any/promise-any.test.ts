@@ -29,7 +29,7 @@ createTests<string>({
         errorMessage: "All promises were rejected",
         errorType: "StepError",
         errorData: undefined,
-        stackTrace: expect.any(Array),
+        stackTrace: undefined,
       });
       expect(execution.getOperations()).toHaveLength(4);
     }, 30000);

@@ -1,5 +1,6 @@
 import { ErrorObject } from "@aws-sdk/client-lambda";
 import { DurableOperationError } from "../../errors/durable-error/durable-error";
+import { STORE_STACK_TRACES } from "../constants/constants";
 
 function isErrorLike(obj: unknown): obj is Error {
   return (
@@ -29,7 +30,7 @@ export function createErrorObjectFromError(
       ErrorData: data,
       ErrorMessage: error.message,
       ErrorType: error.name,
-      StackTrace: error.stack?.split(/\r?\n/),
+      StackTrace: STORE_STACK_TRACES ? error.stack?.split(/\r?\n/) : undefined,
     };
   }
 

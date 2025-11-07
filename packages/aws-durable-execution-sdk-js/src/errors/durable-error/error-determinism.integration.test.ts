@@ -120,12 +120,8 @@ describe("Error Determinism Integration Tests", () => {
 
       // Should be serializable for storage
       const errorObject = stepError.toErrorObject();
-      expect(errorObject.StackTrace).toContain(
-        "Error: Database connection failed",
-      );
-      expect(errorObject.StackTrace).toContain(
-        "    at db.connect(db.js:45:12)",
-      );
+      // Stack traces are disabled by default, so StackTrace should be undefined
+      expect(errorObject.StackTrace).toBeUndefined();
     });
 
     it("should handle callback errors with complete error information", () => {
