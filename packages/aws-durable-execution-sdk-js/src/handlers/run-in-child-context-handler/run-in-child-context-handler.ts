@@ -343,9 +343,10 @@ export const executeChildContext = async <T>(
       Name: name,
     });
 
-    throw new ChildContextError(
-      error instanceof Error ? error.message : "Child context failed",
-      error instanceof Error ? error : undefined,
-    );
+    // Reconstruct error from ErrorObject for deterministic behavior
+    const errorObject = createErrorObjectFromError(error);
+    const reconstructedError =
+      DurableOperationError.fromErrorObject(errorObject);
+    throw new ChildContextError(reconstructedError.message, reconstructedError);
   }
 };

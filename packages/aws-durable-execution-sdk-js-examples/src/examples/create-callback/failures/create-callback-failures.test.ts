@@ -32,7 +32,7 @@ createTests({
       expect(result.getError()).toEqual({
         errorMessage: "External API failure",
         errorType: "CallbackError",
-        stackTrace: expect.any(Array),
+        stackTrace: undefined,
       });
     });
   },

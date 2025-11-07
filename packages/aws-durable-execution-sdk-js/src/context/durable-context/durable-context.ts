@@ -43,7 +43,7 @@ import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 import { EventEmitter } from "events";
-import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants";
+import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
 
 class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;

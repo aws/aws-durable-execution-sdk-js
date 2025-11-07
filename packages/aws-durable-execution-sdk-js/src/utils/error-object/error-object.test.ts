@@ -10,7 +10,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "Test error message",
         ErrorType: "Error",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -24,7 +24,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "Custom error message",
         ErrorType: "CustomError",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -52,7 +52,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "Empty stack error",
         ErrorType: "Error",
-        StackTrace: [""],
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -71,7 +71,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "Custom subclass error",
         ErrorType: "CustomError",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -83,7 +83,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "Type error message",
         ErrorType: "TypeError",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -95,7 +95,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "Reference error message",
         ErrorType: "ReferenceError",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
   });
@@ -111,7 +111,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: "test-data",
         ErrorMessage: "Error with data",
         ErrorType: "Error",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -125,7 +125,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: '{"key": "value", "number": 42}',
         ErrorMessage: "Error with JSON data",
         ErrorType: "Error",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -139,7 +139,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: "",
         ErrorMessage: "Error with empty data",
         ErrorType: "Error",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 
@@ -152,7 +152,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "Error with undefined data",
         ErrorType: "Error",
-        StackTrace: error.stack?.split(/\r?\n/),
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
   });
@@ -239,11 +239,8 @@ describe("createErrorObjectFromError", () => {
 
       const result = createErrorObjectFromError(error);
 
-      expect(result.StackTrace).toEqual([
-        "Error: Multi-line stack error",
-        "    at test (test.js:1:1)",
-        "    at main (main.js:5:5)",
-      ]);
+      // Stack traces are disabled by default
+      expect(result.StackTrace).toBeUndefined();
     });
 
     it("should handle single line stack traces", () => {
@@ -252,7 +249,7 @@ describe("createErrorObjectFromError", () => {
 
       const result = createErrorObjectFromError(error);
 
-      expect(result.StackTrace).toEqual(["Error: Single line error"]);
+      expect(result.StackTrace).toBeUndefined(); // Stack traces are disabled by default
     });
 
     it("should handle stack traces with Windows line endings", () => {
@@ -262,11 +259,8 @@ describe("createErrorObjectFromError", () => {
 
       const result = createErrorObjectFromError(error);
 
-      expect(result.StackTrace).toEqual([
-        "Error: Windows line endings",
-        "    at test (test.js:1:1)",
-        "    at main (main.js:5:5)",
-      ]);
+      // Stack traces are disabled by default
+      expect(result.StackTrace).toBeUndefined();
     });
 
     it("should handle stack traces with mixed line endings", () => {
@@ -276,11 +270,8 @@ describe("createErrorObjectFromError", () => {
 
       const result = createErrorObjectFromError(error);
 
-      expect(result.StackTrace).toEqual([
-        "Error: Mixed line endings",
-        "    at test (test.js:1:1)",
-        "    at main (main.js:5:5)",
-      ]);
+      // Stack traces are disabled by default
+      expect(result.StackTrace).toBeUndefined();
     });
   });
 
@@ -298,10 +289,7 @@ describe("createErrorObjectFromError", () => {
         ErrorData: undefined,
         ErrorMessage: "I look like an error",
         ErrorType: "FakeError",
-        StackTrace: [
-          "FakeError: I look like an error",
-          "    at fake (fake.js:1:1)",
-        ],
+        StackTrace: undefined, // Stack traces are disabled by default
       });
     });
 

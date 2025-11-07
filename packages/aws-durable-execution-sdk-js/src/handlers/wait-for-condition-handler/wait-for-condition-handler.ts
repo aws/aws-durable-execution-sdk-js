@@ -25,6 +25,10 @@ import {
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
+import {
+  DurableOperationError,
+  WaitForConditionError,
+} from "../../errors/durable-error/durable-error";
 
 // Special symbol to indicate that the main loop should continue
 const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
@@ -125,10 +129,20 @@ export const createWaitForConditionHandler = (
         }
 
         if (stepData?.Status === OperationStatus.FAILED) {
-          const errorMessage = stepData?.StepDetails?.Result;
-          // Return async rejected promise to ensure it's handled asynchronously
+          // Return an async rejected promise to ensure it's handled asynchronously
           return (async (): Promise<T> => {
-            throw new Error(errorMessage || "waitForCondition failed");
+            // Reconstruct the original error from stored ErrorObject
+            if (stepData.StepDetails?.Error) {
+              throw DurableOperationError.fromErrorObject(
+                stepData.StepDetails.Error,
+              );
+            } else {
+              // Fallback for legacy data without Error field
+              const errorMessage = stepData?.StepDetails?.Result;
+              throw new WaitForConditionError(
+                errorMessage || "waitForCondition failed",
+              );
+            }
           })();
         }
 
@@ -389,6 +403,8 @@ export const executeWaitForCondition = async <T>(
       Name: name,
     });
 
-    throw error;
+    // Reconstruct error from ErrorObject for deterministic behavior
+    const errorObject = createErrorObjectFromError(error);
+    throw DurableOperationError.fromErrorObject(errorObject);
   }
 };

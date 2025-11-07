@@ -1,6 +1,7 @@
 import {
   ChildContextError,
   DurableContext,
+  StepError,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
@@ -31,7 +32,10 @@ export const handler = withDurableExecution(
         );
       });
     } catch (error) {
-      if (!(error instanceof ChildContextError)) {
+      if (
+        !(error instanceof ChildContextError) &&
+        !(error instanceof StepError)
+      ) {
         throw error;
       }
     }

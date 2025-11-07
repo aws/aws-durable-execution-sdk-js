@@ -22,11 +22,7 @@ createTests({
       expect(error).toMatchObject({
         errorType: "StepError",
         errorMessage: "There was an error",
-        stackTrace: expect.any(Array),
-      });
-      expect(error.stackTrace?.length).toBeGreaterThan(1);
-      error.stackTrace?.forEach((value) => {
-        expect(typeof value).toBe("string");
+        stackTrace: undefined,
       });
 
       // Verify operations were tracked

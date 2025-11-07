@@ -210,7 +210,7 @@ describe("Step Handler", () => {
         ErrorMessage:
           "The step execution process was initiated but failed to reach completion due to an interruption.",
         ErrorType: "StepInterruptedError",
-        StackTrace: expect.any(Array),
+        StackTrace: undefined, // Stack traces are disabled by default
       }),
       StepOptions: {
         NextAttemptDelaySeconds: 10,
@@ -252,9 +252,10 @@ describe("Step Handler", () => {
       thrownError = error;
     }
 
-    // Verify the final error is StepError wrapping StepInterruptedError
+    // Verify the final error is StepError with reconstructed cause
     expect(thrownError).toBeInstanceOf(StepError);
-    expect(thrownError.cause).toBeInstanceOf(StepInterruptedError);
+    expect(thrownError.cause).toBeInstanceOf(Error);
+    expect(thrownError.cause?.name).toBe("StepInterruptedError");
     expect(thrownError.message).toBe(
       "The step execution process was initiated but failed to reach completion due to an interruption.",
     );
@@ -278,7 +279,7 @@ describe("Step Handler", () => {
         ErrorMessage:
           "The step execution process was initiated but failed to reach completion due to an interruption.",
         ErrorType: "StepInterruptedError",
-        StackTrace: expect.any(Array),
+        StackTrace: undefined, // Stack traces are disabled by default
       }),
     });
   });
@@ -454,7 +455,10 @@ describe("Step Handler", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(StepError);
       expect((error as StepError).message).toBe("original-step-error");
-      expect((error as StepError).cause).toBe(originalError);
+      // After error reconstruction, cause is a new Error instance with same properties
+      expect((error as StepError).cause).toBeInstanceOf(Error);
+      expect((error as StepError).cause?.message).toBe("original-step-error");
+      expect((error as StepError).cause?.name).toBe("Error");
     }
   });
 
@@ -587,7 +591,7 @@ describe("Step Handler", () => {
         ErrorMessage:
           "The step execution process was initiated but failed to reach completion due to an interruption.",
         ErrorType: "StepInterruptedError",
-        StackTrace: expect.any(Array),
+        StackTrace: undefined, // Stack traces are disabled by default
       }),
       StepOptions: {
         NextAttemptDelaySeconds: 5,
