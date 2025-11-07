@@ -252,6 +252,14 @@ export class ConcurrencyController {
         const completion = config.completionConfig;
         if (!completion) return failureCount === 0;
 
+        // Default to fail-fast when no completion criteria are defined
+        const hasAnyCompletionCriteria = Object.values(completion).some(
+          (value) => value !== undefined,
+        );
+        if (!hasAnyCompletionCriteria) {
+          return failureCount === 0;
+        }
+
         if (
           completion.toleratedFailureCount !== undefined &&
           failureCount > completion.toleratedFailureCount
@@ -268,17 +276,12 @@ export class ConcurrencyController {
       };
 
       const isComplete = (): boolean => {
-        const completion = config.completionConfig;
-
+        // Always complete when all items are done (matches BatchResult inference)
         if (completedCount === items.length) {
-          return (
-            !completion ||
-            failureCount === 0 ||
-            (completion.minSuccessful !== undefined &&
-              successCount >= completion.minSuccessful)
-          );
+          return true;
         }
 
+        const completion = config.completionConfig;
         if (
           completion?.minSuccessful !== undefined &&
           successCount >= completion.minSuccessful

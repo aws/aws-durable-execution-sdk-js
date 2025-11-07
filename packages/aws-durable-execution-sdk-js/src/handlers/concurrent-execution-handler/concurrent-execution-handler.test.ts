@@ -655,6 +655,35 @@ describe("ConcurrencyController", () => {
       expect(result.completionReason).toBe("ALL_COMPLETED");
     });
 
+    it("should handle empty completion config (no thresholds defined)", async () => {
+      const items = [
+        { id: "item-0", data: "data1", index: 0 },
+        { id: "item-1", data: "data2", index: 1 },
+      ];
+      const executor = jest.fn();
+
+      // First item fails - should fail-fast and not process second item
+      mockParentContext.runInChildContext.mockRejectedValueOnce(
+        new Error("failure"),
+      );
+
+      const result = await controller.executeItems(
+        items,
+        executor,
+        mockParentContext,
+        {
+          completionConfig: {}, // Empty config - should default to fail-fast
+          maxConcurrency: 1,
+        },
+      );
+
+      // Should fail-fast: stop after first failure, second item never starts
+      expect(result.successCount).toBe(0);
+      expect(result.failureCount).toBe(1);
+      expect(result.startedCount).toBe(0); // Second item never started due to fail-fast
+      expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    });
+
     it("should handle verbose logging", async () => {
       const verboseController = new ConcurrencyController(
         "verbose-test",
