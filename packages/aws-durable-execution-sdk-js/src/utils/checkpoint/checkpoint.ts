@@ -35,6 +35,7 @@ class CheckpointHandler {
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
   private pendingCompletions = new Set<string>(); // Track stepIds with pending SUCCEED/FAIL
+  private static textEncoder = new TextEncoder();
 
   constructor(
     private context: ExecutionContext,
@@ -235,7 +236,9 @@ class CheckpointHandler {
 
     while (this.queue.length > 0) {
       const nextItem = this.queue[0];
-      const itemSize = JSON.stringify(nextItem).length;
+      const itemSize = CheckpointHandler.textEncoder.encode(
+        JSON.stringify(nextItem),
+      ).length;
 
       if (currentSize + itemSize > this.MAX_PAYLOAD_SIZE && batch.length > 0) {
         break;

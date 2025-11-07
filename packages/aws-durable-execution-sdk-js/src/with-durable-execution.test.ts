@@ -322,6 +322,46 @@ describe("withDurableExecution", () => {
     });
   });
 
+  it("should checkpoint large results that exceed Lambda response size limit with large unicode characters", async () => {
+    // Setup - Create a large result that exceeds 6MB
+    const largeResult = { data: "\u{FFFF}".repeat(2 * 1024 * 1024) }; // 6MB of byte length, but only 2MB in length
+    const mockHandler = jest.fn().mockResolvedValue(largeResult);
+    const mockCheckpoint = jest.fn().mockResolvedValue(undefined);
+
+    (createCheckpoint as jest.Mock).mockReturnValue(mockCheckpoint);
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    // Execute
+    const wrappedHandler = withDurableExecution(mockHandler);
+    const response = await wrappedHandler(mockEvent, mockContext);
+
+    // Verify
+    expect(mockHandler).toHaveBeenCalledWith(
+      mockCustomerHandlerEvent,
+      mockDurableContext,
+    );
+    expect(createCheckpoint).toHaveBeenCalledWith(
+      mockExecutionContext,
+      TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      expect.any(Object),
+    );
+    expect(mockCheckpoint).toHaveBeenCalledWith(
+      expect.stringMatching(/^execution-result-\d+$/),
+      expect.objectContaining({
+        Id: expect.stringMatching(/^execution-result-\d+$/),
+        Action: "SUCCEED",
+        Type: "EXECUTION",
+        Payload: JSON.stringify(largeResult),
+      }),
+    );
+    expect(response).toEqual({
+      Status: InvocationStatus.SUCCEEDED,
+      Result: "",
+    });
+  });
+
   it("should throw SerdesFailedError when termination reason is SERDES_FAILED", async () => {
     // Setup - handler never resolves so termination wins the race
     const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves

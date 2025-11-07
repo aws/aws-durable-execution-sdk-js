@@ -1180,6 +1180,40 @@ describe("createCheckpointHandler", () => {
     expect(mockState.checkpoint.mock.calls[1][1].Updates).toHaveLength(1);
   });
 
+  it("should split large payloads into multiple API calls when exceeding 750KB limit for large unicode characters", async () => {
+    deleteCheckpoint();
+    const checkpoint = createCheckpoint(
+      mockContext,
+      TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
+    );
+
+    // Create large payload data that will exceed 750KB when combined
+    const largeData = "\u{FFFF}".repeat(200000); // Length is 200KB, but byte length is 600KB
+
+    // Queue two large items that together exceed 750KB
+    const promises = [
+      checkpoint("large-step-1", {
+        Action: OperationAction.START,
+        Payload: largeData,
+      }),
+      checkpoint("large-step-2", {
+        Action: OperationAction.START,
+        Payload: largeData,
+      }),
+    ];
+
+    await Promise.all(promises);
+
+    // Should make multiple API calls due to size limit
+    expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
+
+    // First call should have one item
+    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    // Second call should have the remaining item
+    expect(mockState.checkpoint.mock.calls[1][1].Updates).toHaveLength(1);
+  });
+
   it("should process remaining items in queue after size limit is reached", async () => {
     deleteCheckpoint();
     const checkpoint = createCheckpoint(

@@ -127,16 +127,14 @@ async function runHandler<Input, Output>(
 
     // Stringify the result once to avoid multiple JSON.stringify calls
     const serializedResult = JSON.stringify(result);
+    const serializedSize = new TextEncoder().encode(serializedResult).length;
 
     // Check if the response size exceeds the Lambda limit
     // Note: JSON.stringify(undefined) returns undefined, so we need to handle that case
-    if (
-      serializedResult &&
-      serializedResult.length > LAMBDA_RESPONSE_SIZE_LIMIT
-    ) {
+    if (serializedResult && serializedSize > LAMBDA_RESPONSE_SIZE_LIMIT) {
       log(
         "📦",
-        `Response size (${serializedResult.length} bytes) exceeds Lambda limit (${LAMBDA_RESPONSE_SIZE_LIMIT} bytes). Checkpointing result.`,
+        `Response size (${serializedSize} bytes) exceeds Lambda limit (${LAMBDA_RESPONSE_SIZE_LIMIT} bytes). Checkpointing result.`,
       );
 
       // Create a checkpoint handler to save the large result
