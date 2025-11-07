@@ -174,7 +174,12 @@ describe("CallbackManager", () => {
 
       // Verify completeCallback was called with TIMED_OUT status
       expect(completeCallbackSpy).toHaveBeenCalledWith(
-        { CallbackId: "encoded-callback-id" },
+        {
+          CallbackId: "encoded-callback-id",
+          Error: {
+            ErrorMessage: "Callback timed out",
+          },
+        },
         CompleteCallbackStatus.TIMED_OUT,
       );
     });
@@ -421,7 +426,12 @@ describe("CallbackManager", () => {
 
       // Verify completeCallback was called with TIMED_OUT status
       expect(completeCallbackSpy).toHaveBeenCalledWith(
-        { CallbackId: "encoded-callback-id" },
+        {
+          CallbackId: "encoded-callback-id",
+          Error: {
+            ErrorMessage: "Callback timed out on heartbeat",
+          },
+        },
         CompleteCallbackStatus.TIMED_OUT,
       );
     });

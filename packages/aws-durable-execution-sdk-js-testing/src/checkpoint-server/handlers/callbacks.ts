@@ -72,8 +72,7 @@ export const handleCallbackSuccess: RequestHandler<
     return;
   }
 
-  // todo: should we use utf-8 string or something else?
-  const result = input.toString("utf-8");
+  const result = input.byteLength !== 0 ? input.toString("utf-8") : undefined;
 
   try {
     storage.completeCallback(

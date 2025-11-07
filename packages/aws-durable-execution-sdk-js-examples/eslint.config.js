@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -21,7 +22,7 @@ const durableFunctionsPlugin = {
   },
 };
 
-export default [
+export default defineConfig([
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -30,6 +31,8 @@ export default [
         tsconfigRootDir: __dirname,
       },
     },
+  },
+  {
     plugins: {
       "durable-functions": durableFunctionsPlugin,
     },
@@ -37,5 +40,6 @@ export default [
       "durable-functions/no-nested-durable-operations": "error",
       "durable-functions/no-non-deterministic-outside-step": "error",
     },
+    ignores: "**/*.test.ts",
   },
-];
+]);

@@ -317,7 +317,7 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   sendCallbackSuccess(
-    result: string,
+    result?: string,
   ): Promise<SendDurableExecutionCallbackSuccessCommandOutput> {
     const callbackDetails = this.getCallbackDetails();
 
@@ -332,7 +332,7 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   sendCallbackFailure(
-    error: ErrorObject,
+    error?: ErrorObject,
   ): Promise<SendDurableExecutionCallbackFailureCommandOutput> {
     const callbackDetails = this.getCallbackDetails();
 

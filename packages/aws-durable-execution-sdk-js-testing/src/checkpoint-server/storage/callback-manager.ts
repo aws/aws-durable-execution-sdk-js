@@ -93,6 +93,9 @@ export class CallbackManager {
           this.completeCallback(
             {
               CallbackId: callbackId,
+              Error: {
+                ErrorMessage: "Callback timed out",
+              },
             },
             CompleteCallbackStatus.TIMED_OUT,
           );
@@ -108,6 +111,9 @@ export class CallbackManager {
           this.completeCallback(
             {
               CallbackId: callbackId,
+              Error: {
+                ErrorMessage: "Callback timed out on heartbeat",
+              },
             },
             CompleteCallbackStatus.TIMED_OUT,
           );
@@ -209,6 +215,9 @@ export class CallbackManager {
         this.completeCallback(
           {
             CallbackId: callbackId,
+            Error: {
+              ErrorMessage: "Callback timed out on heartbeat",
+            },
           },
           CompleteCallbackStatus.TIMED_OUT,
         );

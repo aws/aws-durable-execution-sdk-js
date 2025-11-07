@@ -1094,7 +1094,7 @@ describe("checkpoint-server", () => {
         expect(mockCheckpointManager.completeCallback).toHaveBeenCalledWith(
           {
             CallbackId: callbackId,
-            Result: "",
+            Result: undefined,
           },
           OperationStatus.SUCCEEDED,
         );

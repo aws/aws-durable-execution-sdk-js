@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExampleConfig } from "../../types";
+import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "Create Callback",
