@@ -15,6 +15,7 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import { durationToSeconds } from "../../utils/duration/duration";
 
 const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -354,8 +355,12 @@ const createNewCallback = async <T>(
     Type: OperationType.CALLBACK,
     Name: name,
     CallbackOptions: {
-      TimeoutSeconds: config?.timeout,
-      HeartbeatTimeoutSeconds: config?.heartbeatTimeout,
+      TimeoutSeconds: config?.timeout
+        ? durationToSeconds(config.timeout)
+        : undefined,
+      HeartbeatTimeoutSeconds: config?.heartbeatTimeout
+        ? durationToSeconds(config.heartbeatTimeout)
+        : undefined,
     },
   });
 

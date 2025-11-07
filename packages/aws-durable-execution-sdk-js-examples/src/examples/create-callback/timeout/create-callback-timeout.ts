@@ -20,8 +20,8 @@ export const handler = withDurableExecution(
     const [callbackPromise] = await context.createCallback(
       "long-running-task",
       event.timeoutType === "heartbeat"
-        ? { heartbeatTimeout: 1 }
-        : { timeout: 1 },
+        ? { heartbeatTimeout: { seconds: 1 } }
+        : { timeout: { seconds: 1 } },
     );
 
     const result = await callbackPromise;

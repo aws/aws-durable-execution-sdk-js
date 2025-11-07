@@ -49,7 +49,7 @@ export const handler = withDurableExecution(
     const [callbackPromise] = await context.createCallback<CustomData>(
       "custom-serdes-callback",
       {
-        timeout: 300,
+        timeout: { minutes: 5 },
         serdes: customSerdes,
       },
     );

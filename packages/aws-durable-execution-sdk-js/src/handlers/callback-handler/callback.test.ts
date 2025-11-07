@@ -303,7 +303,7 @@ describe("Callback Handler", () => {
 
       const config: CreateCallbackConfig<string> = {
         serdes: customSerdes,
-        timeout: 300,
+        timeout: { minutes: 5 },
       };
 
       const [promise, callbackId] = await callbackHandler<string>(
@@ -717,8 +717,8 @@ describe("Callback Handler", () => {
       });
 
       const config: CreateCallbackConfig<string> = {
-        timeout: 300,
-        heartbeatTimeout: 60,
+        timeout: { minutes: 5 },
+        heartbeatTimeout: { seconds: 60 },
       };
 
       const [, callbackId] = await callbackHandler<string>(
@@ -826,7 +826,7 @@ describe("Callback Handler", () => {
       });
 
       const config: CreateCallbackConfig<string> = {
-        timeout: 120,
+        timeout: { minutes: 2 },
       };
 
       const [, callbackId] = await callbackHandler<string>(
@@ -862,8 +862,8 @@ describe("Callback Handler", () => {
       });
 
       const config: CreateCallbackConfig<string> = {
-        timeout: 180,
-        heartbeatTimeout: 30,
+        timeout: { minutes: 3 },
+        heartbeatTimeout: { seconds: 30 },
       };
 
       const [, callbackId] = await callbackHandler<string>(config);
@@ -884,7 +884,7 @@ describe("Callback Handler", () => {
     });
 
     test("should accept undefined as name parameter", async () => {
-      const config: CreateCallbackConfig<string> = { timeout: 300 };
+      const config: CreateCallbackConfig<string> = { timeout: { minutes: 5 } };
 
       mockExecutionContext._stepData = {};
 

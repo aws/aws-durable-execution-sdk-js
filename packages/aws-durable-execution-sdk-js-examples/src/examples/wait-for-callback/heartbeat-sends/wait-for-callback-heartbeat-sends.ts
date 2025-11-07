@@ -26,7 +26,7 @@ export const handler = withDurableExecution(
         return Promise.resolve();
       },
       {
-        heartbeatTimeout: event.isCloud ? 15 : 1,
+        heartbeatTimeout: event.isCloud ? { seconds: 15 } : { seconds: 1 },
       },
     );
 

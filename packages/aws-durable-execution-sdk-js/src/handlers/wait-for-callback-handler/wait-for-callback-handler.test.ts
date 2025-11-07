@@ -160,7 +160,7 @@ describe("waitForCallback handler", () => {
       mockRunInChildContext,
     );
 
-    const config = { timeout: 300 };
+    const config = { timeout: { minutes: 5 } };
 
     // Should throw error when name is provided but second parameter is not a function
     await expect(handler("test-name", config as any)).rejects.toThrow(
@@ -309,8 +309,8 @@ describe("waitForCallback handler", () => {
 
   it("should pass config to createCallback when submitter and config are provided", async () => {
     const config: WaitForCallbackConfig<string> = {
-      timeout: 300,
-      heartbeatTimeout: 30,
+      timeout: { minutes: 5 },
+      heartbeatTimeout: { seconds: 30 },
     };
     const submitter = jest.fn().mockResolvedValue(undefined);
     const expectedResult = "config result";
@@ -367,8 +367,8 @@ describe("waitForCallback handler", () => {
 
     expect(result).toBe(expectedResult);
     expect(capturedConfig).toEqual({
-      timeout: 300,
-      heartbeatTimeout: 30,
+      timeout: { minutes: 5 },
+      heartbeatTimeout: { seconds: 30 },
       serdes: undefined,
     });
     expect(submitter).toHaveBeenCalledWith(

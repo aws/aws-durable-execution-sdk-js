@@ -1,15 +1,16 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { RetryDecision } from "./step";
 import { WaitForCallbackContext } from "./logger";
+import { Duration } from "./core";
 
 /**
  * Configuration options for createCallback operations
  */
 export interface CreateCallbackConfig<T> {
-  /** Maximum time to wait for callback submission in seconds */
-  timeout?: number;
-  /** Heartbeat timeout in seconds to detect stalled callback operations */
-  heartbeatTimeout?: number;
+  /** Maximum time to wait for callback submission */
+  timeout?: Duration;
+  /** Heartbeat timeout to detect stalled callback operations */
+  heartbeatTimeout?: Duration;
   /** Serialization/deserialization configuration for callback data */
   serdes?: Serdes<T>;
 }
@@ -18,10 +19,10 @@ export interface CreateCallbackConfig<T> {
  * Configuration options for waitForCallback operations
  */
 export interface WaitForCallbackConfig<T> {
-  /** Maximum time to wait for callback in seconds */
-  timeout?: number;
-  /** Heartbeat timeout in seconds to detect stalled operations */
-  heartbeatTimeout?: number;
+  /** Maximum time to wait for callback */
+  timeout?: Duration;
+  /** Heartbeat timeout to detect stalled operations */
+  heartbeatTimeout?: Duration;
   /** Strategy for retrying failed callback submissions */
   retryStrategy?: (error: Error, attemptCount: number) => RetryDecision;
   /** Serialization/deserialization configuration for callback data */

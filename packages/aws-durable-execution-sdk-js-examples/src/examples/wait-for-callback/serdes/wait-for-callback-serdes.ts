@@ -66,7 +66,7 @@ export const handler = withDurableExecution(
       },
       {
         serdes: customSerdes,
-        timeout: 300,
+        timeout: { minutes: 5 },
       },
     );
 

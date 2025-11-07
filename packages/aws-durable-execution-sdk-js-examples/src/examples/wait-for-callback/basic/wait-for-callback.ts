@@ -20,7 +20,7 @@ export const handler = withDurableExecution(
       "my callback function",
       mySubmitterFunction,
       {
-        timeout: 5,
+        timeout: { seconds: 5 },
       },
     );
     console.log("Hello world after callback!");

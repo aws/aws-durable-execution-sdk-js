@@ -17,7 +17,7 @@ export const handler = withDurableExecution(
     });
 
     const [callbackPromise] = await context.createCallback("process-user", {
-      timeout: 300,
+      timeout: { minutes: 5 },
     });
 
     // Mix callback with step and wait operations

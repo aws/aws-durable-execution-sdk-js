@@ -18,7 +18,7 @@ export const handler = withDurableExecution(
         const [callbackPromise] = await context.createCallback(
           "failing-operation",
           {
-            timeout: 60,
+            timeout: { seconds: 60 },
           },
         );
 

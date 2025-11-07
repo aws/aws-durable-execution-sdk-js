@@ -18,7 +18,7 @@ export const handler = withDurableExecution(
           return Promise.resolve();
         },
         {
-          timeout: 1, // 1 second timeout
+          timeout: { seconds: 1 }, // 1 second timeout
         },
       );
 

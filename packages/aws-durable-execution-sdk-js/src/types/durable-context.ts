@@ -284,7 +284,7 @@ export interface DurableContext {
    * ```typescript
    * const [callbackPromise, callbackId] = await context.createCallback(
    *   "external-approval",
-   *   { timeout: 3600 } // 1 hour timeout
+   *   { timeout: { hours: 1 } } // 1 hour timeout
    * );
    *
    * // Send callback ID to external system
@@ -307,7 +307,7 @@ export interface DurableContext {
    * @example
    * ```typescript
    * const [promise, callbackId] = await context.createCallback({
-   *   timeout: 1800 // 30 minutes
+   *   timeout: { minutes: 30 } // 30 minutes
    * });
    * await notifyExternalSystem(callbackId);
    * const result = await promise;
@@ -331,7 +331,7 @@ export interface DurableContext {
    *     // Submit callback ID to external system
    *     await submitToExternalAPI(callbackId);
    *   },
-   *   { timeout: 300 }
+   *   { timeout: { minutes: 5 } }
    * );
    * ```
    */
