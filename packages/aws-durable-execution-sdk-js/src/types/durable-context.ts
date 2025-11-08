@@ -408,17 +408,17 @@ export interface DurableContext {
   /**
    * Executes multiple functions in parallel with optional concurrency control
    * @param name - Step name for tracking and debugging
-   * @param branches - Array of functions or named branches to execute in parallel
+   * @param branches - Array of functions or named branches to execute in parallel (all must return same type)
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
-   * const results = await context.parallel(
+   * // Strict: all branches must return string
+   * const results = await context.parallel<string>(
    *   "parallel-operations",
    *   [
-   *     { name: "task1", func: async (ctx) => ctx.step(async () => "result1") },
-   *     async (ctx) => ctx.step(async () => "task2")
-   *   ],
-   *   { maxConcurrency: 2 }
+   *     async (ctx) => ctx.step(async () => "result1"),
+   *     async (ctx) => ctx.step(async () => "result2")
+   *   ]
    * );
    * ```
    */
@@ -430,22 +430,101 @@ export interface DurableContext {
 
   /**
    * Executes multiple functions in parallel with optional concurrency control
-   * @param branches - Array of functions or named branches to execute in parallel
+   * @param branches - Array of functions or named branches to execute in parallel (all must return same type)
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
    * ```typescript
-   * const results = await context.parallel(
-   *   [
-   *     async (ctx) => ctx.step(async () => "task1"),
-   *     async (ctx) => ctx.step(async () => "task2")
-   *   ]
-   * );
+   * // Strict: all branches must return string
+   * const results = await context.parallel<string>([
+   *   async (ctx) => ctx.step(async () => "task1"),
+   *   async (ctx) => ctx.step(async () => "task2")
+   * ]);
    * ```
    */
   parallel<T>(
     branches: (ParallelFunc<T> | NamedParallelBranch<T>)[],
     config?: ParallelConfig<T>,
   ): Promise<BatchResult<T>>;
+
+  /**
+   * Executes multiple functions in parallel with optional concurrency control
+   *
+   * @remarks
+   * This overload provides automatic type inference for heterogeneous return types.
+   * When branches return different types, the result will be `BatchResult<T1 | T2 | ...>`.
+   * Use the explicit type parameter overloads above for strict homogeneous type checking.
+   *
+   * @param name - Step name for tracking and debugging
+   * @param branches - Array of functions or named branches to execute in parallel
+   * @param config - Optional configuration for concurrency and completion behavior
+   * @example
+   * ```typescript
+   * // Flexible: TypeScript infers union type automatically
+   * const results = await context.parallel("parallel-operations", [
+   *   async (ctx) => ctx.step(async () => ({ step1: "completed" })),
+   *   async (ctx) => ctx.step(async () => "task 2 completed")
+   * ]);
+   * // results: BatchResult<{ step1: string } | string>
+   * ```
+   */
+  parallel<Branches extends readonly unknown[]>(
+    name: string | undefined,
+    branches: Branches,
+    config?: ParallelConfig<
+      Branches[number] extends ParallelFunc<infer ReturnType>
+        ? ReturnType
+        : Branches[number] extends NamedParallelBranch<infer ReturnType>
+          ? ReturnType
+          : never
+    >,
+  ): Promise<
+    BatchResult<
+      Branches[number] extends ParallelFunc<infer ReturnType>
+        ? ReturnType
+        : Branches[number] extends NamedParallelBranch<infer ReturnType>
+          ? ReturnType
+          : never
+    >
+  >;
+
+  /**
+   * Executes multiple functions in parallel with optional concurrency control
+   *
+   * @remarks
+   * This overload provides automatic type inference for heterogeneous return types.
+   * When branches return different types, the result will be `BatchResult<T1 | T2 | ...>`.
+   * Use the explicit type parameter overload above for strict homogeneous type checking.
+   *
+   * @param branches - Array of functions or named branches to execute in parallel
+   * @param config - Optional configuration for concurrency and completion behavior
+   * @example
+   * ```typescript
+   * // Flexible: TypeScript infers union type automatically
+   * const results = await context.parallel([
+   *   async (ctx) => ctx.step(async () => ({ step1: "completed" })),
+   *   async (ctx) => ctx.step(async () => "task 2 completed")
+   * ]);
+   * // results: BatchResult<{ step1: string } | string>
+   * ```
+   */
+  parallel<Branches extends readonly unknown[]>(
+    branches: Branches,
+    config?: ParallelConfig<
+      Branches[number] extends ParallelFunc<infer ReturnType>
+        ? ReturnType
+        : Branches[number] extends NamedParallelBranch<infer ReturnType>
+          ? ReturnType
+          : never
+    >,
+  ): Promise<
+    BatchResult<
+      Branches[number] extends ParallelFunc<infer ReturnType>
+        ? ReturnType
+        : Branches[number] extends NamedParallelBranch<infer ReturnType>
+          ? ReturnType
+          : never
+    >
+  >;
 
   promise: {
     /**
