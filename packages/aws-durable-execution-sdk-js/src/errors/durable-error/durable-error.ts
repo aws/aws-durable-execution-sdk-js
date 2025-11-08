@@ -31,7 +31,11 @@ export abstract class DurableOperationError extends Error {
     cause.stack = errorObject.StackTrace?.join("\n");
 
     // Determine error type and create appropriate instance
-    switch (errorObject.ErrorType) {
+    // Check both ErrorType (AWS SDK format) and errorType (internal format)
+    const errorType =
+      errorObject.ErrorType ||
+      (errorObject as ErrorObject & { errorType?: string }).errorType;
+    switch (errorType) {
       case "StepError":
         return new StepError(
           errorObject.ErrorMessage || "Step failed",

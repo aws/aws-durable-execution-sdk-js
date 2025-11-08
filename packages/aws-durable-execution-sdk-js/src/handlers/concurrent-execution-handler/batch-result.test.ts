@@ -87,9 +87,9 @@ describe("BatchResult", () => {
           {
             index: 1,
             error: {
-              name: "Error",
-              message: "test error",
-              stack: "stack trace",
+              ErrorType: "Error",
+              ErrorMessage: "test error",
+              StackTrace: ["stack trace"],
             },
             status: BatchItemStatus.FAILED,
           },

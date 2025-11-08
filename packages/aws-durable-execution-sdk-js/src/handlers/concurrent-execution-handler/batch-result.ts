@@ -1,4 +1,6 @@
 import { BatchItemStatus, BatchItem, BatchResult } from "../../types";
+import { DurableOperationError } from "../../errors/durable-error/durable-error";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 
 export class BatchResultImpl<R> implements BatchResult<R> {
   constructor(
@@ -107,7 +109,7 @@ export function restoreBatchResult<R>(data: unknown): BatchResult<R> {
         ...item,
         result: item.result as R,
         error: item.error
-          ? Object.assign(new Error(item.error.message), item.error)
+          ? DurableOperationError.fromErrorObject(item.error as ErrorObject)
           : undefined,
       }),
     );

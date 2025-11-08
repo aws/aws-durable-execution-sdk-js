@@ -64,7 +64,10 @@ export class ResultFormatter<ResultType> {
 
           throw error;
         }
-        return tryJsonParse<ResultType>(lambdaResponse.result);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        return this.restoreBatchResults(
+          tryJsonParse<ResultType>(lambdaResponse.result),
+        ) as ResultType;
       },
       getError: () => {
         if (lambdaResponse.status !== OperationStatus.FAILED) {
@@ -118,6 +121,66 @@ export class ResultFormatter<ResultType> {
         console.table(rows);
       },
     };
+  }
+
+  /**
+   * Recursively restores BatchResult objects in the result
+   */
+  private restoreBatchResults(result: unknown): unknown {
+    if (!result || typeof result !== "object") {
+      return result;
+    }
+
+    if (Array.isArray(result)) {
+      return result.map((item) => this.restoreBatchResults(item));
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const resultObj = result as Record<string, unknown>;
+
+    // Check if this looks like a BatchResult object
+    if (
+      resultObj.all &&
+      Array.isArray(resultObj.all) &&
+      resultObj.completionReason
+    ) {
+      // Simple restoration - just add methods back to the object
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const batchResult = result as any;
+
+      // Add BatchResult methods
+      batchResult.succeeded = function () {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return this.all.filter(
+          (item: any) =>
+            item.status === "SUCCEEDED" && item.result !== undefined,
+        );
+      };
+
+      batchResult.failed = function () {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return this.all.filter(
+          (item: any) => item.status === "FAILED" && item.error !== undefined,
+        );
+      };
+
+      batchResult.getResults = function () {
+        return this.succeeded().map((item: any) => item.result);
+      };
+
+      batchResult.getErrors = function () {
+        return this.failed().map((item: any) => item.error);
+      };
+
+      return batchResult;
+    }
+
+    // Recursively process object properties
+    const restored: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(resultObj)) {
+      restored[key] = this.restoreBatchResults(value);
+    }
+    return restored;
   }
 
   private getErrorFromResult(result: TestExecutionResult): TestResultError {
