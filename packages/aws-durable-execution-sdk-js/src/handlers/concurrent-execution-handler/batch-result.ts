@@ -1,4 +1,10 @@
+import { ErrorObject } from "@aws-sdk/client-lambda";
 import { BatchItemStatus, BatchItem, BatchResult } from "../../types";
+import {
+  DurableOperationError,
+  ChildContextError,
+} from "../../errors/durable-error/durable-error";
+import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
 export class BatchResultImpl<R> implements BatchResult<R> {
   constructor(
@@ -16,9 +22,9 @@ export class BatchResultImpl<R> implements BatchResult<R> {
     );
   }
 
-  failed(): Array<BatchItem<R> & { error: Error }> {
+  failed(): Array<BatchItem<R> & { error: ChildContextError }> {
     return this.all.filter(
-      (item): item is BatchItem<R> & { error: Error } =>
+      (item): item is BatchItem<R> & { error: ChildContextError } =>
         item.status === BatchItemStatus.FAILED && item.error !== undefined,
     );
   }
@@ -51,7 +57,7 @@ export class BatchResultImpl<R> implements BatchResult<R> {
     return this.succeeded().map((item) => item.result);
   }
 
-  getErrors(): Array<Error> {
+  getErrors(): Array<ChildContextError> {
     return this.failed().map((item) => item.error);
   }
 
@@ -77,7 +83,7 @@ export class BatchResultImpl<R> implements BatchResult<R> {
 
 interface SerializedBatchItem {
   result?: unknown;
-  error?: { message: string; [key: string]: unknown };
+  error?: ErrorObject;
   index: number;
   status: BatchItemStatus;
 }
@@ -107,7 +113,9 @@ export function restoreBatchResult<R>(data: unknown): BatchResult<R> {
         ...item,
         result: item.result as R,
         error: item.error
-          ? Object.assign(new Error(item.error.message), item.error)
+          ? (DurableOperationError.fromErrorObject(
+              item.error,
+            ) as ChildContextError)
           : undefined,
       }),
     );
@@ -119,4 +127,39 @@ export function restoreBatchResult<R>(data: unknown): BatchResult<R> {
   }
 
   return new BatchResultImpl<R>([], "ALL_COMPLETED");
+}
+
+/**
+ * Creates a Serdes for BatchResult that properly handles error serialization
+ */
+export function createBatchResultSerdes<R>(): Serdes<BatchResult<R>> {
+  return {
+    serialize: async (
+      value: BatchResult<R> | undefined,
+      _context: SerdesContext,
+    ): Promise<string | undefined> => {
+      if (!value) return undefined;
+
+      const serialized = {
+        all: value.all.map((item) => ({
+          ...item,
+          error:
+            item.error instanceof DurableOperationError
+              ? item.error.toErrorObject()
+              : undefined,
+        })),
+        completionReason: value.completionReason,
+      };
+
+      return JSON.stringify(serialized);
+    },
+
+    deserialize: async (
+      data: string | undefined,
+      _context: SerdesContext,
+    ): Promise<BatchResult<R> | undefined> => {
+      if (!data) return undefined;
+      return restoreBatchResult<R>(JSON.parse(data));
+    },
+  };
 }

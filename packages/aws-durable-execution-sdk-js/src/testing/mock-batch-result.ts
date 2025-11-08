@@ -1,4 +1,5 @@
 import { BatchResult, BatchItem, BatchItemStatus } from "../types";
+import { ChildContextError } from "../errors/durable-error/durable-error";
 
 export class MockBatchResult<R> implements BatchResult<R> {
   constructor(
@@ -16,9 +17,9 @@ export class MockBatchResult<R> implements BatchResult<R> {
     );
   }
 
-  failed(): Array<BatchItem<R> & { error: Error }> {
+  failed(): Array<BatchItem<R> & { error: ChildContextError }> {
     return this.all.filter(
-      (item): item is BatchItem<R> & { error: Error } =>
+      (item): item is BatchItem<R> & { error: ChildContextError } =>
         item.status === BatchItemStatus.FAILED && item.error !== undefined,
     );
   }
@@ -51,7 +52,7 @@ export class MockBatchResult<R> implements BatchResult<R> {
     return this.succeeded().map((item) => item.result);
   }
 
-  getErrors(): Array<Error> {
+  getErrors(): Array<ChildContextError> {
     return this.failed().map((item) => item.error);
   }
 

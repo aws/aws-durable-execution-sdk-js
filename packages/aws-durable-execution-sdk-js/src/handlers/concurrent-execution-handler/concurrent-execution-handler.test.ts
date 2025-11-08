@@ -4,6 +4,7 @@ import {
 } from "./concurrent-execution-handler";
 import { ExecutionContext, DurableContext, BatchItemStatus } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
+import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 describe("Concurrent Execution Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -206,7 +207,7 @@ describe("Concurrent Execution Handler", () => {
         { index: 0, result: "success1", status: BatchItemStatus.SUCCEEDED },
         {
           index: 1,
-          error: new Error("failure"),
+          error: new ChildContextError("failure"),
           status: BatchItemStatus.FAILED,
         },
       ]);
@@ -457,7 +458,7 @@ describe("ConcurrencyController", () => {
         { id: "item-1", data: "data2", index: 1 },
       ];
       const executor = jest.fn();
-      const error = new Error("test error");
+      const error = new ChildContextError("test error");
 
       mockParentContext.runInChildContext
         .mockResolvedValueOnce("result1")

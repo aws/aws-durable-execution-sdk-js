@@ -4,6 +4,7 @@ import {
 } from "./summary-generators";
 import { BatchResultImpl } from "../../handlers/concurrent-execution-handler/batch-result";
 import { BatchItemStatus } from "../../types";
+import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 describe("Summary Generators", () => {
   describe("createParallelSummaryGenerator", () => {
@@ -32,7 +33,7 @@ describe("Summary Generators", () => {
     });
 
     it("should generate summary for failed parallel result", () => {
-      const error = new Error("Test error");
+      const error = new ChildContextError("Test error");
       const batchResult = new BatchResultImpl(
         [
           { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
@@ -107,7 +108,7 @@ describe("Summary Generators", () => {
     });
 
     it("should generate summary for failed map result", () => {
-      const error = new Error("Mapping failed");
+      const error = new ChildContextError("Mapping failed");
       const batchResult = new BatchResultImpl(
         [
           { index: 0, result: "mapped1", status: BatchItemStatus.SUCCEEDED },
@@ -132,8 +133,8 @@ describe("Summary Generators", () => {
     });
 
     it("should generate summary for failure tolerance exceeded", () => {
-      const error1 = new Error("Error 1");
-      const error2 = new Error("Error 2");
+      const error1 = new ChildContextError("Error 1");
+      const error2 = new ChildContextError("Error 2");
       const batchResult = new BatchResultImpl(
         [
           { index: 0, error: error1, status: BatchItemStatus.FAILED },

@@ -1,5 +1,14 @@
-import { BatchResultImpl, restoreBatchResult } from "./batch-result";
+import {
+  BatchResultImpl,
+  restoreBatchResult,
+  createBatchResultSerdes,
+} from "./batch-result";
 import { BatchItem, BatchItemStatus } from "../../types";
+import { ChildContextError } from "../../errors/durable-error/durable-error";
+
+class CustomError extends Error {
+  additionalProperty = 1;
+}
 
 describe("BatchResult", () => {
   describe("BatchItemStatus", () => {
@@ -32,7 +41,7 @@ describe("BatchResult", () => {
     });
 
     it("should handle mixed success and failure", () => {
-      const error = new Error("test error");
+      const error = new ChildContextError("test error");
       const items: BatchItem<string>[] = [
         { index: 0, result: "success", status: BatchItemStatus.SUCCEEDED },
         { index: 1, error, status: BatchItemStatus.FAILED },
@@ -62,7 +71,11 @@ describe("BatchResult", () => {
 
     it("should throw on throwIfError with failures", () => {
       const items: BatchItem<string>[] = [
-        { index: 0, error: new Error("test"), status: BatchItemStatus.FAILED },
+        {
+          index: 0,
+          error: new ChildContextError("test"),
+          status: BatchItemStatus.FAILED,
+        },
       ];
       const result = new BatchResultImpl(items, "ALL_COMPLETED");
 
@@ -80,16 +93,16 @@ describe("BatchResult", () => {
   });
 
   describe("restoreBatchResult", () => {
-    it("should restore BatchResult with Error objects", () => {
+    it("should restore BatchResult with DurableOperationError objects", () => {
       const data = {
         all: [
           { index: 0, result: "success", status: BatchItemStatus.SUCCEEDED },
           {
             index: 1,
             error: {
-              name: "Error",
-              message: "test error",
-              stack: "stack trace",
+              ErrorType: "ChildContextError",
+              ErrorMessage: "test error",
+              StackTrace: ["stack trace"],
             },
             status: BatchItemStatus.FAILED,
           },
@@ -128,10 +141,70 @@ describe("BatchResult", () => {
       expect(result.totalCount).toBe(0);
     });
 
+    it("should preserve custom error properties through serialization", () => {
+      // Simulate what happens when a ChildContextError with custom cause is serialized
+      const data = {
+        all: [
+          {
+            index: 0,
+            error: {
+              ErrorType: "ChildContextError",
+              ErrorMessage: "My error",
+              StackTrace: ["at ..."],
+              // This simulates the cause being serialized as ErrorData
+              ErrorData: JSON.stringify({ additionalProperty: 1 }),
+            },
+            status: BatchItemStatus.FAILED,
+          },
+        ],
+        completionReason: "ALL_COMPLETED",
+      };
+
+      const result = restoreBatchResult(data);
+      const failedItem = result.failed()[0];
+
+      expect(failedItem.error).toBeInstanceOf(Error);
+      expect(failedItem.error.message).toBe("My error");
+      expect(failedItem.error).toHaveProperty("errorData");
+    });
+
     it("should handle data without all property", () => {
       const result = restoreBatchResult({});
       expect(result.all).toEqual([]);
       expect(result.totalCount).toBe(0);
+    });
+
+    it("should preserve ChildContextError with custom cause through serialization round-trip", async () => {
+      // Create a ChildContextError with a custom error cause (simulating map/parallel failure)
+      const customError = new CustomError("My error");
+      const childContextError = new ChildContextError(
+        customError.message,
+        customError,
+      );
+
+      const items: BatchItem<string>[] = [
+        { index: 0, error: childContextError, status: BatchItemStatus.FAILED },
+      ];
+      const batchResult = new BatchResultImpl(items, "ALL_COMPLETED");
+
+      // Use the BatchResult serdes for serialization
+      const serdes = createBatchResultSerdes<string>();
+      const serialized = await serdes.serialize(batchResult, {
+        entityId: "test",
+        durableExecutionArn: "arn:test",
+      });
+      const restored = await serdes.deserialize(serialized, {
+        entityId: "test",
+        durableExecutionArn: "arn:test",
+      });
+
+      // Verify the error is properly restored
+      const failedItem = restored!.failed()[0];
+      expect(failedItem.error).toBeInstanceOf(Error);
+      expect(failedItem.error.message).toBe("My error");
+      expect(failedItem.error).toHaveProperty("errorType", "ChildContextError");
+      expect(failedItem.error).toHaveProperty("cause");
+      expect(failedItem.error.cause).toBeInstanceOf(Error);
     });
   });
 });

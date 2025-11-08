@@ -13,6 +13,7 @@ import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { BatchResultImpl, restoreBatchResult } from "./batch-result";
 import { defaultSerdes } from "../../utils/serdes/serdes";
+import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 export class ConcurrencyController {
   constructor(
@@ -180,7 +181,13 @@ export class ConcurrencyController {
           completedCount,
         });
       } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
+        const err =
+          error instanceof ChildContextError
+            ? error
+            : new ChildContextError(
+                error instanceof Error ? error.message : String(error),
+                error instanceof Error ? error : undefined,
+              );
         resultItems.push({
           error: err,
           index: item.index,
@@ -349,7 +356,12 @@ export class ConcurrencyController {
               },
               (error) => {
                 const err =
-                  error instanceof Error ? error : new Error(String(error));
+                  error instanceof ChildContextError
+                    ? error
+                    : new ChildContextError(
+                        error instanceof Error ? error.message : String(error),
+                        error instanceof Error ? error : undefined,
+                      );
                 resultItems[index] = {
                   error: err,
                   index,

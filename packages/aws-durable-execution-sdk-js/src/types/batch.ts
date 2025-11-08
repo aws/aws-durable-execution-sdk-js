@@ -1,5 +1,6 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { DurableContext } from "./durable-context";
+import { ChildContextError } from "../errors/durable-error/durable-error";
 
 export enum BatchItemStatus {
   SUCCEEDED = "SUCCEEDED",
@@ -13,8 +14,8 @@ export enum BatchItemStatus {
 export interface BatchItem<R> {
   /** The result value if the item succeeded */
   result?: R;
-  /** The error if the item failed */
-  error?: Error;
+  /** The error if the item failed (always ChildContextError since batch items run in child contexts) */
+  error?: ChildContextError;
   /** Index of the item in the original array */
   index: number;
   /** Status of the item execution */
@@ -30,7 +31,7 @@ export interface BatchResult<R> {
   /** Returns only the items that succeeded */
   succeeded(): Array<BatchItem<R> & { result: R }>;
   /** Returns only the items that failed */
-  failed(): Array<BatchItem<R> & { error: Error }>;
+  failed(): Array<BatchItem<R> & { error: ChildContextError }>;
   /** Returns only the items that are still in progress */
   started(): Array<BatchItem<R> & { status: BatchItemStatus.STARTED }>;
   /** Overall status of the batch (SUCCEEDED if no failures, FAILED otherwise) */
@@ -47,7 +48,7 @@ export interface BatchResult<R> {
   /** Returns array of all successful results */
   getResults(): Array<R>;
   /** Returns array of all errors */
-  getErrors(): Array<Error>;
+  getErrors(): Array<ChildContextError>;
   /** Number of successful items */
   successCount: number;
   /** Number of failed items */
