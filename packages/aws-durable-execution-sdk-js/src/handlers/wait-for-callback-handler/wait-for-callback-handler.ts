@@ -70,22 +70,27 @@ export const createWaitForCallbackHandler = (
       });
 
       // Execute the submitter step (submitter is now mandatory)
-      await childCtx.step(async (stepContext: StepContext) => {
-        // Use the step's built-in logger instead of creating a new one
-        const callbackContext: WaitForCallbackContext = {
-          logger: stepContext.logger,
-        };
+      await childCtx.step(
+        async (stepContext: StepContext) => {
+          // Use the step's built-in logger instead of creating a new one
+          const callbackContext: WaitForCallbackContext = {
+            logger: stepContext.logger,
+          };
 
-        log("📤", "Executing submitter:", {
-          callbackId,
-          name,
-        });
-        await submitter(callbackId, callbackContext);
-        log("✅", "Submitter completed:", {
-          callbackId,
-          name,
-        });
-      });
+          log("📤", "Executing submitter:", {
+            callbackId,
+            name,
+          });
+          await submitter(callbackId, callbackContext);
+          log("✅", "Submitter completed:", {
+            callbackId,
+            name,
+          });
+        },
+        config?.retryStrategy
+          ? { retryStrategy: config.retryStrategy }
+          : undefined,
+      );
 
       log("⏳", "Waiting for callback completion:", {
         callbackId,
@@ -93,8 +98,6 @@ export const createWaitForCallbackHandler = (
       });
 
       // Return just the callback promise result
-      // This will terminate the invocation as right now we are not handdling cuncurrency
-      // Ideally all termination will wait for in-progress steps to finish before terminatiing the process
       return await callbackPromise;
     };
 

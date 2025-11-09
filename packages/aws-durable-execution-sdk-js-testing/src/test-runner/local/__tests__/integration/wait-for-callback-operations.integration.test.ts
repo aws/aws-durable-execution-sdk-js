@@ -398,14 +398,14 @@ describe("WaitForCallback Operations Integration", () => {
       expect(result.getResult()).toEqual({
         success: false,
         error: "Complex submitter failed at step 3",
-        // Retries 6 times (default maxAttempts)
-        sideEffects: 18,
+        // 3 attempts (initial + 2 retries) × 3 side effects per attempt = 9
+        sideEffects: 9,
         callbackId: expect.any(String),
       });
 
       // Verify that callback ID was generated before failure
       expect(callbackId).toBeDefined();
-      expect(sideEffectCounter).toBe(18);
+      expect(sideEffectCounter).toBe(9);
 
       // Should have no succeeded operations since submitter failed
       const completedOperations = result.getOperations({

@@ -378,4 +378,57 @@ describe("waitForCallback handler", () => {
       }),
     );
   });
+
+  it("should pass retryStrategy to submitter step", async () => {
+    const submitter = jest.fn().mockRejectedValue(new Error("Submitter error"));
+    const retryStrategy = jest.fn().mockReturnValue({
+      shouldRetry: false,
+    });
+
+    mockRunInChildContext.mockImplementation(async (name: any, fn: any) => {
+      const mockChildCtx = {
+        createCallback: jest
+          .fn()
+          .mockResolvedValue([Promise.resolve("result"), "callback-retry"]),
+        step: jest
+          .fn()
+          .mockImplementation(async (fnOrConfig: any, maybeConfig?: any) => {
+            const mockTelemetry = {
+              logger: {
+                log: jest.fn(),
+                error: jest.fn(),
+                warn: jest.fn(),
+                info: jest.fn(),
+                debug: jest.fn(),
+              },
+            };
+
+            // Check if retryStrategy was passed
+            const config =
+              typeof fnOrConfig === "function" ? maybeConfig : fnOrConfig;
+            if (config?.retryStrategy) {
+              expect(config.retryStrategy).toBe(retryStrategy);
+            }
+
+            // Execute the function
+            const fn =
+              typeof fnOrConfig === "function" ? fnOrConfig : maybeConfig;
+            if (fn) {
+              await fn(mockTelemetry);
+            }
+          }),
+      };
+
+      return await fn(mockChildCtx);
+    });
+
+    const handler = createWaitForCallbackHandler(
+      mockExecutionContext,
+      mockRunInChildContext,
+    );
+
+    await expect(handler(submitter, { retryStrategy })).rejects.toThrow(
+      "Submitter error",
+    );
+  });
 });
