@@ -256,6 +256,86 @@ describe("Serdes", () => {
       expect(serialized).toBeUndefined();
       expect(deserialized).toBeUndefined();
     });
+
+    it("should handle nested Date properties", async () => {
+      class ClassWithNestedDate {
+        name: string = "";
+        metadata: {
+          createdAt: Date;
+          updatedAt: Date;
+        };
+        user: {
+          profile: {
+            lastLogin: Date;
+          };
+        };
+
+        constructor() {
+          this.metadata = {
+            createdAt: new Date("2024-01-01"),
+            updatedAt: new Date("2024-01-02"),
+          };
+          this.user = {
+            profile: {
+              lastLogin: new Date("2024-01-03"),
+            },
+          };
+        }
+      }
+
+      const dateSerdes = createClassSerdesWithDates(ClassWithNestedDate, [
+        "metadata.createdAt",
+        "metadata.updatedAt",
+        "user.profile.lastLogin",
+      ]);
+      const instance = new ClassWithNestedDate();
+      instance.name = "test";
+
+      const serialized = await dateSerdes.serialize(instance, mockContext);
+      const deserialized = await dateSerdes.deserialize(
+        serialized,
+        mockContext,
+      );
+
+      expect(deserialized).toBeInstanceOf(ClassWithNestedDate);
+      expect(deserialized?.name).toBe("test");
+      expect(deserialized?.metadata.createdAt).toBeInstanceOf(Date);
+      expect(deserialized?.metadata.updatedAt).toBeInstanceOf(Date);
+      expect(deserialized?.user.profile.lastLogin).toBeInstanceOf(Date);
+      expect(deserialized?.metadata.createdAt.toISOString()).toBe(
+        "2024-01-01T00:00:00.000Z",
+      );
+      expect(deserialized?.metadata.updatedAt.toISOString()).toBe(
+        "2024-01-02T00:00:00.000Z",
+      );
+      expect(deserialized?.user.profile.lastLogin.toISOString()).toBe(
+        "2024-01-03T00:00:00.000Z",
+      );
+    });
+
+    it("should handle missing nested paths gracefully", async () => {
+      class ClassWithOptionalNested {
+        metadata?: {
+          createdAt: Date;
+        };
+      }
+
+      const dateSerdes = createClassSerdesWithDates(ClassWithOptionalNested, [
+        "metadata.createdAt",
+      ]);
+      const instance = new ClassWithOptionalNested();
+      // metadata is undefined
+
+      const serialized = await dateSerdes.serialize(instance, mockContext);
+      const deserialized = await dateSerdes.deserialize(
+        serialized,
+        mockContext,
+      );
+
+      expect(deserialized).toBeInstanceOf(ClassWithOptionalNested);
+      expect(deserialized?.metadata).toBeUndefined();
+      // Should not throw an error
+    });
   });
 
   describe("Custom Async Serdes", () => {

@@ -67,12 +67,43 @@ export const defaultSerdes: Serdes<any> = {
 
 /**
  * Creates a Serdes for a specific class that preserves the class type
- * @param cls - The class constructor
+ * @param cls - The class constructor (must have no required parameters)
  * @returns A Serdes that maintains the class type during serialization/deserialization
  *
- * Note: This basic implementation doesn't handle special types like Date objects.
- * For classes with Date properties or other complex types, you'll need to create
- * a custom Serdes implementation.
+ * @example
+ * ```typescript
+ * class User {
+ *   name: string = "";
+ *   age: number = 0;
+ *
+ *   greet() {
+ *     return `Hello, ${this.name}`;
+ *   }
+ * }
+ *
+ * const userSerdes = createClassSerdes(User);
+ *
+ * // In a durable function:
+ * const user = await context.step("create-user", async () => {
+ *   const u = new User();
+ *   u.name = "Alice";
+ *   u.age = 30;
+ *   return u;
+ * }, { serdes: userSerdes });
+ *
+ * console.log(user.greet()); // "Hello, Alice" - methods are preserved
+ * ```
+ *
+ * Limitations:
+ * - Map/Set objects become plain objects and lose their methods
+ * - Date objects become ISO strings and lose Date methods
+ * - Constructor must have no required parameters
+ * - Constructor side-effects will re-run during deserialization
+ * - Private fields (#field) cannot be serialized
+ * - Getters/setters are not preserved
+ * - Nested class instances lose their prototype
+ *
+ * For classes with Date properties, use createClassSerdesWithDates instead.
  */
 export function createClassSerdes<T extends object>(
   cls: new () => T,
@@ -95,9 +126,51 @@ export function createClassSerdes<T extends object>(
 
 /**
  * Creates a custom Serdes for a class with special handling for Date properties
- * @param cls - The class constructor
- * @param dateProps - Array of property names that should be converted to Date objects
+ * @param cls - The class constructor (must have no required parameters)
+ * @param dateProps - Array of property paths that should be converted to Date objects (supports nested paths like "metadata.createdAt")
  * @returns A Serdes that maintains the class type and converts specified properties to Date objects
+ *
+ * @example
+ * ```typescript
+ * class Article {
+ *   title: string = "";
+ *   createdAt: Date = new Date();
+ *   metadata: {
+ *     publishedAt: Date;
+ *     updatedAt: Date;
+ *   } = {
+ *     publishedAt: new Date(),
+ *     updatedAt: new Date()
+ *   };
+ *
+ *   getAge() {
+ *     return Date.now() - this.createdAt.getTime();
+ *   }
+ * }
+ *
+ * const articleSerdes = createClassSerdesWithDates(Article, [
+ *   "createdAt",
+ *   "metadata.publishedAt",
+ *   "metadata.updatedAt"
+ * ]);
+ *
+ * // In a durable function:
+ * const article = await context.step("create-article", async () => {
+ *   const a = new Article();
+ *   a.title = "My Article";
+ *   return a;
+ * }, { serdes: articleSerdes });
+ *
+ * console.log(article.getAge()); // Works! Dates are properly restored
+ * ```
+ *
+ * Limitations:
+ * - Only handles Date objects (Map/Set are not supported)
+ * - Must manually specify every Date field path
+ * - Constructor must have no required parameters
+ * - Constructor side-effects will re-run during deserialization
+ * - Private fields (#field) cannot be serialized
+ * - Getters/setters are not preserved
  */
 export function createClassSerdesWithDates<T extends object>(
   cls: new () => T,
@@ -123,10 +196,22 @@ export function createClassSerdesWithDates<T extends object>(
       // Copy all properties from parsed object to the new instance
       Object.assign(instance, parsed);
 
-      // Convert date strings back to Date objects
+      // Convert date strings back to Date objects (supports nested paths)
       for (const prop of dateProps) {
-        if (parsed[prop]) {
-          (instance as Record<string, unknown>)[prop] = new Date(parsed[prop]);
+        const parts = prop.split(".");
+        let obj: Record<string, unknown> = instance as Record<string, unknown>;
+
+        // Navigate to parent of target property
+        for (let i = 0; i < parts.length - 1; i++) {
+          const next = obj[parts[i]];
+          if (!next || typeof next !== "object") break;
+          obj = next as Record<string, unknown>;
+        }
+
+        // Convert to Date if path exists
+        const lastKey = parts[parts.length - 1];
+        if (obj[lastKey]) {
+          obj[lastKey] = new Date(obj[lastKey] as string);
         }
       }
 
