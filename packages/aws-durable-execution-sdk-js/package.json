@@ -10,21 +10,22 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist-types/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist-cjs/index.js"
     }
   },
   "files": [
     "dist/",
-    "dist-cjs/"
+    "dist-cjs/",
+    "dist-types/"
   ],
   "scripts": {
     "prebuild": "npm run lint:fix",
-    "build": "concurrently npm:build:esm npm:build:cjs && npm run build:types",
+    "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
-    "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap",
+    "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -34,10 +35,10 @@
     "test:all": "jest --config jest.all.config.js",
     "test:all:coverage": "jest --config jest.all.config.js --coverage",
     "lint": "eslint src --ext .ts",
-    "lint:fix": "prettier --write . && eslint src --ext .ts --fix",
+    "lint:fix": "eslint src --ext .ts --fix",
     "prepublishOnly": "npm test && npm run lint && npm run build",
     "run-locally": "tsx ./src/run-durable.ts",
-    "clean": "rm -rf node_modules dist dist-cjs",
+    "clean": "rm -rf node_modules dist dist-cjs dist-types coverage",
     "prepack": "npm run build"
   },
   "devDependencies": {

@@ -8,10 +8,10 @@ export = {
   },
   configs: {
     recommended: {
-      plugins: ["@amzn/durable-functions"],
+      plugins: ["@aws/durable-functions"],
       rules: {
-        "@amzn/durable-functions/no-nested-durable-operations": "error",
-        "@amzn/durable-functions/no-non-deterministic-outside-step": "error",
+        "@aws/durable-functions/no-nested-durable-operations": "error",
+        "@aws/durable-functions/no-non-deterministic-outside-step": "error",
       },
     },
   },

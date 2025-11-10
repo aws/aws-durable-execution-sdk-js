@@ -2,6 +2,7 @@
 /build
 /dist
 /dist-cjs
+/dist-types
 /coverage
 .husky
 *.iml

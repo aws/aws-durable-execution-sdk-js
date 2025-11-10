@@ -64,8 +64,7 @@ jobs:
         with:
           name: built-artifacts
           path: |
-            packages/**/dist/*
-            packages/**/dist-cjs/*
+            packages/**/dist*/*
             package.json
 
       - name: Deploy functions
