@@ -44,6 +44,7 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
+import { validateContextUsage } from "../../utils/context-tracker/context-tracker";
 
 class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
@@ -196,6 +197,12 @@ class DurableContextImpl implements DurableContext {
     fnOrOptions?: StepFunc<T> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
   ): Promise<T> {
+    validateContextUsage(
+      this._stepPrefix,
+      "step",
+      this.executionContext.terminationManager,
+    );
+
     return this.withModeManagement(() => {
       const stepHandler = createStepHandler(
         this.executionContext,
@@ -222,6 +229,11 @@ class DurableContextImpl implements DurableContext {
     inputOrConfig?: I | InvokeConfig<I, O>,
     maybeConfig?: InvokeConfig<I, O>,
   ): Promise<O> {
+    validateContextUsage(
+      this._stepPrefix,
+      "invoke",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const invokeHandler = createInvokeHandler(
         this.executionContext,
@@ -250,6 +262,11 @@ class DurableContextImpl implements DurableContext {
     fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
   ): Promise<T> {
+    validateContextUsage(
+      this._stepPrefix,
+      "runInChildContext",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const blockHandler = createRunInChildContextHandler(
         this.executionContext,
@@ -271,6 +288,11 @@ class DurableContextImpl implements DurableContext {
     nameOrDuration: string | Duration,
     maybeDuration?: Duration,
   ): Promise<void> {
+    validateContextUsage(
+      this._stepPrefix,
+      "wait",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const waitHandler = createWaitHandler(
         this.executionContext,
@@ -298,6 +320,11 @@ class DurableContextImpl implements DurableContext {
     nameOrConfig?: string | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
   ): Promise<CreateCallbackResult<T>> {
+    validateContextUsage(
+      this._stepPrefix,
+      "createCallback",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const callbackFactory = createCallbackFactory(
         this.executionContext,
@@ -319,6 +346,11 @@ class DurableContextImpl implements DurableContext {
     submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
   ): Promise<T> {
+    validateContextUsage(
+      this._stepPrefix,
+      "waitForCallback",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
         this.executionContext,
@@ -342,6 +374,11 @@ class DurableContextImpl implements DurableContext {
       | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
   ): Promise<T> {
+    validateContextUsage(
+      this._stepPrefix,
+      "waitForCondition",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const waitForConditionHandler = createWaitForConditionHandler(
         this.executionContext,
@@ -378,6 +415,11 @@ class DurableContextImpl implements DurableContext {
     mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
     maybeConfig?: MapConfig<TInput, TOutput>,
   ): Promise<BatchResult<TOutput>> {
+    validateContextUsage(
+      this._stepPrefix,
+      "map",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const mapHandler = createMapHandler(
         this.executionContext,
@@ -402,6 +444,11 @@ class DurableContextImpl implements DurableContext {
       | ParallelConfig<T>,
     maybeConfig?: ParallelConfig<T>,
   ): Promise<BatchResult<T>> {
+    validateContextUsage(
+      this._stepPrefix,
+      "parallel",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const parallelHandler = createParallelHandler(
         this.executionContext,
@@ -421,6 +468,11 @@ class DurableContextImpl implements DurableContext {
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
   ): Promise<BatchResult<TResult>> {
+    validateContextUsage(
+      this._stepPrefix,
+      "executeConcurrently",
+      this.executionContext.terminationManager,
+    );
     return this.withModeManagement(() => {
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
         this.executionContext,

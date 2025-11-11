@@ -15,6 +15,7 @@ export enum TerminationReason {
   // Error-related reasons
   CHECKPOINT_FAILED = "CHECKPOINT_FAILED",
   SERDES_FAILED = "SERDES_FAILED",
+  CONTEXT_VALIDATION_ERROR = "CONTEXT_VALIDATION_ERROR",
 
   // Custom reason
   CUSTOM = "CUSTOM",

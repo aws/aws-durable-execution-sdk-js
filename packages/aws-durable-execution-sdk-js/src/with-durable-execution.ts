@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
+import { runWithContext } from "./utils/context-tracker/context-tracker";
 
 type DurableHandler<Input, Output> = (
   event: Input,
@@ -63,13 +64,13 @@ async function runHandler<Input, Output>(
     let handlerPromiseResolved = false;
     let terminationPromiseResolved = false;
 
-    const handlerPromise = handler(customerHandlerEvent, durableContext).then(
-      (result) => {
-        handlerPromiseResolved = true;
-        log("🏆", "Handler promise resolved first!");
-        return ["handler", result] as const;
-      },
-    );
+    const handlerPromise = runWithContext("root", undefined, () =>
+      handler(customerHandlerEvent, durableContext),
+    ).then((result) => {
+      handlerPromiseResolved = true;
+      log("🏆", "Handler promise resolved first!");
+      return ["handler", result] as const;
+    });
 
     const terminationPromise = executionContext.terminationManager
       .getTerminationPromise()
@@ -113,6 +114,20 @@ async function runHandler<Input, Output>(
     ) {
       log("🛑", "Serdes failed - terminating Lambda execution");
       throw new SerdesFailedError(result.message);
+    }
+
+    // If termination was due to context validation error, return FAILED
+    if (
+      resultType === "termination" &&
+      result.reason === TerminationReason.CONTEXT_VALIDATION_ERROR
+    ) {
+      log("🛑", "Context validation error - returning FAILED status");
+      return {
+        Status: InvocationStatus.FAILED,
+        Error: createErrorObjectFromError(
+          result.error || new Error(result.message),
+        ),
+      };
     }
 
     if (resultType === "termination") {

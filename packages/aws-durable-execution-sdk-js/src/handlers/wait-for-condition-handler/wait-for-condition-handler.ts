@@ -22,6 +22,7 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
@@ -293,7 +294,9 @@ export const executeWaitForCondition = async <T>(
     addRunningOperation(stepId);
     let newState: T;
     try {
-      newState = await check(currentState, waitForConditionContext);
+      newState = await runWithContext(stepId, parentId, () =>
+        check(currentState, waitForConditionContext),
+      );
     } finally {
       removeRunningOperation(stepId);
     }

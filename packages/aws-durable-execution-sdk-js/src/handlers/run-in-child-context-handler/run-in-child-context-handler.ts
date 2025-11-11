@@ -26,6 +26,7 @@ import {
   DurableOperationError,
   ChildContextError,
 } from "../../errors/durable-error/durable-error";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -201,7 +202,9 @@ export const handleCompletedChildContext = async <T>(
       entityId, // parentId
     );
 
-    return await fn(durableChildContext);
+    return await runWithContext(entityId, entityId, () =>
+      fn(durableChildContext),
+    );
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
@@ -266,8 +269,10 @@ export const executeChildContext = async <T>(
   );
 
   try {
-    // Execute the child context function
-    const result = await fn(durableChildContext);
+    // Execute the child context function with context tracking
+    const result = await runWithContext(entityId, parentId, () =>
+      fn(durableChildContext),
+    );
 
     // Always checkpoint at finish with adaptive mode
     // Serialize the result for consistency

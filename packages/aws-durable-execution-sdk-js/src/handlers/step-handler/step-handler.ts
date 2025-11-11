@@ -35,6 +35,7 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { EventEmitter } from "events";
 import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
@@ -363,7 +364,7 @@ export const executeStep = async <T>(
     addRunningOperation(stepId);
     let result: T;
     try {
-      result = await fn(stepContext);
+      result = await runWithContext(stepId, parentId, () => fn(stepContext));
     } finally {
       removeRunningOperation(stepId);
     }

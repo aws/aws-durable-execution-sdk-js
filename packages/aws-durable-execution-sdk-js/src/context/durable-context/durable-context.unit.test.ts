@@ -115,7 +115,7 @@ describe("DurableContext", () => {
   });
 
   describe("withModeManagement", () => {
-    it("should execute operation in ExecutionMode", () => {
+    it("should execute operation in ExecutionMode", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -129,12 +129,12 @@ describe("DurableContext", () => {
       const mockHandler = jest.fn();
       createStepHandler.mockReturnValue(mockHandler);
 
-      context.step(async (): Promise<string> => "result");
+      await context.step(async (): Promise<string> => "result");
 
       expect(mockHandler).toHaveBeenCalled();
     });
 
-    it("should switch from ReplayMode to ExecutionMode when next step not found", () => {
+    it("should switch from ReplayMode to ExecutionMode when next step not found", async () => {
       const executionContext = createMockExecutionContext({
         getStepData: jest.fn().mockReturnValue(undefined),
       });
@@ -145,12 +145,12 @@ describe("DurableContext", () => {
         DurableExecutionMode.ReplayMode,
       );
 
-      context.step(async (): Promise<string> => "result");
+      await context.step(async (): Promise<string> => "result");
 
       expect(executionContext.getStepData).toHaveBeenCalled();
     });
 
-    it("should switch mode when step is unfinished", () => {
+    it("should switch mode when step is unfinished", async () => {
       const executionContext = createMockExecutionContext({
         getStepData: jest
           .fn()
@@ -163,7 +163,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ReplayMode,
       );
 
-      context.step(async (): Promise<string> => "result");
+      await context.step(async (): Promise<string> => "result");
 
       expect(executionContext.getStepData).toHaveBeenCalled();
     });
@@ -187,7 +187,7 @@ describe("DurableContext", () => {
   });
 
   describe("step ID generation", () => {
-    it("should generate sequential step IDs", () => {
+    it("should generate sequential step IDs", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -195,8 +195,8 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.step(async (): Promise<void> => {});
-      context.step(async (): Promise<void> => {});
+      await context.step(async (): Promise<void> => {});
+      await context.step(async (): Promise<void> => {});
 
       const { createStepHandler } = jest.requireMock(
         "../../handlers/step-handler/step-handler",
@@ -208,7 +208,7 @@ describe("DurableContext", () => {
       expect(createStepIdFn()).toBe("3");
     });
 
-    it("should generate prefixed step IDs when prefix provided", () => {
+    it("should generate prefixed step IDs when prefix provided", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -217,7 +217,7 @@ describe("DurableContext", () => {
         "child",
       );
 
-      context.step(async (): Promise<void> => {});
+      await context.step(async (): Promise<void> => {});
 
       const { createStepHandler } = jest.requireMock(
         "../../handlers/step-handler/step-handler",
@@ -230,7 +230,7 @@ describe("DurableContext", () => {
   });
 
   describe("operation handlers", () => {
-    it("should call step handler", () => {
+    it("should call step handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -238,7 +238,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.step(async (): Promise<string> => "result");
+      await context.step(async (): Promise<string> => "result");
 
       const { createStepHandler } = jest.requireMock(
         "../../handlers/step-handler/step-handler",
@@ -246,7 +246,7 @@ describe("DurableContext", () => {
       expect(createStepHandler).toHaveBeenCalled();
     });
 
-    it("should call invoke handler", () => {
+    it("should call invoke handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -254,7 +254,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.invoke("func", {});
+      await context.invoke("func", {});
 
       const { createInvokeHandler } = jest.requireMock(
         "../../handlers/invoke-handler/invoke-handler",
@@ -262,7 +262,7 @@ describe("DurableContext", () => {
       expect(createInvokeHandler).toHaveBeenCalled();
     });
 
-    it("should call runInChildContext handler", () => {
+    it("should call runInChildContext handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -270,7 +270,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.runInChildContext(async (): Promise<string> => "result");
+      await context.runInChildContext(async (): Promise<string> => "result");
 
       const { createRunInChildContextHandler } = jest.requireMock(
         "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
@@ -283,7 +283,7 @@ describe("DurableContext", () => {
       expect(logger).toBeDefined();
     });
 
-    it("should call wait handler", () => {
+    it("should call wait handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -291,7 +291,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.wait({ seconds: 5 });
+      await context.wait({ seconds: 5 });
 
       const { createWaitHandler } = jest.requireMock(
         "../../handlers/wait-handler/wait-handler",
@@ -299,7 +299,7 @@ describe("DurableContext", () => {
       expect(createWaitHandler).toHaveBeenCalled();
     });
 
-    it("should call wait handler with name", () => {
+    it("should call wait handler with name", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -313,12 +313,12 @@ describe("DurableContext", () => {
       const mockHandler = jest.fn();
       createWaitHandler.mockReturnValue(mockHandler);
 
-      context.wait("wait-name", { seconds: 5 });
+      await context.wait("wait-name", { seconds: 5 });
 
       expect(mockHandler).toHaveBeenCalledWith("wait-name", { seconds: 5 });
     });
 
-    it("should call createCallback handler", () => {
+    it("should call createCallback handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -326,7 +326,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.createCallback();
+      await context.createCallback();
 
       const { createCallback } = jest.requireMock(
         "../../handlers/callback-handler/callback",
@@ -334,7 +334,7 @@ describe("DurableContext", () => {
       expect(createCallback).toHaveBeenCalled();
     });
 
-    it("should call waitForCallback handler", () => {
+    it("should call waitForCallback handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -342,7 +342,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.waitForCallback(async (): Promise<void> => {});
+      await context.waitForCallback(async (): Promise<void> => {});
 
       const { createWaitForCallbackHandler } = jest.requireMock(
         "../../handlers/wait-for-callback-handler/wait-for-callback-handler",
@@ -350,7 +350,7 @@ describe("DurableContext", () => {
       expect(createWaitForCallbackHandler).toHaveBeenCalled();
     });
 
-    it("should call waitForCondition handler", () => {
+    it("should call waitForCondition handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -370,7 +370,7 @@ describe("DurableContext", () => {
         }),
       };
 
-      context.waitForCondition(checkFunc, config);
+      await context.waitForCondition(checkFunc, config);
 
       const { createWaitForConditionHandler } = jest.requireMock(
         "../../handlers/wait-for-condition-handler/wait-for-condition-handler",
@@ -378,7 +378,7 @@ describe("DurableContext", () => {
       expect(createWaitForConditionHandler).toHaveBeenCalled();
     });
 
-    it("should call waitForCondition handler with name", () => {
+    it("should call waitForCondition handler with name", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -404,7 +404,7 @@ describe("DurableContext", () => {
         }),
       };
 
-      context.waitForCondition("condition-name", checkFunc, config);
+      await context.waitForCondition("condition-name", checkFunc, config);
 
       expect(mockHandler).toHaveBeenCalledWith(
         "condition-name",
@@ -413,7 +413,7 @@ describe("DurableContext", () => {
       );
     });
 
-    it("should track running operations via hasRunningOperations", () => {
+    it("should track running operations via hasRunningOperations", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -425,13 +425,13 @@ describe("DurableContext", () => {
         "../../handlers/invoke-handler/invoke-handler",
       );
 
-      context.invoke("func", {});
+      await context.invoke("func", {});
       const hasRunningOperationsFn = createInvokeHandler.mock.calls[0][3];
 
       expect(hasRunningOperationsFn()).toBe(false);
     });
 
-    it("should call map handler", () => {
+    it("should call map handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -439,7 +439,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.map([1, 2], async (): Promise<string> => "result");
+      await context.map([1, 2], async (): Promise<string> => "result");
 
       const { createMapHandler } = jest.requireMock(
         "../../handlers/map-handler/map-handler",
@@ -447,7 +447,7 @@ describe("DurableContext", () => {
       expect(createMapHandler).toHaveBeenCalled();
     });
 
-    it("should call parallel handler", () => {
+    it("should call parallel handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -455,7 +455,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      context.parallel([async (): Promise<string> => "result"]);
+      await context.parallel([async (): Promise<string> => "result"]);
 
       const { createParallelHandler } = jest.requireMock(
         "../../handlers/parallel-handler/parallel-handler",
@@ -463,7 +463,7 @@ describe("DurableContext", () => {
       expect(createParallelHandler).toHaveBeenCalled();
     });
 
-    it("should call executeConcurrently handler", () => {
+    it("should call executeConcurrently handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -472,7 +472,10 @@ describe("DurableContext", () => {
       );
 
       const items = [{ id: "1", data: "test", index: 0 }];
-      context.executeConcurrently(items, async (): Promise<string> => "result");
+      await context.executeConcurrently(
+        items,
+        async (): Promise<string> => "result",
+      );
 
       const { createConcurrentExecutionHandler } = jest.requireMock(
         "../../handlers/concurrent-execution-handler/concurrent-execution-handler",
