@@ -29,10 +29,10 @@ export const handler = withDurableExecution(
       },
       {
         // Retry strategy: up to 4 attempts with exponential backoff
-        // Delays: 0.5s, 1s, 2s between retries
+        // Delays: 1s, 2s, 4s between retries
         retryStrategy: (error, attempt) => ({
           shouldRetry: attempt < 4,
-          delaySeconds: Math.pow(2, attempt - 1) * 0.5,
+          delay: { seconds: Math.pow(2, attempt - 1) },
         }),
       },
     );

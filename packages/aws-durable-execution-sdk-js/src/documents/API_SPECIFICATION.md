@@ -225,7 +225,7 @@ type ConcurrentExecutor<TItem, TResult> = (
  */
 export interface RetryDecision {
   shouldRetry: boolean;
-  delaySeconds?: number;
+  delay?: Duration;
 }
 
 /**
@@ -350,7 +350,7 @@ export interface ConcurrencyConfig<TResult> {
  * Decision object for waitForCondition wait strategy
  */
 export type WaitForConditionDecision =
-  | { shouldContinue: true; delaySeconds: number }
+  | { shouldContinue: true; delay: Duration }
   | { shouldContinue: false };
 
 /**
@@ -552,10 +552,10 @@ const result = await context.step(async () => callMyApi(event.value), {
 ```typescript
 const customRetryStrategy = createRetryStrategy({
   maxAttempts: 5,
-  initialDelaySeconds: 1,
-  maxDelaySeconds: 60,
+  initialDelay: { seconds: 1 },
+  maxDelay: { seconds: 60 },
   backoffRate: 2,
-  jitterSeconds: 0.5,
+  jitter: JitterStrategy.FULL,
   retryableErrors: ["Intentional failure", /Network error/],
   retryableErrorTypes: [NetworkError, TimeoutError],
 });
@@ -574,7 +574,7 @@ const myCustomStrategy = (error: Error, attempt: number) => {
   if (attempt >= 5) {
     return { shouldRetry: false };
   }
-  return { shouldRetry: true, delaySeconds: 1 + attempt };
+  return { shouldRetry: true, delay: { seconds: 1 + attempt } };
 };
 
 const result = await context.step(async () => callMyApi(event.value), {
@@ -752,10 +752,10 @@ waitForCondition<T>(check: WaitForConditionCheckFunc<T>, config?: WaitForConditi
 ```typescript
 const customWaitStrategy = createWaitStrategy({
   maxAttempts: 60,
-  initialDelaySeconds: 5,
-  maxDelaySeconds: 30,
+  initialDelay: { seconds: 5 },
+  maxDelay: { seconds: 30 },
   backoffRate: 1.5,
-  jitterSeconds: 1,
+  jitter: JitterStrategy.FULL,
   shouldContinuePolling: (result) => result.status !== "CURRENT",
   timeoutSeconds: 600,
 });
@@ -777,7 +777,7 @@ const myCustomWaitStrategy = (result: StackInstance, attempt: number) => {
   } else {
     return {
       shouldContinue: true,
-      delaySeconds: Math.min(5 * attempt, 30),
+      delay: { seconds: Math.min(5 * attempt, 30) },
     };
   }
 };

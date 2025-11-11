@@ -334,7 +334,7 @@ export const executeWaitForCondition = async <T>(
       name,
       currentAttempt: currentAttempt,
       shouldContinue: decision.shouldContinue,
-      delaySeconds: decision.shouldContinue
+      delayInSeconds: decision.shouldContinue
         ? durationToSeconds(decision.delay)
         : undefined,
     });

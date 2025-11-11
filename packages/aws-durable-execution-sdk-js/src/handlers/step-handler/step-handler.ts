@@ -194,7 +194,7 @@ export const createStepHandler = (
               name,
               currentAttempt,
               shouldRetry: retryDecision.shouldRetry,
-              delaySeconds: retryDecision.shouldRetry
+              delayInSeconds: retryDecision.shouldRetry
                 ? retryDecision.delay
                   ? durationToSeconds(retryDecision.delay)
                   : undefined
@@ -450,7 +450,7 @@ export const executeStep = async <T>(
       name,
       currentAttempt,
       shouldRetry: retryDecision.shouldRetry,
-      delaySeconds: retryDecision.shouldRetry
+      delayInSeconds: retryDecision.shouldRetry
         ? retryDecision.delay
           ? durationToSeconds(retryDecision.delay)
           : undefined

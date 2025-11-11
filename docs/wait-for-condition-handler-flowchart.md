@@ -117,7 +117,7 @@ The waitForCondition handler now implements the same main loop pattern as the st
 **4. Wait Strategy Decision**:
 
 - Calls `config.waitStrategy(newState, attemptNumber)`
-- Returns `{ shouldContinue: boolean, delaySeconds?: number }`
+- Returns `{ shouldContinue: boolean, delay?: Duration }`
 - **shouldContinue = false**: Condition met, complete successfully
 - **shouldContinue = true**: Schedule retry with delay, return CONTINUE_MAIN_LOOP
 

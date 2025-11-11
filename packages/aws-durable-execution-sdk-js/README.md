@@ -72,7 +72,7 @@ const result = await context.step(
   {
     retryStrategy: (error, attempt) => ({
       shouldRetry: attempt < 3,
-      delaySeconds: Math.pow(2, attempt),
+      delay: { seconds: Math.pow(2, attempt) },
     }),
   },
 );
@@ -147,7 +147,7 @@ const finalState = await context.waitForCondition(
       }
       return {
         shouldContinue: true,
-        delaySeconds: Math.min(attempt * 2, 60),
+        delay: { seconds: Math.min(attempt * 2, 60) },
       };
     },
   },
@@ -301,7 +301,7 @@ Custom retry strategy:
 await context.step("custom-retry", async () => riskyOperation(), {
   retryStrategy: (error, attempt) => ({
     shouldRetry: attempt < 5 && error.message.includes("timeout"),
-    delaySeconds: attempt * 2,
+    delay: { seconds: attempt * 2 },
   }),
 });
 ```
@@ -362,8 +362,8 @@ import {
 
 const retryStrategy = createRetryStrategy({
   maxAttempts: 5,
-  initialDelaySeconds: 1,
-  maxDelaySeconds: 60,
+  initialDelay: { seconds: 1 },
+  maxDelay: { seconds: 60 },
   exponentialDelayFactor: 2,
   jitterStrategy: JitterStrategy.FULL,
 });
