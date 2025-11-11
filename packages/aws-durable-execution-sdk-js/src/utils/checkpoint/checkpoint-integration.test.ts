@@ -145,6 +145,7 @@ describe("Checkpoint Integration Tests", () => {
           }),
         ]),
       }),
+      undefined, // logger parameter
     );
   });
 
@@ -178,6 +179,7 @@ describe("Checkpoint Integration Tests", () => {
           ),
         ),
       }),
+      undefined, // logger parameter
     );
   });
 

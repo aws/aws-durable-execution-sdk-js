@@ -73,6 +73,7 @@ class DurableContextImpl implements DurableContext {
       executionContext,
       checkpointToken || "",
       this.operationsEmitter,
+      this.contextLogger || undefined,
     );
     this.durableExecutionMode = durableExecutionMode;
 

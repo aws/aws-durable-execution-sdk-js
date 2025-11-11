@@ -8,6 +8,8 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
+import { createContextLoggerFactory } from "../../utils/logger/context-logger";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
@@ -24,6 +26,13 @@ export const initializeExecutionContext = async (
 
   const state = getExecutionState();
 
+  // Create logger for initialization errors using existing logger factory
+  const tempContext = { durableExecutionArn } as ExecutionContext;
+  const initLogger = createContextLoggerFactory(
+    tempContext,
+    createDefaultLogger,
+  )("");
+
   const operationsArray = [...(event.InitialExecutionState.Operations || [])];
   let nextMarker = event.InitialExecutionState.NextMarker;
 
@@ -32,6 +41,7 @@ export const initializeExecutionContext = async (
       checkpointToken,
       durableExecutionArn,
       nextMarker,
+      initLogger,
     );
     operationsArray.push(...(response.Operations || []));
     nextMarker = response.NextMarker || "";

@@ -14,6 +14,15 @@ jest.mock("../../utils/logger/logger");
 jest.mock("../../termination-manager/termination-manager");
 
 describe("initializeExecutionContext", () => {
+  // Matcher for Logger interface
+  const expectLogger = expect.objectContaining({
+    log: expect.any(Function),
+    info: expect.any(Function),
+    error: expect.any(Function),
+    warn: expect.any(Function),
+    debug: expect.any(Function),
+  });
+
   // Setup common test variables
   const mockCheckpointToken = "test-checkpoint-token";
   const mockDurableExecutionArn = "test-durable-execution-arn";
@@ -195,6 +204,7 @@ describe("initializeExecutionContext", () => {
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token1",
+      expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({
       step1: mockInitialOperations[1],
@@ -250,11 +260,13 @@ describe("initializeExecutionContext", () => {
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token1",
+      expectLogger,
     );
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token2",
+      expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({
       step1: mockInitialOperations[1],
@@ -300,12 +312,14 @@ describe("initializeExecutionContext", () => {
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token1",
+      expectLogger,
     );
 
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token2",
+      expectLogger,
     );
 
     expect(result.executionContext._stepData).toEqual({
@@ -337,6 +351,7 @@ describe("initializeExecutionContext", () => {
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token1",
+      expectLogger,
     );
     expect(mockExecutionState.getStepData).toHaveBeenCalledTimes(1); // Should only be called once
     expect(result.executionContext._stepData).toEqual({
@@ -372,6 +387,7 @@ describe("initializeExecutionContext", () => {
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token1",
+      expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({});
   });
@@ -413,6 +429,7 @@ describe("initializeExecutionContext", () => {
       mockCheckpointToken,
       "test-durable-execution-arn",
       "token1",
+      expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({
       step1: mockInitialOperations[1], // Only the initial operations should be present

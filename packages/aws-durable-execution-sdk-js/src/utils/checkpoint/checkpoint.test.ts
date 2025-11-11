@@ -87,6 +87,7 @@ describe("CheckpointHandler", () => {
             },
           ],
         },
+        undefined, // logger parameter
       );
     });
   });
@@ -598,6 +599,7 @@ describe("CheckpointHandler", () => {
             },
           ],
         },
+        undefined, // logger parameter
       );
     });
   });
@@ -819,11 +821,15 @@ describe("deleteCheckpointHandler", () => {
 
       await checkpoint.force();
 
-      expect(mockState1.checkpoint).toHaveBeenCalledWith("test-token", {
-        DurableExecutionArn: "test-durable-execution-arn-1",
-        CheckpointToken: "test-token",
-        Updates: [],
-      });
+      expect(mockState1.checkpoint).toHaveBeenCalledWith(
+        "test-token",
+        {
+          DurableExecutionArn: "test-durable-execution-arn-1",
+          CheckpointToken: "test-token",
+          Updates: [],
+        },
+        undefined,
+      );
     });
 
     it("should not make additional checkpoint call when force is called during ongoing checkpoint", async () => {
@@ -873,17 +879,21 @@ describe("deleteCheckpointHandler", () => {
 
       // Should still only have made one API call total (the force request piggybacked)
       expect(mockState1.checkpoint).toHaveBeenCalledTimes(1);
-      expect(mockState1.checkpoint).toHaveBeenCalledWith("test-token", {
-        DurableExecutionArn: "test-durable-execution-arn-1",
-        CheckpointToken: "test-token",
-        Updates: [
-          {
-            Type: OperationType.STEP,
-            Action: OperationAction.START,
-            Id: hashId("step1"),
-          },
-        ],
-      });
+      expect(mockState1.checkpoint).toHaveBeenCalledWith(
+        "test-token",
+        {
+          DurableExecutionArn: "test-durable-execution-arn-1",
+          CheckpointToken: "test-token",
+          Updates: [
+            {
+              Type: OperationType.STEP,
+              Action: OperationAction.START,
+              Id: hashId("step1"),
+            },
+          ],
+        },
+        undefined,
+      );
     });
 
     it("should terminate execution when force checkpoint fails", async () => {
@@ -979,6 +989,7 @@ describe("createCheckpointHandler", () => {
           }),
         ]),
       }),
+      undefined, // logger parameter
     );
   });
 

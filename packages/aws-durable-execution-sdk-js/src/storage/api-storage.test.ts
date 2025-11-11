@@ -243,4 +243,75 @@ describe("ApiStorage", () => {
       }),
     );
   });
+
+  test("should log getStepData errors to developer logger when provided", async () => {
+    const mockError = {
+      message: "GetDurableExecutionState failed",
+      $metadata: { requestId: "test-request-id-789" },
+    };
+    mockLambdaClient.send.mockRejectedValue(mockError);
+
+    const mockLogger = {
+      error: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      log: jest.fn(),
+    };
+
+    try {
+      await apiStorage.getStepData(
+        "checkpoint-token",
+        "test-execution-arn",
+        "next-marker",
+        mockLogger,
+      );
+    } catch (_error) {
+      // Expected to throw
+    }
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      "Failed to get durable execution state",
+      mockError,
+      { requestId: "test-request-id-789" },
+    );
+  });
+
+  test("should log checkpoint errors to developer logger when provided", async () => {
+    const mockError = {
+      message: "CheckpointDurableExecution failed",
+      $metadata: { requestId: "test-request-id-999" },
+    };
+    mockLambdaClient.send.mockRejectedValue(mockError);
+
+    const mockLogger = {
+      error: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      log: jest.fn(),
+    };
+
+    const checkpointData: CheckpointDurableExecutionRequest = {
+      DurableExecutionArn: "test-execution-arn",
+      CheckpointToken: "",
+      Updates: [],
+    };
+
+    try {
+      await apiStorage.checkpoint(
+        "checkpoint-token",
+        checkpointData,
+        mockLogger,
+      );
+    } catch (_error) {
+      // Expected to throw
+    }
+
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      "Failed to checkpoint durable execution",
+      mockError,
+      { requestId: "test-request-id-999" },
+    );
+  });
 });
