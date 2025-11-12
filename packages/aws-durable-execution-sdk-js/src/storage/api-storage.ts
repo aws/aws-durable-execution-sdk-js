@@ -17,7 +17,13 @@ export class ApiStorage implements ExecutionState {
   protected client: LambdaClient;
 
   constructor() {
-    this.client = new LambdaClient();
+    this.client = new LambdaClient({
+      requestHandler: {
+        connectionTimeout: 5000,
+        socketTimeout: 50000,
+        requestTimeout: 5000,
+      },
+    });
   }
 
   /**
