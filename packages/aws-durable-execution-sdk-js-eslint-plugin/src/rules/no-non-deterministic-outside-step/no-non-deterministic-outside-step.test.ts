@@ -1,4 +1,4 @@
-import { noNonDeterministicOutsideStep } from "../no-non-deterministic-outside-step";
+import { noNonDeterministicOutsideStep } from "./no-non-deterministic-outside-step";
 
 describe("no-non-deterministic-outside-step", () => {
   it("should be defined", () => {
