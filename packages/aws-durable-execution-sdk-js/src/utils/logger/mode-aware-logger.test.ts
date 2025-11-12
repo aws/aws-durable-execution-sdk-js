@@ -36,6 +36,7 @@ describe("Mode-Aware Logger", () => {
     const logger = createModeAwareLogger(
       DurableExecutionMode.ExecutionMode,
       mockCreateContextLogger,
+      false,
     );
 
     logger.info("test message");
@@ -46,10 +47,11 @@ describe("Mode-Aware Logger", () => {
     );
   });
 
-  test("should not log in ReplayMode", () => {
+  test("should not log in ReplayMode when modeAware is enabled", () => {
     const logger = createModeAwareLogger(
       DurableExecutionMode.ReplayMode,
       mockCreateContextLogger,
+      true,
     );
 
     logger.info("test message");
@@ -57,10 +59,11 @@ describe("Mode-Aware Logger", () => {
     expect(mockEnrichedLogger.info).not.toHaveBeenCalled();
   });
 
-  test("should not log in ReplaySucceededContext", () => {
+  test("should not log in ReplaySucceededContext when modeAware is enabled", () => {
     const logger = createModeAwareLogger(
       DurableExecutionMode.ReplaySucceededContext,
       mockCreateContextLogger,
+      true,
     );
 
     logger.info("test message");
@@ -73,6 +76,7 @@ describe("Mode-Aware Logger", () => {
     createModeAwareLogger(
       DurableExecutionMode.ExecutionMode,
       mockCreateContextLogger,
+      false,
       stepPrefix,
     );
 
@@ -83,6 +87,7 @@ describe("Mode-Aware Logger", () => {
     createModeAwareLogger(
       DurableExecutionMode.ExecutionMode,
       mockCreateContextLogger,
+      false,
     );
 
     expect(mockCreateContextLogger).toHaveBeenCalledWith("", undefined);
@@ -92,6 +97,7 @@ describe("Mode-Aware Logger", () => {
     const logger = createModeAwareLogger(
       DurableExecutionMode.ExecutionMode,
       mockCreateContextLogger,
+      false,
     );
 
     logger.log("custom", "log message", { data: "test" }, new Error("test"));
@@ -118,10 +124,11 @@ describe("Mode-Aware Logger", () => {
     });
   });
 
-  test("should not call any logger methods in ReplayMode", () => {
+  test("should not call any logger methods in ReplayMode when modeAware is enabled", () => {
     const logger = createModeAwareLogger(
       DurableExecutionMode.ReplayMode,
       mockCreateContextLogger,
+      true,
     );
 
     logger.log("custom", "log message");

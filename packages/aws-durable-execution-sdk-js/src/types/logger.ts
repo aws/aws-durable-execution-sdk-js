@@ -16,6 +16,25 @@ export interface Logger {
 }
 
 /**
+ * Configuration options for logger behavior
+ *
+ * This interface supports partial configuration - you can provide only the properties
+ * you want to update. Omitted properties will retain their current values.
+ */
+export interface LoggerConfig {
+  /**
+   * Custom logger implementation to use instead of the default console logger
+   */
+  customLogger?: Logger;
+
+  /**
+   * Whether to enable mode-aware logging (suppress logs during replay)
+   * @defaultValue true
+   */
+  modeAware?: boolean;
+}
+
+/**
  * Base interface for operation contexts.
  * Do not use directly - use specific context types like StepContext, WaitForConditionContext, etc.
  */

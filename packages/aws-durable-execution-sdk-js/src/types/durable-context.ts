@@ -1,5 +1,5 @@
 import { Context } from "aws-lambda";
-import { Logger } from "./logger";
+import { Logger, LoggerConfig } from "./logger";
 import { StepFunc, StepConfig } from "./step";
 import { ChildFunc, ChildConfig } from "./child-context";
 import { InvokeConfig } from "./invoke";
@@ -802,10 +802,12 @@ export interface DurableContext {
   ): Promise<BatchResult<TResult>>;
 
   /**
-   * Sets a custom logger for this context
-   * @param logger - Custom logger implementation
+   * Configures logger behavior for this context
+   *
+   * @param config - Logger configuration options
    * @example
    * ```typescript
+   * // Set custom logger
    * const customLogger = {
    *   log: (level, message, data, error) => console.log(`[${level}] ${message}`, data),
    *   error: (message, error, data) => console.error(message, error, data),
@@ -813,8 +815,17 @@ export interface DurableContext {
    *   info: (message, data) => console.info(message, data),
    *   debug: (message, data) => console.debug(message, data)
    * };
-   * context.setCustomLogger(customLogger);
+   * context.configureLogger({ customLogger });
+   *
+   * // Disable mode-aware logging to see logs during replay
+   * context.configureLogger({ modeAware: false });
+   *
+   * // Both together
+   * context.configureLogger({
+   *   customLogger,
+   *   modeAware: false
+   * });
    * ```
    */
-  setCustomLogger(logger: Logger): void;
+  configureLogger(config: LoggerConfig): void;
 }

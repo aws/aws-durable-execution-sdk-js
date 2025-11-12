@@ -21,6 +21,7 @@ import {
   ConcurrentExecutor,
   ConcurrencyConfig,
   Logger,
+  LoggerConfig,
   InvokeConfig,
   DurableExecutionMode,
   BatchResult,
@@ -50,6 +51,7 @@ class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
   private contextLogger: Logger | null;
+  private modeAwareLoggingEnabled: boolean = true;
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
   private checkpoint: ReturnType<typeof createCheckpoint>;
@@ -91,6 +93,7 @@ class DurableContextImpl implements DurableContext {
     return createModeAwareLogger(
       this.durableExecutionMode,
       this.createContextLogger,
+      this.modeAwareLoggingEnabled,
       this._stepPrefix,
     );
   }
@@ -235,7 +238,7 @@ class DurableContextImpl implements DurableContext {
       "invoke",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withModeManagement(async () => {
       const invokeHandler = createInvokeHandler(
         this.executionContext,
         this.checkpoint,
@@ -254,7 +257,9 @@ class DurableContextImpl implements DurableContext {
       );
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      return promise;
+      const result = await promise;
+      this.checkAndUpdateReplayMode();
+      return result;
     });
   }
 
@@ -294,7 +299,7 @@ class DurableContextImpl implements DurableContext {
       "wait",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withModeManagement(async () => {
       const waitHandler = createWaitHandler(
         this.executionContext,
         this.checkpoint,
@@ -309,12 +314,33 @@ class DurableContextImpl implements DurableContext {
           : waitHandler(nameOrDuration);
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      return promise;
+      await promise;
+      this.checkAndUpdateReplayMode();
     });
   }
 
-  setCustomLogger(logger: Logger): void {
-    this.contextLogger = logger;
+  /**
+   * Configure logger behavior for this context
+   *
+   * This method allows partial configuration - only the properties provided will be updated.
+   * For example, calling configureLogger(\{ modeAware: false \}) will only change the modeAware
+   * setting without affecting any previously configured custom logger.
+   *
+   * @param config - Logger configuration options including customLogger and modeAware settings (default: modeAware=true)
+   * @example
+   * // Set custom logger and enable mode-aware logging
+   * context.configureLogger(\{ customLogger: myLogger, modeAware: true \});
+   *
+   * // Later, disable mode-aware logging without changing the custom logger
+   * context.configureLogger(\{ modeAware: false \});
+   */
+  configureLogger(config: LoggerConfig): void {
+    if (config.customLogger !== undefined) {
+      this.contextLogger = config.customLogger;
+    }
+    if (config.modeAware !== undefined) {
+      this.modeAwareLoggingEnabled = config.modeAware;
+    }
   }
 
   createCallback<T>(
@@ -326,7 +352,7 @@ class DurableContextImpl implements DurableContext {
       "createCallback",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withModeManagement(async () => {
       const callbackFactory = createCallbackFactory(
         this.executionContext,
         this.checkpoint,
@@ -338,7 +364,9 @@ class DurableContextImpl implements DurableContext {
       const promise = callbackFactory(nameOrConfig, maybeConfig);
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      return promise;
+      const result = await promise;
+      this.checkAndUpdateReplayMode();
+      return result;
     });
   }
 
@@ -352,7 +380,7 @@ class DurableContextImpl implements DurableContext {
       "waitForCallback",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withModeManagement(async () => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
         this.executionContext,
         this.runInChildContext.bind(this),
@@ -364,7 +392,9 @@ class DurableContextImpl implements DurableContext {
       );
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      return promise;
+      const result = await promise;
+      this.checkAndUpdateReplayMode();
+      return result;
     });
   }
 
