@@ -1,4 +1,4 @@
-import { noNestedDurableOperations } from "../no-nested-durable-operations";
+import { noNestedDurableOperations } from "./no-nested-durable-operations";
 
 describe("no-nested-durable-operations", () => {
   it("should be defined", () => {
