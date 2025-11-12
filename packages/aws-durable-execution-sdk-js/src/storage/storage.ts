@@ -18,11 +18,18 @@ export interface ExecutionState {
 }
 
 let customStorage: ExecutionState | undefined;
+let defaultStorage: ExecutionState | undefined;
 
 export function setCustomStorage(storage: ExecutionState): void {
   customStorage = storage;
 }
 
 export function getExecutionState(): ExecutionState {
-  return customStorage || new ApiStorage();
+  if (customStorage) {
+    return customStorage;
+  }
+  if (!defaultStorage) {
+    defaultStorage = new ApiStorage();
+  }
+  return defaultStorage;
 }
