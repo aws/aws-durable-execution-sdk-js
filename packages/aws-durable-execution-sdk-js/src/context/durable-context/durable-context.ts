@@ -238,7 +238,7 @@ class DurableContextImpl implements DurableContext {
       "invoke",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(async () => {
+    return this.withModeManagement(() => {
       const invokeHandler = createInvokeHandler(
         this.executionContext,
         this.checkpoint,
@@ -257,9 +257,9 @@ class DurableContextImpl implements DurableContext {
       );
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      const result = await promise;
-      this.checkAndUpdateReplayMode();
-      return result;
+      return promise?.finally(() => {
+        this.checkAndUpdateReplayMode();
+      });
     });
   }
 
@@ -299,7 +299,7 @@ class DurableContextImpl implements DurableContext {
       "wait",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(async () => {
+    return this.withModeManagement(() => {
       const waitHandler = createWaitHandler(
         this.executionContext,
         this.checkpoint,
@@ -314,8 +314,9 @@ class DurableContextImpl implements DurableContext {
           : waitHandler(nameOrDuration);
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      await promise;
-      this.checkAndUpdateReplayMode();
+      return promise?.finally(() => {
+        this.checkAndUpdateReplayMode();
+      });
     });
   }
 
@@ -352,7 +353,7 @@ class DurableContextImpl implements DurableContext {
       "createCallback",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(async () => {
+    return this.withModeManagement(() => {
       const callbackFactory = createCallbackFactory(
         this.executionContext,
         this.checkpoint,
@@ -364,9 +365,9 @@ class DurableContextImpl implements DurableContext {
       const promise = callbackFactory(nameOrConfig, maybeConfig);
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      const result = await promise;
-      this.checkAndUpdateReplayMode();
-      return result;
+      return promise?.finally(() => {
+        this.checkAndUpdateReplayMode();
+      });
     });
   }
 
@@ -380,7 +381,7 @@ class DurableContextImpl implements DurableContext {
       "waitForCallback",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(async () => {
+    return this.withModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
         this.executionContext,
         this.runInChildContext.bind(this),
@@ -392,9 +393,9 @@ class DurableContextImpl implements DurableContext {
       );
       // Prevent unhandled promise rejections
       promise?.catch(() => {});
-      const result = await promise;
-      this.checkAndUpdateReplayMode();
-      return result;
+      return promise?.finally(() => {
+        this.checkAndUpdateReplayMode();
+      });
     });
   }
 

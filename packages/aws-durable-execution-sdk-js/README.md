@@ -422,6 +422,12 @@ context.configureLogger({ customLogger: myLogger });
 
 The new `configureLogger()` method provides additional control over logging behavior with the `modeAware` option.
 
+**Tip for local development:** Set `modeAware: false` to see all logs during replay, which can be helpful for debugging:
+
+```typescript
+context.configureLogger({ modeAware: false });
+```
+
 ## Testing Locally
 
 Run durable functions locally for development:
