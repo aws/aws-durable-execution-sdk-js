@@ -3,8 +3,10 @@
 /dist
 /dist-cjs
 /coverage
+/coverage-sdk
 *.iml
 .aws-sam/*
 *.zip
 
 src/utils/examples-catalog.json
+src/dur-sdk/
