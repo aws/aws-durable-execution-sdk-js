@@ -26,7 +26,7 @@ describe("Default Logger", () => {
     const testData = { key: "value" };
     const testError = new Error("test error");
 
-    logger.log("custom", "test message", testData, testError);
+    logger.log?.("custom", "test message", testData, testError);
 
     expect(consoleSpy).toHaveBeenCalledWith(
       "custom",

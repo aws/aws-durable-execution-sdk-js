@@ -15,14 +15,16 @@ export const createModeAwareLogger = (
     durableExecutionMode === DurableExecutionMode.ExecutionMode;
 
   return {
-    log: (
-      level: string,
-      message?: string,
-      data?: unknown,
-      error?: Error,
-    ): void => {
-      if (shouldLog()) enrichedLogger.log(level, message, data, error);
-    },
+    log: enrichedLogger.log
+      ? (
+          level: string,
+          message?: string,
+          data?: unknown,
+          error?: Error,
+        ): void => {
+          if (shouldLog()) enrichedLogger.log!(level, message, data, error);
+        }
+      : undefined,
     info: (message?: string, data?: unknown): void => {
       if (shouldLog()) enrichedLogger.info(message, data);
     },

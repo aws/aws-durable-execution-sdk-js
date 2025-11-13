@@ -3,8 +3,8 @@
  * Provides structured logging capabilities for durable execution contexts
  */
 export interface Logger {
-  /** Generic log method with configurable level */
-  log(level: string, message?: string, data?: unknown, error?: Error): void;
+  /** Generic log method with configurable level (optional for compatibility with popular loggers) */
+  log?(level: string, message?: string, data?: unknown, error?: Error): void;
   /** Log error messages with optional error object and additional data */
   error(message?: string, error?: Error, data?: unknown): void;
   /** Log warning messages with optional additional data */

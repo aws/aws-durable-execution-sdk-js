@@ -100,7 +100,7 @@ describe("Mode-Aware Logger", () => {
       false,
     );
 
-    logger.log("custom", "log message", { data: "test" }, new Error("test"));
+    logger.log?.("custom", "log message", { data: "test" }, new Error("test"));
     logger.error("error message", new Error("test"), { data: "test" });
     logger.warn("warn message", { data: "test" });
     logger.debug("debug message", { data: "test" });
@@ -131,7 +131,7 @@ describe("Mode-Aware Logger", () => {
       true,
     );
 
-    logger.log("custom", "log message");
+    logger.log?.("custom", "log message");
     logger.error("error message", new Error("test"));
     logger.warn("warn message");
     logger.debug("debug message");

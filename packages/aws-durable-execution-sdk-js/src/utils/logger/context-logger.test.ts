@@ -122,7 +122,7 @@ describe("Context Logger", () => {
     const logger = factory("generic-step");
     const testError = new Error("generic error");
 
-    logger.log("custom", "custom message", { custom: "data" }, testError);
+    logger.log?.("custom", "custom message", { custom: "data" }, testError);
 
     expect(mockBaseLogger.log).toHaveBeenCalledWith(
       "custom",
@@ -173,7 +173,7 @@ describe("Context Logger", () => {
     const logger = factory("test-step");
 
     // Test all logger methods to ensure coverage
-    logger.log(
+    logger.log?.(
       "custom",
       "log message",
       { data: "test" },

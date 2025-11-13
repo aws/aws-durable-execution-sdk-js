@@ -36,19 +36,21 @@ export const createContextLoggerFactory = (
     };
 
     return {
-      log: (
-        level: string,
-        message?: string,
-        data?: unknown,
-        error?: Error,
-      ): void => {
-        baseLogger.log(
-          level,
-          message,
-          createLogEntry(level, message, data, error),
-          error,
-        );
-      },
+      log: baseLogger.log
+        ? (
+            level: string,
+            message?: string,
+            data?: unknown,
+            error?: Error,
+          ): void => {
+            baseLogger.log!(
+              level,
+              message,
+              createLogEntry(level, message, data, error),
+              error,
+            );
+          }
+        : undefined,
       info: (message?: string, data?: unknown): void => {
         baseLogger.info(message, createLogEntry("info", message, data));
       },
