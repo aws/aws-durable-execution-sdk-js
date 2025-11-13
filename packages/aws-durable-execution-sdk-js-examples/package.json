@@ -38,6 +38,9 @@
     "generate-template": "node scripts/generate-template.js",
     "test": "npm run unit-test",
     "test:integration": "NODE_ENV=integration jest --config jest.config.integration.js --testNamePattern=cloud",
+    "pretest-with-sdk-coverage": "node scripts/copy-sdk-source.js",
+    "test-with-sdk-coverage": "jest --config jest.config.sdk-coverage.js --collectCoverage",
+    "coverage-to-csv": "node scripts/coverage-to-csv.js",
     "unit-test": "jest --collectCoverage",
     "unit-test-watch": "jest --watch",
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"
