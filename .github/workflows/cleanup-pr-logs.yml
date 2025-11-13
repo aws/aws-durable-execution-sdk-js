@@ -7,13 +7,15 @@ on:
       - development
 
 permissions:
-  id-token: write # This is required for requesting the JWT
   contents: read # This is required for actions/checkout
 
 jobs:
   cleanup-logs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for AWS credentials
 
     steps:
       - name: Configure AWS credentials
