@@ -51,7 +51,7 @@ describe("DurableContext Logger Property", () => {
     expect(typeof context.logger.debug).toBe("function");
   });
 
-  test("DurableContext logger should be customizable via setCustomLogger", () => {
+  test("DurableContext logger should be customizable via configureLogger", () => {
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
@@ -59,7 +59,7 @@ describe("DurableContext Logger Property", () => {
     );
 
     // Set custom logger
-    context.setCustomLogger(customLogger);
+    context.configureLogger({ customLogger });
 
     // Verify it works by calling a method
     context.logger.info("test message", { data: "test" });
@@ -91,7 +91,7 @@ describe("DurableContext Logger Property", () => {
     context.logger.info("message1");
 
     // Set custom logger
-    context.setCustomLogger(customLogger);
+    context.configureLogger({ customLogger });
 
     // Call logger after setting custom logger
     context.logger.info("message2");
@@ -117,7 +117,7 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
     );
-    contextExecution.setCustomLogger(customLogger);
+    contextExecution.configureLogger({ customLogger });
 
     contextExecution.logger.info("execution mode message");
     expect(customLogger.info).toHaveBeenCalledWith(
@@ -134,13 +134,13 @@ describe("DurableContext Logger Property", () => {
     // Reset mock
     jest.clearAllMocks();
 
-    // Test in ReplayMode - should NOT log
+    // Test in ReplayMode - should NOT log when modeAware is true (default)
     const contextReplay = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
     );
-    contextReplay.setCustomLogger(customLogger);
+    contextReplay.configureLogger({ customLogger });
 
     contextReplay.logger.info("replay mode message");
     expect(customLogger.info).not.toHaveBeenCalled();
@@ -148,13 +148,13 @@ describe("DurableContext Logger Property", () => {
     // Reset mock
     jest.clearAllMocks();
 
-    // Test in ReplaySucceededContext - should NOT log
+    // Test in ReplaySucceededContext - should NOT log when modeAware is true (default)
     const contextReplaySucceeded = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplaySucceededContext,
     );
-    contextReplaySucceeded.setCustomLogger(customLogger);
+    contextReplaySucceeded.configureLogger({ customLogger });
 
     contextReplaySucceeded.logger.info("replay succeeded message");
     expect(customLogger.info).not.toHaveBeenCalled();
@@ -168,7 +168,7 @@ describe("DurableContext Logger Property", () => {
       DurableExecutionMode.ExecutionMode,
       "1", // stepPrefix for child context
     );
-    childContext.setCustomLogger(customLogger);
+    childContext.configureLogger({ customLogger });
 
     childContext.logger.info("child message");
 

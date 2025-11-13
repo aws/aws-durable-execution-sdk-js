@@ -3,13 +3,15 @@ import { Logger, DurableExecutionMode } from "../../types";
 export const createModeAwareLogger = (
   durableExecutionMode: DurableExecutionMode,
   createContextLogger: (stepId: string, attempt?: number) => Logger,
+  modeAwareEnabled: boolean,
   stepPrefix?: string,
 ): Logger => {
   // Use context logger factory with stepPrefix as step ID (or undefined for top level)
   const enrichedLogger = createContextLogger(stepPrefix || "", undefined);
 
-  // Only log if in ExecutionMode
+  // Only log if in ExecutionMode (when mode-aware is enabled) or always log (when disabled)
   const shouldLog = (): boolean =>
+    !modeAwareEnabled ||
     durableExecutionMode === DurableExecutionMode.ExecutionMode;
 
   return {

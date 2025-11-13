@@ -395,14 +395,37 @@ const handler = async (event: any, context: DurableContext) => {
 Custom logger:
 
 ```typescript
-context.setCustomLogger({
-  log: (level, message, data, error) =>
-    console.log(`[${level}] ${message}`, data),
-  error: (message, error, data) => console.error(message, error, data),
-  warn: (message, data) => console.warn(message, data),
-  info: (message, data) => console.info(message, data),
-  debug: (message, data) => console.debug(message, data),
+context.configureLogger({
+  customLogger: {
+    log: (level, message, data, error) =>
+      console.log(`[${level}] ${message}`, data),
+    error: (message, error, data) => console.error(message, error, data),
+    warn: (message, data) => console.warn(message, data),
+    info: (message, data) => console.info(message, data),
+    debug: (message, data) => console.debug(message, data),
+  },
+  modeAware: false, // Optional: show logs during replay (default: true)
 });
+```
+
+### Migration from setCustomLogger()
+
+If you were using the deprecated `setCustomLogger()` method, update your code:
+
+```typescript
+// Before
+context.setCustomLogger(myLogger);
+
+// After
+context.configureLogger({ customLogger: myLogger });
+```
+
+The new `configureLogger()` method provides additional control over logging behavior with the `modeAware` option.
+
+**Tip for local development:** Set `modeAware: false` to see all logs during replay, which can be helpful for debugging:
+
+```typescript
+context.configureLogger({ modeAware: false });
 ```
 
 ## Testing Locally

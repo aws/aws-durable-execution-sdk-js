@@ -99,7 +99,7 @@ describe("DurableContext", () => {
       expect(context.executeConcurrently).toBeDefined();
       expect(context.promise).toBeDefined();
       expect(context.logger).toBeDefined();
-      expect(context.setCustomLogger).toBeDefined();
+      expect(context.configureLogger).toBeDefined();
     });
 
     it("should expose lambdaContext", () => {
@@ -501,7 +501,7 @@ describe("DurableContext", () => {
         debug: jest.fn(),
       };
 
-      expect(() => context.setCustomLogger(customLogger)).not.toThrow();
+      expect(() => context.configureLogger({ customLogger })).not.toThrow();
     });
   });
 
