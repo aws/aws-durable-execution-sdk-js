@@ -55,6 +55,7 @@ jobs:
   unit-tests:
     needs: build
     strategy:
+      fail-fast: false
       matrix:
         node-version: ["20.x", "22.x", "24.x"]
     uses: "./.github/workflows/unit-tests.yml"
@@ -67,6 +68,7 @@ jobs:
       contents: read
       id-token: write
     strategy:
+      fail-fast: false
       matrix:
         node-version: ["20.x", "22.x", "24.x"]
     uses: "./.github/workflows/integration-tests.yml"
@@ -82,7 +84,9 @@ jobs:
       id-token: write
 
     strategy:
+      # Clean up functions sequentially to avoid throttling
       max-parallel: 1
+      fail-fast: false
       matrix:
         node-version: ["20.x", "22.x", "24.x"]
 
