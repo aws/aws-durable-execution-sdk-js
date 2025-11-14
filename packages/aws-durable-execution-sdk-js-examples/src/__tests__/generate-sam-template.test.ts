@@ -29,7 +29,7 @@ describe("generate-sam-template", () => {
     });
 
     test("creates function resource with custom config for steps-with-retry", () => {
-      const resource = createFunctionResource("steps-with-retry");
+      const resource = createFunctionResource("steps-with-retry", {});
 
       expect(resource.Properties.FunctionName).toBe(
         "StepsWithRetry-TypeScript",
@@ -46,7 +46,16 @@ describe("generate-sam-template", () => {
     });
 
     test("includes required environment variables", () => {
-      const resource = createFunctionResource("hello-world");
+      const resource = createFunctionResource("hello-world", {});
+
+      expect(resource.Properties.Environment.Variables).toEqual({
+        AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
+        DURABLE_VERBOSE_MODE: "true",
+      });
+    });
+
+    test("disables verbose logging when skipVerboseLogging is true", () => {
+      const resource = createFunctionResource("hello-world", {}, true);
 
       expect(resource.Properties.Environment.Variables).toEqual({
         AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
