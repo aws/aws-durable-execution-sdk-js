@@ -121,6 +121,4 @@ export interface TestResult<T> {
 // Tracks a single invocation of the handler function
 export interface Invocation {
   id: string;
-  // Get completed steps in this invocation
-  getOperations(params?: { status: OperationStatus }): OperationWithData[];
 }

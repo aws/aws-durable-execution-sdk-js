@@ -117,8 +117,6 @@ export async function startCheckpointServer(port: number) {
 
       res.json({
         operations: convertDatesToTimestamps(operations),
-        operationInvocationIdMap:
-          checkpointStorage.getOperationInvocationIdMap(),
       });
     },
   );
@@ -233,7 +231,7 @@ export async function startCheckpointServer(port: number) {
 
       try {
         validateCheckpointUpdates(updates, storage.operationDataMap);
-        storage.registerUpdates(updates, data.invocationId);
+        storage.registerUpdates(updates);
       } catch (err: unknown) {
         if (err instanceof InvalidParameterValueException) {
           res.setHeaders(

@@ -223,11 +223,9 @@ describe("CheckpointApiClient", () => {
     it("should make a GET request to the correct endpoint", async () => {
       const mockResponseDataSerialized: SerializedPollCheckpointResponse = {
         operations: mockOperationsSerialized,
-        operationInvocationIdMap: { op1: [createInvocationId("invocation-1")] },
       };
       const mockResponseData = {
         operations: mockOperations,
-        operationInvocationIdMap: { op1: ["invocation-1"] },
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -279,7 +277,6 @@ describe("CheckpointApiClient", () => {
             ],
           },
         ],
-        operationInvocationIdMap: {},
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -313,14 +310,12 @@ describe("CheckpointApiClient", () => {
             ],
           },
         ],
-        operationInvocationIdMap: {},
       });
     });
 
     it("should pass the abort signal when provided", async () => {
       const mockResponseData = {
         operations: mockOperationsSerialized,
-        operationInvocationIdMap: { op1: ["invocation-1"] },
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -344,46 +339,6 @@ describe("CheckpointApiClient", () => {
           signal,
         },
       );
-    });
-
-    it("should handle response with operationInvocationIdMap", async () => {
-      const mockResponseData = {
-        operations: mockOperationsSerialized,
-        operationInvocationIdMap: {
-          op1: ["invocation-1", "invocation-2"],
-          op2: ["invocation-3"],
-        },
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockResponseData),
-      });
-
-      const result = await apiClient.pollCheckpointData(mockExecutionId);
-
-      expect(result.operations).toEqual(mockOperations);
-      expect(result.operationInvocationIdMap).toEqual({
-        op1: ["invocation-1", "invocation-2"],
-        op2: ["invocation-3"],
-      });
-    });
-
-    it("should handle response with empty operationInvocationIdMap", async () => {
-      const mockResponseData: SerializedPollCheckpointResponse = {
-        operations: mockOperationsSerialized,
-        operationInvocationIdMap: {},
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockResponseData),
-      });
-
-      const result = await apiClient.pollCheckpointData(mockExecutionId);
-
-      expect(result.operations).toStrictEqual(mockOperations);
-      expect(result.operationInvocationIdMap).toEqual({});
     });
 
     it("should throw an error when the request fails", async () => {

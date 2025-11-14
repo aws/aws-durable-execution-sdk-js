@@ -9,7 +9,7 @@ import {
   OperationUpdate,
 } from "@aws-sdk/client-lambda";
 import { randomUUID } from "node:crypto";
-import { CallbackId, ExecutionId, InvocationId } from "../utils/tagged-strings";
+import { CallbackId, ExecutionId } from "../utils/tagged-strings";
 import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";
 import { EventProcessor } from "./event-processor";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
@@ -23,8 +23,6 @@ export interface CheckpointOperation extends OperationEvents {
   update: OperationUpdate | undefined;
 }
 
-export type OperationInvocationIdMap = Record<string, InvocationId[]>;
-
 /**
  * Used for managing the checkpoints of an execution.
  */
@@ -33,8 +31,6 @@ export class CheckpointManager {
   private readonly pendingUpdates: CheckpointOperation[] = [];
   private resolvePendingUpdatePromise: (() => void) | undefined = undefined;
   private readonly callbackManager: CallbackManager;
-  private readonly operationInvocationIdMap: Record<string, Set<InvocationId>> =
-    {};
   // TODO: add execution timeout
   readonly eventProcessor = new EventProcessor();
 
@@ -111,18 +107,6 @@ export class CheckpointManager {
     this.operationDataMap.set(initialId, initialOperationEvents);
 
     return initialOperationEvents;
-  }
-
-  getOperationInvocationIdMap(): OperationInvocationIdMap {
-    return Object.keys(this.operationInvocationIdMap).reduce(
-      (acc: OperationInvocationIdMap, key: string) => {
-        const invocationIds = this.operationInvocationIdMap[key];
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        acc[key] = invocationIds ? Array.from(invocationIds) : [];
-        return acc;
-      },
-      {},
-    );
   }
 
   /**
@@ -303,10 +287,7 @@ export class CheckpointManager {
    * @param invocationId The invocation ID these updates belong to
    * @returns Array of checkpoint operations with their associated updates
    */
-  registerUpdates(
-    updates: OperationUpdate[],
-    invocationId: InvocationId,
-  ): OperationEvents[] {
+  registerUpdates(updates: OperationUpdate[]): OperationEvents[] {
     if (this._isExecutionCompleted) {
       // Checkpoint token is invalid once execution is completed
       throw new InvalidParameterValueException({
@@ -315,7 +296,7 @@ export class CheckpointManager {
       });
     }
 
-    return updates.map((update) => this.registerUpdate(update, invocationId));
+    return updates.map((update) => this.registerUpdate(update));
   }
 
   /**
@@ -463,10 +444,7 @@ export class CheckpointManager {
    * `getPendingCheckpointUpdates` should be used for acting on the data after each update.
    * @returns the operation update along with the operation itself
    */
-  registerUpdate(
-    update: OperationUpdate,
-    invocationId: InvocationId,
-  ): OperationEvents {
+  registerUpdate(update: OperationUpdate): OperationEvents {
     if (!update.Id) {
       throw new Error("Missing Id in update");
     }
@@ -474,15 +452,6 @@ export class CheckpointManager {
     const previousOperation = this.operationDataMap.get(update.Id);
 
     if (previousOperation) {
-      const operationInvocations = this.operationInvocationIdMap[update.Id];
-
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      if (!operationInvocations) {
-        throw new Error(`Could not find invocations list for ${update.Id}`);
-      }
-
-      operationInvocations.add(invocationId);
-
       if (previousOperation.operation.WaitDetails?.ScheduledEndTimestamp) {
         this.addOperationUpdate({
           ...previousOperation,
@@ -498,15 +467,6 @@ export class CheckpointManager {
       });
       return completedOperation;
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (this.operationInvocationIdMap[update.Id]) {
-      throw new Error(
-        "Operation invocations list should not exist for new operation.",
-      );
-    }
-
-    this.operationInvocationIdMap[update.Id] = new Set([invocationId]);
 
     const operation: Operation = {
       Id: update.Id,
