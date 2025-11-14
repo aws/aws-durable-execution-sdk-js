@@ -53,6 +53,15 @@ describe("generate-template", () => {
         DURABLE_VERBOSE_MODE: "true",
       });
     });
+
+    test("disables verbose logging when skipVerboseLogging is true", () => {
+      const resource = createFunctionResource("hello-world", true);
+
+      expect(resource.Properties.Environment.Variables).toEqual({
+        AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
+        DURABLE_VERBOSE_MODE: "false",
+      });
+    });
   });
 
   describe("generateTemplate", () => {
@@ -70,9 +79,11 @@ describe("generate-template", () => {
       const resourceNames = Object.keys(template.Resources);
       expect(resourceNames.length).toBeGreaterThan(0);
 
-      // Each resource should be a Lambda function
+      // Each resource except DurableFunctionRole should be a Lambda function
       resourceNames.forEach((name) => {
-        expect(template.Resources[name].Type).toBe("AWS::Serverless::Function");
+        if (name !== "DurableFunctionRole") {
+          expect(template.Resources[name].Type).toBe("AWS::Serverless::Function");
+        }
       });
     });
   });

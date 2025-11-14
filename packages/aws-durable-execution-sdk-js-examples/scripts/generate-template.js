@@ -100,7 +100,7 @@ function getExampleFiles() {
 /**
  * Create a Lambda function resource configuration
  */
-function createFunctionResource(filename) {
+function createFunctionResource(filename, skipVerboseLogging = false) {
   const resourceName = toPascalCase(filename);
   const config = EXAMPLE_CONFIGS[filename] || DEFAULT_CONFIG;
 
@@ -114,6 +114,7 @@ function createFunctionResource(filename) {
       Architectures: ["x86_64"],
       MemorySize: config.memorySize,
       Timeout: config.timeout,
+      Role: { "Fn::GetAtt": ["DurableFunctionRole", "Arn"] },
       DurableConfig: {
         ExecutionTimeout: 3600,
         RetentionPeriodInDays: 7,
@@ -121,7 +122,7 @@ function createFunctionResource(filename) {
       Environment: {
         Variables: {
           AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
-          DURABLE_VERBOSE_MODE: "true",
+          DURABLE_VERBOSE_MODE: skipVerboseLogging ? "false" : "true",
         },
       },
     },
@@ -141,7 +142,7 @@ function createFunctionResource(filename) {
 /**
  * Generate the complete CloudFormation template
  */
-function generateTemplate() {
+function generateTemplate(skipVerboseLogging = false) {
   const exampleFiles = getExampleFiles();
 
   if (exampleFiles.length === 0) {
@@ -152,13 +153,52 @@ function generateTemplate() {
     AWSTemplateFormatVersion: "2010-09-09",
     Description: "Durable Function examples written in TypeScript.",
     Transform: ["AWS::Serverless-2016-10-31"],
-    Resources: {},
+    Resources: {
+      DurableFunctionRole: {
+        Type: "AWS::IAM::Role",
+        Properties: {
+          AssumeRolePolicyDocument: {
+            Version: "2012-10-17",
+            Statement: [
+              {
+                Effect: "Allow",
+                Principal: {
+                  Service: "lambda.amazonaws.com",
+                },
+                Action: "sts:AssumeRole",
+              },
+            ],
+          },
+          ManagedPolicyArns: [
+            "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          ],
+          Policies: [
+            {
+              PolicyName: "DurableExecutionPolicy",
+              PolicyDocument: {
+                Version: "2012-10-17",
+                Statement: [
+                  {
+                    Effect: "Allow",
+                    Action: [
+                      "lambda:CheckpointDurableExecution",
+                      "lambda:GetDurableExecutionState",
+                    ],
+                    Resource: "*",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    },
   };
 
   // Generate resources for each example file
   exampleFiles.forEach((filename) => {
     const resourceName = toPascalCase(filename);
-    template.Resources[resourceName] = createFunctionResource(filename);
+    template.Resources[resourceName] = createFunctionResource(filename, skipVerboseLogging);
   });
 
   return template;
@@ -168,10 +208,13 @@ function generateTemplate() {
  * Main function to generate and write the template.yml file
  */
 function main() {
+  const args = process.argv.slice(2);
+  const skipVerboseLogging = args.includes('--skip-verbose-logging');
+
   try {
     console.log("🔍 Scanning src/examples for TypeScript files...");
 
-    const template = generateTemplate();
+    const template = generateTemplate(skipVerboseLogging);
     const exampleCount = Object.keys(template.Resources).length;
 
     console.log(`📝 Found ${exampleCount} example files:`);
@@ -196,6 +239,9 @@ function main() {
       `✅ Generated template.yml with ${exampleCount} Lambda functions`,
     );
     console.log(`📄 Template written to: ${templatePath}`);
+    if (skipVerboseLogging) {
+      console.log("🔇 Verbose logging disabled");
+    }
   } catch (error) {
     console.error("❌ Error generating template.yml:", error.message);
     process.exit(1);
