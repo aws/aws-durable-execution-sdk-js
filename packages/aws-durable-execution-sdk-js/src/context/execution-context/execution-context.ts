@@ -10,6 +10,7 @@ import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
 import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { ActiveOperationsTracker } from "../../utils/termination-helper/active-operations-tracker";
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
@@ -73,6 +74,7 @@ export const initializeExecutionContext = async (
       state,
       _stepData: stepData,
       terminationManager: new TerminationManager(),
+      activeOperationsTracker: new ActiveOperationsTracker(),
       durableExecutionArn,
       getStepData(stepId: string): Operation | undefined {
         return getStepDataUtil(stepData, stepId);

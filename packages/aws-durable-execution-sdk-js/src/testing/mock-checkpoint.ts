@@ -4,6 +4,7 @@ export type CheckpointFunction = {
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;
   setTerminating(): void;
+  hasPendingAncestorCompletion(stepId: string): boolean;
 };
 
 export const createMockCheckpoint = (
@@ -18,6 +19,7 @@ export const createMockCheckpoint = (
   const mockCheckpoint = Object.assign(mockFn, {
     force: jest.fn().mockResolvedValue(undefined),
     setTerminating: jest.fn(),
+    hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
   }) as jest.MockedFunction<CheckpointFunction>;
 
   return mockCheckpoint;
