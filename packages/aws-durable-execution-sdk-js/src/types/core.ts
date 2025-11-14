@@ -2,6 +2,7 @@ import { Context } from "aws-lambda";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { ExecutionState } from "../storage/storage";
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
+import { ActiveOperationsTracker } from "../utils/termination-helper/active-operations-tracker";
 
 export enum DurableExecutionMode {
   ExecutionMode = "ExecutionMode",
@@ -79,5 +80,6 @@ export interface ExecutionContext {
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
   terminationManager: TerminationManager;
   durableExecutionArn: string;
+  activeOperationsTracker?: ActiveOperationsTracker;
   getStepData(stepId: string): Operation | undefined;
 }

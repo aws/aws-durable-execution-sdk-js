@@ -51,6 +51,28 @@ class CheckpointHandler {
     log("🛑", "Checkpoint handler marked as terminating");
   }
 
+  /**
+   * Checks if a step ID or any of its ancestors has a pending completion
+   * @param stepId - The step ID to check (unhashed)
+   * @returns true if the step or any ancestor has a pending SUCCEED/FAIL checkpoint
+   */
+  hasPendingAncestorCompletion(stepId: string): boolean {
+    // Check the step itself and walk up the parent chain
+    let currentHashedId: string | undefined = hashId(stepId);
+
+    while (currentHashedId) {
+      if (this.pendingCompletions.has(currentHashedId)) {
+        return true;
+      }
+
+      const operation: Operation | undefined =
+        this.context._stepData[currentHashedId];
+      currentHashedId = operation?.ParentId;
+    }
+
+    return false;
+  }
+
   async forceCheckpoint(): Promise<void> {
     if (this.isTerminating) {
       log("⚠️", "Force checkpoint skipped - termination in progress");
@@ -79,6 +101,12 @@ class CheckpointHandler {
       return new Promise(() => {}); // Never resolves during termination
     }
 
+    // Track this checkpoint operation
+    const tracker = this.context.activeOperationsTracker;
+    if (tracker) {
+      tracker.increment();
+    }
+
     return new Promise<void>((resolve, reject) => {
       // Track pending completions for ancestor checking
       if (
@@ -91,8 +119,20 @@ class CheckpointHandler {
       const queuedItem: QueuedCheckpoint = {
         stepId,
         data,
-        resolve,
-        reject,
+        resolve: () => {
+          // Decrement tracker when checkpoint completes
+          if (tracker) {
+            tracker.decrement();
+          }
+          resolve();
+        },
+        reject: (error: Error) => {
+          // Decrement tracker even on error
+          if (tracker) {
+            tracker.decrement();
+          }
+          reject(error);
+        },
       };
 
       this.queue.push(queuedItem);
@@ -432,6 +472,7 @@ export const createCheckpoint = (
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;
   setTerminating(): void;
+  hasPendingAncestorCompletion(stepId: string): boolean;
 } => {
   // Return existing handler if it exists, otherwise create new one
   if (!singletonCheckpointHandler) {
@@ -458,6 +499,10 @@ export const createCheckpoint = (
     singletonCheckpointHandler!.setTerminating();
   };
 
+  checkpoint.hasPendingAncestorCompletion = (stepId: string): boolean => {
+    return singletonCheckpointHandler!.hasPendingAncestorCompletion(stepId);
+  };
+
   return checkpoint;
 };
 
@@ -469,6 +514,13 @@ export const setCheckpointTerminating = (): void => {
   if (singletonCheckpointHandler) {
     singletonCheckpointHandler.setTerminating();
   }
+};
+
+export const hasPendingAncestorCompletion = (stepId: string): boolean => {
+  if (singletonCheckpointHandler) {
+    return singletonCheckpointHandler.hasPendingAncestorCompletion(stepId);
+  }
+  return false;
 };
 
 // Export the CheckpointHandler class for testing purposes
