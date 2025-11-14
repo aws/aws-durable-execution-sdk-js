@@ -1833,6 +1833,71 @@ describe("TestExecutionOrchestrator", () => {
       // Verify execution completed successfully
       expect(result.status).toBe(OperationStatus.SUCCEEDED);
     });
+
+    it("should fail execution when callback update fails", async () => {
+      const callbackOperation: Operation = {
+        Id: "callback-success",
+        Name: "callback-operation",
+        Type: OperationType.CALLBACK,
+        Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: undefined,
+      };
+
+      const callbackUpdate = {
+        Id: "callback-success",
+        Type: OperationType.CALLBACK,
+        Action: OperationAction.SUCCEED,
+      };
+
+      const mockOperations = [
+        {
+          operation: callbackOperation,
+          update: callbackUpdate,
+        },
+      ];
+
+      // Mock initial invocation to complete quickly
+      mockInvoke.mockResolvedValueOnce({
+        Status: InvocationStatus.PENDING,
+      });
+
+      // Mock callback invocation data
+      (checkpointApi.startInvocation as jest.Mock).mockRejectedValue(
+        new Error("Failed to start invocation"),
+      );
+
+      let resolvePolling: (() => void) | undefined;
+      (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(() => {
+        return new Promise((resolve) => {
+          resolvePolling = () => {
+            resolve({
+              operations: mockOperations,
+              operationInvocationIdMap: {
+                "callback-success": [createInvocationId("callback-invocation")],
+              },
+            });
+          };
+        });
+      });
+
+      const executePromise = orchestrator.executeHandler();
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      resolvePolling!();
+
+      await expect(executePromise).rejects.toThrow(
+        "Failed to start invocation",
+      );
+
+      // Verify startInvocation was called
+      expect(checkpointApi.startInvocation).toHaveBeenCalledWith(
+        mockExecutionId,
+      );
+
+      // Verify handler was invoked twice (initial)
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("scheduling", () => {

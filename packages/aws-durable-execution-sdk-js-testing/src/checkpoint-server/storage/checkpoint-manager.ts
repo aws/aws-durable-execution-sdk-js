@@ -1,6 +1,7 @@
 import {
   CallbackDetails,
   ErrorObject,
+  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationStatus,
@@ -36,6 +37,12 @@ export class CheckpointManager {
     {};
   // TODO: add execution timeout
   readonly eventProcessor = new EventProcessor();
+
+  private _isExecutionCompleted = false;
+
+  isExecutionCompleted() {
+    return this._isExecutionCompleted;
+  }
 
   constructor(executionId: ExecutionId) {
     this.callbackManager = new CallbackManager(executionId, this);
@@ -300,6 +307,14 @@ export class CheckpointManager {
     updates: OperationUpdate[],
     invocationId: InvocationId,
   ): OperationEvents[] {
+    if (this._isExecutionCompleted) {
+      // Checkpoint token is invalid once execution is completed
+      throw new InvalidParameterValueException({
+        message: "Invalid checkpoint token",
+        $metadata: {},
+      });
+    }
+
     return updates.map((update) => this.registerUpdate(update, invocationId));
   }
 
@@ -429,6 +444,7 @@ export class CheckpointManager {
           },
         );
         newOperationData.events.push(historyEvent);
+        this._isExecutionCompleted = true;
       }
     }
 

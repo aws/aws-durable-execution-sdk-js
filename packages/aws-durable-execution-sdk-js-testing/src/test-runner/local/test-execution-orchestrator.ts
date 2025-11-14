@@ -280,15 +280,21 @@ export class TestExecutionOrchestrator {
         this.handleStepUpdate(update, operation, executionId);
         break;
       case OperationType.CALLBACK:
-        // todo: handle errors
-        void this.handleCallbackUpdate(operation, executionId);
+        this.handleCallbackUpdate(operation, executionId).catch(
+          (err: unknown) => {
+            this.executionState.rejectWith(err);
+          },
+        );
         break;
       case OperationType.EXECUTION:
         this.handleExecutionUpdate(update, operation);
         break;
       case OperationType.CHAINED_INVOKE:
-        // todo: handle errors
-        void this.handleInvokeUpdate(update, executionId);
+        void this.handleInvokeUpdate(update, executionId).catch(
+          (err: unknown) => {
+            this.executionState.rejectWith(err);
+          },
+        );
         break;
     }
   }
