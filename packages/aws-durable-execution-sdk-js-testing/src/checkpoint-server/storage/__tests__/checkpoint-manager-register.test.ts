@@ -388,4 +388,155 @@ describe("checkpoint-manager registerUpdate", () => {
       );
     });
   });
+
+  describe("isExecutionCompleted", () => {
+    it("should return false when checkpoint manager is first created", () => {
+      expect(storage.isExecutionCompleted()).toBe(false);
+    });
+
+    it("should return false after registering non-execution operations", () => {
+      // Register various operation types
+      storage.registerUpdate(
+        {
+          Id: "step-id",
+          Type: OperationType.STEP,
+          Action: OperationAction.START,
+        },
+        mockInvocationId,
+      );
+
+      storage.registerUpdate(
+        {
+          Id: "wait-id",
+          Type: OperationType.WAIT,
+          Action: OperationAction.START,
+          WaitOptions: { WaitSeconds: 5 },
+        },
+        mockInvocationId,
+      );
+
+      storage.registerUpdate(
+        {
+          Id: "context-id",
+          Type: OperationType.CONTEXT,
+          Action: OperationAction.START,
+        },
+        mockInvocationId,
+      );
+
+      expect(storage.isExecutionCompleted()).toBe(false);
+    });
+
+    it.each([
+      OperationStatus.SUCCEEDED,
+      OperationStatus.FAILED,
+      OperationStatus.TIMED_OUT,
+    ])(
+      "should return true after updating execution operation to %s status",
+      (status) => {
+        // Initialize and get the execution operation
+        const initialOperation = storage.initialize();
+        const executionId = initialOperation.operation.Id;
+
+        expect(storage.isExecutionCompleted()).toBe(false);
+
+        // Update the execution operation to SUCCEEDED
+        storage.updateOperation(
+          executionId,
+          { Status: status },
+          "execution result",
+          { ErrorType: "ExecutionError", ErrorMessage: "execution error" },
+        );
+
+        expect(storage.isExecutionCompleted()).toBe(true);
+      },
+    );
+
+    it("should remain true once execution is completed", () => {
+      // Initialize and complete execution
+      const initialOperation = storage.initialize();
+      const executionId = initialOperation.operation.Id;
+
+      storage.updateOperation(
+        executionId,
+        { Status: OperationStatus.SUCCEEDED },
+        "execution result",
+        undefined,
+      );
+
+      expect(storage.isExecutionCompleted()).toBe(true);
+
+      // Try registering more operations - completion state should remain true
+      storage.registerUpdate(
+        {
+          Id: "step-after-completion",
+          Type: OperationType.STEP,
+          Action: OperationAction.START,
+        },
+        mockInvocationId,
+      );
+
+      expect(storage.isExecutionCompleted()).toBe(true);
+    });
+
+    it("should not process updates when execution is completed", () => {
+      // Initialize and complete execution
+      const initialOperation = storage.initialize();
+      const executionId = initialOperation.operation.Id;
+
+      storage.updateOperation(
+        executionId,
+        { Status: OperationStatus.SUCCEEDED },
+        "execution result",
+        undefined,
+      );
+
+      expect(storage.isExecutionCompleted()).toBe(true);
+
+      // Try to register updates - should return empty array
+      const updates = [
+        {
+          Id: "step-1",
+          Type: OperationType.STEP,
+          Action: OperationAction.START,
+        },
+        {
+          Id: "step-2",
+          Type: OperationType.STEP,
+          Action: OperationAction.START,
+        },
+      ] as OperationUpdate[];
+
+      expect(() => storage.registerUpdates(updates, mockInvocationId)).toThrow(
+        "Invalid checkpoint token",
+      );
+    });
+
+    it("should not affect execution completion when updating non-execution operations", () => {
+      // Initialize storage and add some operations
+      storage.initialize();
+
+      storage.registerUpdate(
+        {
+          Id: "step-id",
+          Type: OperationType.STEP,
+          Action: OperationAction.START,
+        },
+        mockInvocationId,
+      );
+
+      expect(storage.isExecutionCompleted()).toBe(false);
+
+      // Update the step operation to completed
+      storage.updateOperation(
+        "step-id",
+        { Status: OperationStatus.SUCCEEDED },
+        "step result",
+        undefined,
+      );
+
+      // Execution should still not be completed since we only updated a STEP operation
+      expect(storage.isExecutionCompleted()).toBe(false);
+    });
+  });
 });

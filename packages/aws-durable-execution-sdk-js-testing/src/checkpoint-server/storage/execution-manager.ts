@@ -74,6 +74,12 @@ export class ExecutionManager {
       return undefined;
     }
 
+    if (checkpointStorage.isExecutionCompleted()) {
+      throw new Error(
+        `Could not start invocation for completed execution ${executionId}`,
+      );
+    }
+
     const checkpointToken = encodeCheckpointToken({
       executionId,
       token: randomUUID(),

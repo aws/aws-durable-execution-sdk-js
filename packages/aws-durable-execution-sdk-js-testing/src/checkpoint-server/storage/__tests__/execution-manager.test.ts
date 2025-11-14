@@ -61,6 +61,7 @@ describe("execution-manager", () => {
   // Reset mocks before each test
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe("createExecutionId", () => {
@@ -122,6 +123,7 @@ describe("execution-manager", () => {
           ExecutionDetails: {
             InputPayload: '{"key":"value"}',
           },
+          StartTimestamp: new Date(),
         };
 
         // Mock the initialize method of CheckpointStorage
@@ -154,9 +156,6 @@ describe("execution-manager", () => {
         // Verify the execution was stored in the manager
         const storage = executionManager.getCheckpointsByExecution(executionId);
         expect(storage).toBeDefined();
-
-        // Clean up
-        initializeSpy.mockRestore();
       });
 
       it("should create a new execution with default payload when not provided", () => {
@@ -174,8 +173,6 @@ describe("execution-manager", () => {
 
         // Default payload should be used
         expect(initializeSpy).toHaveBeenCalledWith(undefined);
-
-        initializeSpy.mockRestore();
       });
     });
 
@@ -257,6 +254,20 @@ describe("execution-manager", () => {
           operation: mockOps[1],
           update: {},
         });
+      });
+
+      it("should throw error if execution is completed already", () => {
+        // First create an execution
+        const executionId = createExecutionId("test-execution-id");
+        executionManager.startExecution({ executionId });
+
+        jest
+          .spyOn(CheckpointManager.prototype, "isExecutionCompleted")
+          .mockReturnValue(true);
+
+        expect(() => executionManager.startInvocation(executionId)).toThrow(
+          `Could not start invocation for completed execution ${executionId}`,
+        );
       });
     });
 
