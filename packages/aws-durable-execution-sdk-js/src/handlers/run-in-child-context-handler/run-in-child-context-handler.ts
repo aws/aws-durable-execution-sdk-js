@@ -27,6 +27,7 @@ import {
   ChildContextError,
 } from "../../errors/durable-error/durable-error";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -75,11 +76,11 @@ export const createRunInChildContextHandler = (
   ) => DurableContext,
   parentId?: string,
 ) => {
-  return async <T>(
+  function runInChildContextHandler<T>(
     nameOrFn: string | undefined | ChildFunc<T>,
     fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
-  ): Promise<T> => {
+  ): DurablePromise<T> {
     let name: string | undefined;
     let fn: ChildFunc<T>;
     let options: ChildConfig<T> | undefined;
@@ -95,31 +96,67 @@ export const createRunInChildContextHandler = (
 
     const entityId = createStepId();
 
-    log("🔄", "Running child context:", {
-      entityId,
-      name,
-    });
-
-    const stepData = context.getStepData(entityId);
-
-    // Validate replay consistency
-    validateReplayConsistency(
-      entityId,
-      {
-        type: OperationType.CONTEXT,
+    return new DurablePromise(async () => {
+      log("🔄", "Running child context:", {
+        entityId,
         name,
-        subType:
-          (options?.subType as OperationSubType) ||
-          OperationSubType.RUN_IN_CHILD_CONTEXT,
-      },
-      stepData,
-      context,
-    );
+      });
 
-    // Check if this child context has already completed
-    if (stepData?.Status === OperationStatus.SUCCEEDED) {
-      return handleCompletedChildContext<T>(
+      const stepData = context.getStepData(entityId);
+
+      // Validate replay consistency
+      validateReplayConsistency(
+        entityId,
+        {
+          type: OperationType.CONTEXT,
+          name,
+          subType:
+            (options?.subType as OperationSubType) ||
+            OperationSubType.RUN_IN_CHILD_CONTEXT,
+        },
+        stepData,
         context,
+      );
+
+      // Check if this child context has already completed
+      if (stepData?.Status === OperationStatus.SUCCEEDED) {
+        return new DurablePromise<T>(() =>
+          handleCompletedChildContext<T>(
+            context,
+            parentContext,
+            entityId,
+            name,
+            fn,
+            options,
+            getParentLogger,
+            createChildContext,
+          ),
+        );
+      }
+
+      if (stepData?.Status === OperationStatus.FAILED) {
+        // Wrap in DurablePromise for lazy evaluation
+        return new DurablePromise<T>(() => {
+          // Reconstruct the original error and wrap in ChildContextError for consistency
+          if (stepData.ContextDetails?.Error) {
+            const originalError = DurableOperationError.fromErrorObject(
+              stepData.ContextDetails.Error,
+            );
+            return Promise.reject(
+              new ChildContextError(originalError.message, originalError),
+            );
+          } else {
+            // Fallback for legacy data without Error field
+            return Promise.reject(
+              new ChildContextError("Child context failed"),
+            );
+          }
+        });
+      }
+
+      return executeChildContext(
+        context,
+        checkpoint,
         parentContext,
         entityId,
         name,
@@ -127,38 +164,12 @@ export const createRunInChildContextHandler = (
         options,
         getParentLogger,
         createChildContext,
+        parentId,
       );
-    }
+    });
+  }
 
-    if (stepData?.Status === OperationStatus.FAILED) {
-      // Return an async rejected promise to ensure it's handled asynchronously
-      return (async (): Promise<T> => {
-        // Reconstruct the original error and wrap in ChildContextError for consistency
-        if (stepData.ContextDetails?.Error) {
-          const originalError = DurableOperationError.fromErrorObject(
-            stepData.ContextDetails.Error,
-          );
-          throw new ChildContextError(originalError.message, originalError);
-        } else {
-          // Fallback for legacy data without Error field
-          throw new ChildContextError("Child context failed");
-        }
-      })();
-    }
-
-    return executeChildContext(
-      context,
-      checkpoint,
-      parentContext,
-      entityId,
-      name,
-      fn,
-      options,
-      getParentLogger,
-      createChildContext,
-      parentId,
-    );
-  };
+  return runInChildContextHandler;
 };
 
 export const handleCompletedChildContext = async <T>(

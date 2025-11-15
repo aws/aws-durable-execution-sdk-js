@@ -148,8 +148,9 @@ describe("Step Handler", () => {
 
     const stepFn = jest.fn().mockResolvedValue("step-result");
 
-    // Start the step execution (should not hang waiting for START checkpoint)
+    // Start the step execution and trigger lazy evaluation
     const stepPromise = stepHandler("test-step", stepFn);
+    stepPromise.catch(() => {}); // Trigger execution
 
     // Give a small delay to ensure the step function would be called if not waiting
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -183,10 +184,11 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics
-    stepHandler("test-step", stepFn, {
+    const _promise = stepHandler("test-step", stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
       retryStrategy: mockRetryStrategy,
     });
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -361,9 +363,10 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler but don't await it (it will never resolve)
-    stepHandler("test-step", stepFn, {
+    const _promise = stepHandler("test-step", stepFn, {
       retryStrategy: mockRetryStrategy,
     });
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -397,7 +400,8 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler but don't await it (it will never resolve)
-    stepHandler("test-step", stepFn);
+    const _promise = stepHandler("test-step", stepFn);
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -564,9 +568,10 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics but no custom retry strategy
-    stepHandler("test-step", stepFn, {
+    const _promise = stepHandler("test-step", stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
     });
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -657,7 +662,8 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler without a name
-    stepHandler(stepFn);
+    const _promise = stepHandler(stepFn);
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -694,9 +700,10 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics but no name
-    stepHandler(stepFn, {
+    const _promise = stepHandler(stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
     });
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -724,6 +731,15 @@ describe("Step Handler", () => {
 
     const promise = stepHandler(stepId, stepFunction);
 
+    // Trigger lazy execution
+    let resolved = false;
+    promise.then(() => {
+      resolved = true;
+    });
+
+    // Wait for execution to start
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
     // Should terminate with retry scheduled message
     expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
       reason: TerminationReason.RETRY_SCHEDULED,
@@ -731,12 +747,6 @@ describe("Step Handler", () => {
     });
 
     // Should return never-resolving promise
-    let resolved = false;
-    promise.then(() => {
-      resolved = true;
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(resolved).toBe(false);
   });
 
@@ -758,10 +768,11 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler with AT_MOST_ONCE_PER_RETRY semantics
-    stepHandler("test-step", stepFn, {
+    const _promise = stepHandler("test-step", stepFn, {
       semantics: StepSemantics.AtMostOncePerRetry,
       retryStrategy: mockRetryStrategy,
     });
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -780,9 +791,10 @@ describe("Step Handler", () => {
       .mockReturnValue({ shouldRetry: true, delay: { seconds: 10 } });
 
     // Call the step handler with custom retry strategy
-    stepHandler("test-step", stepFn, {
+    const _promise = stepHandler("test-step", stepFn, {
       retryStrategy: mockRetryStrategy,
     });
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -813,7 +825,8 @@ describe("Step Handler", () => {
     });
 
     // Call the step handler with default retry strategy
-    stepHandler("test-step", stepFn);
+    const _promise = stepHandler("test-step", stepFn);
+    _promise.catch(() => {}); // Trigger lazy execution
 
     // Wait a small amount of time for the async operations to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -870,7 +883,8 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      stepHandler("test-step", stepFn);
+      const _promise = stepHandler("test-step", stepFn);
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -890,7 +904,8 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      stepHandler("test-step", stepFn);
+      const _promise = stepHandler("test-step", stepFn);
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -910,7 +925,8 @@ describe("Step Handler", () => {
       const stepFn = jest.fn().mockRejectedValue(unrecoverableError);
 
       // Call the step handler but don't await it (it will never resolve)
-      stepHandler("test-step", stepFn);
+      const _promise = stepHandler("test-step", stepFn);
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -931,7 +947,8 @@ describe("Step Handler", () => {
       Object.defineProperty(stepFn, "name", { value: "" });
 
       // Call the step handler but don't await it (it will never resolve)
-      stepHandler(stepFn);
+      const _promise = stepHandler(stepFn);
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -953,7 +970,8 @@ describe("Step Handler", () => {
       Object.defineProperty(stepFn, "name", { value: "" });
 
       // Call the step handler but don't await it (it will never resolve)
-      stepHandler(stepFn);
+      const _promise = stepHandler(stepFn);
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -978,9 +996,10 @@ describe("Step Handler", () => {
       };
 
       // Call the step handler but don't await it (it will never resolve due to termination)
-      stepHandler("test-step", stepFn, {
+      const _promise = stepHandler("test-step", stepFn, {
         serdes: mockSerdes,
       });
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1005,9 +1024,10 @@ describe("Step Handler", () => {
       };
 
       // Call the step handler but don't await it (it will never resolve due to termination)
-      stepHandler("test-step", stepFn, {
+      const _promise = stepHandler("test-step", stepFn, {
         serdes: mockSerdes,
       });
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Wait a small amount of time for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));

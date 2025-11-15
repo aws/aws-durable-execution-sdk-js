@@ -909,6 +909,7 @@ describe("Callback Handler", () => {
       );
 
       const result = callbackHandler(undefined, config);
+      result.catch(() => {}); // Trigger lazy execution
 
       // Wait for the async operations to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -926,8 +927,9 @@ describe("Callback Handler", () => {
         },
       });
 
-      // Verify it returns a promise
-      expect(result).toBeInstanceOf(Promise);
+      // Verify it returns a thenable (DurablePromise implements PromiseLike)
+      expect(result).toHaveProperty("then");
+      expect(typeof result.then).toBe("function");
     });
   });
 

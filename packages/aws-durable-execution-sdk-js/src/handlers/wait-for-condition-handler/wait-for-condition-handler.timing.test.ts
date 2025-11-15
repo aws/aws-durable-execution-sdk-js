@@ -82,7 +82,9 @@ describe("WaitForCondition Handler Timing Tests", () => {
         undefined, // parentId
       );
 
-      waitForConditionHandlerWithMocks("test-wait", checkFn, config);
+      waitForConditionHandlerWithMocks("test-wait", checkFn, config).catch(
+        () => {},
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 

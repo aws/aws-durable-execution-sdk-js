@@ -16,6 +16,7 @@ import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -160,10 +161,10 @@ export const createCallback = (
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ) => {
-  return async <T>(
+  function callbackHandler<T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>> => {
+  ): DurablePromise<CreateCallbackResult<T>> {
     let name: string | undefined;
     let config: CreateCallbackConfig<T> | undefined;
 
@@ -177,63 +178,67 @@ export const createCallback = (
     const stepId = createStepId();
     const serdes = config?.serdes || createPassThroughSerdes<T>();
 
-    log("📞", "Creating callback:", {
-      stepId,
-      name,
-      config,
-    });
-
-    const stepData = context.getStepData(stepId);
-
-    // Validate replay consistency
-    validateReplayConsistency(
-      stepId,
-      {
-        type: OperationType.CALLBACK,
-        name,
-        subType: OperationSubType.CALLBACK,
-      },
-      stepData,
-      context,
-    );
-
-    // Check if callback already exists and is completed
-    if (stepData?.Status === OperationStatus.SUCCEEDED) {
-      return await handleCompletedCallback<T>(context, stepId, name, serdes);
-    }
-
-    if (
-      stepData?.Status === OperationStatus.FAILED ||
-      stepData?.Status === OperationStatus.TIMED_OUT
-    ) {
-      return await handleFailedCallback<T>(context, stepId, name, serdes);
-    }
-
-    // Check if callback is already started (has callbackId)
-    if (stepData?.Status === OperationStatus.STARTED) {
-      return await handleStartedCallback<T>(
-        context,
+    return new DurablePromise(async () => {
+      log("📞", "Creating callback:", {
         stepId,
         name,
+        config,
+      });
+
+      const stepData = context.getStepData(stepId);
+
+      // Validate replay consistency
+      validateReplayConsistency(
+        stepId,
+        {
+          type: OperationType.CALLBACK,
+          name,
+          subType: OperationSubType.CALLBACK,
+        },
+        stepData,
+        context,
+      );
+
+      // Check if callback already exists and is completed
+      if (stepData?.Status === OperationStatus.SUCCEEDED) {
+        return await handleCompletedCallback<T>(context, stepId, name, serdes);
+      }
+
+      if (
+        stepData?.Status === OperationStatus.FAILED ||
+        stepData?.Status === OperationStatus.TIMED_OUT
+      ) {
+        return await handleFailedCallback<T>(context, stepId, name, serdes);
+      }
+
+      // Check if callback is already started (has callbackId)
+      if (stepData?.Status === OperationStatus.STARTED) {
+        return await handleStartedCallback<T>(
+          context,
+          stepId,
+          name,
+          serdes,
+          hasRunningOperations,
+          getOperationsEmitter,
+        );
+      }
+
+      // Create new callback
+      return await createNewCallback<T>(
+        context,
+        checkpoint,
+        stepId,
+        name,
+        config,
         serdes,
         hasRunningOperations,
         getOperationsEmitter,
+        parentId,
       );
-    }
+    });
+  }
 
-    // Create new callback
-    return await createNewCallback<T>(
-      context,
-      checkpoint,
-      stepId,
-      name,
-      config,
-      serdes,
-      hasRunningOperations,
-      getOperationsEmitter,
-      parentId,
-    );
-  };
+  return callbackHandler;
 };
 
 const handleCompletedCallback = async <T>(
