@@ -5,10 +5,7 @@ import {
   OperationUpdate,
 } from "@aws-sdk/client-lambda";
 import { CheckpointManager } from "../checkpoint-manager";
-import {
-  createExecutionId,
-  createInvocationId,
-} from "../../utils/tagged-strings";
+import { createExecutionId } from "../../utils/tagged-strings";
 import { CompleteCallbackStatus } from "../callback-manager";
 
 // Mock crypto's randomUUID function
@@ -18,8 +15,6 @@ jest.mock("node:crypto", () => ({
 
 describe("CheckpointManager", () => {
   let storage: CheckpointManager;
-
-  const mockInvocationId = createInvocationId();
 
   beforeEach(() => {
     storage = new CheckpointManager(createExecutionId("test-execution-id"));
@@ -113,7 +108,7 @@ describe("CheckpointManager", () => {
         Action: OperationAction.START,
         Payload: "my-payload",
       };
-      storage.registerUpdate(update, mockInvocationId);
+      storage.registerUpdate(update);
 
       const pendingUpdates = await storage.getPendingCheckpointUpdates();
       expect(pendingUpdates).toHaveLength(1);
@@ -134,7 +129,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.STEP,
           Action: OperationAction.START,
         };
-        storage.registerUpdate(update, mockInvocationId);
+        storage.registerUpdate(update);
       }, 10);
 
       // Now await the promise
@@ -149,7 +144,7 @@ describe("CheckpointManager", () => {
         Type: OperationType.STEP,
         Action: OperationAction.START,
       };
-      storage.registerUpdate(update, mockInvocationId);
+      storage.registerUpdate(update);
 
       // Retrieve updates first time
       const firstRetrieval = await storage.getPendingCheckpointUpdates();
@@ -162,7 +157,7 @@ describe("CheckpointManager", () => {
         Type: OperationType.STEP,
         Action: OperationAction.START,
       };
-      storage.registerUpdate(update2, mockInvocationId);
+      storage.registerUpdate(update2);
 
       const secondRetrieval = await secondPromise;
       expect(secondRetrieval).toHaveLength(1);
@@ -192,7 +187,7 @@ describe("CheckpointManager", () => {
         Action: OperationAction.START,
       };
 
-      storage.registerUpdate(update, mockInvocationId);
+      storage.registerUpdate(update);
       expect(storage.hasOperation("registered-op")).toBe(true);
     });
 
@@ -220,7 +215,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.STEP,
           Action: OperationAction.RETRY,
         };
-        storage.registerUpdate(stepUpdate, mockInvocationId);
+        storage.registerUpdate(stepUpdate);
 
         // Complete the operation with RETRY action
         const result = storage.completeOperation({
@@ -243,7 +238,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.STEP,
           Action: OperationAction.RETRY,
         };
-        storage.registerUpdate(stepUpdate, mockInvocationId);
+        storage.registerUpdate(stepUpdate);
 
         // Complete with SUCCEED action (should preserve retry count)
         const result = storage.completeOperation({
@@ -267,7 +262,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.STEP,
           Action: OperationAction.START,
         };
-        storage.registerUpdate(stepUpdate, mockInvocationId);
+        storage.registerUpdate(stepUpdate);
 
         // Complete with RETRY action
         const result = storage.completeOperation({
@@ -291,7 +286,7 @@ describe("CheckpointManager", () => {
           Payload: "retry payload",
         };
 
-        const result = storage.registerUpdate(retryUpdate, mockInvocationId);
+        const result = storage.registerUpdate(retryUpdate);
 
         expect(result.operation.StepDetails?.Attempt).toBe(1);
         // Result should not be populated in registerUpdate, only in completeOperation
@@ -309,7 +304,7 @@ describe("CheckpointManager", () => {
           Payload: "normal payload",
         };
 
-        const result = storage.registerUpdate(normalUpdate, mockInvocationId);
+        const result = storage.registerUpdate(normalUpdate);
 
         expect(result.operation.StepDetails?.Attempt).toBe(1);
         expect(result.operation.StepDetails?.Result).toBe("normal payload");
@@ -324,7 +319,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.STEP,
           Action: OperationAction.RETRY,
         };
-        storage.registerUpdate(firstUpdate, mockInvocationId);
+        storage.registerUpdate(firstUpdate);
 
         // Register again without retry action (simulating subsequent update)
         const secondUpdate: OperationUpdate = {
@@ -333,7 +328,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.SUCCEED,
           Payload: "final result",
         };
-        const result = storage.registerUpdate(secondUpdate, mockInvocationId);
+        const result = storage.registerUpdate(secondUpdate);
 
         // Should complete the existing operation, preserving retry count
         expect(result.operation.StepDetails?.Attempt).toBe(2);
@@ -350,7 +345,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.RETRY,
         };
 
-        const result = storage.registerUpdate(retryUpdate, mockInvocationId);
+        const result = storage.registerUpdate(retryUpdate);
 
         expect(result.operation.StepDetails?.Attempt).toBe(1); // Should default to 1 for retry
       });
@@ -366,7 +361,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.START,
           Type: OperationType.STEP,
         };
-        storage.registerUpdate(stepUpdate, mockInvocationId);
+        storage.registerUpdate(stepUpdate);
 
         // Complete the operation with error
         const result = storage.completeOperation({
@@ -399,7 +394,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.START,
           Type: OperationType.STEP,
         };
-        storage.registerUpdate(stepUpdate, mockInvocationId);
+        storage.registerUpdate(stepUpdate);
 
         // Complete the operation with both result and error
         const result = storage.completeOperation({
@@ -434,7 +429,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.STEP,
           Action: OperationAction.RETRY,
         };
-        storage.registerUpdate(stepUpdate, mockInvocationId);
+        storage.registerUpdate(stepUpdate);
 
         // Complete the operation with error and another retry
         const result = storage.completeOperation({
@@ -510,7 +505,7 @@ describe("CheckpointManager", () => {
           Payload: '{"userId": 123, "name": "John Doe"}',
         };
 
-        const result = storage.registerUpdate(contextUpdate, mockInvocationId);
+        const result = storage.registerUpdate(contextUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Id).toBe("context-id");
@@ -539,7 +534,7 @@ describe("CheckpointManager", () => {
           },
         };
 
-        const result = storage.registerUpdate(contextUpdate, mockInvocationId);
+        const result = storage.registerUpdate(contextUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CONTEXT);
@@ -563,7 +558,7 @@ describe("CheckpointManager", () => {
           },
         };
 
-        const result = storage.registerUpdate(contextUpdate, mockInvocationId);
+        const result = storage.registerUpdate(contextUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CONTEXT);
@@ -584,7 +579,7 @@ describe("CheckpointManager", () => {
           Error: undefined,
         };
 
-        const result = storage.registerUpdate(contextUpdate, mockInvocationId);
+        const result = storage.registerUpdate(contextUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CONTEXT);
@@ -607,10 +602,7 @@ describe("CheckpointManager", () => {
             Payload: '{"result": "data"}',
           };
 
-          const result = storage.registerUpdate(
-            contextUpdate,
-            mockInvocationId,
-          );
+          const result = storage.registerUpdate(contextUpdate);
 
           expect(result).toBeDefined();
           expect(result.operation.Id).toBe("completed-context");
@@ -645,7 +637,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.CONTEXT,
           Payload: '{"initial": "result"}',
         };
-        storage.registerUpdate(contextUpdate, mockInvocationId);
+        storage.registerUpdate(contextUpdate);
 
         // Complete the operation with new result
         const result = storage.completeOperation({
@@ -674,7 +666,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.CONTEXT,
           Payload: '{"initial": "result"}',
         };
-        storage.registerUpdate(contextUpdate, mockInvocationId);
+        storage.registerUpdate(contextUpdate);
 
         // Complete the operation with error
         const result = storage.completeOperation({
@@ -706,7 +698,7 @@ describe("CheckpointManager", () => {
           Action: OperationAction.START,
           Type: OperationType.CONTEXT,
         };
-        storage.registerUpdate(contextUpdate, mockInvocationId);
+        storage.registerUpdate(contextUpdate);
 
         // Complete the operation with both result and error
         const result = storage.completeOperation({
@@ -784,7 +776,7 @@ describe("CheckpointManager", () => {
           },
         };
 
-        const result = storage.registerUpdate(callbackUpdate, mockInvocationId);
+        const result = storage.registerUpdate(callbackUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Id).toBe("callback-op");
@@ -802,7 +794,7 @@ describe("CheckpointManager", () => {
           Type: OperationType.CALLBACK,
         };
 
-        const result = storage.registerUpdate(callbackUpdate, mockInvocationId);
+        const result = storage.registerUpdate(callbackUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CALLBACK);
@@ -821,7 +813,7 @@ describe("CheckpointManager", () => {
           },
         };
 
-        const result = storage.registerUpdate(callbackUpdate, mockInvocationId);
+        const result = storage.registerUpdate(callbackUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CALLBACK);
@@ -840,7 +832,7 @@ describe("CheckpointManager", () => {
           },
         };
 
-        const result = storage.registerUpdate(callbackUpdate, mockInvocationId);
+        const result = storage.registerUpdate(callbackUpdate);
 
         expect(result).toBeDefined();
         expect(result.operation.Type).toBe(OperationType.CALLBACK);
@@ -1077,7 +1069,7 @@ describe("CheckpointManager", () => {
         },
       ];
 
-      const results = storage.registerUpdates(updates, mockInvocationId);
+      const results = storage.registerUpdates(updates);
 
       expect(results).toHaveLength(3);
       expect(results[0].operation.Id).toBe("batch-op-1");
@@ -1097,7 +1089,7 @@ describe("CheckpointManager", () => {
     it("should handle empty updates array", () => {
       storage.initialize();
 
-      const results = storage.registerUpdates([], mockInvocationId);
+      const results = storage.registerUpdates([]);
 
       expect(results).toHaveLength(0);
       expect(results).toEqual([]);
@@ -1115,7 +1107,7 @@ describe("CheckpointManager", () => {
         },
       ];
 
-      const results = storage.registerUpdates(updates, mockInvocationId);
+      const results = storage.registerUpdates(updates);
 
       expect(results).toHaveLength(1);
       expect(results[0].operation.Id).toBe("single-op");
@@ -1137,7 +1129,7 @@ describe("CheckpointManager", () => {
         { Id: "op-m", Type: OperationType.STEP, Action: OperationAction.START },
       ];
 
-      const results = storage.registerUpdates(updates, mockInvocationId);
+      const results = storage.registerUpdates(updates);
 
       expect(results[0].operation.Id).toBe("op-z");
       expect(results[1].operation.Id).toBe("op-a");
@@ -1176,8 +1168,8 @@ describe("CheckpointManager", () => {
         WaitOptions: { WaitSeconds: 1 },
       };
 
-      storage.registerUpdate(update1, mockInvocationId);
-      storage.registerUpdate(update2, mockInvocationId);
+      storage.registerUpdate(update1);
+      storage.registerUpdate(update2);
 
       const state = storage.getState();
 
@@ -1281,7 +1273,7 @@ describe("CheckpointManager", () => {
         },
       ];
 
-      storage.registerUpdates(updates, mockInvocationId);
+      storage.registerUpdates(updates);
 
       const state = storage.getState();
 
@@ -1314,110 +1306,6 @@ describe("CheckpointManager", () => {
       ];
       prunedOperations.forEach((prunedId) => {
         expect(state.find((op) => op.Id === prunedId)).toBeUndefined();
-      });
-    });
-  });
-
-  describe("invocation tracking", () => {
-    describe("getOperationInvocationIdMap", () => {
-      it("should return empty map initially", () => {
-        const map = storage.getOperationInvocationIdMap();
-        expect(map).toEqual({});
-      });
-
-      it("should return operations associated with invocations", () => {
-        storage.initialize();
-
-        const invocationId1 = createInvocationId("invocation-1");
-        const invocationId2 = createInvocationId("invocation-2");
-
-        // Register operations with invocations
-        const update1: OperationUpdate = {
-          Id: "op1",
-          Type: OperationType.STEP,
-          Action: OperationAction.START,
-        };
-        storage.registerUpdate(update1, invocationId1);
-
-        const update2: OperationUpdate = {
-          Id: "op2",
-          Type: OperationType.WAIT,
-          WaitOptions: { WaitSeconds: 1 },
-          Action: OperationAction.START,
-        };
-        storage.registerUpdate(update2, invocationId2);
-
-        const map = storage.getOperationInvocationIdMap();
-
-        expect(map).toEqual({
-          op1: [invocationId1],
-          op2: [invocationId2],
-        });
-      });
-
-      it("should convert Set to Array for invocation IDs", () => {
-        storage.initialize();
-
-        const invocationId = createInvocationId("test-invocation");
-
-        const update: OperationUpdate = {
-          Id: "test-op",
-          Type: OperationType.STEP,
-          Action: OperationAction.START,
-        };
-        storage.registerUpdate(update, invocationId);
-
-        const map = storage.getOperationInvocationIdMap();
-
-        expect(Array.isArray(map["test-op"])).toBe(true);
-        expect(map["test-op"]).toEqual([invocationId]);
-      });
-    });
-
-    describe("registerUpdate with invocation tracking", () => {
-      it("should track invocation for new operations", () => {
-        storage.initialize();
-
-        const invocationId = createInvocationId("new-op-invocation");
-
-        const update: OperationUpdate = {
-          Id: "new-tracked-op",
-          Action: OperationAction.START,
-          Type: OperationType.STEP,
-        };
-
-        storage.registerUpdate(update, invocationId);
-
-        const map = storage.getOperationInvocationIdMap();
-        expect(map["new-tracked-op"]).toEqual([invocationId]);
-      });
-
-      it("should add invocation to existing operation", () => {
-        storage.initialize();
-
-        const invocationId1 = createInvocationId("first-invocation");
-        const invocationId2 = createInvocationId("second-invocation");
-
-        const update: OperationUpdate = {
-          Id: "existing-op",
-          Action: OperationAction.START,
-          Type: OperationType.STEP,
-        };
-
-        // First registration
-        storage.registerUpdate(update, invocationId1);
-
-        // Second registration should add to existing operation
-        const update2: OperationUpdate = {
-          Id: "existing-op",
-          Type: OperationType.STEP,
-          Action: OperationAction.SUCCEED,
-        };
-        storage.registerUpdate(update2, invocationId2);
-
-        const map = storage.getOperationInvocationIdMap();
-        expect(map["existing-op"]).toContain(invocationId1);
-        expect(map["existing-op"]).toContain(invocationId2);
       });
     });
   });

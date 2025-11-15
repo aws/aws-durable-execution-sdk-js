@@ -730,10 +730,7 @@ describe("checkpoint-server", () => {
         mockExecutionManager.getCheckpointsByExecution,
       ).toHaveBeenCalledWith(durableExecutionArn);
       // registerUpdates should be called with empty array when no Updates field is provided
-      expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
-        [],
-        "test-invocation-id",
-      );
+      expect(mockStorage.registerUpdates).toHaveBeenCalledWith([]);
       expect(response.body).toEqual({
         CheckpointToken: expect.any(String),
         NewExecutionState: {
@@ -797,10 +794,7 @@ describe("checkpoint-server", () => {
       expect(
         mockExecutionManager.getCheckpointsByExecution,
       ).toHaveBeenCalledWith(durableExecutionArn);
-      expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
-        input.Updates,
-        "test-invocation-id",
-      );
+      expect(mockStorage.registerUpdates).toHaveBeenCalledWith(input.Updates);
       expect(response.body).toEqual({
         CheckpointToken: expect.any(String),
         NewExecutionState: {
@@ -860,10 +854,7 @@ describe("checkpoint-server", () => {
         .send(input);
 
       expect(response.status).toBe(200);
-      expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
-        input.Updates,
-        "test-invocation-id",
-      );
+      expect(mockStorage.registerUpdates).toHaveBeenCalledWith(input.Updates);
       expect(response.body).toEqual({
         CheckpointToken: expect.any(String),
         NewExecutionState: {
@@ -931,10 +922,7 @@ describe("checkpoint-server", () => {
         .send(input);
 
       expect(response.status).toBe(200);
-      expect(mockStorage.registerUpdates).toHaveBeenCalledWith(
-        input.Updates,
-        "test-invocation-id",
-      );
+      expect(mockStorage.registerUpdates).toHaveBeenCalledWith(input.Updates);
     });
 
     it("should return 404 when execution does not exist", async () => {

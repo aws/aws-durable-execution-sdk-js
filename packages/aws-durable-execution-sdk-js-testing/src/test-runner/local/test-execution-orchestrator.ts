@@ -29,10 +29,7 @@ import {
   OperationUpdate,
 } from "@aws-sdk/client-lambda";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
-import {
-  CheckpointOperation,
-  OperationInvocationIdMap,
-} from "../../checkpoint-server/storage/checkpoint-manager";
+import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-manager";
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
 import { defaultLogger } from "../../logger";
@@ -58,7 +55,7 @@ export class TestExecutionOrchestrator {
     setCustomStorage(new LocalRunnerStorage());
 
     this.executionState = new TestExecutionState();
-    this.invocationTracker = new InvocationTracker(operationStorage);
+    this.invocationTracker = new InvocationTracker();
   }
 
   /**
@@ -187,19 +184,14 @@ export class TestExecutionOrchestrator {
   ): Promise<void> {
     try {
       while (!abortController.signal.aborted) {
-        const { operations, operationInvocationIdMap } =
-          await this.checkpointApi.pollCheckpointData(
-            executionId,
-            abortController.signal,
-          );
+        const { operations } = await this.checkpointApi.pollCheckpointData(
+          executionId,
+          abortController.signal,
+        );
 
         this.operationStorage.populateOperations(operations);
 
-        this.processOperations(
-          operations,
-          executionId,
-          operationInvocationIdMap,
-        );
+        this.processOperations(operations, executionId);
 
         // Yield to event loop if `pollCheckpointData` returns too often (mainly in unit tests).
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -228,28 +220,13 @@ export class TestExecutionOrchestrator {
   private processOperations(
     operations: CheckpointOperation[],
     executionId: ExecutionId,
-    operationInvocationIdMap: OperationInvocationIdMap = {},
   ): void {
     for (const { update, operation } of operations) {
       if (!operation.Id) {
         throw new Error("Could not process operation without an Id");
       }
 
-      // Use invocation ID from map if available, otherwise throw an error
-      const invocationIdList = operationInvocationIdMap[operation.Id];
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      if (!invocationIdList) {
-        throw new Error(
-          `Could not find invocations for operation ${operation.Id}`,
-        );
-      }
-
-      this.processOperation(
-        update,
-        operation,
-        executionId,
-        Array.from(invocationIdList),
-      );
+      this.processOperation(update, operation, executionId);
     }
   }
 
@@ -264,13 +241,10 @@ export class TestExecutionOrchestrator {
     update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId,
-    invocationIds: InvocationId[],
   ): void {
     if (!operation.Id) {
       throw new Error("Could not process operation without an Id");
     }
-
-    this.invocationTracker.associateOperation(invocationIds, operation.Id);
 
     switch (operation.Type) {
       case OperationType.WAIT:

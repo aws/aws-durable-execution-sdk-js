@@ -1,7 +1,4 @@
-import {
-  CheckpointOperation,
-  OperationInvocationIdMap,
-} from "../../../checkpoint-server/storage/checkpoint-manager";
+import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 import {
@@ -21,7 +18,6 @@ import {
 
 export interface SerializedPollCheckpointResponse {
   operations: SerializedCheckpointOperation[];
-  operationInvocationIdMap: OperationInvocationIdMap;
 }
 
 /**
@@ -58,7 +54,6 @@ export class CheckpointApiClient {
     signal?: AbortSignal,
   ): Promise<{
     operations: CheckpointOperation[];
-    operationInvocationIdMap: OperationInvocationIdMap;
   }> {
     const result = await this.makeRequest<SerializedPollCheckpointResponse>({
       path: getPollCheckpointDataPath(executionId),
@@ -70,7 +65,6 @@ export class CheckpointApiClient {
       operations: result.operations.map((operationEvents) =>
         deserializeCheckpointOperation(operationEvents),
       ),
-      operationInvocationIdMap: result.operationInvocationIdMap,
     };
   }
 

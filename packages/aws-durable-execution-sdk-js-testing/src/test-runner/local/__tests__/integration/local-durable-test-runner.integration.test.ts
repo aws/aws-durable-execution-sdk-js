@@ -113,20 +113,16 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(allOperationIds).toContain(stepOpId);
     expect(allOperationIds).toContain(secondWaitId);
 
-    // For each invocation, get its operations
-    const invocationOperations = invocations.map((inv) =>
-      inv.getOperations().map((op) => op.getOperationData()?.Id),
-    );
-
-    // Verify exact operations in each invocation
-    // Make sure we have the right number of invocations first
-    expect(invocationOperations).toHaveLength(3);
-    // - Invocation 0: first wait operation
-    expect(invocationOperations[0]).toEqual([firstWaitId]);
-    // - Invocation 1: step operation and second wait operation
-    expect(invocationOperations[1]).toEqual([stepOpId, secondWaitId]);
-    // - Invocation 2: no checkpoints performed
-    expect(invocationOperations[2]).toEqual([]);
+    // Ensure each invocation is valid
+    expect(invocations[0]).toEqual({
+      id: expect.any(String),
+    });
+    expect(invocations[1]).toEqual({
+      id: expect.any(String),
+    });
+    expect(invocations[2]).toEqual({
+      id: expect.any(String),
+    });
 
     // Assert history events
     expect(result.getHistoryEvents()).toEqual([

@@ -228,20 +228,6 @@ describe("WaitForCallback Operations Integration", () => {
       const invocations = result.getInvocations();
       expect(invocations).toHaveLength(4);
 
-      // Verify operations distribution across invocations
-      const invocationOperations = invocations.map(
-        (inv) => inv.getOperations().length,
-      );
-
-      // Invocation 0: wait
-      expect(invocationOperations[0]).toBe(1);
-      // Invocation 1: callback context, callback, submitter, step, wait
-      expect(invocationOperations[1]).toBe(5);
-      // Invocation 3: new callback context, callback, submitter
-      expect(invocationOperations[2]).toBe(3);
-      // Invocation 4: previous callback context
-      expect(invocationOperations[3]).toBe(1);
-
       // Verify callback IDs are unique
       expect(firstCallbackId).toBeDefined();
       expect(secondCallbackId).toBeDefined();

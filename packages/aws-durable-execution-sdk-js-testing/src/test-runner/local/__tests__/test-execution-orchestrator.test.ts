@@ -20,7 +20,7 @@ import {
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 import { IndexedOperations } from "../../common/indexed-operations";
-import { OperationWithData } from "../../common/operations/operation-with-data";
+import { OperationEvents } from "../../common/operations/operation-with-data";
 import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { FunctionStorage } from "../operations/function-storage";
@@ -42,7 +42,7 @@ describe("TestExecutionOrchestrator", () => {
   const mockHandlerFunction = jest.fn();
   const mockExecutionId = createExecutionId("test-execution-id");
   const mockCheckpointToken = createCheckpointToken("test-checkpoint-token");
-  const mockOperationEvents = [
+  const mockOperationEvents: OperationEvents[] = [
     {
       events: [
         {
@@ -53,6 +53,8 @@ describe("TestExecutionOrchestrator", () => {
       ],
       operation: {
         Id: "execution-id",
+        StartTimestamp: new Date(),
+        Status: OperationStatus.STARTED,
         Type: OperationType.EXECUTION,
         ExecutionDetails: {},
       },
@@ -71,6 +73,7 @@ describe("TestExecutionOrchestrator", () => {
     Name: "operation1",
     Type: OperationType.STEP,
     Status: OperationStatus.SUCCEEDED,
+    StartTimestamp: new Date(),
   };
 
   beforeEach(() => {
@@ -114,7 +117,6 @@ describe("TestExecutionOrchestrator", () => {
 
     jest.spyOn(checkpointApi, "pollCheckpointData").mockResolvedValue({
       operations: [],
-      operationInvocationIdMap: {},
     });
 
     jest
@@ -161,6 +163,7 @@ describe("TestExecutionOrchestrator", () => {
             Id: "execution-id",
             Type: OperationType.EXECUTION,
             Status: status,
+            StartTimestamp: new Date(),
           },
           update: {
             Id: "execution-id",
@@ -175,9 +178,6 @@ describe("TestExecutionOrchestrator", () => {
           events: [],
         },
       ] satisfies CheckpointOperation[],
-      operationInvocationIdMap: {
-        "execution-id": createInvocationId("execution-invocation"),
-      },
     });
   }
 
@@ -212,6 +212,7 @@ describe("TestExecutionOrchestrator", () => {
               Name: "operation1",
               Type: OperationType.EXECUTION,
               Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: new Date(),
             },
             update: {
               Id: "op1",
@@ -227,11 +228,8 @@ describe("TestExecutionOrchestrator", () => {
         (checkpointApi.pollCheckpointData as jest.Mock)
           .mockResolvedValueOnce({
             operations: mockOperations,
-            operationInvocationIdMap: {
-              op1: [createInvocationId("test-invocation")],
-            },
           })
-          .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+          .mockResolvedValue({ operations: [] });
 
         const result = await orchestrator.executeHandler({
           payload: { input: "test" },
@@ -264,6 +262,7 @@ describe("TestExecutionOrchestrator", () => {
               Name: "operation1",
               Type: OperationType.EXECUTION,
               Status: OperationStatus.FAILED,
+              StartTimestamp: new Date(),
             },
             update: {
               Id: "op1",
@@ -284,11 +283,8 @@ describe("TestExecutionOrchestrator", () => {
         (checkpointApi.pollCheckpointData as jest.Mock)
           .mockResolvedValueOnce({
             operations: mockOperations,
-            operationInvocationIdMap: {
-              op1: [createInvocationId("test-invocation")],
-            },
           })
-          .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+          .mockResolvedValue({ operations: [] });
 
         const result = await orchestrator.executeHandler({
           payload: { input: "test" },
@@ -326,6 +322,7 @@ describe("TestExecutionOrchestrator", () => {
               Name: "operation1",
               Type: OperationType.EXECUTION,
               Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: new Date(),
             },
             update: {
               Id: "op1",
@@ -341,11 +338,8 @@ describe("TestExecutionOrchestrator", () => {
         (checkpointApi.pollCheckpointData as jest.Mock)
           .mockResolvedValueOnce({
             operations: mockOperations,
-            operationInvocationIdMap: {
-              op1: [createInvocationId("test-invocation")],
-            },
           })
-          .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+          .mockResolvedValue({ operations: [] });
 
         mockInvoke.mockImplementation(
           () =>
@@ -382,6 +376,7 @@ describe("TestExecutionOrchestrator", () => {
               Name: "operation1",
               Type: OperationType.EXECUTION,
               Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: new Date(),
             },
             update: {
               Id: "op1",
@@ -402,12 +397,9 @@ describe("TestExecutionOrchestrator", () => {
             });
             return {
               operations: mockOperations,
-              operationInvocationIdMap: {
-                op1: [createInvocationId("test-invocation")],
-              },
             };
           })
-          .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+          .mockResolvedValue({ operations: [] });
 
         mockInvoke.mockResolvedValue({
           Status: InvocationStatus.SUCCEEDED,
@@ -447,15 +439,18 @@ describe("TestExecutionOrchestrator", () => {
               Id: "op1",
               Name: "operation1",
               Type: OperationType.EXECUTION,
+              Status: undefined,
               ExecutionDetails: {
                 InputPayload: "execution-result",
               },
+              StartTimestamp: new Date(),
             },
             update: {
               Id: "op1",
               Type: OperationType.EXECUTION,
               Name: "operation1",
               Payload: "execution-result",
+              Action: OperationAction.START,
             },
             events: [],
           },
@@ -464,11 +459,8 @@ describe("TestExecutionOrchestrator", () => {
         (checkpointApi.pollCheckpointData as jest.Mock)
           .mockResolvedValueOnce({
             operations: mockOperations,
-            operationInvocationIdMap: {
-              op1: [createInvocationId("test-invocation")],
-            },
           })
-          .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+          .mockResolvedValue({ operations: [] });
 
         await expect(() =>
           orchestrator.executeHandler({
@@ -521,11 +513,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            op1: [createInvocationId("test-invocation")],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       await orchestrator.executeHandler();
 
@@ -540,6 +529,7 @@ describe("TestExecutionOrchestrator", () => {
         Name: "process-step",
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
       };
 
       const mockOperations = [
@@ -557,11 +547,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "step-op": [createInvocationId("test-invocation")],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       await orchestrator.executeHandler();
 
@@ -664,7 +651,7 @@ describe("TestExecutionOrchestrator", () => {
         // eslint-disable-next-line @typescript-eslint/require-await
         async (executionId: string, signal: AbortSignal) => {
           abortSignal = signal;
-          return { operations: [], operationInvocationIdMap: {} };
+          return { operations: [] };
         },
       );
 
@@ -681,7 +668,7 @@ describe("TestExecutionOrchestrator", () => {
         // eslint-disable-next-line @typescript-eslint/require-await
         async (executionId: string, signal: AbortSignal) => {
           abortSignal = signal;
-          return { operations: [], operationInvocationIdMap: {} };
+          return { operations: [] };
         },
       );
 
@@ -773,214 +760,6 @@ describe("TestExecutionOrchestrator", () => {
     });
   });
 
-  describe("invocation tracking", () => {
-    it("should create invocation record for each handler invocation", async () => {
-      mockInvoke
-        .mockResolvedValueOnce({
-          Status: InvocationStatus.PENDING,
-        })
-        .mockImplementation(() => {
-          terminateExecution();
-          return {
-            Status: InvocationStatus.SUCCEEDED,
-          };
-        });
-
-      const firstInvocationId = createInvocationId("first-invocation");
-      const secondInvocationId = createInvocationId("second-invocation");
-
-      // First set up the initial invocation
-      jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
-        executionId: mockExecutionId,
-        checkpointToken: mockCheckpointToken,
-        operationEvents: mockOperationEvents,
-        invocationId: firstInvocationId,
-      });
-
-      // Set up a second invocation when a wait operation is completed
-      jest.spyOn(checkpointApi, "startInvocation").mockResolvedValue({
-        checkpointToken: createCheckpointToken("second-token"),
-        executionId: mockExecutionId,
-        operationEvents: [
-          {
-            operation: mockOperation,
-            events: [],
-          },
-        ],
-        invocationId: secondInvocationId,
-      });
-
-      // Set up wait operation to trigger second invocation
-      const waitOperation = {
-        operation: {
-          Id: "wait-op",
-          Name: "test-wait",
-          Type: OperationType.WAIT,
-          Status: OperationStatus.STARTED,
-        },
-        update: {
-          Id: "wait-op",
-          Type: OperationType.WAIT,
-          Action: OperationAction.START,
-          WaitOptions: { WaitSeconds: 0.25 }, // use real timers so keep wait time short
-        },
-      };
-
-      (checkpointApi.pollCheckpointData as jest.Mock)
-        .mockResolvedValueOnce({
-          operations: [waitOperation],
-          operationInvocationIdMap: { "wait-op": [firstInvocationId] },
-        })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
-
-      await orchestrator.executeHandler();
-
-      // Get invocations
-      const invocations = orchestrator.getInvocations();
-
-      // Should have two invocations
-      expect(invocations).toHaveLength(2);
-
-      // Verify invocation IDs
-      expect(invocations[0]?.id).toBe(firstInvocationId);
-      expect(invocations[1]?.id).toBe(secondInvocationId);
-
-      // Verify each invocation has the getOperations function
-      expect(typeof invocations[0]?.getOperations).toBe("function");
-      expect(typeof invocations[1]?.getOperations).toBe("function");
-    });
-
-    it("should reset invocations when starting a new execution", async () => {
-      // Set up first execution with one invocation ID
-      const firstInvocationId = createInvocationId("first-execution");
-
-      // First set up the initial invocation
-      jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
-        executionId: mockExecutionId,
-        checkpointToken: mockCheckpointToken,
-        operationEvents: mockOperationEvents,
-        invocationId: firstInvocationId,
-      });
-
-      // Run first execution
-      await orchestrator.executeHandler();
-
-      // Get invocations after first execution
-      const firstExecutionInvocations = orchestrator.getInvocations();
-      expect(firstExecutionInvocations.length).toBe(1);
-      expect(firstExecutionInvocations[0]?.id).toBe(firstInvocationId);
-
-      // Set up second execution with different invocation ID
-      const secondInvocationId = createInvocationId("second-execution");
-
-      // Change mock to return different invocation ID for second execution
-      jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
-        executionId: mockExecutionId,
-        checkpointToken: mockCheckpointToken,
-        operationEvents: mockOperationEvents,
-        invocationId: secondInvocationId,
-      });
-
-      // Run second execution
-      await orchestrator.executeHandler();
-
-      // Get invocations after second execution
-      const secondExecutionInvocations = orchestrator.getInvocations();
-
-      // Verify only the second execution's invocation is present
-      expect(secondExecutionInvocations).toHaveLength(1);
-      expect(secondExecutionInvocations[0]?.id).toBe(secondInvocationId);
-    });
-
-    it("should associate operations with invocations", async () => {
-      const invocationId = createInvocationId("test-invocation");
-      const operationId = "test-op-id";
-
-      // Setup mock operations
-      const mockOp = {
-        operation: {
-          Id: operationId,
-          Name: "test-op",
-          Type: OperationType.STEP,
-          Status: OperationStatus.STARTED,
-        },
-        update: {
-          Id: operationId,
-          Type: OperationType.STEP,
-          Action: OperationAction.SUCCEED,
-        },
-      };
-
-      // Mock invocation and polling
-      jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
-        executionId: mockExecutionId,
-        checkpointToken: mockCheckpointToken,
-        operationEvents: mockOperationEvents,
-        invocationId: invocationId,
-      });
-
-      (checkpointApi.pollCheckpointData as jest.Mock)
-        .mockResolvedValueOnce({
-          operations: [mockOp],
-          operationInvocationIdMap: { [operationId]: [invocationId] },
-        })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
-
-      // Execute to observe the integration between operations and invocations
-      await orchestrator.executeHandler();
-
-      // Get invocations and check that operations are associated
-      const invocations = orchestrator.getInvocations();
-      expect(invocations.length).toBe(1);
-
-      const mockOperationResult = new OperationWithData(
-        new OperationWaitManager(),
-        new IndexedOperations([]),
-        {} as DurableApiClient,
-      );
-
-      jest.spyOn(mockOperationResult, "getId").mockReturnValue(operationId);
-      jest.spyOn(mockOperationResult, "getStatus").mockReturnValue("SUCCEEDED");
-
-      jest
-        .spyOn(mockOperationStorage, "getOperations")
-        .mockReturnValue([mockOperationResult]);
-
-      // Now get operations for the invocation
-      const ops = invocations[0]?.getOperations();
-      expect(ops).toHaveLength(1);
-      expect(ops[0]?.getId()).toBe(operationId);
-    });
-
-    it("should throw error when invocation ID mapping is missing for an operation", async () => {
-      // Setup an operation with no invocation mapping
-      const mockOp = {
-        operation: {
-          Id: "orphan-op",
-          Name: "orphan-operation",
-          Type: OperationType.STEP,
-          Status: OperationStatus.STARTED,
-        },
-        update: {
-          Id: "orphan-op",
-          Type: OperationType.STEP,
-          Action: OperationAction.SUCCEED,
-        },
-      };
-
-      // Return operation but with empty invocation mapping
-      (checkpointApi.pollCheckpointData as jest.Mock).mockResolvedValueOnce({
-        operations: [mockOp],
-        operationInvocationIdMap: {}, // Missing mapping for "orphan-op"
-      });
-
-      // Should throw an error about missing invocations
-      await expect(orchestrator.executeHandler()).rejects.toThrow(
-        "Could not find invocations for operation orphan-op",
-      );
-    });
-  });
-
   describe("handleStepUpdate with retry", () => {
     it("should schedule retry with correct delay and re-invoke handler", async () => {
       jest.useFakeTimers();
@@ -990,6 +769,7 @@ describe("TestExecutionOrchestrator", () => {
         Name: "retry-step",
         Type: OperationType.STEP,
         Status: OperationStatus.PENDING,
+        StartTimestamp: new Date(),
       };
 
       const retryUpdate = {
@@ -1023,11 +803,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "retry-op": [createInvocationId("retry-invocation")],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       mockInvoke.mockResolvedValue({
         Status: InvocationStatus.PENDING,
@@ -1072,6 +849,7 @@ describe("TestExecutionOrchestrator", () => {
         Id: "skip-time-retry",
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
       };
 
       const retryUpdate = {
@@ -1093,11 +871,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "skip-time-retry": [createInvocationId("skip-time-invocation")],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "skip-time-token",
@@ -1132,6 +907,7 @@ describe("TestExecutionOrchestrator", () => {
         Id: "missing-delay-retry",
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
       };
 
       const retryUpdate = {
@@ -1151,13 +927,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "missing-delay-retry": [
-              createInvocationId("missing-delay-invocation"),
-            ],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       await expect(orchestrator.executeHandler()).rejects.toThrow(
         "Step operation with retry is missing NextAttemptDelaySeconds",
@@ -1169,6 +940,8 @@ describe("TestExecutionOrchestrator", () => {
         // Missing Id
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
+        Id: undefined,
+        StartTimestamp: undefined,
       };
 
       const retryUpdate = {
@@ -1190,9 +963,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {},
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       await expect(orchestrator.executeHandler()).rejects.toThrow(
         "Could not process operation without an Id",
@@ -1204,6 +976,7 @@ describe("TestExecutionOrchestrator", () => {
         Id: "success-step",
         Type: OperationType.STEP,
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: undefined,
       };
 
       const successUpdate = {
@@ -1223,11 +996,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "success-step": [createInvocationId("success-step-invocation")],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       await orchestrator.executeHandler();
 
@@ -1242,12 +1012,14 @@ describe("TestExecutionOrchestrator", () => {
         Id: "retry-1",
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
+        StartTimestamp: undefined,
       };
 
       const retry2Operation: Operation = {
         Id: "retry-2",
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
+        StartTimestamp: undefined,
       };
 
       const retry1Update = {
@@ -1272,12 +1044,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "retry-1": [createInvocationId("retry-1-invocation")],
-            "retry-2": [createInvocationId("retry-2-invocation")],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "multi-retry-token",
@@ -1316,6 +1084,7 @@ describe("TestExecutionOrchestrator", () => {
         Name: "status-test-step",
         Type: OperationType.STEP,
         Status: OperationStatus.PENDING,
+        StartTimestamp: undefined,
       };
 
       const retryUpdate = {
@@ -1337,13 +1106,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "status-ready-retry": [
-              createInvocationId("status-ready-invocation"),
-            ],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "status-ready-token",
@@ -1395,6 +1159,7 @@ describe("TestExecutionOrchestrator", () => {
         Name: "parameter-test-wait",
         Type: OperationType.WAIT,
         Status: OperationStatus.STARTED,
+        StartTimestamp: undefined,
       };
 
       const waitUpdate = {
@@ -1414,11 +1179,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "param-test-wait": [createInvocationId("param-test-invocation")],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "param-test-token",
@@ -1466,6 +1228,7 @@ describe("TestExecutionOrchestrator", () => {
         Id: "callback-order-test",
         Type: OperationType.STEP,
         Status: OperationStatus.PENDING,
+        StartTimestamp: undefined,
       };
 
       const retryUpdate = {
@@ -1514,13 +1277,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "callback-order-test": [
-              createInvocationId("callback-order-invocation"),
-            ],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       mockInvoke.mockResolvedValue({
         Status: InvocationStatus.PENDING,
@@ -1549,6 +1307,7 @@ describe("TestExecutionOrchestrator", () => {
         Id: "callback-with-active-invocation",
         Type: OperationType.STEP,
         Status: OperationStatus.PENDING,
+        StartTimestamp: undefined,
       };
 
       const retryUpdate = {
@@ -1577,13 +1336,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "callback-with-active-invocation": [
-              createInvocationId("callback-active-invocation"),
-            ],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       // Mock updateCheckpointData to track if it gets called
       (checkpointApi.updateCheckpointData as jest.Mock).mockImplementation(
@@ -1649,6 +1403,7 @@ describe("TestExecutionOrchestrator", () => {
         Name: "callback-operation",
         Type: OperationType.CALLBACK,
         Status: OperationStatus.STARTED,
+        StartTimestamp: undefined,
       };
 
       const callbackUpdate = {
@@ -1667,13 +1422,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "callback-started": [
-              createInvocationId("callback-started-invocation"),
-            ],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       await orchestrator.executeHandler();
 
@@ -1689,6 +1439,7 @@ describe("TestExecutionOrchestrator", () => {
         Name: "callback-operation",
         Type: OperationType.CALLBACK,
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: undefined,
       };
 
       const callbackUpdate = {
@@ -1717,13 +1468,8 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
-          operationInvocationIdMap: {
-            "callback-active-inv": [
-              createInvocationId("callback-active-invocation"),
-            ],
-          },
         })
-        .mockResolvedValue({ operations: [], operationInvocationIdMap: {} });
+        .mockResolvedValue({ operations: [] });
 
       const executePromise = orchestrator.executeHandler();
 
@@ -1750,6 +1496,7 @@ describe("TestExecutionOrchestrator", () => {
         Name: "callback-operation",
         Type: OperationType.CALLBACK,
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: undefined,
       };
 
       const callbackUpdate = {
@@ -1797,11 +1544,6 @@ describe("TestExecutionOrchestrator", () => {
           resolvePolling = () => {
             resolve({
               operations: mockOperations,
-              operationInvocationIdMap: {
-                "callback-success": [
-                  createInvocationId("callback-success-invocation"),
-                ],
-              },
             });
           };
         });
@@ -1872,9 +1614,6 @@ describe("TestExecutionOrchestrator", () => {
           resolvePolling = () => {
             resolve({
               operations: mockOperations,
-              operationInvocationIdMap: {
-                "callback-success": [createInvocationId("callback-invocation")],
-              },
             });
           };
         });
@@ -1942,13 +1681,9 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: [waitOperation],
-          operationInvocationIdMap: {
-            "wait-op": [invocationId],
-          },
         })
         .mockResolvedValue({
           operations: [],
-          operationInvocationIdMap: {},
         });
 
       // Mock updateCheckpointData and startInvocation
@@ -2042,13 +1777,10 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: [waitOperation],
-          operationInvocationIdMap: {
-            "wait-op": [invocationId],
-          },
+          "wait-op": [invocationId],
         })
         .mockResolvedValue({
           operations: [],
-          operationInvocationIdMap: {},
         });
 
       // Mock updateCheckpointData and startInvocation
@@ -2115,11 +1847,9 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: [waitOperation],
-          operationInvocationIdMap: { "wait-op": invocationId },
         })
         .mockResolvedValue({
           operations: [],
-          operationInvocationIdMap: {},
         });
 
       jest
@@ -2179,11 +1909,9 @@ describe("TestExecutionOrchestrator", () => {
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: [waitOperation],
-          operationInvocationIdMap: { "wait-op": invocationId },
         })
         .mockResolvedValue({
           operations: [],
-          operationInvocationIdMap: {},
         });
 
       jest
