@@ -60,7 +60,8 @@ describe("ApiStorage", () => {
       requestHandler: {
         connectionTimeout: 5000,
         socketTimeout: 50000,
-        requestTimeout: 5000,
+        requestTimeout: 55000,
+        throwOnRequestTimeout: true,
       },
     });
   });
