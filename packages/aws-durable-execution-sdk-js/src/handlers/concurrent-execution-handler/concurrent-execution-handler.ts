@@ -14,6 +14,7 @@ import { log } from "../../utils/logger/logger";
 import { BatchResultImpl, restoreBatchResult } from "./batch-result";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 export class ConcurrencyController {
   constructor(
@@ -424,7 +425,7 @@ export const createConcurrentExecutionHandler = (
   runInChildContext: DurableContext["runInChildContext"],
   skipNextOperation: () => void,
 ) => {
-  return async <TItem, TResult>(
+  function concurrentExecutionHandler<TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
@@ -433,7 +434,7 @@ export const createConcurrentExecutionHandler = (
       | ConcurrentExecutor<TItem, TResult>
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>> => {
+  ): DurablePromise<BatchResult<TResult>> {
     let name: string | undefined;
     let items: ConcurrentExecutionItem<TItem>[];
     let executor: ConcurrentExecutor<TItem, TResult>;
@@ -450,85 +451,89 @@ export const createConcurrentExecutionHandler = (
       config = executorOrConfig as ConcurrencyConfig<TResult>;
     }
 
-    log("🔄", "Starting concurrent execution:", {
-      name,
-      itemCount: items.length,
-      maxConcurrency: config?.maxConcurrency,
-    });
-
-    if (!Array.isArray(items)) {
-      throw new Error("Concurrent execution requires an array of items");
-    }
-
-    if (typeof executor !== "function") {
-      throw new Error("Concurrent execution requires an executor function");
-    }
-
-    if (
-      config?.maxConcurrency !== undefined &&
-      config.maxConcurrency !== null &&
-      config.maxConcurrency <= 0
-    ) {
-      throw new Error(
-        `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
-      );
-    }
-
-    const executeOperation = async (
-      executionContext: DurableContext,
-    ): Promise<BatchResult<TResult>> => {
-      const concurrencyController = new ConcurrencyController(
-        "concurrent-execution",
-        skipNextOperation,
-      );
-
-      // Access durableExecutionMode from the context - it's set by runInChildContext
-      // based on determineChildReplayMode logic
-      const durableExecutionMode = (
-        executionContext as unknown as {
-          durableExecutionMode: DurableExecutionMode;
-        }
-      ).durableExecutionMode;
-
-      // Get the entity ID (step prefix) from the child context
-      const entityId = (
-        executionContext as unknown as {
-          _stepPrefix?: string;
-        }
-      )._stepPrefix;
-
-      log("🔄", "Concurrent execution mode:", {
-        mode: durableExecutionMode,
+    return new DurablePromise(async () => {
+      log("🔄", "Starting concurrent execution:", {
+        name,
         itemCount: items.length,
-        entityId,
+        maxConcurrency: config?.maxConcurrency,
       });
 
-      return await concurrencyController.executeItems(
-        items,
-        executor,
-        executionContext,
-        config || {},
-        durableExecutionMode,
-        entityId,
-        context,
-      );
-    };
-
-    return await runInChildContext(name, executeOperation, {
-      subType: config?.topLevelSubType,
-      summaryGenerator: config?.summaryGenerator,
-      serdes: config?.serdes,
-    }).then((result) => {
-      // Restore BatchResult methods if the result came from deserialized data
-      if (
-        result &&
-        typeof result === "object" &&
-        "all" in result &&
-        Array.isArray(result.all)
-      ) {
-        return restoreBatchResult<TResult>(result);
+      if (!Array.isArray(items)) {
+        throw new Error("Concurrent execution requires an array of items");
       }
-      return result as BatchResult<TResult>;
+
+      if (typeof executor !== "function") {
+        throw new Error("Concurrent execution requires an executor function");
+      }
+
+      if (
+        config?.maxConcurrency !== undefined &&
+        config.maxConcurrency !== null &&
+        config.maxConcurrency <= 0
+      ) {
+        throw new Error(
+          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
+        );
+      }
+
+      const executeOperation = async (
+        executionContext: DurableContext,
+      ): Promise<BatchResult<TResult>> => {
+        const concurrencyController = new ConcurrencyController(
+          "concurrent-execution",
+          skipNextOperation,
+        );
+
+        // Access durableExecutionMode from the context - it's set by runInChildContext
+        // based on determineChildReplayMode logic
+        const durableExecutionMode = (
+          executionContext as unknown as {
+            durableExecutionMode: DurableExecutionMode;
+          }
+        ).durableExecutionMode;
+
+        // Get the entity ID (step prefix) from the child context
+        const entityId = (
+          executionContext as unknown as {
+            _stepPrefix?: string;
+          }
+        )._stepPrefix;
+
+        log("🔄", "Concurrent execution mode:", {
+          mode: durableExecutionMode,
+          itemCount: items.length,
+          entityId,
+        });
+
+        return await concurrencyController.executeItems(
+          items,
+          executor,
+          executionContext,
+          config || {},
+          durableExecutionMode,
+          entityId,
+          context,
+        );
+      };
+
+      return await runInChildContext(name, executeOperation, {
+        subType: config?.topLevelSubType,
+        summaryGenerator: config?.summaryGenerator,
+        serdes: config?.serdes,
+      }).then((result) => {
+        // Restore BatchResult methods if the result came from deserialized data
+        if (
+          result &&
+          typeof result === "object" &&
+          "all" in result &&
+          Array.isArray(result.all)
+        ) {
+          return restoreBatchResult<TResult>(result);
+        }
+        return result as BatchResult<TResult>;
+      });
     });
-  };
+  }
+
+  return concurrentExecutionHandler;
 };

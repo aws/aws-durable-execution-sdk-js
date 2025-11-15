@@ -180,7 +180,7 @@ class DurableContextImpl implements DurableContext {
     return this.operationsEmitter;
   }
 
-  private withModeManagement<T>(operation: () => Promise<T>): Promise<T> {
+  private withModeManagement<T>(operation: () => PromiseLike<T>): Promise<T> {
     const shouldSwitchToExecutionMode = this.captureExecutionState();
 
     this.checkAndUpdateReplayMode();
@@ -188,7 +188,7 @@ class DurableContextImpl implements DurableContext {
     if (nonResolvingPromise) return nonResolvingPromise;
 
     try {
-      return operation();
+      return Promise.resolve(operation());
     } finally {
       if (shouldSwitchToExecutionMode) {
         this.durableExecutionMode = DurableExecutionMode.ExecutionMode;

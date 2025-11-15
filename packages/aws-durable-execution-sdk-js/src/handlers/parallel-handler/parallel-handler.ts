@@ -11,12 +11,13 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 export const createParallelHandler = (
   context: ExecutionContext,
   executeConcurrently: DurableContext["executeConcurrently"],
 ) => {
-  return async <T>(
+  function parallelHandler<T>(
     nameOrBranches:
       | string
       | undefined
@@ -25,7 +26,7 @@ export const createParallelHandler = (
       | (ParallelFunc<T> | NamedParallelBranch<T>)[]
       | ParallelConfig<T>,
     maybeConfig?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>> => {
+  ): DurablePromise<BatchResult<T>> {
     let name: string | undefined;
     let branches: (ParallelFunc<T> | NamedParallelBranch<T>)[];
     let config: ParallelConfig<T> | undefined;
@@ -45,80 +46,84 @@ export const createParallelHandler = (
       config = branchesOrConfig as ParallelConfig<T>;
     }
 
-    // Validate inputs
-    if (!Array.isArray(branches)) {
-      throw new Error(
-        "Parallel operation requires an array of branch functions",
-      );
-    }
+    return new DurablePromise(async () => {
+      // Validate inputs
+      if (!Array.isArray(branches)) {
+        throw new Error(
+          "Parallel operation requires an array of branch functions",
+        );
+      }
 
-    log("🔀", "Starting parallel operation:", {
-      name,
-      branchCount: branches.length,
-      maxConcurrency: config?.maxConcurrency,
-    });
-
-    if (
-      branches.some(
-        (branch) =>
-          typeof branch !== "function" &&
-          (typeof branch !== "object" || typeof branch.func !== "function"),
-      )
-    ) {
-      throw new Error(
-        "All branches must be functions or NamedParallelBranch objects",
-      );
-    }
-
-    // Convert to concurrent execution items
-    const executionItems: ConcurrentExecutionItem<ParallelFunc<T>>[] =
-      branches.map((branch, index) => {
-        const isNamedBranch = typeof branch === "object" && "func" in branch;
-        const func = isNamedBranch ? branch.func : branch;
-        const branchName = isNamedBranch ? branch.name : undefined;
-
-        return {
-          id: `parallel-branch-${index}`,
-          data: func,
-          index,
-          name: branchName,
-        };
+      log("🔀", "Starting parallel operation:", {
+        name,
+        branchCount: branches.length,
+        maxConcurrency: config?.maxConcurrency,
       });
 
-    // Create executor that calls the branch function
-    const executor: ConcurrentExecutor<ParallelFunc<T>, T> = async (
-      executionItem,
-      childContext,
-    ) => {
-      log("🔀", "Processing parallel branch:", {
-        index: executionItem.index,
+      if (
+        branches.some(
+          (branch) =>
+            typeof branch !== "function" &&
+            (typeof branch !== "object" || typeof branch.func !== "function"),
+        )
+      ) {
+        throw new Error(
+          "All branches must be functions or NamedParallelBranch objects",
+        );
+      }
+
+      // Convert to concurrent execution items
+      const executionItems: ConcurrentExecutionItem<ParallelFunc<T>>[] =
+        branches.map((branch, index) => {
+          const isNamedBranch = typeof branch === "object" && "func" in branch;
+          const func = isNamedBranch ? branch.func : branch;
+          const branchName = isNamedBranch ? branch.name : undefined;
+
+          return {
+            id: `parallel-branch-${index}`,
+            data: func,
+            index,
+            name: branchName,
+          };
+        });
+
+      // Create executor that calls the branch function
+      const executor: ConcurrentExecutor<ParallelFunc<T>, T> = async (
+        executionItem,
+        childContext,
+      ) => {
+        log("🔀", "Processing parallel branch:", {
+          index: executionItem.index,
+        });
+
+        const result = await executionItem.data(childContext);
+
+        log("✅", "Parallel branch completed:", {
+          index: executionItem.index,
+          result,
+        });
+
+        return result;
+      };
+
+      // Delegate to the concurrent execution handler
+      const result = await executeConcurrently(name, executionItems, executor, {
+        maxConcurrency: config?.maxConcurrency,
+        topLevelSubType: OperationSubType.PARALLEL,
+        iterationSubType: OperationSubType.PARALLEL_BRANCH,
+        summaryGenerator: createParallelSummaryGenerator(),
+        completionConfig: config?.completionConfig,
+        serdes: config?.serdes,
+        itemSerdes: config?.itemSerdes,
       });
 
-      const result = await executionItem.data(childContext);
-
-      log("✅", "Parallel branch completed:", {
-        index: executionItem.index,
-        result,
+      log("🔀", "Parallel operation completed successfully:", {
+        resultCount: result.totalCount,
       });
 
       return result;
-    };
-
-    // Delegate to the concurrent execution handler
-    const result = await executeConcurrently(name, executionItems, executor, {
-      maxConcurrency: config?.maxConcurrency,
-      topLevelSubType: OperationSubType.PARALLEL,
-      iterationSubType: OperationSubType.PARALLEL_BRANCH,
-      summaryGenerator: createParallelSummaryGenerator(),
-      completionConfig: config?.completionConfig,
-      serdes: config?.serdes,
-      itemSerdes: config?.itemSerdes,
     });
+  }
 
-    log("🔀", "Parallel operation completed successfully:", {
-      resultCount: result.totalCount,
-    });
-
-    return result;
-  };
+  return parallelHandler;
 };

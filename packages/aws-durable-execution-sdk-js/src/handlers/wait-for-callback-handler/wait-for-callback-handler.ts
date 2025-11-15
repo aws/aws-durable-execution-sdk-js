@@ -9,101 +9,120 @@ import {
   StepContext,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 export const createWaitForCallbackHandler = (
   context: ExecutionContext,
   runInChildContext: DurableContext["runInChildContext"],
 ) => {
-  return async <T>(
+  function waitForCallbackHandler<T>(
     nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc,
     submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
-  ): Promise<T> => {
+  ): DurablePromise<T> {
+    // Validate parameters and capture any errors
+    let validationError: Error | null = null;
     let name: string | undefined;
-    let submitter: WaitForCallbackSubmitterFunc;
+    let submitter: WaitForCallbackSubmitterFunc | undefined;
     let config: WaitForCallbackConfig<T> | undefined;
 
-    // Parse the overloaded parameters
-    if (typeof nameOrSubmitter === "string" || nameOrSubmitter === undefined) {
-      // Case: waitForCallback("name", submitterFunc, config?) or waitForCallback(undefined, submitterFunc, config?)
-      name = nameOrSubmitter;
-      if (typeof submitterOrConfig === "function") {
-        submitter = submitterOrConfig;
-        config = maybeConfig;
+    try {
+      // Parse the overloaded parameters - validation happens synchronously
+      if (
+        typeof nameOrSubmitter === "string" ||
+        nameOrSubmitter === undefined
+      ) {
+        // Case: waitForCallback("name", submitterFunc, config?) or waitForCallback(undefined, submitterFunc, config?)
+        name = nameOrSubmitter;
+        if (typeof submitterOrConfig === "function") {
+          submitter = submitterOrConfig;
+          config = maybeConfig;
+        } else {
+          throw new Error(
+            "waitForCallback requires a submitter function when name is provided",
+          );
+        }
+      } else if (typeof nameOrSubmitter === "function") {
+        // Case: waitForCallback(submitterFunc, config?)
+        submitter = nameOrSubmitter;
+        config = submitterOrConfig as WaitForCallbackConfig<T>;
       } else {
-        throw new Error(
-          "waitForCallback requires a submitter function when name is provided",
-        );
+        throw new Error("waitForCallback requires a submitter function");
       }
-    } else if (typeof nameOrSubmitter === "function") {
-      // Case: waitForCallback(submitterFunc, config?)
-      submitter = nameOrSubmitter;
-      config = submitterOrConfig as WaitForCallbackConfig<T>;
-    } else {
-      throw new Error("waitForCallback requires a submitter function");
+    } catch (error) {
+      validationError = error as Error;
     }
 
-    log("📞", "WaitForCallback requested:", {
-      name,
-      hasSubmitter: !!submitter,
-      config,
-    });
+    return new DurablePromise(async () => {
+      // Throw validation error if any
+      if (validationError) {
+        throw validationError;
+      }
 
-    // Use runInChildContext to ensure proper ID generation and isolation
-    const childFunction = async (childCtx: DurableContext): Promise<T> => {
-      // Convert WaitForCallbackConfig to CreateCallbackConfig
-      const createCallbackConfig: CreateCallbackConfig<T> | undefined = config
-        ? {
-            timeout: config.timeout,
-            heartbeatTimeout: config.heartbeatTimeout,
-            serdes: config.serdes,
-          }
-        : undefined;
-
-      // Create callback and get the promise + callbackId
-      const [callbackPromise, callbackId] =
-        await childCtx.createCallback<T>(createCallbackConfig);
-
-      log("🆔", "Callback created:", {
-        callbackId,
+      log("📞", "WaitForCallback requested:", {
         name,
+        hasSubmitter: !!submitter,
+        config,
       });
 
-      // Execute the submitter step (submitter is now mandatory)
-      await childCtx.step(
-        async (stepContext: StepContext) => {
-          // Use the step's built-in logger instead of creating a new one
-          const callbackContext: WaitForCallbackContext = {
-            logger: stepContext.logger,
-          };
+      // Use runInChildContext to ensure proper ID generation and isolation
+      const childFunction = async (childCtx: DurableContext): Promise<T> => {
+        // Convert WaitForCallbackConfig to CreateCallbackConfig
+        const createCallbackConfig: CreateCallbackConfig<T> | undefined = config
+          ? {
+              timeout: config.timeout,
+              heartbeatTimeout: config.heartbeatTimeout,
+              serdes: config.serdes,
+            }
+          : undefined;
 
-          log("📤", "Executing submitter:", {
-            callbackId,
-            name,
-          });
-          await submitter(callbackId, callbackContext);
-          log("✅", "Submitter completed:", {
-            callbackId,
-            name,
-          });
-        },
-        config?.retryStrategy
-          ? { retryStrategy: config.retryStrategy }
-          : undefined,
-      );
+        // Create callback and get the promise + callbackId
+        const [callbackPromise, callbackId] =
+          await childCtx.createCallback<T>(createCallbackConfig);
 
-      log("⏳", "Waiting for callback completion:", {
-        callbackId,
-        name,
+        log("🆔", "Callback created:", {
+          callbackId,
+          name,
+        });
+
+        // Execute the submitter step (submitter is now mandatory)
+        await childCtx.step(
+          async (stepContext: StepContext) => {
+            // Use the step's built-in logger instead of creating a new one
+            const callbackContext: WaitForCallbackContext = {
+              logger: stepContext.logger,
+            };
+
+            log("📤", "Executing submitter:", {
+              callbackId,
+              name,
+            });
+            await submitter!(callbackId, callbackContext);
+            log("✅", "Submitter completed:", {
+              callbackId,
+              name,
+            });
+          },
+          config?.retryStrategy
+            ? { retryStrategy: config.retryStrategy }
+            : undefined,
+        );
+
+        log("⏳", "Waiting for callback completion:", {
+          callbackId,
+          name,
+        });
+
+        // Return just the callback promise result
+        return await callbackPromise;
+      };
+
+      // Call runInChildContext with unified signature
+      return runInChildContext(name, childFunction, {
+        subType: OperationSubType.WAIT_FOR_CALLBACK,
       });
-
-      // Return just the callback promise result
-      return await callbackPromise;
-    };
-
-    // Call runInChildContext with unified signature
-    return runInChildContext(name, childFunction, {
-      subType: OperationSubType.WAIT_FOR_CALLBACK,
     });
-  };
+  }
+
+  return waitForCallbackHandler;
 };

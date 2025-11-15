@@ -17,6 +17,7 @@ import {
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -26,31 +27,35 @@ export const createInvokeHandler = (
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ): {
-  <I, O>(funcId: string, input: I, config?: InvokeConfig<I, O>): Promise<O>;
+  <I, O>(
+    funcId: string,
+    input: I,
+    config?: InvokeConfig<I, O>,
+  ): DurablePromise<O>;
   <I, O>(
     name: string,
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
 } => {
   function invokeHandler<I, O>(
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
   function invokeHandler<I, O>(
     name: string,
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
-  async function invokeHandler<I, O>(
+  ): DurablePromise<O>;
+  function invokeHandler<I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
     inputOrConfig?: I | InvokeConfig<I, O>,
     maybeConfig?: InvokeConfig<I, O>,
-  ): Promise<O> {
+  ): DurablePromise<O> {
     const isNameFirst = typeof funcIdOrInput === "string";
     const name = isNameFirst ? nameOrFuncId : undefined;
     const funcId = isNameFirst ? (funcIdOrInput as string) : nameOrFuncId;
@@ -61,47 +66,47 @@ export const createInvokeHandler = (
 
     const stepId = createStepId();
 
-    log("🔗", `Invoke ${name || funcId} (${stepId})`);
+    return new DurablePromise(async () => {
+      log("🔗", `Invoke ${name || funcId} (${stepId})`);
 
-    // Main invoke logic - can be re-executed if step status changes
-    while (true) {
-      // Check if we have existing step data
-      const stepData = context.getStepData(stepId);
+      // Main invoke logic - can be re-executed if step status changes
+      while (true) {
+        // Check if we have existing step data
+        const stepData = context.getStepData(stepId);
 
-      // Validate replay consistency
-      validateReplayConsistency(
-        stepId,
-        {
-          type: OperationType.CHAINED_INVOKE,
-          name,
-          subType: OperationSubType.CHAINED_INVOKE,
-        },
-        stepData,
-        context,
-      );
-
-      if (stepData?.Status === OperationStatus.SUCCEEDED) {
-        // Return cached result - no need to check for errors in successful operations
-        const invokeDetails = stepData.ChainedInvokeDetails;
-        return await safeDeserialize(
-          config?.resultSerdes || defaultSerdes,
-          invokeDetails?.Result,
+        // Validate replay consistency
+        validateReplayConsistency(
           stepId,
-          name,
-          context.terminationManager,
-
-          context.durableExecutionArn,
+          {
+            type: OperationType.CHAINED_INVOKE,
+            name,
+            subType: OperationSubType.CHAINED_INVOKE,
+          },
+          stepData,
+          context,
         );
-      }
 
-      if (
-        stepData?.Status === OperationStatus.FAILED ||
-        stepData?.Status === OperationStatus.TIMED_OUT ||
-        stepData?.Status === OperationStatus.STOPPED
-      ) {
-        // Operation failed, return async rejected promise
-        const invokeDetails = stepData.ChainedInvokeDetails;
-        return (async (): Promise<O> => {
+        if (stepData?.Status === OperationStatus.SUCCEEDED) {
+          // Return cached result - no need to check for errors in successful operations
+          const invokeDetails = stepData.ChainedInvokeDetails;
+          return await safeDeserialize(
+            config?.resultSerdes || defaultSerdes,
+            invokeDetails?.Result,
+            stepId,
+            name,
+            context.terminationManager,
+
+            context.durableExecutionArn,
+          );
+        }
+
+        if (
+          stepData?.Status === OperationStatus.FAILED ||
+          stepData?.Status === OperationStatus.TIMED_OUT ||
+          stepData?.Status === OperationStatus.STOPPED
+        ) {
+          // Operation failed, throw error
+          const invokeDetails = stepData.ChainedInvokeDetails;
           if (invokeDetails?.Error) {
             throw new InvokeError(
               invokeDetails.Error.ErrorMessage || "Invoke failed",
@@ -113,67 +118,67 @@ export const createInvokeHandler = (
           } else {
             throw new InvokeError("Invoke failed");
           }
-        })();
-      }
-
-      if (stepData?.Status === OperationStatus.STARTED) {
-        // Operation is still running, check for other operations before terminating
-        if (hasRunningOperations()) {
-          log(
-            "⏳",
-            `Invoke ${name || funcId} still in progress, waiting for other operations`,
-          );
-          await waitBeforeContinue({
-            checkHasRunningOperations: true,
-            checkStepStatus: true,
-            checkTimer: false,
-            stepId,
-            context,
-            hasRunningOperations,
-            operationsEmitter: getOperationsEmitter(),
-          });
-          continue; // Re-evaluate status after waiting
         }
 
-        // No other operations running, safe to terminate
-        log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
-        return terminate(
-          context,
-          TerminationReason.OPERATION_TERMINATED,
+        if (stepData?.Status === OperationStatus.STARTED) {
+          // Operation is still running, check for other operations before terminating
+          if (hasRunningOperations()) {
+            log(
+              "⏳",
+              `Invoke ${name || funcId} still in progress, waiting for other operations`,
+            );
+            await waitBeforeContinue({
+              checkHasRunningOperations: true,
+              checkStepStatus: true,
+              checkTimer: false,
+              stepId,
+              context,
+              hasRunningOperations,
+              operationsEmitter: getOperationsEmitter(),
+            });
+            continue; // Re-evaluate status after waiting
+          }
+
+          // No other operations running, safe to terminate
+          log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
+          return terminate(
+            context,
+            TerminationReason.OPERATION_TERMINATED,
+            stepId,
+          );
+        }
+
+        // Serialize the input payload
+        const serializedPayload = await safeSerialize(
+          config?.payloadSerdes || defaultSerdes,
+          input,
           stepId,
+          name,
+          context.terminationManager,
+
+          context.durableExecutionArn,
         );
+
+        // Create checkpoint for the invoke operation
+        await checkpoint(stepId, {
+          Id: stepId,
+          ParentId: parentId,
+          Action: OperationAction.START,
+          SubType: OperationSubType.CHAINED_INVOKE,
+          Type: OperationType.CHAINED_INVOKE,
+          Name: name,
+          Payload: serializedPayload,
+          ChainedInvokeOptions: {
+            FunctionName: funcId,
+          },
+        });
+
+        log("🚀", `Invoke ${name || funcId} started, re-checking status`);
+
+        // Continue the loop to re-evaluate status (will hit STARTED case)
+        continue;
       }
-
-      // Serialize the input payload
-      const serializedPayload = await safeSerialize(
-        config?.payloadSerdes || defaultSerdes,
-        input,
-        stepId,
-        name,
-        context.terminationManager,
-
-        context.durableExecutionArn,
-      );
-
-      // Create checkpoint for the invoke operation
-      await checkpoint(stepId, {
-        Id: stepId,
-        ParentId: parentId,
-        Action: OperationAction.START,
-        SubType: OperationSubType.CHAINED_INVOKE,
-        Type: OperationType.CHAINED_INVOKE,
-        Name: name,
-        Payload: serializedPayload,
-        ChainedInvokeOptions: {
-          FunctionName: funcId,
-        },
-      });
-
-      log("🚀", `Invoke ${name || funcId} started, re-checking status`);
-
-      // Continue the loop to re-evaluate status (will hit STARTED case)
-      continue;
-    }
+    });
   }
 
   return invokeHandler;

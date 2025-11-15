@@ -61,7 +61,7 @@ describe("Step Handler Timing Tests", () => {
 
       stepHandlerWithMocks("test-step", stepFn, {
         retryStrategy: mockRetryStrategy,
-      });
+      }).catch(() => {});
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 

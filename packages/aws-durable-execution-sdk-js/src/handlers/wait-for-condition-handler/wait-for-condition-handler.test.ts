@@ -310,6 +310,7 @@ describe("WaitForCondition Handler", () => {
       };
 
       const _promise = waitForConditionHandler(checkFunc, config);
+      _promise.catch(() => {}); // Trigger lazy execution
 
       // Should not resolve
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -509,8 +510,9 @@ describe("WaitForCondition Handler", () => {
         message: "Retry scheduled for step-1",
       });
 
-      // Verify that the promise is indeed never-resolving by checking its constructor
-      expect(promise).toBeInstanceOf(Promise);
+      // Verify that the promise is thenable
+      expect(promise).toHaveProperty("then");
+      expect(typeof promise.then).toBe("function");
     });
 
     it("should wait for timer when status is PENDING", async () => {
@@ -531,6 +533,15 @@ describe("WaitForCondition Handler", () => {
 
       const promise = waitForConditionHandler(checkFunc, config);
 
+      // Trigger lazy execution
+      let resolved = false;
+      promise.then(() => {
+        resolved = true;
+      });
+
+      // Wait for execution to start
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       // Should terminate with retry scheduled message
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.RETRY_SCHEDULED,
@@ -538,12 +549,6 @@ describe("WaitForCondition Handler", () => {
       });
 
       // Should return never-resolving promise
-      let resolved = false;
-      promise.then(() => {
-        resolved = true;
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(resolved).toBe(false);
     });
   });
