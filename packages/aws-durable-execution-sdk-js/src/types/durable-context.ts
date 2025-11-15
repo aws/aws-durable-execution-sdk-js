@@ -3,7 +3,7 @@ import { Logger, LoggerConfig } from "./logger";
 import { StepFunc, StepConfig } from "./step";
 import { ChildFunc, ChildConfig } from "./child-context";
 import { InvokeConfig } from "./invoke";
-import { Duration } from "./core";
+import { WaitOptions } from "./core";
 import {
   CreateCallbackConfig,
   CreateCallbackResult,
@@ -191,9 +191,9 @@ export interface DurableContext {
   runInChildContext<T>(fn: ChildFunc<T>, config?: ChildConfig<T>): Promise<T>;
 
   /**
-   * Pauses execution for the specified duration
+   * Pauses execution for the specified duration or until a specific timestamp
    * @param name - Step name for tracking and debugging
-   * @param duration - Duration to wait
+   * @param waitOptions - Duration to wait or end timestamp
    * @example
    * ```typescript
    * // Wait 5 seconds before retrying
@@ -201,13 +201,16 @@ export interface DurableContext {
    *
    * // Wait for a longer duration
    * await context.wait("long-delay", { minutes: 5, seconds: 30 });
+   *
+   * // Wait until a specific timestamp
+   * await context.wait("scheduled-task", { endTimestamp: "2024-12-25T00:00:00Z" });
    * ```
    */
-  wait(name: string, duration: Duration): Promise<void>;
+  wait(name: string, waitOptions: WaitOptions): Promise<void>;
 
   /**
-   * Pauses execution for the specified duration
-   * @param duration - Duration to wait
+   * Pauses execution for the specified duration or until a specific timestamp
+   * @param waitOptions - Duration to wait or end timestamp
    * @example
    * ```typescript
    * // Wait 30 seconds for rate limiting
@@ -215,9 +218,12 @@ export interface DurableContext {
    *
    * // Wait using multiple units
    * await context.wait({ hours: 1, minutes: 30 });
+   *
+   * // Wait until a specific timestamp
+   * await context.wait({ endTimestamp: "2024-12-25T00:00:00Z" });
    * ```
    */
-  wait(duration: Duration): Promise<void>;
+  wait(waitOptions: WaitOptions): Promise<void>;
 
   /**
    * Waits for a condition to be met by periodically checking state

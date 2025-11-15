@@ -1,4 +1,4 @@
-import { Duration } from "../../types";
+import { Duration, WaitOptions } from "../../types";
 
 /**
  * Converts a Duration object to total seconds
@@ -12,4 +12,29 @@ export function durationToSeconds(duration: Duration): number {
   const seconds = "seconds" in duration ? (duration.seconds ?? 0) : 0;
 
   return days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60 + seconds;
+}
+
+/**
+ * Converts WaitOptions to total seconds
+ * @param waitOptions - WaitOptions object with duration or endTimestamp
+ * @returns Total duration in seconds
+ */
+export function waitOptionsToSeconds(waitOptions: WaitOptions): number {
+  // Handle endTimestamp case
+  if ("endTimestamp" in waitOptions) {
+    const endTime = new Date(waitOptions.endTimestamp).getTime();
+    const currentTime = Date.now();
+    const diffMs = endTime - currentTime;
+
+    // If the timestamp is in the past, return 0
+    if (diffMs <= 0) {
+      return 0;
+    }
+
+    // Convert milliseconds to seconds
+    return Math.ceil(diffMs / 1000);
+  }
+
+  // Handle traditional duration format
+  return durationToSeconds(waitOptions);
 }

@@ -1,4 +1,4 @@
-import { ExecutionContext, OperationSubType, Duration } from "../../types";
+import { ExecutionContext, OperationSubType, WaitOptions } from "../../types";
 import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationStatus,
@@ -11,7 +11,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { durationToSeconds } from "../../utils/duration/duration";
+import { waitOptionsToSeconds } from "../../utils/duration/duration";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -21,25 +21,25 @@ export const createWaitHandler = (
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
 ): {
-  (name: string, duration: Duration): Promise<void>;
-  (duration: Duration): Promise<void>;
+  (name: string, waitOptions: WaitOptions): Promise<void>;
+  (waitOptions: WaitOptions): Promise<void>;
 } => {
-  function waitHandler(name: string, duration: Duration): Promise<void>;
-  function waitHandler(duration: Duration): Promise<void>;
+  function waitHandler(name: string, waitOptions: WaitOptions): Promise<void>;
+  function waitHandler(waitOptions: WaitOptions): Promise<void>;
   async function waitHandler(
-    nameOrDuration: string | Duration,
-    duration?: Duration,
+    nameOrWaitOptions: string | WaitOptions,
+    waitOptions?: WaitOptions,
   ): Promise<void> {
-    const isNameFirst = typeof nameOrDuration === "string";
-    const actualName = isNameFirst ? nameOrDuration : undefined;
-    const actualDuration = isNameFirst ? duration! : nameOrDuration;
-    const actualSeconds = durationToSeconds(actualDuration);
+    const isNameFirst = typeof nameOrWaitOptions === "string";
+    const actualName = isNameFirst ? nameOrWaitOptions : undefined;
+    const actualWaitOptions = isNameFirst ? waitOptions! : nameOrWaitOptions;
+    const actualSeconds = waitOptionsToSeconds(actualWaitOptions);
     const stepId = createStepId();
 
     log("⏲️", "Wait requested:", {
       stepId,
       name: actualName,
-      duration: actualDuration,
+      waitOptions: actualWaitOptions,
       seconds: actualSeconds,
     });
 

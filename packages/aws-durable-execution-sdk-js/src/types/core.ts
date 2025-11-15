@@ -75,6 +75,8 @@ export type Duration =
   | { minutes: number; seconds?: number }
   | { seconds: number };
 
+export type WaitOptions = Duration | { endTimestamp: string };
+
 export interface ExecutionContext {
   state: ExecutionState;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
