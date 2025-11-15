@@ -216,6 +216,19 @@ tests: (runner, isCloud) => {
 - [ ] Local tests pass (`npm test`)
 - [ ] Integration tests pass in CI/CD
 
+## SAM CLI
+
+A SAM template has been provided for testing the examples locally using the AWS SAM CLI.
+Please follow the [SAM CLI documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-command-reference.html) to get started.
+
+Sample usage:
+
+```
+sam local invoke HelloWorld --durable-execution-name "MyLocalDurableExecution"
+sam local execution get $DURABLE_EXECUTION_ARN
+sam local execution history $DURABLE_EXECUTION_ARN
+```
+
 ## Troubleshooting
 
 **Test not found in integration run:**

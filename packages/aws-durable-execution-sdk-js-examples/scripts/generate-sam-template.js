@@ -198,7 +198,10 @@ function generateTemplate(skipVerboseLogging = false) {
   // Generate resources for each example file
   exampleFiles.forEach((filename) => {
     const resourceName = toPascalCase(filename);
-    template.Resources[resourceName] = createFunctionResource(filename, skipVerboseLogging);
+    template.Resources[resourceName] = createFunctionResource(
+      filename,
+      skipVerboseLogging,
+    );
   });
 
   return template;
@@ -209,7 +212,7 @@ function generateTemplate(skipVerboseLogging = false) {
  */
 function main() {
   const args = process.argv.slice(2);
-  const skipVerboseLogging = args.includes('--skip-verbose-logging');
+  const skipVerboseLogging = args.includes("--skip-verbose-logging");
 
   try {
     console.log("🔍 Scanning src/examples for TypeScript files...");
