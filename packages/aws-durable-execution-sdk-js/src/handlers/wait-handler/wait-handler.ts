@@ -47,21 +47,23 @@ export const createWaitHandler = (
         seconds: actualSeconds,
       });
 
+      let stepData = context.getStepData(stepId);
+
+      // Validate replay consistency once before loop
+      validateReplayConsistency(
+        stepId,
+        {
+          type: OperationType.WAIT,
+          name: actualName,
+          subType: OperationSubType.WAIT,
+        },
+        stepData,
+        context,
+      );
+
       // Main wait logic - can be re-executed if step data changes
       while (true) {
-        let stepData = context.getStepData(stepId);
-
-        // Validate replay consistency
-        validateReplayConsistency(
-          stepId,
-          {
-            type: OperationType.WAIT,
-            name: actualName,
-            subType: OperationSubType.WAIT,
-          },
-          stepData,
-          context,
-        );
+        stepData = context.getStepData(stepId);
 
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
           log("⏭️", "Wait already completed:", { stepId });
