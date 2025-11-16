@@ -122,11 +122,17 @@ export const createWaitHandler = (
       }
     };
 
-    // Phase 1: Execute without termination
-    executeWaitLogic(false);
+    // Create a promise that tracks phase 1 completion
+    let phase1Complete = false;
+    const phase1Promise = executeWaitLogic(false).then(() => {
+      phase1Complete = true;
+    });
 
     // Return DurablePromise that will execute phase 2 when awaited
     return new DurablePromise(async () => {
+      // Wait for phase 1 to complete first
+      await phase1Promise;
+      // Then execute phase 2
       await executeWaitLogic(true);
     });
   }
