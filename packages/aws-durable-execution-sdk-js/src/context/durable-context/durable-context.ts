@@ -313,12 +313,7 @@ class DurableContextImpl implements DurableContext {
           ? waitHandler(nameOrDuration, maybeDuration!)
           : waitHandler(nameOrDuration);
 
-      // Convert DurablePromise to regular Promise for the public API
-      const promise = durablePromise.then(() => {}).catch(() => {});
-
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
+      return durablePromise.finally(() => {
         this.checkAndUpdateReplayMode();
       });
     });
