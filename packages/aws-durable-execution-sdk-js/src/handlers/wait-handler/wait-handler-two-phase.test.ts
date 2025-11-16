@@ -29,7 +29,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     getOperationsEmitter = () => new EventEmitter();
   });
 
-  it("should create DurablePromise without executing wait logic immediately", () => {
+  it("should execute wait logic in phase 1 without terminating", async () => {
     const waitHandler = createWaitHandler(
       mockContext,
       mockCheckpoint,
@@ -38,19 +38,21 @@ describe("Wait Handler Two-Phase Execution", () => {
       getOperationsEmitter,
     );
 
-    // Phase 1: Create the promise
+    // Phase 1: Create the promise - this executes the logic but doesn't terminate
     const waitPromise = waitHandler({ seconds: 5 });
+
+    // Wait for phase 1 to complete
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Should return a DurablePromise
     expect(waitPromise).toBeInstanceOf(DurablePromise);
-    expect((waitPromise as DurablePromise<void>).isExecuted).toBe(false);
 
-    // Should not have called checkpoint yet
-    expect(mockCheckpoint).not.toHaveBeenCalled();
-    expect(mockContext.getStepData).not.toHaveBeenCalled();
+    // Phase 1 should have executed (checkpoint called)
+    expect(mockCheckpoint).toHaveBeenCalled();
+    expect(mockContext.getStepData).toHaveBeenCalled();
   });
 
-  it("should execute wait logic only when promise is awaited", async () => {
+  it("should execute wait logic again in phase 2 when awaited", async () => {
     const waitHandler = createWaitHandler(
       mockContext,
       mockCheckpoint,
@@ -61,19 +63,22 @@ describe("Wait Handler Two-Phase Execution", () => {
 
     // Phase 1: Create the promise
     const waitPromise = waitHandler({ seconds: 5 });
-    expect((waitPromise as DurablePromise<void>).isExecuted).toBe(false);
 
-    // Phase 2: Await the promise - this should trigger execution
+    // Wait for phase 1 to complete
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const phase1Calls = mockCheckpoint.mock.calls.length;
+
+    // Phase 2: Await the promise - this should execute again
     try {
       await waitPromise;
     } catch (error) {
       // Expected to throw termination error
     }
 
-    // Now the execution should have happened
+    // Phase 2 execution should have happened (more checkpoint calls)
     expect((waitPromise as DurablePromise<void>).isExecuted).toBe(true);
-    expect(mockCheckpoint).toHaveBeenCalled();
-    expect(mockContext.getStepData).toHaveBeenCalled();
+    expect(mockCheckpoint.mock.calls.length).toBeGreaterThan(phase1Calls);
   });
 
   it("should work correctly with Promise.race", async () => {

@@ -38,16 +38,9 @@ export const createWaitHandler = (
     const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();
 
-    log("⏲️", "Wait requested (phase 1):", {
-      stepId,
-      name: actualName,
-      duration: actualDuration,
-      seconds: actualSeconds,
-    });
-
-    // Phase 1: Create checkpoint but don't terminate yet
-    return new DurablePromise(async () => {
-      log("⏲️", "Wait executing (phase 2):", {
+    // Shared wait logic for both phases
+    const executeWaitLogic = async (canTerminate: boolean): Promise<void> => {
+      log("⏲️", `Wait executing (${canTerminate ? "phase 2" : "phase 1"}):`, {
         stepId,
         name: actualName,
         duration: actualDuration,
@@ -96,12 +89,18 @@ export const createWaitHandler = (
 
         // Check if there are any ongoing operations
         if (!hasRunningOperations()) {
-          // A.1: No ongoing operations - safe to terminate (only in phase 2)
-          return terminate(
-            context,
-            TerminationReason.WAIT_SCHEDULED,
-            `Operation ${actualName || stepId} scheduled to wait`,
-          );
+          // Phase 1: Just return without terminating
+          // Phase 2: Terminate
+          if (canTerminate) {
+            return terminate(
+              context,
+              TerminationReason.WAIT_SCHEDULED,
+              `Operation ${actualName || stepId} scheduled to wait`,
+            );
+          } else {
+            log("⏸️", "Wait ready but not terminating (phase 1):", { stepId });
+            return;
+          }
         }
 
         // There are ongoing operations - wait before continuing
@@ -119,6 +118,14 @@ export const createWaitHandler = (
 
         // Continue the loop to re-evaluate all conditions from the beginning
       }
+    };
+
+    // Phase 1: Execute without termination
+    executeWaitLogic(false);
+
+    // Return DurablePromise that will execute phase 2 when awaited
+    return new DurablePromise(async () => {
+      await executeWaitLogic(true);
     });
   }
 
