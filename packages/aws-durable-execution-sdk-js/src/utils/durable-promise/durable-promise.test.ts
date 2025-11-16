@@ -112,4 +112,24 @@ describe("DurablePromise", () => {
     expect(result).toBe(42);
     expect(finallyCalled).toBe(true);
   });
+
+  it("should handle undefined fn by creating a promise that never resolves", async () => {
+    // Test with explicit undefined
+    const promise1 = new DurablePromise(undefined);
+
+    // Test with no parameter (implicitly undefined)
+    const promise2 = new DurablePromise();
+
+    // Use Promise.race to verify the promises don't resolve within a reasonable time
+    const timeout = new Promise((resolve) =>
+      setTimeout(() => resolve("timeout"), 50),
+    );
+
+    const result1 = await Promise.race([promise1, timeout]);
+    const result2 = await Promise.race([promise2, timeout]);
+
+    // Both should timeout, indicating the promises never resolved
+    expect(result1).toBe("timeout");
+    expect(result2).toBe("timeout");
+  });
 });

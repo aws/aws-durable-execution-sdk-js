@@ -46,6 +46,7 @@ import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
 import { validateContextUsage } from "../../utils/context-tracker/context-tracker";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
@@ -131,6 +132,12 @@ class DurableContextImpl implements DurableContext {
     }
   }
 
+  private isReplayingNextOperation(): boolean {
+    const nextStepId = this.getNextStepId();
+    const nextStepData = this.executionContext.getStepData(nextStepId);
+    return !!nextStepData;
+  }
+
   private captureExecutionState(): boolean {
     const wasInReplayMode =
       this.durableExecutionMode === DurableExecutionMode.ReplayMode;
@@ -144,7 +151,7 @@ class DurableContextImpl implements DurableContext {
     return wasInReplayMode && wasNotFinished;
   }
 
-  private checkForNonResolvingPromise(): Promise<never> | null {
+  private checkForNonResolvingPromise(): DurablePromise<never> | null {
     if (
       this.durableExecutionMode === DurableExecutionMode.ReplaySucceededContext
     ) {
@@ -155,7 +162,7 @@ class DurableContextImpl implements DurableContext {
         nextStepData.Status !== OperationStatus.SUCCEEDED &&
         nextStepData.Status !== OperationStatus.FAILED
       ) {
-        return new Promise<never>(() => {}); // Non-resolving promise
+        return new DurablePromise<never>(); // Non-resolving promise
       }
     }
     return null;
@@ -180,7 +187,9 @@ class DurableContextImpl implements DurableContext {
     return this.operationsEmitter;
   }
 
-  private withModeManagement<T>(operation: () => PromiseLike<T>): Promise<T> {
+  private withModeManagement<T>(
+    operation: () => DurablePromise<T>,
+  ): DurablePromise<T> {
     const shouldSwitchToExecutionMode = this.captureExecutionState();
 
     this.checkAndUpdateReplayMode();
@@ -188,7 +197,7 @@ class DurableContextImpl implements DurableContext {
     if (nonResolvingPromise) return nonResolvingPromise;
 
     try {
-      return Promise.resolve(operation());
+      return operation();
     } finally {
       if (shouldSwitchToExecutionMode) {
         this.durableExecutionMode = DurableExecutionMode.ExecutionMode;
@@ -200,7 +209,7 @@ class DurableContextImpl implements DurableContext {
     nameOrFn: string | undefined | StepFunc<T>,
     fnOrOptions?: StepFunc<T> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "step",
@@ -221,8 +230,6 @@ class DurableContextImpl implements DurableContext {
         this._parentId,
       );
       const promise = stepHandler(nameOrFn, fnOrOptions, maybeOptions);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
       return promise;
     });
   }
@@ -232,7 +239,7 @@ class DurableContextImpl implements DurableContext {
     funcIdOrInput?: string | I,
     inputOrConfig?: I | InvokeConfig<I, O>,
     maybeConfig?: InvokeConfig<I, O>,
-  ): Promise<O> {
+  ): DurablePromise<O> {
     validateContextUsage(
       this._stepPrefix,
       "invoke",
@@ -255,10 +262,11 @@ class DurableContextImpl implements DurableContext {
           maybeConfig,
         ] as Parameters<typeof invokeHandler<I, O>>),
       );
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
+      return new DurablePromise(async () => {
+        promise?.finally(() => {
+          this.checkAndUpdateReplayMode();
+        });
+        return promise;
       });
     });
   }
@@ -267,7 +275,7 @@ class DurableContextImpl implements DurableContext {
     nameOrFn: string | undefined | ChildFunc<T>,
     fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "runInChildContext",
@@ -284,8 +292,6 @@ class DurableContextImpl implements DurableContext {
         this._parentId,
       );
       const promise = blockHandler(nameOrFn, fnOrOptions, maybeOptions);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
       return promise;
     });
   }
@@ -293,7 +299,7 @@ class DurableContextImpl implements DurableContext {
   wait(
     nameOrDuration: string | Duration,
     maybeDuration?: Duration,
-  ): Promise<void> {
+  ): DurablePromise<void> {
     validateContextUsage(
       this._stepPrefix,
       "wait",
@@ -312,10 +318,11 @@ class DurableContextImpl implements DurableContext {
         typeof nameOrDuration === "string"
           ? waitHandler(nameOrDuration, maybeDuration!)
           : waitHandler(nameOrDuration);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
+      return new DurablePromise(() => {
+        promise?.finally(() => {
+          this.checkAndUpdateReplayMode();
+        });
+        return promise;
       });
     });
   }
@@ -347,7 +354,7 @@ class DurableContextImpl implements DurableContext {
   createCallback<T>(
     nameOrConfig?: string | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>> {
+  ): DurablePromise<CreateCallbackResult<T>> {
     validateContextUsage(
       this._stepPrefix,
       "createCallback",
@@ -363,10 +370,11 @@ class DurableContextImpl implements DurableContext {
         this._parentId,
       );
       const promise = callbackFactory(nameOrConfig, maybeConfig);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
+      return new DurablePromise(() => {
+        promise?.finally(() => {
+          this.checkAndUpdateReplayMode();
+        });
+        return promise;
       });
     });
   }
@@ -375,7 +383,7 @@ class DurableContextImpl implements DurableContext {
     nameOrSubmitter?: string | undefined | WaitForCallbackSubmitterFunc,
     submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "waitForCallback",
@@ -391,10 +399,11 @@ class DurableContextImpl implements DurableContext {
         submitterOrConfig,
         maybeConfig,
       );
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
+      return new DurablePromise(() => {
+        promise?.finally(() => {
+          this.checkAndUpdateReplayMode();
+        });
+        return promise;
       });
     });
   }
@@ -405,7 +414,7 @@ class DurableContextImpl implements DurableContext {
       | WaitForConditionCheckFunc<T>
       | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "waitForCondition",
@@ -435,8 +444,6 @@ class DurableContextImpl implements DurableContext {
               nameOrCheckFunc,
               checkFuncOrConfig as WaitForConditionConfig<T>,
             );
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
       return promise;
     });
   }
@@ -446,7 +453,7 @@ class DurableContextImpl implements DurableContext {
     itemsOrMapFunc: TInput[] | MapFunc<TInput, TOutput>,
     mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
     maybeConfig?: MapConfig<TInput, TOutput>,
-  ): Promise<BatchResult<TOutput>> {
+  ): DurablePromise<BatchResult<TOutput>> {
     validateContextUsage(
       this._stepPrefix,
       "map",
@@ -475,7 +482,7 @@ class DurableContextImpl implements DurableContext {
       | (ParallelFunc<T> | NamedParallelBranch<T>)[]
       | ParallelConfig<T>,
     maybeConfig?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>> {
+  ): DurablePromise<BatchResult<T>> {
     validateContextUsage(
       this._stepPrefix,
       "parallel",
@@ -499,7 +506,7 @@ class DurableContextImpl implements DurableContext {
       | ConcurrentExecutor<TItem, TResult>
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>> {
+  ): DurablePromise<BatchResult<TResult>> {
     validateContextUsage(
       this._stepPrefix,
       "executeConcurrently",
@@ -517,14 +524,15 @@ class DurableContextImpl implements DurableContext {
         executorOrConfig,
         maybeConfig,
       );
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
       return promise;
     });
   }
 
   get promise(): DurableContext["promise"] {
-    return createPromiseHandler(this.step.bind(this));
+    return createPromiseHandler(
+      this.step.bind(this),
+      this.isReplayingNextOperation.bind(this),
+    );
   }
 }
 

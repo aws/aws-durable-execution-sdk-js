@@ -7,6 +7,7 @@ import {
 } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { MockBatchResult } from "../../testing/mock-batch-result";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 describe("Map Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -252,22 +253,24 @@ describe("Map Handler", () => {
         .mockResolvedValueOnce("result1")
         .mockResolvedValueOnce("result2");
 
-      mockExecuteConcurrently.mockImplementation(async (...args: any[]) => {
-        const [, executionItems, executor] = args;
+      mockExecuteConcurrently.mockImplementation((...args: any[]) => {
+        return new DurablePromise(async () => {
+          const [, executionItems, executor] = args;
 
-        // Simulate calling the executor for each item
-        const results = [];
-        for (let i = 0; i < executionItems.length; i++) {
-          const item = executionItems[i];
-          const mockChildContext = {} as DurableContext;
-          const result = await (executor as any)(item, mockChildContext);
-          results.push({
-            index: i,
-            result,
-            status: BatchItemStatus.SUCCEEDED as const,
-          });
-        }
-        return new MockBatchResult(results) as any;
+          // Simulate calling the executor for each item
+          const results = [];
+          for (let i = 0; i < executionItems.length; i++) {
+            const item = executionItems[i];
+            const mockChildContext = {} as DurableContext;
+            const result = await (executor as any)(item, mockChildContext);
+            results.push({
+              index: i,
+              result,
+              status: BatchItemStatus.SUCCEEDED as const,
+            });
+          }
+          return new MockBatchResult(results) as any;
+        });
       });
 
       const result = await mapHandler(items, mapFunc);

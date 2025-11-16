@@ -5,6 +5,7 @@ import {
 import { ExecutionContext, DurableContext, BatchItemStatus } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 describe("Concurrent Execution Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -324,11 +325,17 @@ describe("Concurrent Execution Handler", () => {
           } else {
             capturedExecuteOperation = nameOrFn;
           }
-          return Promise.resolve(
-            new MockBatchResult([
-              { index: 0, result: "result", status: BatchItemStatus.SUCCEEDED },
-            ]) as any,
-          );
+          return new DurablePromise(() => {
+            return Promise.resolve(
+              new MockBatchResult([
+                {
+                  index: 0,
+                  result: "result",
+                  status: BatchItemStatus.SUCCEEDED,
+                },
+              ]) as any,
+            );
+          });
         },
       );
 
@@ -347,24 +354,26 @@ describe("Concurrent Execution Handler", () => {
       // Create a real execution context that will execute the actual path
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
-        async (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
-          // Handle the overloaded signature
-          let actualFn;
-          if (typeof nameOrFn === "string" || nameOrFn === undefined) {
-            actualFn = fnOrConfig;
-          } else {
-            actualFn = nameOrFn;
-          }
-          actualExecuteOperation = actualFn;
-          // Execute the actual operation to cover the executeOperation function
-          if (typeof actualFn === "function") {
-            const mockDurableContext = {
-              runInChildContext: jest.fn().mockResolvedValue("test-result"),
-            } as any;
+        (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
+          return new DurablePromise(async () => {
+            // Handle the overloaded signature
+            let actualFn;
+            if (typeof nameOrFn === "string" || nameOrFn === undefined) {
+              actualFn = fnOrConfig;
+            } else {
+              actualFn = nameOrFn;
+            }
+            actualExecuteOperation = actualFn;
+            // Execute the actual operation to cover the executeOperation function
+            if (typeof actualFn === "function") {
+              const mockDurableContext = {
+                runInChildContext: jest.fn().mockResolvedValue("test-result"),
+              } as any;
 
-            return await actualFn(mockDurableContext);
-          }
-          return new MockBatchResult([]) as any;
+              return await actualFn(mockDurableContext);
+            }
+            return new MockBatchResult([]) as any;
+          });
         },
       );
 
@@ -381,23 +390,25 @@ describe("Concurrent Execution Handler", () => {
       // Test with undefined config to cover the config || {} branch
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
-        async (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
-          // Handle the overloaded signature
-          let actualFn;
-          if (typeof nameOrFn === "string" || nameOrFn === undefined) {
-            actualFn = fnOrConfig;
-          } else {
-            actualFn = nameOrFn;
-          }
-          actualExecuteOperation = actualFn;
-          if (typeof actualFn === "function") {
-            const mockDurableContext = {
-              runInChildContext: jest.fn().mockResolvedValue("test-result"),
-            } as any;
+        (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
+          return new DurablePromise(async () => {
+            // Handle the overloaded signature
+            let actualFn;
+            if (typeof nameOrFn === "string" || nameOrFn === undefined) {
+              actualFn = fnOrConfig;
+            } else {
+              actualFn = nameOrFn;
+            }
+            actualExecuteOperation = actualFn;
+            if (typeof actualFn === "function") {
+              const mockDurableContext = {
+                runInChildContext: jest.fn().mockResolvedValue("test-result"),
+              } as any;
 
-            return await actualFn(mockDurableContext);
-          }
-          return new MockBatchResult([]) as any;
+              return await actualFn(mockDurableContext);
+            }
+            return new MockBatchResult([]) as any;
+          });
         },
       );
 
@@ -487,13 +498,15 @@ describe("ConcurrencyController", () => {
       let maxActive = 0;
 
       mockParentContext.runInChildContext.mockImplementation(() => {
-        activeCount++;
-        maxActive = Math.max(maxActive, activeCount);
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            activeCount--;
-            resolve("result");
-          }, 10);
+        return new DurablePromise(() => {
+          activeCount++;
+          maxActive = Math.max(maxActive, activeCount);
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              activeCount--;
+              resolve("result");
+            }, 10);
+          });
         });
       });
 
@@ -514,7 +527,7 @@ describe("ConcurrencyController", () => {
 
       mockParentContext.runInChildContext
         .mockResolvedValueOnce("result1")
-        .mockImplementation(() => new Promise(() => {})); // Never resolves
+        .mockImplementation(() => new DurablePromise()); // Never resolves
 
       const result = await controller.executeItems(
         items,
@@ -541,7 +554,7 @@ describe("ConcurrencyController", () => {
       mockParentContext.runInChildContext
         .mockRejectedValueOnce(new Error("error1"))
         .mockRejectedValueOnce(new Error("error2"))
-        .mockImplementation(() => new Promise(() => {}));
+        .mockImplementation(() => new DurablePromise());
 
       const result = await controller.executeItems(
         items,
@@ -568,7 +581,7 @@ describe("ConcurrencyController", () => {
       mockParentContext.runInChildContext
         .mockRejectedValueOnce(new Error("error1"))
         .mockRejectedValueOnce(new Error("error2"))
-        .mockImplementation(() => new Promise(() => {}));
+        .mockImplementation(() => new DurablePromise());
 
       const result = await controller.executeItems(
         items,
@@ -611,7 +624,7 @@ describe("ConcurrencyController", () => {
 
       mockParentContext.runInChildContext
         .mockResolvedValueOnce("result1")
-        .mockImplementation(() => new Promise(() => {})); // Never resolves
+        .mockImplementation(() => new DurablePromise()); // Never resolves
 
       const result = await controller.executeItems(
         items,
@@ -744,8 +757,10 @@ describe("ConcurrencyController", () => {
       // Resolve in reverse order
       let resolvers: Array<(value: any) => void> = [];
       mockParentContext.runInChildContext.mockImplementation(() => {
-        return new Promise((resolve) => {
-          resolvers.push(resolve);
+        return new DurablePromise(() => {
+          return new Promise((resolve) => {
+            resolvers.push(resolve);
+          });
         });
       });
 

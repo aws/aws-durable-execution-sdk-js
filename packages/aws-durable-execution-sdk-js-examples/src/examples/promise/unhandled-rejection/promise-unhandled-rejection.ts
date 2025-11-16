@@ -13,20 +13,20 @@ export const config: ExampleConfig = {
 export const handler = withDurableExecution(
   async (_event, context: DurableContext) => {
     // Scenario 1: Immediate combinator usage (original test case)
+    const failurePromise = context.step(
+      "failure-step",
+      async () => {
+        throw new Error("This step failed");
+      },
+      {
+        retryStrategy: () => ({
+          shouldRetry: false,
+        }),
+      },
+    );
+
     try {
-      await context.promise.all([
-        context.step(
-          "failure-step",
-          async () => {
-            throw new Error("This step failed");
-          },
-          {
-            retryStrategy: () => ({
-              shouldRetry: false,
-            }),
-          },
-        ),
-      ]);
+      await context.promise.all([failurePromise]);
     } catch {
       // ignoring error should not fail execution
     }

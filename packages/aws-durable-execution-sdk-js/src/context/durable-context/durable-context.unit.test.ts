@@ -3,6 +3,7 @@ import { DurableExecutionMode, Duration } from "../../types";
 import { Context } from "aws-lambda";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createMockExecutionContext } from "../../testing/mock-context";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 jest.mock("../../utils/checkpoint/checkpoint");
 jest.mock("../../handlers/step-handler/step-handler");
@@ -182,7 +183,8 @@ describe("DurableContext", () => {
       );
 
       const promise = context.step(async (): Promise<string> => "result");
-      expect(promise).toBeInstanceOf(Promise);
+      expect(promise).not.toBeInstanceOf(Promise);
+      expect(promise).toBeInstanceOf(DurablePromise);
     });
   });
 
@@ -291,11 +293,14 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      await context.wait({ seconds: 5 });
-
       const { createWaitHandler } = jest.requireMock(
         "../../handlers/wait-handler/wait-handler",
       );
+      const mockHandler = jest.fn().mockReturnValue(Promise.resolve());
+      createWaitHandler.mockReturnValue(mockHandler);
+
+      await context.wait({ seconds: 5 });
+
       expect(createWaitHandler).toHaveBeenCalled();
     });
 
@@ -310,7 +315,7 @@ describe("DurableContext", () => {
       const { createWaitHandler } = jest.requireMock(
         "../../handlers/wait-handler/wait-handler",
       );
-      const mockHandler = jest.fn();
+      const mockHandler = jest.fn().mockReturnValue(Promise.resolve());
       createWaitHandler.mockReturnValue(mockHandler);
 
       await context.wait("wait-name", { seconds: 5 });
@@ -326,11 +331,14 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      await context.createCallback();
-
       const { createCallback } = jest.requireMock(
         "../../handlers/callback-handler/callback",
       );
+      const mockHandler = jest.fn().mockReturnValue(Promise.resolve());
+      createCallback.mockReturnValue(mockHandler);
+
+      await context.createCallback();
+
       expect(createCallback).toHaveBeenCalled();
     });
 
@@ -342,11 +350,14 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
       );
 
-      await context.waitForCallback(async (): Promise<void> => {});
-
       const { createWaitForCallbackHandler } = jest.requireMock(
         "../../handlers/wait-for-callback-handler/wait-for-callback-handler",
       );
+      const mockHandler = jest.fn().mockReturnValue(Promise.resolve());
+      createWaitForCallbackHandler.mockReturnValue(mockHandler);
+
+      await context.waitForCallback(async (): Promise<void> => {});
+
       expect(createWaitForCallbackHandler).toHaveBeenCalled();
     });
 
@@ -370,11 +381,14 @@ describe("DurableContext", () => {
         }),
       };
 
-      await context.waitForCondition(checkFunc, config);
-
       const { createWaitForConditionHandler } = jest.requireMock(
         "../../handlers/wait-for-condition-handler/wait-for-condition-handler",
       );
+      const mockHandler = jest.fn().mockReturnValue(Promise.resolve());
+      createWaitForConditionHandler.mockReturnValue(mockHandler);
+
+      await context.waitForCondition(checkFunc, config);
+
       expect(createWaitForConditionHandler).toHaveBeenCalled();
     });
 

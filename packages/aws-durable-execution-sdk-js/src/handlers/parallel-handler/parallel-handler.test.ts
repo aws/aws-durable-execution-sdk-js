@@ -7,6 +7,7 @@ import {
   BatchItemStatus,
 } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 describe("Parallel Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -205,21 +206,29 @@ describe("Parallel Handler", () => {
     // Mock the executor being called
     let capturedExecutor: any;
     mockExecuteConcurrently.mockImplementation(
-      async (
+      (
         nameOrItems: any,
         itemsOrExecutor?: any,
         executorOrConfig?: any,
         _maybeConfig?: any,
       ) => {
-        // Handle the overloaded signature
-        if (typeof nameOrItems === "string" || nameOrItems === undefined) {
-          capturedExecutor = executorOrConfig;
-        } else {
-          capturedExecutor = itemsOrExecutor;
-        }
-        return new MockBatchResult([
-          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        ]) as any;
+        return new DurablePromise(() => {
+          // Handle the overloaded signature
+          if (typeof nameOrItems === "string" || nameOrItems === undefined) {
+            capturedExecutor = executorOrConfig;
+          } else {
+            capturedExecutor = itemsOrExecutor;
+          }
+          return Promise.resolve(
+            new MockBatchResult([
+              {
+                index: 0,
+                result: "result1",
+                status: BatchItemStatus.SUCCEEDED,
+              },
+            ]),
+          );
+        });
       },
     );
 
@@ -263,10 +272,19 @@ describe("Parallel Handler", () => {
       };
       const branches = [namedBranch];
 
-      mockExecuteConcurrently.mockResolvedValue(
-        new MockBatchResult([
-          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        ]) as any,
+      mockExecuteConcurrently.mockImplementation(
+        () =>
+          new DurablePromise(() =>
+            Promise.resolve(
+              new MockBatchResult([
+                {
+                  index: 0,
+                  result: "result1",
+                  status: BatchItemStatus.SUCCEEDED,
+                },
+              ]),
+            ),
+          ),
       );
 
       await parallelHandler("test-name", branches);

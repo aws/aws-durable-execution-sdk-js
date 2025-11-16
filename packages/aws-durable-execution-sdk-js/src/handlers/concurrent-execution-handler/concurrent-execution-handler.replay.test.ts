@@ -5,6 +5,7 @@ import {
   ExecutionContext,
 } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { DurablePromise } from "../../utils/durable-promise/durable-promise";
 
 describe("ConcurrencyController - Replay Mode", () => {
   let controller: ConcurrencyController;
@@ -66,9 +67,11 @@ describe("ConcurrencyController - Replay Mode", () => {
     });
 
     mockParentContext.runInChildContext.mockImplementation(
-      async (nameOrFn, fnOrConfig) => {
-        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
-        return await (fn as any)({} as any);
+      (nameOrFn, fnOrConfig) => {
+        return new DurablePromise(async () => {
+          const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+          return await (fn as any)({} as any);
+        });
       },
     );
 
@@ -136,13 +139,15 @@ describe("ConcurrencyController - Replay Mode", () => {
     });
 
     mockParentContext.runInChildContext.mockImplementation(
-      async (nameOrFn, fnOrConfig) => {
-        const name = typeof nameOrFn === "string" ? nameOrFn : undefined;
-        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
-        if (name === "item-1") {
-          throw new Error("Replay error");
-        }
-        return await (fn as any)({} as any);
+      (nameOrFn, fnOrConfig) => {
+        return new DurablePromise(async () => {
+          const name = typeof nameOrFn === "string" ? nameOrFn : undefined;
+          const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+          if (name === "item-1") {
+            throw new Error("Replay error");
+          }
+          return await (fn as any)({} as any);
+        });
       },
     );
 

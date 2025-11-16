@@ -70,31 +70,50 @@ const stepConfig = {
   }),
 };
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export const createPromiseHandler = (step: DurableContext["step"]) => {
+export const createPromiseHandler = (
+  step: DurableContext["step"],
+  isReplayingStep: () => boolean,
+) => {
   const parseParams = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
-  ): { name: string | undefined; promises: Promise<T>[] } => {
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ): { name: string | undefined; promises: DurablePromise<T>[] } => {
     if (typeof nameOrPromises === "string" || nameOrPromises === undefined) {
       return { name: nameOrPromises, promises: maybePromises! };
     }
     return { name: undefined, promises: nameOrPromises };
   };
 
-  const all = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
-  ): Promise<T[]> => {
+  const processParams = <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ): { name: string | undefined; promises: DurablePromise<T>[] } => {
     const { name, promises } = parseParams(nameOrPromises, maybePromises);
+
+    if (isReplayingStep()) {
+      // Prevent unhandled rejections if the step will be replayed instead of run
+      promises.forEach((promise) => promise.catch(() => {}));
+    }
+
+    return {
+      name,
+      promises,
+    };
+  };
+
+  const all = <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ): DurablePromise<T[]> => {
+    const { name, promises } = processParams(nameOrPromises, maybePromises);
     return step(name, () => Promise.all(promises), stepConfig);
   };
 
   const allSettled = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
-  ): Promise<PromiseSettledResult<T>[]> => {
-    const { name, promises } = parseParams(nameOrPromises, maybePromises);
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ): DurablePromise<PromiseSettledResult<T>[]> => {
+    const { name, promises } = processParams(nameOrPromises, maybePromises);
     return step(name, () => Promise.allSettled(promises), {
       ...stepConfig,
       serdes: createErrorAwareSerdes<T>(),
@@ -102,18 +121,18 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
   };
 
   const any = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
-  ): Promise<T> => {
-    const { name, promises } = parseParams(nameOrPromises, maybePromises);
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ): DurablePromise<T> => {
+    const { name, promises } = processParams(nameOrPromises, maybePromises);
     return step(name, () => Promise.any(promises), stepConfig);
   };
 
   const race = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
-  ): Promise<T> => {
-    const { name, promises } = parseParams(nameOrPromises, maybePromises);
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ): DurablePromise<T> => {
+    const { name, promises } = processParams(nameOrPromises, maybePromises);
     return step(name, () => Promise.race(promises), stepConfig);
   };
 

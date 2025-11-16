@@ -25,6 +25,7 @@ import {
   ConcurrencyConfig,
   BatchResult,
 } from "./batch";
+import { DurablePromise } from "../utils/durable-promise/durable-promise";
 
 export interface DurableContext {
   /**
@@ -82,7 +83,7 @@ export interface DurableContext {
     name: string | undefined,
     fn: StepFunc<T>,
     config?: StepConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Executes a function as a durable step with automatic retry and state persistence
@@ -103,7 +104,7 @@ export interface DurableContext {
    * );
    * ```
    */
-  step<T>(fn: StepFunc<T>, config?: StepConfig<T>): Promise<T>;
+  step<T>(fn: StepFunc<T>, config?: StepConfig<T>): DurablePromise<T>;
 
   /**
    * Invokes another durable function with the specified input
@@ -126,7 +127,7 @@ export interface DurableContext {
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
 
   /**
    * Invokes another durable function with the specified input
@@ -146,7 +147,7 @@ export interface DurableContext {
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
 
   /**
    * Runs a function in a child context with isolated state and execution tracking
@@ -172,7 +173,7 @@ export interface DurableContext {
     name: string | undefined,
     fn: ChildFunc<T>,
     config?: ChildConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Runs a function in a child context with isolated state and execution tracking
@@ -188,7 +189,10 @@ export interface DurableContext {
    * );
    * ```
    */
-  runInChildContext<T>(fn: ChildFunc<T>, config?: ChildConfig<T>): Promise<T>;
+  runInChildContext<T>(
+    fn: ChildFunc<T>,
+    config?: ChildConfig<T>,
+  ): DurablePromise<T>;
 
   /**
    * Pauses execution for the specified duration
@@ -203,7 +207,7 @@ export interface DurableContext {
    * await context.wait("long-delay", { minutes: 5, seconds: 30 });
    * ```
    */
-  wait(name: string, duration: Duration): Promise<void>;
+  wait(name: string, duration: Duration): DurablePromise<void>;
 
   /**
    * Pauses execution for the specified duration
@@ -217,7 +221,7 @@ export interface DurableContext {
    * await context.wait({ hours: 1, minutes: 30 });
    * ```
    */
-  wait(duration: Duration): Promise<void>;
+  wait(duration: Duration): DurablePromise<void>;
 
   /**
    * Waits for a condition to be met by periodically checking state
@@ -248,7 +252,7 @@ export interface DurableContext {
     name: string | undefined,
     checkFunc: WaitForConditionCheckFunc<T>,
     config: WaitForConditionConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Waits for a condition to be met by periodically checking state
@@ -272,7 +276,7 @@ export interface DurableContext {
   waitForCondition<T>(
     checkFunc: WaitForConditionCheckFunc<T>,
     config: WaitForConditionConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Creates a callback that external systems can complete
@@ -297,7 +301,7 @@ export interface DurableContext {
   createCallback<T>(
     name: string | undefined,
     config?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>>;
+  ): DurablePromise<CreateCallbackResult<T>>;
 
   /**
    * Creates a callback that external systems can complete
@@ -315,7 +319,7 @@ export interface DurableContext {
    */
   createCallback<T>(
     config?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>>;
+  ): DurablePromise<CreateCallbackResult<T>>;
 
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
@@ -339,7 +343,7 @@ export interface DurableContext {
     name: string | undefined,
     submitter: WaitForCallbackSubmitterFunc,
     config?: WaitForCallbackConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
@@ -358,7 +362,7 @@ export interface DurableContext {
   waitForCallback<T>(
     submitter: WaitForCallbackSubmitterFunc,
     config?: WaitForCallbackConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
@@ -384,7 +388,7 @@ export interface DurableContext {
     items: TInput[],
     mapFunc: MapFunc<TInput, TOutput>,
     config?: MapConfig<TInput, TOutput>,
-  ): Promise<BatchResult<TOutput>>;
+  ): DurablePromise<BatchResult<TOutput>>;
 
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
@@ -403,7 +407,7 @@ export interface DurableContext {
     items: TInput[],
     mapFunc: MapFunc<TInput, TOutput>,
     config?: MapConfig<TInput, TOutput>,
-  ): Promise<BatchResult<TOutput>>;
+  ): DurablePromise<BatchResult<TOutput>>;
 
   /**
    * Executes multiple functions in parallel with optional concurrency control
@@ -426,7 +430,7 @@ export interface DurableContext {
     name: string | undefined,
     branches: (ParallelFunc<T> | NamedParallelBranch<T>)[],
     config?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>>;
+  ): DurablePromise<BatchResult<T>>;
 
   /**
    * Executes multiple functions in parallel with optional concurrency control
@@ -444,7 +448,7 @@ export interface DurableContext {
   parallel<T>(
     branches: (ParallelFunc<T> | NamedParallelBranch<T>)[],
     config?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>>;
+  ): DurablePromise<BatchResult<T>>;
 
   /**
    * Executes multiple functions in parallel with optional concurrency control
@@ -477,7 +481,7 @@ export interface DurableContext {
           ? ReturnType
           : never
     >,
-  ): Promise<
+  ): DurablePromise<
     BatchResult<
       Branches[number] extends ParallelFunc<infer ReturnType>
         ? ReturnType
@@ -516,7 +520,7 @@ export interface DurableContext {
           ? ReturnType
           : never
     >,
-  ): Promise<
+  ): DurablePromise<
     BatchResult<
       Branches[number] extends ParallelFunc<infer ReturnType>
         ? ReturnType
@@ -572,7 +576,10 @@ export interface DurableContext {
      * );
      * ```
      */
-    all<T>(name: string | undefined, promises: Promise<T>[]): Promise<T[]>;
+    all<T>(
+      name: string | undefined,
+      promises: DurablePromise<T>[],
+    ): DurablePromise<T[]>;
 
     /**
      * Waits for all promises to resolve and returns an array of all results
@@ -597,7 +604,7 @@ export interface DurableContext {
      * ]);
      * ```
      */
-    all<T>(promises: Promise<T>[]): Promise<T[]>;
+    all<T>(promises: DurablePromise<T>[]): DurablePromise<T[]>;
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
@@ -637,8 +644,8 @@ export interface DurableContext {
      */
     allSettled<T>(
       name: string | undefined,
-      promises: Promise<T>[],
-    ): Promise<PromiseSettledResult<T>[]>;
+      promises: DurablePromise<T>[],
+    ): DurablePromise<PromiseSettledResult<T>[]>;
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
@@ -649,7 +656,9 @@ export interface DurableContext {
      *
      * @param promises - Array of promises to wait for (already executing)
      */
-    allSettled<T>(promises: Promise<T>[]): Promise<PromiseSettledResult<T>[]>;
+    allSettled<T>(
+      promises: DurablePromise<T>[],
+    ): DurablePromise<PromiseSettledResult<T>[]>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -687,7 +696,10 @@ export interface DurableContext {
      * );
      * ```
      */
-    any<T>(name: string | undefined, promises: Promise<T>[]): Promise<T>;
+    any<T>(
+      name: string | undefined,
+      promises: DurablePromise<T>[],
+    ): DurablePromise<T>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -698,7 +710,7 @@ export interface DurableContext {
      *
      * @param promises - Array of promises to race (already executing)
      */
-    any<T>(promises: Promise<T>[]): Promise<T>;
+    any<T>(promises: DurablePromise<T>[]): DurablePromise<T>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
@@ -729,7 +741,10 @@ export interface DurableContext {
      * );
      * ```
      */
-    race<T>(name: string | undefined, promises: Promise<T>[]): Promise<T>;
+    race<T>(
+      name: string | undefined,
+      promises: DurablePromise<T>[],
+    ): DurablePromise<T>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
@@ -740,7 +755,7 @@ export interface DurableContext {
      *
      * @param promises - Array of promises to race (already executing)
      */
-    race<T>(promises: Promise<T>[]): Promise<T>;
+    race<T>(promises: DurablePromise<T>[]): DurablePromise<T>;
   };
 
   /**
@@ -778,7 +793,7 @@ export interface DurableContext {
     items: ConcurrentExecutionItem<TItem>[],
     executor: ConcurrentExecutor<TItem, TResult>,
     config?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>>;
+  ): DurablePromise<BatchResult<TResult>>;
 
   /**
    * Executes items concurrently with fine-grained control over execution strategy
@@ -799,7 +814,7 @@ export interface DurableContext {
     items: ConcurrentExecutionItem<TItem>[],
     executor: ConcurrentExecutor<TItem, TResult>,
     config?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>>;
+  ): DurablePromise<BatchResult<TResult>>;
 
   /**
    * Configures logger behavior for this context

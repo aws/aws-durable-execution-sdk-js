@@ -12,19 +12,19 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (_event, context: DurableContext) => {
-    await context.promise.allSettled([
-      context.step(
-        "failure-step",
-        async () => {
-          throw new Error("This step failed");
-        },
-        {
-          retryStrategy: () => ({
-            shouldRetry: false,
-          }),
-        },
-      ),
-    ]);
+    const failurePromise = context.step(
+      "failure-step",
+      async () => {
+        throw new Error("This step failed");
+      },
+      {
+        retryStrategy: () => ({
+          shouldRetry: false,
+        }),
+      },
+    );
+
+    await context.promise.allSettled([failurePromise]);
     await context.wait({ seconds: 1 });
 
     const successStep = await context.step(async () => {
