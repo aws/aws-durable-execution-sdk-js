@@ -263,10 +263,11 @@ class DurableContextImpl implements DurableContext {
         ] as Parameters<typeof invokeHandler<I, O>>),
       );
       return new DurablePromise(async () => {
-        promise?.finally(() => {
+        try {
+          return await promise;
+        } finally {
           this.checkAndUpdateReplayMode();
-        });
-        return promise;
+        }
       });
     });
   }
@@ -318,11 +319,12 @@ class DurableContextImpl implements DurableContext {
         typeof nameOrDuration === "string"
           ? waitHandler(nameOrDuration, maybeDuration!)
           : waitHandler(nameOrDuration);
-      return new DurablePromise(() => {
-        promise?.finally(() => {
+      return new DurablePromise(async () => {
+        try {
+          return await promise;
+        } finally {
           this.checkAndUpdateReplayMode();
-        });
-        return promise;
+        }
       });
     });
   }
@@ -370,11 +372,12 @@ class DurableContextImpl implements DurableContext {
         this._parentId,
       );
       const promise = callbackFactory(nameOrConfig, maybeConfig);
-      return new DurablePromise(() => {
-        promise?.finally(() => {
+      return new DurablePromise(async () => {
+        try {
+          return await promise;
+        } finally {
           this.checkAndUpdateReplayMode();
-        });
-        return promise;
+        }
       });
     });
   }
@@ -399,11 +402,12 @@ class DurableContextImpl implements DurableContext {
         submitterOrConfig,
         maybeConfig,
       );
-      return new DurablePromise(() => {
-        promise?.finally(() => {
+      return new DurablePromise(async () => {
+        try {
+          return await promise;
+        } finally {
           this.checkAndUpdateReplayMode();
-        });
-        return promise;
+        }
       });
     });
   }

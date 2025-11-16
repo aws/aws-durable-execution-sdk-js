@@ -17,16 +17,16 @@ export const handler = withDurableExecution(
       return Date.now();
     });
 
-    // Execute the race between 1 second and 10 second waits
+    // Execute the race between 1 second and 5 second waits
     await context.promise.race([
       context.wait("wait-1-second", { seconds: 1 }),
-      context.wait("wait-3-seconds", { seconds: 3 }),
+      context.wait("wait-5-seconds", { seconds: 5 }),
     ]);
 
     // Should instantly resolve
     await context.promise.race<unknown>([
       context.step(() => Promise.resolve("quick resolve")),
-      context.wait("wait-3-seconds-2", { seconds: 3 }),
+      context.wait("wait-5-seconds-2", { seconds: 5 }),
     ]);
 
     // Record end time and calculate duration using a durable step

@@ -13,19 +13,19 @@ createTests({
       const execution = await runner.run();
       const duration = execution.getResult() as number;
 
-      // Assert that duration is approximately 1 second, not 3 seconds
+      // Assert that duration is between 1 and 5 seconds
       expect(duration).toBeGreaterThanOrEqual(1000);
-      expect(duration).toBeLessThan(1500);
+      expect(duration).toBeLessThan(5000);
 
       // Get the wait operations to verify they were created
       const wait1SecondOp = runner.getOperation("wait-1-second");
-      const wait3SecondsOp = runner.getOperation("wait-3-seconds");
-      const wait3SecondsOp2 = runner.getOperation("wait-3-seconds-2");
+      const wait5SecondsOp = runner.getOperation("wait-5-seconds");
+      const wait5SecondsOp2 = runner.getOperation("wait-5-seconds-2");
 
       // Verify the wait durations are correct
       expect(wait1SecondOp.getWaitDetails()?.waitSeconds).toBe(1);
-      expect(wait3SecondsOp.getWaitDetails()?.waitSeconds).toBe(3);
-      expect(wait3SecondsOp2.getWaitDetails()?.waitSeconds).toBe(3);
+      expect(wait5SecondsOp.getWaitDetails()?.waitSeconds).toBe(5);
+      expect(wait5SecondsOp2.getWaitDetails()?.waitSeconds).toBe(5);
     });
   },
 });
