@@ -67,7 +67,7 @@ describe("ActiveOperationsTracker", () => {
     });
 
     it("should track failed async operation", async () => {
-      const operation = async (): Promise<never> => {
+      const operation = async (): Promise<void> => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         throw new Error("operation failed");
       };

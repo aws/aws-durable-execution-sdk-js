@@ -8,19 +8,20 @@ import {
   ConcurrentExecutor,
   BatchResult,
   BatchItem,
-  DurablePromise,
-  DurableLogger,
 } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { BatchResultImpl, restoreBatchResult } from "./batch-result";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
+import { terminate } from "../../utils/termination-helper/termination-helper";
+import { TerminationReason } from "../../termination-manager/types";
 
-export class ConcurrencyController<Logger extends DurableLogger> {
+export class ConcurrencyController {
   constructor(
     private readonly operationName: string,
     private readonly skipNextOperation: () => void,
+    private readonly executionContext: ExecutionContext,
   ) {}
 
   private isChildEntityCompleted(
@@ -40,8 +41,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
   async executeItems<T, R>(
     items: ConcurrentExecutionItem<T>[],
-    executor: ConcurrentExecutor<T, R, Logger>,
-    parentContext: DurableContext<Logger>,
+    executor: ConcurrentExecutor<T, R>,
+    parentContext: DurableContext,
     config: ConcurrencyConfig<R>,
     durableExecutionMode: DurableExecutionMode = DurableExecutionMode.ExecutionMode,
     entityId?: string,
@@ -113,8 +114,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
   private async replayItems<T, R>(
     items: ConcurrentExecutionItem<T>[],
-    executor: ConcurrentExecutor<T, R, Logger>,
-    parentContext: DurableContext<Logger>,
+    executor: ConcurrentExecutor<T, R>,
+    parentContext: DurableContext,
     config: ConcurrencyConfig<R>,
     targetTotalCount: number,
     executionContext: ExecutionContext,
@@ -235,8 +236,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
-    executor: ConcurrentExecutor<T, R, Logger>,
-    parentContext: DurableContext<Logger>,
+    executor: ConcurrentExecutor<T, R>,
+    parentContext: DurableContext,
     config: ConcurrencyConfig<R>,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
@@ -250,6 +251,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     let completedCount = 0;
     let successCount = 0;
     let failureCount = 0;
+    let waitingCount = 0;
 
     log("🚀", `Starting ${this.operationName} with concurrency control:`, {
       itemCount: items.length,
@@ -257,6 +259,13 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     });
 
     return new Promise<BatchResult<R>>((resolve) => {
+      // Set up signal aggregation for child contexts
+      parentContext._onChildSignal = (childId: string): void => {
+        waitingCount++;
+        log("⏸️", "Child signaled waiting:", { childId, waitingCount });
+        checkCompletion();
+      };
+
       const shouldContinue = (): boolean => {
         const completion = config.completionConfig;
         if (!completion) return failureCount === 0;
@@ -301,22 +310,69 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         return false;
       };
 
-      const getCompletionReason = ():
-        | "ALL_COMPLETED"
-        | "MIN_SUCCESSFUL_REACHED"
-        | "FAILURE_TOLERANCE_EXCEEDED" => {
-        if (completedCount === items.length) return "ALL_COMPLETED";
+      const checkCompletion = (): void => {
+        const totalAccountedFor = completedCount + waitingCount;
+
+        // Early exit: Enough successes
         if (
           config.completionConfig?.minSuccessful !== undefined &&
           successCount >= config.completionConfig.minSuccessful
-        )
-          return "MIN_SUCCESSFUL_REACHED";
-        return "FAILURE_TOLERANCE_EXCEEDED";
+        ) {
+          const finalBatchItems: BatchItem<R>[] = [];
+          for (let i = 0; i < resultItems.length; i++) {
+            if (resultItems[i] !== undefined) {
+              finalBatchItems.push({ ...resultItems[i]! });
+            }
+          }
+          resolve(
+            new BatchResultImpl(finalBatchItems, "MIN_SUCCESSFUL_REACHED"),
+          );
+          return;
+        }
+
+        // Early exit: Too many failures
+        if (
+          config.completionConfig?.toleratedFailureCount !== undefined &&
+          failureCount > config.completionConfig.toleratedFailureCount
+        ) {
+          const finalBatchItems: BatchItem<R>[] = [];
+          for (let i = 0; i < resultItems.length; i++) {
+            if (resultItems[i] !== undefined) {
+              finalBatchItems.push({ ...resultItems[i]! });
+            }
+          }
+          resolve(
+            new BatchResultImpl(finalBatchItems, "FAILURE_TOLERANCE_EXCEEDED"),
+          );
+          return;
+        }
+
+        // All branches accounted for
+        if (totalAccountedFor === items.length) {
+          if (waitingCount === items.length) {
+            // All waiting - TERMINATE Lambda
+            log("⏸️", "All branches waiting, terminating Lambda");
+            terminate(
+              this.executionContext,
+              TerminationReason.CALLBACK_PENDING,
+              "All parallel branches waiting for callbacks",
+            );
+          } else {
+            // Some completed - RETURN result
+            const finalBatchItems: BatchItem<R>[] = [];
+            for (let i = 0; i < resultItems.length; i++) {
+              if (resultItems[i] !== undefined) {
+                finalBatchItems.push({ ...resultItems[i]! });
+              }
+            }
+            resolve(new BatchResultImpl(finalBatchItems, "ALL_COMPLETED"));
+          }
+        }
       };
 
       const tryStartNext = (): void => {
         while (
-          activeCount < maxConcurrency &&
+          (activeCount + waitingCount) < maxConcurrency &&
           currentIndex < items.length &&
           shouldContinue()
         ) {
@@ -406,6 +462,19 @@ export class ConcurrencyController<Logger extends DurableLogger> {
             totalCount: finalBatchItems.length,
           });
 
+          const getCompletionReason = ():
+            | "ALL_COMPLETED"
+            | "MIN_SUCCESSFUL_REACHED"
+            | "FAILURE_TOLERANCE_EXCEEDED" => {
+            if (completedCount === items.length) return "ALL_COMPLETED";
+            if (
+              config.completionConfig?.minSuccessful !== undefined &&
+              successCount >= config.completionConfig.minSuccessful
+            )
+              return "MIN_SUCCESSFUL_REACHED";
+            return "FAILURE_TOLERANCE_EXCEEDED";
+          };
+
           const result = new BatchResultImpl(
             finalBatchItems,
             getCompletionReason(),
@@ -421,117 +490,107 @@ export class ConcurrencyController<Logger extends DurableLogger> {
   }
 }
 
-export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
+export const createConcurrentExecutionHandler = (
   context: ExecutionContext,
-  runInChildContext: DurableContext<Logger>["runInChildContext"],
+  runInChildContext: DurableContext["runInChildContext"],
   skipNextOperation: () => void,
 ) => {
-  return <TItem, TResult>(
+  return async <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
-      | ConcurrentExecutor<TItem, TResult, Logger>,
+      | ConcurrentExecutor<TItem, TResult>,
     executorOrConfig?:
-      | ConcurrentExecutor<TItem, TResult, Logger>
+      | ConcurrentExecutor<TItem, TResult>
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
-  ): DurablePromise<BatchResult<TResult>> => {
-    // Phase 1: Start execution immediately
-    const phase1Promise = (async (): Promise<BatchResult<TResult>> => {
-      let name: string | undefined;
-      let items: ConcurrentExecutionItem<TItem>[];
-      let executor: ConcurrentExecutor<TItem, TResult, Logger>;
-      let config: ConcurrencyConfig<TResult> | undefined;
+  ): Promise<BatchResult<TResult>> => {
+    let name: string | undefined;
+    let items: ConcurrentExecutionItem<TItem>[];
+    let executor: ConcurrentExecutor<TItem, TResult>;
+    let config: ConcurrencyConfig<TResult> | undefined;
 
-      if (typeof nameOrItems === "string" || nameOrItems === undefined) {
-        name = nameOrItems;
-        items = itemsOrExecutor as ConcurrentExecutionItem<TItem>[];
-        executor = executorOrConfig as ConcurrentExecutor<
-          TItem,
-          TResult,
-          Logger
-        >;
-        config = maybeConfig;
-      } else {
-        items = nameOrItems;
-        executor = itemsOrExecutor as ConcurrentExecutor<
-          TItem,
-          TResult,
-          Logger
-        >;
-        config = executorOrConfig as ConcurrencyConfig<TResult>;
-      }
+    if (typeof nameOrItems === "string" || nameOrItems === undefined) {
+      name = nameOrItems;
+      items = itemsOrExecutor as ConcurrentExecutionItem<TItem>[];
+      executor = executorOrConfig as ConcurrentExecutor<TItem, TResult>;
+      config = maybeConfig;
+    } else {
+      items = nameOrItems;
+      executor = itemsOrExecutor as ConcurrentExecutor<TItem, TResult>;
+      config = executorOrConfig as ConcurrencyConfig<TResult>;
+    }
 
-      log("🔄", "Starting concurrent execution:", {
-        name,
+    log("🔄", "Starting concurrent execution:", {
+      name,
+      itemCount: items.length,
+      maxConcurrency: config?.maxConcurrency,
+    });
+
+    if (!Array.isArray(items)) {
+      throw new Error("Concurrent execution requires an array of items");
+    }
+
+    if (typeof executor !== "function") {
+      throw new Error("Concurrent execution requires an executor function");
+    }
+
+    if (
+      config?.maxConcurrency !== undefined &&
+      config.maxConcurrency !== null &&
+      config.maxConcurrency <= 0
+    ) {
+      throw new Error(
+        `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
+      );
+    }
+
+    const executeOperation = async (
+      executionContext: DurableContext,
+    ): Promise<BatchResult<TResult>> => {
+      const concurrencyController = new ConcurrencyController(
+        "concurrent-execution",
+        skipNextOperation,
+        context,
+      );
+
+      // Access durableExecutionMode from the context - it's set by runInChildContext
+      // based on determineChildReplayMode logic
+      const durableExecutionMode = (
+        executionContext as unknown as {
+          durableExecutionMode: DurableExecutionMode;
+        }
+      ).durableExecutionMode;
+
+      // Get the entity ID (step prefix) from the child context
+      const entityId = (
+        executionContext as unknown as {
+          _stepPrefix?: string;
+        }
+      )._stepPrefix;
+
+      log("🔄", "Concurrent execution mode:", {
+        mode: durableExecutionMode,
         itemCount: items.length,
-        maxConcurrency: config?.maxConcurrency,
+        entityId,
       });
 
-      if (!Array.isArray(items)) {
-        throw new Error("Concurrent execution requires an array of items");
-      }
+      return await concurrencyController.executeItems(
+        items,
+        executor,
+        executionContext,
+        config || {},
+        durableExecutionMode,
+        entityId,
+        context,
+      );
+    };
 
-      if (typeof executor !== "function") {
-        throw new Error("Concurrent execution requires an executor function");
-      }
-
-      if (
-        config?.maxConcurrency !== undefined &&
-        config.maxConcurrency !== null &&
-        config.maxConcurrency <= 0
-      ) {
-        throw new Error(
-          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
-        );
-      }
-
-      const executeOperation = async (
-        executionContext: DurableContext<Logger>,
-      ): Promise<BatchResult<TResult>> => {
-        const concurrencyController = new ConcurrencyController<Logger>(
-          "concurrent-execution",
-          skipNextOperation,
-        );
-
-        // Access durableExecutionMode from the context - it's set by runInChildContext
-        // based on determineChildReplayMode logic
-        const durableExecutionMode = (
-          executionContext as unknown as {
-            durableExecutionMode: DurableExecutionMode;
-          }
-        ).durableExecutionMode;
-
-        // Get the entity ID (step prefix) from the child context
-        const entityId = (
-          executionContext as unknown as {
-            _stepPrefix?: string;
-          }
-        )._stepPrefix;
-
-        log("🔄", "Concurrent execution mode:", {
-          mode: durableExecutionMode,
-          itemCount: items.length,
-          entityId,
-        });
-
-        return await concurrencyController.executeItems(
-          items,
-          executor,
-          executionContext,
-          config || {},
-          durableExecutionMode,
-          entityId,
-          context,
-        );
-      };
-
-      const result = await runInChildContext(name, executeOperation, {
-        subType: config?.topLevelSubType,
-        summaryGenerator: config?.summaryGenerator,
-        serdes: config?.serdes,
-      });
-
+    return await runInChildContext(name, executeOperation, {
+      subType: config?.topLevelSubType,
+      summaryGenerator: config?.summaryGenerator,
+      serdes: config?.serdes,
+    }).then((result) => {
       // Restore BatchResult methods if the result came from deserialized data
       if (
         result &&
@@ -542,15 +601,6 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
         return restoreBatchResult<TResult>(result);
       }
       return result as BatchResult<TResult>;
-    })();
-
-    // Attach catch handler to prevent unhandled promise rejections
-    // The error will still be thrown when the DurablePromise is awaited
-    phase1Promise.catch(() => {});
-
-    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(async () => {
-      return await phase1Promise;
     });
   };
 };

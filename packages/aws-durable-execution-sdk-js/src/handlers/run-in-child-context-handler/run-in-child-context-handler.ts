@@ -230,8 +230,11 @@ export const handleCompletedChildContext = async <
       entityId, // parentId
     );
 
-    return await runWithContext(entityId, entityId, () =>
-      fn(durableChildContext),
+    return await runWithContext(
+      entityId,
+      entityId,
+      () => fn(durableChildContext),
+      durableChildContext,
     );
   }
 
@@ -302,8 +305,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       entityId,
       parentId,
       () => fn(durableChildContext),
-      undefined,
-      childReplayMode,
+      durableChildContext,
     );
 
     // Serialize the result for consistency

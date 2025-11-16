@@ -68,6 +68,8 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private durableExecutionMode: DurableExecutionMode;
   private _parentId?: string;
   private modeManagement: ModeManagement;
+  _onChildSignal?: (childId: string) => void;
+  _parentDurableContext?: DurableContext;
 
   constructor(
     private executionContext: ExecutionContext,

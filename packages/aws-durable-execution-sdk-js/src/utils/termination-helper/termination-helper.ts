@@ -77,6 +77,15 @@ export function terminate<T>(
 ): Promise<T> {
   const activeContext = getActiveContext();
 
+  // Check if child should signal parent instead of terminating
+  if (
+    activeContext?.durableContext?._onChildSignal &&
+    activeContext?.contextId
+  ) {
+    activeContext.durableContext._onChildSignal(activeContext.contextId);
+    return new Promise<T>(() => {});
+  }
+
   // If we have a parent context, add delay to let checkpoints process
   if (activeContext?.parentId) {
     return new Promise<T>(async (_resolve, _reject) => {

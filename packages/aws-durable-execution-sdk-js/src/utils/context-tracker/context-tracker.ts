@@ -1,13 +1,14 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import { DurableExecutionMode } from "../../types";
+import { DurableExecutionMode, DurableContext } from "../../types";
 
 interface ContextInfo {
   contextId: string;
   parentId?: string;
   attempt?: number;
   durableExecutionMode?: DurableExecutionMode;
+  durableContext?: DurableContext;
 }
 
 const asyncLocalStorage = new AsyncLocalStorage<ContextInfo>();
@@ -20,11 +21,12 @@ export const runWithContext = <T>(
   contextId: string,
   parentId: string | undefined,
   fn: () => T,
+  durableContext?: DurableContext,
   attempt?: number,
   durableExecutionMode?: DurableExecutionMode,
 ): T => {
   return asyncLocalStorage.run(
-    { contextId, parentId, attempt, durableExecutionMode },
+    { contextId, parentId, attempt, durableExecutionMode, durableContext },
     fn,
   );
 };

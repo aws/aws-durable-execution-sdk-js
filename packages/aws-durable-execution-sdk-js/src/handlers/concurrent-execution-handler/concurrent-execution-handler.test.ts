@@ -2,19 +2,14 @@ import {
   createConcurrentExecutionHandler,
   ConcurrencyController,
 } from "./concurrent-execution-handler";
-import {
-  ExecutionContext,
-  DurableContext,
-  BatchItemStatus,
-  DurableLogger,
-} from "../../types";
+import { ExecutionContext, DurableContext, BatchItemStatus } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 describe("Concurrent Execution Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
   let mockRunInChildContext: jest.MockedFunction<
-    DurableContext<DurableLogger>["runInChildContext"]
+    DurableContext["runInChildContext"]
   >;
   let concurrentExecutionHandler: ReturnType<
     typeof createConcurrentExecutionHandler
@@ -419,11 +414,17 @@ describe("Concurrent Execution Handler", () => {
 });
 
 describe("ConcurrencyController", () => {
-  let controller: ConcurrencyController<DurableLogger>;
-  let mockParentContext: jest.Mocked<DurableContext<DurableLogger>>;
+  let controller: ConcurrencyController;
+  let mockParentContext: jest.Mocked<DurableContext>;
+  let mockExecutionContext: jest.Mocked<ExecutionContext>;
 
   beforeEach(() => {
-    controller = new ConcurrencyController("test-operation", jest.fn());
+    mockExecutionContext = {} as any;
+    controller = new ConcurrencyController(
+      "test-operation",
+      jest.fn(),
+      mockExecutionContext,
+    );
     mockParentContext = {
       runInChildContext: jest.fn(),
     } as any;
@@ -694,6 +695,7 @@ describe("ConcurrencyController", () => {
       const verboseController = new ConcurrencyController(
         "verbose-test",
         jest.fn(),
+        mockExecutionContext,
       );
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn();
@@ -792,6 +794,7 @@ describe("ConcurrencyController", () => {
       const testController = new ConcurrencyController(
         "test-operation",
         jest.fn(),
+        mockExecutionContext,
       );
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn().mockResolvedValue("test-result");
