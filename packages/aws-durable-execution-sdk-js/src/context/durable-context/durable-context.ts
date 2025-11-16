@@ -307,6 +307,7 @@ class DurableContextImpl implements DurableContext {
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
         this._parentId,
+        this.checkAndUpdateReplayMode.bind(this),
       );
       return typeof nameOrDuration === "string"
         ? waitHandler(nameOrDuration, maybeDuration!)

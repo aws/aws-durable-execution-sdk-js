@@ -21,6 +21,7 @@ export const createWaitHandler = (
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
+  checkAndUpdateReplayMode?: () => void,
 ): {
   (name: string, duration: Duration): DurablePromise<void>;
   (duration: Duration): DurablePromise<void>;
@@ -71,6 +72,7 @@ export const createWaitHandler = (
 
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
           log("⏭️", "Wait already completed:", { stepId });
+          checkAndUpdateReplayMode?.();
           return;
         }
 
