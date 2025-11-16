@@ -12,6 +12,8 @@ createTests({
   invocationType: InvocationType.Event,
   tests: (runner) => {
     it("should succeed when only one of three callbacks completes (minSuccessful:1)", async () => {
+      process.env.DURABLE_VERBOSE_MODE = "true";
+
       const callback1Op = runner.getOperation("branch-1-callback");
       const callback2Op = runner.getOperation("branch-2-callback");
       const callback3Op = runner.getOperation("branch-3-callback");

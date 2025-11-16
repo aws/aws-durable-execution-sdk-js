@@ -416,9 +416,15 @@ describe("Concurrent Execution Handler", () => {
 describe("ConcurrencyController", () => {
   let controller: ConcurrencyController;
   let mockParentContext: jest.Mocked<DurableContext>;
+  let mockExecutionContext: jest.Mocked<ExecutionContext>;
 
   beforeEach(() => {
-    controller = new ConcurrencyController("test-operation", jest.fn());
+    mockExecutionContext = {} as any;
+    controller = new ConcurrencyController(
+      "test-operation",
+      jest.fn(),
+      mockExecutionContext,
+    );
     mockParentContext = {
       runInChildContext: jest.fn(),
     } as any;
@@ -689,6 +695,7 @@ describe("ConcurrencyController", () => {
       const verboseController = new ConcurrencyController(
         "verbose-test",
         jest.fn(),
+        mockExecutionContext,
       );
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn();
@@ -787,6 +794,7 @@ describe("ConcurrencyController", () => {
       const testController = new ConcurrencyController(
         "test-operation",
         jest.fn(),
+        mockExecutionContext,
       );
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn().mockResolvedValue("test-result");

@@ -3,7 +3,6 @@ import {
   OperationUpdate,
   Operation,
   OperationStatus,
-  OperationAction,
 } from "@aws-sdk/client-lambda";
 import { ExecutionContext, Logger } from "../../types";
 import { log } from "../logger/logger";
@@ -34,7 +33,6 @@ class CheckpointHandler {
   }> = [];
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
-  private pendingCompletions = new Set<string>(); // Track stepIds with pending SUCCEED/FAIL
   private static textEncoder = new TextEncoder();
 
   constructor(
@@ -49,28 +47,6 @@ class CheckpointHandler {
   setTerminating(): void {
     this.isTerminating = true;
     log("🛑", "Checkpoint handler marked as terminating");
-  }
-
-  /**
-   * Checks if a step ID or any of its ancestors has a pending completion
-   * @param stepId - The step ID to check (unhashed)
-   * @returns true if the step or any ancestor has a pending SUCCEED/FAIL checkpoint
-   */
-  hasPendingAncestorCompletion(stepId: string): boolean {
-    // Check the step itself and walk up the parent chain
-    let currentHashedId: string | undefined = hashId(stepId);
-
-    while (currentHashedId) {
-      if (this.pendingCompletions.has(currentHashedId)) {
-        return true;
-      }
-
-      const operation: Operation | undefined =
-        this.context._stepData[currentHashedId];
-      currentHashedId = operation?.ParentId;
-    }
-
-    return false;
   }
 
   async forceCheckpoint(): Promise<void> {
@@ -108,14 +84,6 @@ class CheckpointHandler {
     }
 
     return new Promise<void>((resolve, reject) => {
-      // Track pending completions for ancestor checking
-      if (
-        data.Action === OperationAction.SUCCEED ||
-        data.Action === OperationAction.FAIL
-      ) {
-        this.pendingCompletions.add(stepId);
-      }
-
       const queuedItem: QueuedCheckpoint = {
         stepId,
         data,
@@ -314,14 +282,8 @@ class CheckpointHandler {
         await this.processBatch(batch);
       }
 
-      // Remove processed items from pendingCompletions
+      // Resolve all processed items
       batch.forEach((item) => {
-        if (
-          item.data.Action === OperationAction.SUCCEED ||
-          item.data.Action === OperationAction.FAIL
-        ) {
-          this.pendingCompletions.delete(item.stepId);
-        }
         item.resolve();
       });
 
@@ -472,7 +434,6 @@ export const createCheckpoint = (
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;
   setTerminating(): void;
-  hasPendingAncestorCompletion(stepId: string): boolean;
 } => {
   // Return existing handler if it exists, otherwise create new one
   if (!singletonCheckpointHandler) {
@@ -499,10 +460,6 @@ export const createCheckpoint = (
     singletonCheckpointHandler!.setTerminating();
   };
 
-  checkpoint.hasPendingAncestorCompletion = (stepId: string): boolean => {
-    return singletonCheckpointHandler!.hasPendingAncestorCompletion(stepId);
-  };
-
   return checkpoint;
 };
 
@@ -514,13 +471,6 @@ export const setCheckpointTerminating = (): void => {
   if (singletonCheckpointHandler) {
     singletonCheckpointHandler.setTerminating();
   }
-};
-
-export const hasPendingAncestorCompletion = (stepId: string): boolean => {
-  if (singletonCheckpointHandler) {
-    return singletonCheckpointHandler.hasPendingAncestorCompletion(stepId);
-  }
-  return false;
 };
 
 // Export the CheckpointHandler class for testing purposes

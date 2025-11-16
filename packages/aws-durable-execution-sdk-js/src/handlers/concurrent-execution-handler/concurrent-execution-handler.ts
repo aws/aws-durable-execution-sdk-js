@@ -14,11 +14,14 @@ import { log } from "../../utils/logger/logger";
 import { BatchResultImpl, restoreBatchResult } from "./batch-result";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
+import { terminate } from "../../utils/termination-helper/termination-helper";
+import { TerminationReason } from "../../termination-manager/types";
 
 export class ConcurrencyController {
   constructor(
     private readonly operationName: string,
     private readonly skipNextOperation: () => void,
+    private readonly executionContext: ExecutionContext,
   ) {}
 
   private isChildEntityCompleted(
@@ -248,6 +251,7 @@ export class ConcurrencyController {
     let completedCount = 0;
     let successCount = 0;
     let failureCount = 0;
+    let waitingCount = 0;
 
     log("🚀", `Starting ${this.operationName} with concurrency control:`, {
       itemCount: items.length,
@@ -255,6 +259,14 @@ export class ConcurrencyController {
     });
 
     return new Promise<BatchResult<R>>((resolve) => {
+      // Set up signal aggregation for child contexts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (parentContext as any)._onChildSignal = (childId: string): void => {
+        waitingCount++;
+        log("⏸️", "Child signaled waiting:", { childId, waitingCount });
+        checkCompletion();
+      };
+
       const shouldContinue = (): boolean => {
         const completion = config.completionConfig;
         if (!completion) return failureCount === 0;
@@ -299,17 +311,65 @@ export class ConcurrencyController {
         return false;
       };
 
-      const getCompletionReason = ():
-        | "ALL_COMPLETED"
-        | "MIN_SUCCESSFUL_REACHED"
-        | "FAILURE_TOLERANCE_EXCEEDED" => {
-        if (completedCount === items.length) return "ALL_COMPLETED";
+      const checkCompletion = (): void => {
+        const totalAccountedFor = completedCount + waitingCount;
+
+        // Early exit: Enough successes
         if (
           config.completionConfig?.minSuccessful !== undefined &&
           successCount >= config.completionConfig.minSuccessful
-        )
-          return "MIN_SUCCESSFUL_REACHED";
-        return "FAILURE_TOLERANCE_EXCEEDED";
+        ) {
+          const finalBatchItems: BatchItem<R>[] = [];
+          for (let i = 0; i < resultItems.length; i++) {
+            if (resultItems[i] !== undefined) {
+              finalBatchItems.push({ ...resultItems[i]! });
+            }
+          }
+          resolve(
+            new BatchResultImpl(finalBatchItems, "MIN_SUCCESSFUL_REACHED"),
+          );
+          return;
+        }
+
+        // Early exit: Too many failures
+        if (
+          config.completionConfig?.toleratedFailureCount !== undefined &&
+          failureCount > config.completionConfig.toleratedFailureCount
+        ) {
+          const finalBatchItems: BatchItem<R>[] = [];
+          for (let i = 0; i < resultItems.length; i++) {
+            if (resultItems[i] !== undefined) {
+              finalBatchItems.push({ ...resultItems[i]! });
+            }
+          }
+          resolve(
+            new BatchResultImpl(finalBatchItems, "FAILURE_TOLERANCE_EXCEEDED"),
+          );
+          return;
+        }
+
+        // All branches accounted for
+        if (totalAccountedFor === items.length) {
+          if (waitingCount === items.length) {
+            // All waiting - TERMINATE Lambda
+            log("⏸️", "All branches waiting, terminating Lambda");
+            terminate(
+              this.executionContext,
+              TerminationReason.CALLBACK_PENDING,
+              "All parallel branches waiting for callbacks",
+              parentContext, // Pass parent context to check for grandparent
+            );
+          } else {
+            // Some completed - RETURN result
+            const finalBatchItems: BatchItem<R>[] = [];
+            for (let i = 0; i < resultItems.length; i++) {
+              if (resultItems[i] !== undefined) {
+                finalBatchItems.push({ ...resultItems[i]! });
+              }
+            }
+            resolve(new BatchResultImpl(finalBatchItems, "ALL_COMPLETED"));
+          }
+        }
       };
 
       const tryStartNext = (): void => {
@@ -385,9 +445,6 @@ export class ConcurrencyController {
         completedCount++;
 
         if (isComplete() || !shouldContinue()) {
-          // Convert sparse array to dense array - items are already in correct order by index
-          // Include all items that were started (have a value in resultItems)
-          // Create shallow copy to prevent mutations from affecting the returned result
           const finalBatchItems: BatchItem<R>[] = [];
           for (let i = 0; i < resultItems.length; i++) {
             if (resultItems[i] !== undefined) {
@@ -403,6 +460,19 @@ export class ConcurrencyController {
             ).length,
             totalCount: finalBatchItems.length,
           });
+
+          const getCompletionReason = ():
+            | "ALL_COMPLETED"
+            | "MIN_SUCCESSFUL_REACHED"
+            | "FAILURE_TOLERANCE_EXCEEDED" => {
+            if (completedCount === items.length) return "ALL_COMPLETED";
+            if (
+              config.completionConfig?.minSuccessful !== undefined &&
+              successCount >= config.completionConfig.minSuccessful
+            )
+              return "MIN_SUCCESSFUL_REACHED";
+            return "FAILURE_TOLERANCE_EXCEEDED";
+          };
 
           const result = new BatchResultImpl(
             finalBatchItems,
@@ -480,6 +550,7 @@ export const createConcurrentExecutionHandler = (
       const concurrencyController = new ConcurrencyController(
         "concurrent-execution",
         skipNextOperation,
+        context,
       );
 
       // Access durableExecutionMode from the context - it's set by runInChildContext

@@ -51,6 +51,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -65,6 +67,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -91,6 +95,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -118,6 +124,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -145,6 +153,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -165,6 +175,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const [promise] = await callbackHandler<string>("test-callback");
@@ -223,6 +235,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       stepIdCounter = 0; // Reset to ensure we get step-1
@@ -268,6 +282,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       stepIdCounter = 0;
@@ -311,6 +327,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       // Create completed callback (step-1)
@@ -372,6 +390,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       stepIdCounter = 0;
@@ -409,6 +429,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       stepIdCounter = 0;
@@ -450,6 +472,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       stepIdCounter = 0;
@@ -506,6 +530,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       // Force the step ID to be "step-1" to match our mock
@@ -523,6 +549,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       stepIdCounter = 0;
@@ -541,6 +569,8 @@ describe("Callback Handler Promise Interface", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       stepIdCounter = 0;

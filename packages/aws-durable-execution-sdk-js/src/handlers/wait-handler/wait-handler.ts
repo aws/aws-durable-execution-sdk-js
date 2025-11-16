@@ -19,6 +19,8 @@ export const createWaitHandler = (
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
   parentId?: string,
 ): {
   (name: string, duration: Duration): Promise<void>;
@@ -43,6 +45,9 @@ export const createWaitHandler = (
       seconds: actualSeconds,
     });
 
+    // Track as running operation to prevent termination
+    addRunningOperation(stepId);
+
     // Main wait logic - can be re-executed if step data changes
     while (true) {
       let stepData = context.getStepData(stepId);
@@ -61,7 +66,46 @@ export const createWaitHandler = (
 
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Wait already completed:", { stepId });
+        removeRunningOperation(stepId);
         return;
+      }
+
+      if (stepData?.Status === OperationStatus.FAILED) {
+        log("❌", "Wait failed:", { stepId });
+        removeRunningOperation(stepId);
+        return;
+      }
+
+      if (stepData?.Status === OperationStatus.STARTED) {
+        // Wait is already scheduled - remove from running operations
+        log("⏸️", "Wait already started:", { stepId });
+        removeRunningOperation(stepId);
+
+        // Check if there are any ongoing operations
+        if (!hasRunningOperations()) {
+          // No ongoing operations - safe to terminate
+          return terminate(
+            context,
+            TerminationReason.WAIT_SCHEDULED,
+            `Operation ${actualName || stepId} already scheduled to wait`,
+          );
+        }
+
+        // There are ongoing operations - wait before continuing
+        await waitBeforeContinue({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: true,
+          scheduledEndTimestamp: stepData?.WaitDetails?.ScheduledEndTimestamp,
+          stepId,
+          context,
+          hasRunningOperations,
+          operationsEmitter: getOperationsEmitter(),
+          checkpoint,
+        });
+
+        // Continue the loop to re-evaluate all conditions from the beginning
+        continue;
       }
 
       // Only checkpoint START if we haven't started this wait before

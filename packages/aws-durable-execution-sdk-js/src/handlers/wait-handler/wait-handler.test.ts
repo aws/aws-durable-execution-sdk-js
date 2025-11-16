@@ -58,6 +58,8 @@ describe("Wait Handler", () => {
       createStepId,
       jest.fn(() => false), // hasRunningOperations
       () => mockOperationsEmitter,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
     );
   });
 
@@ -153,6 +155,8 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        jest.fn(), // addRunningOperation
+        jest.fn(), // removeRunningOperation
       );
 
       waitHandler("test-wait", { seconds: 1 });
@@ -180,6 +184,8 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        jest.fn(), // addRunningOperation
+        jest.fn(), // removeRunningOperation
       );
 
       waitHandler("test-wait", { seconds: 1 });
@@ -198,6 +204,8 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        jest.fn(), // addRunningOperation
+        jest.fn(), // removeRunningOperation
       );
 
       waitHandler("test-wait", { seconds: 1 });
@@ -232,6 +240,8 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        jest.fn(), // addRunningOperation
+        jest.fn(), // removeRunningOperation
       );
 
       // Start the wait handler (don't await - it will wait for operations)
@@ -260,7 +270,7 @@ describe("Wait Handler", () => {
         mockExecutionContext.terminationManager.terminate,
       ).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
-        message: "Operation test-wait scheduled to wait",
+        message: "Operation test-wait already scheduled to wait",
       });
     });
 
@@ -287,6 +297,8 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        jest.fn(), // addRunningOperation
+        jest.fn(), // removeRunningOperation
       );
 
       // Start wait handler - should detect running operations and wait
@@ -315,7 +327,7 @@ describe("Wait Handler", () => {
         mockExecutionContext.terminationManager.terminate,
       ).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
-        message: "Operation parallel-wait scheduled to wait",
+        message: "Operation parallel-wait already scheduled to wait",
       });
     });
   });

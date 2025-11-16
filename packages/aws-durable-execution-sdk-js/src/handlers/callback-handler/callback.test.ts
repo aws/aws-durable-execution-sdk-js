@@ -46,6 +46,8 @@ describe("Callback Handler", () => {
   let callbackHandler: ReturnType<typeof createCallback>;
   let mockTerminationManager: jest.Mocked<TerminationManager>;
   let mockSafeDeserialize: jest.MockedFunction<typeof safeDeserialize>;
+  const mockAddRunningOperation = jest.fn();
+  const mockRemoveRunningOperation = jest.fn();
 
   beforeEach(() => {
     // Reset all mocks before each test to ensure isolation
@@ -77,6 +79,8 @@ describe("Callback Handler", () => {
       createStepId,
       mockHasRunningOperations,
       () => new EventEmitter(),
+      mockAddRunningOperation,
+      mockRemoveRunningOperation,
     );
   });
 
@@ -443,6 +447,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       // Initially STARTED, then becomes the target status after waitBeforeContinue
@@ -906,6 +912,8 @@ describe("Callback Handler", () => {
         createStepId,
         jest.fn().mockReturnValue(false),
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       const result = callbackHandler(undefined, config);
@@ -944,6 +952,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       // Set up a started callback
@@ -989,6 +999,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1030,6 +1042,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       // Set up a started callback that remains started
@@ -1062,6 +1076,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1096,6 +1112,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1139,6 +1157,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1184,6 +1204,8 @@ describe("Callback Handler", () => {
           createStepId,
           mockHasRunningOperations,
           () => new EventEmitter(),
+          mockAddRunningOperation,
+          mockRemoveRunningOperation,
         );
       }).not.toThrow();
 
@@ -1194,6 +1216,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1219,6 +1243,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       // Initially STARTED, then becomes SUCCEEDED after waitBeforeContinue
@@ -1278,6 +1304,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       // Initially STARTED, then becomes FAILED after waitBeforeContinue
@@ -1340,6 +1368,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1472,6 +1502,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       let callCount = 0;
@@ -1518,6 +1550,8 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        mockAddRunningOperation,
+        mockRemoveRunningOperation,
       );
 
       let callCount = 0;

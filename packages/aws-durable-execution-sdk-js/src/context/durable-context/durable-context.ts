@@ -58,6 +58,8 @@ class DurableContextImpl implements DurableContext {
   private createContextLogger: ReturnType<typeof createContextLoggerFactory>;
   private durableExecutionMode: DurableExecutionMode;
   private _parentId?: string;
+  _onChildSignal?: (childId: string) => void;
+  _parentDurableContext?: DurableContext;
 
   constructor(
     private executionContext: ExecutionContext,
@@ -245,6 +247,8 @@ class DurableContextImpl implements DurableContext {
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this.addRunningOperation.bind(this),
+        this.removeRunningOperation.bind(this),
         this._parentId,
       );
       const promise = invokeHandler<I, O>(
@@ -306,6 +310,8 @@ class DurableContextImpl implements DurableContext {
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this.addRunningOperation.bind(this),
+        this.removeRunningOperation.bind(this),
         this._parentId,
       );
       const promise =
@@ -360,6 +366,8 @@ class DurableContextImpl implements DurableContext {
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this.addRunningOperation.bind(this),
+        this.removeRunningOperation.bind(this),
         this._parentId,
       );
       const promise = callbackFactory(nameOrConfig, maybeConfig);

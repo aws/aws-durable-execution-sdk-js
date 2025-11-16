@@ -158,6 +158,8 @@ export const createCallback = (
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
   parentId?: string,
 ) => {
   return async <T>(
@@ -231,6 +233,8 @@ export const createCallback = (
       serdes,
       hasRunningOperations,
       getOperationsEmitter,
+      addRunningOperation,
+      removeRunningOperation,
       parentId,
     );
   };
@@ -338,6 +342,8 @@ const createNewCallback = async <T>(
   serdes: Serdes<T>,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
   parentId?: string,
 ): Promise<CreateCallbackResult<T>> => {
   log("🆕", "Creating new callback:", {
@@ -345,6 +351,9 @@ const createNewCallback = async <T>(
     name,
     config,
   });
+
+  // Track as running operation to prevent termination during checkpoint
+  addRunningOperation(stepId);
 
   // Checkpoint the callback creation - the API will generate and return the callbackId
   await checkpoint(stepId, {
@@ -363,6 +372,9 @@ const createNewCallback = async <T>(
         : undefined,
     },
   });
+
+  // Remove from running operations once callback is pending
+  removeRunningOperation(stepId);
 
   // After checkpoint, the context._stepData should be updated with the callbackId
   const stepData = context.getStepData(stepId);

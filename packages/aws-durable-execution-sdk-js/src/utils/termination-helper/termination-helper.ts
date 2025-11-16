@@ -1,157 +1,93 @@
-import { ExecutionContext } from "../../types";
+import { ExecutionContext, DurableContext } from "../../types";
 import { UnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 import { TerminationReason } from "../../termination-manager/types";
 import { log } from "../logger/logger";
 import { getActiveContext } from "../context-tracker/context-tracker";
-import { Operation, OperationStatus } from "@aws-sdk/client-lambda";
-import { hashId } from "../step-id-utils/step-id-utils";
-import { hasPendingAncestorCompletion } from "../checkpoint/checkpoint";
 
 /**
- * Checks if any ancestor operation in the parent chain has finished (SUCCEEDED or FAILED)
- * or has a pending completion checkpoint
- */
-function hasFinishedAncestor(
-  context: ExecutionContext,
-  parentId?: string,
-): boolean {
-  if (!parentId) {
-    log("🔍", "hasFinishedAncestor: No parentId provided");
-    return false;
-  }
-
-  // First check if any ancestor has a pending completion checkpoint
-  if (hasPendingAncestorCompletion(parentId)) {
-    log("🔍", "hasFinishedAncestor: Found ancestor with pending completion!", {
-      parentId,
-    });
-    return true;
-  }
-
-  let currentHashedId: string | undefined = hashId(parentId);
-  log("🔍", "hasFinishedAncestor: Starting check", {
-    parentId,
-    initialHashedId: currentHashedId,
-  });
-
-  while (currentHashedId) {
-    const parentOperation: Operation | undefined =
-      context._stepData[currentHashedId];
-
-    log("🔍", "hasFinishedAncestor: Checking operation", {
-      hashedId: currentHashedId,
-      hasOperation: !!parentOperation,
-      status: parentOperation?.Status,
-      type: parentOperation?.Type,
-    });
-
-    if (
-      parentOperation?.Status === OperationStatus.SUCCEEDED ||
-      parentOperation?.Status === OperationStatus.FAILED
-    ) {
-      log("🔍", "hasFinishedAncestor: Found finished ancestor!", {
-        hashedId: currentHashedId,
-        status: parentOperation.Status,
-      });
-      return true;
-    }
-
-    currentHashedId = parentOperation?.ParentId;
-  }
-
-  log("🔍", "hasFinishedAncestor: No finished ancestor found");
-  return false;
-}
-
-/**
- * Terminates execution and returns a never-resolving promise to prevent code progression
- * @param context - The execution context containing the termination manager
- * @param reason - The termination reason
- * @param message - The termination message
- * @returns A never-resolving promise
+ * Terminates execution from a child context and returns a never-resolving promise
  */
 export function terminate<T>(
   context: ExecutionContext,
   reason: TerminationReason,
   message: string,
-): Promise<T> {
+): Promise<T>;
+
+/**
+ * Terminates execution from a parent context
+ */
+export function terminate(
+  context: ExecutionContext,
+  reason: TerminationReason,
+  message: string,
+  callerDurableContext: DurableContext,
+): void;
+
+/**
+ * Terminates execution with signal delegation support
+ * @param context - The execution context containing the termination manager
+ * @param reason - The termination reason
+ * @param message - The termination message
+ * @param callerDurableContext - Optional: The DurableContext of the caller (for parent contexts)
+ * @returns A never-resolving promise (for child contexts) or void (for parent contexts)
+ */
+export function terminate<T>(
+  context: ExecutionContext,
+  reason: TerminationReason,
+  message: string,
+  callerDurableContext?: DurableContext,
+): Promise<T> | void {
   const activeContext = getActiveContext();
 
-  // If we have a parent context, add delay to let checkpoints process
-  if (activeContext?.parentId) {
-    return new Promise<T>(async (_resolve, _reject) => {
-      // Wait a tick to let any pending checkpoints start processing
-      await new Promise((resolve) => setImmediate(resolve));
+  log("🔍", "terminate called:", {
+    reason,
+    message,
+    hasCallerContext: !!callerDurableContext,
+  });
 
-      log("🔍", "Terminate called - checking context:", {
-        hasActiveContext: !!activeContext,
-        contextId: activeContext?.contextId,
-        parentId: activeContext?.parentId,
-        reason,
-        message,
-      });
+  // Determine which context to check for signal delegation
+  let contextToSignal: DurableContext | undefined;
+  let contextIdToSignal: string | undefined;
 
-      const ancestorFinished = hasFinishedAncestor(
-        context,
-        activeContext.parentId,
-      );
-      log("🔍", "Ancestor check result:", {
-        parentId: activeContext.parentId,
-        ancestorFinished,
-      });
+  if (callerDurableContext) {
+    // Called from parent handler - check if parent should signal grandparent
+    contextToSignal = callerDurableContext._parentDurableContext;
+    contextIdToSignal = activeContext?.parentId; // The parent of current child is the caller
 
-      if (ancestorFinished) {
-        log("🛑", "Skipping termination - ancestor already finished:", {
-          contextId: activeContext.contextId,
-          parentId: activeContext.parentId,
-          reason,
-          message,
-        });
-        // Return never-resolving promise without terminating
-        return;
-      }
+    log("🔍", "Parent context termination - checking grandparent:", {
+      hasGrandparent: !!contextToSignal,
+      hasGrandparentSignal: !!contextToSignal?._onChildSignal,
+      callerContextId: contextIdToSignal,
+    });
+  } else {
+    // Called from child context - check if child should signal parent
+    const childContext = activeContext?.durableContext;
+    contextToSignal = childContext?._parentDurableContext;
+    contextIdToSignal = activeContext?.contextId;
 
-      // Check if there are active operations before terminating
-      const tracker = context.activeOperationsTracker;
-      if (tracker && tracker.hasActive()) {
-        log("⏳", "Deferring termination - active operations in progress:", {
-          activeCount: tracker.getCount(),
-          reason,
-          message,
-        });
-
-        // Wait for operations to complete, then terminate
-        const checkInterval = setInterval(() => {
-          if (!tracker.hasActive()) {
-            clearInterval(checkInterval);
-            log(
-              "✅",
-              "Active operations completed, proceeding with termination:",
-              {
-                reason,
-                message,
-              },
-            );
-
-            context.terminationManager.terminate({
-              reason,
-              message,
-            });
-          }
-        }, 10);
-        return;
-      }
-
-      // No active operations, terminate immediately
-      context.terminationManager.terminate({
-        reason,
-        message,
-      });
+    log("🔍", "Child context termination - checking parent:", {
+      hasParent: !!contextToSignal,
+      hasParentSignal: !!contextToSignal?._onChildSignal,
+      childContextId: contextIdToSignal,
     });
   }
 
-  // No parent context - check active operations and terminate
+  // Signal parent/grandparent if available
+  if (contextToSignal?._onChildSignal && contextIdToSignal) {
+    log("📡", "Signaling parent/grandparent context:", { contextIdToSignal });
+    contextToSignal._onChildSignal(contextIdToSignal);
+    // Return never-resolving promise for child contexts, void for parent contexts
+    return callerDurableContext ? undefined : new Promise<T>(() => {});
+  }
+
+  // Check if there are active operations before terminating (Layer 1)
   const tracker = context.activeOperationsTracker;
+
+  log("🔍", "Active operations check:", {
+    hasTracker: !!tracker,
+    hasActive: tracker?.hasActive(),
+    activeCount: tracker?.getCount(),
+  });
   if (tracker && tracker.hasActive()) {
     log("⏳", "Deferring termination - active operations in progress:", {
       activeCount: tracker.getCount(),
@@ -159,35 +95,35 @@ export function terminate<T>(
       message,
     });
 
-    return new Promise<T>((_resolve, _reject) => {
-      const checkInterval = setInterval(() => {
-        if (!tracker.hasActive()) {
-          clearInterval(checkInterval);
-          log(
-            "✅",
-            "Active operations completed, proceeding with termination:",
-            {
-              reason,
-              message,
-            },
-          );
+    const checkInterval = setInterval(() => {
+      if (!tracker.hasActive()) {
+        clearInterval(checkInterval);
+        log("✅", "Active operations completed, proceeding with termination:", {
+          reason,
+          message,
+        });
 
-          context.terminationManager.terminate({
-            reason,
-            message,
-          });
-        }
-      }, 10);
-    });
+        context.terminationManager.terminate({
+          reason,
+          message,
+        });
+      }
+    }, 10);
+
+    // Return never-resolving promise for child contexts, void for parent contexts
+    return callerDurableContext ? undefined : new Promise<T>(() => {});
   }
 
-  // No parent, no active operations - terminate immediately
+  // No active operations - terminate immediately
+  log("🛑", "Calling terminationManager.terminate:", { reason, message });
   context.terminationManager.terminate({
     reason,
     message,
   });
+  log("✅", "terminationManager.terminate called");
 
-  return new Promise<T>(() => {});
+  // Return never-resolving promise for child contexts, void for parent contexts
+  return callerDurableContext ? undefined : new Promise<T>(() => {});
 }
 
 /**

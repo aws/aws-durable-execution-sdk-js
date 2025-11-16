@@ -92,16 +92,21 @@ export class TestExecutionOrchestrator {
 
       return result;
     } catch (err) {
-      await this.checkpointApi.updateCheckpointData({
-        executionId,
-        operationId,
-        operationData: {
-          Status: OperationStatus.FAILED,
-        },
-        error: {
-          ErrorMessage: err instanceof Error ? err.message : "Internal failure",
-        },
-      });
+      try {
+        await this.checkpointApi.updateCheckpointData({
+          executionId,
+          operationId,
+          operationData: {
+            Status: OperationStatus.FAILED,
+          },
+          error: {
+            ErrorMessage:
+              err instanceof Error ? err.message : "Internal failure",
+          },
+        });
+      } catch {
+        // Ignore cleanup failures - checkpoint server may have already shut down
+      }
       throw err;
     }
   }

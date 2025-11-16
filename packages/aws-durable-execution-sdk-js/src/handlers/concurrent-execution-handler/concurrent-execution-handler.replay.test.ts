@@ -14,15 +14,16 @@ describe("ConcurrencyController - Replay Mode", () => {
 
   beforeEach(() => {
     mockSkipNextOperation = jest.fn();
+    mockExecutionContext = {
+      getStepData: jest.fn(),
+    } as any;
     controller = new ConcurrencyController(
       "test-operation",
       mockSkipNextOperation,
+      mockExecutionContext,
     );
     mockParentContext = {
       runInChildContext: jest.fn(),
-    } as any;
-    mockExecutionContext = {
-      getStepData: jest.fn(),
     } as any;
   });
 

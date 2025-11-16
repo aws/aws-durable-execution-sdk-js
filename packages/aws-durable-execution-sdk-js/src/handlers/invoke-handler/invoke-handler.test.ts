@@ -96,6 +96,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -129,6 +131,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const result = await invokeHandler("test-invoke", "test-function", {
@@ -163,6 +167,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -201,6 +207,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       await expect(
@@ -228,6 +236,8 @@ describe("InvokeHandler", () => {
           mockCreateStepId,
           mockHasRunningOperations,
           () => new EventEmitter(),
+          jest.fn(),
+          jest.fn(),
         );
 
         await expect(
@@ -250,6 +260,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       await expect(
@@ -287,6 +299,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -324,6 +338,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
         "parent-123",
       );
 
@@ -374,6 +390,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
         "parent-123",
       );
 
@@ -410,6 +428,8 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
+        jest.fn(),
         "parent-123",
       );
 

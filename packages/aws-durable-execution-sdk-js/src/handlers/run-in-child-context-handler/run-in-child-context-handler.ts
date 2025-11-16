@@ -23,10 +23,13 @@ import {
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import {
+  getActiveContext,
+  runWithContext,
+} from "../../utils/context-tracker/context-tracker";
+import {
   DurableOperationError,
   ChildContextError,
 } from "../../errors/durable-error/durable-error";
-import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -202,8 +205,11 @@ export const handleCompletedChildContext = async <T>(
       entityId, // parentId
     );
 
-    return await runWithContext(entityId, entityId, () =>
-      fn(durableChildContext),
+    return await runWithContext(
+      entityId,
+      entityId,
+      () => fn(durableChildContext),
+      durableChildContext,
     );
   }
 
@@ -268,10 +274,19 @@ export const executeChildContext = async <T>(
     entityId, // parentId
   );
 
+  // Set parent DurableContext reference from AsyncLocalStorage
+  const activeContext = getActiveContext();
+  if (activeContext?.durableContext) {
+    durableChildContext._parentDurableContext = activeContext.durableContext;
+  }
+
   try {
     // Execute the child context function with context tracking
-    const result = await runWithContext(entityId, parentId, () =>
-      fn(durableChildContext),
+    const result = await runWithContext(
+      entityId,
+      parentId,
+      () => fn(durableChildContext),
+      durableChildContext,
     );
 
     // Always checkpoint at finish with adaptive mode

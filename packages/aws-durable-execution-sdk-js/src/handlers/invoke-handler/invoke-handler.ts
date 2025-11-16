@@ -24,6 +24,8 @@ export const createInvokeHandler = (
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  addRunningOperation: (stepId: string) => void,
+  removeRunningOperation: (stepId: string) => void,
   parentId?: string,
 ): {
   <I, O>(funcId: string, input: I, config?: InvokeConfig<I, O>): Promise<O>;
@@ -155,6 +157,9 @@ export const createInvokeHandler = (
         context.durableExecutionArn,
       );
 
+      // Track as running operation to prevent termination during checkpoint
+      addRunningOperation(stepId);
+
       // Create checkpoint for the invoke operation
       await checkpoint(stepId, {
         Id: stepId,
@@ -168,6 +173,9 @@ export const createInvokeHandler = (
           FunctionName: funcId,
         },
       });
+
+      // Remove from running operations once invoke is pending
+      removeRunningOperation(stepId);
 
       log("🚀", `Invoke ${name || funcId} started, re-checking status`);
 

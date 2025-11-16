@@ -1,3 +1,5 @@
+process.env.DURABLE_VERBOSE_MODE = "true";
+
 import {
   InvocationType,
   OperationStatus,

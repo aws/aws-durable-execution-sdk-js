@@ -828,4 +828,16 @@ export interface DurableContext {
    * ```
    */
   configureLogger(config: LoggerConfig): void;
+
+  /**
+   * @internal
+   * Callback for child contexts to signal parent when waiting (e.g., for callback)
+   */
+  _onChildSignal?: (childId: string) => void;
+
+  /**
+   * @internal
+   * Reference to parent DurableContext for signal delegation
+   */
+  _parentDurableContext?: DurableContext;
 }
