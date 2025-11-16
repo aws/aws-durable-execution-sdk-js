@@ -77,6 +77,9 @@ export const createWaitHandler = (
             WaitSeconds: actualSeconds,
           },
         });
+
+        // Refresh stepData after checkpoint to get the updated status
+        stepData = context.getStepData(stepId);
       }
 
       // Check if there are any ongoing operations
@@ -90,8 +93,6 @@ export const createWaitHandler = (
       }
 
       // There are ongoing operations - wait before continuing
-      // Refresh stepData after checkpoint to get ScheduledEndTimestamp
-      stepData = context.getStepData(stepId);
       await waitBeforeContinue({
         checkHasRunningOperations: true,
         checkStepStatus: true,
