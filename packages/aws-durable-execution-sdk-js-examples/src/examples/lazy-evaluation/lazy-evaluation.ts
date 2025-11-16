@@ -12,6 +12,8 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (_event, context: DurableContext) => {
+    context.logger.info("Starting lazy-evaluation handler");
+
     // Create promises for various operations but DON'T await them yet
     // If promises are lazy, these should not create operations until awaited
 
@@ -24,14 +26,20 @@ export const handler = withDurableExecution(
       return "Step 2 result";
     });
 
+    context.logger.info("Created step promises - should be lazy");
+
     // Wait operation
     const waitPromise = context.wait("wait-operation", { seconds: 1 });
+
+    context.logger.info("Created wait promise - should be lazy");
 
     // Parallel operation
     const parallelPromise = context.parallel("parallel-operation", [
       async () => "Parallel task 1",
       async () => "Parallel task 2",
     ]);
+
+    context.logger.info("Created parallel promise - should be lazy");
 
     // Map operation
     const mapPromise = context.map(
@@ -89,10 +97,18 @@ export const handler = withDurableExecution(
     // Do an in-process wait for 500ms to make sure no operations get created (not a durable wait)
     await new Promise((resolve) => setTimeout(resolve, 500));
 
+    context.logger.info(
+      "About to await wait-1 - this should create the only durable operation",
+    );
+
     // Only one operation should exist, and on replay nothing should get created still
     await context.wait("wait-1", { seconds: 1 });
 
+    context.logger.info("Completed wait-1 - lazy evaluation test should pass");
+
     // Do another in-process wait after the operation for 500ms to make sure no operations get created
     await new Promise((resolve) => setTimeout(resolve, 500));
+
+    context.logger.info("Handler completed successfully");
   },
 );
