@@ -1,5 +1,6 @@
 import { createDurableContext } from "./durable-context";
 import { DurableExecutionMode, Duration } from "../../types";
+import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createMockExecutionContext } from "../../testing/mock-context";
@@ -63,7 +64,9 @@ describe("DurableContext", () => {
     createStepHandler.mockReturnValue(jest.fn());
     createInvokeHandler.mockReturnValue(jest.fn());
     createRunInChildContextHandler.mockReturnValue(jest.fn());
-    createWaitHandler.mockReturnValue(jest.fn());
+    createWaitHandler.mockReturnValue(
+      () => new DurablePromise(() => Promise.resolve()),
+    );
     createCallback.mockReturnValue(jest.fn());
     createWaitForCallbackHandler.mockReturnValue(jest.fn());
     createWaitForConditionHandler.mockReturnValue(jest.fn());
@@ -310,7 +313,9 @@ describe("DurableContext", () => {
       const { createWaitHandler } = jest.requireMock(
         "../../handlers/wait-handler/wait-handler",
       );
-      const mockHandler = jest.fn();
+      const mockHandler = jest.fn(
+        () => new DurablePromise(() => Promise.resolve()),
+      );
       createWaitHandler.mockReturnValue(mockHandler);
 
       await context.wait("wait-name", { seconds: 5 });

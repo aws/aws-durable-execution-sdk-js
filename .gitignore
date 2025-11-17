@@ -13,6 +13,9 @@
 .DS_Store
 .eslintcache
 
+# VS Code
+.vscode/
+
 # Environment files
 .secrets
 .env

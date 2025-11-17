@@ -307,16 +307,11 @@ class DurableContextImpl implements DurableContext {
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
         this._parentId,
+        this.checkAndUpdateReplayMode.bind(this),
       );
-      const promise =
-        typeof nameOrDuration === "string"
-          ? waitHandler(nameOrDuration, maybeDuration!)
-          : waitHandler(nameOrDuration);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
-      });
+      return typeof nameOrDuration === "string"
+        ? waitHandler(nameOrDuration, maybeDuration!)
+        : waitHandler(nameOrDuration);
     });
   }
 

@@ -49,7 +49,7 @@ describe("ActiveOperationsTracker", () => {
 
   describe("trackOperation", () => {
     it("should track successful async operation", async () => {
-      const operation = async () => {
+      const operation = async (): Promise<string> => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         return "success";
       };
@@ -67,7 +67,7 @@ describe("ActiveOperationsTracker", () => {
     });
 
     it("should track failed async operation", async () => {
-      const operation = async () => {
+      const operation = async (): Promise<never> => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         throw new Error("operation failed");
       };
@@ -83,12 +83,12 @@ describe("ActiveOperationsTracker", () => {
     });
 
     it("should track multiple concurrent operations", async () => {
-      const operation1 = async () => {
+      const operation1 = async (): Promise<string> => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         return "op1";
       };
 
-      const operation2 = async () => {
+      const operation2 = async (): Promise<string> => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         return "op2";
       };

@@ -12,6 +12,7 @@ import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
+import { DurablePromise } from "../../types/durable-promise";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -20,34 +21,35 @@ export const createWaitHandler = (
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
+  checkAndUpdateReplayMode?: () => void,
 ): {
-  (name: string, duration: Duration): Promise<void>;
-  (duration: Duration): Promise<void>;
+  (name: string, duration: Duration): DurablePromise<void>;
+  (duration: Duration): DurablePromise<void>;
 } => {
-  function waitHandler(name: string, duration: Duration): Promise<void>;
-  function waitHandler(duration: Duration): Promise<void>;
-  async function waitHandler(
+  function waitHandler(name: string, duration: Duration): DurablePromise<void>;
+  function waitHandler(duration: Duration): DurablePromise<void>;
+  function waitHandler(
     nameOrDuration: string | Duration,
     duration?: Duration,
-  ): Promise<void> {
+  ): DurablePromise<void> {
     const isNameFirst = typeof nameOrDuration === "string";
     const actualName = isNameFirst ? nameOrDuration : undefined;
     const actualDuration = isNameFirst ? duration! : nameOrDuration;
     const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();
 
-    log("⏲️", "Wait requested:", {
-      stepId,
-      name: actualName,
-      duration: actualDuration,
-      seconds: actualSeconds,
-    });
+    // Shared wait logic for both phases
+    const executeWaitLogic = async (canTerminate: boolean): Promise<void> => {
+      log("⏲️", `Wait executing (${canTerminate ? "phase 2" : "phase 1"}):`, {
+        stepId,
+        name: actualName,
+        duration: actualDuration,
+        seconds: actualSeconds,
+      });
 
-    // Main wait logic - can be re-executed if step data changes
-    while (true) {
       let stepData = context.getStepData(stepId);
 
-      // Validate replay consistency
+      // Validate replay consistency once before loop
       validateReplayConsistency(
         stepId,
         {
@@ -59,53 +61,79 @@ export const createWaitHandler = (
         context,
       );
 
-      if (stepData?.Status === OperationStatus.SUCCEEDED) {
-        log("⏭️", "Wait already completed:", { stepId });
-        return;
-      }
+      // Main wait logic - can be re-executed if step data changes
+      while (true) {
+        stepData = context.getStepData(stepId);
 
-      // Only checkpoint START if we haven't started this wait before
-      if (!stepData) {
-        await checkpoint(stepId, {
-          Id: stepId,
-          ParentId: parentId,
-          Action: OperationAction.START,
-          SubType: OperationSubType.WAIT,
-          Type: OperationType.WAIT,
-          Name: actualName,
-          WaitOptions: {
-            WaitSeconds: actualSeconds,
-          },
-        });
-      }
+        if (stepData?.Status === OperationStatus.SUCCEEDED) {
+          log("⏭️", "Wait already completed:", { stepId });
+          checkAndUpdateReplayMode?.();
+          return;
+        }
 
-      // Check if there are any ongoing operations
-      if (!hasRunningOperations()) {
-        // A.1: No ongoing operations - safe to terminate
-        return terminate(
+        // Only checkpoint START if we haven't started this wait before
+        if (!stepData) {
+          await checkpoint(stepId, {
+            Id: stepId,
+            ParentId: parentId,
+            Action: OperationAction.START,
+            SubType: OperationSubType.WAIT,
+            Type: OperationType.WAIT,
+            Name: actualName,
+            WaitOptions: {
+              WaitSeconds: actualSeconds,
+            },
+          });
+        }
+
+        // Always refresh stepData to ensure it's up-to-date before proceeding
+        stepData = context.getStepData(stepId);
+
+        // Check if there are any ongoing operations
+        if (!hasRunningOperations()) {
+          // Phase 1: Just return without terminating
+          // Phase 2: Terminate
+          if (canTerminate) {
+            return terminate(
+              context,
+              TerminationReason.WAIT_SCHEDULED,
+              `Operation ${actualName || stepId} scheduled to wait`,
+            );
+          } else {
+            log("⏸️", "Wait ready but not terminating (phase 1):", { stepId });
+            return;
+          }
+        }
+
+        // There are ongoing operations - wait before continuing
+        await waitBeforeContinue({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: true,
+          scheduledEndTimestamp: stepData?.WaitDetails?.ScheduledEndTimestamp,
+          stepId,
           context,
-          TerminationReason.WAIT_SCHEDULED,
-          `Operation ${actualName || stepId} scheduled to wait`,
-        );
+          hasRunningOperations,
+          operationsEmitter: getOperationsEmitter(),
+          checkpoint,
+        });
+
+        // Continue the loop to re-evaluate all conditions from the beginning
       }
+    };
 
-      // There are ongoing operations - wait before continuing
-      // Refresh stepData after checkpoint to get ScheduledEndTimestamp
-      stepData = context.getStepData(stepId);
-      await waitBeforeContinue({
-        checkHasRunningOperations: true,
-        checkStepStatus: true,
-        checkTimer: true,
-        scheduledEndTimestamp: stepData?.WaitDetails?.ScheduledEndTimestamp,
-        stepId,
-        context,
-        hasRunningOperations,
-        operationsEmitter: getOperationsEmitter(),
-        checkpoint,
-      });
+    // Create a promise that tracks phase 1 completion
+    const phase1Promise = executeWaitLogic(false).then(() => {
+      log("✅", "Wait phase 1 complete:", { stepId, name: actualName });
+    });
 
-      // Continue the loop to re-evaluate all conditions from the beginning
-    }
+    // Return DurablePromise that will execute phase 2 when awaited
+    return new DurablePromise(async () => {
+      // Wait for phase 1 to complete first
+      await phase1Promise;
+      // Then execute phase 2
+      await executeWaitLogic(true);
+    });
   }
 
   return waitHandler;
