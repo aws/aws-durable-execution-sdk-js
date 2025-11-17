@@ -10,7 +10,6 @@ import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
  */
 export class InvocationTracker {
   private invocations = new Set<InvocationId>();
-  private invocationOperationsMap = new Map<InvocationId, Set<string>>(); // invocationId -> Set of operationIds
   private completedInvocations = new Set<InvocationId>();
 
   constructor(private readonly checkpointApi: CheckpointApiClient) {}
@@ -20,7 +19,6 @@ export class InvocationTracker {
    */
   reset(): void {
     this.invocations.clear();
-    this.invocationOperationsMap.clear();
     this.completedInvocations.clear();
   }
 
