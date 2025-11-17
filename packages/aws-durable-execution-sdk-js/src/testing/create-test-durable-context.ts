@@ -3,14 +3,13 @@ import {
   Operation,
   CheckpointDurableExecutionResponse,
 } from "@aws-sdk/client-lambda";
-import { createDurableContext } from "../context/durable-context/durable-context";
+import {
+  createDurableContext,
+  DurableContextImpl,
+} from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
-import {
-  DurableContext,
-  ExecutionContext,
-  DurableExecutionMode,
-} from "../types";
+import { ExecutionContext, DurableExecutionMode } from "../types";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
 
 /**
@@ -45,7 +44,7 @@ export function createTestDurableContext(options?: {
   existingOperations?: Operation[];
   lambdaContext?: Partial<Context>;
 }): {
-  context: DurableContext;
+  context: DurableContextImpl;
   storage: InMemoryStorage;
   executionContext: ExecutionContext;
 } {

@@ -47,7 +47,7 @@ import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
 import { validateContextUsage } from "../../utils/context-tracker/context-tracker";
 
-class DurableContextImpl implements DurableContext {
+export class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
   private contextLogger: Logger | null;
@@ -531,7 +531,7 @@ export const createDurableContext = (
   checkpointToken?: string,
   inheritedLogger?: Logger | null,
   parentId?: string,
-): DurableContext => {
+): DurableContextImpl => {
   return new DurableContextImpl(
     executionContext,
     parentContext,
