@@ -123,7 +123,9 @@ export const createWaitHandler = (
     };
 
     // Create a promise that tracks phase 1 completion
-    const phase1Promise = executeWaitLogic(false);
+    const phase1Promise = executeWaitLogic(false).then(() => {
+      log("✅", "Wait phase 1 complete:", { stepId, name: actualName });
+    });
 
     // Return DurablePromise that will execute phase 2 when awaited
     return new DurablePromise(async () => {
