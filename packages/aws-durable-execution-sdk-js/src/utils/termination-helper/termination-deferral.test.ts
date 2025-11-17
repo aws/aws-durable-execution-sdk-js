@@ -30,7 +30,7 @@ describe("termination deferral with active operations", () => {
     // Simulate an active operation
     tracker.increment();
 
-    const terminatePromise = terminate(
+    const _terminatePromise = terminate(
       mockContext,
       TerminationReason.CALLBACK_PENDING,
       "Callback pending",
@@ -63,7 +63,7 @@ describe("termination deferral with active operations", () => {
     tracker.increment();
 
     // Branch 2 tries to terminate
-    const terminatePromise = terminate(
+    const _terminatePromise = terminate(
       mockContext,
       TerminationReason.CALLBACK_PENDING,
       "Branch 2 callback pending",

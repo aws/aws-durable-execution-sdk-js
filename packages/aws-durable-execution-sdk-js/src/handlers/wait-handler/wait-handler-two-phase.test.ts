@@ -24,9 +24,9 @@ describe("Wait Handler Two-Phase Execution", () => {
       .fn()
       .mockReturnValue(false);
 
-    createStepId = () => `step-${++stepIdCounter}`;
-    hasRunningOperations = jest.fn().mockReturnValue(false);
-    getOperationsEmitter = () => new EventEmitter();
+    createStepId = (): string => `step-${++stepIdCounter}`;
+    hasRunningOperations = jest.fn().mockReturnValue(false) as () => boolean;
+    getOperationsEmitter = (): EventEmitter => new EventEmitter();
   });
 
   it("should execute wait logic in phase 1 without terminating", async () => {
@@ -72,7 +72,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     // Phase 2: Await the promise - this should execute again
     try {
       await waitPromise;
-    } catch (error) {
+    } catch {
       // Expected to throw termination error
     }
 
@@ -101,7 +101,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     // Phase 2: Use Promise.race - this should trigger execution
     try {
       await Promise.race([wait1, wait2]);
-    } catch (error) {
+    } catch {
       // Expected to throw termination error
     }
 
@@ -126,7 +126,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     expect((waitPromise as DurablePromise<void>).isExecuted).toBe(false);
 
     // Phase 2: Call .then - this should trigger execution
-    const thenPromise = waitPromise.then(() => {}).catch(() => {});
+    waitPromise.then(() => {}).catch(() => {});
 
     // Should be marked as executed
     expect((waitPromise as DurablePromise<void>).isExecuted).toBe(true);

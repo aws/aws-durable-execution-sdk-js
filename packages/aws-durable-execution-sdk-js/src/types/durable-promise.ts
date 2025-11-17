@@ -24,7 +24,7 @@ export class DurablePromise<T> implements Promise<T> {
       | undefined
       | null,
     onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
+      | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
       | undefined
       | null,
   ): Promise<TResult1 | TResult2> {
@@ -33,7 +33,7 @@ export class DurablePromise<T> implements Promise<T> {
 
   catch<TResult = never>(
     onrejected?:
-      | ((reason: any) => TResult | PromiseLike<TResult>)
+      | ((reason: unknown) => TResult | PromiseLike<TResult>)
       | undefined
       | null,
   ): Promise<T | TResult> {
@@ -44,7 +44,7 @@ export class DurablePromise<T> implements Promise<T> {
     return this.ensureExecution().finally(onfinally);
   }
 
-  get [Symbol.toStringTag]() {
+  get [Symbol.toStringTag](): string {
     return "DurablePromise";
   }
 
