@@ -42,6 +42,7 @@ describe("CloudDurableTestRunner", () => {
           hello: "world",
         }),
       },
+      ExecutionTimeout: undefined,
     },
   };
 
@@ -167,6 +168,10 @@ describe("CloudDurableTestRunner", () => {
           Status: ExecutionStatus.SUCCEEDED,
           Result: '{"result": "success"}',
           $metadata: {},
+          DurableExecutionArn: undefined,
+          DurableExecutionName: undefined,
+          FunctionArn: undefined,
+          StartTimestamp: undefined,
         },
       });
 
@@ -226,6 +231,10 @@ describe("CloudDurableTestRunner", () => {
             ErrorType: "TestError",
           },
           $metadata: {},
+          DurableExecutionArn: undefined,
+          DurableExecutionName: undefined,
+          FunctionArn: undefined,
+          StartTimestamp: undefined,
         },
       });
 
@@ -283,7 +292,10 @@ describe("CloudDurableTestRunner", () => {
         EventTimestamp: new Date(),
         EventId: 1,
         Id: "1",
-        ExecutionStartedDetails: {},
+        ExecutionStartedDetails: {
+          Input: undefined,
+          ExecutionTimeout: undefined,
+        },
       };
       const stepEvent: Event = {
         EventTimestamp: new Date(),
@@ -458,11 +470,19 @@ describe("CloudDurableTestRunner", () => {
           {
             Status: ExecutionStatus.RUNNING,
             $metadata: {},
+            DurableExecutionArn: undefined,
+            DurableExecutionName: undefined,
+            FunctionArn: undefined,
+            StartTimestamp: undefined,
           },
           {
             Status: ExecutionStatus.SUCCEEDED,
             Result: '{"success": true}',
             $metadata: {},
+            DurableExecutionArn: undefined,
+            DurableExecutionName: undefined,
+            FunctionArn: undefined,
+            StartTimestamp: undefined,
           },
         ],
       });
@@ -516,15 +536,27 @@ describe("CloudDurableTestRunner", () => {
           {
             Status: ExecutionStatus.RUNNING,
             $metadata: {},
+            DurableExecutionArn: undefined,
+            DurableExecutionName: undefined,
+            FunctionArn: undefined,
+            StartTimestamp: undefined,
           },
           {
             Status: ExecutionStatus.RUNNING,
             $metadata: {},
+            DurableExecutionArn: undefined,
+            DurableExecutionName: undefined,
+            FunctionArn: undefined,
+            StartTimestamp: undefined,
           },
           {
             Status: ExecutionStatus.SUCCEEDED,
             Result: '{"success": true}',
             $metadata: {},
+            DurableExecutionArn: undefined,
+            DurableExecutionName: undefined,
+            FunctionArn: undefined,
+            StartTimestamp: undefined,
           },
         ],
       });
@@ -564,6 +596,10 @@ describe("CloudDurableTestRunner", () => {
           Status: ExecutionStatus.SUCCEEDED,
           Result: '{"success": true}',
           $metadata: {},
+          DurableExecutionArn: undefined,
+          DurableExecutionName: undefined,
+          FunctionArn: undefined,
+          StartTimestamp: undefined,
         },
       });
 
@@ -591,6 +627,10 @@ describe("CloudDurableTestRunner", () => {
           Status: ExecutionStatus.SUCCEEDED,
           Result: '{"success": true}',
           $metadata: {},
+          DurableExecutionArn: undefined,
+          DurableExecutionName: undefined,
+          FunctionArn: undefined,
+          StartTimestamp: undefined,
         },
       });
 
@@ -674,6 +714,104 @@ describe("CloudDurableTestRunner", () => {
           Result: '{"result": "processed"}',
         },
       });
+    });
+
+    it("should return invocation events", async () => {
+      const stepEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepStarted,
+        EventId: 1,
+        Id: "1",
+        Name: "processData",
+        StepStartedDetails: {
+          Input: '{"input": "test"}',
+        },
+      };
+
+      const stepCompletedEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.StepSucceeded,
+        EventId: 2,
+        Id: "1",
+        StepSucceededDetails: {
+          Result: {
+            Payload: '{"result": "processed"}',
+          },
+          RetryDetails: {},
+        },
+      };
+
+      const invocationCompletedEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.InvocationCompleted,
+        EventId: 3,
+        Id: "2",
+        InvocationCompletedDetails: {
+          StartTimestamp: new Date(),
+          EndTimestamp: new Date(),
+          RequestId: "request-id",
+          Error: {
+            Payload: {
+              ErrorMessage: "error message",
+            },
+          },
+        },
+      };
+
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [stepEvent, stepCompletedEvent, invocationCompletedEvent],
+          $metadata: {},
+        },
+        executionResponse: {
+          Status: ExecutionStatus.SUCCEEDED,
+          Result: '{"result": "processed"}',
+          $metadata: {},
+          StartTimestamp: new Date(),
+          DurableExecutionArn: "",
+          DurableExecutionName: "",
+          FunctionArn: "",
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ result: string }>({
+        functionName: mockFunctionArn,
+      });
+
+      const operation = runner.getOperationByNameAndIndex("processData", 0);
+
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      const result = await runPromise;
+
+      expect(result).toBeDefined();
+      expect(result.getResult()).toBeDefined();
+      expect(operation.getOperationData()).toEqual({
+        Id: "1",
+        Name: "processData",
+        StartTimestamp: expect.any(Date),
+        Status: OperationStatus.SUCCEEDED,
+        Type: OperationType.STEP,
+        EndTimestamp: expect.any(Date),
+        StepDetails: {
+          Result: '{"result": "processed"}',
+        },
+      });
+      expect(result.getInvocations()).toEqual([
+        {
+          startTimestamp:
+            invocationCompletedEvent.InvocationCompletedDetails?.StartTimestamp,
+          endTimestamp:
+            invocationCompletedEvent.InvocationCompletedDetails?.EndTimestamp,
+          requestId:
+            invocationCompletedEvent.InvocationCompletedDetails?.RequestId,
+          error: {
+            errorMessage:
+              invocationCompletedEvent.InvocationCompletedDetails?.Error
+                ?.Payload?.ErrorMessage,
+          },
+        },
+      ]);
     });
 
     it("should respect custom poll intervals", async () => {

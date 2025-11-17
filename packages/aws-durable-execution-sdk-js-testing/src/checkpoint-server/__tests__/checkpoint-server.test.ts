@@ -12,6 +12,8 @@ import {
   SendDurableExecutionCallbackHeartbeatRequest,
   InvalidParameterValueException,
   OperationAction,
+  EventType,
+  Event,
 } from "@aws-sdk/client-lambda";
 import {
   encodeCheckpointToken,
@@ -24,6 +26,7 @@ import {
   InvocationId,
 } from "../utils/tagged-strings";
 import { createCheckpointToken } from "../utils/tagged-strings";
+import { convertDatesToTimestamps } from "../../utils";
 
 // Mock the ExecutionManager
 jest.mock("../storage/execution-manager", () => {
@@ -35,6 +38,7 @@ jest.mock("../storage/execution-manager", () => {
     ExecutionManager: jest.fn(() => ({
       startExecution: jest.fn(),
       startInvocation: jest.fn(),
+      completeInvocation: jest.fn(),
       getCheckpointsByExecution: jest.fn(),
       getCheckpointsByToken: jest.fn(),
       getCheckpointsByCallbackId: jest.fn(),
@@ -242,6 +246,107 @@ describe("checkpoint-server", () => {
           },
         ],
       });
+    });
+  });
+
+  describe(`${API_PATHS.COMPLETE_INVOCATION}/:executionId`, () => {
+    it("should complete invocation successfully without error", async () => {
+      const executionId = "test-execution-id";
+      const invocationId = createInvocationId("test-invocation-id");
+      const startTimestamp = new Date("2021-01-01T00:00:00.000Z");
+      const endTimestamp = new Date("2021-01-01T00:01:00.000Z");
+
+      const mockEvent = {
+        EventId: 1,
+        EventTimestamp: endTimestamp,
+        EventType: EventType.InvocationCompleted,
+        Id: "event-1",
+        Name: "InvocationCompletedDetails",
+        InvocationCompletedDetails: {
+          StartTimestamp: startTimestamp,
+          EndTimestamp: endTimestamp,
+          Error: {
+            Payload: undefined,
+          },
+          RequestId: invocationId,
+        },
+      };
+
+      mockExecutionManager.completeInvocation.mockReturnValueOnce(mockEvent);
+
+      const response = await request(server)
+        .post(`${API_PATHS.COMPLETE_INVOCATION}/${executionId}`)
+        .send({
+          invocationId,
+          error: undefined,
+        });
+
+      expect(response.status).toBe(200);
+      expect(mockExecutionManager.completeInvocation).toHaveBeenCalledWith(
+        executionId,
+        invocationId,
+        undefined,
+      );
+      expect(response.body).toEqual({
+        EventId: 1,
+        EventTimestamp: Math.floor(endTimestamp.getTime() / 1000),
+        EventType: "InvocationCompleted",
+        Id: "event-1",
+        Name: "InvocationCompletedDetails",
+        InvocationCompletedDetails: {
+          StartTimestamp: Math.floor(startTimestamp.getTime() / 1000),
+          EndTimestamp: Math.floor(endTimestamp.getTime() / 1000),
+          Error: {
+            Payload: undefined,
+          },
+          RequestId: invocationId,
+        },
+      });
+    });
+
+    it("should handle complex error objects with nested properties", async () => {
+      const executionId = "test-execution-id";
+      const invocationId = createInvocationId("test-invocation-id");
+      const startTimestamp = new Date("2021-01-01T00:00:00.000Z");
+      const endTimestamp = new Date("2021-01-01T00:01:00.000Z");
+      const complexError = {
+        ErrorType: "ValidationException",
+        ErrorMessage: "Invalid input parameters",
+        StackTrace: ["Error: Invalid input\n", "    at Function.validate"],
+      };
+
+      const mockEvent: Event = {
+        EventId: 3,
+        EventTimestamp: endTimestamp,
+        EventType: EventType.InvocationCompleted,
+        Id: "event-3",
+        Name: "InvocationCompletedDetails",
+        InvocationCompletedDetails: {
+          StartTimestamp: startTimestamp,
+          EndTimestamp: endTimestamp,
+          Error: {
+            Payload: complexError,
+          },
+          RequestId: invocationId,
+        },
+      };
+
+      mockExecutionManager.completeInvocation.mockReturnValueOnce(mockEvent);
+
+      const response = await request(server)
+        .post(`${API_PATHS.COMPLETE_INVOCATION}/${executionId}`)
+        .send({
+          invocationId,
+          error: complexError,
+        });
+
+      expect(response.status).toBe(200);
+      expect(mockExecutionManager.completeInvocation).toHaveBeenCalledWith(
+        executionId,
+        invocationId,
+        complexError,
+      );
+      expect(response.body).toStrictEqual(convertDatesToTimestamps(mockEvent));
     });
   });
 

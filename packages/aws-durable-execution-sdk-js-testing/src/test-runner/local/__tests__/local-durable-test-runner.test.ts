@@ -150,7 +150,6 @@ describe("LocalDurableTestRunner", () => {
         }),
         [],
         mockOperationStorage,
-        [],
       );
       expect(result.getResult()).toEqual({ data: { success: true } });
     });
@@ -256,6 +255,32 @@ describe("LocalDurableTestRunner", () => {
 
       // Verify cleanup was still called
       expect(mockWaitManager.clearWaitingOperations).toHaveBeenCalled();
+    });
+
+    it("should sort history events from operation storage", async () => {
+      const runner = new LocalDurableTestRunner<{ success: boolean }>({
+        handlerFunction: mockHandlerFunction,
+      });
+
+      const mockHistoryEvents = [
+        { EventId: 2 },
+        { EventId: 1 },
+        { EventId: 3 },
+      ];
+      (mockOperationStorage.getHistoryEvents as jest.Mock).mockReturnValue(
+        mockHistoryEvents,
+      );
+
+      await runner.run();
+
+      expect(mockResultFormatter.formatTestResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Status: InvocationStatus.SUCCEEDED,
+          Result: JSON.stringify({ success: true }),
+        }),
+        [{ EventId: 1 }, { EventId: 2 }, { EventId: 3 }],
+        mockOperationStorage,
+      );
     });
   });
 

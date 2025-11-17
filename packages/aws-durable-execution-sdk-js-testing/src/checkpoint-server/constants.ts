@@ -2,6 +2,7 @@
 export const API_PATHS = {
   START_DURABLE_EXECUTION: "/start-durable-execution",
   START_INVOCATION: "/start-invocation",
+  COMPLETE_INVOCATION: "/complete-invocation",
   POLL_CHECKPOINT_DATA: "/poll-checkpoint-data",
   UPDATE_CHECKPOINT_DATA: "/update-checkpoint-data",
   GET_STATE: "/2025-12-01/durable-executions",
@@ -18,6 +19,10 @@ export const HTTP_METHODS = {
 // Utility functions to generate full paths with parameters
 export function getStartInvocationPath(executionId: string): string {
   return `${API_PATHS.START_INVOCATION}/${executionId}`;
+}
+
+export function getCompleteInvocationPath(executionId: string): string {
+  return `${API_PATHS.COMPLETE_INVOCATION}/${executionId}`;
 }
 
 export function getPollCheckpointDataPath(executionId: string): string {

@@ -13,6 +13,7 @@ import {
 } from "../utils/tagged-strings";
 import { decodeCallbackId } from "../utils/callback-id";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
+import { ErrorObject, EventType, Event } from "@aws-sdk/client-lambda";
 
 export interface InvocationResult {
   checkpointToken: CheckpointToken;
@@ -51,6 +52,8 @@ export class ExecutionManager {
       invocationId,
     });
 
+    storage.startInvocation(invocationId);
+
     const initialOperation = storage.initialize(params.payload);
 
     return {
@@ -80,6 +83,8 @@ export class ExecutionManager {
       );
     }
 
+    checkpointStorage.startInvocation(invocationId);
+
     const checkpointToken = encodeCheckpointToken({
       executionId,
       token: randomUUID(),
@@ -92,6 +97,35 @@ export class ExecutionManager {
       invocationId,
       operationEvents: Array.from(checkpointStorage.operationDataMap.values()),
     };
+  }
+
+  completeInvocation(
+    executionId: ExecutionId,
+    invocationId: InvocationId,
+    error: ErrorObject | undefined,
+  ): Event {
+    const checkpointStorage = this.executions.get(executionId);
+
+    if (!checkpointStorage) {
+      throw new Error(`Execution not found for executionId="${executionId}"`);
+    }
+
+    const { startTimestamp, endTimestamp } =
+      checkpointStorage.completeInvocation(invocationId);
+
+    return checkpointStorage.eventProcessor.createHistoryEvent(
+      EventType.InvocationCompleted,
+      undefined,
+      "InvocationCompletedDetails",
+      {
+        StartTimestamp: startTimestamp,
+        EndTimestamp: endTimestamp,
+        Error: {
+          Payload: error,
+        },
+        RequestId: invocationId,
+      },
+    );
   }
 
   /**

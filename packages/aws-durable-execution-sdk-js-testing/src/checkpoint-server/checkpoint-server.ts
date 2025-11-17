@@ -10,7 +10,11 @@ import { ParamsDictionary } from "express-serve-static-core";
 import express from "express";
 import type { Request } from "express";
 import { convertDatesToTimestamps } from "../utils";
-import { createCheckpointToken } from "./utils/tagged-strings";
+import {
+  createCheckpointToken,
+  ExecutionId,
+  InvocationId,
+} from "./utils/tagged-strings";
 import {
   decodeCheckpointToken,
   encodeCheckpointToken,
@@ -29,6 +33,7 @@ import { validateCheckpointUpdates } from "./validators/checkpoint-durable-execu
 import { randomUUID } from "crypto";
 import { createRequestLogger } from "./middleware/request-logger";
 import { defaultLogger } from "../logger";
+import { SerializedEvent } from "./types/operation-event";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -94,6 +99,31 @@ export async function startCheckpointServer(port: number) {
     );
   });
 
+  app.post(
+    `${API_PATHS.COMPLETE_INVOCATION}/:executionId`,
+    (
+      req: Request<
+        { executionId: ExecutionId },
+        SerializedEvent,
+        {
+          invocationId: InvocationId;
+          error: ErrorObject | undefined;
+        }
+      >,
+      res,
+    ) => {
+      const executionId = req.params.executionId;
+      const invocationId = req.body.invocationId;
+      const error = req.body.error;
+
+      res.json(
+        convertDatesToTimestamps(
+          executionManager.completeInvocation(executionId, invocationId, error),
+        ),
+      );
+    },
+  );
+
   /**
    * Long polls for checkpoint data for an execution. The API will return data once checkpoint data
    * is available. It will store data until the next API call for this execution ID.
@@ -124,7 +154,7 @@ export async function startCheckpointServer(port: number) {
   /**
    * Updates the checkpoint data for a particular execution and operation ID with the intended status.
    *
-   * Used for resolving operations like wait steps, retries, and status transitions.
+   * Used for resolving operations like wait steps, retries, and status transitions, and also for resolving the execution itself.
    */
   app.post(
     `${API_PATHS.UPDATE_CHECKPOINT_DATA}/:executionId/:operationId`,

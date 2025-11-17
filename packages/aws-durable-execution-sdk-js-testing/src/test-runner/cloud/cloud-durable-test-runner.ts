@@ -123,7 +123,6 @@ export class CloudDurableTestRunner<ResultType>
         lambdaResponse,
         historyPoller.getEvents(),
         this.operationStorage,
-        [],
       );
     } finally {
       historyPoller.stopPolling();

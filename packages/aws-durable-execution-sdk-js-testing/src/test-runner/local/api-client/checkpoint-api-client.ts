@@ -1,20 +1,28 @@
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
-import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
+import { ErrorObject, Operation, Event } from "@aws-sdk/client-lambda";
 import {
   API_PATHS,
   HTTP_METHODS,
   getStartInvocationPath,
   getPollCheckpointDataPath,
   getUpdateCheckpointDataPath,
+  getCompleteInvocationPath,
 } from "../../../checkpoint-server/constants";
-import { ExecutionId } from "../../../checkpoint-server/utils/tagged-strings";
-import { SerializedCheckpointOperation } from "../../../checkpoint-server/types/operation-event";
+import {
+  ExecutionId,
+  InvocationId,
+} from "../../../checkpoint-server/utils/tagged-strings";
+import {
+  SerializedCheckpointOperation,
+  SerializedEvent,
+} from "../../../checkpoint-server/types/operation-event";
 import { SerializedInvocationResult } from "../../../checkpoint-server/types/serialized-invocation-result";
 import {
   deserializeCheckpointOperation,
   deserializeOperationEvents,
 } from "./deserialize/deserialize-operation-events";
+import { deserializeEvent } from "./deserialize/deserialize-event";
 
 export interface SerializedPollCheckpointResponse {
   operations: SerializedCheckpointOperation[];
@@ -108,6 +116,23 @@ export class CheckpointApiClient {
       ...result,
       operationEvents: deserializeOperationEvents(result.operationEvents),
     };
+  }
+
+  async completeInvocation(
+    executionId: ExecutionId,
+    invocationId: InvocationId,
+    error: ErrorObject | undefined,
+  ): Promise<Event> {
+    const result = await this.makeRequest<SerializedEvent>({
+      path: getCompleteInvocationPath(executionId),
+      method: HTTP_METHODS.POST,
+      body: JSON.stringify({
+        invocationId,
+        error,
+      }),
+    });
+
+    return deserializeEvent(result);
   }
 
   /**

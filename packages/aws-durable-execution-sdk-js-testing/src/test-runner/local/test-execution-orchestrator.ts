@@ -22,7 +22,7 @@ import {
   TestExecutionResult,
   TestExecutionState,
 } from "../common/test-execution-state";
-import { InvokeRequest, Invocation } from "../durable-test-runner";
+import { InvokeRequest } from "../durable-test-runner";
 import {
   OperationAction,
   OperationType,
@@ -55,16 +55,7 @@ export class TestExecutionOrchestrator {
     setCustomStorage(new LocalRunnerStorage());
 
     this.executionState = new TestExecutionState();
-    this.invocationTracker = new InvocationTracker();
-  }
-
-  /**
-   * Gets the list of all invocations that have been tracked during execution.
-   *
-   * @returns Array of invocation records
-   */
-  getInvocations(): Invocation[] {
-    return this.invocationTracker.getInvocations();
+    this.invocationTracker = new InvocationTracker(checkpointApi);
   }
 
   private async handleCompletedExecution(
@@ -542,6 +533,8 @@ export class TestExecutionOrchestrator {
     this.invocationTracker.createInvocation(invocationId);
 
     try {
+      defaultLogger.debug(`Invoking handler with invocationId=${invocationId}`);
+
       const value = await this.invokeHandlerInstance.invoke(
         this.handlerFunction,
         {
@@ -549,6 +542,11 @@ export class TestExecutionOrchestrator {
           checkpointToken: checkpointToken,
           operations,
         },
+      );
+
+      defaultLogger.debug(
+        `Handler response for invocationId=${invocationId}:`,
+        value,
       );
 
       if (value.Status === InvocationStatus.SUCCEEDED) {
@@ -562,10 +560,28 @@ export class TestExecutionOrchestrator {
           status: OperationStatus.FAILED,
         });
       }
+
+      this.operationStorage.addHistoryEvent(
+        await this.invocationTracker.completeInvocation(
+          executionId,
+          invocationId,
+          "Error" in value ? value.Error : undefined,
+        ),
+      );
     } catch (err) {
       this.executionState.rejectWith(err);
-    } finally {
-      this.invocationTracker.completeInvocation(invocationId);
+      this.operationStorage.addHistoryEvent(
+        await this.invocationTracker.completeInvocation(
+          executionId,
+          invocationId,
+          {
+            ErrorMessage: err instanceof Error ? err.message : undefined,
+            ErrorType: err instanceof Error ? err.name : undefined,
+            StackTrace:
+              err instanceof Error ? err.stack?.split("\n") : undefined,
+          },
+        ),
+      );
     }
   }
 }

@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import {
+  OperationStatus,
+  OperationType,
+  EventType,
+  ErrorObject,
+} from "@aws-sdk/client-lambda";
 import { ExecutionManager, StartExecutionParams } from "../execution-manager";
 import { CheckpointManager } from "../checkpoint-manager";
 import {
@@ -425,6 +430,189 @@ describe("execution-manager", () => {
 
         expect(result).toBeUndefined();
         expect(decodeCallbackId).toHaveBeenCalledWith(callbackId);
+      });
+    });
+
+    describe("completeInvocation", () => {
+      it("should throw an error if execution ID doesn't exist", () => {
+        const executionId = createExecutionId("non-existent-execution");
+        const invocationId = createInvocationId("test-invocation");
+
+        expect(() => {
+          executionManager.completeInvocation(
+            executionId,
+            invocationId,
+            undefined,
+          );
+        }).toThrow(`Execution not found for executionId="${executionId}"`);
+      });
+
+      it("should successfully complete invocation without error", () => {
+        // Create an execution first
+        const executionId = createExecutionId("test-execution-id");
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId });
+
+        const storage = executionManager.getCheckpointsByExecution(executionId);
+        expect(storage).toBeDefined();
+
+        // Mock the completeInvocation method on CheckpointManager
+        const mockTimestamps = {
+          startTimestamp: new Date("2023-01-01T00:00:00.000Z"),
+          endTimestamp: new Date("2023-01-01T00:01:00.000Z"),
+        };
+
+        const completeInvocationSpy = jest
+          .spyOn(storage!, "completeInvocation")
+          .mockReturnValue(mockTimestamps);
+
+        // Mock the eventProcessor.createHistoryEvent method
+        const mockHistoryEvent = {
+          EventType: EventType.InvocationCompleted,
+          Timestamp: new Date(),
+          InvocationCompletedDetails: {
+            StartTimestamp: mockTimestamps.startTimestamp,
+            EndTimestamp: mockTimestamps.endTimestamp,
+            Error: {
+              Payload: undefined,
+            },
+            RequestId: invocationId,
+          },
+        };
+
+        const createHistoryEventSpy = jest
+          .spyOn(storage!.eventProcessor, "createHistoryEvent")
+          .mockReturnValue(mockHistoryEvent);
+
+        // Call the method
+        const result = executionManager.completeInvocation(
+          executionId,
+          invocationId,
+          undefined,
+        );
+
+        // Verify the result
+        expect(result).toBe(mockHistoryEvent);
+
+        // Verify CheckpointManager.completeInvocation was called
+        expect(completeInvocationSpy).toHaveBeenCalledWith(invocationId);
+
+        // Verify eventProcessor.createHistoryEvent was called with correct parameters
+        expect(createHistoryEventSpy).toHaveBeenCalledWith(
+          EventType.InvocationCompleted,
+          undefined,
+          "InvocationCompletedDetails",
+          {
+            StartTimestamp: mockTimestamps.startTimestamp,
+            EndTimestamp: mockTimestamps.endTimestamp,
+            Error: {
+              Payload: undefined,
+            },
+            RequestId: invocationId,
+          },
+        );
+      });
+
+      it("should successfully complete invocation with error", () => {
+        // Create an execution first
+        const executionId = createExecutionId("test-execution-id");
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId });
+
+        const storage = executionManager.getCheckpointsByExecution(executionId);
+        expect(storage).toBeDefined();
+
+        // Mock error object
+        const errorObject: ErrorObject = {
+          ErrorType: "TestError",
+          ErrorMessage: "This is a test error",
+          StackTrace: ["line1", "line2"],
+        };
+
+        // Mock the completeInvocation method on CheckpointManager
+        const mockTimestamps = {
+          startTimestamp: new Date("2023-01-01T00:00:00.000Z"),
+          endTimestamp: new Date("2023-01-01T00:01:00.000Z"),
+        };
+
+        const completeInvocationSpy = jest
+          .spyOn(storage!, "completeInvocation")
+          .mockReturnValue(mockTimestamps);
+
+        // Mock the eventProcessor.createHistoryEvent method
+        const mockHistoryEvent = {
+          EventType: EventType.InvocationCompleted,
+          Timestamp: new Date(),
+          InvocationCompletedDetails: {
+            StartTimestamp: mockTimestamps.startTimestamp,
+            EndTimestamp: mockTimestamps.endTimestamp,
+            Error: {
+              Payload: errorObject,
+            },
+            RequestId: invocationId,
+          },
+        };
+
+        const createHistoryEventSpy = jest
+          .spyOn(storage!.eventProcessor, "createHistoryEvent")
+          .mockReturnValue(mockHistoryEvent);
+
+        // Call the method
+        const result = executionManager.completeInvocation(
+          executionId,
+          invocationId,
+          errorObject,
+        );
+
+        // Verify the result
+        expect(result).toBe(mockHistoryEvent);
+
+        // Verify CheckpointManager.completeInvocation was called
+        expect(completeInvocationSpy).toHaveBeenCalledWith(invocationId);
+
+        // Verify eventProcessor.createHistoryEvent was called with correct parameters including error
+        expect(createHistoryEventSpy).toHaveBeenCalledWith(
+          EventType.InvocationCompleted,
+          undefined,
+          "InvocationCompletedDetails",
+          {
+            StartTimestamp: mockTimestamps.startTimestamp,
+            EndTimestamp: mockTimestamps.endTimestamp,
+            Error: {
+              Payload: errorObject,
+            },
+            RequestId: invocationId,
+          },
+        );
+      });
+
+      it("should propagate errors from CheckpointManager.completeInvocation", () => {
+        // Create an execution first
+        const executionId = createExecutionId("test-execution-id");
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId });
+
+        const storage = executionManager.getCheckpointsByExecution(executionId);
+        expect(storage).toBeDefined();
+
+        // Mock the completeInvocation method to throw an error
+        const completeInvocationSpy = jest
+          .spyOn(storage!, "completeInvocation")
+          .mockImplementation(() => {
+            throw new Error("Invocation completion failed");
+          });
+
+        // Call the method and expect it to throw
+        expect(() => {
+          executionManager.completeInvocation(
+            executionId,
+            invocationId,
+            undefined,
+          );
+        }).toThrow("Invocation completion failed");
+
+        // Verify CheckpointManager.completeInvocation was called
+        expect(completeInvocationSpy).toHaveBeenCalledWith(invocationId);
       });
     });
   });

@@ -4,10 +4,7 @@ import {
   OperationAction,
   OperationStatus,
 } from "@aws-sdk/client-lambda";
-import {
-  createInvocationId,
-  createExecutionId,
-} from "../../utils/tagged-strings";
+import { createExecutionId } from "../../utils/tagged-strings";
 import { CheckpointManager } from "../checkpoint-manager";
 
 jest.mock("node:crypto", () => ({
@@ -16,8 +13,6 @@ jest.mock("node:crypto", () => ({
 
 describe("checkpoint-manager registerUpdate", () => {
   let storage: CheckpointManager;
-
-  const mockInvocationId = createInvocationId();
 
   beforeEach(() => {
     storage = new CheckpointManager(createExecutionId("test-execution-id"));
@@ -35,10 +30,7 @@ describe("checkpoint-manager registerUpdate", () => {
     };
 
     expect(() =>
-      storage.registerUpdate(
-        updateWithoutId as OperationUpdate,
-        mockInvocationId,
-      ),
+      storage.registerUpdate(updateWithoutId as OperationUpdate),
     ).toThrow("Missing Id in update");
   });
 
@@ -50,7 +42,7 @@ describe("checkpoint-manager registerUpdate", () => {
       Type: OperationType.STEP,
     };
 
-    const result = storage.registerUpdate(update, mockInvocationId);
+    const result = storage.registerUpdate(update);
 
     expect(result).toBeDefined();
     expect(result.operation.Id).toBe("step-id");
@@ -74,7 +66,7 @@ describe("checkpoint-manager registerUpdate", () => {
       },
     };
 
-    const result = storage.registerUpdate(update, mockInvocationId);
+    const result = storage.registerUpdate(update);
 
     expect(result).toBeDefined();
     expect(result.operation.Id).toBe("CONTEXT-id");
@@ -93,25 +85,19 @@ describe("checkpoint-manager registerUpdate", () => {
     storage.initialize();
 
     // Register a step operation
-    storage.registerUpdate(
-      {
-        Id: "new-id",
-        Action: OperationAction.START,
-        Type: OperationType.STEP,
-      },
-      mockInvocationId,
-    );
+    storage.registerUpdate({
+      Id: "new-id",
+      Action: OperationAction.START,
+      Type: OperationType.STEP,
+    });
 
     // Register the operation
-    const { operation } = storage.registerUpdate(
-      {
-        Id: "new-id",
-        Action: OperationAction.SUCCEED,
-        Payload: "new payload",
-        Type: OperationType.STEP,
-      },
-      mockInvocationId,
-    );
+    const { operation } = storage.registerUpdate({
+      Id: "new-id",
+      Action: OperationAction.SUCCEED,
+      Payload: "new payload",
+      Type: OperationType.STEP,
+    });
 
     expect(operation).toBeDefined();
     expect(operation.Status).toBe(OperationStatus.SUCCEEDED);
@@ -128,7 +114,7 @@ describe("checkpoint-manager registerUpdate", () => {
       Payload: JSON.stringify({ processed: true, value: 42 }),
     };
 
-    const result = storage.registerUpdate(update, mockInvocationId);
+    const result = storage.registerUpdate(update);
 
     // Result should not be populated in registerUpdate, only in completeOperation
     expect(result.operation.StepDetails).toBeUndefined();
@@ -143,7 +129,7 @@ describe("checkpoint-manager registerUpdate", () => {
       Payload: undefined,
     };
 
-    const result = storage.registerUpdate(update, mockInvocationId);
+    const result = storage.registerUpdate(update);
 
     // Result should not be populated in registerUpdate, only in completeOperation
     expect(result.operation.StepDetails).toBeUndefined();
@@ -160,7 +146,7 @@ describe("checkpoint-manager registerUpdate", () => {
       },
     };
 
-    const result = storage.registerUpdate(update, mockInvocationId);
+    const result = storage.registerUpdate(update);
 
     expect(result).toBeDefined();
     expect(result.operation.Id).toBe("wait-id");
@@ -199,10 +185,10 @@ describe("checkpoint-manager registerUpdate", () => {
         WaitSeconds: 5,
       },
     };
-    const firstResult = storage.registerUpdate(waitUpdate, mockInvocationId);
+    const firstResult = storage.registerUpdate(waitUpdate);
 
     // Try to register it again
-    const secondResult = storage.registerUpdate(waitUpdate, mockInvocationId);
+    const secondResult = storage.registerUpdate(waitUpdate);
 
     expect(secondResult).toBe(firstResult);
   });
@@ -217,7 +203,7 @@ describe("checkpoint-manager registerUpdate", () => {
       Type: OperationType.STEP,
       Action: OperationAction.START,
     };
-    storage.registerUpdate(update, mockInvocationId);
+    storage.registerUpdate(update);
 
     // Get the pending updates
     const pendingUpdates = await pendingUpdatesPromise;
@@ -236,7 +222,7 @@ describe("checkpoint-manager registerUpdate", () => {
         Action: action,
       };
 
-      const result = storage.registerUpdate(update, mockInvocationId);
+      const result = storage.registerUpdate(update);
 
       expect(result).toBeDefined();
       expect(result.operation.Id).toBe("step-id");
@@ -269,18 +255,15 @@ describe("checkpoint-manager registerUpdate", () => {
 
     it("should process retry operation during initial registration", () => {
       // Register a STEP operation with RETRY action
-      const result = storage.registerUpdate(
-        {
-          Id: "retry-step-id",
-          Action: OperationAction.RETRY,
-          Type: OperationType.STEP,
-          Name: "test-retry-step",
-          StepOptions: {
-            NextAttemptDelaySeconds: 15,
-          },
+      const result = storage.registerUpdate({
+        Id: "retry-step-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-retry-step",
+        StepOptions: {
+          NextAttemptDelaySeconds: 15,
         },
-        mockInvocationId,
-      );
+      });
 
       expect(result.operation.Id).toBe("retry-step-id");
       expect(result.operation.Status).toBe(OperationStatus.PENDING);
@@ -303,15 +286,12 @@ describe("checkpoint-manager registerUpdate", () => {
     });
 
     it("should not process retry for START action during registration", () => {
-      const result = storage.registerUpdate(
-        {
-          Id: "step-start-id",
-          Action: OperationAction.START,
-          Type: OperationType.STEP,
-          Name: "test-step-start",
-        },
-        mockInvocationId,
-      );
+      const result = storage.registerUpdate({
+        Id: "step-start-id",
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+        Name: "test-step-start",
+      });
 
       expect(result.operation.Status).toBe(OperationStatus.STARTED);
       expect(result.operation.StepDetails?.Attempt).toBeUndefined();
@@ -322,32 +302,26 @@ describe("checkpoint-manager registerUpdate", () => {
 
     it("should handle multiple retry operations with different delays", () => {
       // Register first retry operation
-      const retry1 = storage.registerUpdate(
-        {
-          Id: "retry-1-id",
-          Action: OperationAction.RETRY,
-          Type: OperationType.STEP,
-          Name: "test-retry-1",
-          StepOptions: {
-            NextAttemptDelaySeconds: 10,
-          },
+      const retry1 = storage.registerUpdate({
+        Id: "retry-1-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-retry-1",
+        StepOptions: {
+          NextAttemptDelaySeconds: 10,
         },
-        mockInvocationId,
-      );
+      });
 
       // Register second retry operation
-      const retry2 = storage.registerUpdate(
-        {
-          Id: "retry-2-id",
-          Action: OperationAction.RETRY,
-          Type: OperationType.STEP,
-          Name: "test-retry-2",
-          StepOptions: {
-            NextAttemptDelaySeconds: 20,
-          },
+      const retry2 = storage.registerUpdate({
+        Id: "retry-2-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-retry-2",
+        StepOptions: {
+          NextAttemptDelaySeconds: 20,
         },
-        mockInvocationId,
-      );
+      });
 
       expect(retry1.operation.Status).toBe(OperationStatus.PENDING);
       expect(retry1.operation.StepDetails?.Attempt).toBe(1);
@@ -363,20 +337,17 @@ describe("checkpoint-manager registerUpdate", () => {
     });
 
     it("should preserve other operation properties when processing retry", () => {
-      const result = storage.registerUpdate(
-        {
-          Id: "retry-with-props-id",
-          Action: OperationAction.RETRY,
-          Type: OperationType.STEP,
-          Name: "test-retry-with-props",
-          ParentId: "parent-operation-id",
-          SubType: "custom-subtype",
-          StepOptions: {
-            NextAttemptDelaySeconds: 30,
-          },
+      const result = storage.registerUpdate({
+        Id: "retry-with-props-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-retry-with-props",
+        ParentId: "parent-operation-id",
+        SubType: "custom-subtype",
+        StepOptions: {
+          NextAttemptDelaySeconds: 30,
         },
-        mockInvocationId,
-      );
+      });
 
       expect(result.operation.Status).toBe(OperationStatus.PENDING);
       expect(result.operation.Name).toBe("test-retry-with-props");
@@ -396,33 +367,24 @@ describe("checkpoint-manager registerUpdate", () => {
 
     it("should return false after registering non-execution operations", () => {
       // Register various operation types
-      storage.registerUpdate(
-        {
-          Id: "step-id",
-          Type: OperationType.STEP,
-          Action: OperationAction.START,
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "step-id",
+        Type: OperationType.STEP,
+        Action: OperationAction.START,
+      });
 
-      storage.registerUpdate(
-        {
-          Id: "wait-id",
-          Type: OperationType.WAIT,
-          Action: OperationAction.START,
-          WaitOptions: { WaitSeconds: 5 },
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "wait-id",
+        Type: OperationType.WAIT,
+        Action: OperationAction.START,
+        WaitOptions: { WaitSeconds: 5 },
+      });
 
-      storage.registerUpdate(
-        {
-          Id: "context-id",
-          Type: OperationType.CONTEXT,
-          Action: OperationAction.START,
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "context-id",
+        Type: OperationType.CONTEXT,
+        Action: OperationAction.START,
+      });
 
       expect(storage.isExecutionCompleted()).toBe(false);
     });
@@ -467,14 +429,11 @@ describe("checkpoint-manager registerUpdate", () => {
       expect(storage.isExecutionCompleted()).toBe(true);
 
       // Try registering more operations - completion state should remain true
-      storage.registerUpdate(
-        {
-          Id: "step-after-completion",
-          Type: OperationType.STEP,
-          Action: OperationAction.START,
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "step-after-completion",
+        Type: OperationType.STEP,
+        Action: OperationAction.START,
+      });
 
       expect(storage.isExecutionCompleted()).toBe(true);
     });
@@ -507,23 +466,22 @@ describe("checkpoint-manager registerUpdate", () => {
         },
       ] as OperationUpdate[];
 
-      expect(() => storage.registerUpdates(updates, mockInvocationId)).toThrow(
+      expect(() => storage.registerUpdates(updates)).toThrow(
         "Invalid checkpoint token",
       );
+      expect(storage.operationDataMap.has("step-1")).toBe(false);
+      expect(storage.operationDataMap.has("step-2")).toBe(false);
     });
 
     it("should not affect execution completion when updating non-execution operations", () => {
       // Initialize storage and add some operations
       storage.initialize();
 
-      storage.registerUpdate(
-        {
-          Id: "step-id",
-          Type: OperationType.STEP,
-          Action: OperationAction.START,
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "step-id",
+        Type: OperationType.STEP,
+        Action: OperationAction.START,
+      });
 
       expect(storage.isExecutionCompleted()).toBe(false);
 
