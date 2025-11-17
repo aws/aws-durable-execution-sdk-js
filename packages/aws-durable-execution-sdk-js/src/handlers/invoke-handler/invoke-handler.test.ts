@@ -356,7 +356,7 @@ describe("InvokeHandler", () => {
 
       expect(mockLog).toHaveBeenCalledWith(
         "🚀",
-        "Invoke test-function started, re-checking status",
+        "Invoke test-function started (phase 1)",
       );
     });
 
