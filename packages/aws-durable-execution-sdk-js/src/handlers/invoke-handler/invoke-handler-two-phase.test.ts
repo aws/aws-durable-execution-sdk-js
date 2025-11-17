@@ -19,7 +19,7 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 
 const mockTerminate = terminate as jest.MockedFunction<typeof terminate>;
-const mockLog = log as jest.MockedFunction<typeof log>;
+const _mockLog = log as jest.MockedFunction<typeof log>;
 const mockSafeSerialize = safeSerialize as jest.MockedFunction<
   typeof safeSerialize
 >;
@@ -92,8 +92,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
     mockContext.getStepData = jest
       .fn()
       .mockReturnValueOnce(null) // Phase 1 - no stepData
-      .mockReturnValueOnce({ Status: OperationStatus.STARTED }) // Phase 2 - STARTED
-      .mockReturnValue({ Status: OperationStatus.STARTED }); // Subsequent calls
+      .mockReturnValue({ Status: OperationStatus.STARTED }); // Phase 2 - STARTED
 
     const invokeHandler = createInvokeHandler(
       mockContext,
@@ -108,8 +107,6 @@ describe("Invoke Handler Two-Phase Execution", () => {
 
     // Wait for phase 1 to complete
     await new Promise((resolve) => setTimeout(resolve, 10));
-
-    const phase1Calls = mockCheckpoint.mock.calls.length;
 
     // Phase 2: Await the promise - this should execute again and terminate
     await expect(invokePromise).rejects.toThrow("TERMINATION_FOR_TEST");
