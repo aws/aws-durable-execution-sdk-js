@@ -1,17 +1,17 @@
 import { log } from "./logger";
 
 describe("Logger", () => {
-  let consoleLogSpy: jest.SpyInstance;
+  let consoleDebugSpy: jest.SpyInstance;
   const originalEnv = process.env.DURABLE_VERBOSE_MODE;
 
   beforeEach(() => {
-    // Create a spy on console.log before each test
-    consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+    // Create a spy on console.debug before each test
+    consoleDebugSpy = jest.spyOn(console, "debug").mockImplementation(() => {});
   });
 
   afterEach(() => {
-    // Restore the original console.log after each test
-    consoleLogSpy.mockRestore();
+    // Restore the original console.debug after each test
+    consoleDebugSpy.mockRestore();
     // Restore original environment variable
     if (originalEnv !== undefined) {
       process.env.DURABLE_VERBOSE_MODE = originalEnv;
@@ -30,8 +30,8 @@ describe("Logger", () => {
     log(emoji, message);
 
     // Assert
-    expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-    expect(consoleLogSpy).toHaveBeenCalledWith("🚀 Test message", "");
+    expect(consoleDebugSpy).toHaveBeenCalledTimes(1);
+    expect(consoleDebugSpy).toHaveBeenCalledWith("🚀 Test message", "");
   });
 
   test("should not log message when DURABLE_VERBOSE_MODE is false", () => {
@@ -44,7 +44,7 @@ describe("Logger", () => {
     log(emoji, message);
 
     // Assert
-    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(consoleDebugSpy).not.toHaveBeenCalled();
   });
 
   test("should not log message when DURABLE_VERBOSE_MODE is undefined", () => {
@@ -57,7 +57,7 @@ describe("Logger", () => {
     log(emoji, message);
 
     // Assert
-    expect(consoleLogSpy).not.toHaveBeenCalled();
+    expect(consoleDebugSpy).not.toHaveBeenCalled();
   });
 
   test("should log message with stringified data when data is provided", () => {
@@ -71,8 +71,8 @@ describe("Logger", () => {
     log(emoji, message, data);
 
     // Assert
-    expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-    expect(consoleLogSpy).toHaveBeenCalledWith(
+    expect(consoleDebugSpy).toHaveBeenCalledTimes(1);
+    expect(consoleDebugSpy).toHaveBeenCalledWith(
       "📊 Data received",
       JSON.stringify(data, null, 2),
     );
@@ -95,8 +95,8 @@ describe("Logger", () => {
     log(emoji, message, complexData);
 
     // Assert
-    expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-    expect(consoleLogSpy).toHaveBeenCalledWith(
+    expect(consoleDebugSpy).toHaveBeenCalledTimes(1);
+    expect(consoleDebugSpy).toHaveBeenCalledWith(
       "🔄 Complex data",
       JSON.stringify(complexData, null, 2),
     );
@@ -112,17 +112,17 @@ describe("Logger", () => {
     log(emoji, message, undefined);
 
     // Assert
-    expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-    expect(consoleLogSpy).toHaveBeenCalledWith("⚠️ No data", "");
+    expect(consoleDebugSpy).toHaveBeenCalledTimes(1);
+    expect(consoleDebugSpy).toHaveBeenCalledWith("⚠️ No data", "");
 
     // Reset mock
-    consoleLogSpy.mockClear();
+    consoleDebugSpy.mockClear();
 
     // Act - with null
     log(emoji, message, null);
 
     // Assert
-    expect(consoleLogSpy).toHaveBeenCalledTimes(1);
-    expect(consoleLogSpy).toHaveBeenCalledWith("⚠️ No data", "");
+    expect(consoleDebugSpy).toHaveBeenCalledTimes(1);
+    expect(consoleDebugSpy).toHaveBeenCalledWith("⚠️ No data", "");
   });
 });
