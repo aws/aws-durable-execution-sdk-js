@@ -131,4 +131,40 @@ describe("Wait Handler Two-Phase Execution", () => {
     // Should be marked as executed
     expect((waitPromise as DurablePromise<void>).isExecuted).toBe(true);
   });
+
+  it("should only checkpoint once when stepData already exists", async () => {
+    // Mock stepData to exist (simulating phase 1 already completed)
+    mockContext.getStepData = jest.fn().mockReturnValue({
+      Id: "step-1",
+      Status: null, // Not completed yet
+    });
+
+    const waitHandler = createWaitHandler(
+      mockContext,
+      mockCheckpoint,
+      createStepId,
+      hasRunningOperations,
+      getOperationsEmitter,
+    );
+
+    // Phase 1: Create the promise
+    const waitPromise = waitHandler({ seconds: 5 });
+
+    // Wait for phase 1 to complete
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Checkpoint should have been called once in phase 1
+    const phase1CheckpointCalls = mockCheckpoint.mock.calls.length;
+    expect(phase1CheckpointCalls).toBe(0); // stepData exists, no checkpoint
+
+    // Phase 2: Await the promise
+    try {
+      await waitPromise;
+    } catch {
+      // Expected to throw termination error
+    }
+
+    // Checkpoint should still only be called once (or zero if stepData existed)
+    expect(mockCheckpoint.mock.calls.length).toBe(0);
+  });
 });
