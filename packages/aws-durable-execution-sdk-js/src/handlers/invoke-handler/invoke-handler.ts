@@ -213,7 +213,7 @@ export const createInvokeHandler = (
     };
 
     // Create a promise that tracks phase 1 completion
-    const phase1Promise = startInvokeOperation()
+    const startInvokePromise = startInvokeOperation()
       .then(() => {
         log("✅", "Invoke phase 1 complete:", { stepId, name: name || funcId });
       })
@@ -225,7 +225,7 @@ export const createInvokeHandler = (
     // Return DurablePromise that will execute phase 2 when awaited
     return new DurablePromise(async () => {
       // Wait for phase 1 to complete first
-      await phase1Promise;
+      await startInvokePromise;
       // Then execute phase 2
       return await continueInvokeOperation();
     });
