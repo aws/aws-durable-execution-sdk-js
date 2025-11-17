@@ -94,6 +94,8 @@ export class TestExecutionOrchestrator {
         },
       });
       throw err;
+    } finally {
+      this.scheduler.flushTimers();
     }
   }
 
@@ -348,6 +350,11 @@ export class TestExecutionOrchestrator {
       throw new Error("Missing operation id");
     }
 
+    defaultLogger.debug(`Queuing wait in ${waitSeconds}s`, {
+      executionId,
+      operation,
+      update,
+    });
     this.scheduleAsyncFunction(
       waitSeconds,
       async () => {
@@ -362,6 +369,11 @@ export class TestExecutionOrchestrator {
         );
       },
       () => {
+        defaultLogger.debug(`Wait triggered after ${waitSeconds}s`, {
+          executionId,
+          operation,
+          update,
+        });
         return this.checkpointApi.updateCheckpointData({
           executionId,
           operationId,
@@ -401,6 +413,11 @@ export class TestExecutionOrchestrator {
         throw new Error("Missing operation id");
       }
 
+      defaultLogger.debug(`Queuing step retry in ${retryDelaySeconds}s`, {
+        executionId,
+        operation,
+        update,
+      });
       this.scheduleAsyncFunction(
         retryDelaySeconds,
         async () => {
@@ -414,6 +431,11 @@ export class TestExecutionOrchestrator {
           );
         },
         async () => {
+          defaultLogger.debug(`Retry triggered after ${retryDelaySeconds}s`, {
+            executionId,
+            operation,
+            update,
+          });
           await this.checkpointApi.updateCheckpointData({
             executionId,
             operationId,
@@ -463,6 +485,9 @@ export class TestExecutionOrchestrator {
       throw new Error("Could not find status in execution operation");
     }
 
+    defaultLogger.debug("Resolving execution", {
+      update,
+    });
     this.executionState.resolveWith({
       result: update.Payload,
       error: update.Error,

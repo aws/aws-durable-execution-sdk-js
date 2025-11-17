@@ -160,12 +160,14 @@ describe("TestExecutionOrchestrator", () => {
     jest.useRealTimers();
   });
 
-  function terminateExecution({
+  function getTerminatePollingResponse({
     status = OperationStatus.SUCCEEDED,
     result = "",
     error,
-  }: { status?: OperationStatus; result?: string; error?: ErrorObject } = {}) {
-    (checkpointApi.pollCheckpointData as jest.Mock).mockResolvedValueOnce({
+  }: { status?: OperationStatus; result?: string; error?: ErrorObject } = {}): {
+    operations: CheckpointOperation[];
+  } {
+    return {
       operations: [
         {
           operation: {
@@ -186,8 +188,20 @@ describe("TestExecutionOrchestrator", () => {
           },
           events: [],
         },
-      ] satisfies CheckpointOperation[],
-    });
+      ],
+    };
+  }
+
+  function terminateExecution(
+    params: {
+      status?: OperationStatus;
+      result?: string;
+      error?: ErrorObject;
+    } = {},
+  ) {
+    (checkpointApi.pollCheckpointData as jest.Mock).mockResolvedValueOnce(
+      getTerminatePollingResponse(params),
+    );
   }
 
   describe("executeHandler", () => {
@@ -808,12 +822,20 @@ describe("TestExecutionOrchestrator", () => {
         ],
       });
 
+      let resolvePolling: (value: {
+        operations: CheckpointOperation[];
+      }) => void;
       // Start execution and let it process the retry
       (checkpointApi.pollCheckpointData as jest.Mock)
         .mockResolvedValueOnce({
           operations: mockOperations,
         })
-        .mockResolvedValue({ operations: [] });
+        .mockReturnValueOnce(
+          new Promise<{ operations: CheckpointOperation[] }>((resolve) => {
+            resolvePolling = resolve;
+          }),
+        )
+        .mockRejectedValue(new Error("Not implemented"));
 
       mockInvoke.mockResolvedValue({
         Status: InvocationStatus.PENDING,
@@ -821,10 +843,14 @@ describe("TestExecutionOrchestrator", () => {
 
       const executePromise = orchestrator.executeHandler();
 
-      terminateExecution();
-
       await jest.advanceTimersByTimeAsync(6000); // Advance by retry delay
 
+      resolvePolling!(getTerminatePollingResponse());
+
+      // Complete last polling loop
+      await jest.advanceTimersByTimeAsync(500);
+
+      // Waiting for execute promise
       await executePromise;
 
       // Verify new invocation was started
@@ -881,7 +907,11 @@ describe("TestExecutionOrchestrator", () => {
         .mockResolvedValueOnce({
           operations: mockOperations,
         })
-        .mockResolvedValue({ operations: [] });
+        .mockReturnValueOnce(
+          new Promise<never>(() => {
+            // never resolve and let the invocation complete
+          }),
+        );
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "skip-time-token",
@@ -892,6 +922,16 @@ describe("TestExecutionOrchestrator", () => {
           },
         ],
       });
+
+      mockInvoke
+        // Initial
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        // Retry
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+        });
 
       const executePromise = orchestrator.executeHandler();
 
@@ -909,6 +949,84 @@ describe("TestExecutionOrchestrator", () => {
 
       // Verify handler was re-invoked after retry
       expect(mockInvoke).toHaveBeenCalledTimes(2); // Initial + retry
+    });
+
+    it("should clear retry timers when execution succeeds", async () => {
+      jest.useFakeTimers();
+
+      // Create orchestrator with skipTime enabled
+      const orchestrator = new TestExecutionOrchestrator(
+        mockHandlerFunction,
+        mockOperationStorage,
+        checkpointApi,
+        mockScheduler,
+        mockFunctionStorage,
+        false,
+      );
+
+      const retryOperation: Operation = {
+        Id: "skip-time-retry",
+        Type: OperationType.STEP,
+        Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
+      };
+
+      const retryUpdate = {
+        Id: "skip-time-retry",
+        Type: OperationType.STEP,
+        Action: OperationAction.RETRY,
+        StepOptions: {
+          NextAttemptDelaySeconds: 10,
+        },
+      };
+
+      const mockOperations = [
+        {
+          operation: retryOperation,
+          update: retryUpdate,
+        },
+      ];
+
+      (checkpointApi.pollCheckpointData as jest.Mock)
+        .mockResolvedValueOnce({
+          operations: mockOperations,
+        })
+        .mockReturnValueOnce(
+          new Promise<never>(() => {
+            // never resolve and let the invocation complete
+          }),
+        );
+
+      (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
+        checkpointToken: "skip-time-token",
+        operationEvents: [
+          {
+            events: [],
+            operation: retryOperation,
+          },
+        ],
+      });
+
+      mockInvoke
+        // Initial
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+        });
+
+      const executePromise = orchestrator.executeHandler();
+
+      await jest.advanceTimersByTimeAsync(1000);
+
+      const result = await executePromise;
+
+      // Verify execution completed successfully
+      expect(result.status).toBe(OperationStatus.SUCCEEDED);
+
+      // Verify new invocation was not started (retry was not triggered)
+      expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
+
+      // Verify handler was not re-invoked after retry
+      expect(mockInvoke).toHaveBeenCalledTimes(1); // Initial only
     });
 
     it("should throw error when NextAttemptDelaySeconds is missing", async () => {
@@ -1054,7 +1172,11 @@ describe("TestExecutionOrchestrator", () => {
         .mockResolvedValueOnce({
           operations: mockOperations,
         })
-        .mockResolvedValue({ operations: [] });
+        .mockReturnValueOnce(
+          new Promise<never>(() => {
+            // never resolve and let the invocation complete
+          }),
+        );
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "multi-retry-token",
@@ -1070,11 +1192,27 @@ describe("TestExecutionOrchestrator", () => {
         ],
       });
 
+      mockInvoke
+        // Initial
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        // Retry 1
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        // Retry 2 - Final invocation
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+        });
+
       const executePromise = orchestrator.executeHandler();
 
-      await mockScheduler.waitForScheduledFunction();
+      // Advance by max retry delay to trigger both retries
+      await jest.advanceTimersByTimeAsync(4000);
 
-      await jest.advanceTimersByTimeAsync(4000); // Advance by max retry delay to trigger both
+      // Complete polling loop
+      await jest.advanceTimersByTimeAsync(1000);
 
       await executePromise;
 
@@ -1116,7 +1254,11 @@ describe("TestExecutionOrchestrator", () => {
         .mockResolvedValueOnce({
           operations: mockOperations,
         })
-        .mockResolvedValue({ operations: [] });
+        .mockReturnValueOnce(
+          new Promise<never>(() => {
+            // never resolve and let the invocation complete
+          }),
+        );
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "status-ready-token",
@@ -1130,13 +1272,15 @@ describe("TestExecutionOrchestrator", () => {
         invocationId: createInvocationId("new-invocation"),
       });
 
-      mockInvoke.mockResolvedValue({
-        Status: InvocationStatus.PENDING,
-      });
+      mockInvoke
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+        });
 
       const executePromise = orchestrator.executeHandler();
-
-      terminateExecution();
 
       await jest.advanceTimersByTimeAsync(4000); // Advance by retry delay
 
@@ -1160,7 +1304,7 @@ describe("TestExecutionOrchestrator", () => {
       expect(mockInvoke).toHaveBeenCalledTimes(2); // Initial + retry
     });
 
-    it("should call updateCheckpointData with correct new parameter structure", async () => {
+    it("should call updateCheckpointData with correct parameter structure", async () => {
       jest.useFakeTimers();
 
       const waitOperation: Operation = {
@@ -1189,7 +1333,11 @@ describe("TestExecutionOrchestrator", () => {
         .mockResolvedValueOnce({
           operations: mockOperations,
         })
-        .mockResolvedValue({ operations: [] });
+        .mockReturnValueOnce(
+          new Promise<never>(() => {
+            // never resolve and let the invocation complete
+          }),
+        );
 
       (checkpointApi.startInvocation as jest.Mock).mockResolvedValue({
         checkpointToken: "param-test-token",
@@ -1203,13 +1351,15 @@ describe("TestExecutionOrchestrator", () => {
         invocationId: createInvocationId("new-invocation"),
       });
 
-      mockInvoke.mockResolvedValue({
-        Status: InvocationStatus.PENDING,
-      });
+      mockInvoke
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+        });
 
       const executePromise = orchestrator.executeHandler();
-
-      terminateExecution();
 
       await jest.advanceTimersByTimeAsync(3000); // Advance by wait delay
 
@@ -1287,15 +1437,21 @@ describe("TestExecutionOrchestrator", () => {
         .mockResolvedValueOnce({
           operations: mockOperations,
         })
-        .mockResolvedValue({ operations: [] });
+        .mockReturnValueOnce(
+          new Promise<never>(() => {
+            // never resolve and let the invocation complete
+          }),
+        );
 
-      mockInvoke.mockResolvedValue({
-        Status: InvocationStatus.PENDING,
-      });
+      mockInvoke
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+        });
 
       const executePromise = orchestrator.executeHandler();
-
-      terminateExecution();
 
       await jest.advanceTimersByTimeAsync(2000); // Advance by retry delay
 
@@ -1303,9 +1459,12 @@ describe("TestExecutionOrchestrator", () => {
 
       // Verify callback (updateCheckpointData) was called before invocation function (startInvocation)
       expect(callOrder).toEqual([
+        // Retry callback update
         "updateCheckpointData",
-        "updateCheckpointData",
+        // Invocation retry
         "startInvocation",
+        // Execution completed update
+        "updateCheckpointData",
       ]);
     });
 

@@ -1,4 +1,5 @@
 import { ErrorObject, ExecutionStatus } from "@aws-sdk/client-lambda";
+import { defaultLogger } from "../../logger";
 
 export interface TestExecutionResult {
   status?: ExecutionStatus;
@@ -38,6 +39,7 @@ export class TestExecutionState {
    * This should be called when the handler execution fails.
    */
   rejectWith(error: unknown): void {
+    defaultLogger.debug("Rejecting execution with error", error);
     this.rejectExecution?.(error);
   }
 }

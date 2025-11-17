@@ -181,6 +181,90 @@ describe("Scheduler", () => {
     });
   });
 
+  describe("flushTimers", () => {
+    it("should clear all running timers and prevent functions from executing", async () => {
+      const mockFn1 = jest.fn().mockResolvedValue(undefined);
+      const mockFn2 = jest.fn().mockResolvedValue(undefined);
+      const mockOnError = jest.fn();
+
+      // Schedule multiple functions
+      scheduler.scheduleFunction(mockFn1, 1000, mockOnError);
+      scheduler.scheduleFunction(mockFn2, 2000, mockOnError);
+
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      // Flush all timers
+      scheduler.flushTimers();
+
+      // Fast-forward time - functions should not execute
+      jest.advanceTimersByTime(3000);
+      await Promise.resolve();
+
+      expect(mockFn1).not.toHaveBeenCalled();
+      expect(mockFn2).not.toHaveBeenCalled();
+      expect(mockOnError).not.toHaveBeenCalled();
+    });
+
+    it("should reset hasScheduledFunction flag to false", () => {
+      const mockFn = jest.fn().mockResolvedValue(undefined);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(mockFn, 1000, mockOnError);
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      scheduler.flushTimers();
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
+    it("should handle flushing when no timers are running", () => {
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+
+      // Should not throw an error
+      expect(() => {
+        scheduler.flushTimers();
+      }).not.toThrow();
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
+    it("should allow scheduling new functions after flushing", async () => {
+      const mockFn1 = jest.fn().mockResolvedValue(undefined);
+      const mockFn2 = jest.fn().mockResolvedValue(undefined);
+      const mockOnError = jest.fn();
+
+      // Schedule and flush
+      scheduler.scheduleFunction(mockFn1, 1000, mockOnError);
+      scheduler.flushTimers();
+
+      // Schedule new function after flush
+      scheduler.scheduleFunction(mockFn2, 1000, mockOnError);
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      // New function should execute normally
+      jest.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      expect(mockFn1).not.toHaveBeenCalled(); // First function was flushed
+      expect(mockFn2).toHaveBeenCalledTimes(1); // Second function executed
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
+    it("should handle flushing timers that would have thrown errors", async () => {
+      const error = new Error("Test error");
+      const mockFn = jest.fn().mockRejectedValue(error);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(mockFn, 1000, mockOnError);
+      scheduler.flushTimers();
+
+      // Advance time - error handler should not be called
+      jest.advanceTimersByTime(2000);
+      await Promise.resolve();
+
+      expect(mockFn).not.toHaveBeenCalled();
+      expect(mockOnError).not.toHaveBeenCalled();
+    });
+  });
+
   describe("integration scenarios", () => {
     it("should handle scheduling while waiting", async () => {
       const mockFn = jest.fn().mockResolvedValue(undefined);
