@@ -1,4 +1,9 @@
-import { ExecutionContext, InvokeConfig, OperationSubType } from "../../types";
+import {
+  ExecutionContext,
+  InvokeConfig,
+  OperationSubType,
+  DurablePromise,
+} from "../../types";
 import { InvokeError } from "../../errors/durable-error/durable-error";
 import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
@@ -25,32 +30,37 @@ export const createInvokeHandler = (
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
+  checkAndUpdateReplayMode?: () => void,
 ): {
-  <I, O>(funcId: string, input: I, config?: InvokeConfig<I, O>): Promise<O>;
+  <I, O>(
+    funcId: string,
+    input: I,
+    config?: InvokeConfig<I, O>,
+  ): DurablePromise<O>;
   <I, O>(
     name: string,
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
 } => {
   function invokeHandler<I, O>(
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
   function invokeHandler<I, O>(
     name: string,
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
-  async function invokeHandler<I, O>(
+  ): DurablePromise<O>;
+  function invokeHandler<I, O>(
     nameOrFuncId: string,
     funcIdOrInput?: string | I,
     inputOrConfig?: I | InvokeConfig<I, O>,
     maybeConfig?: InvokeConfig<I, O>,
-  ): Promise<O> {
+  ): DurablePromise<O> {
     const isNameFirst = typeof funcIdOrInput === "string";
     const name = isNameFirst ? nameOrFuncId : undefined;
     const funcId = isNameFirst ? (funcIdOrInput as string) : nameOrFuncId;
@@ -61,14 +71,14 @@ export const createInvokeHandler = (
 
     const stepId = createStepId();
 
-    log("🔗", `Invoke ${name || funcId} (${stepId})`);
+    // Phase 1: Only checkpoint if needed, don't execute full logic
+    const startInvokeOperation = async (): Promise<void> => {
+      log("🔗", `Invoke ${name || funcId} (${stepId}) - phase 1`);
 
-    // Main invoke logic - can be re-executed if step status changes
-    while (true) {
-      // Check if we have existing step data
-      const stepData = context.getStepData(stepId);
+      // Check initial step data for replay consistency validation
+      const initialStepData = context.getStepData(stepId);
 
-      // Validate replay consistency
+      // Validate replay consistency once before any execution
       validateReplayConsistency(
         stepId,
         {
@@ -76,74 +86,17 @@ export const createInvokeHandler = (
           name,
           subType: OperationSubType.CHAINED_INVOKE,
         },
-        stepData,
+        initialStepData,
         context,
       );
 
-      if (stepData?.Status === OperationStatus.SUCCEEDED) {
-        // Return cached result - no need to check for errors in successful operations
-        const invokeDetails = stepData.ChainedInvokeDetails;
-        return await safeDeserialize(
-          config?.resultSerdes || defaultSerdes,
-          invokeDetails?.Result,
-          stepId,
-          name,
-          context.terminationManager,
-
-          context.durableExecutionArn,
-        );
+      // If stepData already exists, phase 1 has nothing to do
+      if (initialStepData) {
+        log("⏸️", `Invoke ${name || funcId} already exists (phase 1)`);
+        return;
       }
 
-      if (
-        stepData?.Status === OperationStatus.FAILED ||
-        stepData?.Status === OperationStatus.TIMED_OUT ||
-        stepData?.Status === OperationStatus.STOPPED
-      ) {
-        // Operation failed, return async rejected promise
-        const invokeDetails = stepData.ChainedInvokeDetails;
-        return (async (): Promise<O> => {
-          if (invokeDetails?.Error) {
-            throw new InvokeError(
-              invokeDetails.Error.ErrorMessage || "Invoke failed",
-              invokeDetails.Error.ErrorMessage
-                ? new Error(invokeDetails.Error.ErrorMessage)
-                : undefined,
-              invokeDetails.Error.ErrorData,
-            );
-          } else {
-            throw new InvokeError("Invoke failed");
-          }
-        })();
-      }
-
-      if (stepData?.Status === OperationStatus.STARTED) {
-        // Operation is still running, check for other operations before terminating
-        if (hasRunningOperations()) {
-          log(
-            "⏳",
-            `Invoke ${name || funcId} still in progress, waiting for other operations`,
-          );
-          await waitBeforeContinue({
-            checkHasRunningOperations: true,
-            checkStepStatus: true,
-            checkTimer: false,
-            stepId,
-            context,
-            hasRunningOperations,
-            operationsEmitter: getOperationsEmitter(),
-          });
-          continue; // Re-evaluate status after waiting
-        }
-
-        // No other operations running, safe to terminate
-        log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
-        return terminate(
-          context,
-          TerminationReason.OPERATION_TERMINATED,
-          stepId,
-        );
-      }
-
+      // No stepData exists - need to start the invoke operation
       // Serialize the input payload
       const serializedPayload = await safeSerialize(
         config?.payloadSerdes || defaultSerdes,
@@ -151,7 +104,6 @@ export const createInvokeHandler = (
         stepId,
         name,
         context.terminationManager,
-
         context.durableExecutionArn,
       );
 
@@ -169,11 +121,114 @@ export const createInvokeHandler = (
         },
       });
 
-      log("🚀", `Invoke ${name || funcId} started, re-checking status`);
+      log("🚀", `Invoke ${name || funcId} started (phase 1)`);
+    };
 
-      // Continue the loop to re-evaluate status (will hit STARTED case)
-      continue;
-    }
+    // Phase 2: Execute full logic including waiting and termination
+    const continueInvokeOperation = async (): Promise<O> => {
+      log("🔗", `Invoke ${name || funcId} (${stepId}) - phase 2`);
+
+      // Main invoke logic - can be re-executed if step status changes
+      while (true) {
+        // Check if we have existing step data
+        const stepData = context.getStepData(stepId);
+
+        if (stepData?.Status === OperationStatus.SUCCEEDED) {
+          // Return cached result - no need to check for errors in successful operations
+          const invokeDetails = stepData.ChainedInvokeDetails;
+          checkAndUpdateReplayMode?.();
+          return await safeDeserialize(
+            config?.resultSerdes || defaultSerdes,
+            invokeDetails?.Result,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
+        }
+
+        if (
+          stepData?.Status === OperationStatus.FAILED ||
+          stepData?.Status === OperationStatus.TIMED_OUT ||
+          stepData?.Status === OperationStatus.STOPPED
+        ) {
+          // Operation failed, return async rejected promise
+          const invokeDetails = stepData.ChainedInvokeDetails;
+          return (async (): Promise<O> => {
+            if (invokeDetails?.Error) {
+              throw new InvokeError(
+                invokeDetails.Error.ErrorMessage || "Invoke failed",
+                invokeDetails.Error.ErrorMessage
+                  ? new Error(invokeDetails.Error.ErrorMessage)
+                  : undefined,
+                invokeDetails.Error.ErrorData,
+              );
+            } else {
+              throw new InvokeError("Invoke failed");
+            }
+          })();
+        }
+
+        if (stepData?.Status === OperationStatus.STARTED) {
+          // Operation is still running
+          if (hasRunningOperations()) {
+            // Phase 2: Wait for other operations
+            log(
+              "⏳",
+              `Invoke ${name || funcId} still in progress, waiting for other operations`,
+            );
+            await waitBeforeContinue({
+              checkHasRunningOperations: true,
+              checkStepStatus: true,
+              checkTimer: false,
+              stepId,
+              context,
+              hasRunningOperations,
+              operationsEmitter: getOperationsEmitter(),
+            });
+            continue; // Re-evaluate status after waiting
+          }
+
+          // No other operations running - terminate
+          log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
+          return terminate(
+            context,
+            TerminationReason.OPERATION_TERMINATED,
+            stepId,
+          );
+        }
+
+        // If stepData exists but has an unexpected status, break to avoid infinite loop
+        if (stepData && stepData.Status !== undefined) {
+          throw new InvokeError(
+            `Unexpected operation status: ${stepData.Status}`,
+          );
+        }
+
+        // This should not happen in phase 2 since phase 1 creates stepData
+        throw new InvokeError(
+          "No step data found in phase 2 - this should not happen",
+        );
+      }
+    };
+
+    // Create a promise that tracks phase 1 completion
+    const startInvokePromise = startInvokeOperation()
+      .then(() => {
+        log("✅", "Invoke phase 1 complete:", { stepId, name: name || funcId });
+      })
+      .catch((error) => {
+        log("❌", "Invoke phase 1 error:", { stepId, error: error.message });
+        throw error; // Re-throw to fail phase 1
+      });
+
+    // Return DurablePromise that will execute phase 2 when awaited
+    return new DurablePromise(async () => {
+      // Wait for phase 1 to complete first
+      await startInvokePromise;
+      // Then execute phase 2
+      return await continueInvokeOperation();
+    });
   }
 
   return invokeHandler;
