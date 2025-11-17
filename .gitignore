@@ -12,6 +12,7 @@
 *.zip
 .DS_Store
 .eslintcache
+*.tsbuildinfo
 
 # VS Code
 .vscode/

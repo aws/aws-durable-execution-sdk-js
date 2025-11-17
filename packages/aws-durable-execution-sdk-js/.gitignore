@@ -10,3 +10,4 @@
 *.zip
 .DS_Store
 *.tgz
+*.tsbuildinfo
