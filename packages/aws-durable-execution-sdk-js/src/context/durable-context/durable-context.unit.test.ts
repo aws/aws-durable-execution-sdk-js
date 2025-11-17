@@ -99,7 +99,7 @@ describe("DurableContext", () => {
       expect(context.waitForCondition).toBeDefined();
       expect(context.map).toBeDefined();
       expect(context.parallel).toBeDefined();
-      expect(context.executeConcurrently).toBeDefined();
+      expect(context._executeConcurrently).toBeDefined();
       expect(context.promise).toBeDefined();
       expect(context.logger).toBeDefined();
       expect(context.configureLogger).toBeDefined();
@@ -468,7 +468,7 @@ describe("DurableContext", () => {
       expect(createParallelHandler).toHaveBeenCalled();
     });
 
-    it("should call executeConcurrently handler", async () => {
+    it("should call _executeConcurrently handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
         executionContext,
@@ -477,7 +477,7 @@ describe("DurableContext", () => {
       );
 
       const items = [{ id: "1", data: "test", index: 0 }];
-      await context.executeConcurrently(
+      await context._executeConcurrently(
         items,
         async (): Promise<string> => "result",
       );
@@ -560,7 +560,7 @@ describe("DurableContext", () => {
     });
   });
 
-  describe("executeConcurrently", () => {
+  describe("_executeConcurrently", () => {
     it("should pass skipNextOperation to concurrent execution handler", async () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
@@ -575,7 +575,7 @@ describe("DurableContext", () => {
       const mockHandler = jest.fn().mockResolvedValue({ totalCount: 0 });
       createConcurrentExecutionHandler.mockReturnValue(mockHandler);
 
-      await context.executeConcurrently([], async () => {});
+      await context._executeConcurrently([], async () => {});
 
       expect(createConcurrentExecutionHandler).toHaveBeenCalledWith(
         executionContext,
@@ -606,7 +606,7 @@ describe("DurableContext", () => {
         },
       );
 
-      await context.executeConcurrently([], async () => {});
+      await context._executeConcurrently([], async () => {});
 
       // Capture the step ID before calling skipNextOperation
       const { createStepHandler } = jest.requireMock(

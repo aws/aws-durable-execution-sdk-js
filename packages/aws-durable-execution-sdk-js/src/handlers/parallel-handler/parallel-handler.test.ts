@@ -11,7 +11,7 @@ import { MockBatchResult } from "../../testing/mock-batch-result";
 describe("Parallel Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
   let mockExecuteConcurrently: jest.MockedFunction<
-    DurableContext["executeConcurrently"]
+    DurableContext["_executeConcurrently"]
   >;
   let parallelHandler: ReturnType<typeof createParallelHandler>;
 

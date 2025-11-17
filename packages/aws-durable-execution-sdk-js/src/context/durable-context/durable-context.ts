@@ -450,7 +450,7 @@ class DurableContextImpl implements DurableContext {
     return this.withModeManagement(() => {
       const mapHandler = createMapHandler(
         this.executionContext,
-        this.executeConcurrently.bind(this),
+        this._executeConcurrently.bind(this),
       );
       return mapHandler(
         nameOrItems,
@@ -479,13 +479,13 @@ class DurableContextImpl implements DurableContext {
     return this.withModeManagement(() => {
       const parallelHandler = createParallelHandler(
         this.executionContext,
-        this.executeConcurrently.bind(this),
+        this._executeConcurrently.bind(this),
       );
       return parallelHandler(nameOrBranches, branchesOrConfig, maybeConfig);
     });
   }
 
-  executeConcurrently<TItem, TResult>(
+  _executeConcurrently<TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
@@ -497,7 +497,7 @@ class DurableContextImpl implements DurableContext {
   ): Promise<BatchResult<TResult>> {
     validateContextUsage(
       this._stepPrefix,
-      "executeConcurrently",
+      "_executeConcurrently",
       this.executionContext.terminationManager,
     );
     return this.withModeManagement(() => {

@@ -13,7 +13,7 @@ import { createMapSummaryGenerator } from "../../utils/summary-generators/summar
 
 export const createMapHandler = (
   context: ExecutionContext,
-  executeConcurrently: DurableContext["executeConcurrently"],
+  executeConcurrently: DurableContext["_executeConcurrently"],
 ) => {
   return async <TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],

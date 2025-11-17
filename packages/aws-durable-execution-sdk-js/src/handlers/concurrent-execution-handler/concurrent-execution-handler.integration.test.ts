@@ -13,7 +13,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const executionOrder: number[] = [];
 
-    const result = await context.executeConcurrently(
+    const result = await context._executeConcurrently(
       items,
       async (item) => {
         executionOrder.push(item.data.value);
@@ -49,7 +49,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
     let maxConcurrent = 0;
     let currentConcurrent = 0;
 
-    const result = await context.executeConcurrently(
+    const result = await context._executeConcurrently(
       items,
       async (item) => {
         currentConcurrent++;
@@ -76,7 +76,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const childContexts: any[] = [];
 
-    const result = await context.executeConcurrently(
+    const result = await context._executeConcurrently(
       items,
       async (item, childContext) => {
         childContexts.push(childContext);
@@ -111,7 +111,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     let executedCount = 0;
 
-    const result = await context.executeConcurrently(
+    const result = await context._executeConcurrently(
       items,
       async (item) => {
         executedCount++;
@@ -140,7 +140,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
       { id: "task-3", data: { multiplier: 4 }, index: 2 },
     ];
 
-    const result = await context.executeConcurrently(
+    const result = await context._executeConcurrently(
       "process-tasks",
       items,
       async (item) => {

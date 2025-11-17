@@ -744,12 +744,11 @@ export interface DurableContext {
   };
 
   /**
-   * @deprecated This method is for internal use only. Use context.map() or context.parallel() instead.
    * @internal
-   * Executes items concurrently with fine-grained control over execution strategy.
-   * This method is used internally by map and parallel operations and should not be called directly.
+   * Internal method used by map and parallel operations.
+   * Do not use directly - use context.map() or context.parallel() instead.
    */
-  executeConcurrently<TItem, TResult>(
+  _executeConcurrently<TItem, TResult>(
     name: string | undefined,
     items: ConcurrentExecutionItem<TItem>[],
     executor: ConcurrentExecutor<TItem, TResult>,
@@ -757,12 +756,11 @@ export interface DurableContext {
   ): Promise<BatchResult<TResult>>;
 
   /**
-   * @deprecated This method is for internal use only. Use context.map() or context.parallel() instead.
    * @internal
-   * Executes items concurrently with fine-grained control over execution strategy.
-   * This method is used internally by map and parallel operations and should not be called directly.
+   * Internal method used by map and parallel operations.
+   * Do not use directly - use context.map() or context.parallel() instead.
    */
-  executeConcurrently<TItem, TResult>(
+  _executeConcurrently<TItem, TResult>(
     items: ConcurrentExecutionItem<TItem>[],
     executor: ConcurrentExecutor<TItem, TResult>,
     config?: ConcurrencyConfig<TResult>,
