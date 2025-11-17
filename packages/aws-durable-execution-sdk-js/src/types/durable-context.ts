@@ -744,29 +744,6 @@ export interface DurableContext {
   };
 
   /**
-   * @internal
-   * Internal method used by map and parallel operations.
-   * Do not use directly - use context.map() or context.parallel() instead.
-   */
-  _executeConcurrently<TItem, TResult>(
-    name: string | undefined,
-    items: ConcurrentExecutionItem<TItem>[],
-    executor: ConcurrentExecutor<TItem, TResult>,
-    config?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>>;
-
-  /**
-   * @internal
-   * Internal method used by map and parallel operations.
-   * Do not use directly - use context.map() or context.parallel() instead.
-   */
-  _executeConcurrently<TItem, TResult>(
-    items: ConcurrentExecutionItem<TItem>[],
-    executor: ConcurrentExecutor<TItem, TResult>,
-    config?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>>;
-
-  /**
    * Configures logger behavior for this context
    *
    * @param config - Logger configuration options

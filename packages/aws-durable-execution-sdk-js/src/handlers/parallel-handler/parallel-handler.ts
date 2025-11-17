@@ -14,7 +14,7 @@ import { createParallelSummaryGenerator } from "../../utils/summary-generators/s
 
 export const createParallelHandler = (
   context: ExecutionContext,
-  executeConcurrently: DurableContext["_executeConcurrently"],
+  executeConcurrently: any, // Private method from DurableContext
 ) => {
   return async <T>(
     nameOrBranches:
