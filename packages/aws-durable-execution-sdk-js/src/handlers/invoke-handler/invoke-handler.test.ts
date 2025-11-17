@@ -270,11 +270,12 @@ describe("InvokeHandler", () => {
     it("should wait when operation is in progress and other operations are running", async () => {
       const mockGetStepData = jest
         .fn()
-        .mockReturnValueOnce({ Status: OperationStatus.STARTED })
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED }) // Phase 1
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED }) // Phase 2 - first check
         .mockReturnValueOnce({
           Status: OperationStatus.SUCCEEDED,
           ChainedInvokeDetails: { Result: '{"result":"success"}' },
-        });
+        }); // Phase 2 - after wait
 
       mockContext.getStepData = mockGetStepData;
       mockHasRunningOperations.mockReturnValue(true); // Other operations running

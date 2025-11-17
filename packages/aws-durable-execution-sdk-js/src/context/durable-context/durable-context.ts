@@ -246,8 +246,9 @@ class DurableContextImpl implements DurableContext {
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
         this._parentId,
+        this.checkAndUpdateReplayMode.bind(this),
       );
-      const promise = invokeHandler<I, O>(
+      return invokeHandler<I, O>(
         ...([
           nameOrFuncId,
           funcIdOrInput,
@@ -255,11 +256,6 @@ class DurableContextImpl implements DurableContext {
           maybeConfig,
         ] as Parameters<typeof invokeHandler<I, O>>),
       );
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
-      });
     });
   }
 
