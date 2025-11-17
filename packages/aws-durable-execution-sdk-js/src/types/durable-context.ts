@@ -20,9 +20,9 @@ import {
   ParallelFunc,
   ParallelConfig,
   NamedParallelBranch,
-  ConcurrentExecutionItem,
-  ConcurrentExecutor,
-  ConcurrencyConfig,
+  ConcurrentExecutionItem as _ConcurrentExecutionItem,
+  ConcurrentExecutor as _ConcurrentExecutor,
+  ConcurrencyConfig as _ConcurrencyConfig,
   BatchResult,
 } from "./batch";
 

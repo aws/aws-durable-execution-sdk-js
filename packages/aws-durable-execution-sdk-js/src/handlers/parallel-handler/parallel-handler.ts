@@ -1,10 +1,10 @@
 import {
   ExecutionContext,
-  DurableContext,
   ParallelFunc,
   ParallelConfig,
   ConcurrentExecutionItem,
   ConcurrentExecutor,
+  ConcurrencyConfig,
   OperationSubType,
   NamedParallelBranch,
   BatchResult,
@@ -14,7 +14,12 @@ import { createParallelSummaryGenerator } from "../../utils/summary-generators/s
 
 export const createParallelHandler = (
   context: ExecutionContext,
-  executeConcurrently: any, // Private method from DurableContext
+  executeConcurrently: <TItem, TResult>(
+    name: string | undefined,
+    items: ConcurrentExecutionItem<TItem>[],
+    executor: ConcurrentExecutor<TItem, TResult>,
+    config?: ConcurrencyConfig<TResult>,
+  ) => Promise<BatchResult<TResult>>,
 ) => {
   return async <T>(
     nameOrBranches:

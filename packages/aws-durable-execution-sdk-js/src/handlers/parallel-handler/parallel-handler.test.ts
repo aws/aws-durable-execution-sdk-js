@@ -1,7 +1,6 @@
 import { createParallelHandler } from "./parallel-handler";
 import {
   ExecutionContext,
-  DurableContext,
   ParallelFunc,
   NamedParallelBranch,
   BatchItemStatus,

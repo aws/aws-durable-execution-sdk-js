@@ -1,10 +1,10 @@
 import {
   ExecutionContext,
-  DurableContext,
   MapFunc,
   MapConfig,
   ConcurrentExecutionItem,
   ConcurrentExecutor,
+  ConcurrencyConfig,
   OperationSubType,
   BatchResult,
 } from "../../types";
@@ -13,7 +13,12 @@ import { createMapSummaryGenerator } from "../../utils/summary-generators/summar
 
 export const createMapHandler = (
   context: ExecutionContext,
-  executeConcurrently: any, // Private method from DurableContext
+  executeConcurrently: <TItem, TResult>(
+    name: string | undefined,
+    items: ConcurrentExecutionItem<TItem>[],
+    executor: ConcurrentExecutor<TItem, TResult>,
+    config?: ConcurrencyConfig<TResult>,
+  ) => Promise<BatchResult<TResult>>,
 ) => {
   return async <TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],

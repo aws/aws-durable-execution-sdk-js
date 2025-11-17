@@ -1,5 +1,5 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
-import { BatchItemStatus } from "../../types";
+import { BatchItemStatus, DurableContext } from "../../types";
 
 describe("ConcurrentExecutionHandler Integration Tests", () => {
   it("should execute items concurrently with real DurableContext", async () => {
@@ -15,7 +15,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const result = await (context as any)._executeConcurrently(
       items,
-      async (item) => {
+      async (item: (typeof items)[0]) => {
         executionOrder.push(item.data.value);
         await new Promise((resolve) => setTimeout(resolve, 10));
         return item.data.value * 2;
@@ -30,10 +30,15 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const successfulResults = result.succeeded();
     expect(successfulResults).toHaveLength(3);
-    expect(successfulResults.map((r) => r.result)).toEqual([2, 4, 6]);
+    expect(
+      successfulResults.map((r: (typeof successfulResults)[0]) => r.result),
+    ).toEqual([2, 4, 6]);
 
     expect(
-      result.all.every((item) => item.status === BatchItemStatus.SUCCEEDED),
+      result.all.every(
+        (item: (typeof result.all)[0]) =>
+          item.status === BatchItemStatus.SUCCEEDED,
+      ),
     ).toBe(true);
   });
 
@@ -51,7 +56,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const result = await (context as any)._executeConcurrently(
       items,
-      async (item) => {
+      async (item: (typeof items)[0]) => {
         currentConcurrent++;
         maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -78,7 +83,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const result = await (context as any)._executeConcurrently(
       items,
-      async (item, childContext) => {
+      async (item: (typeof items)[0], childContext: DurableContext) => {
         childContexts.push(childContext);
 
         // Use child context to run a step
@@ -96,7 +101,9 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
     expect(childContexts[0]).toBeDefined();
     expect(childContexts[1]).toBeDefined();
 
-    const results = result.succeeded().map((r) => r.result);
+    const results = result
+      .succeeded()
+      .map((r: (typeof result.all)[0]) => r.result);
     expect(results).toEqual([10, 20]);
   });
 
@@ -113,7 +120,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const result = await (context as any)._executeConcurrently(
       items,
-      async (item) => {
+      async (item: (typeof items)[0]) => {
         executedCount++;
         await new Promise((resolve) => setTimeout(resolve, 10));
         return item.data.value;
@@ -143,7 +150,7 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
     const result = await (context as any)._executeConcurrently(
       "process-tasks",
       items,
-      async (item) => {
+      async (item: (typeof items)[0]) => {
         // Simulate some async work
         await new Promise((resolve) => setTimeout(resolve, 5));
         return 10 * item.data.multiplier;
