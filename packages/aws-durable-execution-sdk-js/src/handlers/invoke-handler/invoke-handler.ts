@@ -71,19 +71,14 @@ export const createInvokeHandler = (
 
     const stepId = createStepId();
 
-    // Shared invoke logic for both phases
-    const executeInvokeLogic = async (
-      canTerminate: boolean,
-    ): Promise<O | undefined> => {
-      log(
-        "🔗",
-        `Invoke ${name || funcId} (${stepId}) - ${canTerminate ? "phase 2" : "phase 1"}`,
-      );
+    // Phase 1: Only checkpoint if needed, don't execute full logic
+    const executePhase1 = async (): Promise<void> => {
+      log("🔗", `Invoke ${name || funcId} (${stepId}) - phase 1`);
 
       // Check initial step data for replay consistency validation
       const initialStepData = context.getStepData(stepId);
 
-      // Validate replay consistency once before the loop
+      // Validate replay consistency once before any execution
       validateReplayConsistency(
         stepId,
         {
@@ -94,6 +89,44 @@ export const createInvokeHandler = (
         initialStepData,
         context,
       );
+
+      // If stepData already exists, phase 1 has nothing to do
+      if (initialStepData) {
+        log("⏸️", `Invoke ${name || funcId} already exists (phase 1)`);
+        return;
+      }
+
+      // No stepData exists - need to start the invoke operation
+      // Serialize the input payload
+      const serializedPayload = await safeSerialize(
+        config?.payloadSerdes || defaultSerdes,
+        input,
+        stepId,
+        name,
+        context.terminationManager,
+        context.durableExecutionArn,
+      );
+
+      // Create checkpoint for the invoke operation
+      await checkpoint(stepId, {
+        Id: stepId,
+        ParentId: parentId,
+        Action: OperationAction.START,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
+        Name: name,
+        Payload: serializedPayload,
+        ChainedInvokeOptions: {
+          FunctionName: funcId,
+        },
+      });
+
+      log("🚀", `Invoke ${name || funcId} started (phase 1)`);
+    };
+
+    // Phase 2: Execute full logic including waiting and termination
+    const executePhase2 = async (): Promise<O> => {
+      log("🔗", `Invoke ${name || funcId} (${stepId}) - phase 2`);
 
       // Main invoke logic - can be re-executed if step status changes
       while (true) {
@@ -110,7 +143,6 @@ export const createInvokeHandler = (
             stepId,
             name,
             context.terminationManager,
-
             context.durableExecutionArn,
           );
         }
@@ -140,15 +172,6 @@ export const createInvokeHandler = (
         if (stepData?.Status === OperationStatus.STARTED) {
           // Operation is still running
           if (hasRunningOperations()) {
-            // Phase 1: Don't wait, just return
-            if (!canTerminate) {
-              log(
-                "⏸️",
-                `Invoke ${name || funcId} has running operations (phase 1)`,
-              );
-              return;
-            }
-
             // Phase 2: Wait for other operations
             log(
               "⏳",
@@ -166,26 +189,13 @@ export const createInvokeHandler = (
             continue; // Re-evaluate status after waiting
           }
 
-          // No other operations running
-          // Phase 1: Just return without terminating
-          // Phase 2: Terminate
-          if (canTerminate) {
-            log(
-              "⏳",
-              `Invoke ${name || funcId} still in progress, terminating`,
-            );
-            return terminate(
-              context,
-              TerminationReason.OPERATION_TERMINATED,
-              stepId,
-            );
-          } else {
-            log(
-              "⏸️",
-              `Invoke ${name || funcId} ready but not terminating (phase 1)`,
-            );
-            return;
-          }
+          // No other operations running - terminate
+          log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
+          return terminate(
+            context,
+            TerminationReason.OPERATION_TERMINATED,
+            stepId,
+          );
         }
 
         // If stepData exists but has an unexpected status, break to avoid infinite loop
@@ -195,53 +205,21 @@ export const createInvokeHandler = (
           );
         }
 
-        // No stepData exists - need to start the invoke operation
-        // Serialize the input payload
-        const serializedPayload = await safeSerialize(
-          config?.payloadSerdes || defaultSerdes,
-          input,
-          stepId,
-          name,
-          context.terminationManager,
-
-          context.durableExecutionArn,
+        // This should not happen in phase 2 since phase 1 creates stepData
+        throw new InvokeError(
+          "No step data found in phase 2 - this should not happen",
         );
-
-        // Create checkpoint for the invoke operation
-        await checkpoint(stepId, {
-          Id: stepId,
-          ParentId: parentId,
-          Action: OperationAction.START,
-          SubType: OperationSubType.CHAINED_INVOKE,
-          Type: OperationType.CHAINED_INVOKE,
-          Name: name,
-          Payload: serializedPayload,
-          ChainedInvokeOptions: {
-            FunctionName: funcId,
-          },
-        });
-
-        log("🚀", `Invoke ${name || funcId} started, re-checking status`);
-
-        // In phase 1, after checkpointing, just return
-        // Phase 2 will handle the STARTED status
-        if (!canTerminate) {
-          log("⏸️", `Invoke ${name || funcId} checkpointed (phase 1)`);
-          return;
-        }
-
-        // Continue the loop to re-evaluate status (will hit STARTED case)
-        continue;
       }
     };
 
     // Create a promise that tracks phase 1 completion
-    const phase1Promise = executeInvokeLogic(false)
+    const phase1Promise = executePhase1()
       .then(() => {
         log("✅", "Invoke phase 1 complete:", { stepId, name: name || funcId });
       })
-      .catch(() => {
-        // Phase 1 errors are ignored, phase 2 will handle them
+      .catch((error) => {
+        log("❌", "Invoke phase 1 error:", { stepId, error: error.message });
+        throw error; // Re-throw to fail phase 1
       });
 
     // Return DurablePromise that will execute phase 2 when awaited
@@ -249,8 +227,7 @@ export const createInvokeHandler = (
       // Wait for phase 1 to complete first
       await phase1Promise;
       // Then execute phase 2
-      const result = await executeInvokeLogic(true);
-      return result!; // Phase 2 always returns a value or throws
+      return await executePhase2();
     });
   }
 
