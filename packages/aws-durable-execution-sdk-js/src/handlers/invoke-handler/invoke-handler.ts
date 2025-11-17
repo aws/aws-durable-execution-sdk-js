@@ -72,7 +72,7 @@ export const createInvokeHandler = (
     const stepId = createStepId();
 
     // Phase 1: Only checkpoint if needed, don't execute full logic
-    const executePhase1 = async (): Promise<void> => {
+    const startInvokeOperation = async (): Promise<void> => {
       log("🔗", `Invoke ${name || funcId} (${stepId}) - phase 1`);
 
       // Check initial step data for replay consistency validation
@@ -125,7 +125,7 @@ export const createInvokeHandler = (
     };
 
     // Phase 2: Execute full logic including waiting and termination
-    const executePhase2 = async (): Promise<O> => {
+    const continueInvokeOperation = async (): Promise<O> => {
       log("🔗", `Invoke ${name || funcId} (${stepId}) - phase 2`);
 
       // Main invoke logic - can be re-executed if step status changes
@@ -213,7 +213,7 @@ export const createInvokeHandler = (
     };
 
     // Create a promise that tracks phase 1 completion
-    const phase1Promise = executePhase1()
+    const phase1Promise = startInvokeOperation()
       .then(() => {
         log("✅", "Invoke phase 1 complete:", { stepId, name: name || funcId });
       })
@@ -227,7 +227,7 @@ export const createInvokeHandler = (
       // Wait for phase 1 to complete first
       await phase1Promise;
       // Then execute phase 2
-      return await executePhase2();
+      return await continueInvokeOperation();
     });
   }
 
