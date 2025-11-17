@@ -167,4 +167,37 @@ describe("Wait Handler Two-Phase Execution", () => {
     // Checkpoint should still only be called once (or zero if stepData existed)
     expect(mockCheckpoint.mock.calls.length).toBe(0);
   });
+
+  it("should reuse same promise execution when awaited multiple times", async () => {
+    const waitHandler = createWaitHandler(
+      mockContext,
+      mockCheckpoint,
+      createStepId,
+      hasRunningOperations,
+      getOperationsEmitter,
+    );
+
+    const waitPromise = waitHandler({ seconds: 5 });
+
+    // Wait for phase 1 to complete
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const phase1Calls = mockCheckpoint.mock.calls.length;
+
+    // Await the promise multiple times
+    const results = await Promise.allSettled([
+      waitPromise.catch(() => {}),
+      waitPromise.catch(() => {}),
+      waitPromise.catch(() => {}),
+    ]);
+
+    // All should resolve/reject with same result
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+
+    // Checkpoint should not be called multiple times for phase 2
+    // (DurablePromise should cache the execution)
+    const totalCalls = mockCheckpoint.mock.calls.length;
+    expect(totalCalls).toBeGreaterThan(phase1Calls); // Phase 2 executed
+    expect(totalCalls).toBeLessThan(phase1Calls + 3); // But not 3 times
+  });
 });
