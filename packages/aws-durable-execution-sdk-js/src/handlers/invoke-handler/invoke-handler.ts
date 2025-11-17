@@ -188,6 +188,14 @@ export const createInvokeHandler = (
           }
         }
 
+        // If stepData exists but has an unexpected status, break to avoid infinite loop
+        if (stepData && stepData.Status !== undefined) {
+          throw new InvokeError(
+            `Unexpected operation status: ${stepData.Status}`,
+          );
+        }
+
+        // No stepData exists - need to start the invoke operation
         // Serialize the input payload
         const serializedPayload = await safeSerialize(
           config?.payloadSerdes || defaultSerdes,
