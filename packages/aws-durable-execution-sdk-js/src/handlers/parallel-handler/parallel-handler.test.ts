@@ -192,7 +192,7 @@ describe("Parallel Handler", () => {
     const originalEnv = process.env.DURABLE_VERBOSE_MODE;
     process.env.DURABLE_VERBOSE_MODE = "true";
 
-    const consoleSpy = jest.spyOn(console, "log").mockImplementation();
+    const consoleSpy = jest.spyOn(console, "debug").mockImplementation();
 
     const branch1: ParallelFunc<string> = jest
       .fn()
