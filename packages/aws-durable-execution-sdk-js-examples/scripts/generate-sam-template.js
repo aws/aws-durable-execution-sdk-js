@@ -232,6 +232,7 @@ function main() {
       lineWidth: -1, // No line wrapping
       noRefs: true,
       sortKeys: false,
+      quotingType: '"',
     });
 
     // Write to template.yml

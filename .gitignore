@@ -24,3 +24,5 @@
 
 # Node version
 .nvmrc
+
+*.rollup.cache

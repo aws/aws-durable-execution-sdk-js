@@ -40,7 +40,10 @@ export default defineConfig({
     },
   },
   plugins: [
-    typescript(),
+    typescript({
+      // Disable incremental build to ensure examples catalog is parsed
+      incremental: false,
+    }),
     nodeResolve({
       preferBuiltins: true,
     }),

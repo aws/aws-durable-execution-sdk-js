@@ -25,6 +25,7 @@
     "clean": "rm -rf build/ build coverage node_modules/ dist/ *.zip",
     "release": "npm run build && mkdir -p build/aws-durable-execution-sdk-js-examples && npm run copy-files",
     "prebuild": "rm -rf build/aws-durable-execution-sdk-js-examples",
+    "postbuild": "npm run generate-sam-template",
     "package": "node scripts/package.js",
     "generate-examples": "tsx ./scripts/generate-examples.ts",
     "build": "npm run generate-examples && rollup --config rollup.config.mjs",

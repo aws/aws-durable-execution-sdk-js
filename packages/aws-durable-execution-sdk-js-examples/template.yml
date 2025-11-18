@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: Durable Function examples written in TypeScript.
 Transform:
   - AWS::Serverless-2016-10-31
@@ -7,7 +7,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -18,13 +18,13 @@ Resources:
       Policies:
         - PolicyName: DurableExecutionPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - lambda:CheckpointDurableExecution
                   - lambda:GetDurableExecutionState
-                Resource: '*'
+                Resource: "*"
   BlockExample:
     Type: AWS::Serverless::Function
     Properties:
@@ -46,9 +46,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ComprehensiveOperations:
     Type: AWS::Serverless::Function
     Properties:
@@ -70,9 +70,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ConcurrentOperations:
     Type: AWS::Serverless::Function
     Properties:
@@ -94,9 +94,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ConcurrentWait:
     Type: AWS::Serverless::Function
     Properties:
@@ -118,9 +118,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   CreateCallback:
     Type: AWS::Serverless::Function
     Properties:
@@ -142,9 +142,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   CreateCallbackConcurrent:
     Type: AWS::Serverless::Function
     Properties:
@@ -166,9 +166,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   CreateCallbackFailures:
     Type: AWS::Serverless::Function
     Properties:
@@ -190,9 +190,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   CreateCallbackHeartbeat:
     Type: AWS::Serverless::Function
     Properties:
@@ -214,9 +214,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   CreateCallbackMixedOps:
     Type: AWS::Serverless::Function
     Properties:
@@ -238,9 +238,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   CreateCallbackSerdes:
     Type: AWS::Serverless::Function
     Properties:
@@ -262,9 +262,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   CreateCallbackTimeout:
     Type: AWS::Serverless::Function
     Properties:
@@ -286,9 +286,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ErrorDeterminism:
     Type: AWS::Serverless::Function
     Properties:
@@ -310,9 +310,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   HandlerError:
     Type: AWS::Serverless::Function
     Properties:
@@ -334,9 +334,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   HelloWorld:
     Type: AWS::Serverless::Function
     Properties:
@@ -358,9 +358,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   LoggerAfterCallback:
     Type: AWS::Serverless::Function
     Properties:
@@ -382,9 +382,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   LoggerAfterWait:
     Type: AWS::Serverless::Function
     Properties:
@@ -406,9 +406,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   MapBasic:
     Type: AWS::Serverless::Function
     Properties:
@@ -430,9 +430,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   MapCompletionConfigIssue:
     Type: AWS::Serverless::Function
     Properties:
@@ -454,9 +454,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   MapLargeScale:
     Type: AWS::Serverless::Function
     Properties:
@@ -478,9 +478,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   MultipleWaits:
     Type: AWS::Serverless::Function
     Properties:
@@ -502,9 +502,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   NoReplayExecution:
     Type: AWS::Serverless::Function
     Properties:
@@ -526,9 +526,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ParallelBasic:
     Type: AWS::Serverless::Function
     Properties:
@@ -550,9 +550,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ParallelHeterogeneous:
     Type: AWS::Serverless::Function
     Properties:
@@ -574,9 +574,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ParallelMinSuccessfulCallback:
     Type: AWS::Serverless::Function
     Properties:
@@ -598,9 +598,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ParallelWait:
     Type: AWS::Serverless::Function
     Properties:
@@ -622,9 +622,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ParentContextInChild:
     Type: AWS::Serverless::Function
     Properties:
@@ -646,9 +646,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ParentContextInStep:
     Type: AWS::Serverless::Function
     Properties:
@@ -670,9 +670,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   ParentContextInWaitCondition:
     Type: AWS::Serverless::Function
     Properties:
@@ -694,9 +694,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseAll:
     Type: AWS::Serverless::Function
     Properties:
@@ -718,9 +718,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseAllSettled:
     Type: AWS::Serverless::Function
     Properties:
@@ -742,9 +742,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseAllWait:
     Type: AWS::Serverless::Function
     Properties:
@@ -766,9 +766,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseAny:
     Type: AWS::Serverless::Function
     Properties:
@@ -790,9 +790,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseCombinators:
     Type: AWS::Serverless::Function
     Properties:
@@ -814,9 +814,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseRace:
     Type: AWS::Serverless::Function
     Properties:
@@ -838,9 +838,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseReplay:
     Type: AWS::Serverless::Function
     Properties:
@@ -862,9 +862,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   PromiseUnhandledRejection:
     Type: AWS::Serverless::Function
     Properties:
@@ -886,9 +886,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   RetryExhaustion:
     Type: AWS::Serverless::Function
     Properties:
@@ -910,9 +910,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   RunInChildContext:
     Type: AWS::Serverless::Function
     Properties:
@@ -934,9 +934,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   RunInChildContextFailingStep:
     Type: AWS::Serverless::Function
     Properties:
@@ -958,9 +958,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   RunInChildContextLargeData:
     Type: AWS::Serverless::Function
     Properties:
@@ -982,9 +982,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   SimpleExecution:
     Type: AWS::Serverless::Function
     Properties:
@@ -1006,9 +1006,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   StepBasic:
     Type: AWS::Serverless::Function
     Properties:
@@ -1030,9 +1030,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   StepErrorDeterminism:
     Type: AWS::Serverless::Function
     Properties:
@@ -1054,9 +1054,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   StepNamed:
     Type: AWS::Serverless::Function
     Properties:
@@ -1078,9 +1078,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   StepWithRetry:
     Type: AWS::Serverless::Function
     Properties:
@@ -1102,9 +1102,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   StepsWithRetry:
     Type: AWS::Serverless::Function
     Properties:
@@ -1126,12 +1126,12 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
       Policies:
         - DynamoDBReadPolicy:
             TableName: TEST
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   UndefinedResults:
     Type: AWS::Serverless::Function
     Properties:
@@ -1153,9 +1153,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   Wait:
     Type: AWS::Serverless::Function
     Properties:
@@ -1177,9 +1177,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallback:
     Type: AWS::Serverless::Function
     Properties:
@@ -1201,9 +1201,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackAnonymous:
     Type: AWS::Serverless::Function
     Properties:
@@ -1225,9 +1225,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackChildContext:
     Type: AWS::Serverless::Function
     Properties:
@@ -1249,9 +1249,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackFailingSubmitter:
     Type: AWS::Serverless::Function
     Properties:
@@ -1273,9 +1273,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackFailures:
     Type: AWS::Serverless::Function
     Properties:
@@ -1297,9 +1297,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackHeartbeatSends:
     Type: AWS::Serverless::Function
     Properties:
@@ -1321,9 +1321,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackMixedOps:
     Type: AWS::Serverless::Function
     Properties:
@@ -1345,9 +1345,33 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
+  WaitForCallbackMultipleInvocations:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitForCallbackMultipleInvocations-TypeScript
+      CodeUri: ./dist
+      Handler: wait-for-callback-multiple-invocations.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 3600
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "true"
+    Metadata:
+      SkipBuild: "True"
   WaitForCallbackNested:
     Type: AWS::Serverless::Function
     Properties:
@@ -1369,9 +1393,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackSerdes:
     Type: AWS::Serverless::Function
     Properties:
@@ -1393,9 +1417,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackSubmitterFailureCatchable:
     Type: AWS::Serverless::Function
     Properties:
@@ -1417,9 +1441,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackSubmitterRetrySuccess:
     Type: AWS::Serverless::Function
     Properties:
@@ -1441,9 +1465,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCallbackTimeout:
     Type: AWS::Serverless::Function
     Properties:
@@ -1465,9 +1489,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitForCondition:
     Type: AWS::Serverless::Function
     Properties:
@@ -1489,9 +1513,9 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
   WaitNamed:
     Type: AWS::Serverless::Function
     Properties:
@@ -1513,6 +1537,6 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: 'true'
+          DURABLE_VERBOSE_MODE: "true"
     Metadata:
-      SkipBuild: 'True'
+      SkipBuild: "True"
