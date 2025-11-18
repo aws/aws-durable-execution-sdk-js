@@ -2,6 +2,7 @@ import { Serdes } from "../utils/serdes/serdes";
 import { RetryDecision } from "./step";
 import { WaitForCallbackContext } from "./logger";
 import { Duration } from "./core";
+import { DurablePromise } from "./durable-promise";
 
 /**
  * Configuration options for createCallback operations
@@ -29,7 +30,7 @@ export interface WaitForCallbackConfig<T> {
   serdes?: Serdes<T>;
 }
 
-export type CreateCallbackResult<T> = [Promise<T>, string];
+export type CreateCallbackResult<T> = [DurablePromise<T>, string];
 
 /**
  * Function that submits a callback ID to an external system

@@ -27,7 +27,7 @@
     "prebuild": "rm -rf build/aws-durable-execution-sdk-js-examples",
     "package": "node scripts/package.js",
     "generate-examples": "tsx ./scripts/generate-examples.ts",
-    "build": "npm run generate-examples && rollup --config rollup.config.mjs",
+    "build": "npm run generate-examples && rollup --config rollup.config.mjs --silent",
     "deploy": "tsx scripts/deploy-lambda.ts",
     "prerelease": "npm run generate-sam-template",
     "copy-files": "npm run copy-lambda && npm run copy-examples && npm run copy-source && npm run copy-catalog",

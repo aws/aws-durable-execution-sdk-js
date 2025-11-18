@@ -47,4 +47,15 @@ export default defineConfig({
     json(),
     commonJs(),
   ],
+  onwarn(warning, warn) {
+    // Suppress circular dependency warnings from external dependencies (node_modules)
+    // but keep them for our own code to catch potential issues
+    if (
+      warning.code === "CIRCULAR_DEPENDENCY" &&
+      warning.message.includes("node_modules")
+    ) {
+      return;
+    }
+    warn(warning);
+  },
 });

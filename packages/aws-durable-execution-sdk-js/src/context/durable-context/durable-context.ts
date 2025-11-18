@@ -25,6 +25,7 @@ import {
   InvokeConfig,
   DurableExecutionMode,
   BatchResult,
+  DurablePromise,
 } from "../../types";
 import { Context } from "aws-lambda";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
@@ -42,6 +43,7 @@ import { createConcurrentExecutionHandler } from "../../handlers/concurrent-exec
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { ModeManagement } from "./mode-management/mode-management";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
@@ -58,6 +60,7 @@ export class DurableContextImpl implements DurableContext {
   private createContextLogger: ReturnType<typeof createContextLoggerFactory>;
   private durableExecutionMode: DurableExecutionMode;
   private _parentId?: string;
+  private modeManagement: ModeManagement;
 
   constructor(
     private executionContext: ExecutionContext,
@@ -86,6 +89,16 @@ export class DurableContextImpl implements DurableContext {
     this.createContextLogger = createContextLoggerFactory(
       executionContext,
       getLogger,
+    );
+
+    this.modeManagement = new ModeManagement(
+      this.captureExecutionState.bind(this),
+      this.checkAndUpdateReplayMode.bind(this),
+      this.checkForNonResolvingPromise.bind(this),
+      () => this.durableExecutionMode,
+      (mode) => {
+        this.durableExecutionMode = mode;
+      },
     );
   }
 
@@ -181,19 +194,13 @@ export class DurableContextImpl implements DurableContext {
   }
 
   private withModeManagement<T>(operation: () => Promise<T>): Promise<T> {
-    const shouldSwitchToExecutionMode = this.captureExecutionState();
+    return this.modeManagement.withModeManagement(operation);
+  }
 
-    this.checkAndUpdateReplayMode();
-    const nonResolvingPromise = this.checkForNonResolvingPromise();
-    if (nonResolvingPromise) return nonResolvingPromise;
-
-    try {
-      return operation();
-    } finally {
-      if (shouldSwitchToExecutionMode) {
-        this.durableExecutionMode = DurableExecutionMode.ExecutionMode;
-      }
-    }
+  private withDurableModeManagement<T>(
+    operation: () => DurablePromise<T>,
+  ): DurablePromise<T> {
+    return this.modeManagement.withDurableModeManagement(operation);
   }
 
   step<T>(
@@ -338,27 +345,23 @@ export class DurableContextImpl implements DurableContext {
   createCallback<T>(
     nameOrConfig?: string | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>> {
+  ): DurablePromise<CreateCallbackResult<T>> {
     validateContextUsage(
       this._stepPrefix,
       "createCallback",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const callbackFactory = createCallbackFactory(
         this.executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this.checkAndUpdateReplayMode.bind(this),
         this._parentId,
       );
-      const promise = callbackFactory(nameOrConfig, maybeConfig);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
-      });
+      return callbackFactory(nameOrConfig, maybeConfig);
     });
   }
 
