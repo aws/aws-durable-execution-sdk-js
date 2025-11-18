@@ -175,6 +175,8 @@ declare const InvokeWithResponseStreamCommand_base: {
  * @throws {@link ResourceNotReadyException} (server fault)
  *  <p>The function is inactive and its VPC connection is no longer available. Wait for the VPC connection to reestablish and try again.</p>
  *
+ * @throws {@link SerializedRequestEntityTooLargeException} (client fault)
+ *
  * @throws {@link ServiceException} (server fault)
  *  <p>The Lambda service encountered an internal error.</p>
  *

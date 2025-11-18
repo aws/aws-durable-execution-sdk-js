@@ -1,0 +1,4936 @@
+const _A = "Action";
+const _AA = "AliasArn";
+const _AC = "AliasConfiguration";
+const _ACc = "AccessConfigs";
+const _ACl = "AllowCredentials";
+const _AH = "AllowHeaders";
+const _AL = "AccountLimit";
+const _ALL = "ApplicationLogLevel";
+const _ALVP = "AddLayerVersionPermission";
+const _ALVPR = "AddLayerVersionPermissionRequest";
+const _ALVPRd = "AddLayerVersionPermissionResponse";
+const _ALl = "AliasList";
+const _AM = "AllowMethods";
+const _AMKESC = "AmazonManagedKafkaEventSourceConfig";
+const _AO = "AllowOrigins";
+const _AOp = "ApplyOn";
+const _AP = "AllowedPublishers";
+const _APCE = "AvailableProvisionedConcurrentExecutions";
+const _APCEl = "AllocatedProvisionedConcurrentExecutions";
+const _APR = "AddPermissionRequest";
+const _APRd = "AddPermissionResponse";
+const _APd = "AddPermission";
+const _ARC = "AliasRoutingConfiguration";
+const _AT = "AuthType";
+const _AU = "AccountUsage";
+const _AVW = "AdditionalVersionWeights";
+const _Al = "Aliases";
+const _Ar = "Architectures";
+const _Arn = "Arn";
+const _At = "Attribute";
+const _Att = "Attempt";
+const _B = "Blob";
+const _BBOFE = "BisectBatchOnFunctionError";
+const _BOP = "BinaryOperationPayload";
+const _BS = "BlobStream";
+const _BSa = "BatchSize";
+const _C = "Concurrency";
+const _CA = "CompatibleArchitectures";
+const _CAR = "CreateAliasRequest";
+const _CAo = "CompatibleArchitecture";
+const _CAr = "CreateAlias";
+const _CAu = "CurrentAttempt";
+const _CC = "ClientContext";
+const _CCSC = "CreateCodeSigningConfig";
+const _CCSCR = "CreateCodeSigningConfigRequest";
+const _CCSCRr = "CreateCodeSigningConfigResponse";
+const _CD = "CallbackDetails";
+const _CDE = "CheckpointDurableExecution";
+const _CDER = "CheckpointDurableExecutionRequest";
+const _CDERh = "CheckpointDurableExecutionResponse";
+const _CDo = "ContextDetails";
+const _CDr = "CreatedDate";
+const _CE = "ConcurrentExecutions";
+const _CESM = "CreateEventSourceMapping";
+const _CESMR = "CreateEventSourceMappingRequest";
+const _CF = "CreateFunction";
+const _CFD = "CallbackFailedDetails";
+const _CFDo = "ContextFailedDetails";
+const _CFR = "CreateFunctionRequest";
+const _CFUC = "CreateFunctionUrlConfig";
+const _CFUCR = "CreateFunctionUrlConfigRequest";
+const _CFUCRr = "CreateFunctionUrlConfigResponse";
+const _CGI = "ConsumerGroupId";
+const _CI = "CallbackId";
+const _CID = "ChainedInvokeDetails";
+const _CIFD = "ChainedInvokeFailedDetails";
+const _CIO = "ChainedInvokeOptions";
+const _CISD = "ChainedInvokeStartedDetails";
+const _CISDh = "ChainedInvokeStoppedDetails";
+const _CISDha = "ChainedInvokeSucceededDetails";
+const _CITOD = "ChainedInvokeTimedOutDetails";
+const _CN = "CollectionName";
+const _CO = "CallbackOptions";
+const _COo = "ContextOptions";
+const _CR = "CompatibleRuntimes";
+const _CRo = "CompatibleRuntime";
+const _CS = "CodeSize";
+const _CSC = "CodeSigningConfig";
+const _CSCA = "CodeSigningConfigArn";
+const _CSCI = "CodeSigningConfigId";
+const _CSCL = "CodeSigningConfigList";
+const _CSCNFE = "CodeSigningConfigNotFoundException";
+const _CSCo = "CodeSigningConfigs";
+const _CSD = "CallbackStartedDetails";
+const _CSDa = "CallbackSucceededDetails";
+const _CSDo = "ContextStartedDetails";
+const _CSDon = "ContextSucceededDetails";
+const _CSEE = "CodeStorageExceededException";
+const _CSP = "CodeSigningPolicies";
+const _CSU = "CodeSizeUnzipped";
+const _CSZ = "CodeSizeZipped";
+const _CSo = "CodeSha256";
+const _CT = "CheckpointToken";
+const _CTE = "CallbackTimeoutException";
+const _CTOD = "CallbackTimedOutDetails";
+const _CT_ = "Content-Type";
+const _CTl = "ClientToken";
+const _CTr = "CreationTime";
+const _CUES = "CheckpointUpdatedExecutionState";
+const _CVFE = "CodeVerificationFailedException";
+const _Co = "Cors";
+const _Cod = "Code";
+const _Com = "Command";
+const _Con = "Configuration";
+const _Cont = "Content";
+const _D = "Description";
+const _DA = "DeleteAlias";
+const _DAR = "DeleteAliasRequest";
+const _DC = "DestinationConfig";
+const _DCSC = "DeleteCodeSigningConfig";
+const _DCSCR = "DeleteCodeSigningConfigRequest";
+const _DCSCRe = "DeleteCodeSigningConfigResponse";
+const _DCu = "DurableConfig";
+const _DDBESC = "DocumentDBEventSourceConfig";
+const _DE = "DurableExecutions";
+const _DEA = "DurableExecutionArn";
+const _DEASE = "DurableExecutionAlreadyStartedException";
+const _DEN = "DurableExecutionName";
+const _DESM = "DeleteEventSourceMapping";
+const _DESMR = "DeleteEventSourceMappingRequest";
+const _DF = "DeleteFunction";
+const _DFC = "DeleteFunctionConcurrency";
+const _DFCR = "DeleteFunctionConcurrencyRequest";
+const _DFCSC = "DeleteFunctionCodeSigningConfig";
+const _DFCSCR = "DeleteFunctionCodeSigningConfigRequest";
+const _DFEIC = "DeleteFunctionEventInvokeConfig";
+const _DFEICR = "DeleteFunctionEventInvokeConfigRequest";
+const _DFR = "DeleteFunctionRequest";
+const _DFUC = "DeleteFunctionUrlConfig";
+const _DFUCR = "DeleteFunctionUrlConfigRequest";
+const _DLC = "DeadLetterConfig";
+const _DLV = "DeleteLayerVersion";
+const _DLVR = "DeleteLayerVersionRequest";
+const _DN = "DatabaseName";
+const _DPCC = "DeleteProvisionedConcurrencyConfig";
+const _DPCCR = "DeleteProvisionedConcurrencyConfigRequest";
+const _DR = "DryRun";
+const _De = "Destination";
+const _Du = "Duration";
+const _E = "Error";
+const _EC = "ErrorCode";
+const _ECADE = "EC2AccessDeniedException";
+const _ECEC = "EC2ErrorCode";
+const _ECTE = "EC2ThrottledException";
+const _ECUE = "EC2UnexpectedException";
+const _ED = "ErrorData";
+const _EDr = "ErrorDetails";
+const _EDx = "ExecutionDetails";
+const _EE = "EnvironmentError";
+const _EEv = "EventError";
+const _EFD = "ExecutionFailedDetails";
+const _EFSIOE = "EFSIOException";
+const _EFSMCE = "EFSMountConnectivityException";
+const _EFSMFE = "EFSMountFailureException";
+const _EFSMTE = "EFSMountTimeoutException";
+const _EH = "ExposeHeaders";
+const _EI = "EventId";
+const _EIv = "EventInput";
+const _EM = "ErrorMessage";
+const _ENILRE = "ENILimitReachedException";
+const _EO = "ErrorObject";
+const _EP = "EntryPoint";
+const _ER = "EnvironmentResponse";
+const _ERF = "EventRecordFormat";
+const _ERv = "EventResult";
+const _ES = "EphemeralStorage";
+const _ESA = "EventSourceArn";
+const _ESD = "ExecutionStartedDetails";
+const _ESDx = "ExecutionSucceededDetails";
+const _ESDxe = "ExecutionStoppedDetails";
+const _ESM = "EventSourceMappings";
+const _ESMA = "EventSourceMappingArn";
+const _ESMC = "EventSourceMappingConfiguration";
+const _ESML = "EventSourceMappingsList";
+const _ESMMC = "EventSourceMappingMetricsConfig";
+const _EST = "EventSourceToken";
+const _ESv = "EventStream";
+const _ET = "ErrorType";
+const _ETOD = "ExecutionTimedOutDetails";
+const _ETn = "EndTimestamp";
+const _ETv = "EventType";
+const _ETve = "EventTimestamp";
+const _ETx = "ExecutionTimeout";
+const _EV = "ExecutedVersion";
+const _EVN = "EnvironmentVariableName";
+const _EVV = "EnvironmentVariableValue";
+const _EVn = "EnvironmentVariables";
+const _En = "Enabled";
+const _End = "Endpoints";
+const _Env = "Environment";
+const _Ev = "Event";
+const _Eve = "Events";
+const _Ex = "Execution";
+const _F = "Filter";
+const _FA = "FunctionArn";
+const _FAu = "FunctionArns";
+const _FC = "FunctionCount";
+const _FCE = "FilterCriteriaError";
+const _FCL = "FunctionCodeLocation";
+const _FCi = "FilterCriteria";
+const _FCu = "FunctionCode";
+const _FCun = "FunctionConfiguration";
+const _FD = "FullDocument";
+const _FE = "FunctionError";
+const _FEIC = "FunctionEventInvokeConfig";
+const _FEICL = "FunctionEventInvokeConfigList";
+const _FEICu = "FunctionEventInvokeConfigs";
+const _FL = "FilterList";
+const _FLu = "FunctionList";
+const _FN = "FunctionName";
+const _FRT = "FunctionResponseTypes";
+const _FSC = "FileSystemConfigs";
+const _FSCL = "FileSystemConfigList";
+const _FSCi = "FileSystemConfig";
+const _FU = "FunctionUrl";
+const _FUAT = "FunctionUrlAuthType";
+const _FUC = "FunctionUrlConfig";
+const _FUCL = "FunctionUrlConfigList";
+const _FUCu = "FunctionUrlConfigs";
+const _FV = "FunctionVersion";
+const _Fi = "Filters";
+const _Fu = "Functions";
+const _GA = "GetAlias";
+const _GAR = "GetAliasRequest";
+const _GAS = "GetAccountSettings";
+const _GASR = "GetAccountSettingsRequest";
+const _GASRe = "GetAccountSettingsResponse";
+const _GCSC = "GetCodeSigningConfig";
+const _GCSCR = "GetCodeSigningConfigRequest";
+const _GCSCRe = "GetCodeSigningConfigResponse";
+const _GDE = "GetDurableExecution";
+const _GDEH = "GetDurableExecutionHistory";
+const _GDEHR = "GetDurableExecutionHistoryRequest";
+const _GDEHRe = "GetDurableExecutionHistoryResponse";
+const _GDER = "GetDurableExecutionRequest";
+const _GDERe = "GetDurableExecutionResponse";
+const _GDES = "GetDurableExecutionState";
+const _GDESR = "GetDurableExecutionStateRequest";
+const _GDESRe = "GetDurableExecutionStateResponse";
+const _GESM = "GetEventSourceMapping";
+const _GESMR = "GetEventSourceMappingRequest";
+const _GF = "GetFunction";
+const _GFC = "GetFunctionConcurrency";
+const _GFCR = "GetFunctionConcurrencyRequest";
+const _GFCRe = "GetFunctionConcurrencyResponse";
+const _GFCRet = "GetFunctionConfigurationRequest";
+const _GFCSC = "GetFunctionCodeSigningConfig";
+const _GFCSCR = "GetFunctionCodeSigningConfigRequest";
+const _GFCSCRe = "GetFunctionCodeSigningConfigResponse";
+const _GFCe = "GetFunctionConfiguration";
+const _GFEIC = "GetFunctionEventInvokeConfig";
+const _GFEICR = "GetFunctionEventInvokeConfigRequest";
+const _GFR = "GetFunctionRequest";
+const _GFRC = "GetFunctionRecursionConfig";
+const _GFRCR = "GetFunctionRecursionConfigRequest";
+const _GFRCRe = "GetFunctionRecursionConfigResponse";
+const _GFRe = "GetFunctionResponse";
+const _GFUC = "GetFunctionUrlConfig";
+const _GFUCR = "GetFunctionUrlConfigRequest";
+const _GFUCRe = "GetFunctionUrlConfigResponse";
+const _GLV = "GetLayerVersion";
+const _GLVBA = "GetLayerVersionByArn";
+const _GLVBAR = "GetLayerVersionByArnRequest";
+const _GLVP = "GetLayerVersionPolicy";
+const _GLVPR = "GetLayerVersionPolicyRequest";
+const _GLVPRe = "GetLayerVersionPolicyResponse";
+const _GLVR = "GetLayerVersionRequest";
+const _GLVRe = "GetLayerVersionResponse";
+const _GP = "GetPolicy";
+const _GPCC = "GetProvisionedConcurrencyConfig";
+const _GPCCR = "GetProvisionedConcurrencyConfigRequest";
+const _GPCCRe = "GetProvisionedConcurrencyConfigResponse";
+const _GPR = "GetPolicyRequest";
+const _GPRe = "GetPolicyResponse";
+const _GRMC = "GetRuntimeManagementConfig";
+const _GRMCR = "GetRuntimeManagementConfigRequest";
+const _GRMCRe = "GetRuntimeManagementConfigResponse";
+const _H = "Handler";
+const _HT = "HeartbeatTimeout";
+const _HTS = "HeartbeatTimeoutSeconds";
+const _I = "Input";
+const _IA = "InvokeArgs";
+const _IAFDS = "Ipv6AllowedForDualStack";
+const _IAR = "InvokeAsyncRequest";
+const _IARn = "InvokeAsyncResponse";
+const _IAn = "InvokeAsync";
+const _IC = "ImageConfig";
+const _ICD = "InvocationCompletedDetails";
+const _ICE = "ImageConfigError";
+const _ICR = "ImageConfigResponse";
+const _ICSE = "InvalidCodeSignatureException";
+const _ICn = "InvokeComplete";
+const _IED = "IncludeExecutionData";
+const _IM = "InvokeMode";
+const _IP = "InputPayload";
+const _IPVE = "InvalidParameterValueException";
+const _IR = "InvocationRequest";
+const _IRCE = "InvalidRequestContentException";
+const _IRE = "InvalidRuntimeException";
+const _IRSU = "InvokeResponseStreamUpdate";
+const _IRn = "InvocationResponse";
+const _ISGIDE = "InvalidSecurityGroupIDException";
+const _ISIDE = "InvalidSubnetIDException";
+const _IT = "InvocationType";
+const _IU = "ImageUri";
+const _IVFU = "InvokedViaFunctionUrl";
+const _IWRS = "InvokeWithResponseStream";
+const _IWRSCE = "InvokeWithResponseStreamCompleteEvent";
+const _IWRSR = "InvokeWithResponseStreamRequest";
+const _IWRSRE = "InvokeWithResponseStreamResponseEvent";
+const _IWRSRn = "InvokeWithResponseStreamResponse";
+const _IZFE = "InvalidZipFileException";
+const _Id = "Id";
+const _In = "Invoke";
+const _KMSADE = "KMSAccessDeniedException";
+const _KMSDE = "KMSDisabledException";
+const _KMSISE = "KMSInvalidStateException";
+const _KMSKA = "KMSKeyArn";
+const _KMSNFE = "KMSNotFoundException";
+const _KSRAC = "KafkaSchemaRegistryAccessConfig";
+const _KSRACL = "KafkaSchemaRegistryAccessConfigList";
+const _KSRC = "KafkaSchemaRegistryConfig";
+const _KSVC = "KafkaSchemaValidationConfig";
+const _KSVCL = "KafkaSchemaValidationConfigList";
+const _L = "Layers";
+const _LA = "LayerArn";
+const _LAR = "ListAliasesRequest";
+const _LARi = "ListAliasesResponse";
+const _LAi = "ListAliases";
+const _LC = "LoggingConfig";
+const _LCSC = "ListCodeSigningConfigs";
+const _LCSCR = "ListCodeSigningConfigsRequest";
+const _LCSCRi = "ListCodeSigningConfigsResponse";
+const _LDEBF = "ListDurableExecutionsByFunction";
+const _LDEBFR = "ListDurableExecutionsByFunctionRequest";
+const _LDEBFRi = "ListDurableExecutionsByFunctionResponse";
+const _LESM = "ListEventSourceMappings";
+const _LESMR = "ListEventSourceMappingsRequest";
+const _LESMRi = "ListEventSourceMappingsResponse";
+const _LF = "LogFormat";
+const _LFBCSC = "ListFunctionsByCodeSigningConfig";
+const _LFBCSCR = "ListFunctionsByCodeSigningConfigRequest";
+const _LFBCSCRi = "ListFunctionsByCodeSigningConfigResponse";
+const _LFEIC = "ListFunctionEventInvokeConfigs";
+const _LFEICR = "ListFunctionEventInvokeConfigsRequest";
+const _LFEICRi = "ListFunctionEventInvokeConfigsResponse";
+const _LFR = "ListFunctionsRequest";
+const _LFRi = "ListFunctionsResponse";
+const _LFUC = "ListFunctionUrlConfigs";
+const _LFUCR = "ListFunctionUrlConfigsRequest";
+const _LFUCRi = "ListFunctionUrlConfigsResponse";
+const _LFi = "ListFunctions";
+const _LG = "LogGroup";
+const _LI = "LicenseInfo";
+const _LL = "LayersList";
+const _LLI = "LayersListItem";
+const _LLR = "ListLayersRequest";
+const _LLRi = "ListLayersResponse";
+const _LLV = "ListLayerVersions";
+const _LLVR = "ListLayerVersionsRequest";
+const _LLVRi = "ListLayerVersionsResponse";
+const _LLi = "ListLayers";
+const _LM = "LastModified";
+const _LMP = "LocalMountPath";
+const _LMT = "LastModifiedTime";
+const _LMV = "LatestMatchingVersion";
+const _LN = "LayerName";
+const _LPCC = "ListProvisionedConcurrencyConfigs";
+const _LPCCR = "ListProvisionedConcurrencyConfigsRequest";
+const _LPCCRi = "ListProvisionedConcurrencyConfigsResponse";
+const _LPR = "LastProcessingResult";
+const _LR = "LogResult";
+const _LRL = "LayersReferenceList";
+const _LT = "LogType";
+const _LTR = "ListTagsRequest";
+const _LTRi = "ListTagsResponse";
+const _LTi = "ListTags";
+const _LUS = "LastUpdateStatus";
+const _LUSR = "LastUpdateStatusReason";
+const _LUSRC = "LastUpdateStatusReasonCode";
+const _LV = "LayerVersions";
+const _LVA = "LayerVersionArn";
+const _LVBF = "ListVersionsByFunction";
+const _LVBFR = "ListVersionsByFunctionRequest";
+const _LVBFRi = "ListVersionsByFunctionResponse";
+const _LVCI = "LayerVersionContentInput";
+const _LVCO = "LayerVersionContentOutput";
+const _LVL = "LayerVersionsList";
+const _LVLI = "LayerVersionsListItem";
+const _La = "Layer";
+const _Lo = "Location";
+const _M = "Message";
+const _MA = "MaxAge";
+const _MAa = "MasterArn";
+const _MBWIS = "MaximumBatchingWindowInSeconds";
+const _MC = "MetricsConfig";
+const _MCa = "MaximumConcurrency";
+const _MEAIS = "MaximumEventAgeInSeconds";
+const _MI = "MaxItems";
+const _MP = "MinimumPollers";
+const _MPa = "MaximumPollers";
+const _MR = "MasterRegion";
+const _MRA = "MaximumRetryAttempts";
+const _MRAIS = "MaximumRecordAgeInSeconds";
+const _MS = "MemorySize";
+const _Ma = "Marker";
+const _Me = "Metrics";
+const _Mo = "Mode";
+const _N = "Name";
+const _NADS = "NextAttemptDelaySeconds";
+const _NAT = "NextAttemptTimestamp";
+const _NES = "NewExecutionState";
+const _NM = "NextMarker";
+const _O = "Operations";
+const _OF = "OnFailure";
+const _OI = "OrganizationId";
+const _OP = "OperationPayload";
+const _OPu = "OutputPayload";
+const _OS = "OnSuccess";
+const _OSp = "OptimizationStatus";
+const _OU = "OperationUpdate";
+const _OUp = "OperationUpdates";
+const _Op = "Operation";
+const _P = "Principal";
+const _PC = "PayloadChunk";
+const _PCC = "ProvisionedConcurrencyConfigs";
+const _PCCL = "ProvisionedConcurrencyConfigList";
+const _PCCLI = "ProvisionedConcurrencyConfigListItem";
+const _PCCNFE = "ProvisionedConcurrencyConfigNotFoundException";
+const _PCE = "ProvisionedConcurrentExecutions";
+const _PF = "ParallelizationFactor";
+const _PFC = "PutFunctionConcurrency";
+const _PFCR = "PutFunctionConcurrencyRequest";
+const _PFCSC = "PutFunctionCodeSigningConfig";
+const _PFCSCR = "PutFunctionCodeSigningConfigRequest";
+const _PFCSCRu = "PutFunctionCodeSigningConfigResponse";
+const _PFE = "PreconditionFailedException";
+const _PFEIC = "PutFunctionEventInvokeConfig";
+const _PFEICR = "PutFunctionEventInvokeConfigRequest";
+const _PFRC = "PutFunctionRecursionConfig";
+const _PFRCR = "PutFunctionRecursionConfigRequest";
+const _PFRCRu = "PutFunctionRecursionConfigResponse";
+const _PI = "ParentId";
+const _PLEE = "PolicyLengthExceededException";
+const _PLV = "PublishLayerVersion";
+const _PLVR = "PublishLayerVersionRequest";
+const _PLVRu = "PublishLayerVersionResponse";
+const _POID = "PrincipalOrgID";
+const _PPC = "ProvisionedPollerConfig";
+const _PPCC = "PutProvisionedConcurrencyConfig";
+const _PPCCR = "PutProvisionedConcurrencyConfigRequest";
+const _PPCCRu = "PutProvisionedConcurrencyConfigResponse";
+const _PRMC = "PutRuntimeManagementConfig";
+const _PRMCR = "PutRuntimeManagementConfigRequest";
+const _PRMCRu = "PutRuntimeManagementConfigResponse";
+const _PT = "PackageType";
+const _PV = "PublishVersion";
+const _PVR = "PublishVersionRequest";
+const _Pa = "Payload";
+const _Pat = "Pattern";
+const _Po = "Policy";
+const _Pu = "Publish";
+const _Q = "Qualifier";
+const _Qu = "Queues";
+const _R = "Result";
+const _RA = "Retry-After";
+const _RC = "RoutingConfig";
+const _RCE = "ReservedConcurrentExecutions";
+const _RCEe = "ResourceConflictException";
+const _RCe = "ReplayChildren";
+const _RD = "RetryDetails";
+const _RI = "RevisionId";
+const _RIE = "RecursiveInvocationException";
+const _RIU = "ResolvedImageUri";
+const _RIUE = "ResourceInUseException";
+const _RIe = "RequestId";
+const _RL = "RecursiveLoop";
+const _RLVP = "RemoveLayerVersionPermission";
+const _RLVPR = "RemoveLayerVersionPermissionRequest";
+const _RNFE = "ResourceNotFoundException";
+const _RNRE = "ResourceNotReadyException";
+const _RO = "ReverseOrder";
+const _RP = "RemovePermission";
+const _RPCE = "RequestedProvisionedConcurrentExecutions";
+const _RPID = "RetentionPeriodInDays";
+const _RPR = "RemovePermissionRequest";
+const _RSCT = "ResponseStreamContentType";
+const _RT = "RepositoryType";
+const _RTLE = "RequestTooLargeException";
+const _RVA = "RuntimeVersionArn";
+const _RVC = "RuntimeVersionConfig";
+const _RVE = "RuntimeVersionError";
+const _Re = "Resource";
+const _Rea = "Reason";
+const _Ro = "Role";
+const _Ru = "Runtime";
+const _S = "Statement";
+const _SA = "SourceArn";
+const _SAC = "SourceAccessConfigurations";
+const _SACo = "SourceAccessConfiguration";
+const _SAo = "SourceAccount";
+const _SAt = "StartedAfter";
+const _SB = "S3Bucket";
+const _SBt = "StartedBefore";
+const _SC = "ScalingConfig";
+const _SCt = "StatusCode";
+const _SD = "StepDetails";
+const _SDE = "StopDurableExecution";
+const _SDECF = "SendDurableExecutionCallbackFailure";
+const _SDECFR = "SendDurableExecutionCallbackFailureRequest";
+const _SDECFRe = "SendDurableExecutionCallbackFailureResponse";
+const _SDECH = "SendDurableExecutionCallbackHeartbeat";
+const _SDECHR = "SendDurableExecutionCallbackHeartbeatRequest";
+const _SDECHRe = "SendDurableExecutionCallbackHeartbeatResponse";
+const _SDECS = "SendDurableExecutionCallbackSuccess";
+const _SDECSR = "SendDurableExecutionCallbackSuccessRequest";
+const _SDECSRe = "SendDurableExecutionCallbackSuccessResponse";
+const _SDER = "StopDurableExecutionRequest";
+const _SDERt = "StopDurableExecutionResponse";
+const _SE = "ServiceException";
+const _SET = "ScheduledEndTimestamp";
+const _SFD = "StepFailedDetails";
+const _SGI = "SecurityGroupIds";
+const _SI = "StatementId";
+const _SIPALRE = "SubnetIPAddressLimitReachedException";
+const _SIu = "SubnetIds";
+const _SJA = "SigningJobArn";
+const _SK = "S3Key";
+const _SKMSKA = "SourceKMSKeyArn";
+const _SLL = "SystemLogLevel";
+const _SMES = "SelfManagedEventSource";
+const _SMKESC = "SelfManagedKafkaEventSourceConfig";
+const _SO = "StepOptions";
+const _SOV = "S3ObjectVersion";
+const _SP = "StartingPosition";
+const _SPT = "StartingPositionTimestamp";
+const _SPVA = "SigningProfileVersionArns";
+const _SPVAi = "SigningProfileVersionArn";
+const _SR = "StateReason";
+const _SRC = "SchemaRegistryConfig";
+const _SRCt = "StateReasonCode";
+const _SRETLE = "SerializedRequestEntityTooLargeException";
+const _SRURI = "SchemaRegistryURI";
+const _SRt = "StatusReason";
+const _SS = "SensitiveString";
+const _SSD = "StepStartedDetails";
+const _SSDt = "StepSucceededDetails";
+const _SSE = "SnapStartException";
+const _SSNRE = "SnapStartNotReadyException";
+const _SSR = "SnapStartResponse";
+const _SSTE = "SnapStartTimeoutException";
+const _SSn = "SnapStart";
+const _ST = "StackTrace";
+const _STE = "StackTraceEntry";
+const _STEt = "StackTraceEntries";
+const _STR = "StateTransitionReason";
+const _STt = "StartTimestamp";
+const _STto = "StopTimestamp";
+const _STu = "SubType";
+const _SVC = "SchemaValidationConfigs";
+const _Si = "Size";
+const _St = "State";
+const _Sta = "Status";
+const _Stat = "Statuses";
+const _T = "Timeout";
+const _TA = "TargetArn";
+const _TC = "TracingConfig";
+const _TCR = "TracingConfigResponse";
+const _TCS = "TotalCodeSize";
+const _TE = "TagsError";
+const _TH = "TraceHeader";
+const _TI = "TenantId";
+const _TK = "TagKeys";
+const _TMRE = "TooManyRequestsException";
+const _TR = "TagResource";
+const _TRR = "TagResourceRequest";
+const _TS = "TimeoutSeconds";
+const _TWIS = "TumblingWindowInSeconds";
+const _Ta = "Tags";
+const _To = "Topics";
+const _Tr = "Truncated";
+const _Ty = "Type";
+const _U = "Updates";
+const _UA = "UpdateAlias";
+const _UAOD = "UntrustedArtifactOnDeployment";
+const _UAR = "UpdateAliasRequest";
+const _UCE = "UnreservedConcurrentExecutions";
+const _UCSC = "UpdateCodeSigningConfig";
+const _UCSCR = "UpdateCodeSigningConfigRequest";
+const _UCSCRp = "UpdateCodeSigningConfigResponse";
+const _UESM = "UpdateEventSourceMapping";
+const _UESMR = "UpdateEventSourceMappingRequest";
+const _UFC = "UpdateFunctionCode";
+const _UFCR = "UpdateFunctionCodeRequest";
+const _UFCRp = "UpdateFunctionConfigurationRequest";
+const _UFCp = "UpdateFunctionConfiguration";
+const _UFEIC = "UpdateFunctionEventInvokeConfig";
+const _UFEICR = "UpdateFunctionEventInvokeConfigRequest";
+const _UFUC = "UpdateFunctionUrlConfig";
+const _UFUCR = "UpdateFunctionUrlConfigRequest";
+const _UFUCRp = "UpdateFunctionUrlConfigResponse";
+const _UMTE = "UnsupportedMediaTypeException";
+const _UR = "UntagResource";
+const _URI = "URI";
+const _URO = "UpdateRuntimeOn";
+const _URR = "UntagResourceRequest";
+const _UUID = "UUID";
+const _V = "Variables";
+const _VC = "VpcConfig";
+const _VCR = "VpcConfigResponse";
+const _VI = "VpcId";
+const _VN = "VersionNumber";
+const _Ve = "Version";
+const _Ver = "Versions";
+const _WCD = "WaitCancelledDetails";
+const _WD = "WorkingDirectory";
+const _WDa = "WaitDetails";
+const _WO = "WaitOptions";
+const _WS = "WaitSeconds";
+const _WSD = "WaitStartedDetails";
+const _WSDa = "WaitSucceededDetails";
+const _XACC = "X-Amz-Client-Context";
+const _XADEA = "X-Amz-Durable-Execution-Arn";
+const _XADEN = "X-Amz-Durable-Execution-Name";
+const _XAEV = "X-Amz-Executed-Version";
+const _XAFE = "X-Amz-Function-Error";
+const _XAIT = "X-Amz-Invocation-Type";
+const _XALR = "X-Amz-Log-Result";
+const _XALT = "X-Amz-Log-Type";
+const _XATI = "XAmznTraceId";
+const _ZF = "ZipFile";
+const _c = "client";
+const _e = "error";
+const _eP = "eventPayload";
+const _h = "http";
+const _hE = "httpError";
+const _hH = "httpHeader";
+const _hQ = "httpQuery";
+const _m = "message";
+const _rAS = "retryAfterSeconds";
+const _s = "streaming";
+const _se = "server";
+const _sm = "smithy.ts.sdk.synthetic.com.amazonaws.lambda";
+const _tK = "tagKeys";
+const n0 = "com.amazonaws.lambda";
+import { TypeRegistry } from "@smithy/core/schema";
+import {
+  CallbackTimeoutException as __CallbackTimeoutException,
+  CodeSigningConfigNotFoundException as __CodeSigningConfigNotFoundException,
+  CodeStorageExceededException as __CodeStorageExceededException,
+  CodeVerificationFailedException as __CodeVerificationFailedException,
+  DurableExecutionAlreadyStartedException as __DurableExecutionAlreadyStartedException,
+  EC2AccessDeniedException as __EC2AccessDeniedException,
+  EC2ThrottledException as __EC2ThrottledException,
+  EC2UnexpectedException as __EC2UnexpectedException,
+  EFSIOException as __EFSIOException,
+  EFSMountConnectivityException as __EFSMountConnectivityException,
+  EFSMountFailureException as __EFSMountFailureException,
+  EFSMountTimeoutException as __EFSMountTimeoutException,
+  ENILimitReachedException as __ENILimitReachedException,
+  InvalidCodeSignatureException as __InvalidCodeSignatureException,
+  InvalidParameterValueException as __InvalidParameterValueException,
+  InvalidRequestContentException as __InvalidRequestContentException,
+  InvalidRuntimeException as __InvalidRuntimeException,
+  InvalidSecurityGroupIDException as __InvalidSecurityGroupIDException,
+  InvalidSubnetIDException as __InvalidSubnetIDException,
+  InvalidZipFileException as __InvalidZipFileException,
+  KMSAccessDeniedException as __KMSAccessDeniedException,
+  KMSDisabledException as __KMSDisabledException,
+  KMSInvalidStateException as __KMSInvalidStateException,
+  KMSNotFoundException as __KMSNotFoundException,
+  PolicyLengthExceededException as __PolicyLengthExceededException,
+  PreconditionFailedException as __PreconditionFailedException,
+  ProvisionedConcurrencyConfigNotFoundException as __ProvisionedConcurrencyConfigNotFoundException,
+  RecursiveInvocationException as __RecursiveInvocationException,
+  RequestTooLargeException as __RequestTooLargeException,
+  ResourceConflictException as __ResourceConflictException,
+  ResourceInUseException as __ResourceInUseException,
+  ResourceNotFoundException as __ResourceNotFoundException,
+  ResourceNotReadyException as __ResourceNotReadyException,
+  SerializedRequestEntityTooLargeException as __SerializedRequestEntityTooLargeException,
+  ServiceException as __ServiceException,
+  SnapStartException as __SnapStartException,
+  SnapStartNotReadyException as __SnapStartNotReadyException,
+  SnapStartTimeoutException as __SnapStartTimeoutException,
+  SubnetIPAddressLimitReachedException as __SubnetIPAddressLimitReachedException,
+  TooManyRequestsException as __TooManyRequestsException,
+  UnsupportedMediaTypeException as __UnsupportedMediaTypeException,
+} from "../models/errors";
+import { LambdaServiceException as __LambdaServiceException } from "../models/LambdaServiceException";
+export var BinaryOperationPayload = [0, n0, _BOP, 8, 21];
+export var _Blob = [0, n0, _B, 8, 21];
+export var BlobStream = [
+  0,
+  n0,
+  _BS,
+  {
+    [_s]: 1,
+  },
+  42,
+];
+export var EnvironmentVariableName = [0, n0, _EVN, 8, 0];
+export var EnvironmentVariableValue = [0, n0, _EVV, 8, 0];
+export var ErrorData = [0, n0, _ED, 8, 0];
+export var ErrorMessage = [0, n0, _EM, 8, 0];
+export var ErrorType = [0, n0, _ET, 8, 0];
+export var InputPayload = [0, n0, _IP, 8, 0];
+export var OperationPayload = [0, n0, _OP, 8, 0];
+export var OutputPayload = [0, n0, _OPu, 8, 0];
+export var SensitiveString = [0, n0, _SS, 8, 0];
+export var StackTraceEntry = [0, n0, _STE, 8, 0];
+export var AccountLimit = [
+  3,
+  n0,
+  _AL,
+  0,
+  [_TCS, _CSU, _CSZ, _CE, _UCE],
+  [1, 1, 1, 1, 1],
+];
+export var AccountUsage = [3, n0, _AU, 0, [_TCS, _FC], [1, 1]];
+export var AddLayerVersionPermissionRequest = [
+  3,
+  n0,
+  _ALVPR,
+  0,
+  [_LN, _VN, _SI, _A, _P, _OI, _RI],
+  [
+    [0, 1],
+    [1, 1],
+    0,
+    0,
+    0,
+    0,
+    [
+      0,
+      {
+        [_hQ]: _RI,
+      },
+    ],
+  ],
+];
+export var AddLayerVersionPermissionResponse = [
+  3,
+  n0,
+  _ALVPRd,
+  0,
+  [_S, _RI],
+  [0, 0],
+];
+export var AddPermissionRequest = [
+  3,
+  n0,
+  _APR,
+  0,
+  [_FN, _SI, _A, _P, _SA, _SAo, _EST, _Q, _RI, _POID, _FUAT, _IVFU],
+  [
+    [0, 1],
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    0,
+    0,
+    2,
+  ],
+];
+export var AddPermissionResponse = [3, n0, _APRd, 0, [_S], [0]];
+export var AliasConfiguration = [
+  3,
+  n0,
+  _AC,
+  0,
+  [_AA, _N, _FV, _D, _RC, _RI],
+  [0, 0, 0, 0, () => AliasRoutingConfiguration, 0],
+];
+export var AliasRoutingConfiguration = [3, n0, _ARC, 0, [_AVW], [128 | 1]];
+export var AllowedPublishers = [3, n0, _AP, 0, [_SPVA], [64 | 0]];
+export var AmazonManagedKafkaEventSourceConfig = [
+  3,
+  n0,
+  _AMKESC,
+  0,
+  [_CGI, _SRC],
+  [0, () => KafkaSchemaRegistryConfig],
+];
+export var CallbackDetails = [
+  3,
+  n0,
+  _CD,
+  0,
+  [_CI, _R, _E],
+  [0, [() => OperationPayload, 0], [() => ErrorObject, 0]],
+];
+export var CallbackFailedDetails = [
+  3,
+  n0,
+  _CFD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var CallbackOptions = [3, n0, _CO, 0, [_TS, _HTS], [1, 1]];
+export var CallbackStartedDetails = [3, n0, _CSD, 0, [_CI, _HT, _T], [0, 1, 1]];
+export var CallbackSucceededDetails = [
+  3,
+  n0,
+  _CSDa,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+export var CallbackTimedOutDetails = [
+  3,
+  n0,
+  _CTOD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var CallbackTimeoutException = [
+  -3,
+  n0,
+  _CTE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  CallbackTimeoutException,
+  __CallbackTimeoutException,
+);
+export var ChainedInvokeDetails = [
+  3,
+  n0,
+  _CID,
+  0,
+  [_R, _E],
+  [
+    [() => OperationPayload, 0],
+    [() => ErrorObject, 0],
+  ],
+];
+export var ChainedInvokeFailedDetails = [
+  3,
+  n0,
+  _CIFD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var ChainedInvokeOptions = [3, n0, _CIO, 0, [_FN, _TI], [0, 0]];
+export var ChainedInvokeStartedDetails = [
+  3,
+  n0,
+  _CISD,
+  0,
+  [_FN, _TI, _I, _EV, _DEA],
+  [0, 0, [() => EventInput, 0], 0, 0],
+];
+export var ChainedInvokeStoppedDetails = [
+  3,
+  n0,
+  _CISDh,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var ChainedInvokeSucceededDetails = [
+  3,
+  n0,
+  _CISDha,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+export var ChainedInvokeTimedOutDetails = [
+  3,
+  n0,
+  _CITOD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var CheckpointDurableExecutionRequest = [
+  3,
+  n0,
+  _CDER,
+  0,
+  [_DEA, _CT, _U, _CTl],
+  [[0, 1], 0, [() => OperationUpdates, 0], [0, 4]],
+];
+export var CheckpointDurableExecutionResponse = [
+  3,
+  n0,
+  _CDERh,
+  0,
+  [_CT, _NES],
+  [0, [() => CheckpointUpdatedExecutionState, 0]],
+];
+export var CheckpointUpdatedExecutionState = [
+  3,
+  n0,
+  _CUES,
+  0,
+  [_O, _NM],
+  [[() => Operations, 0], 0],
+];
+export var CodeSigningConfig = [
+  3,
+  n0,
+  _CSC,
+  0,
+  [_CSCI, _CSCA, _D, _AP, _CSP, _LM],
+  [0, 0, 0, () => AllowedPublishers, () => CodeSigningPolicies, 0],
+];
+export var CodeSigningConfigNotFoundException = [
+  -3,
+  n0,
+  _CSCNFE,
+  {
+    [_e]: _c,
+    [_hE]: 404,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  CodeSigningConfigNotFoundException,
+  __CodeSigningConfigNotFoundException,
+);
+export var CodeSigningPolicies = [3, n0, _CSP, 0, [_UAOD], [0]];
+export var CodeStorageExceededException = [
+  -3,
+  n0,
+  _CSEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  CodeStorageExceededException,
+  __CodeStorageExceededException,
+);
+export var CodeVerificationFailedException = [
+  -3,
+  n0,
+  _CVFE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  CodeVerificationFailedException,
+  __CodeVerificationFailedException,
+);
+export var Concurrency = [3, n0, _C, 0, [_RCE], [1]];
+export var ContextDetails = [
+  3,
+  n0,
+  _CDo,
+  0,
+  [_RCe, _R, _E],
+  [2, [() => OperationPayload, 0], [() => ErrorObject, 0]],
+];
+export var ContextFailedDetails = [
+  3,
+  n0,
+  _CFDo,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var ContextOptions = [3, n0, _COo, 0, [_RCe], [2]];
+export var ContextStartedDetails = [3, n0, _CSDo, 0, [], []];
+export var ContextSucceededDetails = [
+  3,
+  n0,
+  _CSDon,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+export var Cors = [
+  3,
+  n0,
+  _Co,
+  0,
+  [_ACl, _AH, _AM, _AO, _EH, _MA],
+  [2, 64 | 0, 64 | 0, 64 | 0, 64 | 0, 1],
+];
+export var CreateAliasRequest = [
+  3,
+  n0,
+  _CAR,
+  0,
+  [_FN, _N, _FV, _D, _RC],
+  [[0, 1], 0, 0, 0, () => AliasRoutingConfiguration],
+];
+export var CreateCodeSigningConfigRequest = [
+  3,
+  n0,
+  _CCSCR,
+  0,
+  [_D, _AP, _CSP, _Ta],
+  [0, () => AllowedPublishers, () => CodeSigningPolicies, 128 | 0],
+];
+export var CreateCodeSigningConfigResponse = [
+  3,
+  n0,
+  _CCSCRr,
+  0,
+  [_CSC],
+  [() => CodeSigningConfig],
+];
+export var CreateEventSourceMappingRequest = [
+  3,
+  n0,
+  _CESMR,
+  0,
+  [
+    _ESA,
+    _FN,
+    _En,
+    _BSa,
+    _FCi,
+    _MBWIS,
+    _PF,
+    _SP,
+    _SPT,
+    _DC,
+    _MRAIS,
+    _BBOFE,
+    _MRA,
+    _Ta,
+    _TWIS,
+    _To,
+    _Qu,
+    _SAC,
+    _SMES,
+    _FRT,
+    _AMKESC,
+    _SMKESC,
+    _SC,
+    _DDBESC,
+    _KMSKA,
+    _MC,
+    _PPC,
+  ],
+  [
+    0,
+    0,
+    2,
+    1,
+    () => FilterCriteria,
+    1,
+    1,
+    0,
+    4,
+    () => DestinationConfig,
+    1,
+    2,
+    1,
+    128 | 0,
+    1,
+    64 | 0,
+    64 | 0,
+    () => SourceAccessConfigurations,
+    () => SelfManagedEventSource,
+    64 | 0,
+    () => AmazonManagedKafkaEventSourceConfig,
+    () => SelfManagedKafkaEventSourceConfig,
+    () => ScalingConfig,
+    () => DocumentDBEventSourceConfig,
+    0,
+    () => EventSourceMappingMetricsConfig,
+    () => ProvisionedPollerConfig,
+  ],
+];
+export var CreateFunctionRequest = [
+  3,
+  n0,
+  _CFR,
+  0,
+  [
+    _FN,
+    _Ru,
+    _Ro,
+    _H,
+    _Cod,
+    _D,
+    _T,
+    _MS,
+    _Pu,
+    _VC,
+    _PT,
+    _DLC,
+    _Env,
+    _KMSKA,
+    _TC,
+    _Ta,
+    _L,
+    _FSC,
+    _IC,
+    _CSCA,
+    _Ar,
+    _ES,
+    _SSn,
+    _LC,
+    _DCu,
+  ],
+  [
+    0,
+    0,
+    0,
+    0,
+    [() => FunctionCode, 0],
+    0,
+    1,
+    1,
+    2,
+    () => VpcConfig,
+    0,
+    () => DeadLetterConfig,
+    [() => Environment, 0],
+    0,
+    () => TracingConfig,
+    128 | 0,
+    64 | 0,
+    () => FileSystemConfigList,
+    () => ImageConfig,
+    0,
+    64 | 0,
+    () => EphemeralStorage,
+    () => SnapStart,
+    () => LoggingConfig,
+    () => DurableConfig,
+  ],
+];
+export var CreateFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _CFUCR,
+  0,
+  [_FN, _Q, _AT, _Co, _IM],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    () => Cors,
+    0,
+  ],
+];
+export var CreateFunctionUrlConfigResponse = [
+  3,
+  n0,
+  _CFUCRr,
+  0,
+  [_FU, _FA, _AT, _Co, _CTr, _IM],
+  [0, 0, 0, () => Cors, 0, 0],
+];
+export var DeadLetterConfig = [3, n0, _DLC, 0, [_TA], [0]];
+export var DeleteAliasRequest = [
+  3,
+  n0,
+  _DAR,
+  0,
+  [_FN, _N],
+  [
+    [0, 1],
+    [0, 1],
+  ],
+];
+export var DeleteCodeSigningConfigRequest = [
+  3,
+  n0,
+  _DCSCR,
+  0,
+  [_CSCA],
+  [[0, 1]],
+];
+export var DeleteCodeSigningConfigResponse = [3, n0, _DCSCRe, 0, [], []];
+export var DeleteEventSourceMappingRequest = [
+  3,
+  n0,
+  _DESMR,
+  0,
+  [_UUID],
+  [[0, 1]],
+];
+export var DeleteFunctionCodeSigningConfigRequest = [
+  3,
+  n0,
+  _DFCSCR,
+  0,
+  [_FN],
+  [[0, 1]],
+];
+export var DeleteFunctionConcurrencyRequest = [
+  3,
+  n0,
+  _DFCR,
+  0,
+  [_FN],
+  [[0, 1]],
+];
+export var DeleteFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _DFEICR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var DeleteFunctionRequest = [
+  3,
+  n0,
+  _DFR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var DeleteFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _DFUCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var DeleteLayerVersionRequest = [
+  3,
+  n0,
+  _DLVR,
+  0,
+  [_LN, _VN],
+  [
+    [0, 1],
+    [1, 1],
+  ],
+];
+export var DeleteProvisionedConcurrencyConfigRequest = [
+  3,
+  n0,
+  _DPCCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var DestinationConfig = [
+  3,
+  n0,
+  _DC,
+  0,
+  [_OS, _OF],
+  [() => OnSuccess, () => OnFailure],
+];
+export var DocumentDBEventSourceConfig = [
+  3,
+  n0,
+  _DDBESC,
+  0,
+  [_DN, _CN, _FD],
+  [0, 0, 0],
+];
+export var DurableConfig = [3, n0, _DCu, 0, [_RPID, _ETx], [1, 1]];
+export var DurableExecutionAlreadyStartedException = [
+  -3,
+  n0,
+  _DEASE,
+  {
+    [_e]: _c,
+    [_hE]: 409,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  DurableExecutionAlreadyStartedException,
+  __DurableExecutionAlreadyStartedException,
+);
+export var EC2AccessDeniedException = [
+  -3,
+  n0,
+  _ECADE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  EC2AccessDeniedException,
+  __EC2AccessDeniedException,
+);
+export var EC2ThrottledException = [
+  -3,
+  n0,
+  _ECTE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  EC2ThrottledException,
+  __EC2ThrottledException,
+);
+export var EC2UnexpectedException = [
+  -3,
+  n0,
+  _ECUE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M, _ECEC],
+  [0, 0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  EC2UnexpectedException,
+  __EC2UnexpectedException,
+);
+export var EFSIOException = [
+  -3,
+  n0,
+  _EFSIOE,
+  {
+    [_e]: _c,
+    [_hE]: 410,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(EFSIOException, __EFSIOException);
+export var EFSMountConnectivityException = [
+  -3,
+  n0,
+  _EFSMCE,
+  {
+    [_e]: _c,
+    [_hE]: 408,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  EFSMountConnectivityException,
+  __EFSMountConnectivityException,
+);
+export var EFSMountFailureException = [
+  -3,
+  n0,
+  _EFSMFE,
+  {
+    [_e]: _c,
+    [_hE]: 403,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  EFSMountFailureException,
+  __EFSMountFailureException,
+);
+export var EFSMountTimeoutException = [
+  -3,
+  n0,
+  _EFSMTE,
+  {
+    [_e]: _c,
+    [_hE]: 408,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  EFSMountTimeoutException,
+  __EFSMountTimeoutException,
+);
+export var ENILimitReachedException = [
+  -3,
+  n0,
+  _ENILRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  ENILimitReachedException,
+  __ENILimitReachedException,
+);
+export var Environment = [
+  3,
+  n0,
+  _Env,
+  0,
+  [_V],
+  [[() => EnvironmentVariables, 0]],
+];
+export var EnvironmentError = [
+  3,
+  n0,
+  _EE,
+  0,
+  [_EC, _M],
+  [0, [() => SensitiveString, 0]],
+];
+export var EnvironmentResponse = [
+  3,
+  n0,
+  _ER,
+  0,
+  [_V, _E],
+  [
+    [() => EnvironmentVariables, 0],
+    [() => EnvironmentError, 0],
+  ],
+];
+export var EphemeralStorage = [3, n0, _ES, 0, [_Si], [1]];
+export var ErrorObject = [
+  3,
+  n0,
+  _EO,
+  0,
+  [_EM, _ET, _ED, _ST],
+  [
+    [() => ErrorMessage, 0],
+    [() => ErrorType, 0],
+    [() => ErrorData, 0],
+    [() => StackTraceEntries, 0],
+  ],
+];
+export var Event = [
+  3,
+  n0,
+  _Ev,
+  0,
+  [
+    _ETv,
+    _STu,
+    _EI,
+    _Id,
+    _N,
+    _ETve,
+    _PI,
+    _ESD,
+    _ESDx,
+    _EFD,
+    _ETOD,
+    _ESDxe,
+    _CSDo,
+    _CSDon,
+    _CFDo,
+    _WSD,
+    _WSDa,
+    _WCD,
+    _SSD,
+    _SSDt,
+    _SFD,
+    _CISD,
+    _CISDha,
+    _CIFD,
+    _CITOD,
+    _CISDh,
+    _CSD,
+    _CSDa,
+    _CFD,
+    _CTOD,
+    _ICD,
+  ],
+  [
+    0,
+    0,
+    1,
+    0,
+    0,
+    4,
+    0,
+    [() => ExecutionStartedDetails, 0],
+    [() => ExecutionSucceededDetails, 0],
+    [() => ExecutionFailedDetails, 0],
+    [() => ExecutionTimedOutDetails, 0],
+    [() => ExecutionStoppedDetails, 0],
+    () => ContextStartedDetails,
+    [() => ContextSucceededDetails, 0],
+    [() => ContextFailedDetails, 0],
+    () => WaitStartedDetails,
+    () => WaitSucceededDetails,
+    [() => WaitCancelledDetails, 0],
+    () => StepStartedDetails,
+    [() => StepSucceededDetails, 0],
+    [() => StepFailedDetails, 0],
+    [() => ChainedInvokeStartedDetails, 0],
+    [() => ChainedInvokeSucceededDetails, 0],
+    [() => ChainedInvokeFailedDetails, 0],
+    [() => ChainedInvokeTimedOutDetails, 0],
+    [() => ChainedInvokeStoppedDetails, 0],
+    () => CallbackStartedDetails,
+    [() => CallbackSucceededDetails, 0],
+    [() => CallbackFailedDetails, 0],
+    [() => CallbackTimedOutDetails, 0],
+    [() => InvocationCompletedDetails, 0],
+  ],
+];
+export var EventError = [
+  3,
+  n0,
+  _EEv,
+  0,
+  [_Pa, _Tr],
+  [[() => ErrorObject, 0], 2],
+];
+export var EventInput = [
+  3,
+  n0,
+  _EIv,
+  0,
+  [_Pa, _Tr],
+  [[() => InputPayload, 0], 2],
+];
+export var EventResult = [
+  3,
+  n0,
+  _ERv,
+  0,
+  [_Pa, _Tr],
+  [[() => OperationPayload, 0], 2],
+];
+export var EventSourceMappingConfiguration = [
+  3,
+  n0,
+  _ESMC,
+  0,
+  [
+    _UUID,
+    _SP,
+    _SPT,
+    _BSa,
+    _MBWIS,
+    _PF,
+    _ESA,
+    _FCi,
+    _FA,
+    _LM,
+    _LPR,
+    _St,
+    _STR,
+    _DC,
+    _To,
+    _Qu,
+    _SAC,
+    _SMES,
+    _MRAIS,
+    _BBOFE,
+    _MRA,
+    _TWIS,
+    _FRT,
+    _AMKESC,
+    _SMKESC,
+    _SC,
+    _DDBESC,
+    _KMSKA,
+    _FCE,
+    _ESMA,
+    _MC,
+    _PPC,
+  ],
+  [
+    0,
+    0,
+    4,
+    1,
+    1,
+    1,
+    0,
+    () => FilterCriteria,
+    0,
+    4,
+    0,
+    0,
+    0,
+    () => DestinationConfig,
+    64 | 0,
+    64 | 0,
+    () => SourceAccessConfigurations,
+    () => SelfManagedEventSource,
+    1,
+    2,
+    1,
+    1,
+    64 | 0,
+    () => AmazonManagedKafkaEventSourceConfig,
+    () => SelfManagedKafkaEventSourceConfig,
+    () => ScalingConfig,
+    () => DocumentDBEventSourceConfig,
+    0,
+    () => FilterCriteriaError,
+    0,
+    () => EventSourceMappingMetricsConfig,
+    () => ProvisionedPollerConfig,
+  ],
+];
+export var EventSourceMappingMetricsConfig = [
+  3,
+  n0,
+  _ESMMC,
+  0,
+  [_Me],
+  [64 | 0],
+];
+export var Execution = [
+  3,
+  n0,
+  _Ex,
+  0,
+  [_DEA, _DEN, _FA, _Sta, _STt, _ETn],
+  [0, 0, 0, 0, 4, 4],
+];
+export var ExecutionDetails = [
+  3,
+  n0,
+  _EDx,
+  0,
+  [_IP],
+  [[() => InputPayload, 0]],
+];
+export var ExecutionFailedDetails = [
+  3,
+  n0,
+  _EFD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var ExecutionStartedDetails = [
+  3,
+  n0,
+  _ESD,
+  0,
+  [_I, _ETx],
+  [[() => EventInput, 0], 1],
+];
+export var ExecutionStoppedDetails = [
+  3,
+  n0,
+  _ESDxe,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var ExecutionSucceededDetails = [
+  3,
+  n0,
+  _ESDx,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+export var ExecutionTimedOutDetails = [
+  3,
+  n0,
+  _ETOD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var FileSystemConfig = [3, n0, _FSCi, 0, [_Arn, _LMP], [0, 0]];
+export var Filter = [3, n0, _F, 0, [_Pat], [0]];
+export var FilterCriteria = [3, n0, _FCi, 0, [_Fi], [() => FilterList]];
+export var FilterCriteriaError = [3, n0, _FCE, 0, [_EC, _M], [0, 0]];
+export var FunctionCode = [
+  3,
+  n0,
+  _FCu,
+  0,
+  [_ZF, _SB, _SK, _SOV, _IU, _SKMSKA],
+  [[() => _Blob, 0], 0, 0, 0, 0, 0],
+];
+export var FunctionCodeLocation = [
+  3,
+  n0,
+  _FCL,
+  0,
+  [_RT, _Lo, _IU, _RIU, _SKMSKA],
+  [0, 0, 0, 0, 0],
+];
+export var FunctionConfiguration = [
+  3,
+  n0,
+  _FCun,
+  0,
+  [
+    _FN,
+    _FA,
+    _Ru,
+    _Ro,
+    _H,
+    _CS,
+    _D,
+    _T,
+    _MS,
+    _LM,
+    _CSo,
+    _Ve,
+    _VC,
+    _DLC,
+    _Env,
+    _KMSKA,
+    _TC,
+    _MAa,
+    _RI,
+    _L,
+    _St,
+    _SR,
+    _SRCt,
+    _LUS,
+    _LUSR,
+    _LUSRC,
+    _FSC,
+    _PT,
+    _ICR,
+    _SPVAi,
+    _SJA,
+    _Ar,
+    _ES,
+    _SSn,
+    _RVC,
+    _LC,
+    _DCu,
+  ],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    () => VpcConfigResponse,
+    () => DeadLetterConfig,
+    [() => EnvironmentResponse, 0],
+    0,
+    () => TracingConfigResponse,
+    0,
+    0,
+    () => LayersReferenceList,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    () => FileSystemConfigList,
+    0,
+    [() => ImageConfigResponse, 0],
+    0,
+    0,
+    64 | 0,
+    () => EphemeralStorage,
+    () => SnapStartResponse,
+    [() => RuntimeVersionConfig, 0],
+    () => LoggingConfig,
+    () => DurableConfig,
+  ],
+];
+export var FunctionEventInvokeConfig = [
+  3,
+  n0,
+  _FEIC,
+  0,
+  [_LM, _FA, _MRA, _MEAIS, _DC],
+  [4, 0, 1, 1, () => DestinationConfig],
+];
+export var FunctionUrlConfig = [
+  3,
+  n0,
+  _FUC,
+  0,
+  [_FU, _FA, _CTr, _LMT, _Co, _AT, _IM],
+  [0, 0, 0, 0, () => Cors, 0, 0],
+];
+export var GetAccountSettingsRequest = [3, n0, _GASR, 0, [], []];
+export var GetAccountSettingsResponse = [
+  3,
+  n0,
+  _GASRe,
+  0,
+  [_AL, _AU],
+  [() => AccountLimit, () => AccountUsage],
+];
+export var GetAliasRequest = [
+  3,
+  n0,
+  _GAR,
+  0,
+  [_FN, _N],
+  [
+    [0, 1],
+    [0, 1],
+  ],
+];
+export var GetCodeSigningConfigRequest = [3, n0, _GCSCR, 0, [_CSCA], [[0, 1]]];
+export var GetCodeSigningConfigResponse = [
+  3,
+  n0,
+  _GCSCRe,
+  0,
+  [_CSC],
+  [() => CodeSigningConfig],
+];
+export var GetDurableExecutionHistoryRequest = [
+  3,
+  n0,
+  _GDEHR,
+  0,
+  [_DEA, _IED, _MI, _Ma, _RO],
+  [
+    [0, 1],
+    [
+      2,
+      {
+        [_hQ]: _IED,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      2,
+      {
+        [_hQ]: _RO,
+      },
+    ],
+  ],
+];
+export var GetDurableExecutionHistoryResponse = [
+  3,
+  n0,
+  _GDEHRe,
+  0,
+  [_Eve, _NM],
+  [[() => Events, 0], 0],
+];
+export var GetDurableExecutionRequest = [3, n0, _GDER, 0, [_DEA], [[0, 1]]];
+export var GetDurableExecutionResponse = [
+  3,
+  n0,
+  _GDERe,
+  0,
+  [_DEA, _DEN, _FA, _IP, _R, _E, _STt, _Sta, _ETn, _Ve, _TH],
+  [
+    0,
+    0,
+    0,
+    [() => InputPayload, 0],
+    [() => OutputPayload, 0],
+    [() => ErrorObject, 0],
+    4,
+    0,
+    4,
+    0,
+    () => TraceHeader,
+  ],
+];
+export var GetDurableExecutionStateRequest = [
+  3,
+  n0,
+  _GDESR,
+  0,
+  [_DEA, _CT, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _CT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var GetDurableExecutionStateResponse = [
+  3,
+  n0,
+  _GDESRe,
+  0,
+  [_O, _NM],
+  [[() => Operations, 0], 0],
+];
+export var GetEventSourceMappingRequest = [3, n0, _GESMR, 0, [_UUID], [[0, 1]]];
+export var GetFunctionCodeSigningConfigRequest = [
+  3,
+  n0,
+  _GFCSCR,
+  0,
+  [_FN],
+  [[0, 1]],
+];
+export var GetFunctionCodeSigningConfigResponse = [
+  3,
+  n0,
+  _GFCSCRe,
+  0,
+  [_CSCA, _FN],
+  [0, 0],
+];
+export var GetFunctionConcurrencyRequest = [3, n0, _GFCR, 0, [_FN], [[0, 1]]];
+export var GetFunctionConcurrencyResponse = [3, n0, _GFCRe, 0, [_RCE], [1]];
+export var GetFunctionConfigurationRequest = [
+  3,
+  n0,
+  _GFCRet,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _GFEICR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetFunctionRecursionConfigRequest = [
+  3,
+  n0,
+  _GFRCR,
+  0,
+  [_FN],
+  [[0, 1]],
+];
+export var GetFunctionRecursionConfigResponse = [3, n0, _GFRCRe, 0, [_RL], [0]];
+export var GetFunctionRequest = [
+  3,
+  n0,
+  _GFR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetFunctionResponse = [
+  3,
+  n0,
+  _GFRe,
+  0,
+  [_Con, _Cod, _Ta, _TE, _C],
+  [
+    [() => FunctionConfiguration, 0],
+    () => FunctionCodeLocation,
+    128 | 0,
+    () => TagsError,
+    () => Concurrency,
+  ],
+];
+export var GetFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _GFUCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetFunctionUrlConfigResponse = [
+  3,
+  n0,
+  _GFUCRe,
+  0,
+  [_FU, _FA, _AT, _Co, _CTr, _LMT, _IM],
+  [0, 0, 0, () => Cors, 0, 0, 0],
+];
+export var GetLayerVersionByArnRequest = [
+  3,
+  n0,
+  _GLVBAR,
+  0,
+  [_Arn],
+  [
+    [
+      0,
+      {
+        [_hQ]: _Arn,
+      },
+    ],
+  ],
+];
+export var GetLayerVersionPolicyRequest = [
+  3,
+  n0,
+  _GLVPR,
+  0,
+  [_LN, _VN],
+  [
+    [0, 1],
+    [1, 1],
+  ],
+];
+export var GetLayerVersionPolicyResponse = [
+  3,
+  n0,
+  _GLVPRe,
+  0,
+  [_Po, _RI],
+  [0, 0],
+];
+export var GetLayerVersionRequest = [
+  3,
+  n0,
+  _GLVR,
+  0,
+  [_LN, _VN],
+  [
+    [0, 1],
+    [1, 1],
+  ],
+];
+export var GetLayerVersionResponse = [
+  3,
+  n0,
+  _GLVRe,
+  0,
+  [_Cont, _LA, _LVA, _D, _CDr, _Ve, _CR, _LI, _CA],
+  [() => LayerVersionContentOutput, 0, 0, 0, 0, 1, 64 | 0, 0, 64 | 0],
+];
+export var GetPolicyRequest = [
+  3,
+  n0,
+  _GPR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetPolicyResponse = [3, n0, _GPRe, 0, [_Po, _RI], [0, 0]];
+export var GetProvisionedConcurrencyConfigRequest = [
+  3,
+  n0,
+  _GPCCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetProvisionedConcurrencyConfigResponse = [
+  3,
+  n0,
+  _GPCCRe,
+  0,
+  [_RPCE, _APCE, _APCEl, _Sta, _SRt, _LM],
+  [1, 1, 1, 0, 0, 0],
+];
+export var GetRuntimeManagementConfigRequest = [
+  3,
+  n0,
+  _GRMCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetRuntimeManagementConfigResponse = [
+  3,
+  n0,
+  _GRMCRe,
+  0,
+  [_URO, _RVA, _FA],
+  [0, 0, 0],
+];
+export var ImageConfig = [3, n0, _IC, 0, [_EP, _Com, _WD], [64 | 0, 64 | 0, 0]];
+export var ImageConfigError = [
+  3,
+  n0,
+  _ICE,
+  0,
+  [_EC, _M],
+  [0, [() => SensitiveString, 0]],
+];
+export var ImageConfigResponse = [
+  3,
+  n0,
+  _ICR,
+  0,
+  [_IC, _E],
+  [() => ImageConfig, [() => ImageConfigError, 0]],
+];
+export var InvalidCodeSignatureException = [
+  -3,
+  n0,
+  _ICSE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  InvalidCodeSignatureException,
+  __InvalidCodeSignatureException,
+);
+export var InvalidParameterValueException = [
+  -3,
+  n0,
+  _IPVE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  InvalidParameterValueException,
+  __InvalidParameterValueException,
+);
+export var InvalidRequestContentException = [
+  -3,
+  n0,
+  _IRCE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  InvalidRequestContentException,
+  __InvalidRequestContentException,
+);
+export var InvalidRuntimeException = [
+  -3,
+  n0,
+  _IRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  InvalidRuntimeException,
+  __InvalidRuntimeException,
+);
+export var InvalidSecurityGroupIDException = [
+  -3,
+  n0,
+  _ISGIDE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  InvalidSecurityGroupIDException,
+  __InvalidSecurityGroupIDException,
+);
+export var InvalidSubnetIDException = [
+  -3,
+  n0,
+  _ISIDE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  InvalidSubnetIDException,
+  __InvalidSubnetIDException,
+);
+export var InvalidZipFileException = [
+  -3,
+  n0,
+  _IZFE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  InvalidZipFileException,
+  __InvalidZipFileException,
+);
+export var InvocationCompletedDetails = [
+  3,
+  n0,
+  _ICD,
+  0,
+  [_STt, _ETn, _RIe, _E],
+  [4, 4, 0, [() => EventError, 0]],
+];
+export var InvocationRequest = [
+  3,
+  n0,
+  _IR,
+  0,
+  [_FN, _IT, _LT, _CC, _DEN, _Pa, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hH]: _XAIT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XALT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XACC,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XADEN,
+      },
+    ],
+    [() => _Blob, 16],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var InvocationResponse = [
+  3,
+  n0,
+  _IRn,
+  0,
+  [_SCt, _FE, _LR, _Pa, _EV, _DEA],
+  [
+    [1, 32],
+    [
+      0,
+      {
+        [_hH]: _XAFE,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XALR,
+      },
+    ],
+    [() => _Blob, 16],
+    [
+      0,
+      {
+        [_hH]: _XAEV,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XADEA,
+      },
+    ],
+  ],
+];
+export var InvokeAsyncRequest = [
+  3,
+  n0,
+  _IAR,
+  0,
+  [_FN, _IA],
+  [
+    [0, 1],
+    [() => BlobStream, 16],
+  ],
+];
+export var InvokeAsyncResponse = [3, n0, _IARn, 0, [_Sta], [[1, 32]]];
+export var InvokeResponseStreamUpdate = [
+  3,
+  n0,
+  _IRSU,
+  0,
+  [_Pa],
+  [
+    [
+      () => _Blob,
+      {
+        [_eP]: 1,
+      },
+    ],
+  ],
+];
+export var InvokeWithResponseStreamCompleteEvent = [
+  3,
+  n0,
+  _IWRSCE,
+  0,
+  [_EC, _EDr, _LR],
+  [0, 0, 0],
+];
+export var InvokeWithResponseStreamRequest = [
+  3,
+  n0,
+  _IWRSR,
+  0,
+  [_FN, _IT, _LT, _CC, _Q, _Pa],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hH]: _XAIT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XALT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XACC,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    [() => _Blob, 16],
+  ],
+];
+export var InvokeWithResponseStreamResponse = [
+  3,
+  n0,
+  _IWRSRn,
+  0,
+  [_SCt, _EV, _ESv, _RSCT],
+  [
+    [1, 32],
+    [
+      0,
+      {
+        [_hH]: _XAEV,
+      },
+    ],
+    [() => InvokeWithResponseStreamResponseEvent, 16],
+    [
+      0,
+      {
+        [_hH]: _CT_,
+      },
+    ],
+  ],
+];
+export var KafkaSchemaRegistryAccessConfig = [
+  3,
+  n0,
+  _KSRAC,
+  0,
+  [_Ty, _URI],
+  [0, 0],
+];
+export var KafkaSchemaRegistryConfig = [
+  3,
+  n0,
+  _KSRC,
+  0,
+  [_SRURI, _ERF, _ACc, _SVC],
+  [
+    0,
+    0,
+    () => KafkaSchemaRegistryAccessConfigList,
+    () => KafkaSchemaValidationConfigList,
+  ],
+];
+export var KafkaSchemaValidationConfig = [3, n0, _KSVC, 0, [_At], [0]];
+export var KMSAccessDeniedException = [
+  -3,
+  n0,
+  _KMSADE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  KMSAccessDeniedException,
+  __KMSAccessDeniedException,
+);
+export var KMSDisabledException = [
+  -3,
+  n0,
+  _KMSDE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  KMSDisabledException,
+  __KMSDisabledException,
+);
+export var KMSInvalidStateException = [
+  -3,
+  n0,
+  _KMSISE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  KMSInvalidStateException,
+  __KMSInvalidStateException,
+);
+export var KMSNotFoundException = [
+  -3,
+  n0,
+  _KMSNFE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  KMSNotFoundException,
+  __KMSNotFoundException,
+);
+export var Layer = [3, n0, _La, 0, [_Arn, _CS, _SPVAi, _SJA], [0, 1, 0, 0]];
+export var LayersListItem = [
+  3,
+  n0,
+  _LLI,
+  0,
+  [_LN, _LA, _LMV],
+  [0, 0, () => LayerVersionsListItem],
+];
+export var LayerVersionContentInput = [
+  3,
+  n0,
+  _LVCI,
+  0,
+  [_SB, _SK, _SOV, _ZF],
+  [0, 0, 0, [() => _Blob, 0]],
+];
+export var LayerVersionContentOutput = [
+  3,
+  n0,
+  _LVCO,
+  0,
+  [_Lo, _CSo, _CS, _SPVAi, _SJA],
+  [0, 0, 1, 0, 0],
+];
+export var LayerVersionsListItem = [
+  3,
+  n0,
+  _LVLI,
+  0,
+  [_LVA, _Ve, _D, _CDr, _CR, _LI, _CA],
+  [0, 1, 0, 0, 64 | 0, 0, 64 | 0],
+];
+export var ListAliasesRequest = [
+  3,
+  n0,
+  _LAR,
+  0,
+  [_FN, _FV, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _FV,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListAliasesResponse = [
+  3,
+  n0,
+  _LARi,
+  0,
+  [_NM, _Al],
+  [0, () => AliasList],
+];
+export var ListCodeSigningConfigsRequest = [
+  3,
+  n0,
+  _LCSCR,
+  0,
+  [_Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListCodeSigningConfigsResponse = [
+  3,
+  n0,
+  _LCSCRi,
+  0,
+  [_NM, _CSCo],
+  [0, () => CodeSigningConfigList],
+];
+export var ListDurableExecutionsByFunctionRequest = [
+  3,
+  n0,
+  _LDEBFR,
+  0,
+  [_FN, _Q, _DEN, _Stat, _SAt, _SBt, _RO, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _DEN,
+      },
+    ],
+    [
+      64 | 0,
+      {
+        [_hQ]: _Stat,
+      },
+    ],
+    [
+      4,
+      {
+        [_hQ]: _SAt,
+      },
+    ],
+    [
+      4,
+      {
+        [_hQ]: _SBt,
+      },
+    ],
+    [
+      2,
+      {
+        [_hQ]: _RO,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListDurableExecutionsByFunctionResponse = [
+  3,
+  n0,
+  _LDEBFRi,
+  0,
+  [_DE, _NM],
+  [() => DurableExecutions, 0],
+];
+export var ListEventSourceMappingsRequest = [
+  3,
+  n0,
+  _LESMR,
+  0,
+  [_ESA, _FN, _Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _ESA,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _FN,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListEventSourceMappingsResponse = [
+  3,
+  n0,
+  _LESMRi,
+  0,
+  [_NM, _ESM],
+  [0, () => EventSourceMappingsList],
+];
+export var ListFunctionEventInvokeConfigsRequest = [
+  3,
+  n0,
+  _LFEICR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListFunctionEventInvokeConfigsResponse = [
+  3,
+  n0,
+  _LFEICRi,
+  0,
+  [_FEICu, _NM],
+  [() => FunctionEventInvokeConfigList, 0],
+];
+export var ListFunctionsByCodeSigningConfigRequest = [
+  3,
+  n0,
+  _LFBCSCR,
+  0,
+  [_CSCA, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListFunctionsByCodeSigningConfigResponse = [
+  3,
+  n0,
+  _LFBCSCRi,
+  0,
+  [_NM, _FAu],
+  [0, 64 | 0],
+];
+export var ListFunctionsRequest = [
+  3,
+  n0,
+  _LFR,
+  0,
+  [_MR, _FV, _Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _MR,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _FV,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListFunctionsResponse = [
+  3,
+  n0,
+  _LFRi,
+  0,
+  [_NM, _Fu],
+  [0, [() => FunctionList, 0]],
+];
+export var ListFunctionUrlConfigsRequest = [
+  3,
+  n0,
+  _LFUCR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListFunctionUrlConfigsResponse = [
+  3,
+  n0,
+  _LFUCRi,
+  0,
+  [_FUCu, _NM],
+  [() => FunctionUrlConfigList, 0],
+];
+export var ListLayersRequest = [
+  3,
+  n0,
+  _LLR,
+  0,
+  [_CRo, _Ma, _MI, _CAo],
+  [
+    [
+      0,
+      {
+        [_hQ]: _CRo,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _CAo,
+      },
+    ],
+  ],
+];
+export var ListLayersResponse = [
+  3,
+  n0,
+  _LLRi,
+  0,
+  [_NM, _L],
+  [0, () => LayersList],
+];
+export var ListLayerVersionsRequest = [
+  3,
+  n0,
+  _LLVR,
+  0,
+  [_CRo, _LN, _Ma, _MI, _CAo],
+  [
+    [
+      0,
+      {
+        [_hQ]: _CRo,
+      },
+    ],
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _CAo,
+      },
+    ],
+  ],
+];
+export var ListLayerVersionsResponse = [
+  3,
+  n0,
+  _LLVRi,
+  0,
+  [_NM, _LV],
+  [0, () => LayerVersionsList],
+];
+export var ListProvisionedConcurrencyConfigsRequest = [
+  3,
+  n0,
+  _LPCCR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListProvisionedConcurrencyConfigsResponse = [
+  3,
+  n0,
+  _LPCCRi,
+  0,
+  [_PCC, _NM],
+  [() => ProvisionedConcurrencyConfigList, 0],
+];
+export var ListTagsRequest = [3, n0, _LTR, 0, [_Re], [[0, 1]]];
+export var ListTagsResponse = [3, n0, _LTRi, 0, [_Ta], [128 | 0]];
+export var ListVersionsByFunctionRequest = [
+  3,
+  n0,
+  _LVBFR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListVersionsByFunctionResponse = [
+  3,
+  n0,
+  _LVBFRi,
+  0,
+  [_NM, _Ver],
+  [0, [() => FunctionList, 0]],
+];
+export var LoggingConfig = [
+  3,
+  n0,
+  _LC,
+  0,
+  [_LF, _ALL, _SLL, _LG],
+  [0, 0, 0, 0],
+];
+export var OnFailure = [3, n0, _OF, 0, [_De], [0]];
+export var OnSuccess = [3, n0, _OS, 0, [_De], [0]];
+export var Operation = [
+  3,
+  n0,
+  _Op,
+  0,
+  [_Id, _PI, _N, _Ty, _STu, _STt, _ETn, _Sta, _EDx, _CDo, _SD, _WDa, _CD, _CID],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    4,
+    4,
+    0,
+    [() => ExecutionDetails, 0],
+    [() => ContextDetails, 0],
+    [() => StepDetails, 0],
+    () => WaitDetails,
+    [() => CallbackDetails, 0],
+    [() => ChainedInvokeDetails, 0],
+  ],
+];
+export var OperationUpdate = [
+  3,
+  n0,
+  _OU,
+  0,
+  [_Id, _PI, _N, _Ty, _STu, _A, _Pa, _E, _COo, _SO, _WO, _CO, _CIO],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    [() => OperationPayload, 0],
+    [() => ErrorObject, 0],
+    () => ContextOptions,
+    () => StepOptions,
+    () => WaitOptions,
+    () => CallbackOptions,
+    () => ChainedInvokeOptions,
+  ],
+];
+export var PolicyLengthExceededException = [
+  -3,
+  n0,
+  _PLEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  PolicyLengthExceededException,
+  __PolicyLengthExceededException,
+);
+export var PreconditionFailedException = [
+  -3,
+  n0,
+  _PFE,
+  {
+    [_e]: _c,
+    [_hE]: 412,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  PreconditionFailedException,
+  __PreconditionFailedException,
+);
+export var ProvisionedConcurrencyConfigListItem = [
+  3,
+  n0,
+  _PCCLI,
+  0,
+  [_FA, _RPCE, _APCE, _APCEl, _Sta, _SRt, _LM],
+  [0, 1, 1, 1, 0, 0, 0],
+];
+export var ProvisionedConcurrencyConfigNotFoundException = [
+  -3,
+  n0,
+  _PCCNFE,
+  {
+    [_e]: _c,
+    [_hE]: 404,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  ProvisionedConcurrencyConfigNotFoundException,
+  __ProvisionedConcurrencyConfigNotFoundException,
+);
+export var ProvisionedPollerConfig = [3, n0, _PPC, 0, [_MP, _MPa], [1, 1]];
+export var PublishLayerVersionRequest = [
+  3,
+  n0,
+  _PLVR,
+  0,
+  [_LN, _D, _Cont, _CR, _LI, _CA],
+  [[0, 1], 0, [() => LayerVersionContentInput, 0], 64 | 0, 0, 64 | 0],
+];
+export var PublishLayerVersionResponse = [
+  3,
+  n0,
+  _PLVRu,
+  0,
+  [_Cont, _LA, _LVA, _D, _CDr, _Ve, _CR, _LI, _CA],
+  [() => LayerVersionContentOutput, 0, 0, 0, 0, 1, 64 | 0, 0, 64 | 0],
+];
+export var PublishVersionRequest = [
+  3,
+  n0,
+  _PVR,
+  0,
+  [_FN, _CSo, _D, _RI],
+  [[0, 1], 0, 0, 0],
+];
+export var PutFunctionCodeSigningConfigRequest = [
+  3,
+  n0,
+  _PFCSCR,
+  0,
+  [_CSCA, _FN],
+  [0, [0, 1]],
+];
+export var PutFunctionCodeSigningConfigResponse = [
+  3,
+  n0,
+  _PFCSCRu,
+  0,
+  [_CSCA, _FN],
+  [0, 0],
+];
+export var PutFunctionConcurrencyRequest = [
+  3,
+  n0,
+  _PFCR,
+  0,
+  [_FN, _RCE],
+  [[0, 1], 1],
+];
+export var PutFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _PFEICR,
+  0,
+  [_FN, _Q, _MRA, _MEAIS, _DC],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    1,
+    1,
+    () => DestinationConfig,
+  ],
+];
+export var PutFunctionRecursionConfigRequest = [
+  3,
+  n0,
+  _PFRCR,
+  0,
+  [_FN, _RL],
+  [[0, 1], 0],
+];
+export var PutFunctionRecursionConfigResponse = [3, n0, _PFRCRu, 0, [_RL], [0]];
+export var PutProvisionedConcurrencyConfigRequest = [
+  3,
+  n0,
+  _PPCCR,
+  0,
+  [_FN, _Q, _PCE],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    1,
+  ],
+];
+export var PutProvisionedConcurrencyConfigResponse = [
+  3,
+  n0,
+  _PPCCRu,
+  0,
+  [_RPCE, _APCE, _APCEl, _Sta, _SRt, _LM],
+  [1, 1, 1, 0, 0, 0],
+];
+export var PutRuntimeManagementConfigRequest = [
+  3,
+  n0,
+  _PRMCR,
+  0,
+  [_FN, _Q, _URO, _RVA],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    0,
+  ],
+];
+export var PutRuntimeManagementConfigResponse = [
+  3,
+  n0,
+  _PRMCRu,
+  0,
+  [_URO, _FA, _RVA],
+  [0, 0, 0],
+];
+export var RecursiveInvocationException = [
+  -3,
+  n0,
+  _RIE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  RecursiveInvocationException,
+  __RecursiveInvocationException,
+);
+export var RemoveLayerVersionPermissionRequest = [
+  3,
+  n0,
+  _RLVPR,
+  0,
+  [_LN, _VN, _SI, _RI],
+  [
+    [0, 1],
+    [1, 1],
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _RI,
+      },
+    ],
+  ],
+];
+export var RemovePermissionRequest = [
+  3,
+  n0,
+  _RPR,
+  0,
+  [_FN, _SI, _Q, _RI],
+  [
+    [0, 1],
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _RI,
+      },
+    ],
+  ],
+];
+export var RequestTooLargeException = [
+  -3,
+  n0,
+  _RTLE,
+  {
+    [_e]: _c,
+    [_hE]: 413,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  RequestTooLargeException,
+  __RequestTooLargeException,
+);
+export var ResourceConflictException = [
+  -3,
+  n0,
+  _RCEe,
+  {
+    [_e]: _c,
+    [_hE]: 409,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  ResourceConflictException,
+  __ResourceConflictException,
+);
+export var ResourceInUseException = [
+  -3,
+  n0,
+  _RIUE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  ResourceInUseException,
+  __ResourceInUseException,
+);
+export var ResourceNotFoundException = [
+  -3,
+  n0,
+  _RNFE,
+  {
+    [_e]: _c,
+    [_hE]: 404,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  ResourceNotFoundException,
+  __ResourceNotFoundException,
+);
+export var ResourceNotReadyException = [
+  -3,
+  n0,
+  _RNRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  ResourceNotReadyException,
+  __ResourceNotReadyException,
+);
+export var RetryDetails = [3, n0, _RD, 0, [_CAu, _NADS], [1, 1]];
+export var RuntimeVersionConfig = [
+  3,
+  n0,
+  _RVC,
+  0,
+  [_RVA, _E],
+  [0, [() => RuntimeVersionError, 0]],
+];
+export var RuntimeVersionError = [
+  3,
+  n0,
+  _RVE,
+  0,
+  [_EC, _M],
+  [0, [() => SensitiveString, 0]],
+];
+export var ScalingConfig = [3, n0, _SC, 0, [_MCa], [1]];
+export var SelfManagedEventSource = [
+  3,
+  n0,
+  _SMES,
+  0,
+  [_End],
+  [[2, n0, _End, 0, 0, 64 | 0]],
+];
+export var SelfManagedKafkaEventSourceConfig = [
+  3,
+  n0,
+  _SMKESC,
+  0,
+  [_CGI, _SRC],
+  [0, () => KafkaSchemaRegistryConfig],
+];
+export var SendDurableExecutionCallbackFailureRequest = [
+  3,
+  n0,
+  _SDECFR,
+  0,
+  [_CI, _E],
+  [
+    [0, 1],
+    [() => ErrorObject, 16],
+  ],
+];
+export var SendDurableExecutionCallbackFailureResponse = [
+  3,
+  n0,
+  _SDECFRe,
+  0,
+  [],
+  [],
+];
+export var SendDurableExecutionCallbackHeartbeatRequest = [
+  3,
+  n0,
+  _SDECHR,
+  0,
+  [_CI],
+  [[0, 1]],
+];
+export var SendDurableExecutionCallbackHeartbeatResponse = [
+  3,
+  n0,
+  _SDECHRe,
+  0,
+  [],
+  [],
+];
+export var SendDurableExecutionCallbackSuccessRequest = [
+  3,
+  n0,
+  _SDECSR,
+  0,
+  [_CI, _R],
+  [
+    [0, 1],
+    [() => BinaryOperationPayload, 16],
+  ],
+];
+export var SendDurableExecutionCallbackSuccessResponse = [
+  3,
+  n0,
+  _SDECSRe,
+  0,
+  [],
+  [],
+];
+export var SerializedRequestEntityTooLargeException = [
+  -3,
+  n0,
+  _SRETLE,
+  {
+    [_e]: _c,
+    [_hE]: 413,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  SerializedRequestEntityTooLargeException,
+  __SerializedRequestEntityTooLargeException,
+);
+export var ServiceException = [
+  -3,
+  n0,
+  _SE,
+  {
+    [_e]: _se,
+    [_hE]: 500,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(ServiceException, __ServiceException);
+export var SnapStart = [3, n0, _SSn, 0, [_AOp], [0]];
+export var SnapStartException = [
+  -3,
+  n0,
+  _SSE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(SnapStartException, __SnapStartException);
+export var SnapStartNotReadyException = [
+  -3,
+  n0,
+  _SSNRE,
+  {
+    [_e]: _c,
+    [_hE]: 409,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  SnapStartNotReadyException,
+  __SnapStartNotReadyException,
+);
+export var SnapStartResponse = [3, n0, _SSR, 0, [_AOp, _OSp], [0, 0]];
+export var SnapStartTimeoutException = [
+  -3,
+  n0,
+  _SSTE,
+  {
+    [_e]: _c,
+    [_hE]: 408,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  SnapStartTimeoutException,
+  __SnapStartTimeoutException,
+);
+export var SourceAccessConfiguration = [3, n0, _SACo, 0, [_Ty, _URI], [0, 0]];
+export var StepDetails = [
+  3,
+  n0,
+  _SD,
+  0,
+  [_Att, _NAT, _R, _E],
+  [1, 4, [() => OperationPayload, 0], [() => ErrorObject, 0]],
+];
+export var StepFailedDetails = [
+  3,
+  n0,
+  _SFD,
+  0,
+  [_E, _RD],
+  [[() => EventError, 0], () => RetryDetails],
+];
+export var StepOptions = [3, n0, _SO, 0, [_NADS], [1]];
+export var StepStartedDetails = [3, n0, _SSD, 0, [], []];
+export var StepSucceededDetails = [
+  3,
+  n0,
+  _SSDt,
+  0,
+  [_R, _RD],
+  [[() => EventResult, 0], () => RetryDetails],
+];
+export var StopDurableExecutionRequest = [
+  3,
+  n0,
+  _SDER,
+  0,
+  [_DEA, _E],
+  [
+    [0, 1],
+    [() => ErrorObject, 16],
+  ],
+];
+export var StopDurableExecutionResponse = [3, n0, _SDERt, 0, [_STto], [4]];
+export var SubnetIPAddressLimitReachedException = [
+  -3,
+  n0,
+  _SIPALRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  SubnetIPAddressLimitReachedException,
+  __SubnetIPAddressLimitReachedException,
+);
+export var TagResourceRequest = [3, n0, _TRR, 0, [_Re, _Ta], [[0, 1], 128 | 0]];
+export var TagsError = [3, n0, _TE, 0, [_EC, _M], [0, 0]];
+export var TooManyRequestsException = [
+  -3,
+  n0,
+  _TMRE,
+  {
+    [_e]: _c,
+    [_hE]: 429,
+  },
+  [_rAS, _Ty, _m, _Rea],
+  [
+    [
+      0,
+      {
+        [_hH]: _RA,
+      },
+    ],
+    0,
+    0,
+    0,
+  ],
+];
+TypeRegistry.for(n0).registerError(
+  TooManyRequestsException,
+  __TooManyRequestsException,
+);
+export var TraceHeader = [3, n0, _TH, 0, [_XATI], [0]];
+export var TracingConfig = [3, n0, _TC, 0, [_Mo], [0]];
+export var TracingConfigResponse = [3, n0, _TCR, 0, [_Mo], [0]];
+export var UnsupportedMediaTypeException = [
+  -3,
+  n0,
+  _UMTE,
+  {
+    [_e]: _c,
+    [_hE]: 415,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  UnsupportedMediaTypeException,
+  __UnsupportedMediaTypeException,
+);
+export var UntagResourceRequest = [
+  3,
+  n0,
+  _URR,
+  0,
+  [_Re, _TK],
+  [
+    [0, 1],
+    [
+      64 | 0,
+      {
+        [_hQ]: _tK,
+      },
+    ],
+  ],
+];
+export var UpdateAliasRequest = [
+  3,
+  n0,
+  _UAR,
+  0,
+  [_FN, _N, _FV, _D, _RC, _RI],
+  [[0, 1], [0, 1], 0, 0, () => AliasRoutingConfiguration, 0],
+];
+export var UpdateCodeSigningConfigRequest = [
+  3,
+  n0,
+  _UCSCR,
+  0,
+  [_CSCA, _D, _AP, _CSP],
+  [[0, 1], 0, () => AllowedPublishers, () => CodeSigningPolicies],
+];
+export var UpdateCodeSigningConfigResponse = [
+  3,
+  n0,
+  _UCSCRp,
+  0,
+  [_CSC],
+  [() => CodeSigningConfig],
+];
+export var UpdateEventSourceMappingRequest = [
+  3,
+  n0,
+  _UESMR,
+  0,
+  [
+    _UUID,
+    _FN,
+    _En,
+    _BSa,
+    _FCi,
+    _MBWIS,
+    _DC,
+    _MRAIS,
+    _BBOFE,
+    _MRA,
+    _PF,
+    _SAC,
+    _TWIS,
+    _FRT,
+    _SC,
+    _AMKESC,
+    _SMKESC,
+    _DDBESC,
+    _KMSKA,
+    _MC,
+    _PPC,
+  ],
+  [
+    [0, 1],
+    0,
+    2,
+    1,
+    () => FilterCriteria,
+    1,
+    () => DestinationConfig,
+    1,
+    2,
+    1,
+    1,
+    () => SourceAccessConfigurations,
+    1,
+    64 | 0,
+    () => ScalingConfig,
+    () => AmazonManagedKafkaEventSourceConfig,
+    () => SelfManagedKafkaEventSourceConfig,
+    () => DocumentDBEventSourceConfig,
+    0,
+    () => EventSourceMappingMetricsConfig,
+    () => ProvisionedPollerConfig,
+  ],
+];
+export var UpdateFunctionCodeRequest = [
+  3,
+  n0,
+  _UFCR,
+  0,
+  [_FN, _ZF, _SB, _SK, _SOV, _IU, _Pu, _DR, _RI, _Ar, _SKMSKA],
+  [[0, 1], [() => _Blob, 0], 0, 0, 0, 0, 2, 2, 0, 64 | 0, 0],
+];
+export var UpdateFunctionConfigurationRequest = [
+  3,
+  n0,
+  _UFCRp,
+  0,
+  [
+    _FN,
+    _Ro,
+    _H,
+    _D,
+    _T,
+    _MS,
+    _VC,
+    _Env,
+    _Ru,
+    _DLC,
+    _KMSKA,
+    _TC,
+    _RI,
+    _L,
+    _FSC,
+    _IC,
+    _ES,
+    _SSn,
+    _LC,
+    _DCu,
+  ],
+  [
+    [0, 1],
+    0,
+    0,
+    0,
+    1,
+    1,
+    () => VpcConfig,
+    [() => Environment, 0],
+    0,
+    () => DeadLetterConfig,
+    0,
+    () => TracingConfig,
+    0,
+    64 | 0,
+    () => FileSystemConfigList,
+    () => ImageConfig,
+    () => EphemeralStorage,
+    () => SnapStart,
+    () => LoggingConfig,
+    () => DurableConfig,
+  ],
+];
+export var UpdateFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _UFEICR,
+  0,
+  [_FN, _Q, _MRA, _MEAIS, _DC],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    1,
+    1,
+    () => DestinationConfig,
+  ],
+];
+export var UpdateFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _UFUCR,
+  0,
+  [_FN, _Q, _AT, _Co, _IM],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    () => Cors,
+    0,
+  ],
+];
+export var UpdateFunctionUrlConfigResponse = [
+  3,
+  n0,
+  _UFUCRp,
+  0,
+  [_FU, _FA, _AT, _Co, _CTr, _LMT, _IM],
+  [0, 0, 0, () => Cors, 0, 0, 0],
+];
+export var VpcConfig = [
+  3,
+  n0,
+  _VC,
+  0,
+  [_SIu, _SGI, _IAFDS],
+  [64 | 0, 64 | 0, 2],
+];
+export var VpcConfigResponse = [
+  3,
+  n0,
+  _VCR,
+  0,
+  [_SIu, _SGI, _VI, _IAFDS],
+  [64 | 0, 64 | 0, 0, 2],
+];
+export var WaitCancelledDetails = [
+  3,
+  n0,
+  _WCD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+export var WaitDetails = [3, n0, _WDa, 0, [_SET], [4]];
+export var WaitOptions = [3, n0, _WO, 0, [_WS], [1]];
+export var WaitStartedDetails = [3, n0, _WSD, 0, [_Du, _SET], [1, 4]];
+export var WaitSucceededDetails = [3, n0, _WSDa, 0, [_Du], [1]];
+export var __Unit = "unit";
+export var LambdaServiceException = [
+  -3,
+  _sm,
+  "LambdaServiceException",
+  0,
+  [],
+  [],
+];
+TypeRegistry.for(_sm).registerError(
+  LambdaServiceException,
+  __LambdaServiceException,
+);
+export var AliasList = [1, n0, _ALl, 0, () => AliasConfiguration];
+export var AllowMethodsList = 64 | 0;
+export var AllowOriginsList = 64 | 0;
+export var ArchitecturesList = 64 | 0;
+export var CodeSigningConfigList = [1, n0, _CSCL, 0, () => CodeSigningConfig];
+export var CompatibleArchitectures = 64 | 0;
+export var CompatibleRuntimes = 64 | 0;
+export var DurableExecutions = [1, n0, _DE, 0, () => Execution];
+export var EndpointLists = 64 | 0;
+export var Events = [1, n0, _Eve, 0, [() => Event, 0]];
+export var EventSourceMappingMetricList = 64 | 0;
+export var EventSourceMappingsList = [
+  1,
+  n0,
+  _ESML,
+  0,
+  () => EventSourceMappingConfiguration,
+];
+export var ExecutionStatusList = 64 | 0;
+export var FileSystemConfigList = [1, n0, _FSCL, 0, () => FileSystemConfig];
+export var FilterList = [1, n0, _FL, 0, () => Filter];
+export var FunctionArnList = 64 | 0;
+export var FunctionEventInvokeConfigList = [
+  1,
+  n0,
+  _FEICL,
+  0,
+  () => FunctionEventInvokeConfig,
+];
+export var FunctionList = [1, n0, _FLu, 0, [() => FunctionConfiguration, 0]];
+export var FunctionResponseTypeList = 64 | 0;
+export var FunctionUrlConfigList = [1, n0, _FUCL, 0, () => FunctionUrlConfig];
+export var HeadersList = 64 | 0;
+export var KafkaSchemaRegistryAccessConfigList = [
+  1,
+  n0,
+  _KSRACL,
+  0,
+  () => KafkaSchemaRegistryAccessConfig,
+];
+export var KafkaSchemaValidationConfigList = [
+  1,
+  n0,
+  _KSVCL,
+  0,
+  () => KafkaSchemaValidationConfig,
+];
+export var LayerList = 64 | 0;
+export var LayersList = [1, n0, _LL, 0, () => LayersListItem];
+export var LayersReferenceList = [1, n0, _LRL, 0, () => Layer];
+export var LayerVersionsList = [1, n0, _LVL, 0, () => LayerVersionsListItem];
+export var Operations = [1, n0, _O, 0, [() => Operation, 0]];
+export var OperationUpdates = [1, n0, _OUp, 0, [() => OperationUpdate, 0]];
+export var ProvisionedConcurrencyConfigList = [
+  1,
+  n0,
+  _PCCL,
+  0,
+  () => ProvisionedConcurrencyConfigListItem,
+];
+export var Queues = 64 | 0;
+export var SecurityGroupIds = 64 | 0;
+export var SigningProfileVersionArns = 64 | 0;
+export var SourceAccessConfigurations = [
+  1,
+  n0,
+  _SAC,
+  0,
+  () => SourceAccessConfiguration,
+];
+export var StackTraceEntries = [1, n0, _STEt, 0, [() => StackTraceEntry, 0]];
+export var StringList = 64 | 0;
+export var SubnetIds = 64 | 0;
+export var TagKeyList = 64 | 0;
+export var Topics = 64 | 0;
+export var AdditionalVersionWeights = 128 | 1;
+export var Endpoints = [2, n0, _End, 0, 0, 64 | 0];
+export var EnvironmentVariables = [
+  2,
+  n0,
+  _EVn,
+  8,
+  [() => EnvironmentVariableName, 0],
+  [() => EnvironmentVariableValue, 0],
+];
+export var Tags = 128 | 0;
+export var InvokeWithResponseStreamResponseEvent = [
+  3,
+  n0,
+  _IWRSRE,
+  {
+    [_s]: 1,
+  },
+  [_PC, _ICn],
+  [
+    [() => InvokeResponseStreamUpdate, 0],
+    () => InvokeWithResponseStreamCompleteEvent,
+  ],
+];
+export var AddLayerVersionPermission = [
+  9,
+  n0,
+  _ALVP,
+  {
+    [_h]: [
+      "POST",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy",
+      201,
+    ],
+  },
+  () => AddLayerVersionPermissionRequest,
+  () => AddLayerVersionPermissionResponse,
+];
+export var AddPermission = [
+  9,
+  n0,
+  _APd,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/policy", 201],
+  },
+  () => AddPermissionRequest,
+  () => AddPermissionResponse,
+];
+export var CheckpointDurableExecution = [
+  9,
+  n0,
+  _CDE,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/checkpoint",
+      200,
+    ],
+  },
+  () => CheckpointDurableExecutionRequest,
+  () => CheckpointDurableExecutionResponse,
+];
+export var CreateAlias = [
+  9,
+  n0,
+  _CAr,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/aliases", 201],
+  },
+  () => CreateAliasRequest,
+  () => AliasConfiguration,
+];
+export var CreateCodeSigningConfig = [
+  9,
+  n0,
+  _CCSC,
+  {
+    [_h]: ["POST", "/2020-04-22/code-signing-configs", 201],
+  },
+  () => CreateCodeSigningConfigRequest,
+  () => CreateCodeSigningConfigResponse,
+];
+export var CreateEventSourceMapping = [
+  9,
+  n0,
+  _CESM,
+  {
+    [_h]: ["POST", "/2015-03-31/event-source-mappings", 202],
+  },
+  () => CreateEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+export var CreateFunction = [
+  9,
+  n0,
+  _CF,
+  {
+    [_h]: ["POST", "/2015-03-31/functions", 201],
+  },
+  () => CreateFunctionRequest,
+  () => FunctionConfiguration,
+];
+export var CreateFunctionUrlConfig = [
+  9,
+  n0,
+  _CFUC,
+  {
+    [_h]: ["POST", "/2021-10-31/functions/{FunctionName}/url", 201],
+  },
+  () => CreateFunctionUrlConfigRequest,
+  () => CreateFunctionUrlConfigResponse,
+];
+export var DeleteAlias = [
+  9,
+  n0,
+  _DA,
+  {
+    [_h]: [
+      "DELETE",
+      "/2015-03-31/functions/{FunctionName}/aliases/{Name}",
+      204,
+    ],
+  },
+  () => DeleteAliasRequest,
+  () => __Unit,
+];
+export var DeleteCodeSigningConfig = [
+  9,
+  n0,
+  _DCSC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}",
+      204,
+    ],
+  },
+  () => DeleteCodeSigningConfigRequest,
+  () => DeleteCodeSigningConfigResponse,
+];
+export var DeleteEventSourceMapping = [
+  9,
+  n0,
+  _DESM,
+  {
+    [_h]: ["DELETE", "/2015-03-31/event-source-mappings/{UUID}", 202],
+  },
+  () => DeleteEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+export var DeleteFunction = [
+  9,
+  n0,
+  _DF,
+  {
+    [_h]: ["DELETE", "/2015-03-31/functions/{FunctionName}", 204],
+  },
+  () => DeleteFunctionRequest,
+  () => __Unit,
+];
+export var DeleteFunctionCodeSigningConfig = [
+  9,
+  n0,
+  _DFCSC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2020-06-30/functions/{FunctionName}/code-signing-config",
+      204,
+    ],
+  },
+  () => DeleteFunctionCodeSigningConfigRequest,
+  () => __Unit,
+];
+export var DeleteFunctionConcurrency = [
+  9,
+  n0,
+  _DFC,
+  {
+    [_h]: ["DELETE", "/2017-10-31/functions/{FunctionName}/concurrency", 204],
+  },
+  () => DeleteFunctionConcurrencyRequest,
+  () => __Unit,
+];
+export var DeleteFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _DFEIC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      204,
+    ],
+  },
+  () => DeleteFunctionEventInvokeConfigRequest,
+  () => __Unit,
+];
+export var DeleteFunctionUrlConfig = [
+  9,
+  n0,
+  _DFUC,
+  {
+    [_h]: ["DELETE", "/2021-10-31/functions/{FunctionName}/url", 204],
+  },
+  () => DeleteFunctionUrlConfigRequest,
+  () => __Unit,
+];
+export var DeleteLayerVersion = [
+  9,
+  n0,
+  _DLV,
+  {
+    [_h]: [
+      "DELETE",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}",
+      204,
+    ],
+  },
+  () => DeleteLayerVersionRequest,
+  () => __Unit,
+];
+export var DeleteProvisionedConcurrencyConfig = [
+  9,
+  n0,
+  _DPCC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency",
+      204,
+    ],
+  },
+  () => DeleteProvisionedConcurrencyConfigRequest,
+  () => __Unit,
+];
+export var GetAccountSettings = [
+  9,
+  n0,
+  _GAS,
+  {
+    [_h]: ["GET", "/2016-08-19/account-settings", 200],
+  },
+  () => GetAccountSettingsRequest,
+  () => GetAccountSettingsResponse,
+];
+export var GetAlias = [
+  9,
+  n0,
+  _GA,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/aliases/{Name}", 200],
+  },
+  () => GetAliasRequest,
+  () => AliasConfiguration,
+];
+export var GetCodeSigningConfig = [
+  9,
+  n0,
+  _GCSC,
+  {
+    [_h]: [
+      "GET",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}",
+      200,
+    ],
+  },
+  () => GetCodeSigningConfigRequest,
+  () => GetCodeSigningConfigResponse,
+];
+export var GetDurableExecution = [
+  9,
+  n0,
+  _GDE,
+  {
+    [_h]: ["GET", "/2025-12-01/durable-executions/{DurableExecutionArn}", 200],
+  },
+  () => GetDurableExecutionRequest,
+  () => GetDurableExecutionResponse,
+];
+export var GetDurableExecutionHistory = [
+  9,
+  n0,
+  _GDEH,
+  {
+    [_h]: [
+      "GET",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/history",
+      200,
+    ],
+  },
+  () => GetDurableExecutionHistoryRequest,
+  () => GetDurableExecutionHistoryResponse,
+];
+export var GetDurableExecutionState = [
+  9,
+  n0,
+  _GDES,
+  {
+    [_h]: [
+      "GET",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/state",
+      200,
+    ],
+  },
+  () => GetDurableExecutionStateRequest,
+  () => GetDurableExecutionStateResponse,
+];
+export var GetEventSourceMapping = [
+  9,
+  n0,
+  _GESM,
+  {
+    [_h]: ["GET", "/2015-03-31/event-source-mappings/{UUID}", 200],
+  },
+  () => GetEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+export var GetFunction = [
+  9,
+  n0,
+  _GF,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}", 200],
+  },
+  () => GetFunctionRequest,
+  () => GetFunctionResponse,
+];
+export var GetFunctionCodeSigningConfig = [
+  9,
+  n0,
+  _GFCSC,
+  {
+    [_h]: [
+      "GET",
+      "/2020-06-30/functions/{FunctionName}/code-signing-config",
+      200,
+    ],
+  },
+  () => GetFunctionCodeSigningConfigRequest,
+  () => GetFunctionCodeSigningConfigResponse,
+];
+export var GetFunctionConcurrency = [
+  9,
+  n0,
+  _GFC,
+  {
+    [_h]: ["GET", "/2019-09-30/functions/{FunctionName}/concurrency", 200],
+  },
+  () => GetFunctionConcurrencyRequest,
+  () => GetFunctionConcurrencyResponse,
+];
+export var GetFunctionConfiguration = [
+  9,
+  n0,
+  _GFCe,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/configuration", 200],
+  },
+  () => GetFunctionConfigurationRequest,
+  () => FunctionConfiguration,
+];
+export var GetFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _GFEIC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      200,
+    ],
+  },
+  () => GetFunctionEventInvokeConfigRequest,
+  () => FunctionEventInvokeConfig,
+];
+export var GetFunctionRecursionConfig = [
+  9,
+  n0,
+  _GFRC,
+  {
+    [_h]: ["GET", "/2024-08-31/functions/{FunctionName}/recursion-config", 200],
+  },
+  () => GetFunctionRecursionConfigRequest,
+  () => GetFunctionRecursionConfigResponse,
+];
+export var GetFunctionUrlConfig = [
+  9,
+  n0,
+  _GFUC,
+  {
+    [_h]: ["GET", "/2021-10-31/functions/{FunctionName}/url", 200],
+  },
+  () => GetFunctionUrlConfigRequest,
+  () => GetFunctionUrlConfigResponse,
+];
+export var GetLayerVersion = [
+  9,
+  n0,
+  _GLV,
+  {
+    [_h]: [
+      "GET",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}",
+      200,
+    ],
+  },
+  () => GetLayerVersionRequest,
+  () => GetLayerVersionResponse,
+];
+export var GetLayerVersionByArn = [
+  9,
+  n0,
+  _GLVBA,
+  {
+    [_h]: ["GET", "/2018-10-31/layers?find=LayerVersion", 200],
+  },
+  () => GetLayerVersionByArnRequest,
+  () => GetLayerVersionResponse,
+];
+export var GetLayerVersionPolicy = [
+  9,
+  n0,
+  _GLVP,
+  {
+    [_h]: [
+      "GET",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy",
+      200,
+    ],
+  },
+  () => GetLayerVersionPolicyRequest,
+  () => GetLayerVersionPolicyResponse,
+];
+export var GetPolicy = [
+  9,
+  n0,
+  _GP,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/policy", 200],
+  },
+  () => GetPolicyRequest,
+  () => GetPolicyResponse,
+];
+export var GetProvisionedConcurrencyConfig = [
+  9,
+  n0,
+  _GPCC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency",
+      200,
+    ],
+  },
+  () => GetProvisionedConcurrencyConfigRequest,
+  () => GetProvisionedConcurrencyConfigResponse,
+];
+export var GetRuntimeManagementConfig = [
+  9,
+  n0,
+  _GRMC,
+  {
+    [_h]: [
+      "GET",
+      "/2021-07-20/functions/{FunctionName}/runtime-management-config",
+      200,
+    ],
+  },
+  () => GetRuntimeManagementConfigRequest,
+  () => GetRuntimeManagementConfigResponse,
+];
+export var Invoke = [
+  9,
+  n0,
+  _In,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/invocations", 200],
+  },
+  () => InvocationRequest,
+  () => InvocationResponse,
+];
+export var InvokeAsync = [
+  9,
+  n0,
+  _IAn,
+  {
+    [_h]: ["POST", "/2014-11-13/functions/{FunctionName}/invoke-async", 202],
+  },
+  () => InvokeAsyncRequest,
+  () => InvokeAsyncResponse,
+];
+export var InvokeWithResponseStream = [
+  9,
+  n0,
+  _IWRS,
+  {
+    [_h]: [
+      "POST",
+      "/2021-11-15/functions/{FunctionName}/response-streaming-invocations",
+      200,
+    ],
+  },
+  () => InvokeWithResponseStreamRequest,
+  () => InvokeWithResponseStreamResponse,
+];
+export var ListAliases = [
+  9,
+  n0,
+  _LAi,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/aliases", 200],
+  },
+  () => ListAliasesRequest,
+  () => ListAliasesResponse,
+];
+export var ListCodeSigningConfigs = [
+  9,
+  n0,
+  _LCSC,
+  {
+    [_h]: ["GET", "/2020-04-22/code-signing-configs", 200],
+  },
+  () => ListCodeSigningConfigsRequest,
+  () => ListCodeSigningConfigsResponse,
+];
+export var ListDurableExecutionsByFunction = [
+  9,
+  n0,
+  _LDEBF,
+  {
+    [_h]: [
+      "GET",
+      "/2025-12-01/functions/{FunctionName}/durable-executions",
+      200,
+    ],
+  },
+  () => ListDurableExecutionsByFunctionRequest,
+  () => ListDurableExecutionsByFunctionResponse,
+];
+export var ListEventSourceMappings = [
+  9,
+  n0,
+  _LESM,
+  {
+    [_h]: ["GET", "/2015-03-31/event-source-mappings", 200],
+  },
+  () => ListEventSourceMappingsRequest,
+  () => ListEventSourceMappingsResponse,
+];
+export var ListFunctionEventInvokeConfigs = [
+  9,
+  n0,
+  _LFEIC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config/list",
+      200,
+    ],
+  },
+  () => ListFunctionEventInvokeConfigsRequest,
+  () => ListFunctionEventInvokeConfigsResponse,
+];
+export var ListFunctions = [
+  9,
+  n0,
+  _LFi,
+  {
+    [_h]: ["GET", "/2015-03-31/functions", 200],
+  },
+  () => ListFunctionsRequest,
+  () => ListFunctionsResponse,
+];
+export var ListFunctionsByCodeSigningConfig = [
+  9,
+  n0,
+  _LFBCSC,
+  {
+    [_h]: [
+      "GET",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}/functions",
+      200,
+    ],
+  },
+  () => ListFunctionsByCodeSigningConfigRequest,
+  () => ListFunctionsByCodeSigningConfigResponse,
+];
+export var ListFunctionUrlConfigs = [
+  9,
+  n0,
+  _LFUC,
+  {
+    [_h]: ["GET", "/2021-10-31/functions/{FunctionName}/urls", 200],
+  },
+  () => ListFunctionUrlConfigsRequest,
+  () => ListFunctionUrlConfigsResponse,
+];
+export var ListLayers = [
+  9,
+  n0,
+  _LLi,
+  {
+    [_h]: ["GET", "/2018-10-31/layers", 200],
+  },
+  () => ListLayersRequest,
+  () => ListLayersResponse,
+];
+export var ListLayerVersions = [
+  9,
+  n0,
+  _LLV,
+  {
+    [_h]: ["GET", "/2018-10-31/layers/{LayerName}/versions", 200],
+  },
+  () => ListLayerVersionsRequest,
+  () => ListLayerVersionsResponse,
+];
+export var ListProvisionedConcurrencyConfigs = [
+  9,
+  n0,
+  _LPCC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency?List=ALL",
+      200,
+    ],
+  },
+  () => ListProvisionedConcurrencyConfigsRequest,
+  () => ListProvisionedConcurrencyConfigsResponse,
+];
+export var ListTags = [
+  9,
+  n0,
+  _LTi,
+  {
+    [_h]: ["GET", "/2017-03-31/tags/{Resource}", 200],
+  },
+  () => ListTagsRequest,
+  () => ListTagsResponse,
+];
+export var ListVersionsByFunction = [
+  9,
+  n0,
+  _LVBF,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/versions", 200],
+  },
+  () => ListVersionsByFunctionRequest,
+  () => ListVersionsByFunctionResponse,
+];
+export var PublishLayerVersion = [
+  9,
+  n0,
+  _PLV,
+  {
+    [_h]: ["POST", "/2018-10-31/layers/{LayerName}/versions", 201],
+  },
+  () => PublishLayerVersionRequest,
+  () => PublishLayerVersionResponse,
+];
+export var PublishVersion = [
+  9,
+  n0,
+  _PV,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/versions", 201],
+  },
+  () => PublishVersionRequest,
+  () => FunctionConfiguration,
+];
+export var PutFunctionCodeSigningConfig = [
+  9,
+  n0,
+  _PFCSC,
+  {
+    [_h]: [
+      "PUT",
+      "/2020-06-30/functions/{FunctionName}/code-signing-config",
+      200,
+    ],
+  },
+  () => PutFunctionCodeSigningConfigRequest,
+  () => PutFunctionCodeSigningConfigResponse,
+];
+export var PutFunctionConcurrency = [
+  9,
+  n0,
+  _PFC,
+  {
+    [_h]: ["PUT", "/2017-10-31/functions/{FunctionName}/concurrency", 200],
+  },
+  () => PutFunctionConcurrencyRequest,
+  () => Concurrency,
+];
+export var PutFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _PFEIC,
+  {
+    [_h]: [
+      "PUT",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      200,
+    ],
+  },
+  () => PutFunctionEventInvokeConfigRequest,
+  () => FunctionEventInvokeConfig,
+];
+export var PutFunctionRecursionConfig = [
+  9,
+  n0,
+  _PFRC,
+  {
+    [_h]: ["PUT", "/2024-08-31/functions/{FunctionName}/recursion-config", 200],
+  },
+  () => PutFunctionRecursionConfigRequest,
+  () => PutFunctionRecursionConfigResponse,
+];
+export var PutProvisionedConcurrencyConfig = [
+  9,
+  n0,
+  _PPCC,
+  {
+    [_h]: [
+      "PUT",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency",
+      202,
+    ],
+  },
+  () => PutProvisionedConcurrencyConfigRequest,
+  () => PutProvisionedConcurrencyConfigResponse,
+];
+export var PutRuntimeManagementConfig = [
+  9,
+  n0,
+  _PRMC,
+  {
+    [_h]: [
+      "PUT",
+      "/2021-07-20/functions/{FunctionName}/runtime-management-config",
+      200,
+    ],
+  },
+  () => PutRuntimeManagementConfigRequest,
+  () => PutRuntimeManagementConfigResponse,
+];
+export var RemoveLayerVersionPermission = [
+  9,
+  n0,
+  _RLVP,
+  {
+    [_h]: [
+      "DELETE",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy/{StatementId}",
+      204,
+    ],
+  },
+  () => RemoveLayerVersionPermissionRequest,
+  () => __Unit,
+];
+export var RemovePermission = [
+  9,
+  n0,
+  _RP,
+  {
+    [_h]: [
+      "DELETE",
+      "/2015-03-31/functions/{FunctionName}/policy/{StatementId}",
+      204,
+    ],
+  },
+  () => RemovePermissionRequest,
+  () => __Unit,
+];
+export var SendDurableExecutionCallbackFailure = [
+  9,
+  n0,
+  _SDECF,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-execution-callbacks/{CallbackId}/fail",
+      200,
+    ],
+  },
+  () => SendDurableExecutionCallbackFailureRequest,
+  () => SendDurableExecutionCallbackFailureResponse,
+];
+export var SendDurableExecutionCallbackHeartbeat = [
+  9,
+  n0,
+  _SDECH,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-execution-callbacks/{CallbackId}/heartbeat",
+      200,
+    ],
+  },
+  () => SendDurableExecutionCallbackHeartbeatRequest,
+  () => SendDurableExecutionCallbackHeartbeatResponse,
+];
+export var SendDurableExecutionCallbackSuccess = [
+  9,
+  n0,
+  _SDECS,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-execution-callbacks/{CallbackId}/succeed",
+      200,
+    ],
+  },
+  () => SendDurableExecutionCallbackSuccessRequest,
+  () => SendDurableExecutionCallbackSuccessResponse,
+];
+export var StopDurableExecution = [
+  9,
+  n0,
+  _SDE,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/stop",
+      200,
+    ],
+  },
+  () => StopDurableExecutionRequest,
+  () => StopDurableExecutionResponse,
+];
+export var TagResource = [
+  9,
+  n0,
+  _TR,
+  {
+    [_h]: ["POST", "/2017-03-31/tags/{Resource}", 204],
+  },
+  () => TagResourceRequest,
+  () => __Unit,
+];
+export var UntagResource = [
+  9,
+  n0,
+  _UR,
+  {
+    [_h]: ["DELETE", "/2017-03-31/tags/{Resource}", 204],
+  },
+  () => UntagResourceRequest,
+  () => __Unit,
+];
+export var UpdateAlias = [
+  9,
+  n0,
+  _UA,
+  {
+    [_h]: ["PUT", "/2015-03-31/functions/{FunctionName}/aliases/{Name}", 200],
+  },
+  () => UpdateAliasRequest,
+  () => AliasConfiguration,
+];
+export var UpdateCodeSigningConfig = [
+  9,
+  n0,
+  _UCSC,
+  {
+    [_h]: [
+      "PUT",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}",
+      200,
+    ],
+  },
+  () => UpdateCodeSigningConfigRequest,
+  () => UpdateCodeSigningConfigResponse,
+];
+export var UpdateEventSourceMapping = [
+  9,
+  n0,
+  _UESM,
+  {
+    [_h]: ["PUT", "/2015-03-31/event-source-mappings/{UUID}", 202],
+  },
+  () => UpdateEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+export var UpdateFunctionCode = [
+  9,
+  n0,
+  _UFC,
+  {
+    [_h]: ["PUT", "/2015-03-31/functions/{FunctionName}/code", 200],
+  },
+  () => UpdateFunctionCodeRequest,
+  () => FunctionConfiguration,
+];
+export var UpdateFunctionConfiguration = [
+  9,
+  n0,
+  _UFCp,
+  {
+    [_h]: ["PUT", "/2015-03-31/functions/{FunctionName}/configuration", 200],
+  },
+  () => UpdateFunctionConfigurationRequest,
+  () => FunctionConfiguration,
+];
+export var UpdateFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _UFEIC,
+  {
+    [_h]: [
+      "POST",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      200,
+    ],
+  },
+  () => UpdateFunctionEventInvokeConfigRequest,
+  () => FunctionEventInvokeConfig,
+];
+export var UpdateFunctionUrlConfig = [
+  9,
+  n0,
+  _UFUC,
+  {
+    [_h]: ["PUT", "/2021-10-31/functions/{FunctionName}/url", 200],
+  },
+  () => UpdateFunctionUrlConfigRequest,
+  () => UpdateFunctionUrlConfigResponse,
+];

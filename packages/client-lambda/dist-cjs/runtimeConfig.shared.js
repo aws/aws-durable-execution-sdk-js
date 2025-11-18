@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRuntimeConfig = void 0;
 const core_1 = require("@aws-sdk/core");
+const protocols_1 = require("@aws-sdk/core/protocols");
 const smithy_client_1 = require("@smithy/smithy-client");
 const url_parser_1 = require("@smithy/url-parser");
 const util_base64_1 = require("@smithy/util-base64");
@@ -28,6 +29,11 @@ const getRuntimeConfig = (config) => {
       },
     ],
     logger: config?.logger ?? new smithy_client_1.NoOpLogger(),
+    protocol:
+      config?.protocol ??
+      new protocols_1.AwsRestJsonProtocol({
+        defaultNamespace: "com.amazonaws.lambda",
+      }),
     serviceId: config?.serviceId ?? "Lambda",
     urlParser: config?.urlParser ?? url_parser_1.parseUrl,
     utf8Decoder: config?.utf8Decoder ?? util_utf8_1.fromUtf8,

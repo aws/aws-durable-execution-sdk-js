@@ -1,4 +1,5 @@
 import { AwsSdkSigV4Signer } from "@aws-sdk/core";
+import { AwsRestJsonProtocol } from "@aws-sdk/core/protocols";
 import { NoOpLogger } from "@smithy/smithy-client";
 import { parseUrl } from "@smithy/url-parser";
 import { fromBase64, toBase64 } from "@smithy/util-base64";
@@ -23,6 +24,9 @@ export const getRuntimeConfig = (config) => {
       },
     ],
     logger: config?.logger ?? new NoOpLogger(),
+    protocol:
+      config?.protocol ??
+      new AwsRestJsonProtocol({ defaultNamespace: "com.amazonaws.lambda" }),
     serviceId: config?.serviceId ?? "Lambda",
     urlParser: config?.urlParser ?? parseUrl,
     utf8Decoder: config?.utf8Decoder ?? fromUtf8,

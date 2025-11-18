@@ -8,7 +8,7 @@ import {
 import {
   SendDurableExecutionCallbackHeartbeatRequest,
   SendDurableExecutionCallbackHeartbeatResponse,
-} from "../models/models_1";
+} from "../models/models_0";
 /**
  * @public
  */

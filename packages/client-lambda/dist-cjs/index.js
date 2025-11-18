@@ -6,6 +6,7 @@ var middlewareRecursionDetection = require("@aws-sdk/middleware-recursion-detect
 var middlewareUserAgent = require("@aws-sdk/middleware-user-agent");
 var configResolver = require("@smithy/config-resolver");
 var core = require("@smithy/core");
+var schema = require("@smithy/core/schema");
 var eventstreamSerdeConfigResolver = require("@smithy/eventstream-serde-config-resolver");
 var middlewareContentLength = require("@smithy/middleware-content-length");
 var middlewareEndpoint = require("@smithy/middleware-endpoint");
@@ -15,9 +16,6 @@ var httpAuthSchemeProvider = require("./auth/httpAuthSchemeProvider");
 var runtimeConfig = require("./runtimeConfig");
 var regionConfigResolver = require("@aws-sdk/region-config-resolver");
 var protocolHttp = require("@smithy/protocol-http");
-var middlewareSerde = require("@smithy/middleware-serde");
-var core$1 = require("@aws-sdk/core");
-var uuid = require("@smithy/uuid");
 var utilWaiter = require("@smithy/util-waiter");
 
 const resolveClientEndpointParameters = (options) => {
@@ -116,6 +114,7 @@ class LambdaClient extends smithyClient.Client {
       configuration?.extensions || [],
     );
     this.config = _config_9;
+    this.middlewareStack.use(schema.getSchemaSerdePlugin(this.config));
     this.middlewareStack.use(
       middlewareUserAgent.getUserAgentPlugin(this.config),
     );
@@ -147,14 +146,14 @@ class LambdaClient extends smithyClient.Client {
   }
 }
 
-class LambdaServiceException extends smithyClient.ServiceException {
+let LambdaServiceException$1 = class LambdaServiceException extends smithyClient.ServiceException {
   constructor(options) {
     super(options);
     Object.setPrototypeOf(this, LambdaServiceException.prototype);
   }
-}
+};
 
-class InvalidParameterValueException extends LambdaServiceException {
+let InvalidParameterValueException$1 = class InvalidParameterValueException extends LambdaServiceException$1 {
   name = "InvalidParameterValueException";
   $fault = "client";
   Type;
@@ -167,8 +166,8 @@ class InvalidParameterValueException extends LambdaServiceException {
     Object.setPrototypeOf(this, InvalidParameterValueException.prototype);
     this.Type = opts.Type;
   }
-}
-class PolicyLengthExceededException extends LambdaServiceException {
+};
+let PolicyLengthExceededException$1 = class PolicyLengthExceededException extends LambdaServiceException$1 {
   name = "PolicyLengthExceededException";
   $fault = "client";
   Type;
@@ -181,8 +180,8 @@ class PolicyLengthExceededException extends LambdaServiceException {
     Object.setPrototypeOf(this, PolicyLengthExceededException.prototype);
     this.Type = opts.Type;
   }
-}
-class PreconditionFailedException extends LambdaServiceException {
+};
+let PreconditionFailedException$1 = class PreconditionFailedException extends LambdaServiceException$1 {
   name = "PreconditionFailedException";
   $fault = "client";
   Type;
@@ -195,8 +194,8 @@ class PreconditionFailedException extends LambdaServiceException {
     Object.setPrototypeOf(this, PreconditionFailedException.prototype);
     this.Type = opts.Type;
   }
-}
-class ResourceConflictException extends LambdaServiceException {
+};
+let ResourceConflictException$1 = class ResourceConflictException extends LambdaServiceException$1 {
   name = "ResourceConflictException";
   $fault = "client";
   Type;
@@ -209,8 +208,8 @@ class ResourceConflictException extends LambdaServiceException {
     Object.setPrototypeOf(this, ResourceConflictException.prototype);
     this.Type = opts.Type;
   }
-}
-class ResourceNotFoundException extends LambdaServiceException {
+};
+let ResourceNotFoundException$1 = class ResourceNotFoundException extends LambdaServiceException$1 {
   name = "ResourceNotFoundException";
   $fault = "client";
   Type;
@@ -225,8 +224,8 @@ class ResourceNotFoundException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class ServiceException extends LambdaServiceException {
+};
+let ServiceException$1 = class ServiceException extends LambdaServiceException$1 {
   name = "ServiceException";
   $fault = "server";
   Type;
@@ -241,19 +240,8 @@ class ServiceException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-const ThrottleReason = {
-  CallerRateLimitExceeded: "CallerRateLimitExceeded",
-  ConcurrentInvocationLimitExceeded: "ConcurrentInvocationLimitExceeded",
-  ConcurrentSnapshotCreateLimitExceeded:
-    "ConcurrentSnapshotCreateLimitExceeded",
-  FunctionInvocationRateLimitExceeded: "FunctionInvocationRateLimitExceeded",
-  ReservedFunctionConcurrentInvocationLimitExceeded:
-    "ReservedFunctionConcurrentInvocationLimitExceeded",
-  ReservedFunctionInvocationRateLimitExceeded:
-    "ReservedFunctionInvocationRateLimitExceeded",
 };
-class TooManyRequestsException extends LambdaServiceException {
+let TooManyRequestsException$1 = class TooManyRequestsException extends LambdaServiceException$1 {
   name = "TooManyRequestsException";
   $fault = "client";
   retryAfterSeconds;
@@ -270,94 +258,8 @@ class TooManyRequestsException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Reason = opts.Reason;
   }
-}
-const FunctionUrlAuthType = {
-  AWS_IAM: "AWS_IAM",
-  NONE: "NONE",
 };
-const KafkaSchemaRegistryAuthType = {
-  BASIC_AUTH: "BASIC_AUTH",
-  CLIENT_CERTIFICATE_TLS_AUTH: "CLIENT_CERTIFICATE_TLS_AUTH",
-  SERVER_ROOT_CA_CERTIFICATE: "SERVER_ROOT_CA_CERTIFICATE",
-};
-const SchemaRegistryEventRecordFormat = {
-  JSON: "JSON",
-  SOURCE: "SOURCE",
-};
-const KafkaSchemaValidationAttribute = {
-  KEY: "KEY",
-  VALUE: "VALUE",
-};
-const ApplicationLogLevel = {
-  Debug: "DEBUG",
-  Error: "ERROR",
-  Fatal: "FATAL",
-  Info: "INFO",
-  Trace: "TRACE",
-  Warn: "WARN",
-};
-const Architecture = {
-  arm64: "arm64",
-  x86_64: "x86_64",
-};
-const OperationAction = {
-  CANCEL: "CANCEL",
-  FAIL: "FAIL",
-  RETRY: "RETRY",
-  START: "START",
-  SUCCEED: "SUCCEED",
-};
-const OperationType = {
-  CALLBACK: "CALLBACK",
-  CHAINED_INVOKE: "CHAINED_INVOKE",
-  CONTEXT: "CONTEXT",
-  EXECUTION: "EXECUTION",
-  STEP: "STEP",
-  WAIT: "WAIT",
-};
-const OperationStatus = {
-  CANCELLED: "CANCELLED",
-  FAILED: "FAILED",
-  PENDING: "PENDING",
-  READY: "READY",
-  STARTED: "STARTED",
-  STOPPED: "STOPPED",
-  SUCCEEDED: "SUCCEEDED",
-  TIMED_OUT: "TIMED_OUT",
-};
-const CodeSigningPolicy = {
-  Enforce: "Enforce",
-  Warn: "Warn",
-};
-const FullDocument = {
-  Default: "Default",
-  UpdateLookup: "UpdateLookup",
-};
-const FunctionResponseType = {
-  ReportBatchItemFailures: "ReportBatchItemFailures",
-};
-const EventSourceMappingMetric = {
-  EventCount: "EventCount",
-};
-const EndPointType = {
-  KAFKA_BOOTSTRAP_SERVERS: "KAFKA_BOOTSTRAP_SERVERS",
-};
-const SourceAccessType = {
-  BASIC_AUTH: "BASIC_AUTH",
-  CLIENT_CERTIFICATE_TLS_AUTH: "CLIENT_CERTIFICATE_TLS_AUTH",
-  SASL_SCRAM_256_AUTH: "SASL_SCRAM_256_AUTH",
-  SASL_SCRAM_512_AUTH: "SASL_SCRAM_512_AUTH",
-  SERVER_ROOT_CA_CERTIFICATE: "SERVER_ROOT_CA_CERTIFICATE",
-  VIRTUAL_HOST: "VIRTUAL_HOST",
-  VPC_SECURITY_GROUP: "VPC_SECURITY_GROUP",
-  VPC_SUBNET: "VPC_SUBNET",
-};
-const EventSourcePosition = {
-  AT_TIMESTAMP: "AT_TIMESTAMP",
-  LATEST: "LATEST",
-  TRIM_HORIZON: "TRIM_HORIZON",
-};
-class ResourceInUseException extends LambdaServiceException {
+let ResourceInUseException$1 = class ResourceInUseException extends LambdaServiceException$1 {
   name = "ResourceInUseException";
   $fault = "client";
   Type;
@@ -372,8 +274,8 @@ class ResourceInUseException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class CodeSigningConfigNotFoundException extends LambdaServiceException {
+};
+let CodeSigningConfigNotFoundException$1 = class CodeSigningConfigNotFoundException extends LambdaServiceException$1 {
   name = "CodeSigningConfigNotFoundException";
   $fault = "client";
   Type;
@@ -388,8 +290,8 @@ class CodeSigningConfigNotFoundException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class CodeStorageExceededException extends LambdaServiceException {
+};
+let CodeStorageExceededException$1 = class CodeStorageExceededException extends LambdaServiceException$1 {
   name = "CodeStorageExceededException";
   $fault = "client";
   Type;
@@ -402,8 +304,8 @@ class CodeStorageExceededException extends LambdaServiceException {
     Object.setPrototypeOf(this, CodeStorageExceededException.prototype);
     this.Type = opts.Type;
   }
-}
-class CodeVerificationFailedException extends LambdaServiceException {
+};
+let CodeVerificationFailedException$1 = class CodeVerificationFailedException extends LambdaServiceException$1 {
   name = "CodeVerificationFailedException";
   $fault = "client";
   Type;
@@ -418,137 +320,8 @@ class CodeVerificationFailedException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-const LogFormat = {
-  Json: "JSON",
-  Text: "Text",
 };
-const SystemLogLevel = {
-  Debug: "DEBUG",
-  Info: "INFO",
-  Warn: "WARN",
-};
-const PackageType = {
-  Image: "Image",
-  Zip: "Zip",
-};
-const Runtime = {
-  dotnet6: "dotnet6",
-  dotnet8: "dotnet8",
-  dotnetcore10: "dotnetcore1.0",
-  dotnetcore20: "dotnetcore2.0",
-  dotnetcore21: "dotnetcore2.1",
-  dotnetcore31: "dotnetcore3.1",
-  go1x: "go1.x",
-  java11: "java11",
-  java17: "java17",
-  java21: "java21",
-  java8: "java8",
-  java8al2: "java8.al2",
-  nodejs: "nodejs",
-  nodejs10x: "nodejs10.x",
-  nodejs12x: "nodejs12.x",
-  nodejs14x: "nodejs14.x",
-  nodejs16x: "nodejs16.x",
-  nodejs18x: "nodejs18.x",
-  nodejs20x: "nodejs20.x",
-  nodejs22x: "nodejs22.x",
-  nodejs43: "nodejs4.3",
-  nodejs43edge: "nodejs4.3-edge",
-  nodejs610: "nodejs6.10",
-  nodejs810: "nodejs8.10",
-  provided: "provided",
-  providedal2: "provided.al2",
-  providedal2023: "provided.al2023",
-  python27: "python2.7",
-  python310: "python3.10",
-  python311: "python3.11",
-  python312: "python3.12",
-  python313: "python3.13",
-  python36: "python3.6",
-  python37: "python3.7",
-  python38: "python3.8",
-  python39: "python3.9",
-  ruby25: "ruby2.5",
-  ruby27: "ruby2.7",
-  ruby32: "ruby3.2",
-  ruby33: "ruby3.3",
-  ruby34: "ruby3.4",
-};
-const SnapStartApplyOn = {
-  None: "None",
-  PublishedVersions: "PublishedVersions",
-};
-const TracingMode = {
-  Active: "Active",
-  PassThrough: "PassThrough",
-};
-const LastUpdateStatus = {
-  Failed: "Failed",
-  InProgress: "InProgress",
-  Successful: "Successful",
-};
-const LastUpdateStatusReasonCode = {
-  DisabledKMSKey: "DisabledKMSKey",
-  EFSIOError: "EFSIOError",
-  EFSMountConnectivityError: "EFSMountConnectivityError",
-  EFSMountFailure: "EFSMountFailure",
-  EFSMountTimeout: "EFSMountTimeout",
-  EniLimitExceeded: "EniLimitExceeded",
-  FunctionError: "FunctionError",
-  ImageAccessDenied: "ImageAccessDenied",
-  ImageDeleted: "ImageDeleted",
-  InsufficientRolePermissions: "InsufficientRolePermissions",
-  InternalError: "InternalError",
-  InvalidConfiguration: "InvalidConfiguration",
-  InvalidImage: "InvalidImage",
-  InvalidRuntime: "InvalidRuntime",
-  InvalidSecurityGroup: "InvalidSecurityGroup",
-  InvalidStateKMSKey: "InvalidStateKMSKey",
-  InvalidSubnet: "InvalidSubnet",
-  InvalidZipFileException: "InvalidZipFileException",
-  KMSKeyAccessDenied: "KMSKeyAccessDenied",
-  KMSKeyNotFound: "KMSKeyNotFound",
-  SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
-};
-const SnapStartOptimizationStatus = {
-  Off: "Off",
-  On: "On",
-};
-const State = {
-  Active: "Active",
-  Failed: "Failed",
-  Inactive: "Inactive",
-  Pending: "Pending",
-};
-const StateReasonCode = {
-  Creating: "Creating",
-  DisabledKMSKey: "DisabledKMSKey",
-  DrainingDurableExecutions: "DrainingDurableExecutions",
-  EFSIOError: "EFSIOError",
-  EFSMountConnectivityError: "EFSMountConnectivityError",
-  EFSMountFailure: "EFSMountFailure",
-  EFSMountTimeout: "EFSMountTimeout",
-  EniLimitExceeded: "EniLimitExceeded",
-  FunctionError: "FunctionError",
-  Idle: "Idle",
-  ImageAccessDenied: "ImageAccessDenied",
-  ImageDeleted: "ImageDeleted",
-  InsufficientRolePermissions: "InsufficientRolePermissions",
-  InternalError: "InternalError",
-  InvalidConfiguration: "InvalidConfiguration",
-  InvalidImage: "InvalidImage",
-  InvalidRuntime: "InvalidRuntime",
-  InvalidSecurityGroup: "InvalidSecurityGroup",
-  InvalidStateKMSKey: "InvalidStateKMSKey",
-  InvalidSubnet: "InvalidSubnet",
-  InvalidZipFileException: "InvalidZipFileException",
-  KMSKeyAccessDenied: "KMSKeyAccessDenied",
-  KMSKeyNotFound: "KMSKeyNotFound",
-  Restoring: "Restoring",
-  SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
-};
-class InvalidCodeSignatureException extends LambdaServiceException {
+let InvalidCodeSignatureException$1 = class InvalidCodeSignatureException extends LambdaServiceException$1 {
   name = "InvalidCodeSignatureException";
   $fault = "client";
   Type;
@@ -563,21 +336,8 @@ class InvalidCodeSignatureException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-const InvokeMode = {
-  BUFFERED: "BUFFERED",
-  RESPONSE_STREAM: "RESPONSE_STREAM",
 };
-const RecursiveLoop = {
-  Allow: "Allow",
-  Terminate: "Terminate",
-};
-const UpdateRuntimeOn = {
-  Auto: "Auto",
-  FunctionUpdate: "FunctionUpdate",
-  Manual: "Manual",
-};
-class DurableExecutionAlreadyStartedException extends LambdaServiceException {
+let DurableExecutionAlreadyStartedException$1 = class DurableExecutionAlreadyStartedException extends LambdaServiceException$1 {
   name = "DurableExecutionAlreadyStartedException";
   $fault = "client";
   Type;
@@ -595,8 +355,8 @@ class DurableExecutionAlreadyStartedException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class EC2AccessDeniedException extends LambdaServiceException {
+};
+let EC2AccessDeniedException$1 = class EC2AccessDeniedException extends LambdaServiceException$1 {
   name = "EC2AccessDeniedException";
   $fault = "server";
   Type;
@@ -611,8 +371,8 @@ class EC2AccessDeniedException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class EC2ThrottledException extends LambdaServiceException {
+};
+let EC2ThrottledException$1 = class EC2ThrottledException extends LambdaServiceException$1 {
   name = "EC2ThrottledException";
   $fault = "server";
   Type;
@@ -627,8 +387,8 @@ class EC2ThrottledException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class EC2UnexpectedException extends LambdaServiceException {
+};
+let EC2UnexpectedException$1 = class EC2UnexpectedException extends LambdaServiceException$1 {
   name = "EC2UnexpectedException";
   $fault = "server";
   Type;
@@ -645,8 +405,8 @@ class EC2UnexpectedException extends LambdaServiceException {
     this.Message = opts.Message;
     this.EC2ErrorCode = opts.EC2ErrorCode;
   }
-}
-class EFSIOException extends LambdaServiceException {
+};
+let EFSIOException$1 = class EFSIOException extends LambdaServiceException$1 {
   name = "EFSIOException";
   $fault = "client";
   Type;
@@ -661,8 +421,8 @@ class EFSIOException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class EFSMountConnectivityException extends LambdaServiceException {
+};
+let EFSMountConnectivityException$1 = class EFSMountConnectivityException extends LambdaServiceException$1 {
   name = "EFSMountConnectivityException";
   $fault = "client";
   Type;
@@ -677,8 +437,8 @@ class EFSMountConnectivityException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class EFSMountFailureException extends LambdaServiceException {
+};
+let EFSMountFailureException$1 = class EFSMountFailureException extends LambdaServiceException$1 {
   name = "EFSMountFailureException";
   $fault = "client";
   Type;
@@ -693,8 +453,8 @@ class EFSMountFailureException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class EFSMountTimeoutException extends LambdaServiceException {
+};
+let EFSMountTimeoutException$1 = class EFSMountTimeoutException extends LambdaServiceException$1 {
   name = "EFSMountTimeoutException";
   $fault = "client";
   Type;
@@ -709,8 +469,8 @@ class EFSMountTimeoutException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class ENILimitReachedException extends LambdaServiceException {
+};
+let ENILimitReachedException$1 = class ENILimitReachedException extends LambdaServiceException$1 {
   name = "ENILimitReachedException";
   $fault = "server";
   Type;
@@ -725,8 +485,8 @@ class ENILimitReachedException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class InvalidRequestContentException extends LambdaServiceException {
+};
+let InvalidRequestContentException$1 = class InvalidRequestContentException extends LambdaServiceException$1 {
   name = "InvalidRequestContentException";
   $fault = "client";
   Type;
@@ -739,8 +499,8 @@ class InvalidRequestContentException extends LambdaServiceException {
     Object.setPrototypeOf(this, InvalidRequestContentException.prototype);
     this.Type = opts.Type;
   }
-}
-class InvalidRuntimeException extends LambdaServiceException {
+};
+let InvalidRuntimeException$1 = class InvalidRuntimeException extends LambdaServiceException$1 {
   name = "InvalidRuntimeException";
   $fault = "server";
   Type;
@@ -755,8 +515,8 @@ class InvalidRuntimeException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class InvalidSecurityGroupIDException extends LambdaServiceException {
+};
+let InvalidSecurityGroupIDException$1 = class InvalidSecurityGroupIDException extends LambdaServiceException$1 {
   name = "InvalidSecurityGroupIDException";
   $fault = "server";
   Type;
@@ -771,8 +531,8 @@ class InvalidSecurityGroupIDException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class InvalidSubnetIDException extends LambdaServiceException {
+};
+let InvalidSubnetIDException$1 = class InvalidSubnetIDException extends LambdaServiceException$1 {
   name = "InvalidSubnetIDException";
   $fault = "server";
   Type;
@@ -787,8 +547,8 @@ class InvalidSubnetIDException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class InvalidZipFileException extends LambdaServiceException {
+};
+let InvalidZipFileException$1 = class InvalidZipFileException extends LambdaServiceException$1 {
   name = "InvalidZipFileException";
   $fault = "server";
   Type;
@@ -803,17 +563,8 @@ class InvalidZipFileException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-const InvocationType = {
-  DryRun: "DryRun",
-  Event: "Event",
-  RequestResponse: "RequestResponse",
 };
-const LogType = {
-  None: "None",
-  Tail: "Tail",
-};
-class KMSAccessDeniedException extends LambdaServiceException {
+let KMSAccessDeniedException$1 = class KMSAccessDeniedException extends LambdaServiceException$1 {
   name = "KMSAccessDeniedException";
   $fault = "server";
   Type;
@@ -828,8 +579,8 @@ class KMSAccessDeniedException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class KMSDisabledException extends LambdaServiceException {
+};
+let KMSDisabledException$1 = class KMSDisabledException extends LambdaServiceException$1 {
   name = "KMSDisabledException";
   $fault = "server";
   Type;
@@ -844,8 +595,8 @@ class KMSDisabledException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class KMSInvalidStateException extends LambdaServiceException {
+};
+let KMSInvalidStateException$1 = class KMSInvalidStateException extends LambdaServiceException$1 {
   name = "KMSInvalidStateException";
   $fault = "server";
   Type;
@@ -860,8 +611,8 @@ class KMSInvalidStateException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class KMSNotFoundException extends LambdaServiceException {
+};
+let KMSNotFoundException$1 = class KMSNotFoundException extends LambdaServiceException$1 {
   name = "KMSNotFoundException";
   $fault = "server";
   Type;
@@ -876,8 +627,8 @@ class KMSNotFoundException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class RecursiveInvocationException extends LambdaServiceException {
+};
+let RecursiveInvocationException$1 = class RecursiveInvocationException extends LambdaServiceException$1 {
   name = "RecursiveInvocationException";
   $fault = "client";
   Type;
@@ -892,8 +643,8 @@ class RecursiveInvocationException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class RequestTooLargeException extends LambdaServiceException {
+};
+let RequestTooLargeException$1 = class RequestTooLargeException extends LambdaServiceException$1 {
   name = "RequestTooLargeException";
   $fault = "client";
   Type;
@@ -906,8 +657,8 @@ class RequestTooLargeException extends LambdaServiceException {
     Object.setPrototypeOf(this, RequestTooLargeException.prototype);
     this.Type = opts.Type;
   }
-}
-class ResourceNotReadyException extends LambdaServiceException {
+};
+let ResourceNotReadyException$1 = class ResourceNotReadyException extends LambdaServiceException$1 {
   name = "ResourceNotReadyException";
   $fault = "server";
   Type;
@@ -920,8 +671,25 @@ class ResourceNotReadyException extends LambdaServiceException {
     Object.setPrototypeOf(this, ResourceNotReadyException.prototype);
     this.Type = opts.Type;
   }
-}
-class SnapStartException extends LambdaServiceException {
+};
+let SerializedRequestEntityTooLargeException$1 = class SerializedRequestEntityTooLargeException extends LambdaServiceException$1 {
+  name = "SerializedRequestEntityTooLargeException";
+  $fault = "client";
+  Type;
+  constructor(opts) {
+    super({
+      name: "SerializedRequestEntityTooLargeException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(
+      this,
+      SerializedRequestEntityTooLargeException.prototype,
+    );
+    this.Type = opts.Type;
+  }
+};
+let SnapStartException$1 = class SnapStartException extends LambdaServiceException$1 {
   name = "SnapStartException";
   $fault = "client";
   Type;
@@ -936,8 +704,8 @@ class SnapStartException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class SnapStartNotReadyException extends LambdaServiceException {
+};
+let SnapStartNotReadyException$1 = class SnapStartNotReadyException extends LambdaServiceException$1 {
   name = "SnapStartNotReadyException";
   $fault = "client";
   Type;
@@ -952,8 +720,8 @@ class SnapStartNotReadyException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class SnapStartTimeoutException extends LambdaServiceException {
+};
+let SnapStartTimeoutException$1 = class SnapStartTimeoutException extends LambdaServiceException$1 {
   name = "SnapStartTimeoutException";
   $fault = "client";
   Type;
@@ -968,8 +736,8 @@ class SnapStartTimeoutException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class SubnetIPAddressLimitReachedException extends LambdaServiceException {
+};
+let SubnetIPAddressLimitReachedException$1 = class SubnetIPAddressLimitReachedException extends LambdaServiceException$1 {
   name = "SubnetIPAddressLimitReachedException";
   $fault = "server";
   Type;
@@ -984,8 +752,8 @@ class SubnetIPAddressLimitReachedException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-class UnsupportedMediaTypeException extends LambdaServiceException {
+};
+let UnsupportedMediaTypeException$1 = class UnsupportedMediaTypeException extends LambdaServiceException$1 {
   name = "UnsupportedMediaTypeException";
   $fault = "client";
   Type;
@@ -998,66 +766,8 @@ class UnsupportedMediaTypeException extends LambdaServiceException {
     Object.setPrototypeOf(this, UnsupportedMediaTypeException.prototype);
     this.Type = opts.Type;
   }
-}
-const ResponseStreamingInvocationType = {
-  DryRun: "DryRun",
-  RequestResponse: "RequestResponse",
 };
-exports.InvokeWithResponseStreamResponseEvent = void 0;
-(function (InvokeWithResponseStreamResponseEvent) {
-  InvokeWithResponseStreamResponseEvent.visit = (value, visitor) => {
-    if (value.PayloadChunk !== undefined)
-      return visitor.PayloadChunk(value.PayloadChunk);
-    if (value.InvokeComplete !== undefined)
-      return visitor.InvokeComplete(value.InvokeComplete);
-    return visitor._(value.$unknown[0], value.$unknown[1]);
-  };
-})(
-  exports.InvokeWithResponseStreamResponseEvent ||
-    (exports.InvokeWithResponseStreamResponseEvent = {}),
-);
-const FunctionVersion = {
-  ALL: "ALL",
-};
-const ProvisionedConcurrencyStatusEnum = {
-  FAILED: "FAILED",
-  IN_PROGRESS: "IN_PROGRESS",
-  READY: "READY",
-};
-const ExecutionStatus = {
-  FAILED: "FAILED",
-  RUNNING: "RUNNING",
-  STOPPED: "STOPPED",
-  SUCCEEDED: "SUCCEEDED",
-  TIMED_OUT: "TIMED_OUT",
-};
-const EventType = {
-  CallbackFailed: "CallbackFailed",
-  CallbackStarted: "CallbackStarted",
-  CallbackSucceeded: "CallbackSucceeded",
-  CallbackTimedOut: "CallbackTimedOut",
-  ChainedInvokeFailed: "ChainedInvokeFailed",
-  ChainedInvokeStarted: "ChainedInvokeStarted",
-  ChainedInvokeStopped: "ChainedInvokeStopped",
-  ChainedInvokeSucceeded: "ChainedInvokeSucceeded",
-  ChainedInvokeTimedOut: "ChainedInvokeTimedOut",
-  ContextFailed: "ContextFailed",
-  ContextStarted: "ContextStarted",
-  ContextSucceeded: "ContextSucceeded",
-  ExecutionFailed: "ExecutionFailed",
-  ExecutionStarted: "ExecutionStarted",
-  ExecutionStopped: "ExecutionStopped",
-  ExecutionSucceeded: "ExecutionSucceeded",
-  ExecutionTimedOut: "ExecutionTimedOut",
-  InvocationCompleted: "InvocationCompleted",
-  StepFailed: "StepFailed",
-  StepStarted: "StepStarted",
-  StepSucceeded: "StepSucceeded",
-  WaitCancelled: "WaitCancelled",
-  WaitStarted: "WaitStarted",
-  WaitSucceeded: "WaitSucceeded",
-};
-class ProvisionedConcurrencyConfigNotFoundException extends LambdaServiceException {
+let ProvisionedConcurrencyConfigNotFoundException$1 = class ProvisionedConcurrencyConfigNotFoundException extends LambdaServiceException$1 {
   name = "ProvisionedConcurrencyConfigNotFoundException";
   $fault = "client";
   Type;
@@ -1073,8 +783,8 @@ class ProvisionedConcurrencyConfigNotFoundException extends LambdaServiceExcepti
     );
     this.Type = opts.Type;
   }
-}
-class CallbackTimeoutException extends LambdaServiceException {
+};
+let CallbackTimeoutException$1 = class CallbackTimeoutException extends LambdaServiceException$1 {
   name = "CallbackTimeoutException";
   $fault = "client";
   Type;
@@ -1089,4475 +799,4689 @@ class CallbackTimeoutException extends LambdaServiceException {
     this.Type = opts.Type;
     this.Message = opts.Message;
   }
-}
-const ErrorObjectFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.ErrorMessage && { ErrorMessage: smithyClient.SENSITIVE_STRING }),
-  ...(obj.ErrorType && { ErrorType: smithyClient.SENSITIVE_STRING }),
-  ...(obj.ErrorData && { ErrorData: smithyClient.SENSITIVE_STRING }),
-  ...(obj.StackTrace && { StackTrace: smithyClient.SENSITIVE_STRING }),
-});
-const OperationUpdateFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-const CheckpointDurableExecutionRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Updates && {
-    Updates: obj.Updates.map((item) => OperationUpdateFilterSensitiveLog(item)),
-  }),
-});
-const CallbackDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-const ChainedInvokeDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-const ContextDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-const ExecutionDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.InputPayload && { InputPayload: smithyClient.SENSITIVE_STRING }),
-});
-const StepDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-const OperationFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.ExecutionDetails && {
-    ExecutionDetails: ExecutionDetailsFilterSensitiveLog(obj.ExecutionDetails),
-  }),
-  ...(obj.ContextDetails && {
-    ContextDetails: ContextDetailsFilterSensitiveLog(obj.ContextDetails),
-  }),
-  ...(obj.StepDetails && {
-    StepDetails: StepDetailsFilterSensitiveLog(obj.StepDetails),
-  }),
-  ...(obj.CallbackDetails && {
-    CallbackDetails: CallbackDetailsFilterSensitiveLog(obj.CallbackDetails),
-  }),
-  ...(obj.ChainedInvokeDetails && {
-    ChainedInvokeDetails: ChainedInvokeDetailsFilterSensitiveLog(
-      obj.ChainedInvokeDetails,
-    ),
-  }),
-});
-const CheckpointUpdatedExecutionStateFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Operations && {
-    Operations: obj.Operations.map((item) => OperationFilterSensitiveLog(item)),
-  }),
-});
-const CheckpointDurableExecutionResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.NewExecutionState && {
-    NewExecutionState: CheckpointUpdatedExecutionStateFilterSensitiveLog(
-      obj.NewExecutionState,
-    ),
-  }),
-});
-const FunctionCodeFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.ZipFile && { ZipFile: smithyClient.SENSITIVE_STRING }),
-});
-const EnvironmentFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Variables && { Variables: smithyClient.SENSITIVE_STRING }),
-});
-const CreateFunctionRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Code && { Code: FunctionCodeFilterSensitiveLog(obj.Code) }),
-  ...(obj.Environment && {
-    Environment: EnvironmentFilterSensitiveLog(obj.Environment),
-  }),
-});
-const EnvironmentErrorFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Message && { Message: smithyClient.SENSITIVE_STRING }),
-});
-const EnvironmentResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Variables && { Variables: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Error && { Error: EnvironmentErrorFilterSensitiveLog(obj.Error) }),
-});
-const ImageConfigErrorFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Message && { Message: smithyClient.SENSITIVE_STRING }),
-});
-const ImageConfigResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: ImageConfigErrorFilterSensitiveLog(obj.Error) }),
-});
-const RuntimeVersionErrorFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Message && { Message: smithyClient.SENSITIVE_STRING }),
-});
-const RuntimeVersionConfigFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: RuntimeVersionErrorFilterSensitiveLog(obj.Error) }),
-});
-const FunctionConfigurationFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Environment && {
-    Environment: EnvironmentResponseFilterSensitiveLog(obj.Environment),
-  }),
-  ...(obj.ImageConfigResponse && {
-    ImageConfigResponse: ImageConfigResponseFilterSensitiveLog(
-      obj.ImageConfigResponse,
-    ),
-  }),
-  ...(obj.RuntimeVersionConfig && {
-    RuntimeVersionConfig: RuntimeVersionConfigFilterSensitiveLog(
-      obj.RuntimeVersionConfig,
-    ),
-  }),
-});
-const GetFunctionResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Configuration && {
-    Configuration: FunctionConfigurationFilterSensitiveLog(obj.Configuration),
-  }),
-});
-const InvocationRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
-});
-const InvocationResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
-});
-const InvokeAsyncRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-});
-const InvokeWithResponseStreamRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
-});
-const InvokeResponseStreamUpdateFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
-});
-const InvokeWithResponseStreamResponseEventFilterSensitiveLog = (obj) => {
-  if (obj.PayloadChunk !== undefined)
-    return {
-      PayloadChunk: InvokeResponseStreamUpdateFilterSensitiveLog(
-        obj.PayloadChunk,
-      ),
-    };
-  if (obj.InvokeComplete !== undefined)
-    return { InvokeComplete: obj.InvokeComplete };
-  if (obj.$unknown !== undefined) return { [obj.$unknown[0]]: "UNKNOWN" };
 };
-const InvokeWithResponseStreamResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.EventStream && { EventStream: "STREAMING_CONTENT" }),
-});
-const ListFunctionsResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Functions && {
-    Functions: obj.Functions.map((item) =>
-      FunctionConfigurationFilterSensitiveLog(item),
-    ),
-  }),
-});
-const UpdateFunctionCodeRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.ZipFile && { ZipFile: smithyClient.SENSITIVE_STRING }),
-});
-const UpdateFunctionConfigurationRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Environment && {
-    Environment: EnvironmentFilterSensitiveLog(obj.Environment),
-  }),
-});
-const ListVersionsByFunctionResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Versions && {
-    Versions: obj.Versions.map((item) =>
-      FunctionConfigurationFilterSensitiveLog(item),
-    ),
-  }),
-});
-const GetDurableExecutionResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.InputPayload && { InputPayload: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
-const EventErrorFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: ErrorObjectFilterSensitiveLog(obj.Payload) }),
-});
-const CallbackFailedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const EventResultFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
-});
-const CallbackSucceededDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
-});
-const CallbackTimedOutDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const ChainedInvokeFailedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const EventInputFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Payload && { Payload: smithyClient.SENSITIVE_STRING }),
-});
-const ChainedInvokeStartedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input) }),
-});
-const ChainedInvokeStoppedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const ChainedInvokeSucceededDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
-});
-const ChainedInvokeTimedOutDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const ContextFailedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const ContextSucceededDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
-});
-const ExecutionFailedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const ExecutionStartedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Input && { Input: EventInputFilterSensitiveLog(obj.Input) }),
-});
-const ExecutionStoppedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const ExecutionSucceededDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
-});
-const ExecutionTimedOutDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const InvocationCompletedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const StepFailedDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const StepSucceededDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: EventResultFilterSensitiveLog(obj.Result) }),
-});
-const WaitCancelledDetailsFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: EventErrorFilterSensitiveLog(obj.Error) }),
-});
-const EventFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.ExecutionStartedDetails && {
-    ExecutionStartedDetails: ExecutionStartedDetailsFilterSensitiveLog(
-      obj.ExecutionStartedDetails,
-    ),
-  }),
-  ...(obj.ExecutionSucceededDetails && {
-    ExecutionSucceededDetails: ExecutionSucceededDetailsFilterSensitiveLog(
-      obj.ExecutionSucceededDetails,
-    ),
-  }),
-  ...(obj.ExecutionFailedDetails && {
-    ExecutionFailedDetails: ExecutionFailedDetailsFilterSensitiveLog(
-      obj.ExecutionFailedDetails,
-    ),
-  }),
-  ...(obj.ExecutionTimedOutDetails && {
-    ExecutionTimedOutDetails: ExecutionTimedOutDetailsFilterSensitiveLog(
-      obj.ExecutionTimedOutDetails,
-    ),
-  }),
-  ...(obj.ExecutionStoppedDetails && {
-    ExecutionStoppedDetails: ExecutionStoppedDetailsFilterSensitiveLog(
-      obj.ExecutionStoppedDetails,
-    ),
-  }),
-  ...(obj.ContextSucceededDetails && {
-    ContextSucceededDetails: ContextSucceededDetailsFilterSensitiveLog(
-      obj.ContextSucceededDetails,
-    ),
-  }),
-  ...(obj.ContextFailedDetails && {
-    ContextFailedDetails: ContextFailedDetailsFilterSensitiveLog(
-      obj.ContextFailedDetails,
-    ),
-  }),
-  ...(obj.WaitCancelledDetails && {
-    WaitCancelledDetails: WaitCancelledDetailsFilterSensitiveLog(
-      obj.WaitCancelledDetails,
-    ),
-  }),
-  ...(obj.StepSucceededDetails && {
-    StepSucceededDetails: StepSucceededDetailsFilterSensitiveLog(
-      obj.StepSucceededDetails,
-    ),
-  }),
-  ...(obj.StepFailedDetails && {
-    StepFailedDetails: StepFailedDetailsFilterSensitiveLog(
-      obj.StepFailedDetails,
-    ),
-  }),
-  ...(obj.ChainedInvokeStartedDetails && {
-    ChainedInvokeStartedDetails: ChainedInvokeStartedDetailsFilterSensitiveLog(
-      obj.ChainedInvokeStartedDetails,
-    ),
-  }),
-  ...(obj.ChainedInvokeSucceededDetails && {
-    ChainedInvokeSucceededDetails:
-      ChainedInvokeSucceededDetailsFilterSensitiveLog(
-        obj.ChainedInvokeSucceededDetails,
-      ),
-  }),
-  ...(obj.ChainedInvokeFailedDetails && {
-    ChainedInvokeFailedDetails: ChainedInvokeFailedDetailsFilterSensitiveLog(
-      obj.ChainedInvokeFailedDetails,
-    ),
-  }),
-  ...(obj.ChainedInvokeTimedOutDetails && {
-    ChainedInvokeTimedOutDetails:
-      ChainedInvokeTimedOutDetailsFilterSensitiveLog(
-        obj.ChainedInvokeTimedOutDetails,
-      ),
-  }),
-  ...(obj.ChainedInvokeStoppedDetails && {
-    ChainedInvokeStoppedDetails: ChainedInvokeStoppedDetailsFilterSensitiveLog(
-      obj.ChainedInvokeStoppedDetails,
-    ),
-  }),
-  ...(obj.CallbackSucceededDetails && {
-    CallbackSucceededDetails: CallbackSucceededDetailsFilterSensitiveLog(
-      obj.CallbackSucceededDetails,
-    ),
-  }),
-  ...(obj.CallbackFailedDetails && {
-    CallbackFailedDetails: CallbackFailedDetailsFilterSensitiveLog(
-      obj.CallbackFailedDetails,
-    ),
-  }),
-  ...(obj.CallbackTimedOutDetails && {
-    CallbackTimedOutDetails: CallbackTimedOutDetailsFilterSensitiveLog(
-      obj.CallbackTimedOutDetails,
-    ),
-  }),
-  ...(obj.InvocationCompletedDetails && {
-    InvocationCompletedDetails: InvocationCompletedDetailsFilterSensitiveLog(
-      obj.InvocationCompletedDetails,
-    ),
-  }),
-});
-const GetDurableExecutionHistoryResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Events && {
-    Events: obj.Events.map((item) => EventFilterSensitiveLog(item)),
-  }),
-});
-const GetDurableExecutionStateResponseFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Operations && {
-    Operations: obj.Operations.map((item) => OperationFilterSensitiveLog(item)),
-  }),
-});
-const LayerVersionContentInputFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.ZipFile && { ZipFile: smithyClient.SENSITIVE_STRING }),
-});
-const PublishLayerVersionRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Content && {
-    Content: LayerVersionContentInputFilterSensitiveLog(obj.Content),
-  }),
-});
-const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
 
-const se_AddLayerVersionPermissionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy");
-  b.p("LayerName", () => input.LayerName, "{LayerName}", false);
-  b.p(
-    "VersionNumber",
-    () => input.VersionNumber.toString(),
-    "{VersionNumber}",
-    false,
-  );
-  const query = smithyClient.map({
-    [_RI]: [, input[_RI]],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      Action: [],
-      OrganizationId: [],
-      Principal: [],
-      StatementId: [],
-    }),
-  );
-  b.m("POST").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_AddPermissionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/functions/{FunctionName}/policy");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      Action: [],
-      EventSourceToken: [],
-      FunctionUrlAuthType: [],
-      InvokedViaFunctionUrl: [],
-      Principal: [],
-      PrincipalOrgID: [],
-      RevisionId: [],
-      SourceAccount: [],
-      SourceArn: [],
-      StatementId: [],
-    }),
-  );
-  b.m("POST").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_CheckpointDurableExecutionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2025-12-01/durable-executions/{DurableExecutionArn}/checkpoint");
-  b.p(
-    "DurableExecutionArn",
-    () => input.DurableExecutionArn,
-    "{DurableExecutionArn}",
-    false,
-  );
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      CheckpointToken: [],
-      ClientToken: [true, (_) => _ ?? uuid.v4()],
-      Updates: (_) => smithyClient._json(_),
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_CreateAliasCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/functions/{FunctionName}/aliases");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      Description: [],
-      FunctionVersion: [],
-      Name: [],
-      RoutingConfig: (_) => se_AliasRoutingConfiguration(_),
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_CreateCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2020-04-22/code-signing-configs");
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      AllowedPublishers: (_) => smithyClient._json(_),
-      CodeSigningPolicies: (_) => smithyClient._json(_),
-      Description: [],
-      Tags: (_) => smithyClient._json(_),
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_CreateEventSourceMappingCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/event-source-mappings");
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      AmazonManagedKafkaEventSourceConfig: (_) => smithyClient._json(_),
-      BatchSize: [],
-      BisectBatchOnFunctionError: [],
-      DestinationConfig: (_) => smithyClient._json(_),
-      DocumentDBEventSourceConfig: (_) => smithyClient._json(_),
-      Enabled: [],
-      EventSourceArn: [],
-      FilterCriteria: (_) => smithyClient._json(_),
-      FunctionName: [],
-      FunctionResponseTypes: (_) => smithyClient._json(_),
-      KMSKeyArn: [],
-      MaximumBatchingWindowInSeconds: [],
-      MaximumRecordAgeInSeconds: [],
-      MaximumRetryAttempts: [],
-      MetricsConfig: (_) => smithyClient._json(_),
-      ParallelizationFactor: [],
-      ProvisionedPollerConfig: (_) => smithyClient._json(_),
-      Queues: (_) => smithyClient._json(_),
-      ScalingConfig: (_) => smithyClient._json(_),
-      SelfManagedEventSource: (_) => smithyClient._json(_),
-      SelfManagedKafkaEventSourceConfig: (_) => smithyClient._json(_),
-      SourceAccessConfigurations: (_) => smithyClient._json(_),
-      StartingPosition: [],
-      StartingPositionTimestamp: (_) => _.getTime() / 1_000,
-      Tags: (_) => smithyClient._json(_),
-      Topics: (_) => smithyClient._json(_),
-      TumblingWindowInSeconds: [],
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_CreateFunctionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/functions");
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      Architectures: (_) => smithyClient._json(_),
-      Code: (_) => se_FunctionCode(_, context),
-      CodeSigningConfigArn: [],
-      DeadLetterConfig: (_) => smithyClient._json(_),
-      Description: [],
-      DurableConfig: (_) => smithyClient._json(_),
-      Environment: (_) => smithyClient._json(_),
-      EphemeralStorage: (_) => smithyClient._json(_),
-      FileSystemConfigs: (_) => smithyClient._json(_),
-      FunctionName: [],
-      Handler: [],
-      ImageConfig: (_) => smithyClient._json(_),
-      KMSKeyArn: [],
-      Layers: (_) => smithyClient._json(_),
-      LoggingConfig: (_) => smithyClient._json(_),
-      MemorySize: [],
-      PackageType: [],
-      Publish: [],
-      Role: [],
-      Runtime: [],
-      SnapStart: (_) => smithyClient._json(_),
-      Tags: (_) => smithyClient._json(_),
-      Timeout: [],
-      TracingConfig: (_) => smithyClient._json(_),
-      VpcConfig: (_) => smithyClient._json(_),
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_CreateFunctionUrlConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2021-10-31/functions/{FunctionName}/url");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      AuthType: [],
-      Cors: (_) => smithyClient._json(_),
-      InvokeMode: [],
-    }),
-  );
-  b.m("POST").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_DeleteAliasCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}/aliases/{Name}");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  b.p("Name", () => input.Name, "{Name}", false);
-  let body;
-  b.m("DELETE").h(headers).b(body);
-  return b.build();
-};
-const se_DeleteCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2020-04-22/code-signing-configs/{CodeSigningConfigArn}");
-  b.p(
-    "CodeSigningConfigArn",
-    () => input.CodeSigningConfigArn,
-    "{CodeSigningConfigArn}",
-    false,
-  );
-  let body;
-  b.m("DELETE").h(headers).b(body);
-  return b.build();
-};
-const se_DeleteEventSourceMappingCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/event-source-mappings/{UUID}");
-  b.p("UUID", () => input.UUID, "{UUID}", false);
-  let body;
-  b.m("DELETE").h(headers).b(body);
-  return b.build();
-};
-const se_DeleteFunctionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("DELETE").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_DeleteFunctionCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2020-06-30/functions/{FunctionName}/code-signing-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  b.m("DELETE").h(headers).b(body);
-  return b.build();
-};
-const se_DeleteFunctionConcurrencyCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2017-10-31/functions/{FunctionName}/concurrency");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  b.m("DELETE").h(headers).b(body);
-  return b.build();
-};
-const se_DeleteFunctionEventInvokeConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2019-09-25/functions/{FunctionName}/event-invoke-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("DELETE").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_DeleteFunctionUrlConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2021-10-31/functions/{FunctionName}/url");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("DELETE").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_DeleteLayerVersionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2018-10-31/layers/{LayerName}/versions/{VersionNumber}");
-  b.p("LayerName", () => input.LayerName, "{LayerName}", false);
-  b.p(
-    "VersionNumber",
-    () => input.VersionNumber.toString(),
-    "{VersionNumber}",
-    false,
-  );
-  let body;
-  b.m("DELETE").h(headers).b(body);
-  return b.build();
-};
-const se_DeleteProvisionedConcurrencyConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2019-09-30/functions/{FunctionName}/provisioned-concurrency");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, smithyClient.expectNonNull(input[_Q], `Qualifier`)],
-  });
-  let body;
-  b.m("DELETE").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetAccountSettingsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2016-08-19/account-settings");
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetAliasCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}/aliases/{Name}");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  b.p("Name", () => input.Name, "{Name}", false);
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2020-04-22/code-signing-configs/{CodeSigningConfigArn}");
-  b.p(
-    "CodeSigningConfigArn",
-    () => input.CodeSigningConfigArn,
-    "{CodeSigningConfigArn}",
-    false,
-  );
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetDurableExecutionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2025-12-01/durable-executions/{DurableExecutionArn}");
-  b.p(
-    "DurableExecutionArn",
-    () => input.DurableExecutionArn,
-    "{DurableExecutionArn}",
-    false,
-  );
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetDurableExecutionHistoryCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2025-12-01/durable-executions/{DurableExecutionArn}/history");
-  b.p(
-    "DurableExecutionArn",
-    () => input.DurableExecutionArn,
-    "{DurableExecutionArn}",
-    false,
-  );
-  const query = smithyClient.map({
-    [_IED]: [
-      () => input.IncludeExecutionData !== void 0,
-      () => input[_IED].toString(),
-    ],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-    [_M]: [, input[_M]],
-    [_RO]: [() => input.ReverseOrder !== void 0, () => input[_RO].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetDurableExecutionStateCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2025-12-01/durable-executions/{DurableExecutionArn}/state");
-  b.p(
-    "DurableExecutionArn",
-    () => input.DurableExecutionArn,
-    "{DurableExecutionArn}",
-    false,
-  );
-  const query = smithyClient.map({
-    [_CT]: [, smithyClient.expectNonNull(input[_CT], `CheckpointToken`)],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetEventSourceMappingCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/event-source-mappings/{UUID}");
-  b.p("UUID", () => input.UUID, "{UUID}", false);
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetFunctionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetFunctionCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2020-06-30/functions/{FunctionName}/code-signing-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetFunctionConcurrencyCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2019-09-30/functions/{FunctionName}/concurrency");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetFunctionConfigurationCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}/configuration");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetFunctionEventInvokeConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2019-09-25/functions/{FunctionName}/event-invoke-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetFunctionRecursionConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2024-08-31/functions/{FunctionName}/recursion-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetFunctionUrlConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2021-10-31/functions/{FunctionName}/url");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetLayerVersionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2018-10-31/layers/{LayerName}/versions/{VersionNumber}");
-  b.p("LayerName", () => input.LayerName, "{LayerName}", false);
-  b.p(
-    "VersionNumber",
-    () => input.VersionNumber.toString(),
-    "{VersionNumber}",
-    false,
-  );
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetLayerVersionByArnCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2018-10-31/layers");
-  const query = smithyClient.map({
-    [_f]: [, "LayerVersion"],
-    [_A]: [, smithyClient.expectNonNull(input[_A], `Arn`)],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetLayerVersionPolicyCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy");
-  b.p("LayerName", () => input.LayerName, "{LayerName}", false);
-  b.p(
-    "VersionNumber",
-    () => input.VersionNumber.toString(),
-    "{VersionNumber}",
-    false,
-  );
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_GetPolicyCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}/policy");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetProvisionedConcurrencyConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2019-09-30/functions/{FunctionName}/provisioned-concurrency");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, smithyClient.expectNonNull(input[_Q], `Qualifier`)],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_GetRuntimeManagementConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2021-07-20/functions/{FunctionName}/runtime-management-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_InvokeCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = smithyClient.map({}, smithyClient.isSerializableHeaderValue, {
-    "content-type": "application/octet-stream",
-    [_xait]: input[_IT],
-    [_xalt]: input[_LT],
-    [_xacc]: input[_CC],
-    [_xaden]: input[_DEN],
-  });
-  b.bp("/2015-03-31/functions/{FunctionName}/invocations");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  if (input.Payload !== undefined) {
-    body = input.Payload;
-  }
-  b.m("POST").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_InvokeAsyncCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/octet-stream",
-  };
-  b.bp("/2014-11-13/functions/{FunctionName}/invoke-async");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  if (input.InvokeArgs !== undefined) {
-    body = input.InvokeArgs;
-  }
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_InvokeWithResponseStreamCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = smithyClient.map({}, smithyClient.isSerializableHeaderValue, {
-    "content-type": "application/octet-stream",
-    [_xait]: input[_IT],
-    [_xalt]: input[_LT],
-    [_xacc]: input[_CC],
-  });
-  b.bp("/2021-11-15/functions/{FunctionName}/response-streaming-invocations");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  if (input.Payload !== undefined) {
-    body = input.Payload;
-  }
-  b.m("POST").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListAliasesCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}/aliases");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_FV]: [, input[_FV]],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListCodeSigningConfigsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2020-04-22/code-signing-configs");
-  const query = smithyClient.map({
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListDurableExecutionsByFunctionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2025-12-01/functions/{FunctionName}/durable-executions");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-    [_DEN]: [, input[_DEN]],
-    [_S]: [() => input.Statuses !== void 0, () => input[_S] || []],
-    [_SA]: [
-      () => input.StartedAfter !== void 0,
-      () => smithyClient.serializeDateTime(input[_SA]).toString(),
-    ],
-    [_SB]: [
-      () => input.StartedBefore !== void 0,
-      () => smithyClient.serializeDateTime(input[_SB]).toString(),
-    ],
-    [_RO]: [() => input.ReverseOrder !== void 0, () => input[_RO].toString()],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListEventSourceMappingsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/event-source-mappings");
-  const query = smithyClient.map({
-    [_ESA]: [, input[_ESA]],
-    [_FN]: [, input[_FN]],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListFunctionEventInvokeConfigsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2019-09-25/functions/{FunctionName}/event-invoke-config/list");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListFunctionsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions");
-  const query = smithyClient.map({
-    [_MR]: [, input[_MR]],
-    [_FV]: [, input[_FV]],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListFunctionsByCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2020-04-22/code-signing-configs/{CodeSigningConfigArn}/functions");
-  b.p(
-    "CodeSigningConfigArn",
-    () => input.CodeSigningConfigArn,
-    "{CodeSigningConfigArn}",
-    false,
-  );
-  const query = smithyClient.map({
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListFunctionUrlConfigsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2021-10-31/functions/{FunctionName}/urls");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListLayersCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2018-10-31/layers");
-  const query = smithyClient.map({
-    [_CR]: [, input[_CR]],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-    [_CA]: [, input[_CA]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListLayerVersionsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2018-10-31/layers/{LayerName}/versions");
-  b.p("LayerName", () => input.LayerName, "{LayerName}", false);
-  const query = smithyClient.map({
-    [_CR]: [, input[_CR]],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-    [_CA]: [, input[_CA]],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListProvisionedConcurrencyConfigsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2019-09-30/functions/{FunctionName}/provisioned-concurrency");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_L]: [, "ALL"],
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_ListTagsCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2017-03-31/tags/{Resource}");
-  b.p("Resource", () => input.Resource, "{Resource}", false);
-  let body;
-  b.m("GET").h(headers).b(body);
-  return b.build();
-};
-const se_ListVersionsByFunctionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}/versions");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_M]: [, input[_M]],
-    [_MI]: [() => input.MaxItems !== void 0, () => input[_MI].toString()],
-  });
-  let body;
-  b.m("GET").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_PublishLayerVersionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2018-10-31/layers/{LayerName}/versions");
-  b.p("LayerName", () => input.LayerName, "{LayerName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      CompatibleArchitectures: (_) => smithyClient._json(_),
-      CompatibleRuntimes: (_) => smithyClient._json(_),
-      Content: (_) => se_LayerVersionContentInput(_, context),
-      Description: [],
-      LicenseInfo: [],
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_PublishVersionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/functions/{FunctionName}/versions");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      CodeSha256: [],
-      Description: [],
-      RevisionId: [],
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_PutFunctionCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2020-06-30/functions/{FunctionName}/code-signing-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      CodeSigningConfigArn: [],
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_PutFunctionConcurrencyCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2017-10-31/functions/{FunctionName}/concurrency");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      ReservedConcurrentExecutions: [],
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_PutFunctionEventInvokeConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2019-09-25/functions/{FunctionName}/event-invoke-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      DestinationConfig: (_) => smithyClient._json(_),
-      MaximumEventAgeInSeconds: [],
-      MaximumRetryAttempts: [],
-    }),
-  );
-  b.m("PUT").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_PutFunctionRecursionConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2024-08-31/functions/{FunctionName}/recursion-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      RecursiveLoop: [],
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_PutProvisionedConcurrencyConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2019-09-30/functions/{FunctionName}/provisioned-concurrency");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, smithyClient.expectNonNull(input[_Q], `Qualifier`)],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      ProvisionedConcurrentExecutions: [],
-    }),
-  );
-  b.m("PUT").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_PutRuntimeManagementConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2021-07-20/functions/{FunctionName}/runtime-management-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      RuntimeVersionArn: [],
-      UpdateRuntimeOn: [],
-    }),
-  );
-  b.m("PUT").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_RemoveLayerVersionPermissionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp(
-    "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy/{StatementId}",
-  );
-  b.p("LayerName", () => input.LayerName, "{LayerName}", false);
-  b.p(
-    "VersionNumber",
-    () => input.VersionNumber.toString(),
-    "{VersionNumber}",
-    false,
-  );
-  b.p("StatementId", () => input.StatementId, "{StatementId}", false);
-  const query = smithyClient.map({
-    [_RI]: [, input[_RI]],
-  });
-  let body;
-  b.m("DELETE").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_RemovePermissionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2015-03-31/functions/{FunctionName}/policy/{StatementId}");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  b.p("StatementId", () => input.StatementId, "{StatementId}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-    [_RI]: [, input[_RI]],
-  });
-  let body;
-  b.m("DELETE").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_SendDurableExecutionCallbackFailureCommand = async (
-  input,
-  context,
-) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2025-12-01/durable-execution-callbacks/{CallbackId}/fail");
-  b.p("CallbackId", () => input.CallbackId, "{CallbackId}", false);
-  let body;
-  if (input.Error !== undefined) {
-    body = smithyClient._json(input.Error);
-  }
-  if (body === undefined) {
-    body = {};
-  }
-  body = JSON.stringify(body);
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_SendDurableExecutionCallbackHeartbeatCommand = async (
-  input,
-  context,
-) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2025-12-01/durable-execution-callbacks/{CallbackId}/heartbeat");
-  b.p("CallbackId", () => input.CallbackId, "{CallbackId}", false);
-  let body;
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_SendDurableExecutionCallbackSuccessCommand = async (
-  input,
-  context,
-) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/octet-stream",
-  };
-  b.bp("/2025-12-01/durable-execution-callbacks/{CallbackId}/succeed");
-  b.p("CallbackId", () => input.CallbackId, "{CallbackId}", false);
-  let body;
-  if (input.Result !== undefined) {
-    body = input.Result;
-  }
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_StopDurableExecutionCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2025-12-01/durable-executions/{DurableExecutionArn}/stop");
-  b.p(
-    "DurableExecutionArn",
-    () => input.DurableExecutionArn,
-    "{DurableExecutionArn}",
-    false,
-  );
-  let body;
-  if (input.Error !== undefined) {
-    body = smithyClient._json(input.Error);
-  }
-  if (body === undefined) {
-    body = {};
-  }
-  body = JSON.stringify(body);
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_TagResourceCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2017-03-31/tags/{Resource}");
-  b.p("Resource", () => input.Resource, "{Resource}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      Tags: (_) => smithyClient._json(_),
-    }),
-  );
-  b.m("POST").h(headers).b(body);
-  return b.build();
-};
-const se_UntagResourceCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {};
-  b.bp("/2017-03-31/tags/{Resource}");
-  b.p("Resource", () => input.Resource, "{Resource}", false);
-  const query = smithyClient.map({
-    [_tK]: [
-      smithyClient.expectNonNull(input.TagKeys, `TagKeys`) != null,
-      () => input[_TK] || [],
-    ],
-  });
-  let body;
-  b.m("DELETE").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_UpdateAliasCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/functions/{FunctionName}/aliases/{Name}");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  b.p("Name", () => input.Name, "{Name}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      Description: [],
-      FunctionVersion: [],
-      RevisionId: [],
-      RoutingConfig: (_) => se_AliasRoutingConfiguration(_),
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_UpdateCodeSigningConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2020-04-22/code-signing-configs/{CodeSigningConfigArn}");
-  b.p(
-    "CodeSigningConfigArn",
-    () => input.CodeSigningConfigArn,
-    "{CodeSigningConfigArn}",
-    false,
-  );
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      AllowedPublishers: (_) => smithyClient._json(_),
-      CodeSigningPolicies: (_) => smithyClient._json(_),
-      Description: [],
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_UpdateEventSourceMappingCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/event-source-mappings/{UUID}");
-  b.p("UUID", () => input.UUID, "{UUID}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      AmazonManagedKafkaEventSourceConfig: (_) => smithyClient._json(_),
-      BatchSize: [],
-      BisectBatchOnFunctionError: [],
-      DestinationConfig: (_) => smithyClient._json(_),
-      DocumentDBEventSourceConfig: (_) => smithyClient._json(_),
-      Enabled: [],
-      FilterCriteria: (_) => smithyClient._json(_),
-      FunctionName: [],
-      FunctionResponseTypes: (_) => smithyClient._json(_),
-      KMSKeyArn: [],
-      MaximumBatchingWindowInSeconds: [],
-      MaximumRecordAgeInSeconds: [],
-      MaximumRetryAttempts: [],
-      MetricsConfig: (_) => smithyClient._json(_),
-      ParallelizationFactor: [],
-      ProvisionedPollerConfig: (_) => smithyClient._json(_),
-      ScalingConfig: (_) => smithyClient._json(_),
-      SelfManagedKafkaEventSourceConfig: (_) => smithyClient._json(_),
-      SourceAccessConfigurations: (_) => smithyClient._json(_),
-      TumblingWindowInSeconds: [],
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_UpdateFunctionCodeCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/functions/{FunctionName}/code");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      Architectures: (_) => smithyClient._json(_),
-      DryRun: [],
-      ImageUri: [],
-      Publish: [],
-      RevisionId: [],
-      S3Bucket: [],
-      S3Key: [],
-      S3ObjectVersion: [],
-      SourceKMSKeyArn: [],
-      ZipFile: (_) => context.base64Encoder(_),
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_UpdateFunctionConfigurationCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2015-03-31/functions/{FunctionName}/configuration");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      DeadLetterConfig: (_) => smithyClient._json(_),
-      Description: [],
-      DurableConfig: (_) => smithyClient._json(_),
-      Environment: (_) => smithyClient._json(_),
-      EphemeralStorage: (_) => smithyClient._json(_),
-      FileSystemConfigs: (_) => smithyClient._json(_),
-      Handler: [],
-      ImageConfig: (_) => smithyClient._json(_),
-      KMSKeyArn: [],
-      Layers: (_) => smithyClient._json(_),
-      LoggingConfig: (_) => smithyClient._json(_),
-      MemorySize: [],
-      RevisionId: [],
-      Role: [],
-      Runtime: [],
-      SnapStart: (_) => smithyClient._json(_),
-      Timeout: [],
-      TracingConfig: (_) => smithyClient._json(_),
-      VpcConfig: (_) => smithyClient._json(_),
-    }),
-  );
-  b.m("PUT").h(headers).b(body);
-  return b.build();
-};
-const se_UpdateFunctionEventInvokeConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2019-09-25/functions/{FunctionName}/event-invoke-config");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      DestinationConfig: (_) => smithyClient._json(_),
-      MaximumEventAgeInSeconds: [],
-      MaximumRetryAttempts: [],
-    }),
-  );
-  b.m("POST").h(headers).q(query).b(body);
-  return b.build();
-};
-const se_UpdateFunctionUrlConfigCommand = async (input, context) => {
-  const b = core.requestBuilder(input, context);
-  const headers = {
-    "content-type": "application/json",
-  };
-  b.bp("/2021-10-31/functions/{FunctionName}/url");
-  b.p("FunctionName", () => input.FunctionName, "{FunctionName}", false);
-  const query = smithyClient.map({
-    [_Q]: [, input[_Q]],
-  });
-  let body;
-  body = JSON.stringify(
-    smithyClient.take(input, {
-      AuthType: [],
-      Cors: (_) => smithyClient._json(_),
-      InvokeMode: [],
-    }),
-  );
-  b.m("PUT").h(headers).q(query).b(body);
-  return b.build();
-};
-const de_AddLayerVersionPermissionCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    RevisionId: smithyClient.expectString,
-    Statement: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_AddPermissionCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Statement: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_CheckpointDurableExecutionCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CheckpointToken: smithyClient.expectString,
-    NewExecutionState: (_) => de_CheckpointUpdatedExecutionState(_),
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_CreateAliasCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AliasArn: smithyClient.expectString,
-    Description: smithyClient.expectString,
-    FunctionVersion: smithyClient.expectString,
-    Name: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    RoutingConfig: (_) => de_AliasRoutingConfiguration(_),
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_CreateCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CodeSigningConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_CreateEventSourceMappingCommand = async (output, context) => {
-  if (output.statusCode !== 202 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AmazonManagedKafkaEventSourceConfig: smithyClient._json,
-    BatchSize: smithyClient.expectInt32,
-    BisectBatchOnFunctionError: smithyClient.expectBoolean,
-    DestinationConfig: smithyClient._json,
-    DocumentDBEventSourceConfig: smithyClient._json,
-    EventSourceArn: smithyClient.expectString,
-    EventSourceMappingArn: smithyClient.expectString,
-    FilterCriteria: smithyClient._json,
-    FilterCriteriaError: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionResponseTypes: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    LastProcessingResult: smithyClient.expectString,
-    MaximumBatchingWindowInSeconds: smithyClient.expectInt32,
-    MaximumRecordAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-    MetricsConfig: smithyClient._json,
-    ParallelizationFactor: smithyClient.expectInt32,
-    ProvisionedPollerConfig: smithyClient._json,
-    Queues: smithyClient._json,
-    ScalingConfig: smithyClient._json,
-    SelfManagedEventSource: smithyClient._json,
-    SelfManagedKafkaEventSourceConfig: smithyClient._json,
-    SourceAccessConfigurations: smithyClient._json,
-    StartingPosition: smithyClient.expectString,
-    StartingPositionTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    State: smithyClient.expectString,
-    StateTransitionReason: smithyClient.expectString,
-    Topics: smithyClient._json,
-    TumblingWindowInSeconds: smithyClient.expectInt32,
-    UUID: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_CreateFunctionCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Architectures: smithyClient._json,
-    CodeSha256: smithyClient.expectString,
-    CodeSize: smithyClient.expectLong,
-    DeadLetterConfig: smithyClient._json,
-    Description: smithyClient.expectString,
-    DurableConfig: smithyClient._json,
-    Environment: smithyClient._json,
-    EphemeralStorage: smithyClient._json,
-    FileSystemConfigs: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionName: smithyClient.expectString,
-    Handler: smithyClient.expectString,
-    ImageConfigResponse: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: smithyClient.expectString,
-    LastUpdateStatus: smithyClient.expectString,
-    LastUpdateStatusReason: smithyClient.expectString,
-    LastUpdateStatusReasonCode: smithyClient.expectString,
-    Layers: smithyClient._json,
-    LoggingConfig: smithyClient._json,
-    MasterArn: smithyClient.expectString,
-    MemorySize: smithyClient.expectInt32,
-    PackageType: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    Role: smithyClient.expectString,
-    Runtime: smithyClient.expectString,
-    RuntimeVersionConfig: smithyClient._json,
-    SigningJobArn: smithyClient.expectString,
-    SigningProfileVersionArn: smithyClient.expectString,
-    SnapStart: smithyClient._json,
-    State: smithyClient.expectString,
-    StateReason: smithyClient.expectString,
-    StateReasonCode: smithyClient.expectString,
-    Timeout: smithyClient.expectInt32,
-    TracingConfig: smithyClient._json,
-    Version: smithyClient.expectString,
-    VpcConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_CreateFunctionUrlConfigCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AuthType: smithyClient.expectString,
-    Cors: smithyClient._json,
-    CreationTime: smithyClient.expectString,
-    FunctionArn: smithyClient.expectString,
-    FunctionUrl: smithyClient.expectString,
-    InvokeMode: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_DeleteAliasCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteEventSourceMappingCommand = async (output, context) => {
-  if (output.statusCode !== 202 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AmazonManagedKafkaEventSourceConfig: smithyClient._json,
-    BatchSize: smithyClient.expectInt32,
-    BisectBatchOnFunctionError: smithyClient.expectBoolean,
-    DestinationConfig: smithyClient._json,
-    DocumentDBEventSourceConfig: smithyClient._json,
-    EventSourceArn: smithyClient.expectString,
-    EventSourceMappingArn: smithyClient.expectString,
-    FilterCriteria: smithyClient._json,
-    FilterCriteriaError: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionResponseTypes: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    LastProcessingResult: smithyClient.expectString,
-    MaximumBatchingWindowInSeconds: smithyClient.expectInt32,
-    MaximumRecordAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-    MetricsConfig: smithyClient._json,
-    ParallelizationFactor: smithyClient.expectInt32,
-    ProvisionedPollerConfig: smithyClient._json,
-    Queues: smithyClient._json,
-    ScalingConfig: smithyClient._json,
-    SelfManagedEventSource: smithyClient._json,
-    SelfManagedKafkaEventSourceConfig: smithyClient._json,
-    SourceAccessConfigurations: smithyClient._json,
-    StartingPosition: smithyClient.expectString,
-    StartingPositionTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    State: smithyClient.expectString,
-    StateTransitionReason: smithyClient.expectString,
-    Topics: smithyClient._json,
-    TumblingWindowInSeconds: smithyClient.expectInt32,
-    UUID: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_DeleteFunctionCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteFunctionCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteFunctionConcurrencyCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteFunctionEventInvokeConfigCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteFunctionUrlConfigCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteLayerVersionCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_DeleteProvisionedConcurrencyConfigCommand = async (
-  output,
-  context,
-) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_GetAccountSettingsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AccountLimit: smithyClient._json,
-    AccountUsage: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetAliasCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AliasArn: smithyClient.expectString,
-    Description: smithyClient.expectString,
-    FunctionVersion: smithyClient.expectString,
-    Name: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    RoutingConfig: (_) => de_AliasRoutingConfiguration(_),
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CodeSigningConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetDurableExecutionCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    DurableExecutionArn: smithyClient.expectString,
-    DurableExecutionName: smithyClient.expectString,
-    EndTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    Error: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    InputPayload: smithyClient.expectString,
-    Result: smithyClient.expectString,
-    StartTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    Status: smithyClient.expectString,
-    Version: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetDurableExecutionHistoryCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Events: (_) => de_Events(_),
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetDurableExecutionStateCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    NextMarker: smithyClient.expectString,
-    Operations: (_) => de_Operations(_),
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetEventSourceMappingCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AmazonManagedKafkaEventSourceConfig: smithyClient._json,
-    BatchSize: smithyClient.expectInt32,
-    BisectBatchOnFunctionError: smithyClient.expectBoolean,
-    DestinationConfig: smithyClient._json,
-    DocumentDBEventSourceConfig: smithyClient._json,
-    EventSourceArn: smithyClient.expectString,
-    EventSourceMappingArn: smithyClient.expectString,
-    FilterCriteria: smithyClient._json,
-    FilterCriteriaError: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionResponseTypes: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    LastProcessingResult: smithyClient.expectString,
-    MaximumBatchingWindowInSeconds: smithyClient.expectInt32,
-    MaximumRecordAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-    MetricsConfig: smithyClient._json,
-    ParallelizationFactor: smithyClient.expectInt32,
-    ProvisionedPollerConfig: smithyClient._json,
-    Queues: smithyClient._json,
-    ScalingConfig: smithyClient._json,
-    SelfManagedEventSource: smithyClient._json,
-    SelfManagedKafkaEventSourceConfig: smithyClient._json,
-    SourceAccessConfigurations: smithyClient._json,
-    StartingPosition: smithyClient.expectString,
-    StartingPositionTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    State: smithyClient.expectString,
-    StateTransitionReason: smithyClient.expectString,
-    Topics: smithyClient._json,
-    TumblingWindowInSeconds: smithyClient.expectInt32,
-    UUID: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetFunctionCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Code: smithyClient._json,
-    Concurrency: smithyClient._json,
-    Configuration: smithyClient._json,
-    Tags: smithyClient._json,
-    TagsError: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetFunctionCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CodeSigningConfigArn: smithyClient.expectString,
-    FunctionName: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetFunctionConcurrencyCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    ReservedConcurrentExecutions: smithyClient.expectInt32,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetFunctionConfigurationCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Architectures: smithyClient._json,
-    CodeSha256: smithyClient.expectString,
-    CodeSize: smithyClient.expectLong,
-    DeadLetterConfig: smithyClient._json,
-    Description: smithyClient.expectString,
-    DurableConfig: smithyClient._json,
-    Environment: smithyClient._json,
-    EphemeralStorage: smithyClient._json,
-    FileSystemConfigs: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionName: smithyClient.expectString,
-    Handler: smithyClient.expectString,
-    ImageConfigResponse: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: smithyClient.expectString,
-    LastUpdateStatus: smithyClient.expectString,
-    LastUpdateStatusReason: smithyClient.expectString,
-    LastUpdateStatusReasonCode: smithyClient.expectString,
-    Layers: smithyClient._json,
-    LoggingConfig: smithyClient._json,
-    MasterArn: smithyClient.expectString,
-    MemorySize: smithyClient.expectInt32,
-    PackageType: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    Role: smithyClient.expectString,
-    Runtime: smithyClient.expectString,
-    RuntimeVersionConfig: smithyClient._json,
-    SigningJobArn: smithyClient.expectString,
-    SigningProfileVersionArn: smithyClient.expectString,
-    SnapStart: smithyClient._json,
-    State: smithyClient.expectString,
-    StateReason: smithyClient.expectString,
-    StateReasonCode: smithyClient.expectString,
-    Timeout: smithyClient.expectInt32,
-    TracingConfig: smithyClient._json,
-    Version: smithyClient.expectString,
-    VpcConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetFunctionEventInvokeConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    DestinationConfig: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    MaximumEventAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetFunctionRecursionConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    RecursiveLoop: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetFunctionUrlConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AuthType: smithyClient.expectString,
-    Cors: smithyClient._json,
-    CreationTime: smithyClient.expectString,
-    FunctionArn: smithyClient.expectString,
-    FunctionUrl: smithyClient.expectString,
-    InvokeMode: smithyClient.expectString,
-    LastModifiedTime: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetLayerVersionCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CompatibleArchitectures: smithyClient._json,
-    CompatibleRuntimes: smithyClient._json,
-    Content: smithyClient._json,
-    CreatedDate: smithyClient.expectString,
-    Description: smithyClient.expectString,
-    LayerArn: smithyClient.expectString,
-    LayerVersionArn: smithyClient.expectString,
-    LicenseInfo: smithyClient.expectString,
-    Version: smithyClient.expectLong,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetLayerVersionByArnCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CompatibleArchitectures: smithyClient._json,
-    CompatibleRuntimes: smithyClient._json,
-    Content: smithyClient._json,
-    CreatedDate: smithyClient.expectString,
-    Description: smithyClient.expectString,
-    LayerArn: smithyClient.expectString,
-    LayerVersionArn: smithyClient.expectString,
-    LicenseInfo: smithyClient.expectString,
-    Version: smithyClient.expectLong,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetLayerVersionPolicyCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Policy: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetPolicyCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Policy: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetProvisionedConcurrencyConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AllocatedProvisionedConcurrentExecutions: smithyClient.expectInt32,
-    AvailableProvisionedConcurrentExecutions: smithyClient.expectInt32,
-    LastModified: smithyClient.expectString,
-    RequestedProvisionedConcurrentExecutions: smithyClient.expectInt32,
-    Status: smithyClient.expectString,
-    StatusReason: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_GetRuntimeManagementConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    FunctionArn: smithyClient.expectString,
-    RuntimeVersionArn: smithyClient.expectString,
-    UpdateRuntimeOn: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_InvokeCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-    [_FE]: [, output.headers[_xafe]],
-    [_LR]: [, output.headers[_xalr]],
-    [_EV]: [, output.headers[_xaev]],
-    [_DEA]: [, output.headers[_xadea]],
-  });
-  const data = await smithyClient.collectBody(output.body, context);
-  contents.Payload = data;
-  smithyClient.map(contents, {
-    StatusCode: [, output.statusCode],
-  });
-  return contents;
-};
-const de_InvokeAsyncCommand = async (output, context) => {
-  if (output.statusCode !== 202 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  smithyClient.map(contents, {
-    Status: [, output.statusCode],
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_InvokeWithResponseStreamCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-    [_EV]: [, output.headers[_xaev]],
-    [_RSCT]: [, output.headers[_ct]],
-  });
-  const data = output.body;
-  contents.EventStream = de_InvokeWithResponseStreamResponseEvent(
-    data,
-    context,
-  );
-  smithyClient.map(contents, {
-    StatusCode: [, output.statusCode],
-  });
-  return contents;
-};
-const de_ListAliasesCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Aliases: (_) => de_AliasList(_),
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListCodeSigningConfigsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CodeSigningConfigs: smithyClient._json,
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListDurableExecutionsByFunctionCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    DurableExecutions: (_) => de_DurableExecutions(_),
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListEventSourceMappingsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    EventSourceMappings: (_) => de_EventSourceMappingsList(_),
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListFunctionEventInvokeConfigsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    FunctionEventInvokeConfigs: (_) => de_FunctionEventInvokeConfigList(_),
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListFunctionsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Functions: smithyClient._json,
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListFunctionsByCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    FunctionArns: smithyClient._json,
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListFunctionUrlConfigsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    FunctionUrlConfigs: smithyClient._json,
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListLayersCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Layers: smithyClient._json,
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListLayerVersionsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    LayerVersions: smithyClient._json,
-    NextMarker: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListProvisionedConcurrencyConfigsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    NextMarker: smithyClient.expectString,
-    ProvisionedConcurrencyConfigs: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListTagsCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Tags: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_ListVersionsByFunctionCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    NextMarker: smithyClient.expectString,
-    Versions: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PublishLayerVersionCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CompatibleArchitectures: smithyClient._json,
-    CompatibleRuntimes: smithyClient._json,
-    Content: smithyClient._json,
-    CreatedDate: smithyClient.expectString,
-    Description: smithyClient.expectString,
-    LayerArn: smithyClient.expectString,
-    LayerVersionArn: smithyClient.expectString,
-    LicenseInfo: smithyClient.expectString,
-    Version: smithyClient.expectLong,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PublishVersionCommand = async (output, context) => {
-  if (output.statusCode !== 201 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Architectures: smithyClient._json,
-    CodeSha256: smithyClient.expectString,
-    CodeSize: smithyClient.expectLong,
-    DeadLetterConfig: smithyClient._json,
-    Description: smithyClient.expectString,
-    DurableConfig: smithyClient._json,
-    Environment: smithyClient._json,
-    EphemeralStorage: smithyClient._json,
-    FileSystemConfigs: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionName: smithyClient.expectString,
-    Handler: smithyClient.expectString,
-    ImageConfigResponse: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: smithyClient.expectString,
-    LastUpdateStatus: smithyClient.expectString,
-    LastUpdateStatusReason: smithyClient.expectString,
-    LastUpdateStatusReasonCode: smithyClient.expectString,
-    Layers: smithyClient._json,
-    LoggingConfig: smithyClient._json,
-    MasterArn: smithyClient.expectString,
-    MemorySize: smithyClient.expectInt32,
-    PackageType: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    Role: smithyClient.expectString,
-    Runtime: smithyClient.expectString,
-    RuntimeVersionConfig: smithyClient._json,
-    SigningJobArn: smithyClient.expectString,
-    SigningProfileVersionArn: smithyClient.expectString,
-    SnapStart: smithyClient._json,
-    State: smithyClient.expectString,
-    StateReason: smithyClient.expectString,
-    StateReasonCode: smithyClient.expectString,
-    Timeout: smithyClient.expectInt32,
-    TracingConfig: smithyClient._json,
-    Version: smithyClient.expectString,
-    VpcConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PutFunctionCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CodeSigningConfigArn: smithyClient.expectString,
-    FunctionName: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PutFunctionConcurrencyCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    ReservedConcurrentExecutions: smithyClient.expectInt32,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PutFunctionEventInvokeConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    DestinationConfig: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    MaximumEventAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PutFunctionRecursionConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    RecursiveLoop: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PutProvisionedConcurrencyConfigCommand = async (output, context) => {
-  if (output.statusCode !== 202 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AllocatedProvisionedConcurrentExecutions: smithyClient.expectInt32,
-    AvailableProvisionedConcurrentExecutions: smithyClient.expectInt32,
-    LastModified: smithyClient.expectString,
-    RequestedProvisionedConcurrentExecutions: smithyClient.expectInt32,
-    Status: smithyClient.expectString,
-    StatusReason: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_PutRuntimeManagementConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    FunctionArn: smithyClient.expectString,
-    RuntimeVersionArn: smithyClient.expectString,
-    UpdateRuntimeOn: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_RemoveLayerVersionPermissionCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_RemovePermissionCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_SendDurableExecutionCallbackFailureCommand = async (
-  output,
-  context,
-) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_SendDurableExecutionCallbackHeartbeatCommand = async (
-  output,
-  context,
-) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_SendDurableExecutionCallbackSuccessCommand = async (
-  output,
-  context,
-) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_StopDurableExecutionCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    StopTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_TagResourceCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_UntagResourceCommand = async (output, context) => {
-  if (output.statusCode !== 204 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  await smithyClient.collectBody(output.body, context);
-  return contents;
-};
-const de_UpdateAliasCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AliasArn: smithyClient.expectString,
-    Description: smithyClient.expectString,
-    FunctionVersion: smithyClient.expectString,
-    Name: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    RoutingConfig: (_) => de_AliasRoutingConfiguration(_),
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_UpdateCodeSigningConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    CodeSigningConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_UpdateEventSourceMappingCommand = async (output, context) => {
-  if (output.statusCode !== 202 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AmazonManagedKafkaEventSourceConfig: smithyClient._json,
-    BatchSize: smithyClient.expectInt32,
-    BisectBatchOnFunctionError: smithyClient.expectBoolean,
-    DestinationConfig: smithyClient._json,
-    DocumentDBEventSourceConfig: smithyClient._json,
-    EventSourceArn: smithyClient.expectString,
-    EventSourceMappingArn: smithyClient.expectString,
-    FilterCriteria: smithyClient._json,
-    FilterCriteriaError: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionResponseTypes: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    LastProcessingResult: smithyClient.expectString,
-    MaximumBatchingWindowInSeconds: smithyClient.expectInt32,
-    MaximumRecordAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-    MetricsConfig: smithyClient._json,
-    ParallelizationFactor: smithyClient.expectInt32,
-    ProvisionedPollerConfig: smithyClient._json,
-    Queues: smithyClient._json,
-    ScalingConfig: smithyClient._json,
-    SelfManagedEventSource: smithyClient._json,
-    SelfManagedKafkaEventSourceConfig: smithyClient._json,
-    SourceAccessConfigurations: smithyClient._json,
-    StartingPosition: smithyClient.expectString,
-    StartingPositionTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    State: smithyClient.expectString,
-    StateTransitionReason: smithyClient.expectString,
-    Topics: smithyClient._json,
-    TumblingWindowInSeconds: smithyClient.expectInt32,
-    UUID: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_UpdateFunctionCodeCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Architectures: smithyClient._json,
-    CodeSha256: smithyClient.expectString,
-    CodeSize: smithyClient.expectLong,
-    DeadLetterConfig: smithyClient._json,
-    Description: smithyClient.expectString,
-    DurableConfig: smithyClient._json,
-    Environment: smithyClient._json,
-    EphemeralStorage: smithyClient._json,
-    FileSystemConfigs: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionName: smithyClient.expectString,
-    Handler: smithyClient.expectString,
-    ImageConfigResponse: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: smithyClient.expectString,
-    LastUpdateStatus: smithyClient.expectString,
-    LastUpdateStatusReason: smithyClient.expectString,
-    LastUpdateStatusReasonCode: smithyClient.expectString,
-    Layers: smithyClient._json,
-    LoggingConfig: smithyClient._json,
-    MasterArn: smithyClient.expectString,
-    MemorySize: smithyClient.expectInt32,
-    PackageType: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    Role: smithyClient.expectString,
-    Runtime: smithyClient.expectString,
-    RuntimeVersionConfig: smithyClient._json,
-    SigningJobArn: smithyClient.expectString,
-    SigningProfileVersionArn: smithyClient.expectString,
-    SnapStart: smithyClient._json,
-    State: smithyClient.expectString,
-    StateReason: smithyClient.expectString,
-    StateReasonCode: smithyClient.expectString,
-    Timeout: smithyClient.expectInt32,
-    TracingConfig: smithyClient._json,
-    Version: smithyClient.expectString,
-    VpcConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_UpdateFunctionConfigurationCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    Architectures: smithyClient._json,
-    CodeSha256: smithyClient.expectString,
-    CodeSize: smithyClient.expectLong,
-    DeadLetterConfig: smithyClient._json,
-    Description: smithyClient.expectString,
-    DurableConfig: smithyClient._json,
-    Environment: smithyClient._json,
-    EphemeralStorage: smithyClient._json,
-    FileSystemConfigs: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionName: smithyClient.expectString,
-    Handler: smithyClient.expectString,
-    ImageConfigResponse: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: smithyClient.expectString,
-    LastUpdateStatus: smithyClient.expectString,
-    LastUpdateStatusReason: smithyClient.expectString,
-    LastUpdateStatusReasonCode: smithyClient.expectString,
-    Layers: smithyClient._json,
-    LoggingConfig: smithyClient._json,
-    MasterArn: smithyClient.expectString,
-    MemorySize: smithyClient.expectInt32,
-    PackageType: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    Role: smithyClient.expectString,
-    Runtime: smithyClient.expectString,
-    RuntimeVersionConfig: smithyClient._json,
-    SigningJobArn: smithyClient.expectString,
-    SigningProfileVersionArn: smithyClient.expectString,
-    SnapStart: smithyClient._json,
-    State: smithyClient.expectString,
-    StateReason: smithyClient.expectString,
-    StateReasonCode: smithyClient.expectString,
-    Timeout: smithyClient.expectInt32,
-    TracingConfig: smithyClient._json,
-    Version: smithyClient.expectString,
-    VpcConfig: smithyClient._json,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_UpdateFunctionEventInvokeConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    DestinationConfig: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    MaximumEventAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_UpdateFunctionUrlConfigCommand = async (output, context) => {
-  if (output.statusCode !== 200 && output.statusCode >= 300) {
-    return de_CommandError(output, context);
-  }
-  const contents = smithyClient.map({
-    $metadata: deserializeMetadata(output),
-  });
-  const data = smithyClient.expectNonNull(
-    smithyClient.expectObject(await core$1.parseJsonBody(output.body, context)),
-    "body",
-  );
-  const doc = smithyClient.take(data, {
-    AuthType: smithyClient.expectString,
-    Cors: smithyClient._json,
-    CreationTime: smithyClient.expectString,
-    FunctionArn: smithyClient.expectString,
-    FunctionUrl: smithyClient.expectString,
-    InvokeMode: smithyClient.expectString,
-    LastModifiedTime: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  return contents;
-};
-const de_CommandError = async (output, context) => {
-  const parsedOutput = {
-    ...output,
-    body: await core$1.parseJsonErrorBody(output.body, context),
-  };
-  const errorCode = core$1.loadRestJsonErrorCode(output, parsedOutput.body);
-  switch (errorCode) {
-    case "InvalidParameterValueException":
-    case "com.amazonaws.lambda#InvalidParameterValueException":
-      throw await de_InvalidParameterValueExceptionRes(parsedOutput);
-    case "PolicyLengthExceededException":
-    case "com.amazonaws.lambda#PolicyLengthExceededException":
-      throw await de_PolicyLengthExceededExceptionRes(parsedOutput);
-    case "PreconditionFailedException":
-    case "com.amazonaws.lambda#PreconditionFailedException":
-      throw await de_PreconditionFailedExceptionRes(parsedOutput);
-    case "ResourceConflictException":
-    case "com.amazonaws.lambda#ResourceConflictException":
-      throw await de_ResourceConflictExceptionRes(parsedOutput);
-    case "ResourceNotFoundException":
-    case "com.amazonaws.lambda#ResourceNotFoundException":
-      throw await de_ResourceNotFoundExceptionRes(parsedOutput);
-    case "ServiceException":
-    case "com.amazonaws.lambda#ServiceException":
-      throw await de_ServiceExceptionRes(parsedOutput);
-    case "TooManyRequestsException":
-    case "com.amazonaws.lambda#TooManyRequestsException":
-      throw await de_TooManyRequestsExceptionRes(parsedOutput);
-    case "CodeSigningConfigNotFoundException":
-    case "com.amazonaws.lambda#CodeSigningConfigNotFoundException":
-      throw await de_CodeSigningConfigNotFoundExceptionRes(parsedOutput);
-    case "CodeStorageExceededException":
-    case "com.amazonaws.lambda#CodeStorageExceededException":
-      throw await de_CodeStorageExceededExceptionRes(parsedOutput);
-    case "CodeVerificationFailedException":
-    case "com.amazonaws.lambda#CodeVerificationFailedException":
-      throw await de_CodeVerificationFailedExceptionRes(parsedOutput);
-    case "InvalidCodeSignatureException":
-    case "com.amazonaws.lambda#InvalidCodeSignatureException":
-      throw await de_InvalidCodeSignatureExceptionRes(parsedOutput);
-    case "ResourceInUseException":
-    case "com.amazonaws.lambda#ResourceInUseException":
-      throw await de_ResourceInUseExceptionRes(parsedOutput);
-    case "ProvisionedConcurrencyConfigNotFoundException":
-    case "com.amazonaws.lambda#ProvisionedConcurrencyConfigNotFoundException":
-      throw await de_ProvisionedConcurrencyConfigNotFoundExceptionRes(
-        parsedOutput,
-      );
-    case "DurableExecutionAlreadyStartedException":
-    case "com.amazonaws.lambda#DurableExecutionAlreadyStartedException":
-      throw await de_DurableExecutionAlreadyStartedExceptionRes(parsedOutput);
-    case "EC2AccessDeniedException":
-    case "com.amazonaws.lambda#EC2AccessDeniedException":
-      throw await de_EC2AccessDeniedExceptionRes(parsedOutput);
-    case "EC2ThrottledException":
-    case "com.amazonaws.lambda#EC2ThrottledException":
-      throw await de_EC2ThrottledExceptionRes(parsedOutput);
-    case "EC2UnexpectedException":
-    case "com.amazonaws.lambda#EC2UnexpectedException":
-      throw await de_EC2UnexpectedExceptionRes(parsedOutput);
-    case "EFSIOException":
-    case "com.amazonaws.lambda#EFSIOException":
-      throw await de_EFSIOExceptionRes(parsedOutput);
-    case "EFSMountConnectivityException":
-    case "com.amazonaws.lambda#EFSMountConnectivityException":
-      throw await de_EFSMountConnectivityExceptionRes(parsedOutput);
-    case "EFSMountFailureException":
-    case "com.amazonaws.lambda#EFSMountFailureException":
-      throw await de_EFSMountFailureExceptionRes(parsedOutput);
-    case "EFSMountTimeoutException":
-    case "com.amazonaws.lambda#EFSMountTimeoutException":
-      throw await de_EFSMountTimeoutExceptionRes(parsedOutput);
-    case "ENILimitReachedException":
-    case "com.amazonaws.lambda#ENILimitReachedException":
-      throw await de_ENILimitReachedExceptionRes(parsedOutput);
-    case "InvalidRequestContentException":
-    case "com.amazonaws.lambda#InvalidRequestContentException":
-      throw await de_InvalidRequestContentExceptionRes(parsedOutput);
-    case "InvalidRuntimeException":
-    case "com.amazonaws.lambda#InvalidRuntimeException":
-      throw await de_InvalidRuntimeExceptionRes(parsedOutput);
-    case "InvalidSecurityGroupIDException":
-    case "com.amazonaws.lambda#InvalidSecurityGroupIDException":
-      throw await de_InvalidSecurityGroupIDExceptionRes(parsedOutput);
-    case "InvalidSubnetIDException":
-    case "com.amazonaws.lambda#InvalidSubnetIDException":
-      throw await de_InvalidSubnetIDExceptionRes(parsedOutput);
-    case "InvalidZipFileException":
-    case "com.amazonaws.lambda#InvalidZipFileException":
-      throw await de_InvalidZipFileExceptionRes(parsedOutput);
-    case "KMSAccessDeniedException":
-    case "com.amazonaws.lambda#KMSAccessDeniedException":
-      throw await de_KMSAccessDeniedExceptionRes(parsedOutput);
-    case "KMSDisabledException":
-    case "com.amazonaws.lambda#KMSDisabledException":
-      throw await de_KMSDisabledExceptionRes(parsedOutput);
-    case "KMSInvalidStateException":
-    case "com.amazonaws.lambda#KMSInvalidStateException":
-      throw await de_KMSInvalidStateExceptionRes(parsedOutput);
-    case "KMSNotFoundException":
-    case "com.amazonaws.lambda#KMSNotFoundException":
-      throw await de_KMSNotFoundExceptionRes(parsedOutput);
-    case "RecursiveInvocationException":
-    case "com.amazonaws.lambda#RecursiveInvocationException":
-      throw await de_RecursiveInvocationExceptionRes(parsedOutput);
-    case "RequestTooLargeException":
-    case "com.amazonaws.lambda#RequestTooLargeException":
-      throw await de_RequestTooLargeExceptionRes(parsedOutput);
-    case "ResourceNotReadyException":
-    case "com.amazonaws.lambda#ResourceNotReadyException":
-      throw await de_ResourceNotReadyExceptionRes(parsedOutput);
-    case "SnapStartException":
-    case "com.amazonaws.lambda#SnapStartException":
-      throw await de_SnapStartExceptionRes(parsedOutput);
-    case "SnapStartNotReadyException":
-    case "com.amazonaws.lambda#SnapStartNotReadyException":
-      throw await de_SnapStartNotReadyExceptionRes(parsedOutput);
-    case "SnapStartTimeoutException":
-    case "com.amazonaws.lambda#SnapStartTimeoutException":
-      throw await de_SnapStartTimeoutExceptionRes(parsedOutput);
-    case "SubnetIPAddressLimitReachedException":
-    case "com.amazonaws.lambda#SubnetIPAddressLimitReachedException":
-      throw await de_SubnetIPAddressLimitReachedExceptionRes(parsedOutput);
-    case "UnsupportedMediaTypeException":
-    case "com.amazonaws.lambda#UnsupportedMediaTypeException":
-      throw await de_UnsupportedMediaTypeExceptionRes(parsedOutput);
-    case "CallbackTimeoutException":
-    case "com.amazonaws.lambda#CallbackTimeoutException":
-      throw await de_CallbackTimeoutExceptionRes(parsedOutput);
-    default:
-      const parsedBody = parsedOutput.body;
-      return throwDefaultError({
-        output,
-        parsedBody,
-        errorCode,
-      });
-  }
-};
-const throwDefaultError = smithyClient.withBaseException(
-  LambdaServiceException,
-);
-const de_CallbackTimeoutExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new CallbackTimeoutException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_CodeSigningConfigNotFoundExceptionRes = async (
-  parsedOutput,
-  context,
-) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new CodeSigningConfigNotFoundException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_CodeStorageExceededExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new CodeStorageExceededException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_CodeVerificationFailedExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new CodeVerificationFailedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_DurableExecutionAlreadyStartedExceptionRes = async (
-  parsedOutput,
-  context,
-) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new DurableExecutionAlreadyStartedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_EC2AccessDeniedExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new EC2AccessDeniedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_EC2ThrottledExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new EC2ThrottledException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_EC2UnexpectedExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    EC2ErrorCode: smithyClient.expectString,
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new EC2UnexpectedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_EFSIOExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new EFSIOException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_EFSMountConnectivityExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new EFSMountConnectivityException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_EFSMountFailureExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new EFSMountFailureException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_EFSMountTimeoutExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new EFSMountTimeoutException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_ENILimitReachedExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new ENILimitReachedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvalidCodeSignatureExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new InvalidCodeSignatureException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvalidParameterValueExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new InvalidParameterValueException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvalidRequestContentExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new InvalidRequestContentException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvalidRuntimeExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new InvalidRuntimeException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvalidSecurityGroupIDExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new InvalidSecurityGroupIDException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvalidSubnetIDExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new InvalidSubnetIDException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvalidZipFileExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new InvalidZipFileException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_KMSAccessDeniedExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new KMSAccessDeniedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_KMSDisabledExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new KMSDisabledException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_KMSInvalidStateExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new KMSInvalidStateException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_KMSNotFoundExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new KMSNotFoundException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_PolicyLengthExceededExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new PolicyLengthExceededException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_PreconditionFailedExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new PreconditionFailedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_ProvisionedConcurrencyConfigNotFoundExceptionRes = async (
-  parsedOutput,
-  context,
-) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new ProvisionedConcurrencyConfigNotFoundException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_RecursiveInvocationExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new RecursiveInvocationException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_RequestTooLargeExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new RequestTooLargeException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_ResourceConflictExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new ResourceConflictException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_ResourceInUseExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new ResourceInUseException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_ResourceNotFoundExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new ResourceNotFoundException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_ResourceNotReadyExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new ResourceNotReadyException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_ServiceExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new ServiceException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_SnapStartExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new SnapStartException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_SnapStartNotReadyExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new SnapStartNotReadyException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_SnapStartTimeoutExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new SnapStartTimeoutException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_SubnetIPAddressLimitReachedExceptionRes = async (
-  parsedOutput,
-  context,
-) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Message: smithyClient.expectString,
-    Type: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new SubnetIPAddressLimitReachedException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_TooManyRequestsExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({
-    [_rAS]: [, parsedOutput.headers[_ra]],
-  });
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Reason: smithyClient.expectString,
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new TooManyRequestsException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_UnsupportedMediaTypeExceptionRes = async (parsedOutput, context) => {
-  const contents = smithyClient.map({});
-  const data = parsedOutput.body;
-  const doc = smithyClient.take(data, {
-    Type: smithyClient.expectString,
-    message: smithyClient.expectString,
-  });
-  Object.assign(contents, doc);
-  const exception = new UnsupportedMediaTypeException({
-    $metadata: deserializeMetadata(parsedOutput),
-    ...contents,
-  });
-  return smithyClient.decorateServiceException(exception, parsedOutput.body);
-};
-const de_InvokeWithResponseStreamResponseEvent = (output, context) => {
-  return context.eventStreamMarshaller.deserialize(output, async (event) => {
-    if (event["PayloadChunk"] != null) {
-      return {
-        PayloadChunk: await de_InvokeResponseStreamUpdate_event(
-          event["PayloadChunk"],
-        ),
-      };
-    }
-    if (event["InvokeComplete"] != null) {
-      return {
-        InvokeComplete: await de_InvokeWithResponseStreamCompleteEvent_event(
-          event["InvokeComplete"],
-          context,
-        ),
-      };
-    }
-    return { $unknown: event };
-  });
-};
-const de_InvokeResponseStreamUpdate_event = async (output, context) => {
-  const contents = {};
-  contents.Payload = output.body;
-  return contents;
-};
-const de_InvokeWithResponseStreamCompleteEvent_event = async (
-  output,
-  context,
-) => {
-  const contents = {};
-  const data = await core$1.parseJsonBody(output.body, context);
-  Object.assign(contents, smithyClient._json(data));
-  return contents;
-};
-const se_AdditionalVersionWeights = (input, context) => {
-  return Object.entries(input).reduce((acc, [key, value]) => {
-    if (value === null) {
-      return acc;
-    }
-    acc[key] = smithyClient.serializeFloat(value);
-    return acc;
-  }, {});
-};
-const se_AliasRoutingConfiguration = (input, context) => {
-  return smithyClient.take(input, {
-    AdditionalVersionWeights: (_) => se_AdditionalVersionWeights(_),
-  });
-};
-const se_FunctionCode = (input, context) => {
-  return smithyClient.take(input, {
-    ImageUri: [],
-    S3Bucket: [],
-    S3Key: [],
-    S3ObjectVersion: [],
-    SourceKMSKeyArn: [],
-    ZipFile: context.base64Encoder,
-  });
-};
-const se_LayerVersionContentInput = (input, context) => {
-  return smithyClient.take(input, {
-    S3Bucket: [],
-    S3Key: [],
-    S3ObjectVersion: [],
-    ZipFile: context.base64Encoder,
-  });
-};
-const de_AdditionalVersionWeights = (output, context) => {
-  return Object.entries(output).reduce((acc, [key, value]) => {
-    if (value === null) {
-      return acc;
-    }
-    acc[key] = smithyClient.limitedParseDouble(value);
-    return acc;
-  }, {});
-};
-const de_AliasConfiguration = (output, context) => {
-  return smithyClient.take(output, {
-    AliasArn: smithyClient.expectString,
-    Description: smithyClient.expectString,
-    FunctionVersion: smithyClient.expectString,
-    Name: smithyClient.expectString,
-    RevisionId: smithyClient.expectString,
-    RoutingConfig: (_) => de_AliasRoutingConfiguration(_),
-  });
-};
-const de_AliasList = (output, context) => {
-  const retVal = (output || [])
-    .filter((e) => e != null)
-    .map((entry) => {
-      return de_AliasConfiguration(entry);
-    });
-  return retVal;
-};
-const de_AliasRoutingConfiguration = (output, context) => {
-  return smithyClient.take(output, {
-    AdditionalVersionWeights: (_) => de_AdditionalVersionWeights(_),
-  });
-};
-const de_CheckpointUpdatedExecutionState = (output, context) => {
-  return smithyClient.take(output, {
-    NextMarker: smithyClient.expectString,
-    Operations: (_) => de_Operations(_),
-  });
-};
-const de_DurableExecutions = (output, context) => {
-  const retVal = (output || [])
-    .filter((e) => e != null)
-    .map((entry) => {
-      return de_Execution(entry);
-    });
-  return retVal;
-};
-const de_Event = (output, context) => {
-  return smithyClient.take(output, {
-    CallbackFailedDetails: smithyClient._json,
-    CallbackStartedDetails: smithyClient._json,
-    CallbackSucceededDetails: smithyClient._json,
-    CallbackTimedOutDetails: smithyClient._json,
-    ChainedInvokeFailedDetails: smithyClient._json,
-    ChainedInvokeStartedDetails: smithyClient._json,
-    ChainedInvokeStoppedDetails: smithyClient._json,
-    ChainedInvokeSucceededDetails: smithyClient._json,
-    ChainedInvokeTimedOutDetails: smithyClient._json,
-    ContextFailedDetails: smithyClient._json,
-    ContextStartedDetails: smithyClient._json,
-    ContextSucceededDetails: smithyClient._json,
-    EventId: smithyClient.expectInt32,
-    EventTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    EventType: smithyClient.expectString,
-    ExecutionFailedDetails: smithyClient._json,
-    ExecutionStartedDetails: smithyClient._json,
-    ExecutionStoppedDetails: smithyClient._json,
-    ExecutionSucceededDetails: smithyClient._json,
-    ExecutionTimedOutDetails: smithyClient._json,
-    Id: smithyClient.expectString,
-    InvocationCompletedDetails: (_) => de_InvocationCompletedDetails(_),
-    Name: smithyClient.expectString,
-    ParentId: smithyClient.expectString,
-    StepFailedDetails: smithyClient._json,
-    StepStartedDetails: smithyClient._json,
-    StepSucceededDetails: smithyClient._json,
-    SubType: smithyClient.expectString,
-    WaitCancelledDetails: smithyClient._json,
-    WaitStartedDetails: (_) => de_WaitStartedDetails(_),
-    WaitSucceededDetails: smithyClient._json,
-  });
-};
-const de_Events = (output, context) => {
-  const retVal = (output || [])
-    .filter((e) => e != null)
-    .map((entry) => {
-      return de_Event(entry);
-    });
-  return retVal;
-};
-const de_EventSourceMappingConfiguration = (output, context) => {
-  return smithyClient.take(output, {
-    AmazonManagedKafkaEventSourceConfig: smithyClient._json,
-    BatchSize: smithyClient.expectInt32,
-    BisectBatchOnFunctionError: smithyClient.expectBoolean,
-    DestinationConfig: smithyClient._json,
-    DocumentDBEventSourceConfig: smithyClient._json,
-    EventSourceArn: smithyClient.expectString,
-    EventSourceMappingArn: smithyClient.expectString,
-    FilterCriteria: smithyClient._json,
-    FilterCriteriaError: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    FunctionResponseTypes: smithyClient._json,
-    KMSKeyArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    LastProcessingResult: smithyClient.expectString,
-    MaximumBatchingWindowInSeconds: smithyClient.expectInt32,
-    MaximumRecordAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-    MetricsConfig: smithyClient._json,
-    ParallelizationFactor: smithyClient.expectInt32,
-    ProvisionedPollerConfig: smithyClient._json,
-    Queues: smithyClient._json,
-    ScalingConfig: smithyClient._json,
-    SelfManagedEventSource: smithyClient._json,
-    SelfManagedKafkaEventSourceConfig: smithyClient._json,
-    SourceAccessConfigurations: smithyClient._json,
-    StartingPosition: smithyClient.expectString,
-    StartingPositionTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    State: smithyClient.expectString,
-    StateTransitionReason: smithyClient.expectString,
-    Topics: smithyClient._json,
-    TumblingWindowInSeconds: smithyClient.expectInt32,
-    UUID: smithyClient.expectString,
-  });
-};
-const de_EventSourceMappingsList = (output, context) => {
-  const retVal = (output || [])
-    .filter((e) => e != null)
-    .map((entry) => {
-      return de_EventSourceMappingConfiguration(entry);
-    });
-  return retVal;
-};
-const de_Execution = (output, context) => {
-  return smithyClient.take(output, {
-    DurableExecutionArn: smithyClient.expectString,
-    DurableExecutionName: smithyClient.expectString,
-    EndTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    FunctionArn: smithyClient.expectString,
-    StartTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    Status: smithyClient.expectString,
-  });
-};
-const de_FunctionEventInvokeConfig = (output, context) => {
-  return smithyClient.take(output, {
-    DestinationConfig: smithyClient._json,
-    FunctionArn: smithyClient.expectString,
-    LastModified: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    MaximumEventAgeInSeconds: smithyClient.expectInt32,
-    MaximumRetryAttempts: smithyClient.expectInt32,
-  });
-};
-const de_FunctionEventInvokeConfigList = (output, context) => {
-  const retVal = (output || [])
-    .filter((e) => e != null)
-    .map((entry) => {
-      return de_FunctionEventInvokeConfig(entry);
-    });
-  return retVal;
-};
-const de_InvocationCompletedDetails = (output, context) => {
-  return smithyClient.take(output, {
-    EndTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    Error: smithyClient._json,
-    RequestId: smithyClient.expectString,
-    StartTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-  });
-};
-const de_Operation = (output, context) => {
-  return smithyClient.take(output, {
-    CallbackDetails: smithyClient._json,
-    ChainedInvokeDetails: smithyClient._json,
-    ContextDetails: smithyClient._json,
-    EndTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    ExecutionDetails: smithyClient._json,
-    Id: smithyClient.expectString,
-    Name: smithyClient.expectString,
-    ParentId: smithyClient.expectString,
-    StartTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    Status: smithyClient.expectString,
-    StepDetails: (_) => de_StepDetails(_),
-    SubType: smithyClient.expectString,
-    Type: smithyClient.expectString,
-    WaitDetails: (_) => de_WaitDetails(_),
-  });
-};
-const de_Operations = (output, context) => {
-  const retVal = (output || [])
-    .filter((e) => e != null)
-    .map((entry) => {
-      return de_Operation(entry);
-    });
-  return retVal;
-};
-const de_StepDetails = (output, context) => {
-  return smithyClient.take(output, {
-    Attempt: smithyClient.expectInt32,
-    Error: smithyClient._json,
-    NextAttemptTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-    Result: smithyClient.expectString,
-  });
-};
-const de_WaitDetails = (output, context) => {
-  return smithyClient.take(output, {
-    ScheduledEndTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-  });
-};
-const de_WaitStartedDetails = (output, context) => {
-  return smithyClient.take(output, {
-    Duration: smithyClient.expectInt32,
-    ScheduledEndTimestamp: (_) =>
-      smithyClient.expectNonNull(
-        smithyClient.parseEpochTimestamp(smithyClient.expectNumber(_)),
-      ),
-  });
-};
-const deserializeMetadata = (output) => ({
-  httpStatusCode: output.statusCode,
-  requestId:
-    output.headers["x-amzn-requestid"] ??
-    output.headers["x-amzn-request-id"] ??
-    output.headers["x-amz-request-id"],
-  extendedRequestId: output.headers["x-amz-id-2"],
-  cfId: output.headers["x-amz-cf-id"],
-});
-const _A = "Arn";
-const _CA = "CompatibleArchitecture";
+const _A = "Action";
+const _AA = "AliasArn";
+const _AC = "AliasConfiguration";
+const _ACc = "AccessConfigs";
+const _ACl = "AllowCredentials";
+const _AH = "AllowHeaders";
+const _AL = "AccountLimit";
+const _ALL = "ApplicationLogLevel";
+const _ALVP = "AddLayerVersionPermission";
+const _ALVPR = "AddLayerVersionPermissionRequest";
+const _ALVPRd = "AddLayerVersionPermissionResponse";
+const _ALl = "AliasList";
+const _AM = "AllowMethods";
+const _AMKESC = "AmazonManagedKafkaEventSourceConfig";
+const _AO = "AllowOrigins";
+const _AOp = "ApplyOn";
+const _AP = "AllowedPublishers";
+const _APCE = "AvailableProvisionedConcurrentExecutions";
+const _APCEl = "AllocatedProvisionedConcurrentExecutions";
+const _APR = "AddPermissionRequest";
+const _APRd = "AddPermissionResponse";
+const _APd = "AddPermission";
+const _ARC = "AliasRoutingConfiguration";
+const _AT = "AuthType";
+const _AU = "AccountUsage";
+const _AVW = "AdditionalVersionWeights";
+const _Al = "Aliases";
+const _Ar = "Architectures";
+const _Arn = "Arn";
+const _At = "Attribute";
+const _Att = "Attempt";
+const _B = "Blob";
+const _BBOFE = "BisectBatchOnFunctionError";
+const _BOP = "BinaryOperationPayload";
+const _BS = "BlobStream";
+const _BSa = "BatchSize";
+const _C = "Concurrency";
+const _CA = "CompatibleArchitectures";
+const _CAR = "CreateAliasRequest";
+const _CAo = "CompatibleArchitecture";
+const _CAr = "CreateAlias";
+const _CAu = "CurrentAttempt";
 const _CC = "ClientContext";
-const _CR = "CompatibleRuntime";
+const _CCSC = "CreateCodeSigningConfig";
+const _CCSCR = "CreateCodeSigningConfigRequest";
+const _CCSCRr = "CreateCodeSigningConfigResponse";
+const _CD = "CallbackDetails";
+const _CDE = "CheckpointDurableExecution";
+const _CDER = "CheckpointDurableExecutionRequest";
+const _CDERh = "CheckpointDurableExecutionResponse";
+const _CDo = "ContextDetails";
+const _CDr = "CreatedDate";
+const _CE = "ConcurrentExecutions";
+const _CESM = "CreateEventSourceMapping";
+const _CESMR = "CreateEventSourceMappingRequest";
+const _CF = "CreateFunction";
+const _CFD = "CallbackFailedDetails";
+const _CFDo = "ContextFailedDetails";
+const _CFR = "CreateFunctionRequest";
+const _CFUC = "CreateFunctionUrlConfig";
+const _CFUCR = "CreateFunctionUrlConfigRequest";
+const _CFUCRr = "CreateFunctionUrlConfigResponse";
+const _CGI = "ConsumerGroupId";
+const _CI = "CallbackId";
+const _CID = "ChainedInvokeDetails";
+const _CIFD = "ChainedInvokeFailedDetails";
+const _CIO = "ChainedInvokeOptions";
+const _CISD = "ChainedInvokeStartedDetails";
+const _CISDh = "ChainedInvokeStoppedDetails";
+const _CISDha = "ChainedInvokeSucceededDetails";
+const _CITOD = "ChainedInvokeTimedOutDetails";
+const _CN = "CollectionName";
+const _CO = "CallbackOptions";
+const _COo = "ContextOptions";
+const _CR = "CompatibleRuntimes";
+const _CRo = "CompatibleRuntime";
+const _CS = "CodeSize";
+const _CSC = "CodeSigningConfig";
+const _CSCA = "CodeSigningConfigArn";
+const _CSCI = "CodeSigningConfigId";
+const _CSCL = "CodeSigningConfigList";
+const _CSCNFE = "CodeSigningConfigNotFoundException";
+const _CSCo = "CodeSigningConfigs";
+const _CSD = "CallbackStartedDetails";
+const _CSDa = "CallbackSucceededDetails";
+const _CSDo = "ContextStartedDetails";
+const _CSDon = "ContextSucceededDetails";
+const _CSEE = "CodeStorageExceededException";
+const _CSP = "CodeSigningPolicies";
+const _CSU = "CodeSizeUnzipped";
+const _CSZ = "CodeSizeZipped";
+const _CSo = "CodeSha256";
 const _CT = "CheckpointToken";
+const _CTE = "CallbackTimeoutException";
+const _CTOD = "CallbackTimedOutDetails";
+const _CT_ = "Content-Type";
+const _CTl = "ClientToken";
+const _CTr = "CreationTime";
+const _CUES = "CheckpointUpdatedExecutionState";
+const _CVFE = "CodeVerificationFailedException";
+const _Co = "Cors";
+const _Cod = "Code";
+const _Com = "Command";
+const _Con = "Configuration";
+const _Cont = "Content";
+const _D = "Description";
+const _DA = "DeleteAlias";
+const _DAR = "DeleteAliasRequest";
+const _DC = "DestinationConfig";
+const _DCSC = "DeleteCodeSigningConfig";
+const _DCSCR = "DeleteCodeSigningConfigRequest";
+const _DCSCRe = "DeleteCodeSigningConfigResponse";
+const _DCu = "DurableConfig";
+const _DDBESC = "DocumentDBEventSourceConfig";
+const _DE = "DurableExecutions";
 const _DEA = "DurableExecutionArn";
+const _DEASE = "DurableExecutionAlreadyStartedException";
 const _DEN = "DurableExecutionName";
+const _DESM = "DeleteEventSourceMapping";
+const _DESMR = "DeleteEventSourceMappingRequest";
+const _DF = "DeleteFunction";
+const _DFC = "DeleteFunctionConcurrency";
+const _DFCR = "DeleteFunctionConcurrencyRequest";
+const _DFCSC = "DeleteFunctionCodeSigningConfig";
+const _DFCSCR = "DeleteFunctionCodeSigningConfigRequest";
+const _DFEIC = "DeleteFunctionEventInvokeConfig";
+const _DFEICR = "DeleteFunctionEventInvokeConfigRequest";
+const _DFR = "DeleteFunctionRequest";
+const _DFUC = "DeleteFunctionUrlConfig";
+const _DFUCR = "DeleteFunctionUrlConfigRequest";
+const _DLC = "DeadLetterConfig";
+const _DLV = "DeleteLayerVersion";
+const _DLVR = "DeleteLayerVersionRequest";
+const _DN = "DatabaseName";
+const _DPCC = "DeleteProvisionedConcurrencyConfig";
+const _DPCCR = "DeleteProvisionedConcurrencyConfigRequest";
+const _DR = "DryRun";
+const _De = "Destination";
+const _Du = "Duration";
+const _E = "Error";
+const _EC = "ErrorCode";
+const _ECADE = "EC2AccessDeniedException";
+const _ECEC = "EC2ErrorCode";
+const _ECTE = "EC2ThrottledException";
+const _ECUE = "EC2UnexpectedException";
+const _ED = "ErrorData";
+const _EDr = "ErrorDetails";
+const _EDx = "ExecutionDetails";
+const _EE = "EnvironmentError";
+const _EEv = "EventError";
+const _EFD = "ExecutionFailedDetails";
+const _EFSIOE = "EFSIOException";
+const _EFSMCE = "EFSMountConnectivityException";
+const _EFSMFE = "EFSMountFailureException";
+const _EFSMTE = "EFSMountTimeoutException";
+const _EH = "ExposeHeaders";
+const _EI = "EventId";
+const _EIv = "EventInput";
+const _EM = "ErrorMessage";
+const _ENILRE = "ENILimitReachedException";
+const _EO = "ErrorObject";
+const _EP = "EntryPoint";
+const _ER = "EnvironmentResponse";
+const _ERF = "EventRecordFormat";
+const _ERv = "EventResult";
+const _ES = "EphemeralStorage";
 const _ESA = "EventSourceArn";
+const _ESD = "ExecutionStartedDetails";
+const _ESDx = "ExecutionSucceededDetails";
+const _ESDxe = "ExecutionStoppedDetails";
+const _ESM = "EventSourceMappings";
+const _ESMA = "EventSourceMappingArn";
+const _ESMC = "EventSourceMappingConfiguration";
+const _ESML = "EventSourceMappingsList";
+const _ESMMC = "EventSourceMappingMetricsConfig";
+const _EST = "EventSourceToken";
+const _ESv = "EventStream";
+const _ET = "ErrorType";
+const _ETOD = "ExecutionTimedOutDetails";
+const _ETn = "EndTimestamp";
+const _ETv = "EventType";
+const _ETve = "EventTimestamp";
+const _ETx = "ExecutionTimeout";
 const _EV = "ExecutedVersion";
+const _EVN = "EnvironmentVariableName";
+const _EVV = "EnvironmentVariableValue";
+const _EVn = "EnvironmentVariables";
+const _En = "Enabled";
+const _End = "Endpoints";
+const _Env = "Environment";
+const _Ev = "Event";
+const _Eve = "Events";
+const _Ex = "Execution";
+const _F = "Filter";
+const _FA = "FunctionArn";
+const _FAu = "FunctionArns";
+const _FC = "FunctionCount";
+const _FCE = "FilterCriteriaError";
+const _FCL = "FunctionCodeLocation";
+const _FCi = "FilterCriteria";
+const _FCu = "FunctionCode";
+const _FCun = "FunctionConfiguration";
+const _FD = "FullDocument";
 const _FE = "FunctionError";
+const _FEIC = "FunctionEventInvokeConfig";
+const _FEICL = "FunctionEventInvokeConfigList";
+const _FEICu = "FunctionEventInvokeConfigs";
+const _FL = "FilterList";
+const _FLu = "FunctionList";
 const _FN = "FunctionName";
+const _FRT = "FunctionResponseTypes";
+const _FSC = "FileSystemConfigs";
+const _FSCL = "FileSystemConfigList";
+const _FSCi = "FileSystemConfig";
+const _FU = "FunctionUrl";
+const _FUAT = "FunctionUrlAuthType";
+const _FUC = "FunctionUrlConfig";
+const _FUCL = "FunctionUrlConfigList";
+const _FUCu = "FunctionUrlConfigs";
 const _FV = "FunctionVersion";
+const _Fi = "Filters";
+const _Fu = "Functions";
+const _GA = "GetAlias";
+const _GAR = "GetAliasRequest";
+const _GAS = "GetAccountSettings";
+const _GASR = "GetAccountSettingsRequest";
+const _GASRe = "GetAccountSettingsResponse";
+const _GCSC = "GetCodeSigningConfig";
+const _GCSCR = "GetCodeSigningConfigRequest";
+const _GCSCRe = "GetCodeSigningConfigResponse";
+const _GDE = "GetDurableExecution";
+const _GDEH = "GetDurableExecutionHistory";
+const _GDEHR = "GetDurableExecutionHistoryRequest";
+const _GDEHRe = "GetDurableExecutionHistoryResponse";
+const _GDER = "GetDurableExecutionRequest";
+const _GDERe = "GetDurableExecutionResponse";
+const _GDES = "GetDurableExecutionState";
+const _GDESR = "GetDurableExecutionStateRequest";
+const _GDESRe = "GetDurableExecutionStateResponse";
+const _GESM = "GetEventSourceMapping";
+const _GESMR = "GetEventSourceMappingRequest";
+const _GF = "GetFunction";
+const _GFC = "GetFunctionConcurrency";
+const _GFCR = "GetFunctionConcurrencyRequest";
+const _GFCRe = "GetFunctionConcurrencyResponse";
+const _GFCRet = "GetFunctionConfigurationRequest";
+const _GFCSC = "GetFunctionCodeSigningConfig";
+const _GFCSCR = "GetFunctionCodeSigningConfigRequest";
+const _GFCSCRe = "GetFunctionCodeSigningConfigResponse";
+const _GFCe = "GetFunctionConfiguration";
+const _GFEIC = "GetFunctionEventInvokeConfig";
+const _GFEICR = "GetFunctionEventInvokeConfigRequest";
+const _GFR = "GetFunctionRequest";
+const _GFRC = "GetFunctionRecursionConfig";
+const _GFRCR = "GetFunctionRecursionConfigRequest";
+const _GFRCRe = "GetFunctionRecursionConfigResponse";
+const _GFRe = "GetFunctionResponse";
+const _GFUC = "GetFunctionUrlConfig";
+const _GFUCR = "GetFunctionUrlConfigRequest";
+const _GFUCRe = "GetFunctionUrlConfigResponse";
+const _GLV = "GetLayerVersion";
+const _GLVBA = "GetLayerVersionByArn";
+const _GLVBAR = "GetLayerVersionByArnRequest";
+const _GLVP = "GetLayerVersionPolicy";
+const _GLVPR = "GetLayerVersionPolicyRequest";
+const _GLVPRe = "GetLayerVersionPolicyResponse";
+const _GLVR = "GetLayerVersionRequest";
+const _GLVRe = "GetLayerVersionResponse";
+const _GP = "GetPolicy";
+const _GPCC = "GetProvisionedConcurrencyConfig";
+const _GPCCR = "GetProvisionedConcurrencyConfigRequest";
+const _GPCCRe = "GetProvisionedConcurrencyConfigResponse";
+const _GPR = "GetPolicyRequest";
+const _GPRe = "GetPolicyResponse";
+const _GRMC = "GetRuntimeManagementConfig";
+const _GRMCR = "GetRuntimeManagementConfigRequest";
+const _GRMCRe = "GetRuntimeManagementConfigResponse";
+const _H = "Handler";
+const _HT = "HeartbeatTimeout";
+const _HTS = "HeartbeatTimeoutSeconds";
+const _I = "Input";
+const _IA = "InvokeArgs";
+const _IAFDS = "Ipv6AllowedForDualStack";
+const _IAR = "InvokeAsyncRequest";
+const _IARn = "InvokeAsyncResponse";
+const _IAn = "InvokeAsync";
+const _IC = "ImageConfig";
+const _ICD = "InvocationCompletedDetails";
+const _ICE = "ImageConfigError";
+const _ICR = "ImageConfigResponse";
+const _ICSE = "InvalidCodeSignatureException";
+const _ICn = "InvokeComplete";
 const _IED = "IncludeExecutionData";
+const _IM = "InvokeMode";
+const _IP = "InputPayload";
+const _IPVE = "InvalidParameterValueException";
+const _IR = "InvocationRequest";
+const _IRCE = "InvalidRequestContentException";
+const _IRE = "InvalidRuntimeException";
+const _IRSU = "InvokeResponseStreamUpdate";
+const _IRn = "InvocationResponse";
+const _ISGIDE = "InvalidSecurityGroupIDException";
+const _ISIDE = "InvalidSubnetIDException";
 const _IT = "InvocationType";
-const _L = "List";
+const _IU = "ImageUri";
+const _IVFU = "InvokedViaFunctionUrl";
+const _IWRS = "InvokeWithResponseStream";
+const _IWRSCE = "InvokeWithResponseStreamCompleteEvent";
+const _IWRSR = "InvokeWithResponseStreamRequest";
+const _IWRSRE = "InvokeWithResponseStreamResponseEvent";
+const _IWRSRn = "InvokeWithResponseStreamResponse";
+const _IZFE = "InvalidZipFileException";
+const _Id = "Id";
+const _In = "Invoke";
+const _KMSADE = "KMSAccessDeniedException";
+const _KMSDE = "KMSDisabledException";
+const _KMSISE = "KMSInvalidStateException";
+const _KMSKA = "KMSKeyArn";
+const _KMSNFE = "KMSNotFoundException";
+const _KSRAC = "KafkaSchemaRegistryAccessConfig";
+const _KSRACL = "KafkaSchemaRegistryAccessConfigList";
+const _KSRC = "KafkaSchemaRegistryConfig";
+const _KSVC = "KafkaSchemaValidationConfig";
+const _KSVCL = "KafkaSchemaValidationConfigList";
+const _L = "Layers";
+const _LA = "LayerArn";
+const _LAR = "ListAliasesRequest";
+const _LARi = "ListAliasesResponse";
+const _LAi = "ListAliases";
+const _LC = "LoggingConfig";
+const _LCSC = "ListCodeSigningConfigs";
+const _LCSCR = "ListCodeSigningConfigsRequest";
+const _LCSCRi = "ListCodeSigningConfigsResponse";
+const _LDEBF = "ListDurableExecutionsByFunction";
+const _LDEBFR = "ListDurableExecutionsByFunctionRequest";
+const _LDEBFRi = "ListDurableExecutionsByFunctionResponse";
+const _LESM = "ListEventSourceMappings";
+const _LESMR = "ListEventSourceMappingsRequest";
+const _LESMRi = "ListEventSourceMappingsResponse";
+const _LF = "LogFormat";
+const _LFBCSC = "ListFunctionsByCodeSigningConfig";
+const _LFBCSCR = "ListFunctionsByCodeSigningConfigRequest";
+const _LFBCSCRi = "ListFunctionsByCodeSigningConfigResponse";
+const _LFEIC = "ListFunctionEventInvokeConfigs";
+const _LFEICR = "ListFunctionEventInvokeConfigsRequest";
+const _LFEICRi = "ListFunctionEventInvokeConfigsResponse";
+const _LFR = "ListFunctionsRequest";
+const _LFRi = "ListFunctionsResponse";
+const _LFUC = "ListFunctionUrlConfigs";
+const _LFUCR = "ListFunctionUrlConfigsRequest";
+const _LFUCRi = "ListFunctionUrlConfigsResponse";
+const _LFi = "ListFunctions";
+const _LG = "LogGroup";
+const _LI = "LicenseInfo";
+const _LL = "LayersList";
+const _LLI = "LayersListItem";
+const _LLR = "ListLayersRequest";
+const _LLRi = "ListLayersResponse";
+const _LLV = "ListLayerVersions";
+const _LLVR = "ListLayerVersionsRequest";
+const _LLVRi = "ListLayerVersionsResponse";
+const _LLi = "ListLayers";
+const _LM = "LastModified";
+const _LMP = "LocalMountPath";
+const _LMT = "LastModifiedTime";
+const _LMV = "LatestMatchingVersion";
+const _LN = "LayerName";
+const _LPCC = "ListProvisionedConcurrencyConfigs";
+const _LPCCR = "ListProvisionedConcurrencyConfigsRequest";
+const _LPCCRi = "ListProvisionedConcurrencyConfigsResponse";
+const _LPR = "LastProcessingResult";
 const _LR = "LogResult";
+const _LRL = "LayersReferenceList";
 const _LT = "LogType";
-const _M = "Marker";
+const _LTR = "ListTagsRequest";
+const _LTRi = "ListTagsResponse";
+const _LTi = "ListTags";
+const _LUS = "LastUpdateStatus";
+const _LUSR = "LastUpdateStatusReason";
+const _LUSRC = "LastUpdateStatusReasonCode";
+const _LV = "LayerVersions";
+const _LVA = "LayerVersionArn";
+const _LVBF = "ListVersionsByFunction";
+const _LVBFR = "ListVersionsByFunctionRequest";
+const _LVBFRi = "ListVersionsByFunctionResponse";
+const _LVCI = "LayerVersionContentInput";
+const _LVCO = "LayerVersionContentOutput";
+const _LVL = "LayerVersionsList";
+const _LVLI = "LayerVersionsListItem";
+const _La = "Layer";
+const _Lo = "Location";
+const _M = "Message";
+const _MA = "MaxAge";
+const _MAa = "MasterArn";
+const _MBWIS = "MaximumBatchingWindowInSeconds";
+const _MC = "MetricsConfig";
+const _MCa = "MaximumConcurrency";
+const _MEAIS = "MaximumEventAgeInSeconds";
 const _MI = "MaxItems";
+const _MP = "MinimumPollers";
+const _MPa = "MaximumPollers";
 const _MR = "MasterRegion";
+const _MRA = "MaximumRetryAttempts";
+const _MRAIS = "MaximumRecordAgeInSeconds";
+const _MS = "MemorySize";
+const _Ma = "Marker";
+const _Me = "Metrics";
+const _Mo = "Mode";
+const _N = "Name";
+const _NADS = "NextAttemptDelaySeconds";
+const _NAT = "NextAttemptTimestamp";
+const _NES = "NewExecutionState";
+const _NM = "NextMarker";
+const _O = "Operations";
+const _OF = "OnFailure";
+const _OI = "OrganizationId";
+const _OP = "OperationPayload";
+const _OPu = "OutputPayload";
+const _OS = "OnSuccess";
+const _OSp = "OptimizationStatus";
+const _OU = "OperationUpdate";
+const _OUp = "OperationUpdates";
+const _Op = "Operation";
+const _P = "Principal";
+const _PC = "PayloadChunk";
+const _PCC = "ProvisionedConcurrencyConfigs";
+const _PCCL = "ProvisionedConcurrencyConfigList";
+const _PCCLI = "ProvisionedConcurrencyConfigListItem";
+const _PCCNFE = "ProvisionedConcurrencyConfigNotFoundException";
+const _PCE = "ProvisionedConcurrentExecutions";
+const _PF = "ParallelizationFactor";
+const _PFC = "PutFunctionConcurrency";
+const _PFCR = "PutFunctionConcurrencyRequest";
+const _PFCSC = "PutFunctionCodeSigningConfig";
+const _PFCSCR = "PutFunctionCodeSigningConfigRequest";
+const _PFCSCRu = "PutFunctionCodeSigningConfigResponse";
+const _PFE = "PreconditionFailedException";
+const _PFEIC = "PutFunctionEventInvokeConfig";
+const _PFEICR = "PutFunctionEventInvokeConfigRequest";
+const _PFRC = "PutFunctionRecursionConfig";
+const _PFRCR = "PutFunctionRecursionConfigRequest";
+const _PFRCRu = "PutFunctionRecursionConfigResponse";
+const _PI = "ParentId";
+const _PLEE = "PolicyLengthExceededException";
+const _PLV = "PublishLayerVersion";
+const _PLVR = "PublishLayerVersionRequest";
+const _PLVRu = "PublishLayerVersionResponse";
+const _POID = "PrincipalOrgID";
+const _PPC = "ProvisionedPollerConfig";
+const _PPCC = "PutProvisionedConcurrencyConfig";
+const _PPCCR = "PutProvisionedConcurrencyConfigRequest";
+const _PPCCRu = "PutProvisionedConcurrencyConfigResponse";
+const _PRMC = "PutRuntimeManagementConfig";
+const _PRMCR = "PutRuntimeManagementConfigRequest";
+const _PRMCRu = "PutRuntimeManagementConfigResponse";
+const _PT = "PackageType";
+const _PV = "PublishVersion";
+const _PVR = "PublishVersionRequest";
+const _Pa = "Payload";
+const _Pat = "Pattern";
+const _Po = "Policy";
+const _Pu = "Publish";
 const _Q = "Qualifier";
+const _Qu = "Queues";
+const _R = "Result";
+const _RA = "Retry-After";
+const _RC = "RoutingConfig";
+const _RCE = "ReservedConcurrentExecutions";
+const _RCEe = "ResourceConflictException";
+const _RCe = "ReplayChildren";
+const _RD = "RetryDetails";
 const _RI = "RevisionId";
+const _RIE = "RecursiveInvocationException";
+const _RIU = "ResolvedImageUri";
+const _RIUE = "ResourceInUseException";
+const _RIe = "RequestId";
+const _RL = "RecursiveLoop";
+const _RLVP = "RemoveLayerVersionPermission";
+const _RLVPR = "RemoveLayerVersionPermissionRequest";
+const _RNFE = "ResourceNotFoundException";
+const _RNRE = "ResourceNotReadyException";
 const _RO = "ReverseOrder";
+const _RP = "RemovePermission";
+const _RPCE = "RequestedProvisionedConcurrentExecutions";
+const _RPID = "RetentionPeriodInDays";
+const _RPR = "RemovePermissionRequest";
 const _RSCT = "ResponseStreamContentType";
-const _S = "Statuses";
-const _SA = "StartedAfter";
-const _SB = "StartedBefore";
+const _RT = "RepositoryType";
+const _RTLE = "RequestTooLargeException";
+const _RVA = "RuntimeVersionArn";
+const _RVC = "RuntimeVersionConfig";
+const _RVE = "RuntimeVersionError";
+const _Re = "Resource";
+const _Rea = "Reason";
+const _Ro = "Role";
+const _Ru = "Runtime";
+const _S = "Statement";
+const _SA = "SourceArn";
+const _SAC = "SourceAccessConfigurations";
+const _SACo = "SourceAccessConfiguration";
+const _SAo = "SourceAccount";
+const _SAt = "StartedAfter";
+const _SB = "S3Bucket";
+const _SBt = "StartedBefore";
+const _SC = "ScalingConfig";
+const _SCt = "StatusCode";
+const _SD = "StepDetails";
+const _SDE = "StopDurableExecution";
+const _SDECF = "SendDurableExecutionCallbackFailure";
+const _SDECFR = "SendDurableExecutionCallbackFailureRequest";
+const _SDECFRe = "SendDurableExecutionCallbackFailureResponse";
+const _SDECH = "SendDurableExecutionCallbackHeartbeat";
+const _SDECHR = "SendDurableExecutionCallbackHeartbeatRequest";
+const _SDECHRe = "SendDurableExecutionCallbackHeartbeatResponse";
+const _SDECS = "SendDurableExecutionCallbackSuccess";
+const _SDECSR = "SendDurableExecutionCallbackSuccessRequest";
+const _SDECSRe = "SendDurableExecutionCallbackSuccessResponse";
+const _SDER = "StopDurableExecutionRequest";
+const _SDERt = "StopDurableExecutionResponse";
+const _SE = "ServiceException";
+const _SET = "ScheduledEndTimestamp";
+const _SFD = "StepFailedDetails";
+const _SGI = "SecurityGroupIds";
+const _SI = "StatementId";
+const _SIPALRE = "SubnetIPAddressLimitReachedException";
+const _SIu = "SubnetIds";
+const _SJA = "SigningJobArn";
+const _SK = "S3Key";
+const _SKMSKA = "SourceKMSKeyArn";
+const _SLL = "SystemLogLevel";
+const _SMES = "SelfManagedEventSource";
+const _SMKESC = "SelfManagedKafkaEventSourceConfig";
+const _SO = "StepOptions";
+const _SOV = "S3ObjectVersion";
+const _SP = "StartingPosition";
+const _SPT = "StartingPositionTimestamp";
+const _SPVA = "SigningProfileVersionArns";
+const _SPVAi = "SigningProfileVersionArn";
+const _SR = "StateReason";
+const _SRC = "SchemaRegistryConfig";
+const _SRCt = "StateReasonCode";
+const _SRETLE = "SerializedRequestEntityTooLargeException";
+const _SRURI = "SchemaRegistryURI";
+const _SRt = "StatusReason";
+const _SS = "SensitiveString";
+const _SSD = "StepStartedDetails";
+const _SSDt = "StepSucceededDetails";
+const _SSE = "SnapStartException";
+const _SSNRE = "SnapStartNotReadyException";
+const _SSR = "SnapStartResponse";
+const _SSTE = "SnapStartTimeoutException";
+const _SSn = "SnapStart";
+const _ST = "StackTrace";
+const _STE = "StackTraceEntry";
+const _STEt = "StackTraceEntries";
+const _STR = "StateTransitionReason";
+const _STt = "StartTimestamp";
+const _STto = "StopTimestamp";
+const _STu = "SubType";
+const _SVC = "SchemaValidationConfigs";
+const _Si = "Size";
+const _St = "State";
+const _Sta = "Status";
+const _Stat = "Statuses";
+const _T = "Timeout";
+const _TA = "TargetArn";
+const _TC = "TracingConfig";
+const _TCR = "TracingConfigResponse";
+const _TCS = "TotalCodeSize";
+const _TE = "TagsError";
+const _TH = "TraceHeader";
+const _TI = "TenantId";
 const _TK = "TagKeys";
-const _ct = "content-type";
-const _f = "find";
+const _TMRE = "TooManyRequestsException";
+const _TR = "TagResource";
+const _TRR = "TagResourceRequest";
+const _TS = "TimeoutSeconds";
+const _TWIS = "TumblingWindowInSeconds";
+const _Ta = "Tags";
+const _To = "Topics";
+const _Tr = "Truncated";
+const _Ty = "Type";
+const _U = "Updates";
+const _UA = "UpdateAlias";
+const _UAOD = "UntrustedArtifactOnDeployment";
+const _UAR = "UpdateAliasRequest";
+const _UCE = "UnreservedConcurrentExecutions";
+const _UCSC = "UpdateCodeSigningConfig";
+const _UCSCR = "UpdateCodeSigningConfigRequest";
+const _UCSCRp = "UpdateCodeSigningConfigResponse";
+const _UESM = "UpdateEventSourceMapping";
+const _UESMR = "UpdateEventSourceMappingRequest";
+const _UFC = "UpdateFunctionCode";
+const _UFCR = "UpdateFunctionCodeRequest";
+const _UFCRp = "UpdateFunctionConfigurationRequest";
+const _UFCp = "UpdateFunctionConfiguration";
+const _UFEIC = "UpdateFunctionEventInvokeConfig";
+const _UFEICR = "UpdateFunctionEventInvokeConfigRequest";
+const _UFUC = "UpdateFunctionUrlConfig";
+const _UFUCR = "UpdateFunctionUrlConfigRequest";
+const _UFUCRp = "UpdateFunctionUrlConfigResponse";
+const _UMTE = "UnsupportedMediaTypeException";
+const _UR = "UntagResource";
+const _URI = "URI";
+const _URO = "UpdateRuntimeOn";
+const _URR = "UntagResourceRequest";
+const _UUID = "UUID";
+const _V = "Variables";
+const _VC = "VpcConfig";
+const _VCR = "VpcConfigResponse";
+const _VI = "VpcId";
+const _VN = "VersionNumber";
+const _Ve = "Version";
+const _Ver = "Versions";
+const _WCD = "WaitCancelledDetails";
+const _WD = "WorkingDirectory";
+const _WDa = "WaitDetails";
+const _WO = "WaitOptions";
+const _WS = "WaitSeconds";
+const _WSD = "WaitStartedDetails";
+const _WSDa = "WaitSucceededDetails";
+const _XACC = "X-Amz-Client-Context";
+const _XADEA = "X-Amz-Durable-Execution-Arn";
+const _XADEN = "X-Amz-Durable-Execution-Name";
+const _XAEV = "X-Amz-Executed-Version";
+const _XAFE = "X-Amz-Function-Error";
+const _XAIT = "X-Amz-Invocation-Type";
+const _XALR = "X-Amz-Log-Result";
+const _XALT = "X-Amz-Log-Type";
+const _XATI = "XAmznTraceId";
+const _ZF = "ZipFile";
+const _c = "client";
+const _e = "error";
+const _eP = "eventPayload";
+const _h = "http";
+const _hE = "httpError";
+const _hH = "httpHeader";
+const _hQ = "httpQuery";
+const _m = "message";
 const _rAS = "retryAfterSeconds";
-const _ra = "retry-after";
+const _s = "streaming";
+const _se = "server";
+const _sm = "smithy.ts.sdk.synthetic.com.amazonaws.lambda";
 const _tK = "tagKeys";
-const _xacc = "x-amz-client-context";
-const _xadea = "x-amz-durable-execution-arn";
-const _xaden = "x-amz-durable-execution-name";
-const _xaev = "x-amz-executed-version";
-const _xafe = "x-amz-function-error";
-const _xait = "x-amz-invocation-type";
-const _xalr = "x-amz-log-result";
-const _xalt = "x-amz-log-type";
+const n0 = "com.amazonaws.lambda";
+var BinaryOperationPayload = [0, n0, _BOP, 8, 21];
+var _Blob = [0, n0, _B, 8, 21];
+var BlobStream = [
+  0,
+  n0,
+  _BS,
+  {
+    [_s]: 1,
+  },
+  42,
+];
+var EnvironmentVariableName = [0, n0, _EVN, 8, 0];
+var EnvironmentVariableValue = [0, n0, _EVV, 8, 0];
+var ErrorData = [0, n0, _ED, 8, 0];
+var ErrorMessage = [0, n0, _EM, 8, 0];
+var ErrorType = [0, n0, _ET, 8, 0];
+var InputPayload = [0, n0, _IP, 8, 0];
+var OperationPayload = [0, n0, _OP, 8, 0];
+var OutputPayload = [0, n0, _OPu, 8, 0];
+var SensitiveString = [0, n0, _SS, 8, 0];
+var StackTraceEntry = [0, n0, _STE, 8, 0];
+var AccountLimit = [
+  3,
+  n0,
+  _AL,
+  0,
+  [_TCS, _CSU, _CSZ, _CE, _UCE],
+  [1, 1, 1, 1, 1],
+];
+var AccountUsage = [3, n0, _AU, 0, [_TCS, _FC], [1, 1]];
+var AddLayerVersionPermissionRequest = [
+  3,
+  n0,
+  _ALVPR,
+  0,
+  [_LN, _VN, _SI, _A, _P, _OI, _RI],
+  [
+    [0, 1],
+    [1, 1],
+    0,
+    0,
+    0,
+    0,
+    [
+      0,
+      {
+        [_hQ]: _RI,
+      },
+    ],
+  ],
+];
+var AddLayerVersionPermissionResponse = [3, n0, _ALVPRd, 0, [_S, _RI], [0, 0]];
+var AddPermissionRequest = [
+  3,
+  n0,
+  _APR,
+  0,
+  [_FN, _SI, _A, _P, _SA, _SAo, _EST, _Q, _RI, _POID, _FUAT, _IVFU],
+  [
+    [0, 1],
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    0,
+    0,
+    2,
+  ],
+];
+var AddPermissionResponse = [3, n0, _APRd, 0, [_S], [0]];
+var AliasConfiguration = [
+  3,
+  n0,
+  _AC,
+  0,
+  [_AA, _N, _FV, _D, _RC, _RI],
+  [0, 0, 0, 0, () => AliasRoutingConfiguration, 0],
+];
+var AliasRoutingConfiguration = [3, n0, _ARC, 0, [_AVW], [128 | 1]];
+var AllowedPublishers = [3, n0, _AP, 0, [_SPVA], [64 | 0]];
+var AmazonManagedKafkaEventSourceConfig = [
+  3,
+  n0,
+  _AMKESC,
+  0,
+  [_CGI, _SRC],
+  [0, () => KafkaSchemaRegistryConfig],
+];
+var CallbackDetails = [
+  3,
+  n0,
+  _CD,
+  0,
+  [_CI, _R, _E],
+  [0, [() => OperationPayload, 0], [() => ErrorObject, 0]],
+];
+var CallbackFailedDetails = [3, n0, _CFD, 0, [_E], [[() => EventError, 0]]];
+var CallbackOptions = [3, n0, _CO, 0, [_TS, _HTS], [1, 1]];
+var CallbackStartedDetails = [3, n0, _CSD, 0, [_CI, _HT, _T], [0, 1, 1]];
+var CallbackSucceededDetails = [
+  3,
+  n0,
+  _CSDa,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+var CallbackTimedOutDetails = [3, n0, _CTOD, 0, [_E], [[() => EventError, 0]]];
+var CallbackTimeoutException = [
+  -3,
+  n0,
+  _CTE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  CallbackTimeoutException,
+  CallbackTimeoutException$1,
+);
+var ChainedInvokeDetails = [
+  3,
+  n0,
+  _CID,
+  0,
+  [_R, _E],
+  [
+    [() => OperationPayload, 0],
+    [() => ErrorObject, 0],
+  ],
+];
+var ChainedInvokeFailedDetails = [
+  3,
+  n0,
+  _CIFD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+var ChainedInvokeOptions = [3, n0, _CIO, 0, [_FN, _TI], [0, 0]];
+var ChainedInvokeStartedDetails = [
+  3,
+  n0,
+  _CISD,
+  0,
+  [_FN, _TI, _I, _EV, _DEA],
+  [0, 0, [() => EventInput, 0], 0, 0],
+];
+var ChainedInvokeStoppedDetails = [
+  3,
+  n0,
+  _CISDh,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+var ChainedInvokeSucceededDetails = [
+  3,
+  n0,
+  _CISDha,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+var ChainedInvokeTimedOutDetails = [
+  3,
+  n0,
+  _CITOD,
+  0,
+  [_E],
+  [[() => EventError, 0]],
+];
+var CheckpointDurableExecutionRequest = [
+  3,
+  n0,
+  _CDER,
+  0,
+  [_DEA, _CT, _U, _CTl],
+  [[0, 1], 0, [() => OperationUpdates, 0], [0, 4]],
+];
+var CheckpointDurableExecutionResponse = [
+  3,
+  n0,
+  _CDERh,
+  0,
+  [_CT, _NES],
+  [0, [() => CheckpointUpdatedExecutionState, 0]],
+];
+var CheckpointUpdatedExecutionState = [
+  3,
+  n0,
+  _CUES,
+  0,
+  [_O, _NM],
+  [[() => Operations, 0], 0],
+];
+var CodeSigningConfig = [
+  3,
+  n0,
+  _CSC,
+  0,
+  [_CSCI, _CSCA, _D, _AP, _CSP, _LM],
+  [0, 0, 0, () => AllowedPublishers, () => CodeSigningPolicies, 0],
+];
+var CodeSigningConfigNotFoundException = [
+  -3,
+  n0,
+  _CSCNFE,
+  {
+    [_e]: _c,
+    [_hE]: 404,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  CodeSigningConfigNotFoundException,
+  CodeSigningConfigNotFoundException$1,
+);
+var CodeSigningPolicies = [3, n0, _CSP, 0, [_UAOD], [0]];
+var CodeStorageExceededException = [
+  -3,
+  n0,
+  _CSEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  CodeStorageExceededException,
+  CodeStorageExceededException$1,
+);
+var CodeVerificationFailedException = [
+  -3,
+  n0,
+  _CVFE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  CodeVerificationFailedException,
+  CodeVerificationFailedException$1,
+);
+var Concurrency = [3, n0, _C, 0, [_RCE], [1]];
+var ContextDetails = [
+  3,
+  n0,
+  _CDo,
+  0,
+  [_RCe, _R, _E],
+  [2, [() => OperationPayload, 0], [() => ErrorObject, 0]],
+];
+var ContextFailedDetails = [3, n0, _CFDo, 0, [_E], [[() => EventError, 0]]];
+var ContextOptions = [3, n0, _COo, 0, [_RCe], [2]];
+var ContextStartedDetails = [3, n0, _CSDo, 0, [], []];
+var ContextSucceededDetails = [
+  3,
+  n0,
+  _CSDon,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+var Cors = [
+  3,
+  n0,
+  _Co,
+  0,
+  [_ACl, _AH, _AM, _AO, _EH, _MA],
+  [2, 64 | 0, 64 | 0, 64 | 0, 64 | 0, 1],
+];
+var CreateAliasRequest = [
+  3,
+  n0,
+  _CAR,
+  0,
+  [_FN, _N, _FV, _D, _RC],
+  [[0, 1], 0, 0, 0, () => AliasRoutingConfiguration],
+];
+var CreateCodeSigningConfigRequest = [
+  3,
+  n0,
+  _CCSCR,
+  0,
+  [_D, _AP, _CSP, _Ta],
+  [0, () => AllowedPublishers, () => CodeSigningPolicies, 128 | 0],
+];
+var CreateCodeSigningConfigResponse = [
+  3,
+  n0,
+  _CCSCRr,
+  0,
+  [_CSC],
+  [() => CodeSigningConfig],
+];
+var CreateEventSourceMappingRequest = [
+  3,
+  n0,
+  _CESMR,
+  0,
+  [
+    _ESA,
+    _FN,
+    _En,
+    _BSa,
+    _FCi,
+    _MBWIS,
+    _PF,
+    _SP,
+    _SPT,
+    _DC,
+    _MRAIS,
+    _BBOFE,
+    _MRA,
+    _Ta,
+    _TWIS,
+    _To,
+    _Qu,
+    _SAC,
+    _SMES,
+    _FRT,
+    _AMKESC,
+    _SMKESC,
+    _SC,
+    _DDBESC,
+    _KMSKA,
+    _MC,
+    _PPC,
+  ],
+  [
+    0,
+    0,
+    2,
+    1,
+    () => FilterCriteria,
+    1,
+    1,
+    0,
+    4,
+    () => DestinationConfig,
+    1,
+    2,
+    1,
+    128 | 0,
+    1,
+    64 | 0,
+    64 | 0,
+    () => SourceAccessConfigurations,
+    () => SelfManagedEventSource,
+    64 | 0,
+    () => AmazonManagedKafkaEventSourceConfig,
+    () => SelfManagedKafkaEventSourceConfig,
+    () => ScalingConfig,
+    () => DocumentDBEventSourceConfig,
+    0,
+    () => EventSourceMappingMetricsConfig,
+    () => ProvisionedPollerConfig,
+  ],
+];
+var CreateFunctionRequest = [
+  3,
+  n0,
+  _CFR,
+  0,
+  [
+    _FN,
+    _Ru,
+    _Ro,
+    _H,
+    _Cod,
+    _D,
+    _T,
+    _MS,
+    _Pu,
+    _VC,
+    _PT,
+    _DLC,
+    _Env,
+    _KMSKA,
+    _TC,
+    _Ta,
+    _L,
+    _FSC,
+    _IC,
+    _CSCA,
+    _Ar,
+    _ES,
+    _SSn,
+    _LC,
+    _DCu,
+  ],
+  [
+    0,
+    0,
+    0,
+    0,
+    [() => FunctionCode, 0],
+    0,
+    1,
+    1,
+    2,
+    () => VpcConfig,
+    0,
+    () => DeadLetterConfig,
+    [() => Environment, 0],
+    0,
+    () => TracingConfig,
+    128 | 0,
+    64 | 0,
+    () => FileSystemConfigList,
+    () => ImageConfig,
+    0,
+    64 | 0,
+    () => EphemeralStorage,
+    () => SnapStart,
+    () => LoggingConfig,
+    () => DurableConfig,
+  ],
+];
+var CreateFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _CFUCR,
+  0,
+  [_FN, _Q, _AT, _Co, _IM],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    () => Cors,
+    0,
+  ],
+];
+var CreateFunctionUrlConfigResponse = [
+  3,
+  n0,
+  _CFUCRr,
+  0,
+  [_FU, _FA, _AT, _Co, _CTr, _IM],
+  [0, 0, 0, () => Cors, 0, 0],
+];
+var DeadLetterConfig = [3, n0, _DLC, 0, [_TA], [0]];
+var DeleteAliasRequest = [
+  3,
+  n0,
+  _DAR,
+  0,
+  [_FN, _N],
+  [
+    [0, 1],
+    [0, 1],
+  ],
+];
+var DeleteCodeSigningConfigRequest = [3, n0, _DCSCR, 0, [_CSCA], [[0, 1]]];
+var DeleteCodeSigningConfigResponse = [3, n0, _DCSCRe, 0, [], []];
+var DeleteEventSourceMappingRequest = [3, n0, _DESMR, 0, [_UUID], [[0, 1]]];
+var DeleteFunctionCodeSigningConfigRequest = [
+  3,
+  n0,
+  _DFCSCR,
+  0,
+  [_FN],
+  [[0, 1]],
+];
+var DeleteFunctionConcurrencyRequest = [3, n0, _DFCR, 0, [_FN], [[0, 1]]];
+var DeleteFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _DFEICR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var DeleteFunctionRequest = [
+  3,
+  n0,
+  _DFR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var DeleteFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _DFUCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var DeleteLayerVersionRequest = [
+  3,
+  n0,
+  _DLVR,
+  0,
+  [_LN, _VN],
+  [
+    [0, 1],
+    [1, 1],
+  ],
+];
+var DeleteProvisionedConcurrencyConfigRequest = [
+  3,
+  n0,
+  _DPCCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var DestinationConfig = [
+  3,
+  n0,
+  _DC,
+  0,
+  [_OS, _OF],
+  [() => OnSuccess, () => OnFailure],
+];
+var DocumentDBEventSourceConfig = [
+  3,
+  n0,
+  _DDBESC,
+  0,
+  [_DN, _CN, _FD],
+  [0, 0, 0],
+];
+var DurableConfig = [3, n0, _DCu, 0, [_RPID, _ETx], [1, 1]];
+var DurableExecutionAlreadyStartedException = [
+  -3,
+  n0,
+  _DEASE,
+  {
+    [_e]: _c,
+    [_hE]: 409,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  DurableExecutionAlreadyStartedException,
+  DurableExecutionAlreadyStartedException$1,
+);
+var EC2AccessDeniedException = [
+  -3,
+  n0,
+  _ECADE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  EC2AccessDeniedException,
+  EC2AccessDeniedException$1,
+);
+var EC2ThrottledException = [
+  -3,
+  n0,
+  _ECTE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  EC2ThrottledException,
+  EC2ThrottledException$1,
+);
+var EC2UnexpectedException = [
+  -3,
+  n0,
+  _ECUE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M, _ECEC],
+  [0, 0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  EC2UnexpectedException,
+  EC2UnexpectedException$1,
+);
+var EFSIOException = [
+  -3,
+  n0,
+  _EFSIOE,
+  {
+    [_e]: _c,
+    [_hE]: 410,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(EFSIOException, EFSIOException$1);
+var EFSMountConnectivityException = [
+  -3,
+  n0,
+  _EFSMCE,
+  {
+    [_e]: _c,
+    [_hE]: 408,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  EFSMountConnectivityException,
+  EFSMountConnectivityException$1,
+);
+var EFSMountFailureException = [
+  -3,
+  n0,
+  _EFSMFE,
+  {
+    [_e]: _c,
+    [_hE]: 403,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  EFSMountFailureException,
+  EFSMountFailureException$1,
+);
+var EFSMountTimeoutException = [
+  -3,
+  n0,
+  _EFSMTE,
+  {
+    [_e]: _c,
+    [_hE]: 408,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  EFSMountTimeoutException,
+  EFSMountTimeoutException$1,
+);
+var ENILimitReachedException = [
+  -3,
+  n0,
+  _ENILRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  ENILimitReachedException,
+  ENILimitReachedException$1,
+);
+var Environment = [3, n0, _Env, 0, [_V], [[() => EnvironmentVariables, 0]]];
+var EnvironmentError = [
+  3,
+  n0,
+  _EE,
+  0,
+  [_EC, _M],
+  [0, [() => SensitiveString, 0]],
+];
+var EnvironmentResponse = [
+  3,
+  n0,
+  _ER,
+  0,
+  [_V, _E],
+  [
+    [() => EnvironmentVariables, 0],
+    [() => EnvironmentError, 0],
+  ],
+];
+var EphemeralStorage = [3, n0, _ES, 0, [_Si], [1]];
+var ErrorObject = [
+  3,
+  n0,
+  _EO,
+  0,
+  [_EM, _ET, _ED, _ST],
+  [
+    [() => ErrorMessage, 0],
+    [() => ErrorType, 0],
+    [() => ErrorData, 0],
+    [() => StackTraceEntries, 0],
+  ],
+];
+var Event = [
+  3,
+  n0,
+  _Ev,
+  0,
+  [
+    _ETv,
+    _STu,
+    _EI,
+    _Id,
+    _N,
+    _ETve,
+    _PI,
+    _ESD,
+    _ESDx,
+    _EFD,
+    _ETOD,
+    _ESDxe,
+    _CSDo,
+    _CSDon,
+    _CFDo,
+    _WSD,
+    _WSDa,
+    _WCD,
+    _SSD,
+    _SSDt,
+    _SFD,
+    _CISD,
+    _CISDha,
+    _CIFD,
+    _CITOD,
+    _CISDh,
+    _CSD,
+    _CSDa,
+    _CFD,
+    _CTOD,
+    _ICD,
+  ],
+  [
+    0,
+    0,
+    1,
+    0,
+    0,
+    4,
+    0,
+    [() => ExecutionStartedDetails, 0],
+    [() => ExecutionSucceededDetails, 0],
+    [() => ExecutionFailedDetails, 0],
+    [() => ExecutionTimedOutDetails, 0],
+    [() => ExecutionStoppedDetails, 0],
+    () => ContextStartedDetails,
+    [() => ContextSucceededDetails, 0],
+    [() => ContextFailedDetails, 0],
+    () => WaitStartedDetails,
+    () => WaitSucceededDetails,
+    [() => WaitCancelledDetails, 0],
+    () => StepStartedDetails,
+    [() => StepSucceededDetails, 0],
+    [() => StepFailedDetails, 0],
+    [() => ChainedInvokeStartedDetails, 0],
+    [() => ChainedInvokeSucceededDetails, 0],
+    [() => ChainedInvokeFailedDetails, 0],
+    [() => ChainedInvokeTimedOutDetails, 0],
+    [() => ChainedInvokeStoppedDetails, 0],
+    () => CallbackStartedDetails,
+    [() => CallbackSucceededDetails, 0],
+    [() => CallbackFailedDetails, 0],
+    [() => CallbackTimedOutDetails, 0],
+    [() => InvocationCompletedDetails, 0],
+  ],
+];
+var EventError = [3, n0, _EEv, 0, [_Pa, _Tr], [[() => ErrorObject, 0], 2]];
+var EventInput = [3, n0, _EIv, 0, [_Pa, _Tr], [[() => InputPayload, 0], 2]];
+var EventResult = [
+  3,
+  n0,
+  _ERv,
+  0,
+  [_Pa, _Tr],
+  [[() => OperationPayload, 0], 2],
+];
+var EventSourceMappingConfiguration = [
+  3,
+  n0,
+  _ESMC,
+  0,
+  [
+    _UUID,
+    _SP,
+    _SPT,
+    _BSa,
+    _MBWIS,
+    _PF,
+    _ESA,
+    _FCi,
+    _FA,
+    _LM,
+    _LPR,
+    _St,
+    _STR,
+    _DC,
+    _To,
+    _Qu,
+    _SAC,
+    _SMES,
+    _MRAIS,
+    _BBOFE,
+    _MRA,
+    _TWIS,
+    _FRT,
+    _AMKESC,
+    _SMKESC,
+    _SC,
+    _DDBESC,
+    _KMSKA,
+    _FCE,
+    _ESMA,
+    _MC,
+    _PPC,
+  ],
+  [
+    0,
+    0,
+    4,
+    1,
+    1,
+    1,
+    0,
+    () => FilterCriteria,
+    0,
+    4,
+    0,
+    0,
+    0,
+    () => DestinationConfig,
+    64 | 0,
+    64 | 0,
+    () => SourceAccessConfigurations,
+    () => SelfManagedEventSource,
+    1,
+    2,
+    1,
+    1,
+    64 | 0,
+    () => AmazonManagedKafkaEventSourceConfig,
+    () => SelfManagedKafkaEventSourceConfig,
+    () => ScalingConfig,
+    () => DocumentDBEventSourceConfig,
+    0,
+    () => FilterCriteriaError,
+    0,
+    () => EventSourceMappingMetricsConfig,
+    () => ProvisionedPollerConfig,
+  ],
+];
+var EventSourceMappingMetricsConfig = [3, n0, _ESMMC, 0, [_Me], [64 | 0]];
+var Execution = [
+  3,
+  n0,
+  _Ex,
+  0,
+  [_DEA, _DEN, _FA, _Sta, _STt, _ETn],
+  [0, 0, 0, 0, 4, 4],
+];
+var ExecutionDetails = [3, n0, _EDx, 0, [_IP], [[() => InputPayload, 0]]];
+var ExecutionFailedDetails = [3, n0, _EFD, 0, [_E], [[() => EventError, 0]]];
+var ExecutionStartedDetails = [
+  3,
+  n0,
+  _ESD,
+  0,
+  [_I, _ETx],
+  [[() => EventInput, 0], 1],
+];
+var ExecutionStoppedDetails = [3, n0, _ESDxe, 0, [_E], [[() => EventError, 0]]];
+var ExecutionSucceededDetails = [
+  3,
+  n0,
+  _ESDx,
+  0,
+  [_R],
+  [[() => EventResult, 0]],
+];
+var ExecutionTimedOutDetails = [3, n0, _ETOD, 0, [_E], [[() => EventError, 0]]];
+var FileSystemConfig = [3, n0, _FSCi, 0, [_Arn, _LMP], [0, 0]];
+var Filter = [3, n0, _F, 0, [_Pat], [0]];
+var FilterCriteria = [3, n0, _FCi, 0, [_Fi], [() => FilterList]];
+var FilterCriteriaError = [3, n0, _FCE, 0, [_EC, _M], [0, 0]];
+var FunctionCode = [
+  3,
+  n0,
+  _FCu,
+  0,
+  [_ZF, _SB, _SK, _SOV, _IU, _SKMSKA],
+  [[() => _Blob, 0], 0, 0, 0, 0, 0],
+];
+var FunctionCodeLocation = [
+  3,
+  n0,
+  _FCL,
+  0,
+  [_RT, _Lo, _IU, _RIU, _SKMSKA],
+  [0, 0, 0, 0, 0],
+];
+var FunctionConfiguration = [
+  3,
+  n0,
+  _FCun,
+  0,
+  [
+    _FN,
+    _FA,
+    _Ru,
+    _Ro,
+    _H,
+    _CS,
+    _D,
+    _T,
+    _MS,
+    _LM,
+    _CSo,
+    _Ve,
+    _VC,
+    _DLC,
+    _Env,
+    _KMSKA,
+    _TC,
+    _MAa,
+    _RI,
+    _L,
+    _St,
+    _SR,
+    _SRCt,
+    _LUS,
+    _LUSR,
+    _LUSRC,
+    _FSC,
+    _PT,
+    _ICR,
+    _SPVAi,
+    _SJA,
+    _Ar,
+    _ES,
+    _SSn,
+    _RVC,
+    _LC,
+    _DCu,
+  ],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    () => VpcConfigResponse,
+    () => DeadLetterConfig,
+    [() => EnvironmentResponse, 0],
+    0,
+    () => TracingConfigResponse,
+    0,
+    0,
+    () => LayersReferenceList,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    () => FileSystemConfigList,
+    0,
+    [() => ImageConfigResponse, 0],
+    0,
+    0,
+    64 | 0,
+    () => EphemeralStorage,
+    () => SnapStartResponse,
+    [() => RuntimeVersionConfig, 0],
+    () => LoggingConfig,
+    () => DurableConfig,
+  ],
+];
+var FunctionEventInvokeConfig = [
+  3,
+  n0,
+  _FEIC,
+  0,
+  [_LM, _FA, _MRA, _MEAIS, _DC],
+  [4, 0, 1, 1, () => DestinationConfig],
+];
+var FunctionUrlConfig = [
+  3,
+  n0,
+  _FUC,
+  0,
+  [_FU, _FA, _CTr, _LMT, _Co, _AT, _IM],
+  [0, 0, 0, 0, () => Cors, 0, 0],
+];
+var GetAccountSettingsRequest = [3, n0, _GASR, 0, [], []];
+var GetAccountSettingsResponse = [
+  3,
+  n0,
+  _GASRe,
+  0,
+  [_AL, _AU],
+  [() => AccountLimit, () => AccountUsage],
+];
+var GetAliasRequest = [
+  3,
+  n0,
+  _GAR,
+  0,
+  [_FN, _N],
+  [
+    [0, 1],
+    [0, 1],
+  ],
+];
+var GetCodeSigningConfigRequest = [3, n0, _GCSCR, 0, [_CSCA], [[0, 1]]];
+var GetCodeSigningConfigResponse = [
+  3,
+  n0,
+  _GCSCRe,
+  0,
+  [_CSC],
+  [() => CodeSigningConfig],
+];
+var GetDurableExecutionHistoryRequest = [
+  3,
+  n0,
+  _GDEHR,
+  0,
+  [_DEA, _IED, _MI, _Ma, _RO],
+  [
+    [0, 1],
+    [
+      2,
+      {
+        [_hQ]: _IED,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      2,
+      {
+        [_hQ]: _RO,
+      },
+    ],
+  ],
+];
+var GetDurableExecutionHistoryResponse = [
+  3,
+  n0,
+  _GDEHRe,
+  0,
+  [_Eve, _NM],
+  [[() => Events, 0], 0],
+];
+var GetDurableExecutionRequest = [3, n0, _GDER, 0, [_DEA], [[0, 1]]];
+var GetDurableExecutionResponse = [
+  3,
+  n0,
+  _GDERe,
+  0,
+  [_DEA, _DEN, _FA, _IP, _R, _E, _STt, _Sta, _ETn, _Ve, _TH],
+  [
+    0,
+    0,
+    0,
+    [() => InputPayload, 0],
+    [() => OutputPayload, 0],
+    [() => ErrorObject, 0],
+    4,
+    0,
+    4,
+    0,
+    () => TraceHeader,
+  ],
+];
+var GetDurableExecutionStateRequest = [
+  3,
+  n0,
+  _GDESR,
+  0,
+  [_DEA, _CT, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _CT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var GetDurableExecutionStateResponse = [
+  3,
+  n0,
+  _GDESRe,
+  0,
+  [_O, _NM],
+  [[() => Operations, 0], 0],
+];
+var GetEventSourceMappingRequest = [3, n0, _GESMR, 0, [_UUID], [[0, 1]]];
+var GetFunctionCodeSigningConfigRequest = [3, n0, _GFCSCR, 0, [_FN], [[0, 1]]];
+var GetFunctionCodeSigningConfigResponse = [
+  3,
+  n0,
+  _GFCSCRe,
+  0,
+  [_CSCA, _FN],
+  [0, 0],
+];
+var GetFunctionConcurrencyRequest = [3, n0, _GFCR, 0, [_FN], [[0, 1]]];
+var GetFunctionConcurrencyResponse = [3, n0, _GFCRe, 0, [_RCE], [1]];
+var GetFunctionConfigurationRequest = [
+  3,
+  n0,
+  _GFCRet,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _GFEICR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetFunctionRecursionConfigRequest = [3, n0, _GFRCR, 0, [_FN], [[0, 1]]];
+var GetFunctionRecursionConfigResponse = [3, n0, _GFRCRe, 0, [_RL], [0]];
+var GetFunctionRequest = [
+  3,
+  n0,
+  _GFR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetFunctionResponse = [
+  3,
+  n0,
+  _GFRe,
+  0,
+  [_Con, _Cod, _Ta, _TE, _C],
+  [
+    [() => FunctionConfiguration, 0],
+    () => FunctionCodeLocation,
+    128 | 0,
+    () => TagsError,
+    () => Concurrency,
+  ],
+];
+var GetFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _GFUCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetFunctionUrlConfigResponse = [
+  3,
+  n0,
+  _GFUCRe,
+  0,
+  [_FU, _FA, _AT, _Co, _CTr, _LMT, _IM],
+  [0, 0, 0, () => Cors, 0, 0, 0],
+];
+var GetLayerVersionByArnRequest = [
+  3,
+  n0,
+  _GLVBAR,
+  0,
+  [_Arn],
+  [
+    [
+      0,
+      {
+        [_hQ]: _Arn,
+      },
+    ],
+  ],
+];
+var GetLayerVersionPolicyRequest = [
+  3,
+  n0,
+  _GLVPR,
+  0,
+  [_LN, _VN],
+  [
+    [0, 1],
+    [1, 1],
+  ],
+];
+var GetLayerVersionPolicyResponse = [3, n0, _GLVPRe, 0, [_Po, _RI], [0, 0]];
+var GetLayerVersionRequest = [
+  3,
+  n0,
+  _GLVR,
+  0,
+  [_LN, _VN],
+  [
+    [0, 1],
+    [1, 1],
+  ],
+];
+var GetLayerVersionResponse = [
+  3,
+  n0,
+  _GLVRe,
+  0,
+  [_Cont, _LA, _LVA, _D, _CDr, _Ve, _CR, _LI, _CA],
+  [() => LayerVersionContentOutput, 0, 0, 0, 0, 1, 64 | 0, 0, 64 | 0],
+];
+var GetPolicyRequest = [
+  3,
+  n0,
+  _GPR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetPolicyResponse = [3, n0, _GPRe, 0, [_Po, _RI], [0, 0]];
+var GetProvisionedConcurrencyConfigRequest = [
+  3,
+  n0,
+  _GPCCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetProvisionedConcurrencyConfigResponse = [
+  3,
+  n0,
+  _GPCCRe,
+  0,
+  [_RPCE, _APCE, _APCEl, _Sta, _SRt, _LM],
+  [1, 1, 1, 0, 0, 0],
+];
+var GetRuntimeManagementConfigRequest = [
+  3,
+  n0,
+  _GRMCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetRuntimeManagementConfigResponse = [
+  3,
+  n0,
+  _GRMCRe,
+  0,
+  [_URO, _RVA, _FA],
+  [0, 0, 0],
+];
+var ImageConfig = [3, n0, _IC, 0, [_EP, _Com, _WD], [64 | 0, 64 | 0, 0]];
+var ImageConfigError = [
+  3,
+  n0,
+  _ICE,
+  0,
+  [_EC, _M],
+  [0, [() => SensitiveString, 0]],
+];
+var ImageConfigResponse = [
+  3,
+  n0,
+  _ICR,
+  0,
+  [_IC, _E],
+  [() => ImageConfig, [() => ImageConfigError, 0]],
+];
+var InvalidCodeSignatureException = [
+  -3,
+  n0,
+  _ICSE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  InvalidCodeSignatureException,
+  InvalidCodeSignatureException$1,
+);
+var InvalidParameterValueException = [
+  -3,
+  n0,
+  _IPVE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  InvalidParameterValueException,
+  InvalidParameterValueException$1,
+);
+var InvalidRequestContentException = [
+  -3,
+  n0,
+  _IRCE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  InvalidRequestContentException,
+  InvalidRequestContentException$1,
+);
+var InvalidRuntimeException = [
+  -3,
+  n0,
+  _IRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  InvalidRuntimeException,
+  InvalidRuntimeException$1,
+);
+var InvalidSecurityGroupIDException = [
+  -3,
+  n0,
+  _ISGIDE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  InvalidSecurityGroupIDException,
+  InvalidSecurityGroupIDException$1,
+);
+var InvalidSubnetIDException = [
+  -3,
+  n0,
+  _ISIDE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  InvalidSubnetIDException,
+  InvalidSubnetIDException$1,
+);
+var InvalidZipFileException = [
+  -3,
+  n0,
+  _IZFE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  InvalidZipFileException,
+  InvalidZipFileException$1,
+);
+var InvocationCompletedDetails = [
+  3,
+  n0,
+  _ICD,
+  0,
+  [_STt, _ETn, _RIe, _E],
+  [4, 4, 0, [() => EventError, 0]],
+];
+var InvocationRequest = [
+  3,
+  n0,
+  _IR,
+  0,
+  [_FN, _IT, _LT, _CC, _DEN, _Pa, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hH]: _XAIT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XALT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XACC,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XADEN,
+      },
+    ],
+    [() => _Blob, 16],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var InvocationResponse = [
+  3,
+  n0,
+  _IRn,
+  0,
+  [_SCt, _FE, _LR, _Pa, _EV, _DEA],
+  [
+    [1, 32],
+    [
+      0,
+      {
+        [_hH]: _XAFE,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XALR,
+      },
+    ],
+    [() => _Blob, 16],
+    [
+      0,
+      {
+        [_hH]: _XAEV,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XADEA,
+      },
+    ],
+  ],
+];
+var InvokeAsyncRequest = [
+  3,
+  n0,
+  _IAR,
+  0,
+  [_FN, _IA],
+  [
+    [0, 1],
+    [() => BlobStream, 16],
+  ],
+];
+var InvokeAsyncResponse = [3, n0, _IARn, 0, [_Sta], [[1, 32]]];
+var InvokeResponseStreamUpdate = [
+  3,
+  n0,
+  _IRSU,
+  0,
+  [_Pa],
+  [
+    [
+      () => _Blob,
+      {
+        [_eP]: 1,
+      },
+    ],
+  ],
+];
+var InvokeWithResponseStreamCompleteEvent = [
+  3,
+  n0,
+  _IWRSCE,
+  0,
+  [_EC, _EDr, _LR],
+  [0, 0, 0],
+];
+var InvokeWithResponseStreamRequest = [
+  3,
+  n0,
+  _IWRSR,
+  0,
+  [_FN, _IT, _LT, _CC, _Q, _Pa],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hH]: _XAIT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XALT,
+      },
+    ],
+    [
+      0,
+      {
+        [_hH]: _XACC,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    [() => _Blob, 16],
+  ],
+];
+var InvokeWithResponseStreamResponse = [
+  3,
+  n0,
+  _IWRSRn,
+  0,
+  [_SCt, _EV, _ESv, _RSCT],
+  [
+    [1, 32],
+    [
+      0,
+      {
+        [_hH]: _XAEV,
+      },
+    ],
+    [() => InvokeWithResponseStreamResponseEvent, 16],
+    [
+      0,
+      {
+        [_hH]: _CT_,
+      },
+    ],
+  ],
+];
+var KafkaSchemaRegistryAccessConfig = [3, n0, _KSRAC, 0, [_Ty, _URI], [0, 0]];
+var KafkaSchemaRegistryConfig = [
+  3,
+  n0,
+  _KSRC,
+  0,
+  [_SRURI, _ERF, _ACc, _SVC],
+  [
+    0,
+    0,
+    () => KafkaSchemaRegistryAccessConfigList,
+    () => KafkaSchemaValidationConfigList,
+  ],
+];
+var KafkaSchemaValidationConfig = [3, n0, _KSVC, 0, [_At], [0]];
+var KMSAccessDeniedException = [
+  -3,
+  n0,
+  _KMSADE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  KMSAccessDeniedException,
+  KMSAccessDeniedException$1,
+);
+var KMSDisabledException = [
+  -3,
+  n0,
+  _KMSDE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  KMSDisabledException,
+  KMSDisabledException$1,
+);
+var KMSInvalidStateException = [
+  -3,
+  n0,
+  _KMSISE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  KMSInvalidStateException,
+  KMSInvalidStateException$1,
+);
+var KMSNotFoundException = [
+  -3,
+  n0,
+  _KMSNFE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  KMSNotFoundException,
+  KMSNotFoundException$1,
+);
+var Layer = [3, n0, _La, 0, [_Arn, _CS, _SPVAi, _SJA], [0, 1, 0, 0]];
+var LayersListItem = [
+  3,
+  n0,
+  _LLI,
+  0,
+  [_LN, _LA, _LMV],
+  [0, 0, () => LayerVersionsListItem],
+];
+var LayerVersionContentInput = [
+  3,
+  n0,
+  _LVCI,
+  0,
+  [_SB, _SK, _SOV, _ZF],
+  [0, 0, 0, [() => _Blob, 0]],
+];
+var LayerVersionContentOutput = [
+  3,
+  n0,
+  _LVCO,
+  0,
+  [_Lo, _CSo, _CS, _SPVAi, _SJA],
+  [0, 0, 1, 0, 0],
+];
+var LayerVersionsListItem = [
+  3,
+  n0,
+  _LVLI,
+  0,
+  [_LVA, _Ve, _D, _CDr, _CR, _LI, _CA],
+  [0, 1, 0, 0, 64 | 0, 0, 64 | 0],
+];
+var ListAliasesRequest = [
+  3,
+  n0,
+  _LAR,
+  0,
+  [_FN, _FV, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _FV,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListAliasesResponse = [3, n0, _LARi, 0, [_NM, _Al], [0, () => AliasList]];
+var ListCodeSigningConfigsRequest = [
+  3,
+  n0,
+  _LCSCR,
+  0,
+  [_Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListCodeSigningConfigsResponse = [
+  3,
+  n0,
+  _LCSCRi,
+  0,
+  [_NM, _CSCo],
+  [0, () => CodeSigningConfigList],
+];
+var ListDurableExecutionsByFunctionRequest = [
+  3,
+  n0,
+  _LDEBFR,
+  0,
+  [_FN, _Q, _DEN, _Stat, _SAt, _SBt, _RO, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _DEN,
+      },
+    ],
+    [
+      64 | 0,
+      {
+        [_hQ]: _Stat,
+      },
+    ],
+    [
+      4,
+      {
+        [_hQ]: _SAt,
+      },
+    ],
+    [
+      4,
+      {
+        [_hQ]: _SBt,
+      },
+    ],
+    [
+      2,
+      {
+        [_hQ]: _RO,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListDurableExecutionsByFunctionResponse = [
+  3,
+  n0,
+  _LDEBFRi,
+  0,
+  [_DE, _NM],
+  [() => DurableExecutions, 0],
+];
+var ListEventSourceMappingsRequest = [
+  3,
+  n0,
+  _LESMR,
+  0,
+  [_ESA, _FN, _Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _ESA,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _FN,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListEventSourceMappingsResponse = [
+  3,
+  n0,
+  _LESMRi,
+  0,
+  [_NM, _ESM],
+  [0, () => EventSourceMappingsList],
+];
+var ListFunctionEventInvokeConfigsRequest = [
+  3,
+  n0,
+  _LFEICR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListFunctionEventInvokeConfigsResponse = [
+  3,
+  n0,
+  _LFEICRi,
+  0,
+  [_FEICu, _NM],
+  [() => FunctionEventInvokeConfigList, 0],
+];
+var ListFunctionsByCodeSigningConfigRequest = [
+  3,
+  n0,
+  _LFBCSCR,
+  0,
+  [_CSCA, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListFunctionsByCodeSigningConfigResponse = [
+  3,
+  n0,
+  _LFBCSCRi,
+  0,
+  [_NM, _FAu],
+  [0, 64 | 0],
+];
+var ListFunctionsRequest = [
+  3,
+  n0,
+  _LFR,
+  0,
+  [_MR, _FV, _Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _MR,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _FV,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListFunctionsResponse = [
+  3,
+  n0,
+  _LFRi,
+  0,
+  [_NM, _Fu],
+  [0, [() => FunctionList, 0]],
+];
+var ListFunctionUrlConfigsRequest = [
+  3,
+  n0,
+  _LFUCR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListFunctionUrlConfigsResponse = [
+  3,
+  n0,
+  _LFUCRi,
+  0,
+  [_FUCu, _NM],
+  [() => FunctionUrlConfigList, 0],
+];
+var ListLayersRequest = [
+  3,
+  n0,
+  _LLR,
+  0,
+  [_CRo, _Ma, _MI, _CAo],
+  [
+    [
+      0,
+      {
+        [_hQ]: _CRo,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _CAo,
+      },
+    ],
+  ],
+];
+var ListLayersResponse = [3, n0, _LLRi, 0, [_NM, _L], [0, () => LayersList]];
+var ListLayerVersionsRequest = [
+  3,
+  n0,
+  _LLVR,
+  0,
+  [_CRo, _LN, _Ma, _MI, _CAo],
+  [
+    [
+      0,
+      {
+        [_hQ]: _CRo,
+      },
+    ],
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _CAo,
+      },
+    ],
+  ],
+];
+var ListLayerVersionsResponse = [
+  3,
+  n0,
+  _LLVRi,
+  0,
+  [_NM, _LV],
+  [0, () => LayerVersionsList],
+];
+var ListProvisionedConcurrencyConfigsRequest = [
+  3,
+  n0,
+  _LPCCR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListProvisionedConcurrencyConfigsResponse = [
+  3,
+  n0,
+  _LPCCRi,
+  0,
+  [_PCC, _NM],
+  [() => ProvisionedConcurrencyConfigList, 0],
+];
+var ListTagsRequest = [3, n0, _LTR, 0, [_Re], [[0, 1]]];
+var ListTagsResponse = [3, n0, _LTRi, 0, [_Ta], [128 | 0]];
+var ListVersionsByFunctionRequest = [
+  3,
+  n0,
+  _LVBFR,
+  0,
+  [_FN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListVersionsByFunctionResponse = [
+  3,
+  n0,
+  _LVBFRi,
+  0,
+  [_NM, _Ver],
+  [0, [() => FunctionList, 0]],
+];
+var LoggingConfig = [3, n0, _LC, 0, [_LF, _ALL, _SLL, _LG], [0, 0, 0, 0]];
+var OnFailure = [3, n0, _OF, 0, [_De], [0]];
+var OnSuccess = [3, n0, _OS, 0, [_De], [0]];
+var Operation = [
+  3,
+  n0,
+  _Op,
+  0,
+  [_Id, _PI, _N, _Ty, _STu, _STt, _ETn, _Sta, _EDx, _CDo, _SD, _WDa, _CD, _CID],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    4,
+    4,
+    0,
+    [() => ExecutionDetails, 0],
+    [() => ContextDetails, 0],
+    [() => StepDetails, 0],
+    () => WaitDetails,
+    [() => CallbackDetails, 0],
+    [() => ChainedInvokeDetails, 0],
+  ],
+];
+var OperationUpdate = [
+  3,
+  n0,
+  _OU,
+  0,
+  [_Id, _PI, _N, _Ty, _STu, _A, _Pa, _E, _COo, _SO, _WO, _CO, _CIO],
+  [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    [() => OperationPayload, 0],
+    [() => ErrorObject, 0],
+    () => ContextOptions,
+    () => StepOptions,
+    () => WaitOptions,
+    () => CallbackOptions,
+    () => ChainedInvokeOptions,
+  ],
+];
+var PolicyLengthExceededException = [
+  -3,
+  n0,
+  _PLEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  PolicyLengthExceededException,
+  PolicyLengthExceededException$1,
+);
+var PreconditionFailedException = [
+  -3,
+  n0,
+  _PFE,
+  {
+    [_e]: _c,
+    [_hE]: 412,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  PreconditionFailedException,
+  PreconditionFailedException$1,
+);
+var ProvisionedConcurrencyConfigListItem = [
+  3,
+  n0,
+  _PCCLI,
+  0,
+  [_FA, _RPCE, _APCE, _APCEl, _Sta, _SRt, _LM],
+  [0, 1, 1, 1, 0, 0, 0],
+];
+var ProvisionedConcurrencyConfigNotFoundException = [
+  -3,
+  n0,
+  _PCCNFE,
+  {
+    [_e]: _c,
+    [_hE]: 404,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  ProvisionedConcurrencyConfigNotFoundException,
+  ProvisionedConcurrencyConfigNotFoundException$1,
+);
+var ProvisionedPollerConfig = [3, n0, _PPC, 0, [_MP, _MPa], [1, 1]];
+var PublishLayerVersionRequest = [
+  3,
+  n0,
+  _PLVR,
+  0,
+  [_LN, _D, _Cont, _CR, _LI, _CA],
+  [[0, 1], 0, [() => LayerVersionContentInput, 0], 64 | 0, 0, 64 | 0],
+];
+var PublishLayerVersionResponse = [
+  3,
+  n0,
+  _PLVRu,
+  0,
+  [_Cont, _LA, _LVA, _D, _CDr, _Ve, _CR, _LI, _CA],
+  [() => LayerVersionContentOutput, 0, 0, 0, 0, 1, 64 | 0, 0, 64 | 0],
+];
+var PublishVersionRequest = [
+  3,
+  n0,
+  _PVR,
+  0,
+  [_FN, _CSo, _D, _RI],
+  [[0, 1], 0, 0, 0],
+];
+var PutFunctionCodeSigningConfigRequest = [
+  3,
+  n0,
+  _PFCSCR,
+  0,
+  [_CSCA, _FN],
+  [0, [0, 1]],
+];
+var PutFunctionCodeSigningConfigResponse = [
+  3,
+  n0,
+  _PFCSCRu,
+  0,
+  [_CSCA, _FN],
+  [0, 0],
+];
+var PutFunctionConcurrencyRequest = [3, n0, _PFCR, 0, [_FN, _RCE], [[0, 1], 1]];
+var PutFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _PFEICR,
+  0,
+  [_FN, _Q, _MRA, _MEAIS, _DC],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    1,
+    1,
+    () => DestinationConfig,
+  ],
+];
+var PutFunctionRecursionConfigRequest = [
+  3,
+  n0,
+  _PFRCR,
+  0,
+  [_FN, _RL],
+  [[0, 1], 0],
+];
+var PutFunctionRecursionConfigResponse = [3, n0, _PFRCRu, 0, [_RL], [0]];
+var PutProvisionedConcurrencyConfigRequest = [
+  3,
+  n0,
+  _PPCCR,
+  0,
+  [_FN, _Q, _PCE],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    1,
+  ],
+];
+var PutProvisionedConcurrencyConfigResponse = [
+  3,
+  n0,
+  _PPCCRu,
+  0,
+  [_RPCE, _APCE, _APCEl, _Sta, _SRt, _LM],
+  [1, 1, 1, 0, 0, 0],
+];
+var PutRuntimeManagementConfigRequest = [
+  3,
+  n0,
+  _PRMCR,
+  0,
+  [_FN, _Q, _URO, _RVA],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    0,
+  ],
+];
+var PutRuntimeManagementConfigResponse = [
+  3,
+  n0,
+  _PRMCRu,
+  0,
+  [_URO, _FA, _RVA],
+  [0, 0, 0],
+];
+var RecursiveInvocationException = [
+  -3,
+  n0,
+  _RIE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  RecursiveInvocationException,
+  RecursiveInvocationException$1,
+);
+var RemoveLayerVersionPermissionRequest = [
+  3,
+  n0,
+  _RLVPR,
+  0,
+  [_LN, _VN, _SI, _RI],
+  [
+    [0, 1],
+    [1, 1],
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _RI,
+      },
+    ],
+  ],
+];
+var RemovePermissionRequest = [
+  3,
+  n0,
+  _RPR,
+  0,
+  [_FN, _SI, _Q, _RI],
+  [
+    [0, 1],
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _RI,
+      },
+    ],
+  ],
+];
+var RequestTooLargeException = [
+  -3,
+  n0,
+  _RTLE,
+  {
+    [_e]: _c,
+    [_hE]: 413,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  RequestTooLargeException,
+  RequestTooLargeException$1,
+);
+var ResourceConflictException = [
+  -3,
+  n0,
+  _RCEe,
+  {
+    [_e]: _c,
+    [_hE]: 409,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  ResourceConflictException,
+  ResourceConflictException$1,
+);
+var ResourceInUseException = [
+  -3,
+  n0,
+  _RIUE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  ResourceInUseException,
+  ResourceInUseException$1,
+);
+var ResourceNotFoundException = [
+  -3,
+  n0,
+  _RNFE,
+  {
+    [_e]: _c,
+    [_hE]: 404,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  ResourceNotFoundException,
+  ResourceNotFoundException$1,
+);
+var ResourceNotReadyException = [
+  -3,
+  n0,
+  _RNRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  ResourceNotReadyException,
+  ResourceNotReadyException$1,
+);
+var RetryDetails = [3, n0, _RD, 0, [_CAu, _NADS], [1, 1]];
+var RuntimeVersionConfig = [
+  3,
+  n0,
+  _RVC,
+  0,
+  [_RVA, _E],
+  [0, [() => RuntimeVersionError, 0]],
+];
+var RuntimeVersionError = [
+  3,
+  n0,
+  _RVE,
+  0,
+  [_EC, _M],
+  [0, [() => SensitiveString, 0]],
+];
+var ScalingConfig = [3, n0, _SC, 0, [_MCa], [1]];
+var SelfManagedEventSource = [
+  3,
+  n0,
+  _SMES,
+  0,
+  [_End],
+  [[2, n0, _End, 0, 0, 64 | 0]],
+];
+var SelfManagedKafkaEventSourceConfig = [
+  3,
+  n0,
+  _SMKESC,
+  0,
+  [_CGI, _SRC],
+  [0, () => KafkaSchemaRegistryConfig],
+];
+var SendDurableExecutionCallbackFailureRequest = [
+  3,
+  n0,
+  _SDECFR,
+  0,
+  [_CI, _E],
+  [
+    [0, 1],
+    [() => ErrorObject, 16],
+  ],
+];
+var SendDurableExecutionCallbackFailureResponse = [3, n0, _SDECFRe, 0, [], []];
+var SendDurableExecutionCallbackHeartbeatRequest = [
+  3,
+  n0,
+  _SDECHR,
+  0,
+  [_CI],
+  [[0, 1]],
+];
+var SendDurableExecutionCallbackHeartbeatResponse = [
+  3,
+  n0,
+  _SDECHRe,
+  0,
+  [],
+  [],
+];
+var SendDurableExecutionCallbackSuccessRequest = [
+  3,
+  n0,
+  _SDECSR,
+  0,
+  [_CI, _R],
+  [
+    [0, 1],
+    [() => BinaryOperationPayload, 16],
+  ],
+];
+var SendDurableExecutionCallbackSuccessResponse = [3, n0, _SDECSRe, 0, [], []];
+var SerializedRequestEntityTooLargeException = [
+  -3,
+  n0,
+  _SRETLE,
+  {
+    [_e]: _c,
+    [_hE]: 413,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  SerializedRequestEntityTooLargeException,
+  SerializedRequestEntityTooLargeException$1,
+);
+var ServiceException = [
+  -3,
+  n0,
+  _SE,
+  {
+    [_e]: _se,
+    [_hE]: 500,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(ServiceException, ServiceException$1);
+var SnapStart = [3, n0, _SSn, 0, [_AOp], [0]];
+var SnapStartException = [
+  -3,
+  n0,
+  _SSE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  SnapStartException,
+  SnapStartException$1,
+);
+var SnapStartNotReadyException = [
+  -3,
+  n0,
+  _SSNRE,
+  {
+    [_e]: _c,
+    [_hE]: 409,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  SnapStartNotReadyException,
+  SnapStartNotReadyException$1,
+);
+var SnapStartResponse = [3, n0, _SSR, 0, [_AOp, _OSp], [0, 0]];
+var SnapStartTimeoutException = [
+  -3,
+  n0,
+  _SSTE,
+  {
+    [_e]: _c,
+    [_hE]: 408,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  SnapStartTimeoutException,
+  SnapStartTimeoutException$1,
+);
+var SourceAccessConfiguration = [3, n0, _SACo, 0, [_Ty, _URI], [0, 0]];
+var StepDetails = [
+  3,
+  n0,
+  _SD,
+  0,
+  [_Att, _NAT, _R, _E],
+  [1, 4, [() => OperationPayload, 0], [() => ErrorObject, 0]],
+];
+var StepFailedDetails = [
+  3,
+  n0,
+  _SFD,
+  0,
+  [_E, _RD],
+  [[() => EventError, 0], () => RetryDetails],
+];
+var StepOptions = [3, n0, _SO, 0, [_NADS], [1]];
+var StepStartedDetails = [3, n0, _SSD, 0, [], []];
+var StepSucceededDetails = [
+  3,
+  n0,
+  _SSDt,
+  0,
+  [_R, _RD],
+  [[() => EventResult, 0], () => RetryDetails],
+];
+var StopDurableExecutionRequest = [
+  3,
+  n0,
+  _SDER,
+  0,
+  [_DEA, _E],
+  [
+    [0, 1],
+    [() => ErrorObject, 16],
+  ],
+];
+var StopDurableExecutionResponse = [3, n0, _SDERt, 0, [_STto], [4]];
+var SubnetIPAddressLimitReachedException = [
+  -3,
+  n0,
+  _SIPALRE,
+  {
+    [_e]: _se,
+    [_hE]: 502,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  SubnetIPAddressLimitReachedException,
+  SubnetIPAddressLimitReachedException$1,
+);
+var TagResourceRequest = [3, n0, _TRR, 0, [_Re, _Ta], [[0, 1], 128 | 0]];
+var TagsError = [3, n0, _TE, 0, [_EC, _M], [0, 0]];
+var TooManyRequestsException = [
+  -3,
+  n0,
+  _TMRE,
+  {
+    [_e]: _c,
+    [_hE]: 429,
+  },
+  [_rAS, _Ty, _m, _Rea],
+  [
+    [
+      0,
+      {
+        [_hH]: _RA,
+      },
+    ],
+    0,
+    0,
+    0,
+  ],
+];
+schema.TypeRegistry.for(n0).registerError(
+  TooManyRequestsException,
+  TooManyRequestsException$1,
+);
+var TraceHeader = [3, n0, _TH, 0, [_XATI], [0]];
+var TracingConfig = [3, n0, _TC, 0, [_Mo], [0]];
+var TracingConfigResponse = [3, n0, _TCR, 0, [_Mo], [0]];
+var UnsupportedMediaTypeException = [
+  -3,
+  n0,
+  _UMTE,
+  {
+    [_e]: _c,
+    [_hE]: 415,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  UnsupportedMediaTypeException,
+  UnsupportedMediaTypeException$1,
+);
+var UntagResourceRequest = [
+  3,
+  n0,
+  _URR,
+  0,
+  [_Re, _TK],
+  [
+    [0, 1],
+    [
+      64 | 0,
+      {
+        [_hQ]: _tK,
+      },
+    ],
+  ],
+];
+var UpdateAliasRequest = [
+  3,
+  n0,
+  _UAR,
+  0,
+  [_FN, _N, _FV, _D, _RC, _RI],
+  [[0, 1], [0, 1], 0, 0, () => AliasRoutingConfiguration, 0],
+];
+var UpdateCodeSigningConfigRequest = [
+  3,
+  n0,
+  _UCSCR,
+  0,
+  [_CSCA, _D, _AP, _CSP],
+  [[0, 1], 0, () => AllowedPublishers, () => CodeSigningPolicies],
+];
+var UpdateCodeSigningConfigResponse = [
+  3,
+  n0,
+  _UCSCRp,
+  0,
+  [_CSC],
+  [() => CodeSigningConfig],
+];
+var UpdateEventSourceMappingRequest = [
+  3,
+  n0,
+  _UESMR,
+  0,
+  [
+    _UUID,
+    _FN,
+    _En,
+    _BSa,
+    _FCi,
+    _MBWIS,
+    _DC,
+    _MRAIS,
+    _BBOFE,
+    _MRA,
+    _PF,
+    _SAC,
+    _TWIS,
+    _FRT,
+    _SC,
+    _AMKESC,
+    _SMKESC,
+    _DDBESC,
+    _KMSKA,
+    _MC,
+    _PPC,
+  ],
+  [
+    [0, 1],
+    0,
+    2,
+    1,
+    () => FilterCriteria,
+    1,
+    () => DestinationConfig,
+    1,
+    2,
+    1,
+    1,
+    () => SourceAccessConfigurations,
+    1,
+    64 | 0,
+    () => ScalingConfig,
+    () => AmazonManagedKafkaEventSourceConfig,
+    () => SelfManagedKafkaEventSourceConfig,
+    () => DocumentDBEventSourceConfig,
+    0,
+    () => EventSourceMappingMetricsConfig,
+    () => ProvisionedPollerConfig,
+  ],
+];
+var UpdateFunctionCodeRequest = [
+  3,
+  n0,
+  _UFCR,
+  0,
+  [_FN, _ZF, _SB, _SK, _SOV, _IU, _Pu, _DR, _RI, _Ar, _SKMSKA],
+  [[0, 1], [() => _Blob, 0], 0, 0, 0, 0, 2, 2, 0, 64 | 0, 0],
+];
+var UpdateFunctionConfigurationRequest = [
+  3,
+  n0,
+  _UFCRp,
+  0,
+  [
+    _FN,
+    _Ro,
+    _H,
+    _D,
+    _T,
+    _MS,
+    _VC,
+    _Env,
+    _Ru,
+    _DLC,
+    _KMSKA,
+    _TC,
+    _RI,
+    _L,
+    _FSC,
+    _IC,
+    _ES,
+    _SSn,
+    _LC,
+    _DCu,
+  ],
+  [
+    [0, 1],
+    0,
+    0,
+    0,
+    1,
+    1,
+    () => VpcConfig,
+    [() => Environment, 0],
+    0,
+    () => DeadLetterConfig,
+    0,
+    () => TracingConfig,
+    0,
+    64 | 0,
+    () => FileSystemConfigList,
+    () => ImageConfig,
+    () => EphemeralStorage,
+    () => SnapStart,
+    () => LoggingConfig,
+    () => DurableConfig,
+  ],
+];
+var UpdateFunctionEventInvokeConfigRequest = [
+  3,
+  n0,
+  _UFEICR,
+  0,
+  [_FN, _Q, _MRA, _MEAIS, _DC],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    1,
+    1,
+    () => DestinationConfig,
+  ],
+];
+var UpdateFunctionUrlConfigRequest = [
+  3,
+  n0,
+  _UFUCR,
+  0,
+  [_FN, _Q, _AT, _Co, _IM],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    0,
+    () => Cors,
+    0,
+  ],
+];
+var UpdateFunctionUrlConfigResponse = [
+  3,
+  n0,
+  _UFUCRp,
+  0,
+  [_FU, _FA, _AT, _Co, _CTr, _LMT, _IM],
+  [0, 0, 0, () => Cors, 0, 0, 0],
+];
+var VpcConfig = [3, n0, _VC, 0, [_SIu, _SGI, _IAFDS], [64 | 0, 64 | 0, 2]];
+var VpcConfigResponse = [
+  3,
+  n0,
+  _VCR,
+  0,
+  [_SIu, _SGI, _VI, _IAFDS],
+  [64 | 0, 64 | 0, 0, 2],
+];
+var WaitCancelledDetails = [3, n0, _WCD, 0, [_E], [[() => EventError, 0]]];
+var WaitDetails = [3, n0, _WDa, 0, [_SET], [4]];
+var WaitOptions = [3, n0, _WO, 0, [_WS], [1]];
+var WaitStartedDetails = [3, n0, _WSD, 0, [_Du, _SET], [1, 4]];
+var WaitSucceededDetails = [3, n0, _WSDa, 0, [_Du], [1]];
+var __Unit = "unit";
+var LambdaServiceException = [-3, _sm, "LambdaServiceException", 0, [], []];
+schema.TypeRegistry.for(_sm).registerError(
+  LambdaServiceException,
+  LambdaServiceException$1,
+);
+var AliasList = [1, n0, _ALl, 0, () => AliasConfiguration];
+var CodeSigningConfigList = [1, n0, _CSCL, 0, () => CodeSigningConfig];
+var DurableExecutions = [1, n0, _DE, 0, () => Execution];
+var Events = [1, n0, _Eve, 0, [() => Event, 0]];
+var EventSourceMappingsList = [
+  1,
+  n0,
+  _ESML,
+  0,
+  () => EventSourceMappingConfiguration,
+];
+var FileSystemConfigList = [1, n0, _FSCL, 0, () => FileSystemConfig];
+var FilterList = [1, n0, _FL, 0, () => Filter];
+var FunctionEventInvokeConfigList = [
+  1,
+  n0,
+  _FEICL,
+  0,
+  () => FunctionEventInvokeConfig,
+];
+var FunctionList = [1, n0, _FLu, 0, [() => FunctionConfiguration, 0]];
+var FunctionUrlConfigList = [1, n0, _FUCL, 0, () => FunctionUrlConfig];
+var KafkaSchemaRegistryAccessConfigList = [
+  1,
+  n0,
+  _KSRACL,
+  0,
+  () => KafkaSchemaRegistryAccessConfig,
+];
+var KafkaSchemaValidationConfigList = [
+  1,
+  n0,
+  _KSVCL,
+  0,
+  () => KafkaSchemaValidationConfig,
+];
+var LayersList = [1, n0, _LL, 0, () => LayersListItem];
+var LayersReferenceList = [1, n0, _LRL, 0, () => Layer];
+var LayerVersionsList = [1, n0, _LVL, 0, () => LayerVersionsListItem];
+var Operations = [1, n0, _O, 0, [() => Operation, 0]];
+var OperationUpdates = [1, n0, _OUp, 0, [() => OperationUpdate, 0]];
+var ProvisionedConcurrencyConfigList = [
+  1,
+  n0,
+  _PCCL,
+  0,
+  () => ProvisionedConcurrencyConfigListItem,
+];
+var SourceAccessConfigurations = [
+  1,
+  n0,
+  _SAC,
+  0,
+  () => SourceAccessConfiguration,
+];
+var StackTraceEntries = [1, n0, _STEt, 0, [() => StackTraceEntry, 0]];
+var EnvironmentVariables = [
+  2,
+  n0,
+  _EVn,
+  8,
+  [() => EnvironmentVariableName, 0],
+  [() => EnvironmentVariableValue, 0],
+];
+var InvokeWithResponseStreamResponseEvent = [
+  3,
+  n0,
+  _IWRSRE,
+  {
+    [_s]: 1,
+  },
+  [_PC, _ICn],
+  [
+    [() => InvokeResponseStreamUpdate, 0],
+    () => InvokeWithResponseStreamCompleteEvent,
+  ],
+];
+var AddLayerVersionPermission = [
+  9,
+  n0,
+  _ALVP,
+  {
+    [_h]: [
+      "POST",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy",
+      201,
+    ],
+  },
+  () => AddLayerVersionPermissionRequest,
+  () => AddLayerVersionPermissionResponse,
+];
+var AddPermission = [
+  9,
+  n0,
+  _APd,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/policy", 201],
+  },
+  () => AddPermissionRequest,
+  () => AddPermissionResponse,
+];
+var CheckpointDurableExecution = [
+  9,
+  n0,
+  _CDE,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/checkpoint",
+      200,
+    ],
+  },
+  () => CheckpointDurableExecutionRequest,
+  () => CheckpointDurableExecutionResponse,
+];
+var CreateAlias = [
+  9,
+  n0,
+  _CAr,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/aliases", 201],
+  },
+  () => CreateAliasRequest,
+  () => AliasConfiguration,
+];
+var CreateCodeSigningConfig = [
+  9,
+  n0,
+  _CCSC,
+  {
+    [_h]: ["POST", "/2020-04-22/code-signing-configs", 201],
+  },
+  () => CreateCodeSigningConfigRequest,
+  () => CreateCodeSigningConfigResponse,
+];
+var CreateEventSourceMapping = [
+  9,
+  n0,
+  _CESM,
+  {
+    [_h]: ["POST", "/2015-03-31/event-source-mappings", 202],
+  },
+  () => CreateEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+var CreateFunction = [
+  9,
+  n0,
+  _CF,
+  {
+    [_h]: ["POST", "/2015-03-31/functions", 201],
+  },
+  () => CreateFunctionRequest,
+  () => FunctionConfiguration,
+];
+var CreateFunctionUrlConfig = [
+  9,
+  n0,
+  _CFUC,
+  {
+    [_h]: ["POST", "/2021-10-31/functions/{FunctionName}/url", 201],
+  },
+  () => CreateFunctionUrlConfigRequest,
+  () => CreateFunctionUrlConfigResponse,
+];
+var DeleteAlias = [
+  9,
+  n0,
+  _DA,
+  {
+    [_h]: [
+      "DELETE",
+      "/2015-03-31/functions/{FunctionName}/aliases/{Name}",
+      204,
+    ],
+  },
+  () => DeleteAliasRequest,
+  () => __Unit,
+];
+var DeleteCodeSigningConfig = [
+  9,
+  n0,
+  _DCSC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}",
+      204,
+    ],
+  },
+  () => DeleteCodeSigningConfigRequest,
+  () => DeleteCodeSigningConfigResponse,
+];
+var DeleteEventSourceMapping = [
+  9,
+  n0,
+  _DESM,
+  {
+    [_h]: ["DELETE", "/2015-03-31/event-source-mappings/{UUID}", 202],
+  },
+  () => DeleteEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+var DeleteFunction = [
+  9,
+  n0,
+  _DF,
+  {
+    [_h]: ["DELETE", "/2015-03-31/functions/{FunctionName}", 204],
+  },
+  () => DeleteFunctionRequest,
+  () => __Unit,
+];
+var DeleteFunctionCodeSigningConfig = [
+  9,
+  n0,
+  _DFCSC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2020-06-30/functions/{FunctionName}/code-signing-config",
+      204,
+    ],
+  },
+  () => DeleteFunctionCodeSigningConfigRequest,
+  () => __Unit,
+];
+var DeleteFunctionConcurrency = [
+  9,
+  n0,
+  _DFC,
+  {
+    [_h]: ["DELETE", "/2017-10-31/functions/{FunctionName}/concurrency", 204],
+  },
+  () => DeleteFunctionConcurrencyRequest,
+  () => __Unit,
+];
+var DeleteFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _DFEIC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      204,
+    ],
+  },
+  () => DeleteFunctionEventInvokeConfigRequest,
+  () => __Unit,
+];
+var DeleteFunctionUrlConfig = [
+  9,
+  n0,
+  _DFUC,
+  {
+    [_h]: ["DELETE", "/2021-10-31/functions/{FunctionName}/url", 204],
+  },
+  () => DeleteFunctionUrlConfigRequest,
+  () => __Unit,
+];
+var DeleteLayerVersion = [
+  9,
+  n0,
+  _DLV,
+  {
+    [_h]: [
+      "DELETE",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}",
+      204,
+    ],
+  },
+  () => DeleteLayerVersionRequest,
+  () => __Unit,
+];
+var DeleteProvisionedConcurrencyConfig = [
+  9,
+  n0,
+  _DPCC,
+  {
+    [_h]: [
+      "DELETE",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency",
+      204,
+    ],
+  },
+  () => DeleteProvisionedConcurrencyConfigRequest,
+  () => __Unit,
+];
+var GetAccountSettings = [
+  9,
+  n0,
+  _GAS,
+  {
+    [_h]: ["GET", "/2016-08-19/account-settings", 200],
+  },
+  () => GetAccountSettingsRequest,
+  () => GetAccountSettingsResponse,
+];
+var GetAlias = [
+  9,
+  n0,
+  _GA,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/aliases/{Name}", 200],
+  },
+  () => GetAliasRequest,
+  () => AliasConfiguration,
+];
+var GetCodeSigningConfig = [
+  9,
+  n0,
+  _GCSC,
+  {
+    [_h]: [
+      "GET",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}",
+      200,
+    ],
+  },
+  () => GetCodeSigningConfigRequest,
+  () => GetCodeSigningConfigResponse,
+];
+var GetDurableExecution = [
+  9,
+  n0,
+  _GDE,
+  {
+    [_h]: ["GET", "/2025-12-01/durable-executions/{DurableExecutionArn}", 200],
+  },
+  () => GetDurableExecutionRequest,
+  () => GetDurableExecutionResponse,
+];
+var GetDurableExecutionHistory = [
+  9,
+  n0,
+  _GDEH,
+  {
+    [_h]: [
+      "GET",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/history",
+      200,
+    ],
+  },
+  () => GetDurableExecutionHistoryRequest,
+  () => GetDurableExecutionHistoryResponse,
+];
+var GetDurableExecutionState = [
+  9,
+  n0,
+  _GDES,
+  {
+    [_h]: [
+      "GET",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/state",
+      200,
+    ],
+  },
+  () => GetDurableExecutionStateRequest,
+  () => GetDurableExecutionStateResponse,
+];
+var GetEventSourceMapping = [
+  9,
+  n0,
+  _GESM,
+  {
+    [_h]: ["GET", "/2015-03-31/event-source-mappings/{UUID}", 200],
+  },
+  () => GetEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+var GetFunction = [
+  9,
+  n0,
+  _GF,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}", 200],
+  },
+  () => GetFunctionRequest,
+  () => GetFunctionResponse,
+];
+var GetFunctionCodeSigningConfig = [
+  9,
+  n0,
+  _GFCSC,
+  {
+    [_h]: [
+      "GET",
+      "/2020-06-30/functions/{FunctionName}/code-signing-config",
+      200,
+    ],
+  },
+  () => GetFunctionCodeSigningConfigRequest,
+  () => GetFunctionCodeSigningConfigResponse,
+];
+var GetFunctionConcurrency = [
+  9,
+  n0,
+  _GFC,
+  {
+    [_h]: ["GET", "/2019-09-30/functions/{FunctionName}/concurrency", 200],
+  },
+  () => GetFunctionConcurrencyRequest,
+  () => GetFunctionConcurrencyResponse,
+];
+var GetFunctionConfiguration = [
+  9,
+  n0,
+  _GFCe,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/configuration", 200],
+  },
+  () => GetFunctionConfigurationRequest,
+  () => FunctionConfiguration,
+];
+var GetFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _GFEIC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      200,
+    ],
+  },
+  () => GetFunctionEventInvokeConfigRequest,
+  () => FunctionEventInvokeConfig,
+];
+var GetFunctionRecursionConfig = [
+  9,
+  n0,
+  _GFRC,
+  {
+    [_h]: ["GET", "/2024-08-31/functions/{FunctionName}/recursion-config", 200],
+  },
+  () => GetFunctionRecursionConfigRequest,
+  () => GetFunctionRecursionConfigResponse,
+];
+var GetFunctionUrlConfig = [
+  9,
+  n0,
+  _GFUC,
+  {
+    [_h]: ["GET", "/2021-10-31/functions/{FunctionName}/url", 200],
+  },
+  () => GetFunctionUrlConfigRequest,
+  () => GetFunctionUrlConfigResponse,
+];
+var GetLayerVersion = [
+  9,
+  n0,
+  _GLV,
+  {
+    [_h]: [
+      "GET",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}",
+      200,
+    ],
+  },
+  () => GetLayerVersionRequest,
+  () => GetLayerVersionResponse,
+];
+var GetLayerVersionByArn = [
+  9,
+  n0,
+  _GLVBA,
+  {
+    [_h]: ["GET", "/2018-10-31/layers?find=LayerVersion", 200],
+  },
+  () => GetLayerVersionByArnRequest,
+  () => GetLayerVersionResponse,
+];
+var GetLayerVersionPolicy = [
+  9,
+  n0,
+  _GLVP,
+  {
+    [_h]: [
+      "GET",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy",
+      200,
+    ],
+  },
+  () => GetLayerVersionPolicyRequest,
+  () => GetLayerVersionPolicyResponse,
+];
+var GetPolicy = [
+  9,
+  n0,
+  _GP,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/policy", 200],
+  },
+  () => GetPolicyRequest,
+  () => GetPolicyResponse,
+];
+var GetProvisionedConcurrencyConfig = [
+  9,
+  n0,
+  _GPCC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency",
+      200,
+    ],
+  },
+  () => GetProvisionedConcurrencyConfigRequest,
+  () => GetProvisionedConcurrencyConfigResponse,
+];
+var GetRuntimeManagementConfig = [
+  9,
+  n0,
+  _GRMC,
+  {
+    [_h]: [
+      "GET",
+      "/2021-07-20/functions/{FunctionName}/runtime-management-config",
+      200,
+    ],
+  },
+  () => GetRuntimeManagementConfigRequest,
+  () => GetRuntimeManagementConfigResponse,
+];
+var Invoke = [
+  9,
+  n0,
+  _In,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/invocations", 200],
+  },
+  () => InvocationRequest,
+  () => InvocationResponse,
+];
+var InvokeAsync = [
+  9,
+  n0,
+  _IAn,
+  {
+    [_h]: ["POST", "/2014-11-13/functions/{FunctionName}/invoke-async", 202],
+  },
+  () => InvokeAsyncRequest,
+  () => InvokeAsyncResponse,
+];
+var InvokeWithResponseStream = [
+  9,
+  n0,
+  _IWRS,
+  {
+    [_h]: [
+      "POST",
+      "/2021-11-15/functions/{FunctionName}/response-streaming-invocations",
+      200,
+    ],
+  },
+  () => InvokeWithResponseStreamRequest,
+  () => InvokeWithResponseStreamResponse,
+];
+var ListAliases = [
+  9,
+  n0,
+  _LAi,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/aliases", 200],
+  },
+  () => ListAliasesRequest,
+  () => ListAliasesResponse,
+];
+var ListCodeSigningConfigs = [
+  9,
+  n0,
+  _LCSC,
+  {
+    [_h]: ["GET", "/2020-04-22/code-signing-configs", 200],
+  },
+  () => ListCodeSigningConfigsRequest,
+  () => ListCodeSigningConfigsResponse,
+];
+var ListDurableExecutionsByFunction = [
+  9,
+  n0,
+  _LDEBF,
+  {
+    [_h]: [
+      "GET",
+      "/2025-12-01/functions/{FunctionName}/durable-executions",
+      200,
+    ],
+  },
+  () => ListDurableExecutionsByFunctionRequest,
+  () => ListDurableExecutionsByFunctionResponse,
+];
+var ListEventSourceMappings = [
+  9,
+  n0,
+  _LESM,
+  {
+    [_h]: ["GET", "/2015-03-31/event-source-mappings", 200],
+  },
+  () => ListEventSourceMappingsRequest,
+  () => ListEventSourceMappingsResponse,
+];
+var ListFunctionEventInvokeConfigs = [
+  9,
+  n0,
+  _LFEIC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config/list",
+      200,
+    ],
+  },
+  () => ListFunctionEventInvokeConfigsRequest,
+  () => ListFunctionEventInvokeConfigsResponse,
+];
+var ListFunctions = [
+  9,
+  n0,
+  _LFi,
+  {
+    [_h]: ["GET", "/2015-03-31/functions", 200],
+  },
+  () => ListFunctionsRequest,
+  () => ListFunctionsResponse,
+];
+var ListFunctionsByCodeSigningConfig = [
+  9,
+  n0,
+  _LFBCSC,
+  {
+    [_h]: [
+      "GET",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}/functions",
+      200,
+    ],
+  },
+  () => ListFunctionsByCodeSigningConfigRequest,
+  () => ListFunctionsByCodeSigningConfigResponse,
+];
+var ListFunctionUrlConfigs = [
+  9,
+  n0,
+  _LFUC,
+  {
+    [_h]: ["GET", "/2021-10-31/functions/{FunctionName}/urls", 200],
+  },
+  () => ListFunctionUrlConfigsRequest,
+  () => ListFunctionUrlConfigsResponse,
+];
+var ListLayers = [
+  9,
+  n0,
+  _LLi,
+  {
+    [_h]: ["GET", "/2018-10-31/layers", 200],
+  },
+  () => ListLayersRequest,
+  () => ListLayersResponse,
+];
+var ListLayerVersions = [
+  9,
+  n0,
+  _LLV,
+  {
+    [_h]: ["GET", "/2018-10-31/layers/{LayerName}/versions", 200],
+  },
+  () => ListLayerVersionsRequest,
+  () => ListLayerVersionsResponse,
+];
+var ListProvisionedConcurrencyConfigs = [
+  9,
+  n0,
+  _LPCC,
+  {
+    [_h]: [
+      "GET",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency?List=ALL",
+      200,
+    ],
+  },
+  () => ListProvisionedConcurrencyConfigsRequest,
+  () => ListProvisionedConcurrencyConfigsResponse,
+];
+var ListTags = [
+  9,
+  n0,
+  _LTi,
+  {
+    [_h]: ["GET", "/2017-03-31/tags/{Resource}", 200],
+  },
+  () => ListTagsRequest,
+  () => ListTagsResponse,
+];
+var ListVersionsByFunction = [
+  9,
+  n0,
+  _LVBF,
+  {
+    [_h]: ["GET", "/2015-03-31/functions/{FunctionName}/versions", 200],
+  },
+  () => ListVersionsByFunctionRequest,
+  () => ListVersionsByFunctionResponse,
+];
+var PublishLayerVersion = [
+  9,
+  n0,
+  _PLV,
+  {
+    [_h]: ["POST", "/2018-10-31/layers/{LayerName}/versions", 201],
+  },
+  () => PublishLayerVersionRequest,
+  () => PublishLayerVersionResponse,
+];
+var PublishVersion = [
+  9,
+  n0,
+  _PV,
+  {
+    [_h]: ["POST", "/2015-03-31/functions/{FunctionName}/versions", 201],
+  },
+  () => PublishVersionRequest,
+  () => FunctionConfiguration,
+];
+var PutFunctionCodeSigningConfig = [
+  9,
+  n0,
+  _PFCSC,
+  {
+    [_h]: [
+      "PUT",
+      "/2020-06-30/functions/{FunctionName}/code-signing-config",
+      200,
+    ],
+  },
+  () => PutFunctionCodeSigningConfigRequest,
+  () => PutFunctionCodeSigningConfigResponse,
+];
+var PutFunctionConcurrency = [
+  9,
+  n0,
+  _PFC,
+  {
+    [_h]: ["PUT", "/2017-10-31/functions/{FunctionName}/concurrency", 200],
+  },
+  () => PutFunctionConcurrencyRequest,
+  () => Concurrency,
+];
+var PutFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _PFEIC,
+  {
+    [_h]: [
+      "PUT",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      200,
+    ],
+  },
+  () => PutFunctionEventInvokeConfigRequest,
+  () => FunctionEventInvokeConfig,
+];
+var PutFunctionRecursionConfig = [
+  9,
+  n0,
+  _PFRC,
+  {
+    [_h]: ["PUT", "/2024-08-31/functions/{FunctionName}/recursion-config", 200],
+  },
+  () => PutFunctionRecursionConfigRequest,
+  () => PutFunctionRecursionConfigResponse,
+];
+var PutProvisionedConcurrencyConfig = [
+  9,
+  n0,
+  _PPCC,
+  {
+    [_h]: [
+      "PUT",
+      "/2019-09-30/functions/{FunctionName}/provisioned-concurrency",
+      202,
+    ],
+  },
+  () => PutProvisionedConcurrencyConfigRequest,
+  () => PutProvisionedConcurrencyConfigResponse,
+];
+var PutRuntimeManagementConfig = [
+  9,
+  n0,
+  _PRMC,
+  {
+    [_h]: [
+      "PUT",
+      "/2021-07-20/functions/{FunctionName}/runtime-management-config",
+      200,
+    ],
+  },
+  () => PutRuntimeManagementConfigRequest,
+  () => PutRuntimeManagementConfigResponse,
+];
+var RemoveLayerVersionPermission = [
+  9,
+  n0,
+  _RLVP,
+  {
+    [_h]: [
+      "DELETE",
+      "/2018-10-31/layers/{LayerName}/versions/{VersionNumber}/policy/{StatementId}",
+      204,
+    ],
+  },
+  () => RemoveLayerVersionPermissionRequest,
+  () => __Unit,
+];
+var RemovePermission = [
+  9,
+  n0,
+  _RP,
+  {
+    [_h]: [
+      "DELETE",
+      "/2015-03-31/functions/{FunctionName}/policy/{StatementId}",
+      204,
+    ],
+  },
+  () => RemovePermissionRequest,
+  () => __Unit,
+];
+var SendDurableExecutionCallbackFailure = [
+  9,
+  n0,
+  _SDECF,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-execution-callbacks/{CallbackId}/fail",
+      200,
+    ],
+  },
+  () => SendDurableExecutionCallbackFailureRequest,
+  () => SendDurableExecutionCallbackFailureResponse,
+];
+var SendDurableExecutionCallbackHeartbeat = [
+  9,
+  n0,
+  _SDECH,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-execution-callbacks/{CallbackId}/heartbeat",
+      200,
+    ],
+  },
+  () => SendDurableExecutionCallbackHeartbeatRequest,
+  () => SendDurableExecutionCallbackHeartbeatResponse,
+];
+var SendDurableExecutionCallbackSuccess = [
+  9,
+  n0,
+  _SDECS,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-execution-callbacks/{CallbackId}/succeed",
+      200,
+    ],
+  },
+  () => SendDurableExecutionCallbackSuccessRequest,
+  () => SendDurableExecutionCallbackSuccessResponse,
+];
+var StopDurableExecution = [
+  9,
+  n0,
+  _SDE,
+  {
+    [_h]: [
+      "POST",
+      "/2025-12-01/durable-executions/{DurableExecutionArn}/stop",
+      200,
+    ],
+  },
+  () => StopDurableExecutionRequest,
+  () => StopDurableExecutionResponse,
+];
+var TagResource = [
+  9,
+  n0,
+  _TR,
+  {
+    [_h]: ["POST", "/2017-03-31/tags/{Resource}", 204],
+  },
+  () => TagResourceRequest,
+  () => __Unit,
+];
+var UntagResource = [
+  9,
+  n0,
+  _UR,
+  {
+    [_h]: ["DELETE", "/2017-03-31/tags/{Resource}", 204],
+  },
+  () => UntagResourceRequest,
+  () => __Unit,
+];
+var UpdateAlias = [
+  9,
+  n0,
+  _UA,
+  {
+    [_h]: ["PUT", "/2015-03-31/functions/{FunctionName}/aliases/{Name}", 200],
+  },
+  () => UpdateAliasRequest,
+  () => AliasConfiguration,
+];
+var UpdateCodeSigningConfig = [
+  9,
+  n0,
+  _UCSC,
+  {
+    [_h]: [
+      "PUT",
+      "/2020-04-22/code-signing-configs/{CodeSigningConfigArn}",
+      200,
+    ],
+  },
+  () => UpdateCodeSigningConfigRequest,
+  () => UpdateCodeSigningConfigResponse,
+];
+var UpdateEventSourceMapping = [
+  9,
+  n0,
+  _UESM,
+  {
+    [_h]: ["PUT", "/2015-03-31/event-source-mappings/{UUID}", 202],
+  },
+  () => UpdateEventSourceMappingRequest,
+  () => EventSourceMappingConfiguration,
+];
+var UpdateFunctionCode = [
+  9,
+  n0,
+  _UFC,
+  {
+    [_h]: ["PUT", "/2015-03-31/functions/{FunctionName}/code", 200],
+  },
+  () => UpdateFunctionCodeRequest,
+  () => FunctionConfiguration,
+];
+var UpdateFunctionConfiguration = [
+  9,
+  n0,
+  _UFCp,
+  {
+    [_h]: ["PUT", "/2015-03-31/functions/{FunctionName}/configuration", 200],
+  },
+  () => UpdateFunctionConfigurationRequest,
+  () => FunctionConfiguration,
+];
+var UpdateFunctionEventInvokeConfig = [
+  9,
+  n0,
+  _UFEIC,
+  {
+    [_h]: [
+      "POST",
+      "/2019-09-25/functions/{FunctionName}/event-invoke-config",
+      200,
+    ],
+  },
+  () => UpdateFunctionEventInvokeConfigRequest,
+  () => FunctionEventInvokeConfig,
+];
+var UpdateFunctionUrlConfig = [
+  9,
+  n0,
+  _UFUC,
+  {
+    [_h]: ["PUT", "/2021-10-31/functions/{FunctionName}/url", 200],
+  },
+  () => UpdateFunctionUrlConfigRequest,
+  () => UpdateFunctionUrlConfigResponse,
+];
 
 class AddLayerVersionPermissionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5566,16 +5490,13 @@ class AddLayerVersionPermissionCommand extends smithyClient.Command.classBuilder
   })
   .s("AWSGirApiService", "AddLayerVersionPermission", {})
   .n("LambdaClient", "AddLayerVersionPermissionCommand")
-  .f(void 0, void 0)
-  .ser(se_AddLayerVersionPermissionCommand)
-  .de(de_AddLayerVersionPermissionCommand)
+  .sc(AddLayerVersionPermission)
   .build() {}
 
 class AddPermissionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5584,16 +5505,13 @@ class AddPermissionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "AddPermission", {})
   .n("LambdaClient", "AddPermissionCommand")
-  .f(void 0, void 0)
-  .ser(se_AddPermissionCommand)
-  .de(de_AddPermissionCommand)
+  .sc(AddPermission)
   .build() {}
 
 class CheckpointDurableExecutionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5602,19 +5520,13 @@ class CheckpointDurableExecutionCommand extends smithyClient.Command.classBuilde
   })
   .s("AWSGirApiService", "CheckpointDurableExecution", {})
   .n("LambdaClient", "CheckpointDurableExecutionCommand")
-  .f(
-    CheckpointDurableExecutionRequestFilterSensitiveLog,
-    CheckpointDurableExecutionResponseFilterSensitiveLog,
-  )
-  .ser(se_CheckpointDurableExecutionCommand)
-  .de(de_CheckpointDurableExecutionCommand)
+  .sc(CheckpointDurableExecution)
   .build() {}
 
 class CreateAliasCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5623,16 +5535,13 @@ class CreateAliasCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "CreateAlias", {})
   .n("LambdaClient", "CreateAliasCommand")
-  .f(void 0, void 0)
-  .ser(se_CreateAliasCommand)
-  .de(de_CreateAliasCommand)
+  .sc(CreateAlias)
   .build() {}
 
 class CreateCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5641,16 +5550,13 @@ class CreateCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "CreateCodeSigningConfig", {})
   .n("LambdaClient", "CreateCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_CreateCodeSigningConfigCommand)
-  .de(de_CreateCodeSigningConfigCommand)
+  .sc(CreateCodeSigningConfig)
   .build() {}
 
 class CreateEventSourceMappingCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5659,16 +5565,13 @@ class CreateEventSourceMappingCommand extends smithyClient.Command.classBuilder(
   })
   .s("AWSGirApiService", "CreateEventSourceMapping", {})
   .n("LambdaClient", "CreateEventSourceMappingCommand")
-  .f(void 0, void 0)
-  .ser(se_CreateEventSourceMappingCommand)
-  .de(de_CreateEventSourceMappingCommand)
+  .sc(CreateEventSourceMapping)
   .build() {}
 
 class CreateFunctionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5677,19 +5580,13 @@ class CreateFunctionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "CreateFunction", {})
   .n("LambdaClient", "CreateFunctionCommand")
-  .f(
-    CreateFunctionRequestFilterSensitiveLog,
-    FunctionConfigurationFilterSensitiveLog,
-  )
-  .ser(se_CreateFunctionCommand)
-  .de(de_CreateFunctionCommand)
+  .sc(CreateFunction)
   .build() {}
 
 class CreateFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5698,16 +5595,13 @@ class CreateFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "CreateFunctionUrlConfig", {})
   .n("LambdaClient", "CreateFunctionUrlConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_CreateFunctionUrlConfigCommand)
-  .de(de_CreateFunctionUrlConfigCommand)
+  .sc(CreateFunctionUrlConfig)
   .build() {}
 
 class DeleteAliasCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5716,16 +5610,13 @@ class DeleteAliasCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "DeleteAlias", {})
   .n("LambdaClient", "DeleteAliasCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteAliasCommand)
-  .de(de_DeleteAliasCommand)
+  .sc(DeleteAlias)
   .build() {}
 
 class DeleteCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5734,16 +5625,13 @@ class DeleteCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "DeleteCodeSigningConfig", {})
   .n("LambdaClient", "DeleteCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteCodeSigningConfigCommand)
-  .de(de_DeleteCodeSigningConfigCommand)
+  .sc(DeleteCodeSigningConfig)
   .build() {}
 
 class DeleteEventSourceMappingCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5752,16 +5640,13 @@ class DeleteEventSourceMappingCommand extends smithyClient.Command.classBuilder(
   })
   .s("AWSGirApiService", "DeleteEventSourceMapping", {})
   .n("LambdaClient", "DeleteEventSourceMappingCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteEventSourceMappingCommand)
-  .de(de_DeleteEventSourceMappingCommand)
+  .sc(DeleteEventSourceMapping)
   .build() {}
 
 class DeleteFunctionCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5770,16 +5655,13 @@ class DeleteFunctionCodeSigningConfigCommand extends smithyClient.Command.classB
   })
   .s("AWSGirApiService", "DeleteFunctionCodeSigningConfig", {})
   .n("LambdaClient", "DeleteFunctionCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteFunctionCodeSigningConfigCommand)
-  .de(de_DeleteFunctionCodeSigningConfigCommand)
+  .sc(DeleteFunctionCodeSigningConfig)
   .build() {}
 
 class DeleteFunctionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5788,16 +5670,13 @@ class DeleteFunctionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "DeleteFunction", {})
   .n("LambdaClient", "DeleteFunctionCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteFunctionCommand)
-  .de(de_DeleteFunctionCommand)
+  .sc(DeleteFunction)
   .build() {}
 
 class DeleteFunctionConcurrencyCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5806,16 +5685,13 @@ class DeleteFunctionConcurrencyCommand extends smithyClient.Command.classBuilder
   })
   .s("AWSGirApiService", "DeleteFunctionConcurrency", {})
   .n("LambdaClient", "DeleteFunctionConcurrencyCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteFunctionConcurrencyCommand)
-  .de(de_DeleteFunctionConcurrencyCommand)
+  .sc(DeleteFunctionConcurrency)
   .build() {}
 
 class DeleteFunctionEventInvokeConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5824,16 +5700,13 @@ class DeleteFunctionEventInvokeConfigCommand extends smithyClient.Command.classB
   })
   .s("AWSGirApiService", "DeleteFunctionEventInvokeConfig", {})
   .n("LambdaClient", "DeleteFunctionEventInvokeConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteFunctionEventInvokeConfigCommand)
-  .de(de_DeleteFunctionEventInvokeConfigCommand)
+  .sc(DeleteFunctionEventInvokeConfig)
   .build() {}
 
 class DeleteFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5842,16 +5715,13 @@ class DeleteFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "DeleteFunctionUrlConfig", {})
   .n("LambdaClient", "DeleteFunctionUrlConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteFunctionUrlConfigCommand)
-  .de(de_DeleteFunctionUrlConfigCommand)
+  .sc(DeleteFunctionUrlConfig)
   .build() {}
 
 class DeleteLayerVersionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5860,16 +5730,13 @@ class DeleteLayerVersionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "DeleteLayerVersion", {})
   .n("LambdaClient", "DeleteLayerVersionCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteLayerVersionCommand)
-  .de(de_DeleteLayerVersionCommand)
+  .sc(DeleteLayerVersion)
   .build() {}
 
 class DeleteProvisionedConcurrencyConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5878,16 +5745,13 @@ class DeleteProvisionedConcurrencyConfigCommand extends smithyClient.Command.cla
   })
   .s("AWSGirApiService", "DeleteProvisionedConcurrencyConfig", {})
   .n("LambdaClient", "DeleteProvisionedConcurrencyConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_DeleteProvisionedConcurrencyConfigCommand)
-  .de(de_DeleteProvisionedConcurrencyConfigCommand)
+  .sc(DeleteProvisionedConcurrencyConfig)
   .build() {}
 
 class GetAccountSettingsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5896,16 +5760,13 @@ class GetAccountSettingsCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetAccountSettings", {})
   .n("LambdaClient", "GetAccountSettingsCommand")
-  .f(void 0, void 0)
-  .ser(se_GetAccountSettingsCommand)
-  .de(de_GetAccountSettingsCommand)
+  .sc(GetAccountSettings)
   .build() {}
 
 class GetAliasCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5914,16 +5775,13 @@ class GetAliasCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetAlias", {})
   .n("LambdaClient", "GetAliasCommand")
-  .f(void 0, void 0)
-  .ser(se_GetAliasCommand)
-  .de(de_GetAliasCommand)
+  .sc(GetAlias)
   .build() {}
 
 class GetCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5932,16 +5790,13 @@ class GetCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetCodeSigningConfig", {})
   .n("LambdaClient", "GetCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_GetCodeSigningConfigCommand)
-  .de(de_GetCodeSigningConfigCommand)
+  .sc(GetCodeSigningConfig)
   .build() {}
 
 class GetDurableExecutionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5950,16 +5805,13 @@ class GetDurableExecutionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetDurableExecution", {})
   .n("LambdaClient", "GetDurableExecutionCommand")
-  .f(void 0, GetDurableExecutionResponseFilterSensitiveLog)
-  .ser(se_GetDurableExecutionCommand)
-  .de(de_GetDurableExecutionCommand)
+  .sc(GetDurableExecution)
   .build() {}
 
 class GetDurableExecutionHistoryCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5968,16 +5820,13 @@ class GetDurableExecutionHistoryCommand extends smithyClient.Command.classBuilde
   })
   .s("AWSGirApiService", "GetDurableExecutionHistory", {})
   .n("LambdaClient", "GetDurableExecutionHistoryCommand")
-  .f(void 0, GetDurableExecutionHistoryResponseFilterSensitiveLog)
-  .ser(se_GetDurableExecutionHistoryCommand)
-  .de(de_GetDurableExecutionHistoryCommand)
+  .sc(GetDurableExecutionHistory)
   .build() {}
 
 class GetDurableExecutionStateCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -5986,16 +5835,13 @@ class GetDurableExecutionStateCommand extends smithyClient.Command.classBuilder(
   })
   .s("AWSGirApiService", "GetDurableExecutionState", {})
   .n("LambdaClient", "GetDurableExecutionStateCommand")
-  .f(void 0, GetDurableExecutionStateResponseFilterSensitiveLog)
-  .ser(se_GetDurableExecutionStateCommand)
-  .de(de_GetDurableExecutionStateCommand)
+  .sc(GetDurableExecutionState)
   .build() {}
 
 class GetEventSourceMappingCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6004,16 +5850,13 @@ class GetEventSourceMappingCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetEventSourceMapping", {})
   .n("LambdaClient", "GetEventSourceMappingCommand")
-  .f(void 0, void 0)
-  .ser(se_GetEventSourceMappingCommand)
-  .de(de_GetEventSourceMappingCommand)
+  .sc(GetEventSourceMapping)
   .build() {}
 
 class GetFunctionCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6022,16 +5865,13 @@ class GetFunctionCodeSigningConfigCommand extends smithyClient.Command.classBuil
   })
   .s("AWSGirApiService", "GetFunctionCodeSigningConfig", {})
   .n("LambdaClient", "GetFunctionCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_GetFunctionCodeSigningConfigCommand)
-  .de(de_GetFunctionCodeSigningConfigCommand)
+  .sc(GetFunctionCodeSigningConfig)
   .build() {}
 
 class GetFunctionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6040,16 +5880,13 @@ class GetFunctionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetFunction", {})
   .n("LambdaClient", "GetFunctionCommand")
-  .f(void 0, GetFunctionResponseFilterSensitiveLog)
-  .ser(se_GetFunctionCommand)
-  .de(de_GetFunctionCommand)
+  .sc(GetFunction)
   .build() {}
 
 class GetFunctionConcurrencyCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6058,16 +5895,13 @@ class GetFunctionConcurrencyCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetFunctionConcurrency", {})
   .n("LambdaClient", "GetFunctionConcurrencyCommand")
-  .f(void 0, void 0)
-  .ser(se_GetFunctionConcurrencyCommand)
-  .de(de_GetFunctionConcurrencyCommand)
+  .sc(GetFunctionConcurrency)
   .build() {}
 
 class GetFunctionConfigurationCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6076,16 +5910,13 @@ class GetFunctionConfigurationCommand extends smithyClient.Command.classBuilder(
   })
   .s("AWSGirApiService", "GetFunctionConfiguration", {})
   .n("LambdaClient", "GetFunctionConfigurationCommand")
-  .f(void 0, FunctionConfigurationFilterSensitiveLog)
-  .ser(se_GetFunctionConfigurationCommand)
-  .de(de_GetFunctionConfigurationCommand)
+  .sc(GetFunctionConfiguration)
   .build() {}
 
 class GetFunctionEventInvokeConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6094,16 +5925,13 @@ class GetFunctionEventInvokeConfigCommand extends smithyClient.Command.classBuil
   })
   .s("AWSGirApiService", "GetFunctionEventInvokeConfig", {})
   .n("LambdaClient", "GetFunctionEventInvokeConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_GetFunctionEventInvokeConfigCommand)
-  .de(de_GetFunctionEventInvokeConfigCommand)
+  .sc(GetFunctionEventInvokeConfig)
   .build() {}
 
 class GetFunctionRecursionConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6112,16 +5940,13 @@ class GetFunctionRecursionConfigCommand extends smithyClient.Command.classBuilde
   })
   .s("AWSGirApiService", "GetFunctionRecursionConfig", {})
   .n("LambdaClient", "GetFunctionRecursionConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_GetFunctionRecursionConfigCommand)
-  .de(de_GetFunctionRecursionConfigCommand)
+  .sc(GetFunctionRecursionConfig)
   .build() {}
 
 class GetFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6130,16 +5955,13 @@ class GetFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetFunctionUrlConfig", {})
   .n("LambdaClient", "GetFunctionUrlConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_GetFunctionUrlConfigCommand)
-  .de(de_GetFunctionUrlConfigCommand)
+  .sc(GetFunctionUrlConfig)
   .build() {}
 
 class GetLayerVersionByArnCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6148,16 +5970,13 @@ class GetLayerVersionByArnCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetLayerVersionByArn", {})
   .n("LambdaClient", "GetLayerVersionByArnCommand")
-  .f(void 0, void 0)
-  .ser(se_GetLayerVersionByArnCommand)
-  .de(de_GetLayerVersionByArnCommand)
+  .sc(GetLayerVersionByArn)
   .build() {}
 
 class GetLayerVersionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6166,16 +5985,13 @@ class GetLayerVersionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetLayerVersion", {})
   .n("LambdaClient", "GetLayerVersionCommand")
-  .f(void 0, void 0)
-  .ser(se_GetLayerVersionCommand)
-  .de(de_GetLayerVersionCommand)
+  .sc(GetLayerVersion)
   .build() {}
 
 class GetLayerVersionPolicyCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6184,16 +6000,13 @@ class GetLayerVersionPolicyCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetLayerVersionPolicy", {})
   .n("LambdaClient", "GetLayerVersionPolicyCommand")
-  .f(void 0, void 0)
-  .ser(se_GetLayerVersionPolicyCommand)
-  .de(de_GetLayerVersionPolicyCommand)
+  .sc(GetLayerVersionPolicy)
   .build() {}
 
 class GetPolicyCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6202,16 +6015,13 @@ class GetPolicyCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "GetPolicy", {})
   .n("LambdaClient", "GetPolicyCommand")
-  .f(void 0, void 0)
-  .ser(se_GetPolicyCommand)
-  .de(de_GetPolicyCommand)
+  .sc(GetPolicy)
   .build() {}
 
 class GetProvisionedConcurrencyConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6220,16 +6030,13 @@ class GetProvisionedConcurrencyConfigCommand extends smithyClient.Command.classB
   })
   .s("AWSGirApiService", "GetProvisionedConcurrencyConfig", {})
   .n("LambdaClient", "GetProvisionedConcurrencyConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_GetProvisionedConcurrencyConfigCommand)
-  .de(de_GetProvisionedConcurrencyConfigCommand)
+  .sc(GetProvisionedConcurrencyConfig)
   .build() {}
 
 class GetRuntimeManagementConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6238,16 +6045,13 @@ class GetRuntimeManagementConfigCommand extends smithyClient.Command.classBuilde
   })
   .s("AWSGirApiService", "GetRuntimeManagementConfig", {})
   .n("LambdaClient", "GetRuntimeManagementConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_GetRuntimeManagementConfigCommand)
-  .de(de_GetRuntimeManagementConfigCommand)
+  .sc(GetRuntimeManagementConfig)
   .build() {}
 
 class InvokeAsyncCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6256,16 +6060,13 @@ class InvokeAsyncCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "InvokeAsync", {})
   .n("LambdaClient", "InvokeAsyncCommand")
-  .f(InvokeAsyncRequestFilterSensitiveLog, void 0)
-  .ser(se_InvokeAsyncCommand)
-  .de(de_InvokeAsyncCommand)
+  .sc(InvokeAsync)
   .build() {}
 
 class InvokeCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6274,16 +6075,13 @@ class InvokeCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "Invoke", {})
   .n("LambdaClient", "InvokeCommand")
-  .f(InvocationRequestFilterSensitiveLog, InvocationResponseFilterSensitiveLog)
-  .ser(se_InvokeCommand)
-  .de(de_InvokeCommand)
+  .sc(Invoke)
   .build() {}
 
 class InvokeWithResponseStreamCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6296,19 +6094,13 @@ class InvokeWithResponseStreamCommand extends smithyClient.Command.classBuilder(
     },
   })
   .n("LambdaClient", "InvokeWithResponseStreamCommand")
-  .f(
-    InvokeWithResponseStreamRequestFilterSensitiveLog,
-    InvokeWithResponseStreamResponseFilterSensitiveLog,
-  )
-  .ser(se_InvokeWithResponseStreamCommand)
-  .de(de_InvokeWithResponseStreamCommand)
+  .sc(InvokeWithResponseStream)
   .build() {}
 
 class ListAliasesCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6317,16 +6109,13 @@ class ListAliasesCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListAliases", {})
   .n("LambdaClient", "ListAliasesCommand")
-  .f(void 0, void 0)
-  .ser(se_ListAliasesCommand)
-  .de(de_ListAliasesCommand)
+  .sc(ListAliases)
   .build() {}
 
 class ListCodeSigningConfigsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6335,16 +6124,13 @@ class ListCodeSigningConfigsCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListCodeSigningConfigs", {})
   .n("LambdaClient", "ListCodeSigningConfigsCommand")
-  .f(void 0, void 0)
-  .ser(se_ListCodeSigningConfigsCommand)
-  .de(de_ListCodeSigningConfigsCommand)
+  .sc(ListCodeSigningConfigs)
   .build() {}
 
 class ListDurableExecutionsByFunctionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6353,16 +6139,13 @@ class ListDurableExecutionsByFunctionCommand extends smithyClient.Command.classB
   })
   .s("AWSGirApiService", "ListDurableExecutionsByFunction", {})
   .n("LambdaClient", "ListDurableExecutionsByFunctionCommand")
-  .f(void 0, void 0)
-  .ser(se_ListDurableExecutionsByFunctionCommand)
-  .de(de_ListDurableExecutionsByFunctionCommand)
+  .sc(ListDurableExecutionsByFunction)
   .build() {}
 
 class ListEventSourceMappingsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6371,16 +6154,13 @@ class ListEventSourceMappingsCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListEventSourceMappings", {})
   .n("LambdaClient", "ListEventSourceMappingsCommand")
-  .f(void 0, void 0)
-  .ser(se_ListEventSourceMappingsCommand)
-  .de(de_ListEventSourceMappingsCommand)
+  .sc(ListEventSourceMappings)
   .build() {}
 
 class ListFunctionEventInvokeConfigsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6389,16 +6169,13 @@ class ListFunctionEventInvokeConfigsCommand extends smithyClient.Command.classBu
   })
   .s("AWSGirApiService", "ListFunctionEventInvokeConfigs", {})
   .n("LambdaClient", "ListFunctionEventInvokeConfigsCommand")
-  .f(void 0, void 0)
-  .ser(se_ListFunctionEventInvokeConfigsCommand)
-  .de(de_ListFunctionEventInvokeConfigsCommand)
+  .sc(ListFunctionEventInvokeConfigs)
   .build() {}
 
 class ListFunctionsByCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6407,16 +6184,13 @@ class ListFunctionsByCodeSigningConfigCommand extends smithyClient.Command.class
   })
   .s("AWSGirApiService", "ListFunctionsByCodeSigningConfig", {})
   .n("LambdaClient", "ListFunctionsByCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_ListFunctionsByCodeSigningConfigCommand)
-  .de(de_ListFunctionsByCodeSigningConfigCommand)
+  .sc(ListFunctionsByCodeSigningConfig)
   .build() {}
 
 class ListFunctionsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6425,16 +6199,13 @@ class ListFunctionsCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListFunctions", {})
   .n("LambdaClient", "ListFunctionsCommand")
-  .f(void 0, ListFunctionsResponseFilterSensitiveLog)
-  .ser(se_ListFunctionsCommand)
-  .de(de_ListFunctionsCommand)
+  .sc(ListFunctions)
   .build() {}
 
 class ListFunctionUrlConfigsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6443,16 +6214,13 @@ class ListFunctionUrlConfigsCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListFunctionUrlConfigs", {})
   .n("LambdaClient", "ListFunctionUrlConfigsCommand")
-  .f(void 0, void 0)
-  .ser(se_ListFunctionUrlConfigsCommand)
-  .de(de_ListFunctionUrlConfigsCommand)
+  .sc(ListFunctionUrlConfigs)
   .build() {}
 
 class ListLayersCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6461,16 +6229,13 @@ class ListLayersCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListLayers", {})
   .n("LambdaClient", "ListLayersCommand")
-  .f(void 0, void 0)
-  .ser(se_ListLayersCommand)
-  .de(de_ListLayersCommand)
+  .sc(ListLayers)
   .build() {}
 
 class ListLayerVersionsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6479,16 +6244,13 @@ class ListLayerVersionsCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListLayerVersions", {})
   .n("LambdaClient", "ListLayerVersionsCommand")
-  .f(void 0, void 0)
-  .ser(se_ListLayerVersionsCommand)
-  .de(de_ListLayerVersionsCommand)
+  .sc(ListLayerVersions)
   .build() {}
 
 class ListProvisionedConcurrencyConfigsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6497,16 +6259,13 @@ class ListProvisionedConcurrencyConfigsCommand extends smithyClient.Command.clas
   })
   .s("AWSGirApiService", "ListProvisionedConcurrencyConfigs", {})
   .n("LambdaClient", "ListProvisionedConcurrencyConfigsCommand")
-  .f(void 0, void 0)
-  .ser(se_ListProvisionedConcurrencyConfigsCommand)
-  .de(de_ListProvisionedConcurrencyConfigsCommand)
+  .sc(ListProvisionedConcurrencyConfigs)
   .build() {}
 
 class ListTagsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6515,16 +6274,13 @@ class ListTagsCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListTags", {})
   .n("LambdaClient", "ListTagsCommand")
-  .f(void 0, void 0)
-  .ser(se_ListTagsCommand)
-  .de(de_ListTagsCommand)
+  .sc(ListTags)
   .build() {}
 
 class ListVersionsByFunctionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6533,16 +6289,13 @@ class ListVersionsByFunctionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "ListVersionsByFunction", {})
   .n("LambdaClient", "ListVersionsByFunctionCommand")
-  .f(void 0, ListVersionsByFunctionResponseFilterSensitiveLog)
-  .ser(se_ListVersionsByFunctionCommand)
-  .de(de_ListVersionsByFunctionCommand)
+  .sc(ListVersionsByFunction)
   .build() {}
 
 class PublishLayerVersionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6551,16 +6304,13 @@ class PublishLayerVersionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "PublishLayerVersion", {})
   .n("LambdaClient", "PublishLayerVersionCommand")
-  .f(PublishLayerVersionRequestFilterSensitiveLog, void 0)
-  .ser(se_PublishLayerVersionCommand)
-  .de(de_PublishLayerVersionCommand)
+  .sc(PublishLayerVersion)
   .build() {}
 
 class PublishVersionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6569,16 +6319,13 @@ class PublishVersionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "PublishVersion", {})
   .n("LambdaClient", "PublishVersionCommand")
-  .f(void 0, FunctionConfigurationFilterSensitiveLog)
-  .ser(se_PublishVersionCommand)
-  .de(de_PublishVersionCommand)
+  .sc(PublishVersion)
   .build() {}
 
 class PutFunctionCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6587,16 +6334,13 @@ class PutFunctionCodeSigningConfigCommand extends smithyClient.Command.classBuil
   })
   .s("AWSGirApiService", "PutFunctionCodeSigningConfig", {})
   .n("LambdaClient", "PutFunctionCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_PutFunctionCodeSigningConfigCommand)
-  .de(de_PutFunctionCodeSigningConfigCommand)
+  .sc(PutFunctionCodeSigningConfig)
   .build() {}
 
 class PutFunctionConcurrencyCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6605,16 +6349,13 @@ class PutFunctionConcurrencyCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "PutFunctionConcurrency", {})
   .n("LambdaClient", "PutFunctionConcurrencyCommand")
-  .f(void 0, void 0)
-  .ser(se_PutFunctionConcurrencyCommand)
-  .de(de_PutFunctionConcurrencyCommand)
+  .sc(PutFunctionConcurrency)
   .build() {}
 
 class PutFunctionEventInvokeConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6623,16 +6364,13 @@ class PutFunctionEventInvokeConfigCommand extends smithyClient.Command.classBuil
   })
   .s("AWSGirApiService", "PutFunctionEventInvokeConfig", {})
   .n("LambdaClient", "PutFunctionEventInvokeConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_PutFunctionEventInvokeConfigCommand)
-  .de(de_PutFunctionEventInvokeConfigCommand)
+  .sc(PutFunctionEventInvokeConfig)
   .build() {}
 
 class PutFunctionRecursionConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6641,16 +6379,13 @@ class PutFunctionRecursionConfigCommand extends smithyClient.Command.classBuilde
   })
   .s("AWSGirApiService", "PutFunctionRecursionConfig", {})
   .n("LambdaClient", "PutFunctionRecursionConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_PutFunctionRecursionConfigCommand)
-  .de(de_PutFunctionRecursionConfigCommand)
+  .sc(PutFunctionRecursionConfig)
   .build() {}
 
 class PutProvisionedConcurrencyConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6659,16 +6394,13 @@ class PutProvisionedConcurrencyConfigCommand extends smithyClient.Command.classB
   })
   .s("AWSGirApiService", "PutProvisionedConcurrencyConfig", {})
   .n("LambdaClient", "PutProvisionedConcurrencyConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_PutProvisionedConcurrencyConfigCommand)
-  .de(de_PutProvisionedConcurrencyConfigCommand)
+  .sc(PutProvisionedConcurrencyConfig)
   .build() {}
 
 class PutRuntimeManagementConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6677,16 +6409,13 @@ class PutRuntimeManagementConfigCommand extends smithyClient.Command.classBuilde
   })
   .s("AWSGirApiService", "PutRuntimeManagementConfig", {})
   .n("LambdaClient", "PutRuntimeManagementConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_PutRuntimeManagementConfigCommand)
-  .de(de_PutRuntimeManagementConfigCommand)
+  .sc(PutRuntimeManagementConfig)
   .build() {}
 
 class RemoveLayerVersionPermissionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6695,16 +6424,13 @@ class RemoveLayerVersionPermissionCommand extends smithyClient.Command.classBuil
   })
   .s("AWSGirApiService", "RemoveLayerVersionPermission", {})
   .n("LambdaClient", "RemoveLayerVersionPermissionCommand")
-  .f(void 0, void 0)
-  .ser(se_RemoveLayerVersionPermissionCommand)
-  .de(de_RemoveLayerVersionPermissionCommand)
+  .sc(RemoveLayerVersionPermission)
   .build() {}
 
 class RemovePermissionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6713,16 +6439,13 @@ class RemovePermissionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "RemovePermission", {})
   .n("LambdaClient", "RemovePermissionCommand")
-  .f(void 0, void 0)
-  .ser(se_RemovePermissionCommand)
-  .de(de_RemovePermissionCommand)
+  .sc(RemovePermission)
   .build() {}
 
 class SendDurableExecutionCallbackFailureCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6731,16 +6454,13 @@ class SendDurableExecutionCallbackFailureCommand extends smithyClient.Command.cl
   })
   .s("AWSGirApiService", "SendDurableExecutionCallbackFailure", {})
   .n("LambdaClient", "SendDurableExecutionCallbackFailureCommand")
-  .f(SendDurableExecutionCallbackFailureRequestFilterSensitiveLog, void 0)
-  .ser(se_SendDurableExecutionCallbackFailureCommand)
-  .de(de_SendDurableExecutionCallbackFailureCommand)
+  .sc(SendDurableExecutionCallbackFailure)
   .build() {}
 
 class SendDurableExecutionCallbackHeartbeatCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6749,25 +6469,13 @@ class SendDurableExecutionCallbackHeartbeatCommand extends smithyClient.Command.
   })
   .s("AWSGirApiService", "SendDurableExecutionCallbackHeartbeat", {})
   .n("LambdaClient", "SendDurableExecutionCallbackHeartbeatCommand")
-  .f(void 0, void 0)
-  .ser(se_SendDurableExecutionCallbackHeartbeatCommand)
-  .de(de_SendDurableExecutionCallbackHeartbeatCommand)
+  .sc(SendDurableExecutionCallbackHeartbeat)
   .build() {}
-
-const SendDurableExecutionCallbackSuccessRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Result && { Result: smithyClient.SENSITIVE_STRING }),
-});
-const StopDurableExecutionRequestFilterSensitiveLog = (obj) => ({
-  ...obj,
-  ...(obj.Error && { Error: ErrorObjectFilterSensitiveLog(obj.Error) }),
-});
 
 class SendDurableExecutionCallbackSuccessCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6776,16 +6484,13 @@ class SendDurableExecutionCallbackSuccessCommand extends smithyClient.Command.cl
   })
   .s("AWSGirApiService", "SendDurableExecutionCallbackSuccess", {})
   .n("LambdaClient", "SendDurableExecutionCallbackSuccessCommand")
-  .f(SendDurableExecutionCallbackSuccessRequestFilterSensitiveLog, void 0)
-  .ser(se_SendDurableExecutionCallbackSuccessCommand)
-  .de(de_SendDurableExecutionCallbackSuccessCommand)
+  .sc(SendDurableExecutionCallbackSuccess)
   .build() {}
 
 class StopDurableExecutionCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6794,16 +6499,13 @@ class StopDurableExecutionCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "StopDurableExecution", {})
   .n("LambdaClient", "StopDurableExecutionCommand")
-  .f(StopDurableExecutionRequestFilterSensitiveLog, void 0)
-  .ser(se_StopDurableExecutionCommand)
-  .de(de_StopDurableExecutionCommand)
+  .sc(StopDurableExecution)
   .build() {}
 
 class TagResourceCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6812,16 +6514,13 @@ class TagResourceCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "TagResource", {})
   .n("LambdaClient", "TagResourceCommand")
-  .f(void 0, void 0)
-  .ser(se_TagResourceCommand)
-  .de(de_TagResourceCommand)
+  .sc(TagResource)
   .build() {}
 
 class UntagResourceCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6830,16 +6529,13 @@ class UntagResourceCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "UntagResource", {})
   .n("LambdaClient", "UntagResourceCommand")
-  .f(void 0, void 0)
-  .ser(se_UntagResourceCommand)
-  .de(de_UntagResourceCommand)
+  .sc(UntagResource)
   .build() {}
 
 class UpdateAliasCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6848,16 +6544,13 @@ class UpdateAliasCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "UpdateAlias", {})
   .n("LambdaClient", "UpdateAliasCommand")
-  .f(void 0, void 0)
-  .ser(se_UpdateAliasCommand)
-  .de(de_UpdateAliasCommand)
+  .sc(UpdateAlias)
   .build() {}
 
 class UpdateCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6866,16 +6559,13 @@ class UpdateCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "UpdateCodeSigningConfig", {})
   .n("LambdaClient", "UpdateCodeSigningConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_UpdateCodeSigningConfigCommand)
-  .de(de_UpdateCodeSigningConfigCommand)
+  .sc(UpdateCodeSigningConfig)
   .build() {}
 
 class UpdateEventSourceMappingCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6884,16 +6574,13 @@ class UpdateEventSourceMappingCommand extends smithyClient.Command.classBuilder(
   })
   .s("AWSGirApiService", "UpdateEventSourceMapping", {})
   .n("LambdaClient", "UpdateEventSourceMappingCommand")
-  .f(void 0, void 0)
-  .ser(se_UpdateEventSourceMappingCommand)
-  .de(de_UpdateEventSourceMappingCommand)
+  .sc(UpdateEventSourceMapping)
   .build() {}
 
 class UpdateFunctionCodeCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6902,19 +6589,13 @@ class UpdateFunctionCodeCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "UpdateFunctionCode", {})
   .n("LambdaClient", "UpdateFunctionCodeCommand")
-  .f(
-    UpdateFunctionCodeRequestFilterSensitiveLog,
-    FunctionConfigurationFilterSensitiveLog,
-  )
-  .ser(se_UpdateFunctionCodeCommand)
-  .de(de_UpdateFunctionCodeCommand)
+  .sc(UpdateFunctionCode)
   .build() {}
 
 class UpdateFunctionConfigurationCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6923,19 +6604,13 @@ class UpdateFunctionConfigurationCommand extends smithyClient.Command.classBuild
   })
   .s("AWSGirApiService", "UpdateFunctionConfiguration", {})
   .n("LambdaClient", "UpdateFunctionConfigurationCommand")
-  .f(
-    UpdateFunctionConfigurationRequestFilterSensitiveLog,
-    FunctionConfigurationFilterSensitiveLog,
-  )
-  .ser(se_UpdateFunctionConfigurationCommand)
-  .de(de_UpdateFunctionConfigurationCommand)
+  .sc(UpdateFunctionConfiguration)
   .build() {}
 
 class UpdateFunctionEventInvokeConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6944,16 +6619,13 @@ class UpdateFunctionEventInvokeConfigCommand extends smithyClient.Command.classB
   })
   .s("AWSGirApiService", "UpdateFunctionEventInvokeConfig", {})
   .n("LambdaClient", "UpdateFunctionEventInvokeConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_UpdateFunctionEventInvokeConfigCommand)
-  .de(de_UpdateFunctionEventInvokeConfigCommand)
+  .sc(UpdateFunctionEventInvokeConfig)
   .build() {}
 
 class UpdateFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      middlewareSerde.getSerdePlugin(config, this.serialize, this.deserialize),
       middlewareEndpoint.getEndpointPlugin(
         config,
         Command.getEndpointParameterInstructions(),
@@ -6962,9 +6634,7 @@ class UpdateFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
   })
   .s("AWSGirApiService", "UpdateFunctionUrlConfig", {})
   .n("LambdaClient", "UpdateFunctionUrlConfigCommand")
-  .f(void 0, void 0)
-  .ser(se_UpdateFunctionUrlConfigCommand)
-  .de(de_UpdateFunctionUrlConfigCommand)
+  .sc(UpdateFunctionUrlConfig)
   .build() {}
 
 const commands = {
@@ -7459,6 +7129,300 @@ const waitUntilPublishedVersionActive = async (params, input) => {
   return utilWaiter.checkExceptions(result);
 };
 
+const ThrottleReason = {
+  CallerRateLimitExceeded: "CallerRateLimitExceeded",
+  ConcurrentInvocationLimitExceeded: "ConcurrentInvocationLimitExceeded",
+  ConcurrentSnapshotCreateLimitExceeded:
+    "ConcurrentSnapshotCreateLimitExceeded",
+  FunctionInvocationRateLimitExceeded: "FunctionInvocationRateLimitExceeded",
+  ReservedFunctionConcurrentInvocationLimitExceeded:
+    "ReservedFunctionConcurrentInvocationLimitExceeded",
+  ReservedFunctionInvocationRateLimitExceeded:
+    "ReservedFunctionInvocationRateLimitExceeded",
+};
+const FunctionUrlAuthType = {
+  AWS_IAM: "AWS_IAM",
+  NONE: "NONE",
+};
+const KafkaSchemaRegistryAuthType = {
+  BASIC_AUTH: "BASIC_AUTH",
+  CLIENT_CERTIFICATE_TLS_AUTH: "CLIENT_CERTIFICATE_TLS_AUTH",
+  SERVER_ROOT_CA_CERTIFICATE: "SERVER_ROOT_CA_CERTIFICATE",
+};
+const SchemaRegistryEventRecordFormat = {
+  JSON: "JSON",
+  SOURCE: "SOURCE",
+};
+const KafkaSchemaValidationAttribute = {
+  KEY: "KEY",
+  VALUE: "VALUE",
+};
+const ApplicationLogLevel = {
+  Debug: "DEBUG",
+  Error: "ERROR",
+  Fatal: "FATAL",
+  Info: "INFO",
+  Trace: "TRACE",
+  Warn: "WARN",
+};
+const Architecture = {
+  arm64: "arm64",
+  x86_64: "x86_64",
+};
+const OperationAction = {
+  CANCEL: "CANCEL",
+  FAIL: "FAIL",
+  RETRY: "RETRY",
+  START: "START",
+  SUCCEED: "SUCCEED",
+};
+const OperationType = {
+  CALLBACK: "CALLBACK",
+  CHAINED_INVOKE: "CHAINED_INVOKE",
+  CONTEXT: "CONTEXT",
+  EXECUTION: "EXECUTION",
+  STEP: "STEP",
+  WAIT: "WAIT",
+};
+const OperationStatus = {
+  CANCELLED: "CANCELLED",
+  FAILED: "FAILED",
+  PENDING: "PENDING",
+  READY: "READY",
+  STARTED: "STARTED",
+  STOPPED: "STOPPED",
+  SUCCEEDED: "SUCCEEDED",
+  TIMED_OUT: "TIMED_OUT",
+};
+const CodeSigningPolicy = {
+  Enforce: "Enforce",
+  Warn: "Warn",
+};
+const FullDocument = {
+  Default: "Default",
+  UpdateLookup: "UpdateLookup",
+};
+const FunctionResponseType = {
+  ReportBatchItemFailures: "ReportBatchItemFailures",
+};
+const EventSourceMappingMetric = {
+  EventCount: "EventCount",
+};
+const EndPointType = {
+  KAFKA_BOOTSTRAP_SERVERS: "KAFKA_BOOTSTRAP_SERVERS",
+};
+const SourceAccessType = {
+  BASIC_AUTH: "BASIC_AUTH",
+  CLIENT_CERTIFICATE_TLS_AUTH: "CLIENT_CERTIFICATE_TLS_AUTH",
+  SASL_SCRAM_256_AUTH: "SASL_SCRAM_256_AUTH",
+  SASL_SCRAM_512_AUTH: "SASL_SCRAM_512_AUTH",
+  SERVER_ROOT_CA_CERTIFICATE: "SERVER_ROOT_CA_CERTIFICATE",
+  VIRTUAL_HOST: "VIRTUAL_HOST",
+  VPC_SECURITY_GROUP: "VPC_SECURITY_GROUP",
+  VPC_SUBNET: "VPC_SUBNET",
+};
+const EventSourcePosition = {
+  AT_TIMESTAMP: "AT_TIMESTAMP",
+  LATEST: "LATEST",
+  TRIM_HORIZON: "TRIM_HORIZON",
+};
+const LogFormat = {
+  Json: "JSON",
+  Text: "Text",
+};
+const SystemLogLevel = {
+  Debug: "DEBUG",
+  Info: "INFO",
+  Warn: "WARN",
+};
+const PackageType = {
+  Image: "Image",
+  Zip: "Zip",
+};
+const Runtime = {
+  dotnet6: "dotnet6",
+  dotnet8: "dotnet8",
+  dotnetcore10: "dotnetcore1.0",
+  dotnetcore20: "dotnetcore2.0",
+  dotnetcore21: "dotnetcore2.1",
+  dotnetcore31: "dotnetcore3.1",
+  go1x: "go1.x",
+  java11: "java11",
+  java17: "java17",
+  java21: "java21",
+  java8: "java8",
+  java8al2: "java8.al2",
+  nodejs: "nodejs",
+  nodejs10x: "nodejs10.x",
+  nodejs12x: "nodejs12.x",
+  nodejs14x: "nodejs14.x",
+  nodejs16x: "nodejs16.x",
+  nodejs18x: "nodejs18.x",
+  nodejs20x: "nodejs20.x",
+  nodejs22x: "nodejs22.x",
+  nodejs43: "nodejs4.3",
+  nodejs43edge: "nodejs4.3-edge",
+  nodejs610: "nodejs6.10",
+  nodejs810: "nodejs8.10",
+  provided: "provided",
+  providedal2: "provided.al2",
+  providedal2023: "provided.al2023",
+  python27: "python2.7",
+  python310: "python3.10",
+  python311: "python3.11",
+  python312: "python3.12",
+  python313: "python3.13",
+  python36: "python3.6",
+  python37: "python3.7",
+  python38: "python3.8",
+  python39: "python3.9",
+  ruby25: "ruby2.5",
+  ruby27: "ruby2.7",
+  ruby32: "ruby3.2",
+  ruby33: "ruby3.3",
+  ruby34: "ruby3.4",
+};
+const SnapStartApplyOn = {
+  None: "None",
+  PublishedVersions: "PublishedVersions",
+};
+const TracingMode = {
+  Active: "Active",
+  PassThrough: "PassThrough",
+};
+const LastUpdateStatus = {
+  Failed: "Failed",
+  InProgress: "InProgress",
+  Successful: "Successful",
+};
+const LastUpdateStatusReasonCode = {
+  DisabledKMSKey: "DisabledKMSKey",
+  EFSIOError: "EFSIOError",
+  EFSMountConnectivityError: "EFSMountConnectivityError",
+  EFSMountFailure: "EFSMountFailure",
+  EFSMountTimeout: "EFSMountTimeout",
+  EniLimitExceeded: "EniLimitExceeded",
+  FunctionError: "FunctionError",
+  ImageAccessDenied: "ImageAccessDenied",
+  ImageDeleted: "ImageDeleted",
+  InsufficientRolePermissions: "InsufficientRolePermissions",
+  InternalError: "InternalError",
+  InvalidConfiguration: "InvalidConfiguration",
+  InvalidImage: "InvalidImage",
+  InvalidRuntime: "InvalidRuntime",
+  InvalidSecurityGroup: "InvalidSecurityGroup",
+  InvalidStateKMSKey: "InvalidStateKMSKey",
+  InvalidSubnet: "InvalidSubnet",
+  InvalidZipFileException: "InvalidZipFileException",
+  KMSKeyAccessDenied: "KMSKeyAccessDenied",
+  KMSKeyNotFound: "KMSKeyNotFound",
+  SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
+};
+const SnapStartOptimizationStatus = {
+  Off: "Off",
+  On: "On",
+};
+const State = {
+  Active: "Active",
+  Failed: "Failed",
+  Inactive: "Inactive",
+  Pending: "Pending",
+};
+const StateReasonCode = {
+  Creating: "Creating",
+  DisabledKMSKey: "DisabledKMSKey",
+  DrainingDurableExecutions: "DrainingDurableExecutions",
+  EFSIOError: "EFSIOError",
+  EFSMountConnectivityError: "EFSMountConnectivityError",
+  EFSMountFailure: "EFSMountFailure",
+  EFSMountTimeout: "EFSMountTimeout",
+  EniLimitExceeded: "EniLimitExceeded",
+  FunctionError: "FunctionError",
+  Idle: "Idle",
+  ImageAccessDenied: "ImageAccessDenied",
+  ImageDeleted: "ImageDeleted",
+  InsufficientRolePermissions: "InsufficientRolePermissions",
+  InternalError: "InternalError",
+  InvalidConfiguration: "InvalidConfiguration",
+  InvalidImage: "InvalidImage",
+  InvalidRuntime: "InvalidRuntime",
+  InvalidSecurityGroup: "InvalidSecurityGroup",
+  InvalidStateKMSKey: "InvalidStateKMSKey",
+  InvalidSubnet: "InvalidSubnet",
+  InvalidZipFileException: "InvalidZipFileException",
+  KMSKeyAccessDenied: "KMSKeyAccessDenied",
+  KMSKeyNotFound: "KMSKeyNotFound",
+  Restoring: "Restoring",
+  SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
+};
+const InvokeMode = {
+  BUFFERED: "BUFFERED",
+  RESPONSE_STREAM: "RESPONSE_STREAM",
+};
+const RecursiveLoop = {
+  Allow: "Allow",
+  Terminate: "Terminate",
+};
+const UpdateRuntimeOn = {
+  Auto: "Auto",
+  FunctionUpdate: "FunctionUpdate",
+  Manual: "Manual",
+};
+const InvocationType = {
+  DryRun: "DryRun",
+  Event: "Event",
+  RequestResponse: "RequestResponse",
+};
+const LogType = {
+  None: "None",
+  Tail: "Tail",
+};
+const ResponseStreamingInvocationType = {
+  DryRun: "DryRun",
+  RequestResponse: "RequestResponse",
+};
+const FunctionVersion = {
+  ALL: "ALL",
+};
+const ProvisionedConcurrencyStatusEnum = {
+  FAILED: "FAILED",
+  IN_PROGRESS: "IN_PROGRESS",
+  READY: "READY",
+};
+const ExecutionStatus = {
+  FAILED: "FAILED",
+  RUNNING: "RUNNING",
+  STOPPED: "STOPPED",
+  SUCCEEDED: "SUCCEEDED",
+  TIMED_OUT: "TIMED_OUT",
+};
+const EventType = {
+  CallbackFailed: "CallbackFailed",
+  CallbackStarted: "CallbackStarted",
+  CallbackSucceeded: "CallbackSucceeded",
+  CallbackTimedOut: "CallbackTimedOut",
+  ChainedInvokeFailed: "ChainedInvokeFailed",
+  ChainedInvokeStarted: "ChainedInvokeStarted",
+  ChainedInvokeStopped: "ChainedInvokeStopped",
+  ChainedInvokeSucceeded: "ChainedInvokeSucceeded",
+  ChainedInvokeTimedOut: "ChainedInvokeTimedOut",
+  ContextFailed: "ContextFailed",
+  ContextStarted: "ContextStarted",
+  ContextSucceeded: "ContextSucceeded",
+  ExecutionFailed: "ExecutionFailed",
+  ExecutionStarted: "ExecutionStarted",
+  ExecutionStopped: "ExecutionStopped",
+  ExecutionSucceeded: "ExecutionSucceeded",
+  ExecutionTimedOut: "ExecutionTimedOut",
+  InvocationCompleted: "InvocationCompleted",
+  StepFailed: "StepFailed",
+  StepStarted: "StepStarted",
+  StepSucceeded: "StepSucceeded",
+  WaitCancelled: "WaitCancelled",
+  WaitStarted: "WaitStarted",
+  WaitSucceeded: "WaitSucceeded",
+};
+
 Object.defineProperty(exports, "$Command", {
   enumerable: true,
   get: function () {
@@ -7475,48 +7439,17 @@ exports.AddLayerVersionPermissionCommand = AddLayerVersionPermissionCommand;
 exports.AddPermissionCommand = AddPermissionCommand;
 exports.ApplicationLogLevel = ApplicationLogLevel;
 exports.Architecture = Architecture;
-exports.CallbackDetailsFilterSensitiveLog = CallbackDetailsFilterSensitiveLog;
-exports.CallbackFailedDetailsFilterSensitiveLog =
-  CallbackFailedDetailsFilterSensitiveLog;
-exports.CallbackSucceededDetailsFilterSensitiveLog =
-  CallbackSucceededDetailsFilterSensitiveLog;
-exports.CallbackTimedOutDetailsFilterSensitiveLog =
-  CallbackTimedOutDetailsFilterSensitiveLog;
-exports.CallbackTimeoutException = CallbackTimeoutException;
-exports.ChainedInvokeDetailsFilterSensitiveLog =
-  ChainedInvokeDetailsFilterSensitiveLog;
-exports.ChainedInvokeFailedDetailsFilterSensitiveLog =
-  ChainedInvokeFailedDetailsFilterSensitiveLog;
-exports.ChainedInvokeStartedDetailsFilterSensitiveLog =
-  ChainedInvokeStartedDetailsFilterSensitiveLog;
-exports.ChainedInvokeStoppedDetailsFilterSensitiveLog =
-  ChainedInvokeStoppedDetailsFilterSensitiveLog;
-exports.ChainedInvokeSucceededDetailsFilterSensitiveLog =
-  ChainedInvokeSucceededDetailsFilterSensitiveLog;
-exports.ChainedInvokeTimedOutDetailsFilterSensitiveLog =
-  ChainedInvokeTimedOutDetailsFilterSensitiveLog;
+exports.CallbackTimeoutException = CallbackTimeoutException$1;
 exports.CheckpointDurableExecutionCommand = CheckpointDurableExecutionCommand;
-exports.CheckpointDurableExecutionRequestFilterSensitiveLog =
-  CheckpointDurableExecutionRequestFilterSensitiveLog;
-exports.CheckpointDurableExecutionResponseFilterSensitiveLog =
-  CheckpointDurableExecutionResponseFilterSensitiveLog;
-exports.CheckpointUpdatedExecutionStateFilterSensitiveLog =
-  CheckpointUpdatedExecutionStateFilterSensitiveLog;
-exports.CodeSigningConfigNotFoundException = CodeSigningConfigNotFoundException;
+exports.CodeSigningConfigNotFoundException =
+  CodeSigningConfigNotFoundException$1;
 exports.CodeSigningPolicy = CodeSigningPolicy;
-exports.CodeStorageExceededException = CodeStorageExceededException;
-exports.CodeVerificationFailedException = CodeVerificationFailedException;
-exports.ContextDetailsFilterSensitiveLog = ContextDetailsFilterSensitiveLog;
-exports.ContextFailedDetailsFilterSensitiveLog =
-  ContextFailedDetailsFilterSensitiveLog;
-exports.ContextSucceededDetailsFilterSensitiveLog =
-  ContextSucceededDetailsFilterSensitiveLog;
+exports.CodeStorageExceededException = CodeStorageExceededException$1;
+exports.CodeVerificationFailedException = CodeVerificationFailedException$1;
 exports.CreateAliasCommand = CreateAliasCommand;
 exports.CreateCodeSigningConfigCommand = CreateCodeSigningConfigCommand;
 exports.CreateEventSourceMappingCommand = CreateEventSourceMappingCommand;
 exports.CreateFunctionCommand = CreateFunctionCommand;
-exports.CreateFunctionRequestFilterSensitiveLog =
-  CreateFunctionRequestFilterSensitiveLog;
 exports.CreateFunctionUrlConfigCommand = CreateFunctionUrlConfigCommand;
 exports.DeleteAliasCommand = DeleteAliasCommand;
 exports.DeleteCodeSigningConfigCommand = DeleteCodeSigningConfigCommand;
@@ -7532,44 +7465,21 @@ exports.DeleteLayerVersionCommand = DeleteLayerVersionCommand;
 exports.DeleteProvisionedConcurrencyConfigCommand =
   DeleteProvisionedConcurrencyConfigCommand;
 exports.DurableExecutionAlreadyStartedException =
-  DurableExecutionAlreadyStartedException;
-exports.EC2AccessDeniedException = EC2AccessDeniedException;
-exports.EC2ThrottledException = EC2ThrottledException;
-exports.EC2UnexpectedException = EC2UnexpectedException;
-exports.EFSIOException = EFSIOException;
-exports.EFSMountConnectivityException = EFSMountConnectivityException;
-exports.EFSMountFailureException = EFSMountFailureException;
-exports.EFSMountTimeoutException = EFSMountTimeoutException;
-exports.ENILimitReachedException = ENILimitReachedException;
+  DurableExecutionAlreadyStartedException$1;
+exports.EC2AccessDeniedException = EC2AccessDeniedException$1;
+exports.EC2ThrottledException = EC2ThrottledException$1;
+exports.EC2UnexpectedException = EC2UnexpectedException$1;
+exports.EFSIOException = EFSIOException$1;
+exports.EFSMountConnectivityException = EFSMountConnectivityException$1;
+exports.EFSMountFailureException = EFSMountFailureException$1;
+exports.EFSMountTimeoutException = EFSMountTimeoutException$1;
+exports.ENILimitReachedException = ENILimitReachedException$1;
 exports.EndPointType = EndPointType;
-exports.EnvironmentErrorFilterSensitiveLog = EnvironmentErrorFilterSensitiveLog;
-exports.EnvironmentFilterSensitiveLog = EnvironmentFilterSensitiveLog;
-exports.EnvironmentResponseFilterSensitiveLog =
-  EnvironmentResponseFilterSensitiveLog;
-exports.ErrorObjectFilterSensitiveLog = ErrorObjectFilterSensitiveLog;
-exports.EventErrorFilterSensitiveLog = EventErrorFilterSensitiveLog;
-exports.EventFilterSensitiveLog = EventFilterSensitiveLog;
-exports.EventInputFilterSensitiveLog = EventInputFilterSensitiveLog;
-exports.EventResultFilterSensitiveLog = EventResultFilterSensitiveLog;
 exports.EventSourceMappingMetric = EventSourceMappingMetric;
 exports.EventSourcePosition = EventSourcePosition;
 exports.EventType = EventType;
-exports.ExecutionDetailsFilterSensitiveLog = ExecutionDetailsFilterSensitiveLog;
-exports.ExecutionFailedDetailsFilterSensitiveLog =
-  ExecutionFailedDetailsFilterSensitiveLog;
-exports.ExecutionStartedDetailsFilterSensitiveLog =
-  ExecutionStartedDetailsFilterSensitiveLog;
 exports.ExecutionStatus = ExecutionStatus;
-exports.ExecutionStoppedDetailsFilterSensitiveLog =
-  ExecutionStoppedDetailsFilterSensitiveLog;
-exports.ExecutionSucceededDetailsFilterSensitiveLog =
-  ExecutionSucceededDetailsFilterSensitiveLog;
-exports.ExecutionTimedOutDetailsFilterSensitiveLog =
-  ExecutionTimedOutDetailsFilterSensitiveLog;
 exports.FullDocument = FullDocument;
-exports.FunctionCodeFilterSensitiveLog = FunctionCodeFilterSensitiveLog;
-exports.FunctionConfigurationFilterSensitiveLog =
-  FunctionConfigurationFilterSensitiveLog;
 exports.FunctionResponseType = FunctionResponseType;
 exports.FunctionUrlAuthType = FunctionUrlAuthType;
 exports.FunctionVersion = FunctionVersion;
@@ -7578,13 +7488,7 @@ exports.GetAliasCommand = GetAliasCommand;
 exports.GetCodeSigningConfigCommand = GetCodeSigningConfigCommand;
 exports.GetDurableExecutionCommand = GetDurableExecutionCommand;
 exports.GetDurableExecutionHistoryCommand = GetDurableExecutionHistoryCommand;
-exports.GetDurableExecutionHistoryResponseFilterSensitiveLog =
-  GetDurableExecutionHistoryResponseFilterSensitiveLog;
-exports.GetDurableExecutionResponseFilterSensitiveLog =
-  GetDurableExecutionResponseFilterSensitiveLog;
 exports.GetDurableExecutionStateCommand = GetDurableExecutionStateCommand;
-exports.GetDurableExecutionStateResponseFilterSensitiveLog =
-  GetDurableExecutionStateResponseFilterSensitiveLog;
 exports.GetEventSourceMappingCommand = GetEventSourceMappingCommand;
 exports.GetFunctionCodeSigningConfigCommand =
   GetFunctionCodeSigningConfigCommand;
@@ -7594,8 +7498,6 @@ exports.GetFunctionConfigurationCommand = GetFunctionConfigurationCommand;
 exports.GetFunctionEventInvokeConfigCommand =
   GetFunctionEventInvokeConfigCommand;
 exports.GetFunctionRecursionConfigCommand = GetFunctionRecursionConfigCommand;
-exports.GetFunctionResponseFilterSensitiveLog =
-  GetFunctionResponseFilterSensitiveLog;
 exports.GetFunctionUrlConfigCommand = GetFunctionUrlConfigCommand;
 exports.GetLayerVersionByArnCommand = GetLayerVersionByArnCommand;
 exports.GetLayerVersionCommand = GetLayerVersionCommand;
@@ -7604,50 +7506,29 @@ exports.GetPolicyCommand = GetPolicyCommand;
 exports.GetProvisionedConcurrencyConfigCommand =
   GetProvisionedConcurrencyConfigCommand;
 exports.GetRuntimeManagementConfigCommand = GetRuntimeManagementConfigCommand;
-exports.ImageConfigErrorFilterSensitiveLog = ImageConfigErrorFilterSensitiveLog;
-exports.ImageConfigResponseFilterSensitiveLog =
-  ImageConfigResponseFilterSensitiveLog;
-exports.InvalidCodeSignatureException = InvalidCodeSignatureException;
-exports.InvalidParameterValueException = InvalidParameterValueException;
-exports.InvalidRequestContentException = InvalidRequestContentException;
-exports.InvalidRuntimeException = InvalidRuntimeException;
-exports.InvalidSecurityGroupIDException = InvalidSecurityGroupIDException;
-exports.InvalidSubnetIDException = InvalidSubnetIDException;
-exports.InvalidZipFileException = InvalidZipFileException;
-exports.InvocationCompletedDetailsFilterSensitiveLog =
-  InvocationCompletedDetailsFilterSensitiveLog;
-exports.InvocationRequestFilterSensitiveLog =
-  InvocationRequestFilterSensitiveLog;
-exports.InvocationResponseFilterSensitiveLog =
-  InvocationResponseFilterSensitiveLog;
+exports.InvalidCodeSignatureException = InvalidCodeSignatureException$1;
+exports.InvalidParameterValueException = InvalidParameterValueException$1;
+exports.InvalidRequestContentException = InvalidRequestContentException$1;
+exports.InvalidRuntimeException = InvalidRuntimeException$1;
+exports.InvalidSecurityGroupIDException = InvalidSecurityGroupIDException$1;
+exports.InvalidSubnetIDException = InvalidSubnetIDException$1;
+exports.InvalidZipFileException = InvalidZipFileException$1;
 exports.InvocationType = InvocationType;
 exports.InvokeAsyncCommand = InvokeAsyncCommand;
-exports.InvokeAsyncRequestFilterSensitiveLog =
-  InvokeAsyncRequestFilterSensitiveLog;
 exports.InvokeCommand = InvokeCommand;
 exports.InvokeMode = InvokeMode;
-exports.InvokeResponseStreamUpdateFilterSensitiveLog =
-  InvokeResponseStreamUpdateFilterSensitiveLog;
 exports.InvokeWithResponseStreamCommand = InvokeWithResponseStreamCommand;
-exports.InvokeWithResponseStreamRequestFilterSensitiveLog =
-  InvokeWithResponseStreamRequestFilterSensitiveLog;
-exports.InvokeWithResponseStreamResponseEventFilterSensitiveLog =
-  InvokeWithResponseStreamResponseEventFilterSensitiveLog;
-exports.InvokeWithResponseStreamResponseFilterSensitiveLog =
-  InvokeWithResponseStreamResponseFilterSensitiveLog;
-exports.KMSAccessDeniedException = KMSAccessDeniedException;
-exports.KMSDisabledException = KMSDisabledException;
-exports.KMSInvalidStateException = KMSInvalidStateException;
-exports.KMSNotFoundException = KMSNotFoundException;
+exports.KMSAccessDeniedException = KMSAccessDeniedException$1;
+exports.KMSDisabledException = KMSDisabledException$1;
+exports.KMSInvalidStateException = KMSInvalidStateException$1;
+exports.KMSNotFoundException = KMSNotFoundException$1;
 exports.KafkaSchemaRegistryAuthType = KafkaSchemaRegistryAuthType;
 exports.KafkaSchemaValidationAttribute = KafkaSchemaValidationAttribute;
 exports.Lambda = Lambda;
 exports.LambdaClient = LambdaClient;
-exports.LambdaServiceException = LambdaServiceException;
+exports.LambdaServiceException = LambdaServiceException$1;
 exports.LastUpdateStatus = LastUpdateStatus;
 exports.LastUpdateStatusReasonCode = LastUpdateStatusReasonCode;
-exports.LayerVersionContentInputFilterSensitiveLog =
-  LayerVersionContentInputFilterSensitiveLog;
 exports.ListAliasesCommand = ListAliasesCommand;
 exports.ListCodeSigningConfigsCommand = ListCodeSigningConfigsCommand;
 exports.ListDurableExecutionsByFunctionCommand =
@@ -7659,32 +7540,24 @@ exports.ListFunctionUrlConfigsCommand = ListFunctionUrlConfigsCommand;
 exports.ListFunctionsByCodeSigningConfigCommand =
   ListFunctionsByCodeSigningConfigCommand;
 exports.ListFunctionsCommand = ListFunctionsCommand;
-exports.ListFunctionsResponseFilterSensitiveLog =
-  ListFunctionsResponseFilterSensitiveLog;
 exports.ListLayerVersionsCommand = ListLayerVersionsCommand;
 exports.ListLayersCommand = ListLayersCommand;
 exports.ListProvisionedConcurrencyConfigsCommand =
   ListProvisionedConcurrencyConfigsCommand;
 exports.ListTagsCommand = ListTagsCommand;
 exports.ListVersionsByFunctionCommand = ListVersionsByFunctionCommand;
-exports.ListVersionsByFunctionResponseFilterSensitiveLog =
-  ListVersionsByFunctionResponseFilterSensitiveLog;
 exports.LogFormat = LogFormat;
 exports.LogType = LogType;
 exports.OperationAction = OperationAction;
-exports.OperationFilterSensitiveLog = OperationFilterSensitiveLog;
 exports.OperationStatus = OperationStatus;
 exports.OperationType = OperationType;
-exports.OperationUpdateFilterSensitiveLog = OperationUpdateFilterSensitiveLog;
 exports.PackageType = PackageType;
-exports.PolicyLengthExceededException = PolicyLengthExceededException;
-exports.PreconditionFailedException = PreconditionFailedException;
+exports.PolicyLengthExceededException = PolicyLengthExceededException$1;
+exports.PreconditionFailedException = PreconditionFailedException$1;
 exports.ProvisionedConcurrencyConfigNotFoundException =
-  ProvisionedConcurrencyConfigNotFoundException;
+  ProvisionedConcurrencyConfigNotFoundException$1;
 exports.ProvisionedConcurrencyStatusEnum = ProvisionedConcurrencyStatusEnum;
 exports.PublishLayerVersionCommand = PublishLayerVersionCommand;
-exports.PublishLayerVersionRequestFilterSensitiveLog =
-  PublishLayerVersionRequestFilterSensitiveLog;
 exports.PublishVersionCommand = PublishVersionCommand;
 exports.PutFunctionCodeSigningConfigCommand =
   PutFunctionCodeSigningConfigCommand;
@@ -7695,74 +7568,55 @@ exports.PutFunctionRecursionConfigCommand = PutFunctionRecursionConfigCommand;
 exports.PutProvisionedConcurrencyConfigCommand =
   PutProvisionedConcurrencyConfigCommand;
 exports.PutRuntimeManagementConfigCommand = PutRuntimeManagementConfigCommand;
-exports.RecursiveInvocationException = RecursiveInvocationException;
+exports.RecursiveInvocationException = RecursiveInvocationException$1;
 exports.RecursiveLoop = RecursiveLoop;
 exports.RemoveLayerVersionPermissionCommand =
   RemoveLayerVersionPermissionCommand;
 exports.RemovePermissionCommand = RemovePermissionCommand;
-exports.RequestTooLargeException = RequestTooLargeException;
-exports.ResourceConflictException = ResourceConflictException;
-exports.ResourceInUseException = ResourceInUseException;
-exports.ResourceNotFoundException = ResourceNotFoundException;
-exports.ResourceNotReadyException = ResourceNotReadyException;
+exports.RequestTooLargeException = RequestTooLargeException$1;
+exports.ResourceConflictException = ResourceConflictException$1;
+exports.ResourceInUseException = ResourceInUseException$1;
+exports.ResourceNotFoundException = ResourceNotFoundException$1;
+exports.ResourceNotReadyException = ResourceNotReadyException$1;
 exports.ResponseStreamingInvocationType = ResponseStreamingInvocationType;
 exports.Runtime = Runtime;
-exports.RuntimeVersionConfigFilterSensitiveLog =
-  RuntimeVersionConfigFilterSensitiveLog;
-exports.RuntimeVersionErrorFilterSensitiveLog =
-  RuntimeVersionErrorFilterSensitiveLog;
 exports.SchemaRegistryEventRecordFormat = SchemaRegistryEventRecordFormat;
 exports.SendDurableExecutionCallbackFailureCommand =
   SendDurableExecutionCallbackFailureCommand;
-exports.SendDurableExecutionCallbackFailureRequestFilterSensitiveLog =
-  SendDurableExecutionCallbackFailureRequestFilterSensitiveLog;
 exports.SendDurableExecutionCallbackHeartbeatCommand =
   SendDurableExecutionCallbackHeartbeatCommand;
 exports.SendDurableExecutionCallbackSuccessCommand =
   SendDurableExecutionCallbackSuccessCommand;
-exports.SendDurableExecutionCallbackSuccessRequestFilterSensitiveLog =
-  SendDurableExecutionCallbackSuccessRequestFilterSensitiveLog;
-exports.ServiceException = ServiceException;
+exports.SerializedRequestEntityTooLargeException =
+  SerializedRequestEntityTooLargeException$1;
+exports.ServiceException = ServiceException$1;
 exports.SnapStartApplyOn = SnapStartApplyOn;
-exports.SnapStartException = SnapStartException;
-exports.SnapStartNotReadyException = SnapStartNotReadyException;
+exports.SnapStartException = SnapStartException$1;
+exports.SnapStartNotReadyException = SnapStartNotReadyException$1;
 exports.SnapStartOptimizationStatus = SnapStartOptimizationStatus;
-exports.SnapStartTimeoutException = SnapStartTimeoutException;
+exports.SnapStartTimeoutException = SnapStartTimeoutException$1;
 exports.SourceAccessType = SourceAccessType;
 exports.State = State;
 exports.StateReasonCode = StateReasonCode;
-exports.StepDetailsFilterSensitiveLog = StepDetailsFilterSensitiveLog;
-exports.StepFailedDetailsFilterSensitiveLog =
-  StepFailedDetailsFilterSensitiveLog;
-exports.StepSucceededDetailsFilterSensitiveLog =
-  StepSucceededDetailsFilterSensitiveLog;
 exports.StopDurableExecutionCommand = StopDurableExecutionCommand;
-exports.StopDurableExecutionRequestFilterSensitiveLog =
-  StopDurableExecutionRequestFilterSensitiveLog;
 exports.SubnetIPAddressLimitReachedException =
-  SubnetIPAddressLimitReachedException;
+  SubnetIPAddressLimitReachedException$1;
 exports.SystemLogLevel = SystemLogLevel;
 exports.TagResourceCommand = TagResourceCommand;
 exports.ThrottleReason = ThrottleReason;
-exports.TooManyRequestsException = TooManyRequestsException;
+exports.TooManyRequestsException = TooManyRequestsException$1;
 exports.TracingMode = TracingMode;
-exports.UnsupportedMediaTypeException = UnsupportedMediaTypeException;
+exports.UnsupportedMediaTypeException = UnsupportedMediaTypeException$1;
 exports.UntagResourceCommand = UntagResourceCommand;
 exports.UpdateAliasCommand = UpdateAliasCommand;
 exports.UpdateCodeSigningConfigCommand = UpdateCodeSigningConfigCommand;
 exports.UpdateEventSourceMappingCommand = UpdateEventSourceMappingCommand;
 exports.UpdateFunctionCodeCommand = UpdateFunctionCodeCommand;
-exports.UpdateFunctionCodeRequestFilterSensitiveLog =
-  UpdateFunctionCodeRequestFilterSensitiveLog;
 exports.UpdateFunctionConfigurationCommand = UpdateFunctionConfigurationCommand;
-exports.UpdateFunctionConfigurationRequestFilterSensitiveLog =
-  UpdateFunctionConfigurationRequestFilterSensitiveLog;
 exports.UpdateFunctionEventInvokeConfigCommand =
   UpdateFunctionEventInvokeConfigCommand;
 exports.UpdateFunctionUrlConfigCommand = UpdateFunctionUrlConfigCommand;
 exports.UpdateRuntimeOn = UpdateRuntimeOn;
-exports.WaitCancelledDetailsFilterSensitiveLog =
-  WaitCancelledDetailsFilterSensitiveLog;
 exports.paginateGetDurableExecutionHistory = paginateGetDurableExecutionHistory;
 exports.paginateGetDurableExecutionState = paginateGetDurableExecutionState;
 exports.paginateListAliases = paginateListAliases;

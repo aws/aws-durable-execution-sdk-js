@@ -57,9 +57,9 @@
     "typescript-eslint": "^8.34.1"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda": "*",
+    "@aws-sdk/client-lambda": "^3.938.0",
     "@sinonjs/fake-timers": "^13.0.5",
-    "@smithy/smithy-client": "^4.9.1",
+    "@smithy/smithy-client": "^4.9.8",
     "express": "^5.1.0"
   },
   "peerDependencies": {

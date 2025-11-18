@@ -84,6 +84,9 @@ declare const GetDurableExecutionCommand_base: {
  * //   Status: "RUNNING" || "SUCCEEDED" || "FAILED" || "TIMED_OUT" || "STOPPED", // required
  * //   EndTimestamp: new Date("TIMESTAMP"),
  * //   Version: "STRING_VALUE",
+ * //   TraceHeader: { // TraceHeader
+ * //     XAmznTraceId: "STRING_VALUE",
+ * //   },
  * // };
  *
  * ```

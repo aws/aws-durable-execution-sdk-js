@@ -5,7 +5,7 @@ import {
   ServiceInputTypes,
   ServiceOutputTypes,
 } from "../LambdaClient";
-import { TagResourceRequest } from "../models/models_1";
+import { TagResourceRequest } from "../models/models_0";
 /**
  * @public
  */

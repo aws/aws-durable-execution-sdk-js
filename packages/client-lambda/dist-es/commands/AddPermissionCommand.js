@@ -1,24 +1,17 @@
 import { getEndpointPlugin } from "@smithy/middleware-endpoint";
-import { getSerdePlugin } from "@smithy/middleware-serde";
 import { Command as $Command } from "@smithy/smithy-client";
 import { commonParams } from "../endpoint/EndpointParameters";
-import {
-  de_AddPermissionCommand,
-  se_AddPermissionCommand,
-} from "../protocols/Aws_restJson1";
+import { AddPermission } from "../schemas/schemas_0";
 export { $Command };
 export class AddPermissionCommand extends $Command
   .classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
     return [
-      getSerdePlugin(config, this.serialize, this.deserialize),
       getEndpointPlugin(config, Command.getEndpointParameterInstructions()),
     ];
   })
   .s("AWSGirApiService", "AddPermission", {})
   .n("LambdaClient", "AddPermissionCommand")
-  .f(void 0, void 0)
-  .ser(se_AddPermissionCommand)
-  .de(de_AddPermissionCommand)
+  .sc(AddPermission)
   .build() {}

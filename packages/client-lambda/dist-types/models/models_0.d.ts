@@ -1,6 +1,43 @@
-import { ExceptionOptionType as __ExceptionOptionType } from "@smithy/smithy-client";
 import { StreamingBlobTypes } from "@smithy/types";
-import { LambdaServiceException as __BaseException } from "./LambdaServiceException";
+import {
+  ApplicationLogLevel,
+  Architecture,
+  CodeSigningPolicy,
+  EndPointType,
+  EventSourceMappingMetric,
+  EventSourcePosition,
+  EventType,
+  ExecutionStatus,
+  FullDocument,
+  FunctionResponseType,
+  FunctionUrlAuthType,
+  FunctionVersion,
+  InvocationType,
+  InvokeMode,
+  KafkaSchemaRegistryAuthType,
+  KafkaSchemaValidationAttribute,
+  LastUpdateStatus,
+  LastUpdateStatusReasonCode,
+  LogFormat,
+  LogType,
+  OperationAction,
+  OperationStatus,
+  OperationType,
+  PackageType,
+  ProvisionedConcurrencyStatusEnum,
+  RecursiveLoop,
+  ResponseStreamingInvocationType,
+  Runtime,
+  SchemaRegistryEventRecordFormat,
+  SnapStartApplyOn,
+  SnapStartOptimizationStatus,
+  SourceAccessType,
+  State,
+  StateReasonCode,
+  SystemLogLevel,
+  TracingMode,
+  UpdateRuntimeOn,
+} from "./enums";
 /**
  * <p>Limits that are related to concurrency and storage. All file and storage sizes are in bytes.</p>
  * @public
@@ -103,162 +140,6 @@ export interface AddLayerVersionPermissionResponse {
    */
   RevisionId?: string | undefined;
 }
-/**
- * <p>One of the parameters in the request is not valid.</p>
- * @public
- */
-export declare class InvalidParameterValueException extends __BaseException {
-  readonly name: "InvalidParameterValueException";
-  readonly $fault: "client";
-  /**
-   * <p>The exception type.</p>
-   * @public
-   */
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      InvalidParameterValueException,
-      __BaseException
-    >,
-  );
-}
-/**
- * <p>The permissions policy for the resource is too large. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>.</p>
- * @public
- */
-export declare class PolicyLengthExceededException extends __BaseException {
-  readonly name: "PolicyLengthExceededException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<PolicyLengthExceededException, __BaseException>,
-  );
-}
-/**
- * <p>The RevisionId provided does not match the latest RevisionId for the Lambda function or alias.</p> <ul> <li> <p> <b>For AddPermission and RemovePermission API operations:</b> Call <code>GetPolicy</code> to retrieve the latest RevisionId for your resource.</p> </li> <li> <p> <b>For all other API operations:</b> Call <code>GetFunction</code> or <code>GetAlias</code> to retrieve the latest RevisionId for your resource.</p> </li> </ul>
- * @public
- */
-export declare class PreconditionFailedException extends __BaseException {
-  readonly name: "PreconditionFailedException";
-  readonly $fault: "client";
-  /**
-   * <p>The exception type.</p>
-   * @public
-   */
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<PreconditionFailedException, __BaseException>,
-  );
-}
-/**
- * <p>The resource already exists, or another operation is in progress.</p>
- * @public
- */
-export declare class ResourceConflictException extends __BaseException {
-  readonly name: "ResourceConflictException";
-  readonly $fault: "client";
-  /**
-   * <p>The exception type.</p>
-   * @public
-   */
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<ResourceConflictException, __BaseException>,
-  );
-}
-/**
- * <p>The resource specified in the request does not exist.</p>
- * @public
- */
-export declare class ResourceNotFoundException extends __BaseException {
-  readonly name: "ResourceNotFoundException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<ResourceNotFoundException, __BaseException>,
-  );
-}
-/**
- * <p>The Lambda service encountered an internal error.</p>
- * @public
- */
-export declare class ServiceException extends __BaseException {
-  readonly name: "ServiceException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(opts: __ExceptionOptionType<ServiceException, __BaseException>);
-}
-/**
- * @public
- * @enum
- */
-export declare const ThrottleReason: {
-  readonly CallerRateLimitExceeded: "CallerRateLimitExceeded";
-  readonly ConcurrentInvocationLimitExceeded: "ConcurrentInvocationLimitExceeded";
-  readonly ConcurrentSnapshotCreateLimitExceeded: "ConcurrentSnapshotCreateLimitExceeded";
-  readonly FunctionInvocationRateLimitExceeded: "FunctionInvocationRateLimitExceeded";
-  readonly ReservedFunctionConcurrentInvocationLimitExceeded: "ReservedFunctionConcurrentInvocationLimitExceeded";
-  readonly ReservedFunctionInvocationRateLimitExceeded: "ReservedFunctionInvocationRateLimitExceeded";
-};
-/**
- * @public
- */
-export type ThrottleReason =
-  (typeof ThrottleReason)[keyof typeof ThrottleReason];
-/**
- * <p>The request throughput limit was exceeded. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#api-requests">Lambda quotas</a>.</p>
- * @public
- */
-export declare class TooManyRequestsException extends __BaseException {
-  readonly name: "TooManyRequestsException";
-  readonly $fault: "client";
-  /**
-   * <p>The number of seconds the caller should wait before retrying.</p>
-   * @public
-   */
-  retryAfterSeconds?: string | undefined;
-  Type?: string | undefined;
-  Reason?: ThrottleReason | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<TooManyRequestsException, __BaseException>,
-  );
-}
-/**
- * @public
- * @enum
- */
-export declare const FunctionUrlAuthType: {
-  readonly AWS_IAM: "AWS_IAM";
-  readonly NONE: "NONE";
-};
-/**
- * @public
- */
-export type FunctionUrlAuthType =
-  (typeof FunctionUrlAuthType)[keyof typeof FunctionUrlAuthType];
 /**
  * @public
  */
@@ -389,20 +270,6 @@ export interface AllowedPublishers {
   SigningProfileVersionArns: string[] | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const KafkaSchemaRegistryAuthType: {
-  readonly BASIC_AUTH: "BASIC_AUTH";
-  readonly CLIENT_CERTIFICATE_TLS_AUTH: "CLIENT_CERTIFICATE_TLS_AUTH";
-  readonly SERVER_ROOT_CA_CERTIFICATE: "SERVER_ROOT_CA_CERTIFICATE";
-};
-/**
- * @public
- */
-export type KafkaSchemaRegistryAuthType =
-  (typeof KafkaSchemaRegistryAuthType)[keyof typeof KafkaSchemaRegistryAuthType];
-/**
  * <p>Specific access configuration settings that tell Lambda how to authenticate with your schema registry.</p> <p>If you're working with an Glue schema registry, don't provide authentication details in this object. Instead, ensure that your execution role has the required permissions for Lambda to access your cluster.</p> <p>If you're working with a Confluent schema registry, choose the authentication method in the <code>Type</code> field, and provide the Secrets Manager secret ARN in the <code>URI</code> field.</p>
  * @public
  */
@@ -418,32 +285,6 @@ export interface KafkaSchemaRegistryAccessConfig {
    */
   URI?: string | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const SchemaRegistryEventRecordFormat: {
-  readonly JSON: "JSON";
-  readonly SOURCE: "SOURCE";
-};
-/**
- * @public
- */
-export type SchemaRegistryEventRecordFormat =
-  (typeof SchemaRegistryEventRecordFormat)[keyof typeof SchemaRegistryEventRecordFormat];
-/**
- * @public
- * @enum
- */
-export declare const KafkaSchemaValidationAttribute: {
-  readonly KEY: "KEY";
-  readonly VALUE: "VALUE";
-};
-/**
- * @public
- */
-export type KafkaSchemaValidationAttribute =
-  (typeof KafkaSchemaValidationAttribute)[keyof typeof KafkaSchemaValidationAttribute];
 /**
  * <p>Specific schema validation configuration settings that tell Lambda the message attributes you want to validate and filter using your schema registry.</p>
  * @public
@@ -499,51 +340,6 @@ export interface AmazonManagedKafkaEventSourceConfig {
 }
 /**
  * @public
- * @enum
- */
-export declare const ApplicationLogLevel: {
-  readonly Debug: "DEBUG";
-  readonly Error: "ERROR";
-  readonly Fatal: "FATAL";
-  readonly Info: "INFO";
-  readonly Trace: "TRACE";
-  readonly Warn: "WARN";
-};
-/**
- * @public
- */
-export type ApplicationLogLevel =
-  (typeof ApplicationLogLevel)[keyof typeof ApplicationLogLevel];
-/**
- * @public
- * @enum
- */
-export declare const Architecture: {
-  readonly arm64: "arm64";
-  readonly x86_64: "x86_64";
-};
-/**
- * @public
- */
-export type Architecture = (typeof Architecture)[keyof typeof Architecture];
-/**
- * @public
- * @enum
- */
-export declare const OperationAction: {
-  readonly CANCEL: "CANCEL";
-  readonly FAIL: "FAIL";
-  readonly RETRY: "RETRY";
-  readonly START: "START";
-  readonly SUCCEED: "SUCCEED";
-};
-/**
- * @public
- */
-export type OperationAction =
-  (typeof OperationAction)[keyof typeof OperationAction];
-/**
- * @public
  */
 export interface CallbackOptions {
   TimeoutSeconds?: number | undefined;
@@ -577,22 +373,6 @@ export interface ErrorObject {
 export interface StepOptions {
   NextAttemptDelaySeconds?: number | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const OperationType: {
-  readonly CALLBACK: "CALLBACK";
-  readonly CHAINED_INVOKE: "CHAINED_INVOKE";
-  readonly CONTEXT: "CONTEXT";
-  readonly EXECUTION: "EXECUTION";
-  readonly STEP: "STEP";
-  readonly WAIT: "WAIT";
-};
-/**
- * @public
- */
-export type OperationType = (typeof OperationType)[keyof typeof OperationType];
 /**
  * @public
  */
@@ -657,25 +437,6 @@ export interface ExecutionDetails {
 }
 /**
  * @public
- * @enum
- */
-export declare const OperationStatus: {
-  readonly CANCELLED: "CANCELLED";
-  readonly FAILED: "FAILED";
-  readonly PENDING: "PENDING";
-  readonly READY: "READY";
-  readonly STARTED: "STARTED";
-  readonly STOPPED: "STOPPED";
-  readonly SUCCEEDED: "SUCCEEDED";
-  readonly TIMED_OUT: "TIMED_OUT";
-};
-/**
- * @public
- */
-export type OperationStatus =
-  (typeof OperationStatus)[keyof typeof OperationStatus];
-/**
- * @public
  */
 export interface StepDetails {
   Attempt?: number | undefined;
@@ -722,19 +483,6 @@ export interface CheckpointDurableExecutionResponse {
   CheckpointToken?: string | undefined;
   NewExecutionState: CheckpointUpdatedExecutionState | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const CodeSigningPolicy: {
-  readonly Enforce: "Enforce";
-  readonly Warn: "Warn";
-};
-/**
- * @public
- */
-export type CodeSigningPolicy =
-  (typeof CodeSigningPolicy)[keyof typeof CodeSigningPolicy];
 /**
  * <p>Code signing configuration <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-codesigning.html#config-codesigning-policies">policies</a> specify the validation failure action for signature mismatch or expiry.</p>
  * @public
@@ -990,18 +738,6 @@ export interface DestinationConfig {
   OnFailure?: OnFailure | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const FullDocument: {
-  readonly Default: "Default";
-  readonly UpdateLookup: "UpdateLookup";
-};
-/**
- * @public
- */
-export type FullDocument = (typeof FullDocument)[keyof typeof FullDocument];
-/**
  * <p> Specific configuration settings for a DocumentDB event source. </p>
  * @public
  */
@@ -1045,30 +781,6 @@ export interface FilterCriteria {
   Filters?: Filter[] | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const FunctionResponseType: {
-  readonly ReportBatchItemFailures: "ReportBatchItemFailures";
-};
-/**
- * @public
- */
-export type FunctionResponseType =
-  (typeof FunctionResponseType)[keyof typeof FunctionResponseType];
-/**
- * @public
- * @enum
- */
-export declare const EventSourceMappingMetric: {
-  readonly EventCount: "EventCount";
-};
-/**
- * @public
- */
-export type EventSourceMappingMetric =
-  (typeof EventSourceMappingMetric)[keyof typeof EventSourceMappingMetric];
-/**
  * <p>The metrics configuration for your event source. Use this configuration object to define which metrics you want your event source mapping to produce.</p>
  * @public
  */
@@ -1107,17 +819,6 @@ export interface ScalingConfig {
   MaximumConcurrency?: number | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const EndPointType: {
-  readonly KAFKA_BOOTSTRAP_SERVERS: "KAFKA_BOOTSTRAP_SERVERS";
-};
-/**
- * @public
- */
-export type EndPointType = (typeof EndPointType)[keyof typeof EndPointType];
-/**
  * <p>The self-managed Apache Kafka cluster for your event source.</p>
  * @public
  */
@@ -1145,25 +846,6 @@ export interface SelfManagedKafkaEventSourceConfig {
   SchemaRegistryConfig?: KafkaSchemaRegistryConfig | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const SourceAccessType: {
-  readonly BASIC_AUTH: "BASIC_AUTH";
-  readonly CLIENT_CERTIFICATE_TLS_AUTH: "CLIENT_CERTIFICATE_TLS_AUTH";
-  readonly SASL_SCRAM_256_AUTH: "SASL_SCRAM_256_AUTH";
-  readonly SASL_SCRAM_512_AUTH: "SASL_SCRAM_512_AUTH";
-  readonly SERVER_ROOT_CA_CERTIFICATE: "SERVER_ROOT_CA_CERTIFICATE";
-  readonly VIRTUAL_HOST: "VIRTUAL_HOST";
-  readonly VPC_SECURITY_GROUP: "VPC_SECURITY_GROUP";
-  readonly VPC_SUBNET: "VPC_SUBNET";
-};
-/**
- * @public
- */
-export type SourceAccessType =
-  (typeof SourceAccessType)[keyof typeof SourceAccessType];
-/**
  * <p>To secure and define access to your event source, you can specify the authentication protocol, VPC components, or virtual host.</p>
  * @public
  */
@@ -1179,20 +861,6 @@ export interface SourceAccessConfiguration {
    */
   URI?: string | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const EventSourcePosition: {
-  readonly AT_TIMESTAMP: "AT_TIMESTAMP";
-  readonly LATEST: "LATEST";
-  readonly TRIM_HORIZON: "TRIM_HORIZON";
-};
-/**
- * @public
- */
-export type EventSourcePosition =
-  (typeof EventSourcePosition)[keyof typeof EventSourcePosition];
 /**
  * @public
  */
@@ -1534,22 +1202,6 @@ export interface DeleteEventSourceMappingRequest {
   UUID: string | undefined;
 }
 /**
- * <p>The operation conflicts with the resource's availability. For example, you tried to update an event source mapping in the CREATING state, or you tried to delete an event source mapping currently UPDATING.</p>
- * @public
- */
-export declare class ResourceInUseException extends __BaseException {
-  readonly name: "ResourceInUseException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<ResourceInUseException, __BaseException>,
-  );
-}
-/**
  * @public
  */
 export interface GetEventSourceMappingRequest {
@@ -1714,63 +1366,6 @@ export interface UpdateEventSourceMappingRequest {
   ProvisionedPollerConfig?: ProvisionedPollerConfig | undefined;
 }
 /**
- * <p>The specified code signing configuration does not exist.</p>
- * @public
- */
-export declare class CodeSigningConfigNotFoundException extends __BaseException {
-  readonly name: "CodeSigningConfigNotFoundException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      CodeSigningConfigNotFoundException,
-      __BaseException
-    >,
-  );
-}
-/**
- * <p>Your Amazon Web Services account has exceeded its maximum total code size. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>.</p>
- * @public
- */
-export declare class CodeStorageExceededException extends __BaseException {
-  readonly name: "CodeStorageExceededException";
-  readonly $fault: "client";
-  /**
-   * <p>The exception type.</p>
-   * @public
-   */
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<CodeStorageExceededException, __BaseException>,
-  );
-}
-/**
- * <p>The code signature failed one or more of the validation checks for signature mismatch or expiry, and the code signing policy is set to ENFORCE. Lambda blocks the deployment.</p>
- * @public
- */
-export declare class CodeVerificationFailedException extends __BaseException {
-  readonly name: "CodeVerificationFailedException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      CodeVerificationFailedException,
-      __BaseException
-    >,
-  );
-}
-/**
  * <p>The code for the Lambda function. You can either specify an object in Amazon S3, upload a .zip file archive deployment package directly, or specify the URI of a container image.</p>
  * @public
  */
@@ -1884,32 +1479,6 @@ export interface ImageConfig {
   WorkingDirectory?: string | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const LogFormat: {
-  readonly Json: "JSON";
-  readonly Text: "Text";
-};
-/**
- * @public
- */
-export type LogFormat = (typeof LogFormat)[keyof typeof LogFormat];
-/**
- * @public
- * @enum
- */
-export declare const SystemLogLevel: {
-  readonly Debug: "DEBUG";
-  readonly Info: "INFO";
-  readonly Warn: "WARN";
-};
-/**
- * @public
- */
-export type SystemLogLevel =
-  (typeof SystemLogLevel)[keyof typeof SystemLogLevel];
-/**
  * <p>The function's Amazon CloudWatch Logs configuration settings.</p>
  * @public
  */
@@ -1936,82 +1505,6 @@ export interface LoggingConfig {
   LogGroup?: string | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const PackageType: {
-  readonly Image: "Image";
-  readonly Zip: "Zip";
-};
-/**
- * @public
- */
-export type PackageType = (typeof PackageType)[keyof typeof PackageType];
-/**
- * @public
- * @enum
- */
-export declare const Runtime: {
-  readonly dotnet6: "dotnet6";
-  readonly dotnet8: "dotnet8";
-  readonly dotnetcore10: "dotnetcore1.0";
-  readonly dotnetcore20: "dotnetcore2.0";
-  readonly dotnetcore21: "dotnetcore2.1";
-  readonly dotnetcore31: "dotnetcore3.1";
-  readonly go1x: "go1.x";
-  readonly java11: "java11";
-  readonly java17: "java17";
-  readonly java21: "java21";
-  readonly java8: "java8";
-  readonly java8al2: "java8.al2";
-  readonly nodejs: "nodejs";
-  readonly nodejs10x: "nodejs10.x";
-  readonly nodejs12x: "nodejs12.x";
-  readonly nodejs14x: "nodejs14.x";
-  readonly nodejs16x: "nodejs16.x";
-  readonly nodejs18x: "nodejs18.x";
-  readonly nodejs20x: "nodejs20.x";
-  readonly nodejs22x: "nodejs22.x";
-  readonly nodejs43: "nodejs4.3";
-  readonly nodejs43edge: "nodejs4.3-edge";
-  readonly nodejs610: "nodejs6.10";
-  readonly nodejs810: "nodejs8.10";
-  readonly provided: "provided";
-  readonly providedal2: "provided.al2";
-  readonly providedal2023: "provided.al2023";
-  readonly python27: "python2.7";
-  readonly python310: "python3.10";
-  readonly python311: "python3.11";
-  readonly python312: "python3.12";
-  readonly python313: "python3.13";
-  readonly python36: "python3.6";
-  readonly python37: "python3.7";
-  readonly python38: "python3.8";
-  readonly python39: "python3.9";
-  readonly ruby25: "ruby2.5";
-  readonly ruby27: "ruby2.7";
-  readonly ruby32: "ruby3.2";
-  readonly ruby33: "ruby3.3";
-  readonly ruby34: "ruby3.4";
-};
-/**
- * @public
- */
-export type Runtime = (typeof Runtime)[keyof typeof Runtime];
-/**
- * @public
- * @enum
- */
-export declare const SnapStartApplyOn: {
-  readonly None: "None";
-  readonly PublishedVersions: "PublishedVersions";
-};
-/**
- * @public
- */
-export type SnapStartApplyOn =
-  (typeof SnapStartApplyOn)[keyof typeof SnapStartApplyOn];
-/**
  * <p>The function's <a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html">Lambda SnapStart</a> setting. Set <code>ApplyOn</code> to <code>PublishedVersions</code> to create a snapshot of the initialized execution environment when you publish a function version.</p>
  * @public
  */
@@ -2022,18 +1515,6 @@ export interface SnapStart {
    */
   ApplyOn?: SnapStartApplyOn | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const TracingMode: {
-  readonly Active: "Active";
-  readonly PassThrough: "PassThrough";
-};
-/**
- * @public
- */
-export type TracingMode = (typeof TracingMode)[keyof typeof TracingMode];
 /**
  * <p>The function's <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-xray.html">X-Ray</a> tracing configuration. To sample and record incoming requests, set <code>Mode</code> to <code>Active</code>.</p>
  * @public
@@ -2257,52 +1738,6 @@ export interface ImageConfigResponse {
   Error?: ImageConfigError | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const LastUpdateStatus: {
-  readonly Failed: "Failed";
-  readonly InProgress: "InProgress";
-  readonly Successful: "Successful";
-};
-/**
- * @public
- */
-export type LastUpdateStatus =
-  (typeof LastUpdateStatus)[keyof typeof LastUpdateStatus];
-/**
- * @public
- * @enum
- */
-export declare const LastUpdateStatusReasonCode: {
-  readonly DisabledKMSKey: "DisabledKMSKey";
-  readonly EFSIOError: "EFSIOError";
-  readonly EFSMountConnectivityError: "EFSMountConnectivityError";
-  readonly EFSMountFailure: "EFSMountFailure";
-  readonly EFSMountTimeout: "EFSMountTimeout";
-  readonly EniLimitExceeded: "EniLimitExceeded";
-  readonly FunctionError: "FunctionError";
-  readonly ImageAccessDenied: "ImageAccessDenied";
-  readonly ImageDeleted: "ImageDeleted";
-  readonly InsufficientRolePermissions: "InsufficientRolePermissions";
-  readonly InternalError: "InternalError";
-  readonly InvalidConfiguration: "InvalidConfiguration";
-  readonly InvalidImage: "InvalidImage";
-  readonly InvalidRuntime: "InvalidRuntime";
-  readonly InvalidSecurityGroup: "InvalidSecurityGroup";
-  readonly InvalidStateKMSKey: "InvalidStateKMSKey";
-  readonly InvalidSubnet: "InvalidSubnet";
-  readonly InvalidZipFileException: "InvalidZipFileException";
-  readonly KMSKeyAccessDenied: "KMSKeyAccessDenied";
-  readonly KMSKeyNotFound: "KMSKeyNotFound";
-  readonly SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses";
-};
-/**
- * @public
- */
-export type LastUpdateStatusReasonCode =
-  (typeof LastUpdateStatusReasonCode)[keyof typeof LastUpdateStatusReasonCode];
-/**
  * <p>An <a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html">Lambda layer</a>.</p>
  * @public
  */
@@ -2361,19 +1796,6 @@ export interface RuntimeVersionConfig {
   Error?: RuntimeVersionError | undefined;
 }
 /**
- * @public
- * @enum
- */
-export declare const SnapStartOptimizationStatus: {
-  readonly Off: "Off";
-  readonly On: "On";
-};
-/**
- * @public
- */
-export type SnapStartOptimizationStatus =
-  (typeof SnapStartOptimizationStatus)[keyof typeof SnapStartOptimizationStatus];
-/**
  * <p>The function's <a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html">SnapStart</a> setting.</p>
  * @public
  */
@@ -2389,56 +1811,6 @@ export interface SnapStartResponse {
    */
   OptimizationStatus?: SnapStartOptimizationStatus | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const State: {
-  readonly Active: "Active";
-  readonly Failed: "Failed";
-  readonly Inactive: "Inactive";
-  readonly Pending: "Pending";
-};
-/**
- * @public
- */
-export type State = (typeof State)[keyof typeof State];
-/**
- * @public
- * @enum
- */
-export declare const StateReasonCode: {
-  readonly Creating: "Creating";
-  readonly DisabledKMSKey: "DisabledKMSKey";
-  readonly DrainingDurableExecutions: "DrainingDurableExecutions";
-  readonly EFSIOError: "EFSIOError";
-  readonly EFSMountConnectivityError: "EFSMountConnectivityError";
-  readonly EFSMountFailure: "EFSMountFailure";
-  readonly EFSMountTimeout: "EFSMountTimeout";
-  readonly EniLimitExceeded: "EniLimitExceeded";
-  readonly FunctionError: "FunctionError";
-  readonly Idle: "Idle";
-  readonly ImageAccessDenied: "ImageAccessDenied";
-  readonly ImageDeleted: "ImageDeleted";
-  readonly InsufficientRolePermissions: "InsufficientRolePermissions";
-  readonly InternalError: "InternalError";
-  readonly InvalidConfiguration: "InvalidConfiguration";
-  readonly InvalidImage: "InvalidImage";
-  readonly InvalidRuntime: "InvalidRuntime";
-  readonly InvalidSecurityGroup: "InvalidSecurityGroup";
-  readonly InvalidStateKMSKey: "InvalidStateKMSKey";
-  readonly InvalidSubnet: "InvalidSubnet";
-  readonly InvalidZipFileException: "InvalidZipFileException";
-  readonly KMSKeyAccessDenied: "KMSKeyAccessDenied";
-  readonly KMSKeyNotFound: "KMSKeyNotFound";
-  readonly Restoring: "Restoring";
-  readonly SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses";
-};
-/**
- * @public
- */
-export type StateReasonCode =
-  (typeof StateReasonCode)[keyof typeof StateReasonCode];
 /**
  * <p>The function's X-Ray tracing configuration.</p>
  * @public
@@ -2664,22 +2036,6 @@ export interface FunctionConfiguration {
   DurableConfig?: DurableConfig | undefined;
 }
 /**
- * <p>The code signature failed the integrity check. If the integrity check fails, then Lambda blocks deployment, even if the code signing policy is set to WARN.</p>
- * @public
- */
-export declare class InvalidCodeSignatureException extends __BaseException {
-  readonly name: "InvalidCodeSignatureException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<InvalidCodeSignatureException, __BaseException>,
-  );
-}
-/**
  * <p>The <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">cross-origin resource sharing (CORS)</a> settings for your Lambda function URL. Use CORS to grant access to your function URL from any origin. You can also use CORS to control access for specific HTTP headers and methods in requests to your function URL.</p>
  * @public
  */
@@ -2715,18 +2071,6 @@ export interface Cors {
    */
   MaxAge?: number | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const InvokeMode: {
-  readonly BUFFERED: "BUFFERED";
-  readonly RESPONSE_STREAM: "RESPONSE_STREAM";
-};
-/**
- * @public
- */
-export type InvokeMode = (typeof InvokeMode)[keyof typeof InvokeMode];
 /**
  * @public
  */
@@ -3076,18 +2420,6 @@ export interface GetFunctionRecursionConfigRequest {
 }
 /**
  * @public
- * @enum
- */
-export declare const RecursiveLoop: {
-  readonly Allow: "Allow";
-  readonly Terminate: "Terminate";
-};
-/**
- * @public
- */
-export type RecursiveLoop = (typeof RecursiveLoop)[keyof typeof RecursiveLoop];
-/**
- * @public
  */
 export interface GetFunctionRecursionConfigResponse {
   /**
@@ -3198,20 +2530,6 @@ export interface GetRuntimeManagementConfigRequest {
 }
 /**
  * @public
- * @enum
- */
-export declare const UpdateRuntimeOn: {
-  readonly Auto: "Auto";
-  readonly FunctionUpdate: "FunctionUpdate";
-  readonly Manual: "Manual";
-};
-/**
- * @public
- */
-export type UpdateRuntimeOn =
-  (typeof UpdateRuntimeOn)[keyof typeof UpdateRuntimeOn];
-/**
- * @public
  */
 export interface GetRuntimeManagementConfigResponse {
   /**
@@ -3230,266 +2548,6 @@ export interface GetRuntimeManagementConfigResponse {
    */
   FunctionArn?: string | undefined;
 }
-/**
- * @public
- */
-export declare class DurableExecutionAlreadyStartedException extends __BaseException {
-  readonly name: "DurableExecutionAlreadyStartedException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      DurableExecutionAlreadyStartedException,
-      __BaseException
-    >,
-  );
-}
-/**
- * <p>Need additional permissions to configure VPC settings.</p>
- * @public
- */
-export declare class EC2AccessDeniedException extends __BaseException {
-  readonly name: "EC2AccessDeniedException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<EC2AccessDeniedException, __BaseException>,
-  );
-}
-/**
- * <p>Amazon EC2 throttled Lambda during Lambda function initialization using the execution role provided for the function.</p>
- * @public
- */
-export declare class EC2ThrottledException extends __BaseException {
-  readonly name: "EC2ThrottledException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<EC2ThrottledException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda received an unexpected Amazon EC2 client exception while setting up for the Lambda function.</p>
- * @public
- */
-export declare class EC2UnexpectedException extends __BaseException {
-  readonly name: "EC2UnexpectedException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  EC2ErrorCode?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<EC2UnexpectedException, __BaseException>,
-  );
-}
-/**
- * <p>An error occurred when reading from or writing to a connected file system.</p>
- * @public
- */
-export declare class EFSIOException extends __BaseException {
-  readonly name: "EFSIOException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(opts: __ExceptionOptionType<EFSIOException, __BaseException>);
-}
-/**
- * <p>The Lambda function couldn't make a network connection to the configured file system.</p>
- * @public
- */
-export declare class EFSMountConnectivityException extends __BaseException {
-  readonly name: "EFSMountConnectivityException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<EFSMountConnectivityException, __BaseException>,
-  );
-}
-/**
- * <p>The Lambda function couldn't mount the configured file system due to a permission or configuration issue.</p>
- * @public
- */
-export declare class EFSMountFailureException extends __BaseException {
-  readonly name: "EFSMountFailureException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<EFSMountFailureException, __BaseException>,
-  );
-}
-/**
- * <p>The Lambda function made a network connection to the configured file system, but the mount operation timed out.</p>
- * @public
- */
-export declare class EFSMountTimeoutException extends __BaseException {
-  readonly name: "EFSMountTimeoutException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<EFSMountTimeoutException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda couldn't create an elastic network interface in the VPC, specified as part of Lambda function configuration, because the limit for network interfaces has been reached. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>.</p>
- * @public
- */
-export declare class ENILimitReachedException extends __BaseException {
-  readonly name: "ENILimitReachedException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<ENILimitReachedException, __BaseException>,
-  );
-}
-/**
- * <p>The request body could not be parsed as JSON, or a request header is invalid. For example, the 'x-amzn-RequestId' header is not a valid UUID string.</p>
- * @public
- */
-export declare class InvalidRequestContentException extends __BaseException {
-  readonly name: "InvalidRequestContentException";
-  readonly $fault: "client";
-  /**
-   * <p>The exception type.</p>
-   * @public
-   */
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      InvalidRequestContentException,
-      __BaseException
-    >,
-  );
-}
-/**
- * <p>The runtime or runtime version specified is not supported.</p>
- * @public
- */
-export declare class InvalidRuntimeException extends __BaseException {
-  readonly name: "InvalidRuntimeException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<InvalidRuntimeException, __BaseException>,
-  );
-}
-/**
- * <p>The security group ID provided in the Lambda function VPC configuration is not valid.</p>
- * @public
- */
-export declare class InvalidSecurityGroupIDException extends __BaseException {
-  readonly name: "InvalidSecurityGroupIDException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      InvalidSecurityGroupIDException,
-      __BaseException
-    >,
-  );
-}
-/**
- * <p>The subnet ID provided in the Lambda function VPC configuration is not valid.</p>
- * @public
- */
-export declare class InvalidSubnetIDException extends __BaseException {
-  readonly name: "InvalidSubnetIDException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<InvalidSubnetIDException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda could not unzip the deployment package.</p>
- * @public
- */
-export declare class InvalidZipFileException extends __BaseException {
-  readonly name: "InvalidZipFileException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<InvalidZipFileException, __BaseException>,
-  );
-}
-/**
- * @public
- * @enum
- */
-export declare const InvocationType: {
-  readonly DryRun: "DryRun";
-  readonly Event: "Event";
-  readonly RequestResponse: "RequestResponse";
-};
-/**
- * @public
- */
-export type InvocationType =
-  (typeof InvocationType)[keyof typeof InvocationType];
-/**
- * @public
- * @enum
- */
-export declare const LogType: {
-  readonly None: "None";
-  readonly Tail: "Tail";
-};
-/**
- * @public
- */
-export type LogType = (typeof LogType)[keyof typeof LogType];
 /**
  * @public
  */
@@ -3558,208 +2616,6 @@ export interface InvocationResponse {
   DurableExecutionArn?: string | undefined;
 }
 /**
- * <p>Lambda couldn't decrypt the environment variables because KMS access was denied. Check the Lambda function's KMS permissions.</p>
- * @public
- */
-export declare class KMSAccessDeniedException extends __BaseException {
-  readonly name: "KMSAccessDeniedException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<KMSAccessDeniedException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda couldn't decrypt the environment variables because the KMS key used is disabled. Check the Lambda function's KMS key settings.</p>
- * @public
- */
-export declare class KMSDisabledException extends __BaseException {
-  readonly name: "KMSDisabledException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<KMSDisabledException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda couldn't decrypt the environment variables because the state of the KMS key used is not valid for Decrypt. Check the function's KMS key settings.</p>
- * @public
- */
-export declare class KMSInvalidStateException extends __BaseException {
-  readonly name: "KMSInvalidStateException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<KMSInvalidStateException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda couldn't decrypt the environment variables because the KMS key was not found. Check the function's KMS key settings.</p>
- * @public
- */
-export declare class KMSNotFoundException extends __BaseException {
-  readonly name: "KMSNotFoundException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<KMSNotFoundException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda has detected your function being invoked in a recursive loop with other Amazon Web Services resources and stopped your function's invocation.</p>
- * @public
- */
-export declare class RecursiveInvocationException extends __BaseException {
-  readonly name: "RecursiveInvocationException";
-  readonly $fault: "client";
-  /**
-   * <p>The exception type.</p>
-   * @public
-   */
-  Type?: string | undefined;
-  /**
-   * <p>The exception message.</p>
-   * @public
-   */
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<RecursiveInvocationException, __BaseException>,
-  );
-}
-/**
- * <p>The request payload exceeded the <code>Invoke</code> request body JSON input quota. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>.</p>
- * @public
- */
-export declare class RequestTooLargeException extends __BaseException {
-  readonly name: "RequestTooLargeException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<RequestTooLargeException, __BaseException>,
-  );
-}
-/**
- * <p>The function is inactive and its VPC connection is no longer available. Wait for the VPC connection to reestablish and try again.</p>
- * @public
- */
-export declare class ResourceNotReadyException extends __BaseException {
-  readonly name: "ResourceNotReadyException";
-  readonly $fault: "server";
-  /**
-   * <p>The exception type.</p>
-   * @public
-   */
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<ResourceNotReadyException, __BaseException>,
-  );
-}
-/**
- * <p>The <code>afterRestore()</code> <a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart-runtime-hooks.html">runtime hook</a> encountered an error. For more information, check the Amazon CloudWatch logs.</p>
- * @public
- */
-export declare class SnapStartException extends __BaseException {
-  readonly name: "SnapStartException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(opts: __ExceptionOptionType<SnapStartException, __BaseException>);
-}
-/**
- * <p>Lambda is initializing your function. You can invoke the function when the <a href="https://docs.aws.amazon.com/lambda/latest/dg/functions-states.html">function state</a> becomes <code>Active</code>.</p>
- * @public
- */
-export declare class SnapStartNotReadyException extends __BaseException {
-  readonly name: "SnapStartNotReadyException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<SnapStartNotReadyException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda couldn't restore the snapshot within the timeout limit.</p>
- * @public
- */
-export declare class SnapStartTimeoutException extends __BaseException {
-  readonly name: "SnapStartTimeoutException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<SnapStartTimeoutException, __BaseException>,
-  );
-}
-/**
- * <p>Lambda couldn't set up VPC access for the Lambda function because one or more configured subnets has no available IP addresses.</p>
- * @public
- */
-export declare class SubnetIPAddressLimitReachedException extends __BaseException {
-  readonly name: "SubnetIPAddressLimitReachedException";
-  readonly $fault: "server";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      SubnetIPAddressLimitReachedException,
-      __BaseException
-    >,
-  );
-}
-/**
- * <p>The content type of the <code>Invoke</code> request body is not JSON.</p>
- * @public
- */
-export declare class UnsupportedMediaTypeException extends __BaseException {
-  readonly name: "UnsupportedMediaTypeException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<UnsupportedMediaTypeException, __BaseException>,
-  );
-}
-/**
  * @public
  */
 export interface InvokeAsyncRequest {
@@ -3787,19 +2643,6 @@ export interface InvokeAsyncResponse {
    */
   Status?: number | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const ResponseStreamingInvocationType: {
-  readonly DryRun: "DryRun";
-  readonly RequestResponse: "RequestResponse";
-};
-/**
- * @public
- */
-export type ResponseStreamingInvocationType =
-  (typeof ResponseStreamingInvocationType)[keyof typeof ResponseStreamingInvocationType];
 /**
  * @public
  */
@@ -3905,15 +2748,15 @@ export declare namespace InvokeWithResponseStreamResponseEvent {
     InvokeComplete?: never;
     $unknown: [string, any];
   }
+  /**
+   * @deprecated unused in schema-serde mode.
+   *
+   */
   interface Visitor<T> {
     PayloadChunk: (value: InvokeResponseStreamUpdate) => T;
     InvokeComplete: (value: InvokeWithResponseStreamCompleteEvent) => T;
     _: (name: string, value: any) => T;
   }
-  const visit: <T>(
-    value: InvokeWithResponseStreamResponseEvent,
-    visitor: Visitor<T>,
-  ) => T;
 }
 /**
  * @public
@@ -3977,18 +2820,6 @@ export interface ListFunctionEventInvokeConfigsResponse {
    */
   NextMarker?: string | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const FunctionVersion: {
-  readonly ALL: "ALL";
-};
-/**
- * @public
- */
-export type FunctionVersion =
-  (typeof FunctionVersion)[keyof typeof FunctionVersion];
 /**
  * @public
  */
@@ -4126,20 +2957,6 @@ export interface ListProvisionedConcurrencyConfigsRequest {
    */
   MaxItems?: number | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const ProvisionedConcurrencyStatusEnum: {
-  readonly FAILED: "FAILED";
-  readonly IN_PROGRESS: "IN_PROGRESS";
-  readonly READY: "READY";
-};
-/**
- * @public
- */
-export type ProvisionedConcurrencyStatusEnum =
-  (typeof ProvisionedConcurrencyStatusEnum)[keyof typeof ProvisionedConcurrencyStatusEnum];
 /**
  * <p>Details about the provisioned concurrency configuration for a function alias or version.</p>
  * @public
@@ -4826,20 +3643,10 @@ export interface GetDurableExecutionRequest {
 }
 /**
  * @public
- * @enum
  */
-export declare const ExecutionStatus: {
-  readonly FAILED: "FAILED";
-  readonly RUNNING: "RUNNING";
-  readonly STOPPED: "STOPPED";
-  readonly SUCCEEDED: "SUCCEEDED";
-  readonly TIMED_OUT: "TIMED_OUT";
-};
-/**
- * @public
- */
-export type ExecutionStatus =
-  (typeof ExecutionStatus)[keyof typeof ExecutionStatus];
+export interface TraceHeader {
+  XAmznTraceId?: string | undefined;
+}
 /**
  * @public
  */
@@ -4854,6 +3661,7 @@ export interface GetDurableExecutionResponse {
   Status: ExecutionStatus | undefined;
   EndTimestamp?: Date | undefined;
   Version?: string | undefined;
+  TraceHeader?: TraceHeader | undefined;
 }
 /**
  * @public
@@ -4962,40 +3770,6 @@ export interface ContextStartedDetails {}
 export interface ContextSucceededDetails {
   Result: EventResult | undefined;
 }
-/**
- * @public
- * @enum
- */
-export declare const EventType: {
-  readonly CallbackFailed: "CallbackFailed";
-  readonly CallbackStarted: "CallbackStarted";
-  readonly CallbackSucceeded: "CallbackSucceeded";
-  readonly CallbackTimedOut: "CallbackTimedOut";
-  readonly ChainedInvokeFailed: "ChainedInvokeFailed";
-  readonly ChainedInvokeStarted: "ChainedInvokeStarted";
-  readonly ChainedInvokeStopped: "ChainedInvokeStopped";
-  readonly ChainedInvokeSucceeded: "ChainedInvokeSucceeded";
-  readonly ChainedInvokeTimedOut: "ChainedInvokeTimedOut";
-  readonly ContextFailed: "ContextFailed";
-  readonly ContextStarted: "ContextStarted";
-  readonly ContextSucceeded: "ContextSucceeded";
-  readonly ExecutionFailed: "ExecutionFailed";
-  readonly ExecutionStarted: "ExecutionStarted";
-  readonly ExecutionStopped: "ExecutionStopped";
-  readonly ExecutionSucceeded: "ExecutionSucceeded";
-  readonly ExecutionTimedOut: "ExecutionTimedOut";
-  readonly InvocationCompleted: "InvocationCompleted";
-  readonly StepFailed: "StepFailed";
-  readonly StepStarted: "StepStarted";
-  readonly StepSucceeded: "StepSucceeded";
-  readonly WaitCancelled: "WaitCancelled";
-  readonly WaitStarted: "WaitStarted";
-  readonly WaitSucceeded: "WaitSucceeded";
-};
-/**
- * @public
- */
-export type EventType = (typeof EventType)[keyof typeof EventType];
 /**
  * @public
  */
@@ -5716,24 +4490,6 @@ export interface GetProvisionedConcurrencyConfigResponse {
   LastModified?: string | undefined;
 }
 /**
- * <p>The specified configuration does not exist.</p>
- * @public
- */
-export declare class ProvisionedConcurrencyConfigNotFoundException extends __BaseException {
-  readonly name: "ProvisionedConcurrencyConfigNotFoundException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<
-      ProvisionedConcurrencyConfigNotFoundException,
-      __BaseException
-    >,
-  );
-}
-/**
  * @public
  */
 export interface PutProvisionedConcurrencyConfigRequest {
@@ -5791,376 +4547,75 @@ export interface PutProvisionedConcurrencyConfigResponse {
 /**
  * @public
  */
-export declare class CallbackTimeoutException extends __BaseException {
-  readonly name: "CallbackTimeoutException";
-  readonly $fault: "client";
-  Type?: string | undefined;
-  Message?: string | undefined;
-  /**
-   * @internal
-   */
-  constructor(
-    opts: __ExceptionOptionType<CallbackTimeoutException, __BaseException>,
-  );
-}
-/**
- * @public
- */
 export interface SendDurableExecutionCallbackFailureRequest {
   CallbackId: string | undefined;
   Error?: ErrorObject | undefined;
 }
 /**
- * @internal
+ * @public
  */
-export declare const ErrorObjectFilterSensitiveLog: (obj: ErrorObject) => any;
+export interface SendDurableExecutionCallbackFailureResponse {}
 /**
- * @internal
+ * @public
  */
-export declare const OperationUpdateFilterSensitiveLog: (
-  obj: OperationUpdate,
-) => any;
+export interface SendDurableExecutionCallbackHeartbeatRequest {
+  CallbackId: string | undefined;
+}
 /**
- * @internal
+ * @public
  */
-export declare const CheckpointDurableExecutionRequestFilterSensitiveLog: (
-  obj: CheckpointDurableExecutionRequest,
-) => any;
+export interface SendDurableExecutionCallbackHeartbeatResponse {}
 /**
- * @internal
+ * @public
  */
-export declare const CallbackDetailsFilterSensitiveLog: (
-  obj: CallbackDetails,
-) => any;
+export interface SendDurableExecutionCallbackSuccessRequest {
+  CallbackId: string | undefined;
+  Result?: Uint8Array | undefined;
+}
 /**
- * @internal
+ * @public
  */
-export declare const ChainedInvokeDetailsFilterSensitiveLog: (
-  obj: ChainedInvokeDetails,
-) => any;
+export interface SendDurableExecutionCallbackSuccessResponse {}
 /**
- * @internal
+ * @public
  */
-export declare const ContextDetailsFilterSensitiveLog: (
-  obj: ContextDetails,
-) => any;
+export interface StopDurableExecutionRequest {
+  DurableExecutionArn: string | undefined;
+  Error?: ErrorObject | undefined;
+}
 /**
- * @internal
+ * @public
  */
-export declare const ExecutionDetailsFilterSensitiveLog: (
-  obj: ExecutionDetails,
-) => any;
+export interface StopDurableExecutionResponse {
+  StopTimestamp: Date | undefined;
+}
 /**
- * @internal
+ * @public
  */
-export declare const StepDetailsFilterSensitiveLog: (obj: StepDetails) => any;
+export interface TagResourceRequest {
+  /**
+   * <p>The resource's Amazon Resource Name (ARN).</p>
+   * @public
+   */
+  Resource: string | undefined;
+  /**
+   * <p>A list of tags to apply to the resource.</p>
+   * @public
+   */
+  Tags: Record<string, string> | undefined;
+}
 /**
- * @internal
+ * @public
  */
-export declare const OperationFilterSensitiveLog: (obj: Operation) => any;
-/**
- * @internal
- */
-export declare const CheckpointUpdatedExecutionStateFilterSensitiveLog: (
-  obj: CheckpointUpdatedExecutionState,
-) => any;
-/**
- * @internal
- */
-export declare const CheckpointDurableExecutionResponseFilterSensitiveLog: (
-  obj: CheckpointDurableExecutionResponse,
-) => any;
-/**
- * @internal
- */
-export declare const FunctionCodeFilterSensitiveLog: (obj: FunctionCode) => any;
-/**
- * @internal
- */
-export declare const EnvironmentFilterSensitiveLog: (obj: Environment) => any;
-/**
- * @internal
- */
-export declare const CreateFunctionRequestFilterSensitiveLog: (
-  obj: CreateFunctionRequest,
-) => any;
-/**
- * @internal
- */
-export declare const EnvironmentErrorFilterSensitiveLog: (
-  obj: EnvironmentError,
-) => any;
-/**
- * @internal
- */
-export declare const EnvironmentResponseFilterSensitiveLog: (
-  obj: EnvironmentResponse,
-) => any;
-/**
- * @internal
- */
-export declare const ImageConfigErrorFilterSensitiveLog: (
-  obj: ImageConfigError,
-) => any;
-/**
- * @internal
- */
-export declare const ImageConfigResponseFilterSensitiveLog: (
-  obj: ImageConfigResponse,
-) => any;
-/**
- * @internal
- */
-export declare const RuntimeVersionErrorFilterSensitiveLog: (
-  obj: RuntimeVersionError,
-) => any;
-/**
- * @internal
- */
-export declare const RuntimeVersionConfigFilterSensitiveLog: (
-  obj: RuntimeVersionConfig,
-) => any;
-/**
- * @internal
- */
-export declare const FunctionConfigurationFilterSensitiveLog: (
-  obj: FunctionConfiguration,
-) => any;
-/**
- * @internal
- */
-export declare const GetFunctionResponseFilterSensitiveLog: (
-  obj: GetFunctionResponse,
-) => any;
-/**
- * @internal
- */
-export declare const InvocationRequestFilterSensitiveLog: (
-  obj: InvocationRequest,
-) => any;
-/**
- * @internal
- */
-export declare const InvocationResponseFilterSensitiveLog: (
-  obj: InvocationResponse,
-) => any;
-/**
- * @internal
- */
-export declare const InvokeAsyncRequestFilterSensitiveLog: (
-  obj: InvokeAsyncRequest,
-) => any;
-/**
- * @internal
- */
-export declare const InvokeWithResponseStreamRequestFilterSensitiveLog: (
-  obj: InvokeWithResponseStreamRequest,
-) => any;
-/**
- * @internal
- */
-export declare const InvokeResponseStreamUpdateFilterSensitiveLog: (
-  obj: InvokeResponseStreamUpdate,
-) => any;
-/**
- * @internal
- */
-export declare const InvokeWithResponseStreamResponseEventFilterSensitiveLog: (
-  obj: InvokeWithResponseStreamResponseEvent,
-) => any;
-/**
- * @internal
- */
-export declare const InvokeWithResponseStreamResponseFilterSensitiveLog: (
-  obj: InvokeWithResponseStreamResponse,
-) => any;
-/**
- * @internal
- */
-export declare const ListFunctionsResponseFilterSensitiveLog: (
-  obj: ListFunctionsResponse,
-) => any;
-/**
- * @internal
- */
-export declare const UpdateFunctionCodeRequestFilterSensitiveLog: (
-  obj: UpdateFunctionCodeRequest,
-) => any;
-/**
- * @internal
- */
-export declare const UpdateFunctionConfigurationRequestFilterSensitiveLog: (
-  obj: UpdateFunctionConfigurationRequest,
-) => any;
-/**
- * @internal
- */
-export declare const ListVersionsByFunctionResponseFilterSensitiveLog: (
-  obj: ListVersionsByFunctionResponse,
-) => any;
-/**
- * @internal
- */
-export declare const GetDurableExecutionResponseFilterSensitiveLog: (
-  obj: GetDurableExecutionResponse,
-) => any;
-/**
- * @internal
- */
-export declare const EventErrorFilterSensitiveLog: (obj: EventError) => any;
-/**
- * @internal
- */
-export declare const CallbackFailedDetailsFilterSensitiveLog: (
-  obj: CallbackFailedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const EventResultFilterSensitiveLog: (obj: EventResult) => any;
-/**
- * @internal
- */
-export declare const CallbackSucceededDetailsFilterSensitiveLog: (
-  obj: CallbackSucceededDetails,
-) => any;
-/**
- * @internal
- */
-export declare const CallbackTimedOutDetailsFilterSensitiveLog: (
-  obj: CallbackTimedOutDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ChainedInvokeFailedDetailsFilterSensitiveLog: (
-  obj: ChainedInvokeFailedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const EventInputFilterSensitiveLog: (obj: EventInput) => any;
-/**
- * @internal
- */
-export declare const ChainedInvokeStartedDetailsFilterSensitiveLog: (
-  obj: ChainedInvokeStartedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ChainedInvokeStoppedDetailsFilterSensitiveLog: (
-  obj: ChainedInvokeStoppedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ChainedInvokeSucceededDetailsFilterSensitiveLog: (
-  obj: ChainedInvokeSucceededDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ChainedInvokeTimedOutDetailsFilterSensitiveLog: (
-  obj: ChainedInvokeTimedOutDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ContextFailedDetailsFilterSensitiveLog: (
-  obj: ContextFailedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ContextSucceededDetailsFilterSensitiveLog: (
-  obj: ContextSucceededDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ExecutionFailedDetailsFilterSensitiveLog: (
-  obj: ExecutionFailedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ExecutionStartedDetailsFilterSensitiveLog: (
-  obj: ExecutionStartedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ExecutionStoppedDetailsFilterSensitiveLog: (
-  obj: ExecutionStoppedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ExecutionSucceededDetailsFilterSensitiveLog: (
-  obj: ExecutionSucceededDetails,
-) => any;
-/**
- * @internal
- */
-export declare const ExecutionTimedOutDetailsFilterSensitiveLog: (
-  obj: ExecutionTimedOutDetails,
-) => any;
-/**
- * @internal
- */
-export declare const InvocationCompletedDetailsFilterSensitiveLog: (
-  obj: InvocationCompletedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const StepFailedDetailsFilterSensitiveLog: (
-  obj: StepFailedDetails,
-) => any;
-/**
- * @internal
- */
-export declare const StepSucceededDetailsFilterSensitiveLog: (
-  obj: StepSucceededDetails,
-) => any;
-/**
- * @internal
- */
-export declare const WaitCancelledDetailsFilterSensitiveLog: (
-  obj: WaitCancelledDetails,
-) => any;
-/**
- * @internal
- */
-export declare const EventFilterSensitiveLog: (obj: Event) => any;
-/**
- * @internal
- */
-export declare const GetDurableExecutionHistoryResponseFilterSensitiveLog: (
-  obj: GetDurableExecutionHistoryResponse,
-) => any;
-/**
- * @internal
- */
-export declare const GetDurableExecutionStateResponseFilterSensitiveLog: (
-  obj: GetDurableExecutionStateResponse,
-) => any;
-/**
- * @internal
- */
-export declare const LayerVersionContentInputFilterSensitiveLog: (
-  obj: LayerVersionContentInput,
-) => any;
-/**
- * @internal
- */
-export declare const PublishLayerVersionRequestFilterSensitiveLog: (
-  obj: PublishLayerVersionRequest,
-) => any;
-/**
- * @internal
- */
-export declare const SendDurableExecutionCallbackFailureRequestFilterSensitiveLog: (
-  obj: SendDurableExecutionCallbackFailureRequest,
-) => any;
+export interface UntagResourceRequest {
+  /**
+   * <p>The resource's Amazon Resource Name (ARN).</p>
+   * @public
+   */
+  Resource: string | undefined;
+  /**
+   * <p>A list of tag keys to remove from the resource.</p>
+   * @public
+   */
+  TagKeys: string[] | undefined;
+}

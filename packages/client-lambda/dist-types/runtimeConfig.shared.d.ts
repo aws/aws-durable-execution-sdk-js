@@ -17,6 +17,10 @@ export declare const getRuntimeConfig: (config: LambdaClientConfig) => {
   httpAuthSchemeProvider: import("./auth/httpAuthSchemeProvider").LambdaHttpAuthSchemeProvider;
   httpAuthSchemes: import("@smithy/types").HttpAuthScheme[];
   logger: import("@smithy/types").Logger;
+  protocol: import("@smithy/types").ClientProtocol<
+    import("@smithy/types").HttpRequest,
+    import("@smithy/types").HttpResponse
+  >;
   serviceId: string;
   urlParser: import("@smithy/types").UrlParser;
   utf8Decoder: import("@smithy/types").Decoder;

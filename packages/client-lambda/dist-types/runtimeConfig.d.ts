@@ -42,6 +42,10 @@ export declare const getRuntimeConfig: (config: LambdaClientConfig) => {
   profile?: string;
   logger: import("@smithy/types").Logger;
   extensions: import("./runtimeExtensions").RuntimeExtension[];
+  protocol: import("@smithy/types").ClientProtocol<
+    import("@smithy/types").HttpRequest,
+    import("@smithy/types").HttpResponse
+  >;
   customUserAgent?: string | import("@smithy/types").UserAgent;
   retryStrategy?:
     | import("@smithy/types").RetryStrategy

@@ -34,11 +34,14 @@ import {
   BodyLengthCalculator as __BodyLengthCalculator,
   CheckOptionalClientConfig as __CheckOptionalClientConfig,
   ChecksumConstructor as __ChecksumConstructor,
+  ClientProtocol,
   Decoder as __Decoder,
   Encoder as __Encoder,
   EventStreamSerdeProvider as __EventStreamSerdeProvider,
   HashConstructor as __HashConstructor,
   HttpHandlerOptions as __HttpHandlerOptions,
+  HttpRequest,
+  HttpResponse,
   Logger as __Logger,
   Provider as __Provider,
   Provider,
@@ -651,6 +654,15 @@ export interface ClientDefaults
    * Optional extensions
    */
   extensions?: RuntimeExtension[];
+  /**
+   * The protocol controlling the message type (e.g. HTTP) and format (e.g. JSON)
+   * may be overridden. A default will always be set by the client.
+   * Available options depend on the service's supported protocols and will not be validated by
+   * the client.
+   * @alpha
+   *
+   */
+  protocol?: ClientProtocol<HttpRequest, HttpResponse>;
   /**
    * The function that provides necessary utilities for generating and parsing event stream
    */

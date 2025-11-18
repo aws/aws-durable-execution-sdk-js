@@ -40,6 +40,10 @@ export declare const getRuntimeConfig: (config: LambdaClientConfig) => {
   retryMode: string | import("@smithy/types").Provider<string>;
   logger: import("@smithy/types").Logger;
   extensions: import("./runtimeExtensions").RuntimeExtension[];
+  protocol: import("@smithy/types").ClientProtocol<
+    import("@smithy/types").HttpRequest,
+    import("@smithy/types").HttpResponse
+  >;
   eventStreamSerdeProvider: import("@smithy/types").EventStreamSerdeProvider;
   defaultsMode:
     | import("@smithy/smithy-client").DefaultsMode

@@ -11,7 +11,7 @@ import {
 import {
   SendDurableExecutionCallbackSuccessRequest,
   SendDurableExecutionCallbackSuccessResponse,
-} from "../models/models_1";
+} from "../models/models_0";
 /**
  * @public
  */

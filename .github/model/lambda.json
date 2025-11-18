@@ -711,6 +711,7 @@
         { "shape": "RequestTooLargeException" },
         { "shape": "KMSDisabledException" },
         { "shape": "UnsupportedMediaTypeException" },
+        { "shape": "SerializedRequestEntityTooLargeException" },
         { "shape": "InvalidRuntimeException" },
         { "shape": "EC2UnexpectedException" },
         { "shape": "InvalidSubnetIDException" },
@@ -774,6 +775,7 @@
         { "shape": "RequestTooLargeException" },
         { "shape": "KMSDisabledException" },
         { "shape": "UnsupportedMediaTypeException" },
+        { "shape": "SerializedRequestEntityTooLargeException" },
         { "shape": "InvalidRuntimeException" },
         { "shape": "EC2UnexpectedException" },
         { "shape": "InvalidSubnetIDException" },
@@ -3248,7 +3250,9 @@
     },
     "ExecutionStatusList": {
       "type": "list",
-      "member": { "shape": "ExecutionStatus" }
+      "member": { "shape": "ExecutionStatus" },
+      "max": 10,
+      "min": 1
     },
     "ExecutionStoppedDetails": {
       "type": "structure",
@@ -3814,7 +3818,8 @@
         "StartTimestamp": { "shape": "ExecutionTimestamp" },
         "Status": { "shape": "ExecutionStatus" },
         "EndTimestamp": { "shape": "ExecutionTimestamp" },
-        "Version": { "shape": "Version" }
+        "Version": { "shape": "Version" },
+        "TraceHeader": { "shape": "TraceHeader" }
       }
     },
     "GetDurableExecutionStateRequest": {
@@ -6688,6 +6693,18 @@
       "type": "string",
       "sensitive": true
     },
+    "SerializedRequestEntityTooLargeException": {
+      "type": "structure",
+      "members": {
+        "Type": { "shape": "String" },
+        "message": { "shape": "String" }
+      },
+      "error": {
+        "httpStatusCode": 413,
+        "senderFault": true
+      },
+      "exception": true
+    },
     "ServiceException": {
       "type": "structure",
       "members": {
@@ -7070,6 +7087,12 @@
       "member": { "shape": "Topic" },
       "max": 1,
       "min": 1
+    },
+    "TraceHeader": {
+      "type": "structure",
+      "members": {
+        "XAmznTraceId": { "shape": "XAmznTraceId" }
+      }
     },
     "TracingConfig": {
       "type": "structure",
@@ -7645,6 +7668,11 @@
     "WorkingDirectory": {
       "type": "string",
       "max": 1000,
+      "min": 0
+    },
+    "XAmznTraceId": {
+      "type": "string",
+      "max": 8192,
       "min": 0
     }
   },
