@@ -25,3 +25,6 @@ pids
 
 # ESLint cache
 .eslintcache
+
+# TypeScript incremental build info
+*.tsbuildinfo
