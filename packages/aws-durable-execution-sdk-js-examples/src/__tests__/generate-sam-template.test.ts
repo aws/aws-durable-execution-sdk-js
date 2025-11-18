@@ -3,9 +3,9 @@ const {
   getExampleFiles,
   createFunctionResource,
   generateTemplate,
-} = require("../../scripts/generate-template.js");
+} = require("../../scripts/generate-sam-template.js");
 
-describe("generate-template", () => {
+describe("generate-sam-template", () => {
   describe("toPascalCase", () => {
     test("converts kebab-case to PascalCase", () => {
       expect(toPascalCase("hello-world")).toBe("HelloWorld");
@@ -82,7 +82,9 @@ describe("generate-template", () => {
       // Each resource except DurableFunctionRole should be a Lambda function
       resourceNames.forEach((name) => {
         if (name !== "DurableFunctionRole") {
-          expect(template.Resources[name].Type).toBe("AWS::Serverless::Function");
+          expect(template.Resources[name].Type).toBe(
+            "AWS::Serverless::Function",
+          );
         }
       });
     });

@@ -2,7 +2,7 @@
 
 This directory contains build and automation scripts for the DurableExecutionsTypeScriptExamples package.
 
-## generate-template.js
+## generate-sam-template.js
 
 Automatically generates the `template.yml` CloudFormation template based on TypeScript files found in `src/examples/`.
 
@@ -17,7 +17,7 @@ Automatically generates the `template.yml` CloudFormation template based on Type
 
 ```bash
 # Run manually
-npm run generate-template
+npm run generate-sam-template
 
 # Automatically runs during build (via prebuild hook)
 npm run build
@@ -79,7 +79,7 @@ The script is integrated into the build process via the `prebuild` npm script:
 ```json
 {
   "scripts": {
-    "prebuild": "rm -rf build/durable-executions-typescript-sdk-examples && npm run generate-template"
+    "prebuild": "rm -rf build/durable-executions-typescript-sdk-examples && npm run generate-sam-template"
   }
 }
 ```
