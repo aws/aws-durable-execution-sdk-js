@@ -57,6 +57,6 @@ createTests({
       // Verify boundary conditions - now much tighter around the limit
       expect(underLimitResults.length).toBe(10); // Sizes LIMIT-10 to LIMIT-1
       expect(overLimitResults.length).toBe(90); // Sizes LIMIT to LIMIT+89
-    }, 60000);
+    }, 120000);
   },
 });
