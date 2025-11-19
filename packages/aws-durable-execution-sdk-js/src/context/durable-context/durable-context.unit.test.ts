@@ -184,7 +184,7 @@ describe("DurableContext", () => {
       );
 
       const promise = context.step(async (): Promise<string> => "result");
-      expect(promise).toBeInstanceOf(Promise);
+      expect(promise).toBeInstanceOf(DurablePromise);
     });
   });
 

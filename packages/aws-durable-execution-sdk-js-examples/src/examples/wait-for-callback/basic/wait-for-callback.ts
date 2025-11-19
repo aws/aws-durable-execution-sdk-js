@@ -10,7 +10,7 @@ export const config: ExampleConfig = {
 };
 
 const mySubmitterFunction = async (callbackId: string): Promise<void> => {
-  console.log(`Calling my external system with callback id: ${callbackId}`);
+  // In a real scenario, you would send the callbackId to an external system
 };
 
 export const handler = withDurableExecution(

@@ -18,19 +18,16 @@ export const handler = withDurableExecution(
         async (childContext) => {
           const [callbackPromise, callbackId] =
             await childContext.createCallback<string>("branch-1-callback");
-          console.log(`Branch 1 callback ID: ${callbackId}`);
           return await callbackPromise;
         },
         async (childContext) => {
           const [callbackPromise, callbackId] =
             await childContext.createCallback<string>("branch-2-callback");
-          console.log(`Branch 2 callback ID: ${callbackId}`);
           return await callbackPromise;
         },
         async (childContext) => {
           const [callbackPromise, callbackId] =
             await childContext.createCallback<string>("branch-3-callback");
-          console.log(`Branch 3 callback ID: ${callbackId}`);
           return await callbackPromise;
         },
       ],

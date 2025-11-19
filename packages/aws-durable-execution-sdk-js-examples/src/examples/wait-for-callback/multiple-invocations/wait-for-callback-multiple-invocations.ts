@@ -20,7 +20,6 @@ export const handler = withDurableExecution<unknown, unknown>(
       step: number;
     }>("first-callback", async (callbackId) => {
       // Simulate submitter function work
-      console.log(`First callback submitted with ID: ${callbackId}`);
       return Promise.resolve();
     });
 
@@ -36,7 +35,6 @@ export const handler = withDurableExecution<unknown, unknown>(
     const callbackResult2 = await context.waitForCallback<{
       step: number;
     }>("second-callback", async (callbackId) => {
-      console.log(`Second callback submitted with ID: ${callbackId}`);
       return Promise.resolve();
     });
 

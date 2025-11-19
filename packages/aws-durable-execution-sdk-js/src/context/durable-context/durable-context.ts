@@ -207,14 +207,14 @@ export class DurableContextImpl implements DurableContext {
     nameOrFn: string | undefined | StepFunc<T>,
     fnOrOptions?: StepFunc<T> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "step",
       this.executionContext.terminationManager,
     );
 
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const stepHandler = createStepHandler(
         this.executionContext,
         this.checkpoint,
@@ -227,10 +227,7 @@ export class DurableContextImpl implements DurableContext {
         this.getOperationsEmitter.bind(this),
         this._parentId,
       );
-      const promise = stepHandler(nameOrFn, fnOrOptions, maybeOptions);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise;
+      return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
   }
 

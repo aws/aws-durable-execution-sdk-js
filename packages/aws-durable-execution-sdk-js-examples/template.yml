@@ -937,6 +937,30 @@ Resources:
           DURABLE_VERBOSE_MODE: "true"
     Metadata:
       SkipBuild: "True"
+  RunInChildContextCheckpointSizeLimit:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RunInChildContextCheckpointSizeLimit-TypeScript
+      CodeUri: ./dist
+      Handler: run-in-child-context-checkpoint-size-limit.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 3600
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "true"
+    Metadata:
+      SkipBuild: "True"
   RunInChildContextFailingStep:
     Type: AWS::Serverless::Function
     Properties:

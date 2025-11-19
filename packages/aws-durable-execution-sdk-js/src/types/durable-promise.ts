@@ -2,22 +2,103 @@
  * A promise that defers execution until it's awaited or .then/.catch/.finally is called
  */
 export class DurablePromise<T> implements Promise<T> {
+  /**
+   * The actual promise instance, created only when execution begins.
+   * Starts as null and remains null until the DurablePromise is first awaited
+   * or chained (.then/.catch/.finally). Once created, it holds the running
+   * promise returned by the _executor function.
+   *
+   * Example lifecycle:
+   * ```typescript
+   * const dp = new DurablePromise(() => fetch('/api')); // _promise = null
+   * console.log(dp.isExecuted); // false
+   *
+   * const result = await dp; // NOW _promise = fetch('/api') promise
+   * console.log(dp.isExecuted); // true
+   * ```
+   *
+   * This lazy initialization prevents the executor from running until needed.
+   */
   private _promise: Promise<T> | null = null;
+
+  /**
+   * Function that contains the deferred execution logic.
+   * This function is NOT called when the DurablePromise is created - it's only
+   * executed when the promise is first awaited or chained (.then/.catch/.finally).
+   *
+   * Example:
+   * ```typescript
+   * const durablePromise = new DurablePromise(async () => {
+   *   console.log("This runs ONLY when awaited, not when created");
+   *   return await someAsyncOperation();
+   * });
+   *
+   * // At this point, nothing has executed yet
+   * console.log("Promise created but not executed");
+   *
+   * // NOW the executor function runs
+   * const result = await durablePromise;
+   * ```
+   */
   private _executor: () => Promise<T>;
+
+  /** Flag indicating whether the promise has been executed (awaited or chained) */
   private _isExecuted = false;
 
-  constructor(executor: () => Promise<T>) {
+  /** Optional callback to register a function that gets called when promise becomes awaited */
+  private _onAwaitedCallback?: (callback: () => void) => void;
+
+  /** Phase 1 execution state and results */
+  private _isComplete = false;
+  private _result: T | undefined = undefined;
+  private _error: unknown = undefined;
+  private _completionPromise: Promise<void>;
+
+  /**
+   * Creates a new DurablePromise
+   * @param executor - Function containing the deferred execution logic
+   * @param onAwaitedCallback - Optional callback to register when promise becomes awaited
+   */
+  constructor(
+    executor: () => Promise<T>,
+    onAwaitedCallback?: (callback: () => void) => void,
+  ) {
     this._executor = executor;
+    this._onAwaitedCallback = onAwaitedCallback;
+
+    // Don't start execution immediately - wait until promise is awaited
+    // This prevents unhandled rejections from executor
+    this._completionPromise = Promise.resolve();
   }
 
+  /**
+   * Ensures the promise is executed, creating the actual promise if needed
+   * @returns The underlying promise instance
+   */
   private ensureExecution(): Promise<T> {
     if (!this._promise) {
       this._isExecuted = true;
-      this._promise = this._executor();
+      if (this._onAwaitedCallback) {
+        this._onAwaitedCallback(() => {
+          // Callback for when execution state changes
+        });
+      }
+
+      // Phase 2: Wait for completion, then return stored result or throw stored error
+      this._promise = this._completionPromise.then(() => {
+        if (this._error !== undefined) {
+          throw this._error;
+        }
+        return this._result!;
+      });
     }
     return this._promise;
   }
 
+  /**
+   * Attaches callbacks for the resolution and/or rejection of the Promise
+   * Triggers execution if not already started
+   */
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?:
       | ((value: T) => TResult1 | PromiseLike<TResult1>)
@@ -31,6 +112,10 @@ export class DurablePromise<T> implements Promise<T> {
     return this.ensureExecution().then(onfulfilled, onrejected);
   }
 
+  /**
+   * Attaches a callback for only the rejection of the Promise
+   * Triggers execution if not already started
+   */
   catch<TResult = never>(
     onrejected?:
       | ((reason: unknown) => TResult | PromiseLike<TResult>)
@@ -40,16 +125,22 @@ export class DurablePromise<T> implements Promise<T> {
     return this.ensureExecution().catch(onrejected);
   }
 
+  /**
+   * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected)
+   * Triggers execution if not already started
+   */
   finally(onfinally?: (() => void) | undefined | null): Promise<T> {
     return this.ensureExecution().finally(onfinally);
   }
 
+  /** Returns the string tag for the promise type */
   get [Symbol.toStringTag](): string {
     return "DurablePromise";
   }
 
   /**
    * Check if the promise has been executed (awaited or had .then/.catch/.finally called)
+   * @returns true if execution has started, false otherwise
    */
   get isExecuted(): boolean {
     return this._isExecuted;

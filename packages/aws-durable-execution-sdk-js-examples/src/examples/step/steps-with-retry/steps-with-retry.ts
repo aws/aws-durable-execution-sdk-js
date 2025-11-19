@@ -16,11 +16,6 @@ const ddbClient = new DynamoDBClient();
 const STEP_CONFIG_WITH_RETRY_FAILURES_AFTER_1_SECOND_5_TIMES = {
   retryStrategy: (error: Error, attemptsMade: number) => {
     const shouldRetry = attemptsMade <= 5;
-    console.warn(
-      `Step Attempt #${attemptsMade}.`,
-      error,
-      `. Retry? ${shouldRetry}. `,
-    );
     if (shouldRetry) {
       return { shouldRetry: true, delay: { seconds: 1 } };
     } else {
