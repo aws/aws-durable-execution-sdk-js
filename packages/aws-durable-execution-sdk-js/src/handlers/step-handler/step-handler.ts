@@ -50,6 +50,7 @@ const waitForContinuation = async (
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   checkpoint: ReturnType<typeof createCheckpoint>,
+  onAwaitedChange?: (callback: () => void) => void,
 ): Promise<void> => {
   const stepData = context.getStepData(stepId);
 
@@ -74,6 +75,7 @@ const waitForContinuation = async (
     hasRunningOperations,
     operationsEmitter: getOperationsEmitter(),
     checkpoint,
+    onAwaitedChange,
   });
 
   // Return to let the main loop re-evaluate step status
@@ -90,6 +92,7 @@ export const createStepHandler = (
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
+  getOnAwaitedChange?: () => ((callback: () => void) => void) | undefined,
 ) => {
   return async <T>(
     nameOrFn: string | undefined | StepFunc<T>,
@@ -164,6 +167,7 @@ export const createStepHandler = (
             hasRunningOperations,
             getOperationsEmitter,
             checkpoint,
+            getOnAwaitedChange?.() || undefined,
           );
           continue; // Re-evaluate step status after waiting
         }
@@ -240,6 +244,7 @@ export const createStepHandler = (
                 hasRunningOperations,
                 getOperationsEmitter,
                 checkpoint,
+                getOnAwaitedChange?.(),
               );
               continue; // Re-evaluate step status after waiting
             }
@@ -260,6 +265,7 @@ export const createStepHandler = (
           getOperationsEmitter,
           parentId,
           options,
+          getOnAwaitedChange,
         );
 
         // If executeStep signals to continue the main loop, do so
@@ -319,6 +325,7 @@ export const executeStep = async <T>(
   getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
   options?: StepConfig<T>,
+  getOnAwaitedChange?: () => ((callback: () => void) => void) | undefined,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   // Determine step semantics (default to AT_LEAST_ONCE_PER_RETRY if not specified)
   const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
@@ -498,6 +505,7 @@ export const executeStep = async <T>(
         hasRunningOperations,
         getOperationsEmitter,
         checkpoint,
+        getOnAwaitedChange?.(),
       );
       return CONTINUE_MAIN_LOOP;
     }

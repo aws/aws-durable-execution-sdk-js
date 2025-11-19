@@ -69,7 +69,7 @@ describe("Wait Handler Two-Phase Execution", () => {
 
     const phase1Calls = mockCheckpoint.mock.calls.length;
 
-    // Phase 2: Await the promise - this should execute again
+    // Phase 2: Await the promise - this should execute phase 2 logic
     try {
       await waitPromise;
     } catch {

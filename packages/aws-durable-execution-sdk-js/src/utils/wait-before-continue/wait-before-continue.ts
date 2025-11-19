@@ -26,8 +26,8 @@ export interface WaitBeforeContinueOptions {
   operationsEmitter: EventEmitter;
   /** Checkpoint object to force refresh when timer expires */
   checkpoint?: ReturnType<typeof createCheckpoint>;
-  /** Callback to invoke when awaited state changes */
-  onAwaitedChange?: () => void;
+  /** Function to set callback that will be invoked when promise is awaited */
+  onAwaitedChange?: (callback: () => void) => void;
 }
 
 export interface WaitBeforeContinueResult {
@@ -133,17 +133,14 @@ export async function waitBeforeContinue(
     promises.push(stepStatusPromise);
   }
 
-  // Awaited change promise - resolves when onAwaitedChange is called
+  // Awaited change promise - resolves when the callback we set is invoked
   if (onAwaitedChange) {
     const awaitedChangePromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
-        const originalCallback = onAwaitedChange;
-        const wrappedCallback = (): void => {
-          originalCallback();
+        // Register a callback that will be invoked when the promise is awaited
+        onAwaitedChange(() => {
           resolve({ reason: "status" });
-        };
-        // Replace the callback temporarily
-        options.onAwaitedChange = wrappedCallback;
+        });
       },
     );
     promises.push(awaitedChangePromise);

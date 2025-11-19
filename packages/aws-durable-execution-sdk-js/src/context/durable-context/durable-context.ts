@@ -215,6 +215,15 @@ export class DurableContextImpl implements DurableContext {
     );
 
     return this.withDurableModeManagement(() => {
+      // Callback that will be invoked when promise is awaited
+      let waitingCallback: (() => void) | undefined;
+      let isAwaited = false;
+
+      // Setter function that waitBeforeContinue can use to register its callback
+      const setWaitingCallback = (cb: () => void) => {
+        waitingCallback = cb;
+      };
+
       const stepHandler = createStepHandler(
         this.executionContext,
         this.checkpoint,
@@ -226,8 +235,39 @@ export class DurableContextImpl implements DurableContext {
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
         this._parentId,
+        () => (isAwaited ? undefined : setWaitingCallback), // Only return setter if not awaited yet
       );
-      return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
+
+      // Phase 1: Start execution immediately and capture result/error
+      let phase1Result: T | undefined;
+      let phase1Error: unknown;
+
+      const phase1Promise = stepHandler(nameOrFn, fnOrOptions, maybeOptions)
+        .then((result) => {
+          phase1Result = result;
+        })
+        .catch((error) => {
+          phase1Error = error;
+        });
+
+      // Return DurablePromise that will return Phase 1 result when awaited
+      return new DurablePromise(
+        async () => {
+          // Phase 2: Wait for Phase 1 to complete, then return stored result or throw stored error
+          await phase1Promise;
+          if (phase1Error !== undefined) {
+            throw phase1Error;
+          }
+          return phase1Result!;
+        },
+        () => {
+          // When promise is awaited, mark as awaited and invoke waiting callback
+          isAwaited = true;
+          if (waitingCallback) {
+            waitingCallback();
+          }
+        },
+      );
     });
   }
 

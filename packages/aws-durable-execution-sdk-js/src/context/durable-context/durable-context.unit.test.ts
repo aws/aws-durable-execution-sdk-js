@@ -61,7 +61,7 @@ describe("DurableContext", () => {
       "../../handlers/concurrent-execution-handler/concurrent-execution-handler",
     );
 
-    createStepHandler.mockReturnValue(jest.fn());
+    createStepHandler.mockReturnValue(jest.fn().mockResolvedValue(undefined));
     createInvokeHandler.mockReturnValue(jest.fn());
     createRunInChildContextHandler.mockReturnValue(jest.fn());
     createWaitHandler.mockReturnValue(
@@ -128,7 +128,7 @@ describe("DurableContext", () => {
       const { createStepHandler } = jest.requireMock(
         "../../handlers/step-handler/step-handler",
       );
-      const mockHandler = jest.fn();
+      const mockHandler = jest.fn().mockResolvedValue("result");
       createStepHandler.mockReturnValue(mockHandler);
 
       await context.step(async (): Promise<string> => "result");

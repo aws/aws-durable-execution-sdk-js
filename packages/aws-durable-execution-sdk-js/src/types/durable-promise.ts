@@ -45,30 +45,17 @@ export class DurablePromise<T> implements Promise<T> {
   /** Flag indicating whether the promise has been executed (awaited or chained) */
   private _isExecuted = false;
 
-  /** Optional callback to register a function that gets called when promise becomes awaited */
-  private _onAwaitedCallback?: (callback: () => void) => void;
-
-  /** Phase 1 execution state and results */
-  private _isComplete = false;
-  private _result: T | undefined = undefined;
-  private _error: unknown = undefined;
-  private _completionPromise: Promise<void>;
+  /** Callback that gets invoked when the promise becomes awaited */
+  private _onAwaitedCallback?: () => void;
 
   /**
    * Creates a new DurablePromise
    * @param executor - Function containing the deferred execution logic
-   * @param onAwaitedCallback - Optional callback to register when promise becomes awaited
+   * @param onAwaitedCallback - Optional callback invoked when promise becomes awaited
    */
-  constructor(
-    executor: () => Promise<T>,
-    onAwaitedCallback?: (callback: () => void) => void,
-  ) {
+  constructor(executor: () => Promise<T>, onAwaitedCallback?: () => void) {
     this._executor = executor;
     this._onAwaitedCallback = onAwaitedCallback;
-
-    // Don't start execution immediately - wait until promise is awaited
-    // This prevents unhandled rejections from executor
-    this._completionPromise = Promise.resolve();
   }
 
   /**
@@ -78,19 +65,14 @@ export class DurablePromise<T> implements Promise<T> {
   private ensureExecution(): Promise<T> {
     if (!this._promise) {
       this._isExecuted = true;
+
+      // Notify that the promise is now being awaited
       if (this._onAwaitedCallback) {
-        this._onAwaitedCallback(() => {
-          // Callback for when execution state changes
-        });
+        this._onAwaitedCallback();
       }
 
-      // Phase 2: Wait for completion, then return stored result or throw stored error
-      this._promise = this._completionPromise.then(() => {
-        if (this._error !== undefined) {
-          throw this._error;
-        }
-        return this._result!;
-      });
+      // Execute the promise
+      this._promise = this._executor();
     }
     return this._promise;
   }
