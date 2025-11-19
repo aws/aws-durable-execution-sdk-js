@@ -6,7 +6,7 @@
   "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-testing",
   "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-testing",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "bin": {
     "run-durable": "./dist/cli/run-durable.js"
