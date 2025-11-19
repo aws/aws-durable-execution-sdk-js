@@ -5,7 +5,7 @@
   "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-examples",
   "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-examples",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "files": [
     "dist"
