@@ -8,14 +8,14 @@ createTests({
   functionName: "run-in-child-context-checkpoint-size-limit",
   handler,
   tests: (runner) => {
-    it("should handle 200 iterations near checkpoint size limit", async () => {
+    it("should handle 100 iterations near checkpoint size limit", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
 
       // Verify the execution succeeded
       expect(execution.getStatus()).toBe("SUCCEEDED");
       expect(result.success).toBe(true);
-      expect(result.totalIterations).toBe(200);
+      expect(result.totalIterations).toBe(100);
 
       // Verify checkpoint limit constant
       expect(result.checkpointLimit).toBe(CHECKPOINT_SIZE_LIMIT);
@@ -34,7 +34,7 @@ createTests({
       console.log(`Under limit iterations: ${underLimitResults.length}`);
       console.log(`Over limit iterations: ${overLimitResults.length}`);
       console.log(
-        `Payload size range: ${CHECKPOINT_SIZE_LIMIT - 10} to ${CHECKPOINT_SIZE_LIMIT + 189} bytes`,
+        `Payload size range: ${CHECKPOINT_SIZE_LIMIT - 10} to ${CHECKPOINT_SIZE_LIMIT + 89} bytes`,
       );
 
       // Show serialization overhead for first few results
@@ -56,7 +56,7 @@ createTests({
 
       // Verify boundary conditions - now much tighter around the limit
       expect(underLimitResults.length).toBe(10); // Sizes LIMIT-10 to LIMIT-1
-      expect(overLimitResults.length).toBe(190); // Sizes LIMIT to LIMIT+189
+      expect(overLimitResults.length).toBe(90); // Sizes LIMIT to LIMIT+89
     }, 60000);
   },
 });

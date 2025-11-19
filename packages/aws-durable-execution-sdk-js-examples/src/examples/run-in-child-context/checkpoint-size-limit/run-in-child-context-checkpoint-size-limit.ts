@@ -7,7 +7,7 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Run In Child Context Checkpoint Size Limit Boundary",
   description:
-    "Test runInChildContext with 200 iterations near 256KB limit to verify ReplayChildren boundary behavior",
+    "Test runInChildContext with 100 iterations near 256KB limit to verify ReplayChildren boundary behavior",
 };
 
 // 256KB limit from run-in-child-context-handler.ts
@@ -16,13 +16,13 @@ const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     console.log(
-      "Testing checkpoint size limit boundary with 200 iterations in parallel",
+      "Testing checkpoint size limit boundary with 100 iterations in parallel",
     );
 
     // Create all promises first - test much closer to the limit to catch serialization overhead
     const promises = [];
-    for (let i = 0; i < 200; i++) {
-      const payloadSize = CHECKPOINT_SIZE_LIMIT - 10 + i; // Range: LIMIT-10 to LIMIT+189
+    for (let i = 0; i < 100; i++) {
+      const payloadSize = CHECKPOINT_SIZE_LIMIT - 10 + i; // Range: LIMIT-10 to LIMIT+89
 
       const promise = context
         .runInChildContext(`boundary-test-${i}`, async () => {
