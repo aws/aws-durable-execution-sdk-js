@@ -124,7 +124,7 @@ export const createCallback = (
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         const callbackData = stepData.CallbackDetails;
         if (!callbackData?.CallbackId) {
-          throw new Error(
+          throw new CallbackError(
             `No callback ID found for completed callback: ${stepId}`,
           );
         }
@@ -155,7 +155,7 @@ export const createCallback = (
       ) {
         const callbackData = stepData.CallbackDetails;
         if (!callbackData?.CallbackId) {
-          throw new Error(
+          throw new CallbackError(
             `No callback ID found for failed callback: ${stepId}`,
           );
         }
@@ -186,7 +186,7 @@ export const createCallback = (
         const errorMessage = wasNewCallback
           ? `Callback ID not found in stepData after checkpoint: ${stepId}`
           : `No callback ID found for started callback: ${stepId}`;
-        throw new Error(errorMessage);
+        throw new CallbackError(errorMessage);
       }
 
       const callbackId = callbackData.CallbackId;
