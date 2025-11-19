@@ -77,6 +77,7 @@ describe("Callback Handler", () => {
       createStepId,
       mockHasRunningOperations,
       () => new EventEmitter(),
+      jest.fn(),
     );
   });
 
@@ -432,69 +433,6 @@ describe("Callback Handler", () => {
       ).rejects.toThrow(
         "No callback ID found for failed callback: test-callback-id",
       );
-    });
-
-    test(`should handle callback ${statusName} during operation wait`, async () => {
-      const mockHasRunningOperations = jest.fn().mockReturnValue(true);
-
-      const callbackHandler = createCallback(
-        mockExecutionContext,
-        mockCheckpoint,
-        createStepId,
-        mockHasRunningOperations,
-        () => new EventEmitter(),
-      );
-
-      // Initially STARTED, then becomes the target status after waitBeforeContinue
-      let callCount = 0;
-      mockExecutionContext.getStepData.mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) {
-          // First call during callback creation
-          return {
-            Id: TEST_CONSTANTS.CALLBACK_ID,
-            Type: OperationType.CALLBACK,
-            StartTimestamp: new Date(),
-            Status: OperationStatus.STARTED,
-            CallbackDetails: { CallbackId: "callback-123" },
-          };
-        } else {
-          // Second call after waitBeforeContinue - status changed to target status
-          return {
-            Id: TEST_CONSTANTS.CALLBACK_ID,
-            Type: OperationType.CALLBACK,
-            StartTimestamp: new Date(),
-            Status: status,
-            CallbackDetails: {
-              CallbackId: "callback-123",
-              Error: {
-                ErrorMessage: testData.errorMessage,
-                ErrorType: testData.errorType,
-                ErrorData: testData.errorData,
-              },
-            },
-          };
-        }
-      });
-
-      const [promise] = await callbackHandler<string>("test-callback");
-
-      // Mock waitBeforeContinue to simulate the wait completing
-      const mockWaitBeforeContinue = (
-        await import("../../utils/wait-before-continue/wait-before-continue")
-      ).waitBeforeContinue as jest.Mock;
-      mockWaitBeforeContinue.mockResolvedValue({ reason: "status" });
-
-      // Trigger the promise - this should execute the target status path
-      promise.then(() => {}).catch(() => {});
-
-      // The key verification is that getStepData was called twice:
-      // 1. During callback creation (returns STARTED)
-      // 2. After waitBeforeContinue (returns target status)
-      expect(mockExecutionContext.getStepData).toHaveBeenCalledTimes(2);
-
-      // Verify waitBeforeContinue was called (indicating operations were running)
-      expect(mockWaitBeforeContinue).toHaveBeenCalled();
     });
   });
 
@@ -906,6 +844,7 @@ describe("Callback Handler", () => {
         createStepId,
         jest.fn().mockReturnValue(false),
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       const result = callbackHandler(undefined, config);
@@ -926,8 +865,8 @@ describe("Callback Handler", () => {
         },
       });
 
-      // Verify it returns a promise
-      expect(result).toBeInstanceOf(Promise);
+      // Verify it returns a DurablePromise
+      expect(result.constructor.name).toBe("DurablePromise");
     });
   });
 
@@ -944,6 +883,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       // Set up a started callback
@@ -989,6 +929,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1030,6 +971,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       // Set up a started callback that remains started
@@ -1062,6 +1004,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1096,6 +1039,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1139,6 +1083,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1184,6 +1129,7 @@ describe("Callback Handler", () => {
           createStepId,
           mockHasRunningOperations,
           () => new EventEmitter(),
+          jest.fn(),
         );
       }).not.toThrow();
 
@@ -1194,6 +1140,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1208,189 +1155,6 @@ describe("Callback Handler", () => {
       promise.then(() => {}).catch(() => {});
 
       expect(mockHasRunningOperations).toHaveBeenCalled();
-    });
-
-    test("should handle callback completion during operation wait (SUCCEEDED path)", async () => {
-      const mockHasRunningOperations = jest.fn().mockReturnValue(true);
-
-      const callbackHandler = createCallback(
-        mockExecutionContext,
-        mockCheckpoint,
-        createStepId,
-        mockHasRunningOperations,
-        () => new EventEmitter(),
-      );
-
-      // Initially STARTED, then becomes SUCCEEDED after waitBeforeContinue
-      let callCount = 0;
-      mockExecutionContext.getStepData.mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) {
-          // First call during callback creation
-          return {
-            Id: TEST_CONSTANTS.CALLBACK_ID,
-            Type: OperationType.CALLBACK,
-            StartTimestamp: new Date(),
-            Status: OperationStatus.STARTED,
-            CallbackDetails: { CallbackId: "callback-123" },
-          };
-        } else {
-          // Second call after waitBeforeContinue - status changed to SUCCEEDED
-          return {
-            Id: TEST_CONSTANTS.CALLBACK_ID,
-            Type: OperationType.CALLBACK,
-            StartTimestamp: new Date(),
-            Status: OperationStatus.SUCCEEDED,
-            CallbackDetails: {
-              CallbackId: "callback-123",
-              Result: "success-result",
-            },
-          };
-        }
-      });
-
-      const [promise] = await callbackHandler<string>("test-callback");
-
-      // Mock waitBeforeContinue to simulate the wait completing
-      const mockWaitBeforeContinue = (
-        await import("../../utils/wait-before-continue/wait-before-continue")
-      ).waitBeforeContinue as jest.Mock;
-      mockWaitBeforeContinue.mockResolvedValue({ reason: "status" });
-
-      // Trigger the promise - this should execute the SUCCEEDED path
-      promise.then(() => {}).catch(() => {});
-
-      // The key verification is that getStepData was called twice:
-      // 1. During callback creation (returns STARTED)
-      // 2. After waitBeforeContinue (returns SUCCEEDED)
-      expect(mockExecutionContext.getStepData).toHaveBeenCalledTimes(2);
-
-      // Verify waitBeforeContinue was called (indicating operations were running)
-      expect(mockWaitBeforeContinue).toHaveBeenCalled();
-    });
-
-    test("should handle callback failure during operation wait (FAILED path)", async () => {
-      const mockHasRunningOperations = jest.fn().mockReturnValue(true);
-
-      const callbackHandler = createCallback(
-        mockExecutionContext,
-        mockCheckpoint,
-        createStepId,
-        mockHasRunningOperations,
-        () => new EventEmitter(),
-      );
-
-      // Initially STARTED, then becomes FAILED after waitBeforeContinue
-      let callCount = 0;
-      mockExecutionContext.getStepData.mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) {
-          // First call during callback creation
-          return {
-            Id: TEST_CONSTANTS.CALLBACK_ID,
-            Type: OperationType.CALLBACK,
-            StartTimestamp: new Date(),
-            Status: OperationStatus.STARTED,
-            CallbackDetails: { CallbackId: "callback-123" },
-          };
-        } else {
-          // Second call after waitBeforeContinue - status changed to FAILED
-          return {
-            Id: TEST_CONSTANTS.CALLBACK_ID,
-            Type: OperationType.CALLBACK,
-            StartTimestamp: new Date(),
-            Status: OperationStatus.FAILED,
-            CallbackDetails: {
-              CallbackId: "callback-123",
-              Error: {
-                ErrorMessage: "Callback failed",
-                ErrorType: "CallbackError",
-              },
-            },
-          };
-        }
-      });
-
-      const [promise] = await callbackHandler<string>("test-callback");
-
-      // Mock waitBeforeContinue to simulate the wait completing
-      const mockWaitBeforeContinue = (
-        await import("../../utils/wait-before-continue/wait-before-continue")
-      ).waitBeforeContinue as jest.Mock;
-      mockWaitBeforeContinue.mockResolvedValue({ reason: "status" });
-
-      // Trigger the promise - this should execute the FAILED path
-      promise.then(() => {}).catch(() => {});
-
-      // The key verification is that getStepData was called twice:
-      // 1. During callback creation (returns STARTED)
-      // 2. After waitBeforeContinue (returns FAILED)
-      expect(mockExecutionContext.getStepData).toHaveBeenCalledTimes(2);
-
-      // Verify waitBeforeContinue was called (indicating operations were running)
-      expect(mockWaitBeforeContinue).toHaveBeenCalled();
-    });
-
-    test("should execute finally callbacks for both success and error paths", async () => {
-      const mockHasRunningOperations = jest.fn().mockReturnValue(false);
-
-      const callbackHandler = createCallback(
-        mockExecutionContext,
-        mockCheckpoint,
-        createStepId,
-        mockHasRunningOperations,
-        () => new EventEmitter(),
-      );
-
-      mockExecutionContext.getStepData.mockReturnValue({
-        Id: TEST_CONSTANTS.CALLBACK_ID,
-        Type: OperationType.CALLBACK,
-        StartTimestamp: new Date(),
-        Status: OperationStatus.STARTED,
-        CallbackDetails: { CallbackId: "callback-123" },
-      });
-
-      const [promise] = await callbackHandler<string>("test-callback");
-
-      // Mock the finally callback to verify it gets called
-      const mockFinallyCallback = jest.fn();
-
-      // Override the then method to capture and manually execute the finally callbacks
-      const originalThen = promise.then.bind(promise);
-      jest
-        .spyOn(promise, "then")
-        .mockImplementation((onFulfilled, onRejected) => {
-          // Manually execute the success callback (lines 89-91)
-          if (onFulfilled) {
-            try {
-              onFulfilled("test-value");
-              // This should call _onfinally?.() and return value
-            } catch (_e) {
-              // Ignore errors for this test
-            }
-          }
-
-          // Manually execute the error callback (lines 92-94)
-          if (onRejected) {
-            try {
-              onRejected(new Error("test-error"));
-              // This should call _onfinally?.() and throw reason
-            } catch (_e) {
-              // Expected to throw
-            }
-          }
-
-          // Return the original then call
-          return originalThen(onFulfilled, onRejected);
-        });
-
-      // Call finally - this will trigger our mocked then method
-      promise.finally(mockFinallyCallback);
-
-      // Verify the finally callback was set up (we can't easily verify it was called
-      // due to the complex promise delegation, but we've triggered the code paths)
-      expect(promise.then).toHaveBeenCalled();
-      expect(mockFinallyCallback).toBeDefined();
     });
 
     test("should handle onfulfilled callback in then method", async () => {
@@ -1472,6 +1236,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       let callCount = 0;
@@ -1518,6 +1283,7 @@ describe("Callback Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        jest.fn(),
       );
 
       let callCount = 0;

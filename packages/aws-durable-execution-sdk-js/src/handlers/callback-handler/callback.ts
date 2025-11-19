@@ -3,154 +3,23 @@ import {
   CreateCallbackConfig,
   CreateCallbackResult,
   OperationSubType,
+  DurablePromise,
 } from "../../types";
-import { terminate } from "../../utils/termination-helper/termination-helper";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
-import { TerminationReason } from "../../termination-manager/types";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/durable-error/durable-error";
-import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
+import { createCallbackPromise } from "./callback-promise";
 
 const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
   deserialize: async (data: string | undefined) => data as T | undefined,
 });
-
-/**
- * A Promise-like class that checks status and running operations before terminating
- */
-export class TerminatingPromise<T> implements Promise<T> {
-  constructor(
-    private readonly context: ExecutionContext,
-    private readonly stepId: string,
-    private readonly stepName: string | undefined,
-    private readonly message: string,
-    private readonly hasRunningOperations: () => boolean,
-    private readonly serdes: Serdes<T>,
-    private readonly operationsEmitter: EventEmitter,
-  ) {}
-
-  async then<TResult1 = T, TResult2 = never>(
-    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-  ): Promise<TResult1 | TResult2> {
-    try {
-      // Wait for EITHER operations to complete OR status to change
-      if (this.hasRunningOperations()) {
-        await waitBeforeContinue({
-          checkHasRunningOperations: true,
-          checkStepStatus: true, // ✅ Check status changes too
-          checkTimer: false,
-          stepId: this.stepId,
-          context: this.context,
-          hasRunningOperations: this.hasRunningOperations,
-          operationsEmitter: this.operationsEmitter,
-        });
-      }
-
-      // Check final status after waiting
-      const finalStepData = this.context.getStepData(this.stepId);
-      if (finalStepData?.Status === OperationStatus.SUCCEEDED) {
-        const result = await handleCompletedCallback<T>(
-          this.context,
-          this.stepId,
-          this.stepName,
-          this.serdes,
-        );
-
-        if (onfulfilled) {
-          return onfulfilled(await result[0]);
-        }
-
-        return result[0] as TResult1;
-      }
-
-      if (
-        finalStepData?.Status === OperationStatus.FAILED ||
-        finalStepData?.Status === OperationStatus.TIMED_OUT
-      ) {
-        const result = await handleFailedCallback<T>(
-          this.context,
-          this.stepId,
-          this.stepName,
-          this.serdes,
-        );
-
-        await result[0];
-      }
-    } catch (err) {
-      if (onrejected) {
-        return onrejected(err);
-      }
-
-      throw err;
-    }
-
-    // Only terminate if still pending
-    return terminate(
-      this.context,
-      TerminationReason.CALLBACK_PENDING,
-      this.message,
-    );
-  }
-
-  catch<TResult = never>(
-    onrejected?:
-      | ((reason: unknown) => TResult | PromiseLike<TResult>)
-      | null
-      | undefined,
-  ): Promise<T | TResult> {
-    return this.then(undefined, onrejected);
-  }
-
-  finally(onfinally?: (() => void) | null): Promise<T> {
-    // Delegate to then() which handles the status checking
-    return this.then(
-      (value) => {
-        onfinally?.();
-        return value;
-      },
-      (reason) => {
-        onfinally?.();
-        throw reason;
-      },
-    );
-  }
-
-  get [Symbol.toStringTag](): string {
-    return "TerminatingPromise";
-  }
-}
-
-/**
- * Creates a thenable that checks status and running operations before terminating
- * Properly implements Promise interface including instanceof Promise support
- */
-const createTerminatingThenable = <T>(
-  context: ExecutionContext,
-  stepId: string,
-  stepName: string | undefined,
-  message: string,
-  hasRunningOperations: () => boolean,
-  serdes: Serdes<T>,
-  operationsEmitter: EventEmitter,
-): TerminatingPromise<T> => {
-  return new TerminatingPromise<T>(
-    context,
-    stepId,
-    stepName,
-    message,
-    hasRunningOperations,
-    serdes,
-    operationsEmitter,
-  );
-};
 
 export const createCallback = (
   context: ExecutionContext,
@@ -158,12 +27,13 @@ export const createCallback = (
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  checkAndUpdateReplayMode: () => void,
   parentId?: string,
 ) => {
-  return async <T>(
+  return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>> => {
+  ): DurablePromise<CreateCallbackResult<T>> => {
     let name: string | undefined;
     let config: CreateCallbackConfig<T> | undefined;
 
@@ -177,15 +47,8 @@ export const createCallback = (
     const stepId = createStepId();
     const serdes = config?.serdes || createPassThroughSerdes<T>();
 
-    log("📞", "Creating callback:", {
-      stepId,
-      name,
-      config,
-    });
-
+    // Validate replay consistency first
     const stepData = context.getStepData(stepId);
-
-    // Validate replay consistency
     validateReplayConsistency(
       stepId,
       {
@@ -197,200 +60,160 @@ export const createCallback = (
       context,
     );
 
-    // Check if callback already exists and is completed
-    if (stepData?.Status === OperationStatus.SUCCEEDED) {
-      return await handleCompletedCallback<T>(context, stepId, name, serdes);
-    }
+    // Phase 1: Setup and checkpoint (immediate execution)
+    const setupPromise = (async (): Promise<{ wasNewCallback: boolean }> => {
+      log("📞", "Creating callback phase 1:", { stepId, name, config });
 
-    if (
-      stepData?.Status === OperationStatus.FAILED ||
-      stepData?.Status === OperationStatus.TIMED_OUT
-    ) {
-      return await handleFailedCallback<T>(context, stepId, name, serdes);
-    }
+      // Handle already completed callbacks
+      if (stepData?.Status === OperationStatus.SUCCEEDED) {
+        log("⏭️", "Callback already completed in phase 1:", { stepId });
+        return { wasNewCallback: false };
+      }
 
-    // Check if callback is already started (has callbackId)
-    if (stepData?.Status === OperationStatus.STARTED) {
-      return await handleStartedCallback<T>(
+      if (
+        stepData?.Status === OperationStatus.FAILED ||
+        stepData?.Status === OperationStatus.TIMED_OUT
+      ) {
+        log("❌", "Callback already failed in phase 1:", { stepId });
+        return { wasNewCallback: false };
+      }
+
+      // Handle already started callbacks
+      if (stepData?.Status === OperationStatus.STARTED) {
+        log("⏳", "Callback already started in phase 1:", { stepId });
+        return { wasNewCallback: false };
+      }
+
+      // Create new callback - checkpoint START operation
+      log("🆕", "Creating new callback in phase 1:", { stepId, name });
+      await checkpoint(stepId, {
+        Id: stepId,
+        ParentId: parentId,
+        Action: "START",
+        SubType: OperationSubType.CALLBACK,
+        Type: OperationType.CALLBACK,
+        Name: name,
+        CallbackOptions: {
+          TimeoutSeconds: config?.timeout
+            ? durationToSeconds(config.timeout)
+            : undefined,
+          HeartbeatTimeoutSeconds: config?.heartbeatTimeout
+            ? durationToSeconds(config.heartbeatTimeout)
+            : undefined,
+        },
+      });
+
+      log("✅", "Callback checkpoint completed in phase 1:", { stepId });
+      return { wasNewCallback: true };
+    })().catch((error) => {
+      log("❌", "Callback phase 1 error:", { stepId, error: error.message });
+      throw error;
+    });
+
+    // Return DurablePromise that executes phase 2 when awaited
+    return new DurablePromise(async (): Promise<CreateCallbackResult<T>> => {
+      // Wait for phase 1 to complete
+      const { wasNewCallback } = await setupPromise;
+
+      // Phase 2: Handle results and create callback promise
+      log("🔄", "Callback phase 2 executing:", { stepId, name });
+
+      const stepData = context.getStepData(stepId);
+
+      // Handle completed callbacks
+      if (stepData?.Status === OperationStatus.SUCCEEDED) {
+        const callbackData = stepData.CallbackDetails;
+        if (!callbackData?.CallbackId) {
+          throw new CallbackError(
+            `No callback ID found for completed callback: ${stepId}`,
+          );
+        }
+
+        const deserializedResult = await safeDeserialize(
+          serdes,
+          callbackData.Result,
+          stepId,
+          name,
+          context.terminationManager,
+          context.durableExecutionArn,
+        );
+
+        const resolvedPromise = new DurablePromise(
+          async (): Promise<T> => deserializedResult as T,
+        );
+
+        // Check and update replay mode after callback completion
+        checkAndUpdateReplayMode();
+
+        return [resolvedPromise, callbackData.CallbackId];
+      }
+
+      // Handle failed callbacks
+      if (
+        stepData?.Status === OperationStatus.FAILED ||
+        stepData?.Status === OperationStatus.TIMED_OUT
+      ) {
+        const callbackData = stepData.CallbackDetails;
+        if (!callbackData?.CallbackId) {
+          throw new CallbackError(
+            `No callback ID found for failed callback: ${stepId}`,
+          );
+        }
+
+        const error = stepData.CallbackDetails?.Error;
+        const callbackError = error
+          ? ((): CallbackError => {
+              const cause = new Error(error.ErrorMessage);
+              cause.name = error.ErrorType || "Error";
+              cause.stack = error.StackTrace?.join("\n");
+              return new CallbackError(
+                error.ErrorMessage || "Callback failed",
+                cause,
+                error.ErrorData,
+              );
+            })()
+          : new CallbackError("Callback failed");
+
+        const rejectedPromise = new DurablePromise(async (): Promise<T> => {
+          throw callbackError;
+        });
+        return [rejectedPromise, callbackData.CallbackId];
+      }
+
+      // Handle started or new callbacks
+      const callbackData = stepData?.CallbackDetails;
+      if (!callbackData?.CallbackId) {
+        const errorMessage = wasNewCallback
+          ? `Callback ID not found in stepData after checkpoint: ${stepId}`
+          : `No callback ID found for started callback: ${stepId}`;
+        throw new CallbackError(errorMessage);
+      }
+
+      const callbackId = callbackData.CallbackId;
+
+      // Create callback promise that handles completion
+      const terminationMessage = wasNewCallback
+        ? `Callback ${name || stepId} created and pending external completion`
+        : `Callback ${name || stepId} is pending external completion`;
+
+      const callbackPromise = createCallbackPromise<T>(
         context,
         stepId,
         name,
         serdes,
         hasRunningOperations,
-        getOperationsEmitter,
+        getOperationsEmitter(),
+        terminationMessage,
+        checkAndUpdateReplayMode,
       );
-    }
 
-    // Create new callback
-    return await createNewCallback<T>(
-      context,
-      checkpoint,
-      stepId,
-      name,
-      config,
-      serdes,
-      hasRunningOperations,
-      getOperationsEmitter,
-      parentId,
-    );
+      log("✅", "Callback created successfully in phase 2:", {
+        stepId,
+        name,
+        callbackId,
+      });
+
+      return [callbackPromise, callbackId];
+    });
   };
-};
-
-const handleCompletedCallback = async <T>(
-  context: ExecutionContext,
-  stepId: string,
-  stepName: string | undefined,
-  serdes: Serdes<T>,
-): Promise<CreateCallbackResult<T>> => {
-  log("⏭️", "Callback already completed, returning cached result:", { stepId });
-
-  const stepData = context.getStepData(stepId);
-  const callbackData = stepData?.CallbackDetails;
-  if (!callbackData?.CallbackId) {
-    throw new Error(`No callback ID found for completed callback: ${stepId}`);
-  }
-
-  const deserializedResult = await safeDeserialize(
-    serdes,
-    callbackData.Result,
-    stepId,
-    stepName,
-    context.terminationManager,
-
-    context.durableExecutionArn,
-  );
-
-  // Return resolved promise with the result
-  const resolvedPromise = Promise.resolve(deserializedResult) as Promise<T>;
-  return [resolvedPromise, callbackData.CallbackId];
-};
-
-const handleFailedCallback = async <T>(
-  context: ExecutionContext,
-  stepId: string,
-  _stepName: string | undefined,
-  _serdes: Serdes<T>,
-): Promise<CreateCallbackResult<T>> => {
-  log("❌", "Callback already failed, returning rejected promise:", { stepId });
-
-  const stepData = context.getStepData(stepId);
-  const callbackData = stepData?.CallbackDetails;
-  if (!callbackData?.CallbackId) {
-    throw new Error(`No callback ID found for failed callback: ${stepId}`);
-  }
-
-  // Return rejected promise with the error
-  const rejectedPromise = Promise.reject(
-    stepData?.CallbackDetails?.Error
-      ? ((): CallbackError => {
-          const cause = new Error(stepData.CallbackDetails.Error.ErrorMessage);
-          cause.name = stepData.CallbackDetails.Error.ErrorType || "Error";
-          cause.stack = stepData.CallbackDetails.Error.StackTrace?.join("\n");
-          return new CallbackError(
-            stepData.CallbackDetails.Error.ErrorMessage || "Callback failed",
-            cause,
-            stepData.CallbackDetails.Error.ErrorData,
-          );
-        })()
-      : new CallbackError("Callback failed"),
-  ) as Promise<T>;
-  return [rejectedPromise, callbackData.CallbackId];
-};
-
-const handleStartedCallback = async <T>(
-  context: ExecutionContext,
-  stepId: string,
-  stepName: string | undefined,
-  serdes: Serdes<T>,
-  hasRunningOperations: () => boolean,
-  getOperationsEmitter: () => EventEmitter,
-): Promise<CreateCallbackResult<T>> => {
-  log("⏳", "Callback already started, returning existing promise:", {
-    stepId,
-  });
-
-  const stepData = context.getStepData(stepId);
-  const callbackData = stepData?.CallbackDetails;
-  if (!callbackData?.CallbackId) {
-    throw new Error(`No callback ID found for started callback: ${stepId}`);
-  }
-
-  // Create a thenable that checks status and operations before terminating
-  const callbackPromise = createTerminatingThenable<T>(
-    context,
-    stepId,
-    stepName,
-    `Callback ${stepName || stepId} is pending external completion`,
-    hasRunningOperations,
-    serdes,
-    getOperationsEmitter(),
-  );
-
-  return [callbackPromise, callbackData.CallbackId];
-};
-
-const createNewCallback = async <T>(
-  context: ExecutionContext,
-  checkpoint: ReturnType<typeof createCheckpoint>,
-  stepId: string,
-  name: string | undefined,
-  config: CreateCallbackConfig<T> | undefined,
-  serdes: Serdes<T>,
-  hasRunningOperations: () => boolean,
-  getOperationsEmitter: () => EventEmitter,
-  parentId?: string,
-): Promise<CreateCallbackResult<T>> => {
-  log("🆕", "Creating new callback:", {
-    stepId,
-    name,
-    config,
-  });
-
-  // Checkpoint the callback creation - the API will generate and return the callbackId
-  await checkpoint(stepId, {
-    Id: stepId,
-    ParentId: parentId,
-    Action: "START",
-    SubType: OperationSubType.CALLBACK,
-    Type: OperationType.CALLBACK,
-    Name: name,
-    CallbackOptions: {
-      TimeoutSeconds: config?.timeout
-        ? durationToSeconds(config.timeout)
-        : undefined,
-      HeartbeatTimeoutSeconds: config?.heartbeatTimeout
-        ? durationToSeconds(config.heartbeatTimeout)
-        : undefined,
-    },
-  });
-
-  // After checkpoint, the context._stepData should be updated with the callbackId
-  const stepData = context.getStepData(stepId);
-  const callbackData = stepData?.CallbackDetails;
-  if (!callbackData?.CallbackId) {
-    throw new Error(
-      `Callback ID not found in stepData after checkpoint: ${stepId}`,
-    );
-  }
-
-  const callbackId = callbackData.CallbackId;
-
-  // Create a thenable that checks status and operations before terminating
-  const callbackPromise = createTerminatingThenable<T>(
-    context,
-    stepId,
-    name,
-    `Callback ${name || stepId} created and pending external completion`,
-    hasRunningOperations,
-    serdes,
-    getOperationsEmitter(),
-  );
-
-  log("✅", "Callback created successfully:", {
-    stepId,
-    name,
-    callbackId,
-  });
-
-  return [callbackPromise, callbackId];
 };
