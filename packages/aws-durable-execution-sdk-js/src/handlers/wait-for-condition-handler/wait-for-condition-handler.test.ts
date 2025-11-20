@@ -9,6 +9,7 @@ import {
   WaitForConditionConfig,
   OperationSubType,
   Logger,
+  DurablePromise,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -125,12 +126,12 @@ describe("WaitForCondition Handler", () => {
       });
     });
 
-    it("should throw error if config is missing", async () => {
+    it("should throw error if config is missing", () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest.fn();
 
-      await expect(
+      expect(() =>
         waitForConditionHandler(checkFunc, undefined as any),
-      ).rejects.toThrow(
+      ).toThrow(
         "waitForCondition requires config with waitStrategy and initialState",
       );
     });
@@ -509,8 +510,8 @@ describe("WaitForCondition Handler", () => {
         message: "Retry scheduled for step-1",
       });
 
-      // Verify that the promise is indeed never-resolving by checking its constructor
-      expect(promise).toBeInstanceOf(Promise);
+      // Verify that the promise is indeed a DurablePromise
+      expect(promise).toBeInstanceOf(DurablePromise);
     });
 
     it("should wait for timer when status is PENDING", async () => {
