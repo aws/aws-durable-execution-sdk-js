@@ -171,4 +171,30 @@ describe("waitBeforeContinue", () => {
     expect(result.timerExpired).toBe(true);
     expect(mockCheckpoint.force).toHaveBeenCalled();
   });
+
+  test("should resolve when onAwaitedChange callback is invoked", async () => {
+    let awaitedCallback: (() => void) | undefined;
+
+    const resultPromise = waitBeforeContinue({
+      checkHasRunningOperations: false,
+      checkStepStatus: false,
+      checkTimer: false,
+      stepId: "test-step",
+      context: mockContext,
+      hasRunningOperations: mockHasRunningOperations,
+      operationsEmitter: mockOperationsEmitter,
+      onAwaitedChange: (callback) => {
+        awaitedCallback = callback;
+      },
+    });
+
+    // Invoke the callback after 50ms
+    const timer = setTimeout(() => {
+      awaitedCallback?.();
+    }, 50);
+    timers.push(timer);
+
+    const result = await resultPromise;
+    expect(result.reason).toBe("status");
+  });
 });
