@@ -7,13 +7,14 @@ import { handler } from "./step-with-retry";
 
 const EXPECTED_RESULT = "step succeeded";
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+beforeAll(() =>
+  LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
+);
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe("step-with-retry test", () => {
   const durableTestRunner = new LocalDurableTestRunner({
     handlerFunction: handler,
-    skipTime: true,
   });
 
   it("should return expected result - happy case", async () => {

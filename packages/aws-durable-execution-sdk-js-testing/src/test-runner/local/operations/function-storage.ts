@@ -94,7 +94,6 @@ export class FunctionStorage {
   async runHandler(
     functionName: string,
     payload: string | undefined,
-    skipTime: boolean,
   ): Promise<{
     result?: string;
     error?: ErrorObject;
@@ -113,7 +112,6 @@ export class FunctionStorage {
     if (isDurable) {
       const invokeRunner = this.runnerFactory.createRunner({
         handlerFunction: handler,
-        skipTime,
       });
 
       const execution = await invokeRunner.run({

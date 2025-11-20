@@ -6,9 +6,9 @@ import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { InvocationStatus } from "@aws/durable-execution-sdk-js";
 import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manager";
-import { Scheduler } from "../orchestration/scheduler";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 import { FunctionStorage } from "../operations/function-storage";
+import { install } from "@sinonjs/fake-timers";
 
 jest.mock("../test-execution-orchestrator");
 jest.mock("../result-formatter");
@@ -16,6 +16,7 @@ jest.mock("../operations/local-operation-storage");
 jest.mock("../operations/operation-wait-manager");
 jest.mock("../checkpoint-server-worker-manager");
 jest.mock("../operations/function-storage");
+jest.mock("@sinonjs/fake-timers");
 
 describe("LocalDurableTestRunner", () => {
   const mockHandlerFunction = jest.fn();
@@ -206,6 +207,8 @@ describe("LocalDurableTestRunner", () => {
     });
 
     it("should create TestExecutionOrchestrator with correct dependencies during run", async () => {
+      await LocalDurableTestRunner.setupTestEnvironment();
+
       const runner = new LocalDurableTestRunner<{ success: boolean }>({
         handlerFunction: mockHandlerFunction,
       });
@@ -217,16 +220,20 @@ describe("LocalDurableTestRunner", () => {
         mockHandlerFunction,
         mockOperationStorage,
         expect.any(CheckpointApiClient), // CheckpointApiClient created with server URL
-        expect.any(Scheduler), // Scheduler
         mockFunctionStorage,
-        false, // skipTime default
+        {
+          enabled: false,
+        }, // skipTime default
       );
     });
 
     it("should pass skipTime parameter to TestExecutionOrchestrator", async () => {
+      await LocalDurableTestRunner.setupTestEnvironment({
+        skipTime: true,
+      });
+
       const runner = new LocalDurableTestRunner<{ success: boolean }>({
         handlerFunction: mockHandlerFunction,
-        skipTime: true,
       });
 
       await runner.run();
@@ -235,9 +242,10 @@ describe("LocalDurableTestRunner", () => {
         mockHandlerFunction,
         mockOperationStorage,
         expect.any(CheckpointApiClient), // CheckpointApiClient created with server URL
-        expect.any(Scheduler), // Scheduler
         mockFunctionStorage,
-        true, // skipTime
+        {
+          enabled: true,
+        }, // skipTime
       );
     });
 
@@ -370,6 +378,23 @@ describe("LocalDurableTestRunner", () => {
 
   describe("static environment methods", () => {
     describe("setupTestEnvironment", () => {
+      let mockFakeClock: jest.Mocked<{ uninstall: jest.Mock }>;
+
+      beforeEach(() => {
+        mockFakeClock = {
+          uninstall: jest.fn(),
+        };
+        (install as jest.Mock).mockReturnValue(mockFakeClock);
+      });
+
+      afterEach(() => {
+        // Clean up static state after each test
+        LocalDurableTestRunner.skipTime = false;
+        (
+          LocalDurableTestRunner as unknown as { fakeClock: unknown }
+        ).fakeClock = undefined;
+      });
+
       it("should delegate to CheckpointServerWorkerManager.getInstance().setup()", async () => {
         const expectedResult = {
           url: "http://127.0.0.1:9999",
@@ -386,6 +411,72 @@ describe("LocalDurableTestRunner", () => {
         expect(result).toEqual(expectedResult);
       });
 
+      it("should set skipTime to false by default", async () => {
+        await LocalDurableTestRunner.setupTestEnvironment();
+
+        expect(LocalDurableTestRunner.skipTime).toBe(false);
+      });
+
+      it("should set skipTime to true when specified in params", async () => {
+        await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });
+
+        expect(LocalDurableTestRunner.skipTime).toBe(true);
+      });
+
+      it("should set skipTime to false when explicitly specified in params", async () => {
+        await LocalDurableTestRunner.setupTestEnvironment({ skipTime: false });
+
+        expect(LocalDurableTestRunner.skipTime).toBe(false);
+      });
+
+      it("should not install fake timers if skip time is disabled", async () => {
+        await LocalDurableTestRunner.setupTestEnvironment();
+
+        expect(install).not.toHaveBeenCalled();
+        expect(
+          (LocalDurableTestRunner as unknown as { fakeClock: unknown })
+            .fakeClock,
+        ).toBeUndefined();
+      });
+
+      it("should install fake timers with correct configuration", async () => {
+        jest.spyOn(Date, "now").mockReturnValue(1);
+
+        await LocalDurableTestRunner.setupTestEnvironment({
+          skipTime: true,
+        });
+
+        expect(install).toHaveBeenCalledWith({
+          shouldAdvanceTime: true,
+          shouldClearNativeTimers: true,
+          now: 1,
+        });
+        expect(
+          (LocalDurableTestRunner as unknown as { fakeClock: unknown })
+            .fakeClock,
+        ).toBe(mockFakeClock);
+      });
+
+      it("should throw error if fake timers failed to be installed", async () => {
+        const installError = new Error("Failed to install fake timers");
+        (install as jest.Mock).mockImplementation(() => {
+          throw installError;
+        });
+
+        // Should not throw an error
+        await expect(
+          LocalDurableTestRunner.setupTestEnvironment({
+            skipTime: true,
+          }),
+        ).rejects.toThrow(installError);
+
+        expect(install).toHaveBeenCalled();
+        expect(
+          (LocalDurableTestRunner as unknown as { fakeClock: unknown })
+            .fakeClock,
+        ).toBeUndefined();
+      });
+
       it("should propagate setup errors", async () => {
         const setupError = new Error("Failed to start checkpoint server");
         mockCheckpointServerWorkerManager.setup.mockRejectedValue(setupError);
@@ -400,6 +491,22 @@ describe("LocalDurableTestRunner", () => {
     });
 
     describe("teardownTestEnvironment", () => {
+      let mockFakeClock: jest.Mocked<{ uninstall: jest.Mock }>;
+
+      beforeEach(() => {
+        mockFakeClock = {
+          uninstall: jest.fn(),
+        };
+      });
+
+      afterEach(() => {
+        // Clean up static state after each test
+        LocalDurableTestRunner.skipTime = false;
+        (
+          LocalDurableTestRunner as unknown as { fakeClock: unknown }
+        ).fakeClock = undefined;
+      });
+
       it("should delegate to CheckpointServerWorkerManager.getInstance().teardown()", async () => {
         mockCheckpointServerWorkerManager.teardown.mockResolvedValue(undefined);
 
@@ -407,6 +514,45 @@ describe("LocalDurableTestRunner", () => {
 
         expect(CheckpointServerWorkerManager.getInstance).toHaveBeenCalled();
         expect(mockCheckpointServerWorkerManager.teardown).toHaveBeenCalled();
+      });
+
+      it("should uninstall fake clock when it exists", async () => {
+        // Set up fake clock on the static class
+        (
+          LocalDurableTestRunner as unknown as { fakeClock: unknown }
+        ).fakeClock = mockFakeClock;
+
+        await LocalDurableTestRunner.teardownTestEnvironment();
+
+        expect(mockFakeClock.uninstall).toHaveBeenCalled();
+      });
+
+      it("should set fake clock to undefined after uninstalling", async () => {
+        // Set up fake clock on the static class
+        (
+          LocalDurableTestRunner as unknown as { fakeClock: unknown }
+        ).fakeClock = mockFakeClock;
+
+        await LocalDurableTestRunner.teardownTestEnvironment();
+
+        expect(
+          (LocalDurableTestRunner as unknown as { fakeClock: unknown })
+            .fakeClock,
+        ).toBeUndefined();
+      });
+
+      it("should handle teardown when fake clock is undefined", async () => {
+        // Ensure fake clock is undefined
+        (
+          LocalDurableTestRunner as unknown as { fakeClock: unknown }
+        ).fakeClock = undefined;
+
+        // Should not throw an error
+        await expect(
+          LocalDurableTestRunner.teardownTestEnvironment(),
+        ).resolves.toBeUndefined();
+
+        expect(mockFakeClock.uninstall).not.toHaveBeenCalled();
       });
 
       it("should propagate teardown errors", async () => {
@@ -425,6 +571,23 @@ describe("LocalDurableTestRunner", () => {
     });
 
     describe("environment lifecycle integration", () => {
+      let mockFakeClock: jest.Mocked<{ uninstall: jest.Mock }>;
+
+      beforeEach(() => {
+        mockFakeClock = {
+          uninstall: jest.fn(),
+        };
+        (install as jest.Mock).mockReturnValue(mockFakeClock);
+      });
+
+      afterEach(() => {
+        // Clean up static state after each test
+        LocalDurableTestRunner.skipTime = false;
+        (
+          LocalDurableTestRunner as unknown as { fakeClock: unknown }
+        ).fakeClock = undefined;
+      });
+
       it("should allow setup and teardown to be called in sequence", async () => {
         const setupResult = { url: "http://127.0.0.1:8888", port: 8888 };
         mockCheckpointServerWorkerManager.setup.mockResolvedValue(setupResult);
@@ -443,6 +606,54 @@ describe("LocalDurableTestRunner", () => {
         expect(
           mockCheckpointServerWorkerManager.teardown,
         ).toHaveBeenCalledTimes(1);
+      });
+
+      it("should handle complete fake clock lifecycle with skipTime enabled", async () => {
+        const mockNow = 1640995200000; // 2022-01-01T00:00:00.000Z
+        jest.spyOn(Date, "now").mockReturnValue(mockNow);
+
+        // Setup with skipTime enabled
+        await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });
+
+        // Verify fake clock was installed with correct config
+        expect(install).toHaveBeenCalledWith({
+          shouldAdvanceTime: true,
+          shouldClearNativeTimers: true,
+          now: mockNow,
+        });
+        expect(LocalDurableTestRunner.skipTime).toBe(true);
+        expect(
+          (LocalDurableTestRunner as unknown as { fakeClock: unknown })
+            .fakeClock,
+        ).toBe(mockFakeClock);
+
+        // Create and run a test instance
+        const runner = new LocalDurableTestRunner<{ success: boolean }>({
+          handlerFunction: mockHandlerFunction,
+        });
+
+        await runner.run();
+
+        // Verify orchestrator was created with skipTime enabled and fakeClock
+        expect(TestExecutionOrchestrator).toHaveBeenCalledWith(
+          mockHandlerFunction,
+          mockOperationStorage,
+          expect.any(CheckpointApiClient),
+          mockFunctionStorage,
+          {
+            enabled: true,
+            fakeClock: mockFakeClock,
+          },
+        );
+
+        // Teardown and verify fake clock cleanup
+        await LocalDurableTestRunner.teardownTestEnvironment();
+
+        expect(mockFakeClock.uninstall).toHaveBeenCalled();
+        expect(
+          (LocalDurableTestRunner as unknown as { fakeClock: unknown })
+            .fakeClock,
+        ).toBeUndefined();
       });
     });
   });

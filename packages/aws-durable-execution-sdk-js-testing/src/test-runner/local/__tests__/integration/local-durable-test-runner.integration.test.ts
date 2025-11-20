@@ -5,7 +5,9 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+beforeAll(() =>
+  LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
+);
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe("LocalDurableTestRunner Integration", () => {
@@ -13,13 +15,14 @@ describe("LocalDurableTestRunner Integration", () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    jest.useRealTimers();
   });
 
   it("should complete execution with no environment variables set", async () => {
     process.env = {};
 
     const handler = withDurableExecution(
-      async (event: unknown, context: DurableContext) => {
+      async (_event: unknown, context: DurableContext) => {
         const result = await context.step(() => Promise.resolve("completed"));
         return { success: true, step: result };
       },
@@ -27,7 +30,6 @@ describe("LocalDurableTestRunner Integration", () => {
 
     const runner = new LocalDurableTestRunner({
       handlerFunction: handler,
-      skipTime: true,
     });
 
     const result = await runner.run();
@@ -64,7 +66,6 @@ describe("LocalDurableTestRunner Integration", () => {
 
     const runner = new LocalDurableTestRunner({
       handlerFunction: handler,
-      skipTime: true,
     });
 
     // Get operations for verification
@@ -252,6 +253,52 @@ describe("LocalDurableTestRunner Integration", () => {
         },
       },
     ]);
+  });
+
+  it("should complete with mocking", async () => {
+    const mockedFunction = jest.fn();
+
+    const otherCode = {
+      property: () => "not mocked",
+    };
+
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+        const mock1: string = await context.step(() => mockedFunction());
+
+        return mock1 + " and " + otherCode.property();
+      },
+    );
+
+    jest.spyOn(otherCode, "property").mockReturnValue("my result");
+
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: handler,
+    });
+
+    mockedFunction.mockResolvedValue("hello world");
+
+    const result = await runner.run();
+
+    expect(result.getResult()).toEqual("hello world and my result");
+  });
+
+  it("should have fake timers in the global scope", async () => {
+    jest.useRealTimers();
+
+    const handler = withDurableExecution(() => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+      return Promise.resolve((Date as unknown as any).isFake);
+    });
+
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: handler,
+    });
+
+    const result = await runner.run();
+
+    expect(result.getResult()).toBe(true);
   });
 
   // enable when language SDK supports concurrent waits

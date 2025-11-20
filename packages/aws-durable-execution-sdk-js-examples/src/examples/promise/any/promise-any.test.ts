@@ -4,11 +4,8 @@ import { createTests } from "../../../utils/test-helper";
 createTests<string>({
   name: "promise-any test",
   functionName: "promise-any",
-  localRunnerConfig: {
-    skipTime: false,
-  },
   handler,
-  tests: (runner, isCloud) => {
+  tests: (runner) => {
     it("should return first successful promise result", async () => {
       const execution = await runner.run();
 

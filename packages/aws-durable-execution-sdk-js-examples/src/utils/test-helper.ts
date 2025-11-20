@@ -63,13 +63,16 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   }
 
   describe(`${testDef.name} (local)`, () => {
-    beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+    beforeAll(() =>
+      LocalDurableTestRunner.setupTestEnvironment({
+        skipTime: testDef.localRunnerConfig?.skipTime ?? true,
+      }),
+    );
     afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
     const runner: LocalDurableTestRunner<ResultType> =
       new LocalDurableTestRunner({
         handlerFunction: testDef.handler,
-        skipTime: testDef.localRunnerConfig?.skipTime ?? true,
       });
 
     beforeEach(() => {

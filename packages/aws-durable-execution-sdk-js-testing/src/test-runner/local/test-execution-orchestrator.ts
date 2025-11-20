@@ -10,11 +10,7 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import { LocalRunnerStorage } from "./local-runner-storage";
 import { InvocationResult } from "../../checkpoint-server/storage/execution-manager";
-import {
-  CheckpointToken,
-  ExecutionId,
-  InvocationId,
-} from "../../checkpoint-server/utils/tagged-strings";
+import { ExecutionId } from "../../checkpoint-server/utils/tagged-strings";
 import { InvokeHandler } from "./invoke-handler";
 import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { InvocationTracker } from "./operations/invocation-tracker";
@@ -33,6 +29,15 @@ import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
 import { defaultLogger } from "../../logger";
+import { setTimeout } from "node:timers";
+import { InstalledClock } from "@sinonjs/fake-timers";
+import { QueueScheduler } from "./orchestration/queue-scheduler";
+import { TimerScheduler } from "./orchestration/timer-scheduler";
+
+export interface SkipTimeProps {
+  enabled: boolean;
+  fakeClock?: InstalledClock;
+}
 
 /**
  * Orchestrates test execution lifecycle, polling, and handler invocation for LocalDurableTestRunner.
@@ -40,22 +45,26 @@ import { defaultLogger } from "../../logger";
  */
 export class TestExecutionOrchestrator {
   private executionState: TestExecutionState;
-  private invokeHandlerInstance: InvokeHandler = new InvokeHandler();
+  private invokeHandlerInstance: InvokeHandler;
   private invocationTracker: InvocationTracker;
+  private readonly scheduler: Scheduler;
 
   constructor(
     private handlerFunction: ReturnType<typeof withDurableExecution>,
     private operationStorage: LocalOperationStorage,
     private readonly checkpointApi: CheckpointApiClient,
-    private readonly scheduler: Scheduler,
     private readonly functionStorage: FunctionStorage,
-    private skipTime = false,
+    private skipTimeProps: SkipTimeProps,
   ) {
     // Set up local storage for testing
     setCustomStorage(new LocalRunnerStorage());
 
     this.executionState = new TestExecutionState();
     this.invocationTracker = new InvocationTracker(checkpointApi);
+    this.invokeHandlerInstance = new InvokeHandler();
+    this.scheduler = this.skipTimeProps.enabled
+      ? new QueueScheduler()
+      : new TimerScheduler();
   }
 
   private async handleCompletedExecution(
@@ -137,12 +146,17 @@ export class TestExecutionOrchestrator {
 
       this.operationStorage.populateOperations(initialOperationsEvents);
 
-      // Start initial invocation of the handler
-      void this.invokeHandler(
-        executionId,
-        checkpointToken,
-        invocationId,
-        initialOperationsEvents.map((op) => op.operation),
+      // Start initial invocation of the handler inside scheduler
+      this.scheduler.scheduleFunction(
+        () =>
+          this.invokeHandler(executionId, {
+            operationEvents: initialOperationsEvents,
+            checkpointToken,
+            invocationId,
+          }),
+        (err) => {
+          this.executionState.rejectWith(err);
+        },
       );
 
       return await this.handleCompletedExecution(
@@ -182,12 +196,17 @@ export class TestExecutionOrchestrator {
           abortController.signal,
         );
 
+        defaultLogger.debug(
+          `Processing ${operations.length} operations`,
+          operations,
+        );
+
         this.operationStorage.populateOperations(operations);
 
         this.processOperations(operations, executionId);
 
         // Yield to event loop if `pollCheckpointData` returns too often (mainly in unit tests).
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setImmediate(resolve));
       }
     } catch (err: unknown) {
       // Only reject execution when the error is not an abort error
@@ -247,21 +266,15 @@ export class TestExecutionOrchestrator {
         this.handleStepUpdate(update, operation, executionId);
         break;
       case OperationType.CALLBACK:
-        this.handleCallbackUpdate(operation, executionId).catch(
-          (err: unknown) => {
-            this.executionState.rejectWith(err);
-          },
-        );
+        this.handleCallbackUpdate(operation, executionId);
         break;
       case OperationType.EXECUTION:
         this.handleExecutionUpdate(update, operation);
         break;
       case OperationType.CHAINED_INVOKE:
-        void this.handleInvokeUpdate(update, executionId).catch(
-          (err: unknown) => {
-            this.executionState.rejectWith(err);
-          },
-        );
+        this.handleInvokeUpdate(update, executionId).catch((err: unknown) => {
+          this.executionState.rejectWith(err);
+        });
         break;
     }
   }
@@ -287,7 +300,6 @@ export class TestExecutionOrchestrator {
     const { result, error } = await this.functionStorage.runHandler(
       functionName,
       update.Payload,
-      this.skipTime,
     );
 
     if (update.Id === undefined) {
@@ -307,14 +319,11 @@ export class TestExecutionOrchestrator {
       },
     });
 
-    const newInvocationData =
-      await this.checkpointApi.startInvocation(executionId);
-
-    await this.invokeHandler(
-      executionId,
-      newInvocationData.checkpointToken,
-      newInvocationData.invocationId,
-      newInvocationData.operationEvents.map((operation) => operation.operation),
+    this.scheduler.scheduleFunction(
+      () => this.invokeHandler(executionId),
+      (err) => {
+        this.executionState.rejectWith(err);
+      },
     );
   }
 
@@ -338,10 +347,10 @@ export class TestExecutionOrchestrator {
       return;
     }
 
-    const waitSeconds = update.WaitOptions?.WaitSeconds;
+    const waitEndTimestamp = operation.WaitDetails?.ScheduledEndTimestamp;
 
-    if (!waitSeconds) {
-      throw new Error("Wait operation is missing waitSeconds");
+    if (!waitEndTimestamp) {
+      throw new Error("Wait operation is missing ScheduledEndTimestamp");
     }
 
     const operationId = operation.Id;
@@ -350,39 +359,28 @@ export class TestExecutionOrchestrator {
       throw new Error("Missing operation id");
     }
 
-    defaultLogger.debug(`Queuing wait in ${waitSeconds}s`, {
+    defaultLogger.debug(`Queuing wait for ${waitEndTimestamp.toISOString()}`, {
       executionId,
       operation,
       update,
     });
-    this.scheduleAsyncFunction(
-      waitSeconds,
-      async () => {
-        const newInvocationData =
-          await this.checkpointApi.startInvocation(executionId);
-        // Re-invoke handler after waitSeconds
-        await this.invokeHandler(
-          executionId,
-          newInvocationData.checkpointToken,
-          newInvocationData.invocationId,
-          newInvocationData.operationEvents.map((op) => op.operation),
-        );
-      },
-      () => {
-        defaultLogger.debug(`Wait triggered after ${waitSeconds}s`, {
+    this.scheduleInvocationAtTimestamp(waitEndTimestamp, executionId, () => {
+      defaultLogger.debug(
+        `Wait triggered at ${waitEndTimestamp.toISOString()}`,
+        {
           executionId,
           operation,
           update,
-        });
-        return this.checkpointApi.updateCheckpointData({
-          executionId,
-          operationId,
-          operationData: {
-            Status: OperationStatus.SUCCEEDED,
-          },
-        });
-      },
-    );
+        },
+      );
+      return this.checkpointApi.updateCheckpointData({
+        executionId,
+        operationId,
+        operationData: {
+          Status: OperationStatus.SUCCEEDED,
+        },
+      });
+    });
   }
 
   /**
@@ -399,43 +397,40 @@ export class TestExecutionOrchestrator {
     executionId: ExecutionId,
   ): void {
     if (update?.Action === OperationAction.RETRY) {
-      const retryDelaySeconds = update.StepOptions?.NextAttemptDelaySeconds;
+      const nextAttemptTimestamp = operation.StepDetails?.NextAttemptTimestamp;
 
-      if (!retryDelaySeconds) {
+      if (!nextAttemptTimestamp) {
         throw new Error(
-          "Step operation with retry is missing NextAttemptDelaySeconds",
+          "Step operation with retry is missing NextAttemptTimestamp",
         );
       }
 
       const operationId = operation.Id;
 
       if (!operationId) {
-        throw new Error("Missing operation id");
+        throw new Error("Step operation is missing operation id");
       }
 
-      defaultLogger.debug(`Queuing step retry in ${retryDelaySeconds}s`, {
-        executionId,
-        operation,
-        update,
-      });
-      this.scheduleAsyncFunction(
-        retryDelaySeconds,
-        async () => {
-          const newInvocationData =
-            await this.checkpointApi.startInvocation(executionId);
-          return this.invokeHandler(
-            executionId,
-            newInvocationData.checkpointToken,
-            newInvocationData.invocationId,
-            newInvocationData.operationEvents.map((op) => op.operation),
-          );
+      defaultLogger.debug(
+        `Queuing step retry to start at ${nextAttemptTimestamp.toISOString()}`,
+        {
+          executionId,
+          operation,
+          update,
         },
+      );
+      this.scheduleInvocationAtTimestamp(
+        nextAttemptTimestamp,
+        executionId,
         async () => {
-          defaultLogger.debug(`Retry triggered after ${retryDelaySeconds}s`, {
-            executionId,
-            operation,
-            update,
-          });
+          defaultLogger.debug(
+            `Retry triggered at ${nextAttemptTimestamp.toISOString()}s`,
+            {
+              executionId,
+              operation,
+              update,
+            },
+          );
           await this.checkpointApi.updateCheckpointData({
             executionId,
             operationId,
@@ -448,28 +443,19 @@ export class TestExecutionOrchestrator {
     }
   }
 
-  private async handleCallbackUpdate(
+  private handleCallbackUpdate(
     operation: Operation,
     executionId: ExecutionId,
-  ): Promise<void> {
+  ): void {
     if (operation.Status === OperationStatus.STARTED) {
       return;
     }
 
-    if (this.invocationTracker.hasActiveInvocation()) {
-      defaultLogger.warn(
-        "Skipping scheduled function execution due to current active invocation",
-      );
-      return;
-    }
-
-    const newInvocationData =
-      await this.checkpointApi.startInvocation(executionId);
-    await this.invokeHandler(
-      executionId,
-      newInvocationData.checkpointToken,
-      newInvocationData.invocationId,
-      newInvocationData.operationEvents.map((op) => op.operation),
+    this.scheduler.scheduleFunction(
+      () => this.invokeHandler(executionId),
+      (err) => {
+        this.executionState.rejectWith(err);
+      },
     );
   }
 
@@ -499,42 +485,52 @@ export class TestExecutionOrchestrator {
   }
 
   /**
-   * Schedules an async function to execute after a specified delay.
+   * Schedules an invocation to execute at a specific timestamp.
    *
-   * This method supports executing both a callback and an invocation function:
-   * 1. The callback (if provided) is always executed first after the delay
-   * 2. The invocation function is executed only if there's no active invocation (unless skipTime is true)
-   *
-   * This pattern allows for operations like updating checkpoint data even when
-   * invocations are skipped due to active invocation conflicts.
-   *
-   * @param delaySeconds Delay in seconds before execution
-   * @param invocationFunction Function that starts a new invocation (may be skipped if there's an active invocation)
-   * @param callback Optional function that always executes after the delay (e.g., for checkpoint updates)
+   * @param timestamp The time that the next invocation should start
+   * @param executionId The id of the execution
+   * @param updateCheckpoint Function that always executes before the next invocation (e.g., for checkpoint updates)
    */
-  private scheduleAsyncFunction(
-    delaySeconds: number,
-    invocationFunction: () => Promise<void>,
-    callback: () => Promise<void>,
+  private scheduleInvocationAtTimestamp(
+    timestamp: Date,
+    executionId: ExecutionId,
+    updateCheckpoint: () => Promise<void>,
   ): void {
     this.scheduler.scheduleFunction(
-      async () => {
-        await callback();
-        // When skipping time, it's possible an invocation hasn't fully wrapped up before another invocation starts.
-        // TODO: add more time skipping options instead of completely skipping all time
-        if (this.invocationTracker.hasActiveInvocation() && !this.skipTime) {
-          defaultLogger.warn(
-            "Skipping scheduled function execution due to current active invocation",
-          );
-          return;
-        }
-
-        await invocationFunction();
-      },
-      this.skipTime ? 1 : delaySeconds * 1000,
+      () => this.invokeHandler(executionId),
       (err) => {
         this.executionState.rejectWith(err);
       },
+      timestamp,
+      () =>
+        updateCheckpoint().then(() => {
+          if (!this.skipTimeProps.enabled) {
+            return;
+          }
+
+          const fakeClock = this.skipTimeProps.fakeClock;
+          if (!fakeClock) {
+            defaultLogger.debug(
+              "Skipped advancing fake timers since timers were not initialized",
+            );
+            return;
+          }
+
+          // When skipTime is enabled, we are advancing the timers in the language SDK waitBeforeContinue timers.
+          const timerCount = fakeClock.countTimers();
+          const advanceTimersMs = timestamp.getTime() - Date.now();
+          if (timerCount > 0 && advanceTimersMs > 0) {
+            defaultLogger.debug(
+              `Advancing fake timers for ${timerCount} timers by ${advanceTimersMs}ms`,
+            );
+            fakeClock.tick(advanceTimersMs);
+            return;
+          }
+
+          defaultLogger.debug(
+            `Skipped advancing fake timers with timerCount=(${timerCount}) and advanceTimerMs=${advanceTimersMs}`,
+          );
+        }),
     );
   }
 
@@ -545,15 +541,30 @@ export class TestExecutionOrchestrator {
    * and polling stops. For "PENDING" status, execution continues.
    *
    * @param executionId Current execution ID
-   * @param checkpointToken Current checkpoint token
-   * @param operations Operations for this invocation
+   * @param invocationParams Data for the invocation. Defaults to creating a new invocation.
    */
   private async invokeHandler(
     executionId: ExecutionId,
-    checkpointToken: CheckpointToken,
-    invocationId: InvocationId,
-    operations: Operation[],
+    invocationParams?: Omit<InvocationResult, "executionId">,
   ): Promise<void> {
+    if (this.invocationTracker.hasActiveInvocation()) {
+      if (this.skipTimeProps.enabled) {
+        throw new Error(
+          "Cannot schedule concurrent invocation when skip time is enabled",
+        );
+      }
+      defaultLogger.debug(
+        "Skipping scheduled function execution due to current active invocation",
+      );
+      return;
+    }
+
+    const { checkpointToken, invocationId, operationEvents } =
+      invocationParams ??
+      (await this.checkpointApi.startInvocation(executionId));
+
+    const operations = operationEvents.map((operation) => operation.operation);
+
     // Create invocation record at the start of each invocation using the tracker
     this.invocationTracker.createInvocation(invocationId);
 
@@ -594,6 +605,11 @@ export class TestExecutionOrchestrator {
         ),
       );
     } catch (err) {
+      defaultLogger.debug(
+        `Handler failed for invocationId=${invocationId}:`,
+        err,
+      );
+
       this.executionState.rejectWith(err);
       this.operationStorage.addHistoryEvent(
         await this.invocationTracker.completeInvocation(

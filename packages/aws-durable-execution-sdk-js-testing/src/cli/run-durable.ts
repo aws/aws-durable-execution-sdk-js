@@ -50,11 +50,12 @@ async function runDurable() {
     const handler = (module.handler ??
       module.default) as LambdaHandler<DurableExecutionInvocationInput>;
 
-    await LocalDurableTestRunner.setupTestEnvironment();
+    await LocalDurableTestRunner.setupTestEnvironment({
+      skipTime,
+    });
 
     const runner = new LocalDurableTestRunner({
       handlerFunction: handler,
-      skipTime,
     });
 
     console.log(`Running durable function from: ${filePath}`);

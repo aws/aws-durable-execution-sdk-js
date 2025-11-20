@@ -14,13 +14,14 @@ jest.mock("@aws-sdk/client-dynamodb", () => ({
   GetItemCommand: jest.fn().mockImplementation((params) => params),
 }));
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+beforeAll(() =>
+  LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
+);
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe("steps-with-retry", () => {
   const durableTestRunner = new LocalDurableTestRunner({
     handlerFunction: handler,
-    skipTime: true,
   });
 
   jest.spyOn(Math, "random").mockReturnValue(0.5);
