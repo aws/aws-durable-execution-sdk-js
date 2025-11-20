@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Create Callback",
@@ -15,7 +16,8 @@ export const handler = withDurableExecution(
       await context.createCallback<string>();
 
     // In a real scenario, you would send the callbackId to an external system
-    // For this example, we'll just store it for the test to use
+    // For this example, we'll just log it
+    log("Send this callbackId to external system:", callbackId);
 
     // The promise would be resolved by calling SendDurableExecutionCallbackSuccess
     // with the callbackId from an external system
