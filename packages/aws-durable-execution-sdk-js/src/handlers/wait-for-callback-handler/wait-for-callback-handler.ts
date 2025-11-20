@@ -7,6 +7,7 @@ import {
   OperationSubType,
   WaitForCallbackContext,
   StepContext,
+  DurablePromise,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 
@@ -14,11 +15,11 @@ export const createWaitForCallbackHandler = (
   context: ExecutionContext,
   runInChildContext: DurableContext["runInChildContext"],
 ) => {
-  return async <T>(
+  return <T>(
     nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc,
     submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
-  ): Promise<T> => {
+  ): DurablePromise<T> => {
     let name: string | undefined;
     let submitter: WaitForCallbackSubmitterFunc;
     let config: WaitForCallbackConfig<T> | undefined;
@@ -48,6 +49,10 @@ export const createWaitForCallbackHandler = (
       hasSubmitter: !!submitter,
       config,
     });
+
+    // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
+    let phase1Result: T | undefined;
+    let phase1Error: unknown;
 
     // Use runInChildContext to ensure proper ID generation and isolation
     const childFunction = async (childCtx: DurableContext): Promise<T> => {
@@ -101,9 +106,24 @@ export const createWaitForCallbackHandler = (
       return await callbackPromise;
     };
 
-    // Call runInChildContext with unified signature
-    return runInChildContext(name, childFunction, {
+    // Phase 1: Start execution immediately and capture result/error
+    const phase1Promise = runInChildContext(name, childFunction, {
       subType: OperationSubType.WAIT_FOR_CALLBACK,
+    })
+      .then((result) => {
+        phase1Result = result;
+      })
+      .catch((error) => {
+        phase1Error = error;
+      });
+
+    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    return new DurablePromise(async () => {
+      await phase1Promise;
+      if (phase1Error !== undefined) {
+        throw phase1Error;
+      }
+      return phase1Result!;
     });
   };
 };
