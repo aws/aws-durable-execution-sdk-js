@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Parent Context in Step Error",
@@ -12,13 +13,13 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log("Starting parent context operations");
+    log("Starting parent context operations");
 
     // This will fail because we're using the parent context inside a step within the child
     const result = await context.runInChildContext(
       "child-context",
       async (childContext: DurableContext) => {
-        console.log("Inside child context");
+        log("Inside child context");
 
         // This step should work fine
         const step1 = await childContext.step("correct-step", async () => {

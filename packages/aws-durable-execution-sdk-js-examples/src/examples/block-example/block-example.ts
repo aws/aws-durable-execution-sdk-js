@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../types";
+import { log } from "../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Block Example",
@@ -11,19 +12,19 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log("Handler started");
+    log("Handler started");
 
     // Example of using runInChildContext with a child context
     const result = await context.runInChildContext(
       "parent_block",
       async (childContext: DurableContext) => {
-        console.log("Inside parent block");
+        log("Inside parent block");
 
         // Use the child context for nested operations
         const nestedResult = await childContext.step(
           "nested_step",
           async () => {
-            console.log("Inside nested step");
+            log("Inside nested step");
             return "nested step result";
           },
         );
@@ -32,7 +33,7 @@ export const handler = withDurableExecution(
         const nestedBlockResult = await childContext.runInChildContext(
           "nested_block",
           async (grandchildContext: DurableContext) => {
-            console.log("Inside nested block");
+            log("Inside nested block");
 
             // Use the grandchild context for further nested operations
             await grandchildContext.wait({ seconds: 1 });
@@ -48,7 +49,7 @@ export const handler = withDurableExecution(
       },
     );
 
-    console.log("Block completed with result:", result);
+    log("Block completed with result:", result);
     return result;
   },
 );

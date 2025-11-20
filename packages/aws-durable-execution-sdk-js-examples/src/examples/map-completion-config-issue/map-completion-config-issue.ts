@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../types";
+import { log } from "../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Map Completion Config Issue",
@@ -27,8 +28,8 @@ export const handler = withDurableExecution(
       toleratedFailurePercentage: 50,
     };
 
-    console.log("Starting map with config:", JSON.stringify(completionConfig));
-    console.log(
+    log("Starting map with config:", JSON.stringify(completionConfig));
+    log(
       "Items pattern:",
       items.map((i) => (i.shouldFail ? "FAIL" : "SUCCESS")).join(", "),
     );
@@ -37,7 +38,7 @@ export const handler = withDurableExecution(
       "completion-config-items",
       items,
       async (ctx: DurableContext, item: (typeof items)[0], index: number) => {
-        console.log(
+        log(
           `Processing item ${item.id} (index ${index}), shouldFail: ${item.shouldFail}`,
         );
 
@@ -74,13 +75,13 @@ export const handler = withDurableExecution(
       },
     );
 
-    console.log("Map completed with results:");
-    console.log(`Total items processed: ${results.totalCount}`);
-    console.log(`Successful items: ${results.successCount}`);
-    console.log(`Failed items: ${results.failureCount}`);
-    console.log(`Has failures: ${results.hasFailure}`);
-    console.log(`Batch status: ${results.status}`);
-    console.log(`Completion reason: ${results.completionReason}`);
+    log("Map completed with results:");
+    log(`Total items processed: ${results.totalCount}`);
+    log(`Successful items: ${results.successCount}`);
+    log(`Failed items: ${results.failureCount}`);
+    log(`Has failures: ${results.hasFailure}`);
+    log(`Batch status: ${results.status}`);
+    log(`Completion reason: ${results.completionReason}`);
 
     return {
       totalItems: results.totalCount,

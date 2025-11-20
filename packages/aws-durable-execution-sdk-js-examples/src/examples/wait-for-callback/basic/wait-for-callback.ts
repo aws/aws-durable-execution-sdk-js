@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Wait for Callback",
@@ -15,7 +16,7 @@ const mySubmitterFunction = async (callbackId: string): Promise<void> => {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log("Hello world before callback!");
+    log("Hello world before callback!");
     const result = await context.waitForCallback(
       "my callback function",
       mySubmitterFunction,
@@ -23,7 +24,7 @@ export const handler = withDurableExecution(
         timeout: { seconds: 5 },
       },
     );
-    console.log("Hello world after callback!");
+    log("Hello world after callback!");
 
     return result;
   },

@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Parent Context in WaitForCondition Error",
@@ -12,12 +13,12 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log("Starting parent context operations");
+    log("Starting parent context operations");
 
     const result = await context.runInChildContext(
       "child-context",
       async (childContext: DurableContext) => {
-        console.log("Inside child context");
+        log("Inside child context");
 
         // ❌ WRONG: Using parent context inside waitForCondition check function
         const wrongWait = await childContext.waitForCondition(

@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../types";
+import { log } from "../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Hello World",
@@ -11,7 +12,7 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log("Hello world from a durable function!");
+    log("Hello world from a durable function!");
     return "Hello World!";
   },
 );

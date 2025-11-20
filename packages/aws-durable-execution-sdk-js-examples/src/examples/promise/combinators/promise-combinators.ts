@@ -4,6 +4,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Promise Combinators",
@@ -33,38 +34,38 @@ const stepConfig: StepConfig<any> = {
  */
 export const handler = withDurableExecution(
   async (event: PromiseCombinatorsInput, context: DurableContext) => {
-    console.log("Starting promise combinators example with event:", event);
+    log("Starting promise combinators example with event:", event);
 
     // Create some durable steps that return promises
     const step1Promise = context.step("step1", async () => {
-      console.log("Step 1 executing");
+      log("Step 1 executing");
       await new Promise((resolve) => setTimeout(resolve, 100)); // Simulate async work
       return "Result from step 1";
     });
 
     const step2Promise = context.step("step2", async () => {
-      console.log("Step 2 executing");
+      log("Step 2 executing");
       await new Promise((resolve) => setTimeout(resolve, 200)); // Simulate async work
       return "Result from step 2";
     });
 
     const step3Promise = context.step("step3", async () => {
-      console.log("Step 3 executing");
+      log("Step 3 executing");
       await new Promise((resolve) => setTimeout(resolve, 50)); // Simulate async work
       return "Result from step 3";
     });
 
     // Example 1: Promise.all - wait for all promises to complete
-    console.log("Testing Promise.all...");
+    log("Testing Promise.all...");
     const allResults = await context.promise.all("all-steps", [
       step1Promise,
       step2Promise,
       step3Promise,
     ]);
-    console.log("All results:", allResults);
+    log("All results:", allResults);
 
     // Example 2: Promise.race - get the first promise to complete
-    console.log("Testing Promise.race...");
+    log("Testing Promise.race...");
     const step4Promise = context.step("step4", async () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
       return "Slow result";
@@ -76,10 +77,10 @@ export const handler = withDurableExecution(
     });
 
     const raceResult = await context.promise.race([step4Promise, step5Promise]);
-    console.log("Race result:", raceResult);
+    log("Race result:", raceResult);
 
     // Example 3: Promise.allSettled - wait for all promises regardless of success/failure
-    console.log("Testing Promise.allSettled...");
+    log("Testing Promise.allSettled...");
     const successPromise = context.step("success-step", async () => {
       return "Success!";
     });
@@ -96,10 +97,10 @@ export const handler = withDurableExecution(
       successPromise,
       failurePromise,
     ]);
-    console.log("Settled results:", settledResults);
+    log("Settled results:", settledResults);
 
     // Example 4: Promise.any - get the first successful promise
-    console.log("Testing Promise.any...");
+    log("Testing Promise.any...");
     const failPromise1 = context.step(
       "fail1",
       async () => {
@@ -128,9 +129,9 @@ export const handler = withDurableExecution(
         failPromise2,
         successPromise2,
       ]);
-      console.log("Any result:", anyResult);
+      log("Any result:", anyResult);
     } catch (error) {
-      console.log("All promises failed:", error);
+      log("All promises failed:", error);
       anyResult = "All promises failed";
     }
 

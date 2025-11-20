@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../types";
+import { log } from "../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Comprehensive Operations",
@@ -23,11 +24,11 @@ interface ComprehensiveExampleInput {
  */
 export const handler = withDurableExecution(
   async (event: ComprehensiveExampleInput, context: DurableContext) => {
-    console.log("Starting comprehensive operations example with event:", event);
+    log("Starting comprehensive operations example with event:", event);
 
     // Step 1: ctx.step - Simple step that returns a result
     const step1Result = await context.step("step1", async () => {
-      console.log("Executing step1");
+      log("Executing step1");
       return "Step 1 completed successfully";
     });
 

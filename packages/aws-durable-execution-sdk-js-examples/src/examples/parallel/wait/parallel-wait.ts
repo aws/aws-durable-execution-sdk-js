@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Parallel wait",
@@ -11,7 +12,7 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log("Before waits");
+    log("Before waits");
     await context.parallel("parent-block", [
       async (childContext: DurableContext) =>
         await childContext.wait("wait-1-second", { seconds: 1 }),
@@ -20,7 +21,7 @@ export const handler = withDurableExecution(
       async (childContext: DurableContext) =>
         await childContext.wait("wait-5-seconds", { seconds: 5 }),
     ]);
-    console.log("After waits");
+    log("After waits");
     return "Completed waits";
   },
 );

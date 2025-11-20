@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Wait State",
@@ -11,9 +12,9 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log("Hello world before wait!");
+    log("Hello world before wait!");
     await context.wait({ seconds: 2 });
-    console.log("Hello world after wait!");
+    log("Hello world after wait!");
     return "Function Completed";
   },
 );
