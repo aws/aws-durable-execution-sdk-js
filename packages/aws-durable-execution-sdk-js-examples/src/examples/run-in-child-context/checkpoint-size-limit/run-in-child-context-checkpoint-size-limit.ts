@@ -15,39 +15,27 @@ const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    console.log(
-      "Testing checkpoint size limit boundary with 100 iterations in parallel",
-    );
-
-    // Create all promises first - test much closer to the limit to catch serialization overhead
+    // Create 100 child contexts with payloads near the 256KB checkpoint limit
     const promises = [];
     for (let i = 0; i < 100; i++) {
       const payloadSize = CHECKPOINT_SIZE_LIMIT - 10 + i; // Range: LIMIT-10 to LIMIT+89
 
-      const promise = context
-        .runInChildContext(`boundary-test-${i}`, async () => {
+      const promise = context.runInChildContext(
+        `boundary-test-${i}`,
+        async () => {
           return "x".repeat(payloadSize);
-        })
-        .then((result) => ({
-          iteration: i,
-          payloadSize,
-          resultSize: result.length,
-          serializedSize: Buffer.byteLength(JSON.stringify(result), "utf8"),
-          isOverLimit: payloadSize >= CHECKPOINT_SIZE_LIMIT,
-        }));
+        },
+      );
 
       promises.push(promise);
     }
 
     // Await all promises in parallel
-    const results = await Promise.all(promises);
+    await Promise.all(promises);
 
     return {
       success: true,
-      message: "Checkpoint size boundary test completed",
-      totalIterations: results.length,
-      checkpointLimit: CHECKPOINT_SIZE_LIMIT,
-      results,
+      totalIterations: 100,
     };
   },
 );
