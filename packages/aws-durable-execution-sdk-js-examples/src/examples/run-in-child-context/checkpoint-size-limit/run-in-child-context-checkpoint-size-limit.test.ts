@@ -26,25 +26,6 @@ createTests({
       );
       const overLimitResults = result.results.filter((r: any) => r.isOverLimit);
 
-      console.log(`\n=== CHECKPOINT SIZE BOUNDARY TEST RESULTS ===`);
-      console.log(
-        `Checkpoint size limit: ${CHECKPOINT_SIZE_LIMIT} bytes (256KB)`,
-      );
-      console.log(`Total iterations: ${result.totalIterations}`);
-      console.log(`Under limit iterations: ${underLimitResults.length}`);
-      console.log(`Over limit iterations: ${overLimitResults.length}`);
-      console.log(
-        `Payload size range: ${CHECKPOINT_SIZE_LIMIT - 10} to ${CHECKPOINT_SIZE_LIMIT + 89} bytes`,
-      );
-
-      // Show serialization overhead for first few results
-      console.log(`\n=== SERIALIZATION OVERHEAD ANALYSIS ===`);
-      result.results.slice(0, 5).forEach((r: any) => {
-        console.log(
-          `Payload: ${r.payloadSize} bytes, Serialized: ${r.serializedSize} bytes, Overhead: ${r.serializedSize - r.payloadSize} bytes`,
-        );
-      });
-
       // Verify all results have correct payload sizes
       result.results.forEach((r: any, index: number) => {
         const expectedSize = CHECKPOINT_SIZE_LIMIT - 10 + index;
