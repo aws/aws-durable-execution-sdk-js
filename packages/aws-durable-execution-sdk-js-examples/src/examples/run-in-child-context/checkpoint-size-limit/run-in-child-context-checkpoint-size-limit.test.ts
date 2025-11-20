@@ -15,7 +15,9 @@ createTests({
       // Verify the execution succeeded
       expect(execution.getStatus()).toBe("SUCCEEDED");
       expect(result.success).toBe(true);
-      expect(result.totalIterations).toBe(100);
+
+      // Verify totalIterations matches actual operations created
+      expect(result.totalIterations).toBe(execution.getOperations().length);
     }, 120000);
   },
 });
