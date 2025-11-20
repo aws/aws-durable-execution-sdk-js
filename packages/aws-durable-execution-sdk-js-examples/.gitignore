@@ -11,3 +11,4 @@
 
 src/utils/examples-catalog.json
 src/dur-sdk/
+test_output.log
