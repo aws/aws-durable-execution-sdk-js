@@ -67,8 +67,14 @@ export class DurablePromise<T> implements Promise<T> {
       this._isExecuted = true;
 
       // Notify that the promise is now being awaited
+      // Wrap in try-catch to prevent callback errors from breaking execution
       if (this._onAwaitedCallback) {
-        this._onAwaitedCallback();
+        try {
+          this._onAwaitedCallback();
+        } catch (error) {
+          // Log but don't propagate - callback errors shouldn't break user code
+          console.error("Error in onAwaitedCallback:", error);
+        }
       }
 
       // Execute the promise
