@@ -239,6 +239,9 @@ export class DurableContextImpl implements DurableContext {
       );
 
       // Phase 1: Start execution immediately and capture result/error
+      // This allows the step to checkpoint and make progress before being awaited.
+      // The stepHandler promise will complete (resolve/reject/terminate) - it won't hang.
+      // Memory is released when the Lambda invocation ends (max 15 min timeout).
       let phase1Result: T | undefined;
       let phase1Error: unknown;
 
@@ -251,6 +254,7 @@ export class DurableContextImpl implements DurableContext {
         });
 
       // Return DurablePromise that will return Phase 1 result when awaited
+      // Phase 2: When the user awaits this promise, return the stored result/error from Phase 1
       return new DurablePromise(
         async () => {
           // Phase 2: Wait for Phase 1 to complete, then return stored result or throw stored error
