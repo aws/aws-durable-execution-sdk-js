@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
   name: "Parallel minSuccessful with Callbacks",
@@ -18,16 +19,21 @@ export const handler = withDurableExecution(
         async (childContext) => {
           const [callbackPromise, callbackId] =
             await childContext.createCallback<string>("branch-1-callback");
+          log(`Branch 1 callback ID: ${callbackId}`);
           return await callbackPromise;
         },
         async (childContext) => {
           const [callbackPromise, callbackId] =
             await childContext.createCallback<string>("branch-2-callback");
+          log(`Branch 2 callback ID: ${callbackId}`);
+
           return await callbackPromise;
         },
         async (childContext) => {
           const [callbackPromise, callbackId] =
             await childContext.createCallback<string>("branch-3-callback");
+          log(`Branch 3 callback ID: ${callbackId}`);
+
           return await callbackPromise;
         },
       ],
