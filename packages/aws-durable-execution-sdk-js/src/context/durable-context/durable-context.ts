@@ -215,17 +215,6 @@ export class DurableContextImpl implements DurableContext {
     );
 
     return this.withDurableModeManagement(() => {
-      // Two-phase execution state management:
-      // - waitingCallback: holds the callback to invoke when promise is awaited
-      // - isAwaited: tracks whether the promise has been awaited yet
-      // - setWaitingCallback: allows waitBeforeContinue to register its callback
-      let waitingCallback: (() => void) | undefined;
-      let isAwaited = false;
-
-      const setWaitingCallback = (cb: () => void): void => {
-        waitingCallback = cb;
-      };
-
       const stepHandler = createStepHandler(
         this.executionContext,
         this.checkpoint,
@@ -237,45 +226,9 @@ export class DurableContextImpl implements DurableContext {
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
         this._parentId,
-        // getOnAwaitedChange: Returns setter before first await, undefined after
-        // This allows waitBeforeContinue to wait for await on first call,
-        // but skip waiting on subsequent calls (already awaited)
-        () => (isAwaited ? undefined : setWaitingCallback),
       );
 
-      // Phase 1: Start execution immediately and capture result/error
-      // This allows the step to checkpoint and make progress before being awaited.
-      // The stepHandler promise will complete (resolve/reject/terminate) - it won't hang.
-      let phase1Result: T | undefined;
-      let phase1Error: unknown;
-
-      const phase1Promise = stepHandler(nameOrFn, fnOrOptions, maybeOptions)
-        .then((result) => {
-          phase1Result = result;
-        })
-        .catch((error) => {
-          phase1Error = error;
-        });
-
-      // Return DurablePromise that will return Phase 1 result when awaited
-      // Phase 2: When the user awaits this promise, return the stored result/error from Phase 1
-      return new DurablePromise(
-        async () => {
-          // Phase 2: Wait for Phase 1 to complete, then return stored result or throw stored error
-          await phase1Promise;
-          if (phase1Error !== undefined) {
-            throw phase1Error;
-          }
-          return phase1Result!;
-        },
-        () => {
-          // When promise is awaited, mark as awaited and invoke waiting callback
-          isAwaited = true;
-          if (waitingCallback) {
-            waitingCallback();
-          }
-        },
-      );
+      return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
   }
 

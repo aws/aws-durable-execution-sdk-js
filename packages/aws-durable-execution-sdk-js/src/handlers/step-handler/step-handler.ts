@@ -7,6 +7,7 @@ import {
   OperationSubType,
   StepContext,
   Logger,
+  DurablePromise,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import {
@@ -83,13 +84,6 @@ const waitForContinuation = async (
 
 /**
  * Creates a step handler for executing durable steps with two-phase execution.
- *
- * @param getOnAwaitedChange - Optional function that returns a callback setter or undefined.
- *   - Returns a setter function `(callback) => void` if the promise is NOT yet awaited
- *   - Returns `undefined` if the promise is already awaited
- *   - The setter is used by waitBeforeContinue to register a callback that will be
- *     invoked when the promise becomes awaited, allowing execution to continue
- *   - After first await, returns undefined to skip waiting (already awaited)
  */
 export const createStepHandler = (
   context: ExecutionContext,
@@ -102,13 +96,12 @@ export const createStepHandler = (
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId?: string,
-  getOnAwaitedChange?: () => ((callback: () => void) => void) | undefined,
 ) => {
-  return async <T>(
+  return <T>(
     nameOrFn: string | undefined | StepFunc<T>,
     fnOrOptions?: StepFunc<T> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
-  ): Promise<T> => {
+  ): DurablePromise<T> => {
     let name: string | undefined;
     let fn: StepFunc<T>;
     let options: StepConfig<T> | undefined;
@@ -126,177 +119,214 @@ export const createStepHandler = (
 
     log("▶️", "Running step:", { stepId, name, options });
 
-    // Main step logic - can be re-executed if step status changes
-    while (true) {
-      try {
-        const stepData = context.getStepData(stepId);
+    // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
+    let phase1Result: T | undefined;
+    let phase1Error: unknown;
+    let isAwaited = false;
+    let waitingCallback: (() => void) | undefined;
 
-        // Validate replay consistency
-        validateReplayConsistency(
-          stepId,
-          {
-            type: OperationType.STEP,
-            name,
-            subType: OperationSubType.STEP,
-          },
-          stepData,
-          context,
-        );
+    const setWaitingCallback = (cb: () => void): void => {
+      waitingCallback = cb;
+    };
 
-        if (stepData?.Status === OperationStatus.SUCCEEDED) {
-          return await handleCompletedStep<T>(
-            context,
+    // Phase 1: Start execution immediately and capture result/error
+    const phase1Promise = (async (): Promise<T> => {
+      // Main step logic - can be re-executed if step status changes
+      while (true) {
+        try {
+          const stepData = context.getStepData(stepId);
+
+          // Validate replay consistency
+          validateReplayConsistency(
             stepId,
-            name,
-            options?.serdes,
-          );
-        }
-
-        if (stepData?.Status === OperationStatus.FAILED) {
-          // Return an async rejected promise to ensure it's handled asynchronously
-          return (async (): Promise<T> => {
-            // Reconstruct the original error from stored ErrorObject
-            if (stepData.StepDetails?.Error) {
-              throw DurableOperationError.fromErrorObject(
-                stepData.StepDetails.Error,
-              );
-            } else {
-              // Fallback for legacy data without Error field
-              const errorMessage = stepData?.StepDetails?.Result;
-              throw new StepError(errorMessage || "Unknown error");
-            }
-          })();
-        }
-
-        // If PENDING, wait for timer to complete
-        if (stepData?.Status === OperationStatus.PENDING) {
-          await waitForContinuation(
+            {
+              type: OperationType.STEP,
+              name,
+              subType: OperationSubType.STEP,
+            },
+            stepData,
             context,
-            stepId,
-            name,
-            hasRunningOperations,
-            getOperationsEmitter,
-            checkpoint,
-            getOnAwaitedChange?.() || undefined,
           );
-          continue; // Re-evaluate step status after waiting
-        }
 
-        // Check for interrupted step with AT_MOST_ONCE_PER_RETRY semantics
-        if (stepData?.Status === OperationStatus.STARTED) {
-          const semantics =
-            options?.semantics || StepSemantics.AtLeastOncePerRetry;
-          if (semantics === StepSemantics.AtMostOncePerRetry) {
-            log("⚠️", "Step was interrupted during execution:", {
+          if (stepData?.Status === OperationStatus.SUCCEEDED) {
+            return await handleCompletedStep<T>(
+              context,
               stepId,
               name,
-            });
-            const error = new StepInterruptedError(stepId, name);
+              options?.serdes,
+            );
+          }
 
-            // Handle the interrupted step as a failure
-            const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
-            let retryDecision: RetryDecision;
+          if (stepData?.Status === OperationStatus.FAILED) {
+            // Return an async rejected promise to ensure it's handled asynchronously
+            return (async (): Promise<T> => {
+              // Reconstruct the original error from stored ErrorObject
+              if (stepData.StepDetails?.Error) {
+                throw DurableOperationError.fromErrorObject(
+                  stepData.StepDetails.Error,
+                );
+              } else {
+                // Fallback for legacy data without Error field
+                const errorMessage = stepData?.StepDetails?.Result;
+                throw new StepError(errorMessage || "Unknown error");
+              }
+            })();
+          }
 
-            if (options?.retryStrategy !== undefined) {
-              retryDecision = options.retryStrategy(error, currentAttempt);
-            } else {
-              retryDecision = retryPresets.default(error, currentAttempt);
-            }
-
-            log("⚠️", "Should Retry Interrupted Step:", {
+          // If PENDING, wait for timer to complete
+          if (stepData?.Status === OperationStatus.PENDING) {
+            await waitForContinuation(
+              context,
               stepId,
               name,
-              currentAttempt,
-              shouldRetry: retryDecision.shouldRetry,
-              delayInSeconds: retryDecision.shouldRetry
-                ? retryDecision.delay
-                  ? durationToSeconds(retryDecision.delay)
-                  : undefined
-                : undefined,
-            });
+              hasRunningOperations,
+              getOperationsEmitter,
+              checkpoint,
+              isAwaited ? undefined : setWaitingCallback,
+            );
+            continue; // Re-evaluate step status after waiting
+          }
 
-            if (!retryDecision.shouldRetry) {
-              // No retry, mark as failed
-              await checkpoint(stepId, {
-                Id: stepId,
-                ParentId: parentId,
-                Action: OperationAction.FAIL,
-                SubType: OperationSubType.STEP,
-                Type: OperationType.STEP,
-                Error: createErrorObjectFromError(error),
-                Name: name,
-              });
-
-              // Reconstruct error from ErrorObject for deterministic behavior
-              const errorObject = createErrorObjectFromError(error);
-              throw DurableOperationError.fromErrorObject(errorObject);
-            } else {
-              // Retry
-              await checkpoint(stepId, {
-                Id: stepId,
-                ParentId: parentId,
-                Action: OperationAction.RETRY,
-                SubType: OperationSubType.STEP,
-                Type: OperationType.STEP,
-                Error: createErrorObjectFromError(error),
-                Name: name,
-                StepOptions: {
-                  NextAttemptDelaySeconds: retryDecision.delay
-                    ? durationToSeconds(retryDecision.delay)
-                    : 1,
-                },
-              });
-
-              await waitForContinuation(
-                context,
+          // Check for interrupted step with AT_MOST_ONCE_PER_RETRY semantics
+          if (stepData?.Status === OperationStatus.STARTED) {
+            const semantics =
+              options?.semantics || StepSemantics.AtLeastOncePerRetry;
+            if (semantics === StepSemantics.AtMostOncePerRetry) {
+              log("⚠️", "Step was interrupted during execution:", {
                 stepId,
                 name,
-                hasRunningOperations,
-                getOperationsEmitter,
-                checkpoint,
-                getOnAwaitedChange?.(),
-              );
-              continue; // Re-evaluate step status after waiting
+              });
+              const error = new StepInterruptedError(stepId, name);
+
+              // Handle the interrupted step as a failure
+              const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
+              let retryDecision: RetryDecision;
+
+              if (options?.retryStrategy !== undefined) {
+                retryDecision = options.retryStrategy(error, currentAttempt);
+              } else {
+                retryDecision = retryPresets.default(error, currentAttempt);
+              }
+
+              log("⚠️", "Should Retry Interrupted Step:", {
+                stepId,
+                name,
+                currentAttempt,
+                shouldRetry: retryDecision.shouldRetry,
+                delayInSeconds: retryDecision.shouldRetry
+                  ? retryDecision.delay
+                    ? durationToSeconds(retryDecision.delay)
+                    : undefined
+                  : undefined,
+              });
+
+              if (!retryDecision.shouldRetry) {
+                // No retry, mark as failed
+                await checkpoint(stepId, {
+                  Id: stepId,
+                  ParentId: parentId,
+                  Action: OperationAction.FAIL,
+                  SubType: OperationSubType.STEP,
+                  Type: OperationType.STEP,
+                  Error: createErrorObjectFromError(error),
+                  Name: name,
+                });
+
+                // Reconstruct error from ErrorObject for deterministic behavior
+                const errorObject = createErrorObjectFromError(error);
+                throw DurableOperationError.fromErrorObject(errorObject);
+              } else {
+                // Retry
+                await checkpoint(stepId, {
+                  Id: stepId,
+                  ParentId: parentId,
+                  Action: OperationAction.RETRY,
+                  SubType: OperationSubType.STEP,
+                  Type: OperationType.STEP,
+                  Error: createErrorObjectFromError(error),
+                  Name: name,
+                  StepOptions: {
+                    NextAttemptDelaySeconds: retryDecision.delay
+                      ? durationToSeconds(retryDecision.delay)
+                      : 1,
+                  },
+                });
+
+                await waitForContinuation(
+                  context,
+                  stepId,
+                  name,
+                  hasRunningOperations,
+                  getOperationsEmitter,
+                  checkpoint,
+                  isAwaited ? undefined : setWaitingCallback,
+                );
+                continue; // Re-evaluate step status after waiting
+              }
             }
           }
+
+          // Execute step function for READY, STARTED (AtLeastOncePerRetry), or first time (undefined)
+          const result = await executeStep(
+            context,
+            checkpoint,
+            stepId,
+            name,
+            fn,
+            createContextLogger,
+            addRunningOperation,
+            removeRunningOperation,
+            hasRunningOperations,
+            getOperationsEmitter,
+            parentId,
+            options,
+            isAwaited ? undefined : setWaitingCallback,
+          );
+
+          // If executeStep signals to continue the main loop, do so
+          if (result === CONTINUE_MAIN_LOOP) {
+            continue;
+          }
+
+          return result;
+        } catch (error) {
+          // Preserve DurableOperationError instances (StepInterruptedError is handled specifically where it's thrown)
+          if (error instanceof DurableOperationError) {
+            throw error;
+          }
+
+          // For any other error from executeStep, wrap it in StepError for consistency
+          throw new StepError(
+            error instanceof Error ? error.message : "Step failed",
+            error instanceof Error ? error : undefined,
+          );
         }
-
-        // Execute step function for READY, STARTED (AtLeastOncePerRetry), or first time (undefined)
-        const result = await executeStep(
-          context,
-          checkpoint,
-          stepId,
-          name,
-          fn,
-          createContextLogger,
-          addRunningOperation,
-          removeRunningOperation,
-          hasRunningOperations,
-          getOperationsEmitter,
-          parentId,
-          options,
-          getOnAwaitedChange,
-        );
-
-        // If executeStep signals to continue the main loop, do so
-        if (result === CONTINUE_MAIN_LOOP) {
-          continue;
-        }
-
-        return result;
-      } catch (error) {
-        // Preserve DurableOperationError instances (StepInterruptedError is handled specifically where it's thrown)
-        if (error instanceof DurableOperationError) {
-          throw error;
-        }
-
-        // For any other error from executeStep, wrap it in StepError for consistency
-        throw new StepError(
-          error instanceof Error ? error.message : "Step failed",
-          error instanceof Error ? error : undefined,
-        );
       }
-    }
+    })()
+      .then((result) => {
+        phase1Result = result;
+      })
+      .catch((error) => {
+        phase1Error = error;
+      });
+
+    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    return new DurablePromise(
+      async () => {
+        await phase1Promise;
+        if (phase1Error !== undefined) {
+          throw phase1Error;
+        }
+        return phase1Result!;
+      },
+      () => {
+        // When promise is awaited, mark as awaited and invoke waiting callback
+        isAwaited = true;
+        if (waitingCallback) {
+          waitingCallback();
+        }
+      },
+    );
   };
 };
 
@@ -335,7 +365,7 @@ export const executeStep = async <T>(
   getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
   options?: StepConfig<T>,
-  getOnAwaitedChange?: () => ((callback: () => void) => void) | undefined,
+  onAwaitedChange?: ((callback: () => void) => void) | undefined,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   // Determine step semantics (default to AT_LEAST_ONCE_PER_RETRY if not specified)
   const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
@@ -515,7 +545,7 @@ export const executeStep = async <T>(
         hasRunningOperations,
         getOperationsEmitter,
         checkpoint,
-        getOnAwaitedChange?.(),
+        onAwaitedChange,
       );
       return CONTINUE_MAIN_LOOP;
     }
