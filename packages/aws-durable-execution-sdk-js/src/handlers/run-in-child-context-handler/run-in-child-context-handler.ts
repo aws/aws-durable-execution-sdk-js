@@ -117,8 +117,12 @@ export const createRunInChildContextHandler = (
       context,
     );
 
-    // Return DurablePromise for two-phase execution
-    return new DurablePromise<T>(async () => {
+    // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
+    let phase1Result: T | undefined;
+    let phase1Error: unknown;
+
+    // Phase 1: Start execution immediately and capture result/error
+    const phase1Promise = (async (): Promise<T> => {
       const currentStepData = context.getStepData(entityId);
 
       // If already completed, return cached result
@@ -151,6 +155,21 @@ export const createRunInChildContextHandler = (
         createChildContext,
         parentId,
       );
+    })()
+      .then((result) => {
+        phase1Result = result;
+      })
+      .catch((error) => {
+        phase1Error = error;
+      });
+
+    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    return new DurablePromise(async () => {
+      await phase1Promise;
+      if (phase1Error !== undefined) {
+        throw phase1Error;
+      }
+      return phase1Result!;
     });
   };
 };
