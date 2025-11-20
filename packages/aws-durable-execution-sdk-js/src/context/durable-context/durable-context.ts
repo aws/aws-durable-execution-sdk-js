@@ -215,11 +215,13 @@ export class DurableContextImpl implements DurableContext {
     );
 
     return this.withDurableModeManagement(() => {
-      // Callback that will be invoked when promise is awaited
+      // Two-phase execution state management:
+      // - waitingCallback: holds the callback to invoke when promise is awaited
+      // - isAwaited: tracks whether the promise has been awaited yet
+      // - setWaitingCallback: allows waitBeforeContinue to register its callback
       let waitingCallback: (() => void) | undefined;
       let isAwaited = false;
 
-      // Setter function that waitBeforeContinue can use to register its callback
       const setWaitingCallback = (cb: () => void) => {
         waitingCallback = cb;
       };
@@ -235,7 +237,10 @@ export class DurableContextImpl implements DurableContext {
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
         this._parentId,
-        () => (isAwaited ? undefined : setWaitingCallback), // Only return setter if not awaited yet
+        // getOnAwaitedChange: Returns setter before first await, undefined after
+        // This allows waitBeforeContinue to wait for await on first call,
+        // but skip waiting on subsequent calls (already awaited)
+        () => (isAwaited ? undefined : setWaitingCallback),
       );
 
       // Phase 1: Start execution immediately and capture result/error

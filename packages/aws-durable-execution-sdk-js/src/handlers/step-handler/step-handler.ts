@@ -81,6 +81,16 @@ const waitForContinuation = async (
   // Return to let the main loop re-evaluate step status
 };
 
+/**
+ * Creates a step handler for executing durable steps with two-phase execution.
+ *
+ * @param getOnAwaitedChange - Optional function that returns a callback setter or undefined.
+ *   - Returns a setter function `(callback) => void` if the promise is NOT yet awaited
+ *   - Returns `undefined` if the promise is already awaited
+ *   - The setter is used by waitBeforeContinue to register a callback that will be
+ *     invoked when the promise becomes awaited, allowing execution to continue
+ *   - After first await, returns undefined to skip waiting (already awaited)
+ */
 export const createStepHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
