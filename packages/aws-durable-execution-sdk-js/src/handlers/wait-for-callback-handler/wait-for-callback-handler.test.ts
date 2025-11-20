@@ -149,12 +149,12 @@ describe("waitForCallback handler", () => {
 
     // Should throw error when no parameters are provided
     // Using type assertion to test runtime behavior despite TypeScript error
-    expect(() => (handler as any)()).toThrow(
+    await expect((handler as any)()).rejects.toThrow(
       "waitForCallback requires a submitter function",
     );
   });
 
-  it("should throw error when name is provided but submitter is not a function", () => {
+  it("should throw error when name is provided but submitter is not a function", async () => {
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
       mockRunInChildContext,
@@ -163,7 +163,7 @@ describe("waitForCallback handler", () => {
     const config = { timeout: { minutes: 5 } };
 
     // Should throw error when name is provided but second parameter is not a function
-    expect(() => handler("test-name", config as any)).toThrow(
+    await expect(handler("test-name", config as any)).rejects.toThrow(
       "waitForCallback requires a submitter function when name is provided",
     );
   });
@@ -302,7 +302,7 @@ describe("waitForCallback handler", () => {
 
     // Test with an invalid parameter type (number) to cover the else branch
     // Using type assertion to bypass TypeScript checking
-    expect(() => (handler as any)(123)).toThrow(
+    await expect((handler as any)(123)).rejects.toThrow(
       "waitForCallback requires a submitter function",
     );
   });
