@@ -72,8 +72,9 @@ export class DurablePromise<T> implements Promise<T> {
         try {
           this._onAwaitedCallback();
         } catch (error) {
-          // Log but don't propagate - callback errors shouldn't break user code
-          console.error("Error in onAwaitedCallback:", error);
+          // Defensive: callback just calls Promise.resolve() which should never throw.
+          // This catch prevents theoretical edge cases (corrupted runtime, monkey-patched Promise)
+          // from breaking user code. In normal operation, this should never be hit.
         }
       }
 
