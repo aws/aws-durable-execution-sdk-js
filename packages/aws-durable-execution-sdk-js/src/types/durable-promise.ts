@@ -71,7 +71,7 @@ export class DurablePromise<T> implements Promise<T> {
       if (this._onAwaitedCallback) {
         try {
           this._onAwaitedCallback();
-        } catch (error) {
+        } catch {
           // Defensive: callback just calls Promise.resolve() which should never throw.
           // This catch prevents theoretical edge cases (corrupted runtime, monkey-patched Promise)
           // from breaking user code. In normal operation, this should never be hit.

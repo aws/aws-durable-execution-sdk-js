@@ -222,7 +222,7 @@ export class DurableContextImpl implements DurableContext {
       let waitingCallback: (() => void) | undefined;
       let isAwaited = false;
 
-      const setWaitingCallback = (cb: () => void) => {
+      const setWaitingCallback = (cb: () => void): void => {
         waitingCallback = cb;
       };
 
