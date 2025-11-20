@@ -68,15 +68,18 @@ describe("Step Handler Two-Phase Execution", () => {
     // Phase 1: Create the promise - this executes the logic immediately
     const stepPromise = stepHandler(stepFn);
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
     // Should return a DurablePromise
     expect(stepPromise).toBeInstanceOf(DurablePromise);
 
-    // Phase 1 should have executed the step function
+    // Wait briefly for phase 1 to start executing
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Phase 1 should have executed the step function (before we await the promise)
     expect(stepFn).toHaveBeenCalled();
     expect(mockCheckpoint).toHaveBeenCalled();
+
+    // Now await the promise to verify it completes
+    await stepPromise;
   });
 
   it("should return cached result in phase 2 when awaited", async () => {
@@ -97,10 +100,12 @@ describe("Step Handler Two-Phase Execution", () => {
     // Phase 1: Create the promise
     const stepPromise = stepHandler(stepFn);
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait briefly for phase 1 to execute
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
+    // Step function should have been called before we await the promise
     const phase1Calls = stepFn.mock.calls.length;
+    expect(phase1Calls).toBeGreaterThan(0);
 
     // Phase 2: Await the promise - should return cached result
     const result = await stepPromise;

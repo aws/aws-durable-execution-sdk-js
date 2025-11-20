@@ -58,15 +58,18 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
     // Phase 1: Create the promise - this executes the logic immediately
     const childPromise = handler(childFn);
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
     // Should return a DurablePromise
     expect(childPromise).toBeInstanceOf(DurablePromise);
 
-    // Phase 1 should have executed the child function
+    // Wait briefly for phase 1 to start executing
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Phase 1 should have executed the child function (before we await the promise)
     expect(childFn).toHaveBeenCalled();
     expect(mockCheckpoint).toHaveBeenCalled();
+
+    // Now await the promise to verify it completes
+    await childPromise;
   });
 
   it("should return cached result in phase 2 when awaited", async () => {
@@ -84,10 +87,12 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
     // Phase 1: Create the promise
     const childPromise = handler(childFn);
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait briefly for phase 1 to execute
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
+    // Child function should have been called before we await the promise
     const phase1Calls = childFn.mock.calls.length;
+    expect(phase1Calls).toBeGreaterThan(0);
 
     // Phase 2: Await the promise - should return cached result
     const result = await childPromise;

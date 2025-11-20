@@ -67,15 +67,18 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       waitStrategy: (state) => ({ shouldContinue: false }),
     });
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
     // Should return a DurablePromise
     expect(promise).toBeInstanceOf(DurablePromise);
 
-    // Phase 1 should have executed the check function
+    // Wait briefly for phase 1 to start executing
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Phase 1 should have executed the check function (before we await the promise)
     expect(checkFn).toHaveBeenCalled();
     expect(mockCheckpoint).toHaveBeenCalled();
+
+    // Now await the promise to verify it completes
+    await promise;
   });
 
   it("should return cached result in phase 2 when awaited", async () => {
@@ -101,8 +104,11 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       waitStrategy: (state) => ({ shouldContinue: false }),
     });
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait briefly for phase 1 to execute
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Check function should have been called before we await the promise
+    expect(checkFn).toHaveBeenCalledTimes(1);
 
     // Phase 2: Await the promise to get the result
     const result = await promise;
@@ -138,8 +144,11 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     });
     executionOrder.push("after-handler-call");
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait briefly for phase 1 to execute
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Check should have executed before we await
+    expect(checkFn).toHaveBeenCalled();
 
     executionOrder.push("before-await");
     const result = await promise;
