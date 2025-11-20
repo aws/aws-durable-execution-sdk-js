@@ -45,17 +45,12 @@ export class DurablePromise<T> implements Promise<T> {
   /** Flag indicating whether the promise has been executed (awaited or chained) */
   private _isExecuted = false;
 
-  /** Callback that gets invoked when the promise becomes awaited */
-  private _onAwaitedCallback?: () => void;
-
   /**
    * Creates a new DurablePromise
    * @param executor - Function containing the deferred execution logic
-   * @param onAwaitedCallback - Optional callback invoked when promise becomes awaited
    */
-  constructor(executor: () => Promise<T>, onAwaitedCallback?: () => void) {
+  constructor(executor: () => Promise<T>) {
     this._executor = executor;
-    this._onAwaitedCallback = onAwaitedCallback;
   }
 
   /**
@@ -65,18 +60,6 @@ export class DurablePromise<T> implements Promise<T> {
   private ensureExecution(): Promise<T> {
     if (!this._promise) {
       this._isExecuted = true;
-
-      // Notify that the promise is now being awaited
-      // Wrap in try-catch to prevent callback errors from breaking execution
-      if (this._onAwaitedCallback) {
-        try {
-          this._onAwaitedCallback();
-        } catch {
-          // Defensive: callback just calls Promise.resolve() which should never throw.
-          // This catch prevents theoretical edge cases (corrupted runtime, monkey-patched Promise)
-          // from breaking user code. In normal operation, this should never be hit.
-        }
-      }
 
       // Execute the promise
       this._promise = this._executor();

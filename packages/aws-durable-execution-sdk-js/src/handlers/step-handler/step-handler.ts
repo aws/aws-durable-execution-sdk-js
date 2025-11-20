@@ -311,22 +311,19 @@ export const createStepHandler = (
       });
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(
-      async () => {
-        await phase1Promise;
-        if (phase1Error !== undefined) {
-          throw phase1Error;
-        }
-        return phase1Result!;
-      },
-      () => {
-        // When promise is awaited, mark as awaited and invoke waiting callback
-        isAwaited = true;
-        if (waitingCallback) {
-          waitingCallback();
-        }
-      },
-    );
+    return new DurablePromise(async () => {
+      // When promise is awaited, mark as awaited and invoke waiting callback
+      isAwaited = true;
+      if (waitingCallback) {
+        waitingCallback();
+      }
+
+      await phase1Promise;
+      if (phase1Error !== undefined) {
+        throw phase1Error;
+      }
+      return phase1Result!;
+    });
   };
 };
 
