@@ -126,12 +126,12 @@ describe("WaitForCondition Handler", () => {
       });
     });
 
-    it("should throw error if config is missing", () => {
+    it("should throw error if config is missing", async () => {
       const checkFunc: WaitForConditionCheckFunc<string> = jest.fn();
 
-      expect(() =>
+      await expect(
         waitForConditionHandler(checkFunc, undefined as any),
-      ).toThrow(
+      ).rejects.toThrow(
         "waitForCondition requires config with waitStrategy and initialState",
       );
     });

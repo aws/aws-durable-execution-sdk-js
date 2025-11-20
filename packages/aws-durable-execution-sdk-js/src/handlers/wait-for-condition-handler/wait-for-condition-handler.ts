@@ -89,34 +89,6 @@ export const createWaitForConditionHandler = (
     checkOrConfig?: WaitForConditionCheckFunc<T> | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
   ): DurablePromise<T> => {
-    let name: string | undefined;
-    let check: WaitForConditionCheckFunc<T>;
-    let config: WaitForConditionConfig<T>;
-
-    // Parse overloaded parameters
-    if (typeof nameOrCheck === "string" || nameOrCheck === undefined) {
-      name = nameOrCheck;
-      check = checkOrConfig as WaitForConditionCheckFunc<T>;
-      config = maybeConfig as WaitForConditionConfig<T>;
-    } else {
-      check = nameOrCheck;
-      config = checkOrConfig as WaitForConditionConfig<T>;
-    }
-
-    if (!config || !config.waitStrategy || config.initialState === undefined) {
-      throw new Error(
-        "waitForCondition requires config with waitStrategy and initialState",
-      );
-    }
-
-    const stepId = createStepId();
-
-    log("🔄", "Running waitForCondition:", {
-      stepId,
-      name,
-      config,
-    });
-
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     let phase1Result: T | undefined;
     let phase1Error: unknown;
@@ -129,6 +101,37 @@ export const createWaitForConditionHandler = (
 
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
+      let name: string | undefined;
+      let check: WaitForConditionCheckFunc<T>;
+      let config: WaitForConditionConfig<T>;
+
+      // Parse overloaded parameters - validation errors thrown here are async
+      if (typeof nameOrCheck === "string" || nameOrCheck === undefined) {
+        name = nameOrCheck;
+        check = checkOrConfig as WaitForConditionCheckFunc<T>;
+        config = maybeConfig as WaitForConditionConfig<T>;
+      } else {
+        check = nameOrCheck;
+        config = checkOrConfig as WaitForConditionConfig<T>;
+      }
+
+      if (
+        !config ||
+        !config.waitStrategy ||
+        config.initialState === undefined
+      ) {
+        throw new Error(
+          "waitForCondition requires config with waitStrategy and initialState",
+        );
+      }
+
+      const stepId = createStepId();
+
+      log("🔄", "Running waitForCondition:", {
+        stepId,
+        name,
+        config,
+      });
       // Main waitForCondition logic - can be re-executed if step status changes
       while (true) {
         try {
