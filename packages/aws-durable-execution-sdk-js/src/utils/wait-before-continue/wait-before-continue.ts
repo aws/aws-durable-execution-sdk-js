@@ -134,6 +134,9 @@ export async function waitBeforeContinue(
   }
 
   // Awaited change promise - resolves when the callback we set is invoked
+  // Note: This is safe from race conditions because waitBeforeContinue is called
+  // during Phase 1 execution (inside stepHandler), which happens BEFORE the user
+  // can await the DurablePromise. The callback is registered before it can be invoked.
   if (onAwaitedChange) {
     const awaitedChangePromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
