@@ -10,12 +10,6 @@ import { InvokeRequest, TestResult } from "../../durable-test-runner";
 export interface LocalDurableTestRunnerParameters {
   /** The handler function to run the execution on */
   handlerFunction: LambdaHandler<DurableExecutionInvocationInput>;
-  /**
-   * Whether to skip wait/retry intervals by using minimal delays.
-   * Will be overridden by calling `skipTime` on individual mocked steps.
-   * @default false
-   */
-  skipTime?: boolean;
 }
 
 /**

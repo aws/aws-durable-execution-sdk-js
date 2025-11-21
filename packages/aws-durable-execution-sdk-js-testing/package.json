@@ -41,6 +41,7 @@
     "@types/aws-lambda": "^8.10.150",
     "@types/express": "^5.0.2",
     "@types/morgan": "^1.9.10",
+    "@types/sinonjs__fake-timers": "^15.0.1",
     "@types/supertest": "^6.0.3",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.5",
@@ -54,6 +55,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "*",
+    "@sinonjs/fake-timers": "^13.0.5",
     "@smithy/smithy-client": "^4.9.1",
     "express": "^5.1.0"
   },

@@ -6,7 +6,11 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 
-beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+beforeAll(() =>
+  LocalDurableTestRunner.setupTestEnvironment({
+    skipTime: true,
+  }),
+);
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 /**
@@ -71,7 +75,6 @@ describe("WaitForCallback Operations Integration", () => {
 
       const runner = new LocalDurableTestRunner({
         handlerFunction: handler,
-        skipTime: true,
       });
 
       // Get all callback operations by index
@@ -172,7 +175,6 @@ describe("WaitForCallback Operations Integration", () => {
 
         const runner = new LocalDurableTestRunner({
           handlerFunction: handler,
-          skipTime: true,
         });
 
         const result = await runner.run({
@@ -216,7 +218,6 @@ describe("WaitForCallback Operations Integration", () => {
 
         const runner = new LocalDurableTestRunner({
           handlerFunction: handler,
-          skipTime: true,
         });
 
         const result = await runner.run({
@@ -286,7 +287,6 @@ describe("WaitForCallback Operations Integration", () => {
 
       const runner = new LocalDurableTestRunner({
         handlerFunction: handler,
-        skipTime: true,
       });
 
       const result = await runner.run({
