@@ -51,8 +51,7 @@ declare const CheckpointDurableExecutionCommand_base: {
   getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Saves the progress of a <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable function</a> execution during runtime. This API is used by the Lambda durable functions SDK to checkpoint completed steps and schedule asynchronous operations. You typically don't need to call this API directly as the SDK handles checkpointing automatically.</p> <p>Each checkpoint operation consumes the current checkpoint token and returns a new one for the next checkpoint. This ensures that checkpoints are applied in the correct order and prevents duplicate or out-of-order state updates.</p>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
@@ -198,6 +197,7 @@ declare const CheckpointDurableExecutionCommand_base: {
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @public
  */
 export declare class CheckpointDurableExecutionCommand extends CheckpointDurableExecutionCommand_base {
   /** @internal type navigation helper, not in runtime. */

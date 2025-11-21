@@ -1,7 +1,7 @@
 {
   "name": "@aws-sdk/client-lambda",
   "description": "AWS SDK for JavaScript Lambda Client for Node.js, Browser and React Native",
-  "version": "3.938.0",
+  "version": "3.942.0",
   "scripts": {
     "clean": "rm -rf node_modules"
   },

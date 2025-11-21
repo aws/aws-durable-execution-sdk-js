@@ -128,6 +128,28 @@ export declare class TooManyRequestsException extends __BaseException {
   );
 }
 /**
+ * <p>The maximum number of capacity providers for your account has been exceeded. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a> </p>
+ * @public
+ */
+export declare class CapacityProviderLimitExceededException extends __BaseException {
+  readonly name: "CapacityProviderLimitExceededException";
+  readonly $fault: "client";
+  /**
+   * <p>The exception type.</p>
+   * @public
+   */
+  Type?: string | undefined;
+  /**
+   * @internal
+   */
+  constructor(
+    opts: __ExceptionOptionType<
+      CapacityProviderLimitExceededException,
+      __BaseException
+    >,
+  );
+}
+/**
  * <p>The operation conflicts with the resource's availability. For example, you tried to update an event source mapping in the CREATING state, or you tried to delete an event source mapping currently UPDATING.</p>
  * @public
  */
@@ -201,6 +223,28 @@ export declare class CodeVerificationFailedException extends __BaseException {
   );
 }
 /**
+ * <p>The maximum number of function versions that can be associated with a single capacity provider has been exceeded. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>.</p>
+ * @public
+ */
+export declare class FunctionVersionsPerCapacityProviderLimitExceededException extends __BaseException {
+  readonly name: "FunctionVersionsPerCapacityProviderLimitExceededException";
+  readonly $fault: "client";
+  /**
+   * <p>The exception type.</p>
+   * @public
+   */
+  Type?: string | undefined;
+  /**
+   * @internal
+   */
+  constructor(
+    opts: __ExceptionOptionType<
+      FunctionVersionsPerCapacityProviderLimitExceededException,
+      __BaseException
+    >,
+  );
+}
+/**
  * <p>The code signature failed the integrity check. If the integrity check fails, then Lambda blocks deployment, even if the code signing policy is set to WARN.</p>
  * @public
  */
@@ -217,11 +261,16 @@ export declare class InvalidCodeSignatureException extends __BaseException {
   );
 }
 /**
+ * <p>The durable execution with the specified name has already been started. Each durable execution name must be unique within the function. Use a different name or check the status of the existing execution.</p>
  * @public
  */
 export declare class DurableExecutionAlreadyStartedException extends __BaseException {
   readonly name: "DurableExecutionAlreadyStartedException";
   readonly $fault: "client";
+  /**
+   * <p>The exception type.</p>
+   * @public
+   */
   Type?: string | undefined;
   Message?: string | undefined;
   /**
@@ -515,6 +564,26 @@ export declare class KMSNotFoundException extends __BaseException {
   );
 }
 /**
+ * <p>The function has no published versions available.</p>
+ * @public
+ */
+export declare class NoPublishedVersionException extends __BaseException {
+  readonly name: "NoPublishedVersionException";
+  readonly $fault: "client";
+  /**
+   * <p>The exception type.</p>
+   * @public
+   */
+  Type?: string | undefined;
+  Message?: string | undefined;
+  /**
+   * @internal
+   */
+  constructor(
+    opts: __ExceptionOptionType<NoPublishedVersionException, __BaseException>,
+  );
+}
+/**
  * <p>Lambda has detected your function being invoked in a recursive loop with other Amazon Web Services resources and stopped your function's invocation.</p>
  * @public
  */
@@ -573,11 +642,16 @@ export declare class ResourceNotReadyException extends __BaseException {
   );
 }
 /**
+ * <p>The request payload exceeded the maximum allowed size for serialized request entities.</p>
  * @public
  */
 export declare class SerializedRequestEntityTooLargeException extends __BaseException {
   readonly name: "SerializedRequestEntityTooLargeException";
   readonly $fault: "client";
+  /**
+   * <p>The error type.</p>
+   * @public
+   */
   Type?: string | undefined;
   /**
    * @internal
@@ -688,11 +762,16 @@ export declare class ProvisionedConcurrencyConfigNotFoundException extends __Bas
   );
 }
 /**
+ * <p>The callback ID token has either expired or the callback associated with the token has already been closed.</p>
  * @public
  */
 export declare class CallbackTimeoutException extends __BaseException {
   readonly name: "CallbackTimeoutException";
   readonly $fault: "client";
+  /**
+   * <p>The exception type.</p>
+   * @public
+   */
   Type?: string | undefined;
   Message?: string | undefined;
   /**

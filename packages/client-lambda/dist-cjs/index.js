@@ -259,6 +259,23 @@ let TooManyRequestsException$1 = class TooManyRequestsException extends LambdaSe
     this.Reason = opts.Reason;
   }
 };
+let CapacityProviderLimitExceededException$1 = class CapacityProviderLimitExceededException extends LambdaServiceException$1 {
+  name = "CapacityProviderLimitExceededException";
+  $fault = "client";
+  Type;
+  constructor(opts) {
+    super({
+      name: "CapacityProviderLimitExceededException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(
+      this,
+      CapacityProviderLimitExceededException.prototype,
+    );
+    this.Type = opts.Type;
+  }
+};
 let ResourceInUseException$1 = class ResourceInUseException extends LambdaServiceException$1 {
   name = "ResourceInUseException";
   $fault = "client";
@@ -319,6 +336,23 @@ let CodeVerificationFailedException$1 = class CodeVerificationFailedException ex
     Object.setPrototypeOf(this, CodeVerificationFailedException.prototype);
     this.Type = opts.Type;
     this.Message = opts.Message;
+  }
+};
+let FunctionVersionsPerCapacityProviderLimitExceededException$1 = class FunctionVersionsPerCapacityProviderLimitExceededException extends LambdaServiceException$1 {
+  name = "FunctionVersionsPerCapacityProviderLimitExceededException";
+  $fault = "client";
+  Type;
+  constructor(opts) {
+    super({
+      name: "FunctionVersionsPerCapacityProviderLimitExceededException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(
+      this,
+      FunctionVersionsPerCapacityProviderLimitExceededException.prototype,
+    );
+    this.Type = opts.Type;
   }
 };
 let InvalidCodeSignatureException$1 = class InvalidCodeSignatureException extends LambdaServiceException$1 {
@@ -628,6 +662,22 @@ let KMSNotFoundException$1 = class KMSNotFoundException extends LambdaServiceExc
     this.Message = opts.Message;
   }
 };
+let NoPublishedVersionException$1 = class NoPublishedVersionException extends LambdaServiceException$1 {
+  name = "NoPublishedVersionException";
+  $fault = "client";
+  Type;
+  Message;
+  constructor(opts) {
+    super({
+      name: "NoPublishedVersionException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, NoPublishedVersionException.prototype);
+    this.Type = opts.Type;
+    this.Message = opts.Message;
+  }
+};
 let RecursiveInvocationException$1 = class RecursiveInvocationException extends LambdaServiceException$1 {
   name = "RecursiveInvocationException";
   $fault = "client";
@@ -806,7 +856,9 @@ const _AA = "AliasArn";
 const _AC = "AliasConfiguration";
 const _ACc = "AccessConfigs";
 const _ACl = "AllowCredentials";
+const _AFSC = "AppliedFunctionScalingConfig";
 const _AH = "AllowHeaders";
+const _AIT = "AllowedInstanceTypes";
 const _AL = "AccountLimit";
 const _ALL = "ApplicationLogLevel";
 const _ALVP = "AddLayerVersionPermission";
@@ -844,6 +896,9 @@ const _CAo = "CompatibleArchitecture";
 const _CAr = "CreateAlias";
 const _CAu = "CurrentAttempt";
 const _CC = "ClientContext";
+const _CCP = "CreateCapacityProvider";
+const _CCPR = "CreateCapacityProviderRequest";
+const _CCPRr = "CreateCapacityProviderResponse";
 const _CCSC = "CreateCodeSigningConfig";
 const _CCSCR = "CreateCodeSigningConfigRequest";
 const _CCSCRr = "CreateCodeSigningConfigResponse";
@@ -875,6 +930,18 @@ const _CITOD = "ChainedInvokeTimedOutDetails";
 const _CN = "CollectionName";
 const _CO = "CallbackOptions";
 const _COo = "ContextOptions";
+const _CP = "CapacityProvider";
+const _CPA = "CapacityProviderArn";
+const _CPC = "CapacityProviderConfig";
+const _CPL = "CapacityProvidersList";
+const _CPLEE = "CapacityProviderLimitExceededException";
+const _CPN = "CapacityProviderName";
+const _CPORA = "CapacityProviderOperatorRoleArn";
+const _CPPC = "CapacityProviderPermissionsConfig";
+const _CPSC = "CapacityProviderScalingConfig";
+const _CPSPL = "CapacityProviderScalingPoliciesList";
+const _CPVC = "CapacityProviderVpcConfig";
+const _CPa = "CapacityProviders";
 const _CR = "CompatibleRuntimes";
 const _CRo = "CompatibleRuntime";
 const _CS = "CodeSize";
@@ -893,6 +960,7 @@ const _CSP = "CodeSigningPolicies";
 const _CSU = "CodeSizeUnzipped";
 const _CSZ = "CodeSizeZipped";
 const _CSo = "CodeSha256";
+const _CSon = "ConfigSha256";
 const _CT = "CheckpointToken";
 const _CTE = "CallbackTimeoutException";
 const _CTOD = "CallbackTimedOutDetails";
@@ -910,6 +978,9 @@ const _D = "Description";
 const _DA = "DeleteAlias";
 const _DAR = "DeleteAliasRequest";
 const _DC = "DestinationConfig";
+const _DCP = "DeleteCapacityProvider";
+const _DCPR = "DeleteCapacityProviderRequest";
+const _DCPRe = "DeleteCapacityProviderResponse";
 const _DCSC = "DeleteCodeSigningConfig";
 const _DCSCR = "DeleteCodeSigningConfigRequest";
 const _DCSCRe = "DeleteCodeSigningConfigResponse";
@@ -929,6 +1000,7 @@ const _DFCSCR = "DeleteFunctionCodeSigningConfigRequest";
 const _DFEIC = "DeleteFunctionEventInvokeConfig";
 const _DFEICR = "DeleteFunctionEventInvokeConfigRequest";
 const _DFR = "DeleteFunctionRequest";
+const _DFRe = "DeleteFunctionResponse";
 const _DFUC = "DeleteFunctionUrlConfig";
 const _DFUCR = "DeleteFunctionUrlConfigRequest";
 const _DLC = "DeadLetterConfig";
@@ -950,6 +1022,7 @@ const _ED = "ErrorData";
 const _EDr = "ErrorDetails";
 const _EDx = "ExecutionDetails";
 const _EE = "EnvironmentError";
+const _EEMGBPVC = "ExecutionEnvironmentMemoryGiBPerVCpu";
 const _EEv = "EventError";
 const _EFD = "ExecutionFailedDetails";
 const _EFSIOE = "EFSIOException";
@@ -958,6 +1031,7 @@ const _EFSMFE = "EFSMountFailureException";
 const _EFSMTE = "EFSMountTimeoutException";
 const _EH = "ExposeHeaders";
 const _EI = "EventId";
+const _EIT = "ExcludedInstanceTypes";
 const _EIv = "EventInput";
 const _EM = "ErrorMessage";
 const _ENILRE = "ENILimitReachedException";
@@ -1012,15 +1086,21 @@ const _FL = "FilterList";
 const _FLu = "FunctionList";
 const _FN = "FunctionName";
 const _FRT = "FunctionResponseTypes";
+const _FS = "FunctionState";
 const _FSC = "FileSystemConfigs";
 const _FSCL = "FileSystemConfigList";
 const _FSCi = "FileSystemConfig";
+const _FSCu = "FunctionScalingConfig";
 const _FU = "FunctionUrl";
 const _FUAT = "FunctionUrlAuthType";
 const _FUC = "FunctionUrlConfig";
 const _FUCL = "FunctionUrlConfigList";
 const _FUCu = "FunctionUrlConfigs";
 const _FV = "FunctionVersion";
+const _FVBCPL = "FunctionVersionsByCapacityProviderList";
+const _FVBCPLI = "FunctionVersionsByCapacityProviderListItem";
+const _FVPCPLEE = "FunctionVersionsPerCapacityProviderLimitExceededException";
+const _FVu = "FunctionVersions";
 const _Fi = "Filters";
 const _Fu = "Functions";
 const _GA = "GetAlias";
@@ -1028,6 +1108,9 @@ const _GAR = "GetAliasRequest";
 const _GAS = "GetAccountSettings";
 const _GASR = "GetAccountSettingsRequest";
 const _GASRe = "GetAccountSettingsResponse";
+const _GCP = "GetCapacityProvider";
+const _GCPR = "GetCapacityProviderRequest";
+const _GCPRe = "GetCapacityProviderResponse";
 const _GCSC = "GetCodeSigningConfig";
 const _GCSCR = "GetCodeSigningConfigRequest";
 const _GCSCRe = "GetCodeSigningConfigResponse";
@@ -1058,6 +1141,9 @@ const _GFRC = "GetFunctionRecursionConfig";
 const _GFRCR = "GetFunctionRecursionConfigRequest";
 const _GFRCRe = "GetFunctionRecursionConfigResponse";
 const _GFRe = "GetFunctionResponse";
+const _GFSC = "GetFunctionScalingConfig";
+const _GFSCR = "GetFunctionScalingConfigRequest";
+const _GFSCRe = "GetFunctionScalingConfigResponse";
 const _GFUC = "GetFunctionUrlConfig";
 const _GFUCR = "GetFunctionUrlConfigRequest";
 const _GFUCRe = "GetFunctionUrlConfigResponse";
@@ -1097,11 +1183,12 @@ const _IED = "IncludeExecutionData";
 const _IM = "InvokeMode";
 const _IP = "InputPayload";
 const _IPVE = "InvalidParameterValueException";
-const _IR = "InvocationRequest";
+const _IR = "InstanceRequirements";
 const _IRCE = "InvalidRequestContentException";
 const _IRE = "InvalidRuntimeException";
 const _IRSU = "InvokeResponseStreamUpdate";
-const _IRn = "InvocationResponse";
+const _IRn = "InvocationRequest";
+const _IRnv = "InvocationResponse";
 const _ISGIDE = "InvalidSecurityGroupIDException";
 const _ISIDE = "InvalidSubnetIDException";
 const _IT = "InvocationType";
@@ -1115,6 +1202,7 @@ const _IWRSRn = "InvokeWithResponseStreamResponse";
 const _IZFE = "InvalidZipFileException";
 const _Id = "Id";
 const _In = "Invoke";
+const _KKA = "KmsKeyArn";
 const _KMSADE = "KMSAccessDeniedException";
 const _KMSDE = "KMSDisabledException";
 const _KMSISE = "KMSInvalidStateException";
@@ -1131,6 +1219,9 @@ const _LAR = "ListAliasesRequest";
 const _LARi = "ListAliasesResponse";
 const _LAi = "ListAliases";
 const _LC = "LoggingConfig";
+const _LCP = "ListCapacityProviders";
+const _LCPR = "ListCapacityProvidersRequest";
+const _LCPRi = "ListCapacityProvidersResponse";
 const _LCSC = "ListCodeSigningConfigs";
 const _LCSCR = "ListCodeSigningConfigsRequest";
 const _LCSCRi = "ListCodeSigningConfigsResponse";
@@ -1152,6 +1243,9 @@ const _LFRi = "ListFunctionsResponse";
 const _LFUC = "ListFunctionUrlConfigs";
 const _LFUCR = "ListFunctionUrlConfigsRequest";
 const _LFUCRi = "ListFunctionUrlConfigsResponse";
+const _LFVBCP = "ListFunctionVersionsByCapacityProvider";
+const _LFVBCPR = "ListFunctionVersionsByCapacityProviderRequest";
+const _LFVBCPRi = "ListFunctionVersionsByCapacityProviderResponse";
 const _LFi = "ListFunctions";
 const _LG = "LogGroup";
 const _LI = "LicenseInfo";
@@ -1164,6 +1258,7 @@ const _LLVR = "ListLayerVersionsRequest";
 const _LLVRi = "ListLayerVersionsResponse";
 const _LLi = "ListLayers";
 const _LM = "LastModified";
+const _LMICPC = "LambdaManagedInstancesCapacityProviderConfig";
 const _LMP = "LocalMountPath";
 const _LMT = "LastModifiedTime";
 const _LMV = "LatestMatchingVersion";
@@ -1199,6 +1294,8 @@ const _MBWIS = "MaximumBatchingWindowInSeconds";
 const _MC = "MetricsConfig";
 const _MCa = "MaximumConcurrency";
 const _MEAIS = "MaximumEventAgeInSeconds";
+const _MEE = "MinExecutionEnvironments";
+const _MEEa = "MaxExecutionEnvironments";
 const _MI = "MaxItems";
 const _MP = "MinimumPollers";
 const _MPa = "MaximumPollers";
@@ -1206,6 +1303,7 @@ const _MR = "MasterRegion";
 const _MRA = "MaximumRetryAttempts";
 const _MRAIS = "MaximumRecordAgeInSeconds";
 const _MS = "MemorySize";
+const _MVCC = "MaxVCpuCount";
 const _Ma = "Marker";
 const _Me = "Metrics";
 const _Mo = "Mode";
@@ -1214,6 +1312,7 @@ const _NADS = "NextAttemptDelaySeconds";
 const _NAT = "NextAttemptTimestamp";
 const _NES = "NewExecutionState";
 const _NM = "NextMarker";
+const _NPVE = "NoPublishedVersionException";
 const _O = "Operations";
 const _OF = "OnFailure";
 const _OI = "OrganizationId";
@@ -1225,12 +1324,14 @@ const _OU = "OperationUpdate";
 const _OUp = "OperationUpdates";
 const _Op = "Operation";
 const _P = "Principal";
-const _PC = "PayloadChunk";
+const _PC = "PermissionsConfig";
 const _PCC = "ProvisionedConcurrencyConfigs";
 const _PCCL = "ProvisionedConcurrencyConfigList";
 const _PCCLI = "ProvisionedConcurrencyConfigListItem";
 const _PCCNFE = "ProvisionedConcurrencyConfigNotFoundException";
 const _PCE = "ProvisionedConcurrentExecutions";
+const _PCa = "PayloadChunk";
+const _PEEMC = "PerExecutionEnvironmentMaxConcurrency";
 const _PF = "ParallelizationFactor";
 const _PFC = "PutFunctionConcurrency";
 const _PFCR = "PutFunctionConcurrencyRequest";
@@ -1243,11 +1344,16 @@ const _PFEICR = "PutFunctionEventInvokeConfigRequest";
 const _PFRC = "PutFunctionRecursionConfig";
 const _PFRCR = "PutFunctionRecursionConfigRequest";
 const _PFRCRu = "PutFunctionRecursionConfigResponse";
+const _PFSC = "PutFunctionScalingConfig";
+const _PFSCR = "PutFunctionScalingConfigRequest";
+const _PFSCRu = "PutFunctionScalingConfigResponse";
+const _PGN = "PollerGroupName";
 const _PI = "ParentId";
 const _PLEE = "PolicyLengthExceededException";
 const _PLV = "PublishLayerVersion";
 const _PLVR = "PublishLayerVersionRequest";
 const _PLVRu = "PublishLayerVersionResponse";
+const _PMT = "PredefinedMetricType";
 const _POID = "PrincipalOrgID";
 const _PPC = "ProvisionedPollerConfig";
 const _PPCC = "PutProvisionedConcurrencyConfig";
@@ -1257,6 +1363,7 @@ const _PRMC = "PutRuntimeManagementConfig";
 const _PRMCR = "PutRuntimeManagementConfigRequest";
 const _PRMCRu = "PutRuntimeManagementConfigResponse";
 const _PT = "PackageType";
+const _PTu = "PublishTo";
 const _PV = "PublishVersion";
 const _PVR = "PublishVersionRequest";
 const _Pa = "Payload";
@@ -1272,6 +1379,7 @@ const _RCE = "ReservedConcurrentExecutions";
 const _RCEe = "ResourceConflictException";
 const _RCe = "ReplayChildren";
 const _RD = "RetryDetails";
+const _RFSC = "RequestedFunctionScalingConfig";
 const _RI = "RevisionId";
 const _RIE = "RecursiveInvocationException";
 const _RIU = "ResolvedImageUri";
@@ -1331,14 +1439,16 @@ const _SJA = "SigningJobArn";
 const _SK = "S3Key";
 const _SKMSKA = "SourceKMSKeyArn";
 const _SLL = "SystemLogLevel";
+const _SM = "ScalingMode";
 const _SMES = "SelfManagedEventSource";
 const _SMKESC = "SelfManagedKafkaEventSourceConfig";
 const _SO = "StepOptions";
 const _SOV = "S3ObjectVersion";
-const _SP = "StartingPosition";
+const _SP = "ScalingPolicies";
 const _SPT = "StartingPositionTimestamp";
 const _SPVA = "SigningProfileVersionArns";
 const _SPVAi = "SigningProfileVersionArn";
+const _SPt = "StartingPosition";
 const _SR = "StateReason";
 const _SRC = "SchemaRegistryConfig";
 const _SRCt = "StateReasonCode";
@@ -1370,14 +1480,18 @@ const _TA = "TargetArn";
 const _TC = "TracingConfig";
 const _TCR = "TracingConfigResponse";
 const _TCS = "TotalCodeSize";
+const _TCe = "TenancyConfig";
 const _TE = "TagsError";
 const _TH = "TraceHeader";
 const _TI = "TenantId";
+const _TIM = "TenantIsolationMode";
 const _TK = "TagKeys";
 const _TMRE = "TooManyRequestsException";
 const _TR = "TagResource";
 const _TRR = "TagResourceRequest";
 const _TS = "TimeoutSeconds";
+const _TTSP = "TargetTrackingScalingPolicy";
+const _TV = "TargetValue";
 const _TWIS = "TumblingWindowInSeconds";
 const _Ta = "Tags";
 const _To = "Topics";
@@ -1388,6 +1502,9 @@ const _UA = "UpdateAlias";
 const _UAOD = "UntrustedArtifactOnDeployment";
 const _UAR = "UpdateAliasRequest";
 const _UCE = "UnreservedConcurrentExecutions";
+const _UCP = "UpdateCapacityProvider";
+const _UCPR = "UpdateCapacityProviderRequest";
+const _UCPRp = "UpdateCapacityProviderResponse";
 const _UCSC = "UpdateCodeSigningConfig";
 const _UCSCR = "UpdateCodeSigningConfigRequest";
 const _UCSCRp = "UpdateCodeSigningConfigResponse";
@@ -1430,7 +1547,8 @@ const _XAFE = "X-Amz-Function-Error";
 const _XAIT = "X-Amz-Invocation-Type";
 const _XALR = "X-Amz-Log-Result";
 const _XALT = "X-Amz-Log-Type";
-const _XATI = "XAmznTraceId";
+const _XATI = "X-Amz-Tenant-Id";
+const _XATIm = "XAmznTraceId";
 const _ZF = "ZipFile";
 const _c = "client";
 const _e = "error";
@@ -1578,6 +1696,63 @@ schema.TypeRegistry.for(n0).registerError(
   CallbackTimeoutException,
   CallbackTimeoutException$1,
 );
+var CapacityProvider = [
+  3,
+  n0,
+  _CP,
+  0,
+  [_CPA, _St, _VC, _PC, _IR, _CPSC, _KKA, _LM],
+  [
+    0,
+    0,
+    () => CapacityProviderVpcConfig,
+    () => CapacityProviderPermissionsConfig,
+    () => InstanceRequirements,
+    () => CapacityProviderScalingConfig,
+    0,
+    0,
+  ],
+];
+var CapacityProviderConfig = [
+  3,
+  n0,
+  _CPC,
+  0,
+  [_LMICPC],
+  [() => LambdaManagedInstancesCapacityProviderConfig],
+];
+var CapacityProviderLimitExceededException = [
+  -3,
+  n0,
+  _CPLEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  CapacityProviderLimitExceededException,
+  CapacityProviderLimitExceededException$1,
+);
+var CapacityProviderPermissionsConfig = [3, n0, _CPPC, 0, [_CPORA], [0]];
+var CapacityProviderScalingConfig = [
+  3,
+  n0,
+  _CPSC,
+  0,
+  [_MVCC, _SM, _SP],
+  [1, 0, () => CapacityProviderScalingPoliciesList],
+];
+var CapacityProviderVpcConfig = [
+  3,
+  n0,
+  _CPVC,
+  0,
+  [_SIu, _SGI],
+  [64 | 0, 64 | 0],
+];
 var ChainedInvokeDetails = [
   3,
   n0,
@@ -1744,6 +1919,30 @@ var CreateAliasRequest = [
   [_FN, _N, _FV, _D, _RC],
   [[0, 1], 0, 0, 0, () => AliasRoutingConfiguration],
 ];
+var CreateCapacityProviderRequest = [
+  3,
+  n0,
+  _CCPR,
+  0,
+  [_CPN, _VC, _PC, _IR, _CPSC, _KKA, _Ta],
+  [
+    0,
+    () => CapacityProviderVpcConfig,
+    () => CapacityProviderPermissionsConfig,
+    () => InstanceRequirements,
+    () => CapacityProviderScalingConfig,
+    0,
+    128 | 0,
+  ],
+];
+var CreateCapacityProviderResponse = [
+  3,
+  n0,
+  _CCPRr,
+  0,
+  [_CP],
+  [() => CapacityProvider],
+];
 var CreateCodeSigningConfigRequest = [
   3,
   n0,
@@ -1773,7 +1972,7 @@ var CreateEventSourceMappingRequest = [
     _FCi,
     _MBWIS,
     _PF,
-    _SP,
+    _SPt,
     _SPT,
     _DC,
     _MRAIS,
@@ -1854,7 +2053,10 @@ var CreateFunctionRequest = [
     _ES,
     _SSn,
     _LC,
+    _CPC,
+    _PTu,
     _DCu,
+    _TCe,
   ],
   [
     0,
@@ -1881,7 +2083,10 @@ var CreateFunctionRequest = [
     () => EphemeralStorage,
     () => SnapStart,
     () => LoggingConfig,
+    () => CapacityProviderConfig,
+    0,
     () => DurableConfig,
+    () => TenancyConfig,
   ],
 ];
 var CreateFunctionUrlConfigRequest = [
@@ -1922,6 +2127,15 @@ var DeleteAliasRequest = [
     [0, 1],
     [0, 1],
   ],
+];
+var DeleteCapacityProviderRequest = [3, n0, _DCPR, 0, [_CPN], [[0, 1]]];
+var DeleteCapacityProviderResponse = [
+  3,
+  n0,
+  _DCPRe,
+  0,
+  [_CP],
+  [() => CapacityProvider],
 ];
 var DeleteCodeSigningConfigRequest = [3, n0, _DCSCR, 0, [_CSCA], [[0, 1]]];
 var DeleteCodeSigningConfigResponse = [3, n0, _DCSCRe, 0, [], []];
@@ -1967,6 +2181,7 @@ var DeleteFunctionRequest = [
     ],
   ],
 ];
+var DeleteFunctionResponse = [3, n0, _DFRe, 0, [_SCt], [[1, 32]]];
 var DeleteFunctionUrlConfigRequest = [
   3,
   n0,
@@ -2282,7 +2497,7 @@ var EventSourceMappingConfiguration = [
   0,
   [
     _UUID,
-    _SP,
+    _SPt,
     _SPT,
     _BSa,
     _MBWIS,
@@ -2440,7 +2655,10 @@ var FunctionConfiguration = [
     _SSn,
     _RVC,
     _LC,
+    _CPC,
+    _CSon,
     _DCu,
+    _TCe,
   ],
   [
     0,
@@ -2479,7 +2697,10 @@ var FunctionConfiguration = [
     () => SnapStartResponse,
     [() => RuntimeVersionConfig, 0],
     () => LoggingConfig,
+    () => CapacityProviderConfig,
+    0,
     () => DurableConfig,
+    () => TenancyConfig,
   ],
 ];
 var FunctionEventInvokeConfig = [
@@ -2490,6 +2711,7 @@ var FunctionEventInvokeConfig = [
   [_LM, _FA, _MRA, _MEAIS, _DC],
   [4, 0, 1, 1, () => DestinationConfig],
 ];
+var FunctionScalingConfig = [3, n0, _FSCu, 0, [_MEE, _MEEa], [1, 1]];
 var FunctionUrlConfig = [
   3,
   n0,
@@ -2498,6 +2720,29 @@ var FunctionUrlConfig = [
   [_FU, _FA, _CTr, _LMT, _Co, _AT, _IM],
   [0, 0, 0, 0, () => Cors, 0, 0],
 ];
+var FunctionVersionsByCapacityProviderListItem = [
+  3,
+  n0,
+  _FVBCPLI,
+  0,
+  [_FA, _St],
+  [0, 0],
+];
+var FunctionVersionsPerCapacityProviderLimitExceededException = [
+  -3,
+  n0,
+  _FVPCPLEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  FunctionVersionsPerCapacityProviderLimitExceededException,
+  FunctionVersionsPerCapacityProviderLimitExceededException$1,
+);
 var GetAccountSettingsRequest = [3, n0, _GASR, 0, [], []];
 var GetAccountSettingsResponse = [
   3,
@@ -2517,6 +2762,15 @@ var GetAliasRequest = [
     [0, 1],
     [0, 1],
   ],
+];
+var GetCapacityProviderRequest = [3, n0, _GCPR, 0, [_CPN], [[0, 1]]];
+var GetCapacityProviderResponse = [
+  3,
+  n0,
+  _GCPRe,
+  0,
+  [_CP],
+  [() => CapacityProvider],
 ];
 var GetCodeSigningConfigRequest = [3, n0, _GCSCR, 0, [_CSCA], [[0, 1]]];
 var GetCodeSigningConfigResponse = [
@@ -2702,6 +2956,30 @@ var GetFunctionResponse = [
     () => Concurrency,
   ],
 ];
+var GetFunctionScalingConfigRequest = [
+  3,
+  n0,
+  _GFSCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+var GetFunctionScalingConfigResponse = [
+  3,
+  n0,
+  _GFSCRe,
+  0,
+  [_FA, _AFSC, _RFSC],
+  [0, () => FunctionScalingConfig, () => FunctionScalingConfig],
+];
 var GetFunctionUrlConfigRequest = [
   3,
   n0,
@@ -2854,6 +3132,14 @@ var ImageConfigResponse = [
   [_IC, _E],
   [() => ImageConfig, [() => ImageConfigError, 0]],
 ];
+var InstanceRequirements = [
+  3,
+  n0,
+  _IR,
+  0,
+  [_Ar, _AIT, _EIT],
+  [64 | 0, 64 | 0, 64 | 0],
+];
 var InvalidCodeSignatureException = [
   -3,
   n0,
@@ -2970,9 +3256,9 @@ var InvocationCompletedDetails = [
 var InvocationRequest = [
   3,
   n0,
-  _IR,
+  _IRn,
   0,
-  [_FN, _IT, _LT, _CC, _DEN, _Pa, _Q],
+  [_FN, _IT, _LT, _CC, _DEN, _Pa, _Q, _TI],
   [
     [0, 1],
     [
@@ -3006,12 +3292,18 @@ var InvocationRequest = [
         [_hQ]: _Q,
       },
     ],
+    [
+      0,
+      {
+        [_hH]: _XATI,
+      },
+    ],
   ],
 ];
 var InvocationResponse = [
   3,
   n0,
-  _IRn,
+  _IRnv,
   0,
   [_SCt, _FE, _LR, _Pa, _EV, _DEA],
   [
@@ -3083,7 +3375,7 @@ var InvokeWithResponseStreamRequest = [
   n0,
   _IWRSR,
   0,
-  [_FN, _IT, _LT, _CC, _Q, _Pa],
+  [_FN, _IT, _LT, _CC, _Q, _Pa, _TI],
   [
     [0, 1],
     [
@@ -3111,6 +3403,12 @@ var InvokeWithResponseStreamRequest = [
       },
     ],
     [() => _Blob, 16],
+    [
+      0,
+      {
+        [_hH]: _XATI,
+      },
+    ],
   ],
 ];
 var InvokeWithResponseStreamResponse = [
@@ -3211,6 +3509,14 @@ schema.TypeRegistry.for(n0).registerError(
   KMSNotFoundException,
   KMSNotFoundException$1,
 );
+var LambdaManagedInstancesCapacityProviderConfig = [
+  3,
+  n0,
+  _LMICPC,
+  0,
+  [_CPA, _PEEMC, _EEMGBPVC],
+  [0, 1, 1],
+];
 var Layer = [3, n0, _La, 0, [_Arn, _CS, _SPVAi, _SJA], [0, 1, 0, 0]];
 var LayersListItem = [
   3,
@@ -3273,6 +3579,41 @@ var ListAliasesRequest = [
   ],
 ];
 var ListAliasesResponse = [3, n0, _LARi, 0, [_NM, _Al], [0, () => AliasList]];
+var ListCapacityProvidersRequest = [
+  3,
+  n0,
+  _LCPR,
+  0,
+  [_St, _Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _St,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListCapacityProvidersResponse = [
+  3,
+  n0,
+  _LCPRi,
+  0,
+  [_CPa, _NM],
+  [() => CapacityProvidersList, 0],
+];
 var ListCodeSigningConfigsRequest = [
   3,
   n0,
@@ -3540,6 +3881,36 @@ var ListFunctionUrlConfigsResponse = [
   [_FUCu, _NM],
   [() => FunctionUrlConfigList, 0],
 ];
+var ListFunctionVersionsByCapacityProviderRequest = [
+  3,
+  n0,
+  _LFVBCPR,
+  0,
+  [_CPN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+var ListFunctionVersionsByCapacityProviderResponse = [
+  3,
+  n0,
+  _LFVBCPRi,
+  0,
+  [_CPA, _FVu, _NM],
+  [0, () => FunctionVersionsByCapacityProviderList, 0],
+];
 var ListLayersRequest = [
   3,
   n0,
@@ -3679,6 +4050,21 @@ var ListVersionsByFunctionResponse = [
   [0, [() => FunctionList, 0]],
 ];
 var LoggingConfig = [3, n0, _LC, 0, [_LF, _ALL, _SLL, _LG], [0, 0, 0, 0]];
+var NoPublishedVersionException = [
+  -3,
+  n0,
+  _NPVE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+schema.TypeRegistry.for(n0).registerError(
+  NoPublishedVersionException,
+  NoPublishedVersionException$1,
+);
 var OnFailure = [3, n0, _OF, 0, [_De], [0]];
 var OnSuccess = [3, n0, _OS, 0, [_De], [0]];
 var Operation = [
@@ -3779,7 +4165,7 @@ schema.TypeRegistry.for(n0).registerError(
   ProvisionedConcurrencyConfigNotFoundException,
   ProvisionedConcurrencyConfigNotFoundException$1,
 );
-var ProvisionedPollerConfig = [3, n0, _PPC, 0, [_MP, _MPa], [1, 1]];
+var ProvisionedPollerConfig = [3, n0, _PPC, 0, [_MP, _MPa, _PGN], [1, 1, 0]];
 var PublishLayerVersionRequest = [
   3,
   n0,
@@ -3801,8 +4187,8 @@ var PublishVersionRequest = [
   n0,
   _PVR,
   0,
-  [_FN, _CSo, _D, _RI],
-  [[0, 1], 0, 0, 0],
+  [_FN, _CSo, _D, _RI, _PTu],
+  [[0, 1], 0, 0, 0, 0],
 ];
 var PutFunctionCodeSigningConfigRequest = [
   3,
@@ -3849,6 +4235,24 @@ var PutFunctionRecursionConfigRequest = [
   [[0, 1], 0],
 ];
 var PutFunctionRecursionConfigResponse = [3, n0, _PFRCRu, 0, [_RL], [0]];
+var PutFunctionScalingConfigRequest = [
+  3,
+  n0,
+  _PFSCR,
+  0,
+  [_FN, _Q, _FSCu],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    () => FunctionScalingConfig,
+  ],
+];
+var PutFunctionScalingConfigResponse = [3, n0, _PFSCRu, 0, [_FS], [0]];
 var PutProvisionedConcurrencyConfigRequest = [
   3,
   n0,
@@ -4235,6 +4639,8 @@ schema.TypeRegistry.for(n0).registerError(
 );
 var TagResourceRequest = [3, n0, _TRR, 0, [_Re, _Ta], [[0, 1], 128 | 0]];
 var TagsError = [3, n0, _TE, 0, [_EC, _M], [0, 0]];
+var TargetTrackingScalingPolicy = [3, n0, _TTSP, 0, [_PMT, _TV], [0, 1]];
+var TenancyConfig = [3, n0, _TCe, 0, [_TIM], [0]];
 var TooManyRequestsException = [
   -3,
   n0,
@@ -4260,7 +4666,7 @@ schema.TypeRegistry.for(n0).registerError(
   TooManyRequestsException,
   TooManyRequestsException$1,
 );
-var TraceHeader = [3, n0, _TH, 0, [_XATI], [0]];
+var TraceHeader = [3, n0, _TH, 0, [_XATIm], [0]];
 var TracingConfig = [3, n0, _TC, 0, [_Mo], [0]];
 var TracingConfigResponse = [3, n0, _TCR, 0, [_Mo], [0]];
 var UnsupportedMediaTypeException = [
@@ -4301,6 +4707,22 @@ var UpdateAliasRequest = [
   0,
   [_FN, _N, _FV, _D, _RC, _RI],
   [[0, 1], [0, 1], 0, 0, () => AliasRoutingConfiguration, 0],
+];
+var UpdateCapacityProviderRequest = [
+  3,
+  n0,
+  _UCPR,
+  0,
+  [_CPN, _CPSC],
+  [[0, 1], () => CapacityProviderScalingConfig],
+];
+var UpdateCapacityProviderResponse = [
+  3,
+  n0,
+  _UCPRp,
+  0,
+  [_CP],
+  [() => CapacityProvider],
 ];
 var UpdateCodeSigningConfigRequest = [
   3,
@@ -4375,8 +4797,8 @@ var UpdateFunctionCodeRequest = [
   n0,
   _UFCR,
   0,
-  [_FN, _ZF, _SB, _SK, _SOV, _IU, _Pu, _DR, _RI, _Ar, _SKMSKA],
-  [[0, 1], [() => _Blob, 0], 0, 0, 0, 0, 2, 2, 0, 64 | 0, 0],
+  [_FN, _ZF, _SB, _SK, _SOV, _IU, _Pu, _DR, _RI, _Ar, _SKMSKA, _PTu],
+  [[0, 1], [() => _Blob, 0], 0, 0, 0, 0, 2, 2, 0, 64 | 0, 0, 0],
 ];
 var UpdateFunctionConfigurationRequest = [
   3,
@@ -4403,6 +4825,7 @@ var UpdateFunctionConfigurationRequest = [
     _ES,
     _SSn,
     _LC,
+    _CPC,
     _DCu,
   ],
   [
@@ -4425,6 +4848,7 @@ var UpdateFunctionConfigurationRequest = [
     () => EphemeralStorage,
     () => SnapStart,
     () => LoggingConfig,
+    () => CapacityProviderConfig,
     () => DurableConfig,
   ],
 ];
@@ -4495,6 +4919,14 @@ schema.TypeRegistry.for(_sm).registerError(
   LambdaServiceException$1,
 );
 var AliasList = [1, n0, _ALl, 0, () => AliasConfiguration];
+var CapacityProviderScalingPoliciesList = [
+  1,
+  n0,
+  _CPSPL,
+  0,
+  () => TargetTrackingScalingPolicy,
+];
+var CapacityProvidersList = [1, n0, _CPL, 0, () => CapacityProvider];
 var CodeSigningConfigList = [1, n0, _CSCL, 0, () => CodeSigningConfig];
 var DurableExecutions = [1, n0, _DE, 0, () => Execution];
 var Events = [1, n0, _Eve, 0, [() => Event, 0]];
@@ -4516,6 +4948,13 @@ var FunctionEventInvokeConfigList = [
 ];
 var FunctionList = [1, n0, _FLu, 0, [() => FunctionConfiguration, 0]];
 var FunctionUrlConfigList = [1, n0, _FUCL, 0, () => FunctionUrlConfig];
+var FunctionVersionsByCapacityProviderList = [
+  1,
+  n0,
+  _FVBCPL,
+  0,
+  () => FunctionVersionsByCapacityProviderListItem,
+];
 var KafkaSchemaRegistryAccessConfigList = [
   1,
   n0,
@@ -4565,7 +5004,7 @@ var InvokeWithResponseStreamResponseEvent = [
   {
     [_s]: 1,
   },
-  [_PC, _ICn],
+  [_PCa, _ICn],
   [
     [() => InvokeResponseStreamUpdate, 0],
     () => InvokeWithResponseStreamCompleteEvent,
@@ -4618,6 +5057,16 @@ var CreateAlias = [
   },
   () => CreateAliasRequest,
   () => AliasConfiguration,
+];
+var CreateCapacityProvider = [
+  9,
+  n0,
+  _CCP,
+  {
+    [_h]: ["POST", "/2025-11-30/capacity-providers", 202],
+  },
+  () => CreateCapacityProviderRequest,
+  () => CreateCapacityProviderResponse,
 ];
 var CreateCodeSigningConfig = [
   9,
@@ -4673,6 +5122,20 @@ var DeleteAlias = [
   () => DeleteAliasRequest,
   () => __Unit,
 ];
+var DeleteCapacityProvider = [
+  9,
+  n0,
+  _DCP,
+  {
+    [_h]: [
+      "DELETE",
+      "/2025-11-30/capacity-providers/{CapacityProviderName}",
+      202,
+    ],
+  },
+  () => DeleteCapacityProviderRequest,
+  () => DeleteCapacityProviderResponse,
+];
 var DeleteCodeSigningConfig = [
   9,
   n0,
@@ -4702,10 +5165,10 @@ var DeleteFunction = [
   n0,
   _DF,
   {
-    [_h]: ["DELETE", "/2015-03-31/functions/{FunctionName}", 204],
+    [_h]: ["DELETE", "/2015-03-31/functions/{FunctionName}", 200],
   },
   () => DeleteFunctionRequest,
-  () => __Unit,
+  () => DeleteFunctionResponse,
 ];
 var DeleteFunctionCodeSigningConfig = [
   9,
@@ -4802,6 +5265,16 @@ var GetAlias = [
   },
   () => GetAliasRequest,
   () => AliasConfiguration,
+];
+var GetCapacityProvider = [
+  9,
+  n0,
+  _GCP,
+  {
+    [_h]: ["GET", "/2025-11-30/capacity-providers/{CapacityProviderName}", 200],
+  },
+  () => GetCapacityProviderRequest,
+  () => GetCapacityProviderResponse,
 ];
 var GetCodeSigningConfig = [
   9,
@@ -4933,6 +5406,20 @@ var GetFunctionRecursionConfig = [
   () => GetFunctionRecursionConfigRequest,
   () => GetFunctionRecursionConfigResponse,
 ];
+var GetFunctionScalingConfig = [
+  9,
+  n0,
+  _GFSC,
+  {
+    [_h]: [
+      "GET",
+      "/2025-11-30/functions/{FunctionName}/function-scaling-config",
+      200,
+    ],
+  },
+  () => GetFunctionScalingConfigRequest,
+  () => GetFunctionScalingConfigResponse,
+];
 var GetFunctionUrlConfig = [
   9,
   n0,
@@ -5063,6 +5550,16 @@ var ListAliases = [
   () => ListAliasesRequest,
   () => ListAliasesResponse,
 ];
+var ListCapacityProviders = [
+  9,
+  n0,
+  _LCP,
+  {
+    [_h]: ["GET", "/2025-11-30/capacity-providers", 200],
+  },
+  () => ListCapacityProvidersRequest,
+  () => ListCapacityProvidersResponse,
+];
 var ListCodeSigningConfigs = [
   9,
   n0,
@@ -5144,6 +5641,20 @@ var ListFunctionUrlConfigs = [
   },
   () => ListFunctionUrlConfigsRequest,
   () => ListFunctionUrlConfigsResponse,
+];
+var ListFunctionVersionsByCapacityProvider = [
+  9,
+  n0,
+  _LFVBCP,
+  {
+    [_h]: [
+      "GET",
+      "/2025-11-30/capacity-providers/{CapacityProviderName}/function-versions",
+      200,
+    ],
+  },
+  () => ListFunctionVersionsByCapacityProviderRequest,
+  () => ListFunctionVersionsByCapacityProviderResponse,
 ];
 var ListLayers = [
   9,
@@ -5266,6 +5777,20 @@ var PutFunctionRecursionConfig = [
   },
   () => PutFunctionRecursionConfigRequest,
   () => PutFunctionRecursionConfigResponse,
+];
+var PutFunctionScalingConfig = [
+  9,
+  n0,
+  _PFSC,
+  {
+    [_h]: [
+      "PUT",
+      "/2025-11-30/functions/{FunctionName}/function-scaling-config",
+      202,
+    ],
+  },
+  () => PutFunctionScalingConfigRequest,
+  () => PutFunctionScalingConfigResponse,
 ];
 var PutProvisionedConcurrencyConfig = [
   9,
@@ -5409,6 +5934,16 @@ var UpdateAlias = [
   () => UpdateAliasRequest,
   () => AliasConfiguration,
 ];
+var UpdateCapacityProvider = [
+  9,
+  n0,
+  _UCP,
+  {
+    [_h]: ["PUT", "/2025-11-30/capacity-providers/{CapacityProviderName}", 202],
+  },
+  () => UpdateCapacityProviderRequest,
+  () => UpdateCapacityProviderResponse,
+];
 var UpdateCodeSigningConfig = [
   9,
   n0,
@@ -5538,6 +6073,21 @@ class CreateAliasCommand extends smithyClient.Command.classBuilder()
   .sc(CreateAlias)
   .build() {}
 
+class CreateCapacityProviderCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "CreateCapacityProvider", {})
+  .n("LambdaClient", "CreateCapacityProviderCommand")
+  .sc(CreateCapacityProvider)
+  .build() {}
+
 class CreateCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
@@ -5611,6 +6161,21 @@ class DeleteAliasCommand extends smithyClient.Command.classBuilder()
   .s("AWSGirApiService", "DeleteAlias", {})
   .n("LambdaClient", "DeleteAliasCommand")
   .sc(DeleteAlias)
+  .build() {}
+
+class DeleteCapacityProviderCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "DeleteCapacityProvider", {})
+  .n("LambdaClient", "DeleteCapacityProviderCommand")
+  .sc(DeleteCapacityProvider)
   .build() {}
 
 class DeleteCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
@@ -5778,6 +6343,21 @@ class GetAliasCommand extends smithyClient.Command.classBuilder()
   .sc(GetAlias)
   .build() {}
 
+class GetCapacityProviderCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "GetCapacityProvider", {})
+  .n("LambdaClient", "GetCapacityProviderCommand")
+  .sc(GetCapacityProvider)
+  .build() {}
+
 class GetCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
@@ -5941,6 +6521,21 @@ class GetFunctionRecursionConfigCommand extends smithyClient.Command.classBuilde
   .s("AWSGirApiService", "GetFunctionRecursionConfig", {})
   .n("LambdaClient", "GetFunctionRecursionConfigCommand")
   .sc(GetFunctionRecursionConfig)
+  .build() {}
+
+class GetFunctionScalingConfigCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "GetFunctionScalingConfig", {})
+  .n("LambdaClient", "GetFunctionScalingConfigCommand")
+  .sc(GetFunctionScalingConfig)
   .build() {}
 
 class GetFunctionUrlConfigCommand extends smithyClient.Command.classBuilder()
@@ -6112,6 +6707,21 @@ class ListAliasesCommand extends smithyClient.Command.classBuilder()
   .sc(ListAliases)
   .build() {}
 
+class ListCapacityProvidersCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "ListCapacityProviders", {})
+  .n("LambdaClient", "ListCapacityProvidersCommand")
+  .sc(ListCapacityProviders)
+  .build() {}
+
 class ListCodeSigningConfigsCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
@@ -6215,6 +6825,21 @@ class ListFunctionUrlConfigsCommand extends smithyClient.Command.classBuilder()
   .s("AWSGirApiService", "ListFunctionUrlConfigs", {})
   .n("LambdaClient", "ListFunctionUrlConfigsCommand")
   .sc(ListFunctionUrlConfigs)
+  .build() {}
+
+class ListFunctionVersionsByCapacityProviderCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "ListFunctionVersionsByCapacityProvider", {})
+  .n("LambdaClient", "ListFunctionVersionsByCapacityProviderCommand")
+  .sc(ListFunctionVersionsByCapacityProvider)
   .build() {}
 
 class ListLayersCommand extends smithyClient.Command.classBuilder()
@@ -6382,6 +7007,21 @@ class PutFunctionRecursionConfigCommand extends smithyClient.Command.classBuilde
   .sc(PutFunctionRecursionConfig)
   .build() {}
 
+class PutFunctionScalingConfigCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "PutFunctionScalingConfig", {})
+  .n("LambdaClient", "PutFunctionScalingConfigCommand")
+  .sc(PutFunctionScalingConfig)
+  .build() {}
+
 class PutProvisionedConcurrencyConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
@@ -6547,6 +7187,21 @@ class UpdateAliasCommand extends smithyClient.Command.classBuilder()
   .sc(UpdateAlias)
   .build() {}
 
+class UpdateCapacityProviderCommand extends smithyClient.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      middlewareEndpoint.getEndpointPlugin(
+        config,
+        Command.getEndpointParameterInstructions(),
+      ),
+    ];
+  })
+  .s("AWSGirApiService", "UpdateCapacityProvider", {})
+  .n("LambdaClient", "UpdateCapacityProviderCommand")
+  .sc(UpdateCapacityProvider)
+  .build() {}
+
 class UpdateCodeSigningConfigCommand extends smithyClient.Command.classBuilder()
   .ep(commonParams)
   .m(function (Command, cs, config, o) {
@@ -6642,11 +7297,13 @@ const commands = {
   AddPermissionCommand,
   CheckpointDurableExecutionCommand,
   CreateAliasCommand,
+  CreateCapacityProviderCommand,
   CreateCodeSigningConfigCommand,
   CreateEventSourceMappingCommand,
   CreateFunctionCommand,
   CreateFunctionUrlConfigCommand,
   DeleteAliasCommand,
+  DeleteCapacityProviderCommand,
   DeleteCodeSigningConfigCommand,
   DeleteEventSourceMappingCommand,
   DeleteFunctionCommand,
@@ -6658,6 +7315,7 @@ const commands = {
   DeleteProvisionedConcurrencyConfigCommand,
   GetAccountSettingsCommand,
   GetAliasCommand,
+  GetCapacityProviderCommand,
   GetCodeSigningConfigCommand,
   GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
@@ -6669,6 +7327,7 @@ const commands = {
   GetFunctionConfigurationCommand,
   GetFunctionEventInvokeConfigCommand,
   GetFunctionRecursionConfigCommand,
+  GetFunctionScalingConfigCommand,
   GetFunctionUrlConfigCommand,
   GetLayerVersionCommand,
   GetLayerVersionByArnCommand,
@@ -6680,6 +7339,7 @@ const commands = {
   InvokeAsyncCommand,
   InvokeWithResponseStreamCommand,
   ListAliasesCommand,
+  ListCapacityProvidersCommand,
   ListCodeSigningConfigsCommand,
   ListDurableExecutionsByFunctionCommand,
   ListEventSourceMappingsCommand,
@@ -6687,6 +7347,7 @@ const commands = {
   ListFunctionsCommand,
   ListFunctionsByCodeSigningConfigCommand,
   ListFunctionUrlConfigsCommand,
+  ListFunctionVersionsByCapacityProviderCommand,
   ListLayersCommand,
   ListLayerVersionsCommand,
   ListProvisionedConcurrencyConfigsCommand,
@@ -6698,6 +7359,7 @@ const commands = {
   PutFunctionConcurrencyCommand,
   PutFunctionEventInvokeConfigCommand,
   PutFunctionRecursionConfigCommand,
+  PutFunctionScalingConfigCommand,
   PutProvisionedConcurrencyConfigCommand,
   PutRuntimeManagementConfigCommand,
   RemoveLayerVersionPermissionCommand,
@@ -6709,6 +7371,7 @@ const commands = {
   TagResourceCommand,
   UntagResourceCommand,
   UpdateAliasCommand,
+  UpdateCapacityProviderCommand,
   UpdateCodeSigningConfigCommand,
   UpdateEventSourceMappingCommand,
   UpdateFunctionCodeCommand,
@@ -6738,6 +7401,14 @@ const paginateGetDurableExecutionState = core.createPaginator(
 const paginateListAliases = core.createPaginator(
   LambdaClient,
   ListAliasesCommand,
+  "Marker",
+  "NextMarker",
+  "MaxItems",
+);
+
+const paginateListCapacityProviders = core.createPaginator(
+  LambdaClient,
+  ListCapacityProvidersCommand,
   "Marker",
   "NextMarker",
   "MaxItems",
@@ -6778,6 +7449,14 @@ const paginateListFunctionEventInvokeConfigs = core.createPaginator(
 const paginateListFunctionUrlConfigs = core.createPaginator(
   LambdaClient,
   ListFunctionUrlConfigsCommand,
+  "Marker",
+  "NextMarker",
+  "MaxItems",
+);
+
+const paginateListFunctionVersionsByCapacityProvider = core.createPaginator(
+  LambdaClient,
+  ListFunctionVersionsByCapacityProviderCommand,
   "Marker",
   "NextMarker",
   "MaxItems",
@@ -7169,6 +7848,30 @@ const Architecture = {
   arm64: "arm64",
   x86_64: "x86_64",
 };
+const CapacityProviderScalingMode = {
+  Auto: "Auto",
+  Manual: "Manual",
+};
+const CapacityProviderPredefinedMetricType = {
+  LambdaCapacityProviderAverageCPUUtilization:
+    "LambdaCapacityProviderAverageCPUUtilization",
+};
+const CapacityProviderState = {
+  Active: "Active",
+  Deleting: "Deleting",
+  Failed: "Failed",
+  Pending: "Pending",
+};
+const State = {
+  Active: "Active",
+  ActiveNonInvocable: "ActiveNonInvocable",
+  Deactivated: "Deactivated",
+  Deactivating: "Deactivating",
+  Deleting: "Deleting",
+  Failed: "Failed",
+  Inactive: "Inactive",
+  Pending: "Pending",
+};
 const OperationAction = {
   CANCEL: "CANCEL",
   FAIL: "FAIL",
@@ -7239,6 +7942,9 @@ const PackageType = {
   Image: "Image",
   Zip: "Zip",
 };
+const FunctionVersionLatestPublished = {
+  LATEST_PUBLISHED: "LATEST_PUBLISHED",
+};
 const Runtime = {
   dotnet6: "dotnet6",
   dotnet8: "dotnet8",
@@ -7250,6 +7956,7 @@ const Runtime = {
   java11: "java11",
   java17: "java17",
   java21: "java21",
+  java25: "java25",
   java8: "java8",
   java8al2: "java8.al2",
   nodejs: "nodejs",
@@ -7260,6 +7967,7 @@ const Runtime = {
   nodejs18x: "nodejs18.x",
   nodejs20x: "nodejs20.x",
   nodejs22x: "nodejs22.x",
+  nodejs24x: "nodejs24.x",
   nodejs43: "nodejs4.3",
   nodejs43edge: "nodejs4.3-edge",
   nodejs610: "nodejs6.10",
@@ -7272,6 +7980,7 @@ const Runtime = {
   python311: "python3.11",
   python312: "python3.12",
   python313: "python3.13",
+  python314: "python3.14",
   python36: "python3.6",
   python37: "python3.7",
   python38: "python3.8",
@@ -7286,6 +7995,9 @@ const SnapStartApplyOn = {
   None: "None",
   PublishedVersions: "PublishedVersions",
 };
+const TenantIsolationMode = {
+  PER_TENANT: "PER_TENANT",
+};
 const TracingMode = {
   Active: "Active",
   PassThrough: "PassThrough",
@@ -7296,15 +8008,26 @@ const LastUpdateStatus = {
   Successful: "Successful",
 };
 const LastUpdateStatusReasonCode = {
+  CapacityProviderScalingLimitExceeded: "CapacityProviderScalingLimitExceeded",
   DisabledKMSKey: "DisabledKMSKey",
+  EC2RequestLimitExceeded: "EC2RequestLimitExceeded",
   EFSIOError: "EFSIOError",
   EFSMountConnectivityError: "EFSMountConnectivityError",
   EFSMountFailure: "EFSMountFailure",
   EFSMountTimeout: "EFSMountTimeout",
   EniLimitExceeded: "EniLimitExceeded",
   FunctionError: "FunctionError",
+  FunctionErrorExtensionInitError: "FunctionError.ExtensionInitError",
+  FunctionErrorInitResourceExhausted: "FunctionError.InitResourceExhausted",
+  FunctionErrorInitTimeout: "FunctionError.InitTimeout",
+  FunctionErrorInvalidEntryPoint: "FunctionError.InvalidEntryPoint",
+  FunctionErrorInvalidWorkingDirectory: "FunctionError.InvalidWorkingDirectory",
+  FunctionErrorPermissionDenied: "FunctionError.PermissionDenied",
+  FunctionErrorRuntimeInitError: "FunctionError.RuntimeInitError",
+  FunctionErrorTooManyExtensions: "FunctionError.TooManyExtensions",
   ImageAccessDenied: "ImageAccessDenied",
   ImageDeleted: "ImageDeleted",
+  InsufficientCapacity: "InsufficientCapacity",
   InsufficientRolePermissions: "InsufficientRolePermissions",
   InternalError: "InternalError",
   InvalidConfiguration: "InvalidConfiguration",
@@ -7317,30 +8040,36 @@ const LastUpdateStatusReasonCode = {
   KMSKeyAccessDenied: "KMSKeyAccessDenied",
   KMSKeyNotFound: "KMSKeyNotFound",
   SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
+  VcpuLimitExceeded: "VcpuLimitExceeded",
 };
 const SnapStartOptimizationStatus = {
   Off: "Off",
   On: "On",
 };
-const State = {
-  Active: "Active",
-  Failed: "Failed",
-  Inactive: "Inactive",
-  Pending: "Pending",
-};
 const StateReasonCode = {
+  CapacityProviderScalingLimitExceeded: "CapacityProviderScalingLimitExceeded",
   Creating: "Creating",
   DisabledKMSKey: "DisabledKMSKey",
   DrainingDurableExecutions: "DrainingDurableExecutions",
+  EC2RequestLimitExceeded: "EC2RequestLimitExceeded",
   EFSIOError: "EFSIOError",
   EFSMountConnectivityError: "EFSMountConnectivityError",
   EFSMountFailure: "EFSMountFailure",
   EFSMountTimeout: "EFSMountTimeout",
   EniLimitExceeded: "EniLimitExceeded",
   FunctionError: "FunctionError",
+  FunctionErrorExtensionInitError: "FunctionError.ExtensionInitError",
+  FunctionErrorInitResourceExhausted: "FunctionError.InitResourceExhausted",
+  FunctionErrorInitTimeout: "FunctionError.InitTimeout",
+  FunctionErrorInvalidEntryPoint: "FunctionError.InvalidEntryPoint",
+  FunctionErrorInvalidWorkingDirectory: "FunctionError.InvalidWorkingDirectory",
+  FunctionErrorPermissionDenied: "FunctionError.PermissionDenied",
+  FunctionErrorRuntimeInitError: "FunctionError.RuntimeInitError",
+  FunctionErrorTooManyExtensions: "FunctionError.TooManyExtensions",
   Idle: "Idle",
   ImageAccessDenied: "ImageAccessDenied",
   ImageDeleted: "ImageDeleted",
+  InsufficientCapacity: "InsufficientCapacity",
   InsufficientRolePermissions: "InsufficientRolePermissions",
   InternalError: "InternalError",
   InvalidConfiguration: "InvalidConfiguration",
@@ -7354,6 +8083,7 @@ const StateReasonCode = {
   KMSKeyNotFound: "KMSKeyNotFound",
   Restoring: "Restoring",
   SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
+  VcpuLimitExceeded: "VcpuLimitExceeded",
 };
 const InvokeMode = {
   BUFFERED: "BUFFERED",
@@ -7440,6 +8170,12 @@ exports.AddPermissionCommand = AddPermissionCommand;
 exports.ApplicationLogLevel = ApplicationLogLevel;
 exports.Architecture = Architecture;
 exports.CallbackTimeoutException = CallbackTimeoutException$1;
+exports.CapacityProviderLimitExceededException =
+  CapacityProviderLimitExceededException$1;
+exports.CapacityProviderPredefinedMetricType =
+  CapacityProviderPredefinedMetricType;
+exports.CapacityProviderScalingMode = CapacityProviderScalingMode;
+exports.CapacityProviderState = CapacityProviderState;
 exports.CheckpointDurableExecutionCommand = CheckpointDurableExecutionCommand;
 exports.CodeSigningConfigNotFoundException =
   CodeSigningConfigNotFoundException$1;
@@ -7447,11 +8183,13 @@ exports.CodeSigningPolicy = CodeSigningPolicy;
 exports.CodeStorageExceededException = CodeStorageExceededException$1;
 exports.CodeVerificationFailedException = CodeVerificationFailedException$1;
 exports.CreateAliasCommand = CreateAliasCommand;
+exports.CreateCapacityProviderCommand = CreateCapacityProviderCommand;
 exports.CreateCodeSigningConfigCommand = CreateCodeSigningConfigCommand;
 exports.CreateEventSourceMappingCommand = CreateEventSourceMappingCommand;
 exports.CreateFunctionCommand = CreateFunctionCommand;
 exports.CreateFunctionUrlConfigCommand = CreateFunctionUrlConfigCommand;
 exports.DeleteAliasCommand = DeleteAliasCommand;
+exports.DeleteCapacityProviderCommand = DeleteCapacityProviderCommand;
 exports.DeleteCodeSigningConfigCommand = DeleteCodeSigningConfigCommand;
 exports.DeleteEventSourceMappingCommand = DeleteEventSourceMappingCommand;
 exports.DeleteFunctionCodeSigningConfigCommand =
@@ -7483,8 +8221,12 @@ exports.FullDocument = FullDocument;
 exports.FunctionResponseType = FunctionResponseType;
 exports.FunctionUrlAuthType = FunctionUrlAuthType;
 exports.FunctionVersion = FunctionVersion;
+exports.FunctionVersionLatestPublished = FunctionVersionLatestPublished;
+exports.FunctionVersionsPerCapacityProviderLimitExceededException =
+  FunctionVersionsPerCapacityProviderLimitExceededException$1;
 exports.GetAccountSettingsCommand = GetAccountSettingsCommand;
 exports.GetAliasCommand = GetAliasCommand;
+exports.GetCapacityProviderCommand = GetCapacityProviderCommand;
 exports.GetCodeSigningConfigCommand = GetCodeSigningConfigCommand;
 exports.GetDurableExecutionCommand = GetDurableExecutionCommand;
 exports.GetDurableExecutionHistoryCommand = GetDurableExecutionHistoryCommand;
@@ -7498,6 +8240,7 @@ exports.GetFunctionConfigurationCommand = GetFunctionConfigurationCommand;
 exports.GetFunctionEventInvokeConfigCommand =
   GetFunctionEventInvokeConfigCommand;
 exports.GetFunctionRecursionConfigCommand = GetFunctionRecursionConfigCommand;
+exports.GetFunctionScalingConfigCommand = GetFunctionScalingConfigCommand;
 exports.GetFunctionUrlConfigCommand = GetFunctionUrlConfigCommand;
 exports.GetLayerVersionByArnCommand = GetLayerVersionByArnCommand;
 exports.GetLayerVersionCommand = GetLayerVersionCommand;
@@ -7530,6 +8273,7 @@ exports.LambdaServiceException = LambdaServiceException$1;
 exports.LastUpdateStatus = LastUpdateStatus;
 exports.LastUpdateStatusReasonCode = LastUpdateStatusReasonCode;
 exports.ListAliasesCommand = ListAliasesCommand;
+exports.ListCapacityProvidersCommand = ListCapacityProvidersCommand;
 exports.ListCodeSigningConfigsCommand = ListCodeSigningConfigsCommand;
 exports.ListDurableExecutionsByFunctionCommand =
   ListDurableExecutionsByFunctionCommand;
@@ -7537,6 +8281,8 @@ exports.ListEventSourceMappingsCommand = ListEventSourceMappingsCommand;
 exports.ListFunctionEventInvokeConfigsCommand =
   ListFunctionEventInvokeConfigsCommand;
 exports.ListFunctionUrlConfigsCommand = ListFunctionUrlConfigsCommand;
+exports.ListFunctionVersionsByCapacityProviderCommand =
+  ListFunctionVersionsByCapacityProviderCommand;
 exports.ListFunctionsByCodeSigningConfigCommand =
   ListFunctionsByCodeSigningConfigCommand;
 exports.ListFunctionsCommand = ListFunctionsCommand;
@@ -7548,6 +8294,7 @@ exports.ListTagsCommand = ListTagsCommand;
 exports.ListVersionsByFunctionCommand = ListVersionsByFunctionCommand;
 exports.LogFormat = LogFormat;
 exports.LogType = LogType;
+exports.NoPublishedVersionException = NoPublishedVersionException$1;
 exports.OperationAction = OperationAction;
 exports.OperationStatus = OperationStatus;
 exports.OperationType = OperationType;
@@ -7565,6 +8312,7 @@ exports.PutFunctionConcurrencyCommand = PutFunctionConcurrencyCommand;
 exports.PutFunctionEventInvokeConfigCommand =
   PutFunctionEventInvokeConfigCommand;
 exports.PutFunctionRecursionConfigCommand = PutFunctionRecursionConfigCommand;
+exports.PutFunctionScalingConfigCommand = PutFunctionScalingConfigCommand;
 exports.PutProvisionedConcurrencyConfigCommand =
   PutProvisionedConcurrencyConfigCommand;
 exports.PutRuntimeManagementConfigCommand = PutRuntimeManagementConfigCommand;
@@ -7603,12 +8351,14 @@ exports.SubnetIPAddressLimitReachedException =
   SubnetIPAddressLimitReachedException$1;
 exports.SystemLogLevel = SystemLogLevel;
 exports.TagResourceCommand = TagResourceCommand;
+exports.TenantIsolationMode = TenantIsolationMode;
 exports.ThrottleReason = ThrottleReason;
 exports.TooManyRequestsException = TooManyRequestsException$1;
 exports.TracingMode = TracingMode;
 exports.UnsupportedMediaTypeException = UnsupportedMediaTypeException$1;
 exports.UntagResourceCommand = UntagResourceCommand;
 exports.UpdateAliasCommand = UpdateAliasCommand;
+exports.UpdateCapacityProviderCommand = UpdateCapacityProviderCommand;
 exports.UpdateCodeSigningConfigCommand = UpdateCodeSigningConfigCommand;
 exports.UpdateEventSourceMappingCommand = UpdateEventSourceMappingCommand;
 exports.UpdateFunctionCodeCommand = UpdateFunctionCodeCommand;
@@ -7620,6 +8370,7 @@ exports.UpdateRuntimeOn = UpdateRuntimeOn;
 exports.paginateGetDurableExecutionHistory = paginateGetDurableExecutionHistory;
 exports.paginateGetDurableExecutionState = paginateGetDurableExecutionState;
 exports.paginateListAliases = paginateListAliases;
+exports.paginateListCapacityProviders = paginateListCapacityProviders;
 exports.paginateListCodeSigningConfigs = paginateListCodeSigningConfigs;
 exports.paginateListDurableExecutionsByFunction =
   paginateListDurableExecutionsByFunction;
@@ -7627,6 +8378,8 @@ exports.paginateListEventSourceMappings = paginateListEventSourceMappings;
 exports.paginateListFunctionEventInvokeConfigs =
   paginateListFunctionEventInvokeConfigs;
 exports.paginateListFunctionUrlConfigs = paginateListFunctionUrlConfigs;
+exports.paginateListFunctionVersionsByCapacityProvider =
+  paginateListFunctionVersionsByCapacityProvider;
 exports.paginateListFunctions = paginateListFunctions;
 exports.paginateListFunctionsByCodeSigningConfig =
   paginateListFunctionsByCodeSigningConfig;

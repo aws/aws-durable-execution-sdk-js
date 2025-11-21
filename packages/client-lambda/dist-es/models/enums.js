@@ -38,6 +38,30 @@ export const Architecture = {
   arm64: "arm64",
   x86_64: "x86_64",
 };
+export const CapacityProviderScalingMode = {
+  Auto: "Auto",
+  Manual: "Manual",
+};
+export const CapacityProviderPredefinedMetricType = {
+  LambdaCapacityProviderAverageCPUUtilization:
+    "LambdaCapacityProviderAverageCPUUtilization",
+};
+export const CapacityProviderState = {
+  Active: "Active",
+  Deleting: "Deleting",
+  Failed: "Failed",
+  Pending: "Pending",
+};
+export const State = {
+  Active: "Active",
+  ActiveNonInvocable: "ActiveNonInvocable",
+  Deactivated: "Deactivated",
+  Deactivating: "Deactivating",
+  Deleting: "Deleting",
+  Failed: "Failed",
+  Inactive: "Inactive",
+  Pending: "Pending",
+};
 export const OperationAction = {
   CANCEL: "CANCEL",
   FAIL: "FAIL",
@@ -108,6 +132,9 @@ export const PackageType = {
   Image: "Image",
   Zip: "Zip",
 };
+export const FunctionVersionLatestPublished = {
+  LATEST_PUBLISHED: "LATEST_PUBLISHED",
+};
 export const Runtime = {
   dotnet6: "dotnet6",
   dotnet8: "dotnet8",
@@ -119,6 +146,7 @@ export const Runtime = {
   java11: "java11",
   java17: "java17",
   java21: "java21",
+  java25: "java25",
   java8: "java8",
   java8al2: "java8.al2",
   nodejs: "nodejs",
@@ -129,6 +157,7 @@ export const Runtime = {
   nodejs18x: "nodejs18.x",
   nodejs20x: "nodejs20.x",
   nodejs22x: "nodejs22.x",
+  nodejs24x: "nodejs24.x",
   nodejs43: "nodejs4.3",
   nodejs43edge: "nodejs4.3-edge",
   nodejs610: "nodejs6.10",
@@ -141,6 +170,7 @@ export const Runtime = {
   python311: "python3.11",
   python312: "python3.12",
   python313: "python3.13",
+  python314: "python3.14",
   python36: "python3.6",
   python37: "python3.7",
   python38: "python3.8",
@@ -155,6 +185,9 @@ export const SnapStartApplyOn = {
   None: "None",
   PublishedVersions: "PublishedVersions",
 };
+export const TenantIsolationMode = {
+  PER_TENANT: "PER_TENANT",
+};
 export const TracingMode = {
   Active: "Active",
   PassThrough: "PassThrough",
@@ -165,15 +198,26 @@ export const LastUpdateStatus = {
   Successful: "Successful",
 };
 export const LastUpdateStatusReasonCode = {
+  CapacityProviderScalingLimitExceeded: "CapacityProviderScalingLimitExceeded",
   DisabledKMSKey: "DisabledKMSKey",
+  EC2RequestLimitExceeded: "EC2RequestLimitExceeded",
   EFSIOError: "EFSIOError",
   EFSMountConnectivityError: "EFSMountConnectivityError",
   EFSMountFailure: "EFSMountFailure",
   EFSMountTimeout: "EFSMountTimeout",
   EniLimitExceeded: "EniLimitExceeded",
   FunctionError: "FunctionError",
+  FunctionErrorExtensionInitError: "FunctionError.ExtensionInitError",
+  FunctionErrorInitResourceExhausted: "FunctionError.InitResourceExhausted",
+  FunctionErrorInitTimeout: "FunctionError.InitTimeout",
+  FunctionErrorInvalidEntryPoint: "FunctionError.InvalidEntryPoint",
+  FunctionErrorInvalidWorkingDirectory: "FunctionError.InvalidWorkingDirectory",
+  FunctionErrorPermissionDenied: "FunctionError.PermissionDenied",
+  FunctionErrorRuntimeInitError: "FunctionError.RuntimeInitError",
+  FunctionErrorTooManyExtensions: "FunctionError.TooManyExtensions",
   ImageAccessDenied: "ImageAccessDenied",
   ImageDeleted: "ImageDeleted",
+  InsufficientCapacity: "InsufficientCapacity",
   InsufficientRolePermissions: "InsufficientRolePermissions",
   InternalError: "InternalError",
   InvalidConfiguration: "InvalidConfiguration",
@@ -186,30 +230,36 @@ export const LastUpdateStatusReasonCode = {
   KMSKeyAccessDenied: "KMSKeyAccessDenied",
   KMSKeyNotFound: "KMSKeyNotFound",
   SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
+  VcpuLimitExceeded: "VcpuLimitExceeded",
 };
 export const SnapStartOptimizationStatus = {
   Off: "Off",
   On: "On",
 };
-export const State = {
-  Active: "Active",
-  Failed: "Failed",
-  Inactive: "Inactive",
-  Pending: "Pending",
-};
 export const StateReasonCode = {
+  CapacityProviderScalingLimitExceeded: "CapacityProviderScalingLimitExceeded",
   Creating: "Creating",
   DisabledKMSKey: "DisabledKMSKey",
   DrainingDurableExecutions: "DrainingDurableExecutions",
+  EC2RequestLimitExceeded: "EC2RequestLimitExceeded",
   EFSIOError: "EFSIOError",
   EFSMountConnectivityError: "EFSMountConnectivityError",
   EFSMountFailure: "EFSMountFailure",
   EFSMountTimeout: "EFSMountTimeout",
   EniLimitExceeded: "EniLimitExceeded",
   FunctionError: "FunctionError",
+  FunctionErrorExtensionInitError: "FunctionError.ExtensionInitError",
+  FunctionErrorInitResourceExhausted: "FunctionError.InitResourceExhausted",
+  FunctionErrorInitTimeout: "FunctionError.InitTimeout",
+  FunctionErrorInvalidEntryPoint: "FunctionError.InvalidEntryPoint",
+  FunctionErrorInvalidWorkingDirectory: "FunctionError.InvalidWorkingDirectory",
+  FunctionErrorPermissionDenied: "FunctionError.PermissionDenied",
+  FunctionErrorRuntimeInitError: "FunctionError.RuntimeInitError",
+  FunctionErrorTooManyExtensions: "FunctionError.TooManyExtensions",
   Idle: "Idle",
   ImageAccessDenied: "ImageAccessDenied",
   ImageDeleted: "ImageDeleted",
+  InsufficientCapacity: "InsufficientCapacity",
   InsufficientRolePermissions: "InsufficientRolePermissions",
   InternalError: "InternalError",
   InvalidConfiguration: "InvalidConfiguration",
@@ -223,6 +273,7 @@ export const StateReasonCode = {
   KMSKeyNotFound: "KMSKeyNotFound",
   Restoring: "Restoring",
   SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses",
+  VcpuLimitExceeded: "VcpuLimitExceeded",
 };
 export const InvokeMode = {
   BUFFERED: "BUFFERED",

@@ -51,8 +51,7 @@ declare const ListDurableExecutionsByFunctionCommand_base: {
   getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Returns a list of <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable executions</a> for a specified Lambda function. You can filter the results by execution name, status, and start time range. This API supports pagination for large result sets.</p>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
@@ -114,6 +113,7 @@ declare const ListDurableExecutionsByFunctionCommand_base: {
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @public
  */
 export declare class ListDurableExecutionsByFunctionCommand extends ListDurableExecutionsByFunctionCommand_base {
   /** @internal type navigation helper, not in runtime. */

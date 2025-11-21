@@ -3,11 +3,13 @@ import { AddLayerVersionPermissionCommand } from "./commands/AddLayerVersionPerm
 import { AddPermissionCommand } from "./commands/AddPermissionCommand";
 import { CheckpointDurableExecutionCommand } from "./commands/CheckpointDurableExecutionCommand";
 import { CreateAliasCommand } from "./commands/CreateAliasCommand";
+import { CreateCapacityProviderCommand } from "./commands/CreateCapacityProviderCommand";
 import { CreateCodeSigningConfigCommand } from "./commands/CreateCodeSigningConfigCommand";
 import { CreateEventSourceMappingCommand } from "./commands/CreateEventSourceMappingCommand";
 import { CreateFunctionCommand } from "./commands/CreateFunctionCommand";
 import { CreateFunctionUrlConfigCommand } from "./commands/CreateFunctionUrlConfigCommand";
 import { DeleteAliasCommand } from "./commands/DeleteAliasCommand";
+import { DeleteCapacityProviderCommand } from "./commands/DeleteCapacityProviderCommand";
 import { DeleteCodeSigningConfigCommand } from "./commands/DeleteCodeSigningConfigCommand";
 import { DeleteEventSourceMappingCommand } from "./commands/DeleteEventSourceMappingCommand";
 import { DeleteFunctionCodeSigningConfigCommand } from "./commands/DeleteFunctionCodeSigningConfigCommand";
@@ -19,6 +21,7 @@ import { DeleteLayerVersionCommand } from "./commands/DeleteLayerVersionCommand"
 import { DeleteProvisionedConcurrencyConfigCommand } from "./commands/DeleteProvisionedConcurrencyConfigCommand";
 import { GetAccountSettingsCommand } from "./commands/GetAccountSettingsCommand";
 import { GetAliasCommand } from "./commands/GetAliasCommand";
+import { GetCapacityProviderCommand } from "./commands/GetCapacityProviderCommand";
 import { GetCodeSigningConfigCommand } from "./commands/GetCodeSigningConfigCommand";
 import { GetDurableExecutionCommand } from "./commands/GetDurableExecutionCommand";
 import { GetDurableExecutionHistoryCommand } from "./commands/GetDurableExecutionHistoryCommand";
@@ -30,6 +33,7 @@ import { GetFunctionConcurrencyCommand } from "./commands/GetFunctionConcurrency
 import { GetFunctionConfigurationCommand } from "./commands/GetFunctionConfigurationCommand";
 import { GetFunctionEventInvokeConfigCommand } from "./commands/GetFunctionEventInvokeConfigCommand";
 import { GetFunctionRecursionConfigCommand } from "./commands/GetFunctionRecursionConfigCommand";
+import { GetFunctionScalingConfigCommand } from "./commands/GetFunctionScalingConfigCommand";
 import { GetFunctionUrlConfigCommand } from "./commands/GetFunctionUrlConfigCommand";
 import { GetLayerVersionByArnCommand } from "./commands/GetLayerVersionByArnCommand";
 import { GetLayerVersionCommand } from "./commands/GetLayerVersionCommand";
@@ -41,6 +45,7 @@ import { InvokeAsyncCommand } from "./commands/InvokeAsyncCommand";
 import { InvokeCommand } from "./commands/InvokeCommand";
 import { InvokeWithResponseStreamCommand } from "./commands/InvokeWithResponseStreamCommand";
 import { ListAliasesCommand } from "./commands/ListAliasesCommand";
+import { ListCapacityProvidersCommand } from "./commands/ListCapacityProvidersCommand";
 import { ListCodeSigningConfigsCommand } from "./commands/ListCodeSigningConfigsCommand";
 import { ListDurableExecutionsByFunctionCommand } from "./commands/ListDurableExecutionsByFunctionCommand";
 import { ListEventSourceMappingsCommand } from "./commands/ListEventSourceMappingsCommand";
@@ -48,6 +53,7 @@ import { ListFunctionEventInvokeConfigsCommand } from "./commands/ListFunctionEv
 import { ListFunctionsByCodeSigningConfigCommand } from "./commands/ListFunctionsByCodeSigningConfigCommand";
 import { ListFunctionsCommand } from "./commands/ListFunctionsCommand";
 import { ListFunctionUrlConfigsCommand } from "./commands/ListFunctionUrlConfigsCommand";
+import { ListFunctionVersionsByCapacityProviderCommand } from "./commands/ListFunctionVersionsByCapacityProviderCommand";
 import { ListLayersCommand } from "./commands/ListLayersCommand";
 import { ListLayerVersionsCommand } from "./commands/ListLayerVersionsCommand";
 import { ListProvisionedConcurrencyConfigsCommand } from "./commands/ListProvisionedConcurrencyConfigsCommand";
@@ -59,6 +65,7 @@ import { PutFunctionCodeSigningConfigCommand } from "./commands/PutFunctionCodeS
 import { PutFunctionConcurrencyCommand } from "./commands/PutFunctionConcurrencyCommand";
 import { PutFunctionEventInvokeConfigCommand } from "./commands/PutFunctionEventInvokeConfigCommand";
 import { PutFunctionRecursionConfigCommand } from "./commands/PutFunctionRecursionConfigCommand";
+import { PutFunctionScalingConfigCommand } from "./commands/PutFunctionScalingConfigCommand";
 import { PutProvisionedConcurrencyConfigCommand } from "./commands/PutProvisionedConcurrencyConfigCommand";
 import { PutRuntimeManagementConfigCommand } from "./commands/PutRuntimeManagementConfigCommand";
 import { RemoveLayerVersionPermissionCommand } from "./commands/RemoveLayerVersionPermissionCommand";
@@ -70,6 +77,7 @@ import { StopDurableExecutionCommand } from "./commands/StopDurableExecutionComm
 import { TagResourceCommand } from "./commands/TagResourceCommand";
 import { UntagResourceCommand } from "./commands/UntagResourceCommand";
 import { UpdateAliasCommand } from "./commands/UpdateAliasCommand";
+import { UpdateCapacityProviderCommand } from "./commands/UpdateCapacityProviderCommand";
 import { UpdateCodeSigningConfigCommand } from "./commands/UpdateCodeSigningConfigCommand";
 import { UpdateEventSourceMappingCommand } from "./commands/UpdateEventSourceMappingCommand";
 import { UpdateFunctionCodeCommand } from "./commands/UpdateFunctionCodeCommand";
@@ -82,11 +90,13 @@ const commands = {
   AddPermissionCommand,
   CheckpointDurableExecutionCommand,
   CreateAliasCommand,
+  CreateCapacityProviderCommand,
   CreateCodeSigningConfigCommand,
   CreateEventSourceMappingCommand,
   CreateFunctionCommand,
   CreateFunctionUrlConfigCommand,
   DeleteAliasCommand,
+  DeleteCapacityProviderCommand,
   DeleteCodeSigningConfigCommand,
   DeleteEventSourceMappingCommand,
   DeleteFunctionCommand,
@@ -98,6 +108,7 @@ const commands = {
   DeleteProvisionedConcurrencyConfigCommand,
   GetAccountSettingsCommand,
   GetAliasCommand,
+  GetCapacityProviderCommand,
   GetCodeSigningConfigCommand,
   GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
@@ -109,6 +120,7 @@ const commands = {
   GetFunctionConfigurationCommand,
   GetFunctionEventInvokeConfigCommand,
   GetFunctionRecursionConfigCommand,
+  GetFunctionScalingConfigCommand,
   GetFunctionUrlConfigCommand,
   GetLayerVersionCommand,
   GetLayerVersionByArnCommand,
@@ -120,6 +132,7 @@ const commands = {
   InvokeAsyncCommand,
   InvokeWithResponseStreamCommand,
   ListAliasesCommand,
+  ListCapacityProvidersCommand,
   ListCodeSigningConfigsCommand,
   ListDurableExecutionsByFunctionCommand,
   ListEventSourceMappingsCommand,
@@ -127,6 +140,7 @@ const commands = {
   ListFunctionsCommand,
   ListFunctionsByCodeSigningConfigCommand,
   ListFunctionUrlConfigsCommand,
+  ListFunctionVersionsByCapacityProviderCommand,
   ListLayersCommand,
   ListLayerVersionsCommand,
   ListProvisionedConcurrencyConfigsCommand,
@@ -138,6 +152,7 @@ const commands = {
   PutFunctionConcurrencyCommand,
   PutFunctionEventInvokeConfigCommand,
   PutFunctionRecursionConfigCommand,
+  PutFunctionScalingConfigCommand,
   PutProvisionedConcurrencyConfigCommand,
   PutRuntimeManagementConfigCommand,
   RemoveLayerVersionPermissionCommand,
@@ -149,6 +164,7 @@ const commands = {
   TagResourceCommand,
   UntagResourceCommand,
   UpdateAliasCommand,
+  UpdateCapacityProviderCommand,
   UpdateCodeSigningConfigCommand,
   UpdateEventSourceMappingCommand,
   UpdateFunctionCodeCommand,

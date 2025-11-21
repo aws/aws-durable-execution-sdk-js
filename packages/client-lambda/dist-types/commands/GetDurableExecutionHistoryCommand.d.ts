@@ -51,8 +51,7 @@ declare const GetDurableExecutionHistoryCommand_base: {
   getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Retrieves the execution history for a <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a>, showing all the steps, callbacks, and events that occurred during the execution. This provides a detailed audit trail of the execution's progress over time.</p> <p>The history is available while the execution is running and for a retention period after it completes (1-90 days, default 30 days). You can control whether to include execution data such as step results and callback payloads.</p>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
@@ -267,6 +266,7 @@ declare const GetDurableExecutionHistoryCommand_base: {
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @public
  */
 export declare class GetDurableExecutionHistoryCommand extends GetDurableExecutionHistoryCommand_base {
   /** @internal type navigation helper, not in runtime. */

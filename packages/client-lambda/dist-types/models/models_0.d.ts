@@ -2,6 +2,9 @@ import { StreamingBlobTypes } from "@smithy/types";
 import {
   ApplicationLogLevel,
   Architecture,
+  CapacityProviderPredefinedMetricType,
+  CapacityProviderScalingMode,
+  CapacityProviderState,
   CodeSigningPolicy,
   EndPointType,
   EventSourceMappingMetric,
@@ -12,6 +15,7 @@ import {
   FunctionResponseType,
   FunctionUrlAuthType,
   FunctionVersion,
+  FunctionVersionLatestPublished,
   InvocationType,
   InvokeMode,
   KafkaSchemaRegistryAuthType,
@@ -35,6 +39,7 @@ import {
   State,
   StateReasonCode,
   SystemLogLevel,
+  TenantIsolationMode,
   TracingMode,
   UpdateRuntimeOn,
 } from "./enums";
@@ -195,10 +200,14 @@ export interface AddPermissionRequest {
    */
   PrincipalOrgID?: string | undefined;
   /**
-   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Security and auth model for Lambda function URLs</a>.</p>
+   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Control access to Lambda function URLs</a>.</p>
    * @public
    */
   FunctionUrlAuthType?: FunctionUrlAuthType | undefined;
+  /**
+   * <p>Indicates whether the permission applies when the function is invoked through a function URL. </p>
+   * @public
+   */
   InvokedViaFunctionUrl?: boolean | undefined;
 }
 /**
@@ -339,148 +348,741 @@ export interface AmazonManagedKafkaEventSourceConfig {
   SchemaRegistryConfig?: KafkaSchemaRegistryConfig | undefined;
 }
 /**
+ * <p>A scaling policy for the capacity provider that automatically adjusts capacity to maintain a target value for a specific metric.</p>
+ * @public
+ */
+export interface TargetTrackingScalingPolicy {
+  /**
+   * <p>The predefined metric type to track for scaling decisions.</p>
+   * @public
+   */
+  PredefinedMetricType: CapacityProviderPredefinedMetricType | undefined;
+  /**
+   * <p>The target value for the metric that the scaling policy attempts to maintain through scaling actions.</p>
+   * @public
+   */
+  TargetValue: number | undefined;
+}
+/**
+ * <p>Configuration that defines how the capacity provider scales compute instances based on demand and policies.</p>
+ * @public
+ */
+export interface CapacityProviderScalingConfig {
+  /**
+   * <p>The maximum number of vCPUs that the capacity provider can provision across all compute instances.</p>
+   * @public
+   */
+  MaxVCpuCount?: number | undefined;
+  /**
+   * <p>The scaling mode that determines how the capacity provider responds to changes in demand.</p>
+   * @public
+   */
+  ScalingMode?: CapacityProviderScalingMode | undefined;
+  /**
+   * <p>A list of scaling policies that define how the capacity provider scales compute instances based on metrics and thresholds.</p>
+   * @public
+   */
+  ScalingPolicies?: TargetTrackingScalingPolicy[] | undefined;
+}
+/**
+ * <p>Specifications that define the characteristics and constraints for compute instances used by the capacity provider.</p>
+ * @public
+ */
+export interface InstanceRequirements {
+  /**
+   * <p>A list of supported CPU architectures for compute instances. Valid values include <code>x86_64</code> and <code>arm64</code>.</p>
+   * @public
+   */
+  Architectures?: Architecture[] | undefined;
+  /**
+   * <p>A list of EC2 instance types that the capacity provider is allowed to use. If not specified, all compatible instance types are allowed.</p>
+   * @public
+   */
+  AllowedInstanceTypes?: string[] | undefined;
+  /**
+   * <p>A list of EC2 instance types that the capacity provider should not use, even if they meet other requirements.</p>
+   * @public
+   */
+  ExcludedInstanceTypes?: string[] | undefined;
+}
+/**
+ * <p>Configuration that specifies the permissions required for the capacity provider to manage compute resources.</p>
+ * @public
+ */
+export interface CapacityProviderPermissionsConfig {
+  /**
+   * <p>The ARN of the IAM role that the capacity provider uses to manage compute instances and other Amazon Web Services resources.</p>
+   * @public
+   */
+  CapacityProviderOperatorRoleArn: string | undefined;
+}
+/**
+ * <p>VPC configuration that specifies the network settings for compute instances managed by the capacity provider.</p>
+ * @public
+ */
+export interface CapacityProviderVpcConfig {
+  /**
+   * <p>A list of subnet IDs where the capacity provider launches compute instances.</p>
+   * @public
+   */
+  SubnetIds: string[] | undefined;
+  /**
+   * <p>A list of security group IDs that control network access for compute instances managed by the capacity provider.</p>
+   * @public
+   */
+  SecurityGroupIds: string[] | undefined;
+}
+/**
+ * @public
+ */
+export interface CreateCapacityProviderRequest {
+  /**
+   * <p>The name of the capacity provider. </p>
+   * @public
+   */
+  CapacityProviderName: string | undefined;
+  /**
+   * <p>The VPC configuration for the capacity provider, including subnet IDs and security group IDs where compute instances will be launched.</p>
+   * @public
+   */
+  VpcConfig: CapacityProviderVpcConfig | undefined;
+  /**
+   * <p>The permissions configuration that specifies the IAM role ARN used by the capacity provider to manage compute resources.</p>
+   * @public
+   */
+  PermissionsConfig: CapacityProviderPermissionsConfig | undefined;
+  /**
+   * <p>The instance requirements that specify the compute instance characteristics, including architectures and allowed or excluded instance types.</p>
+   * @public
+   */
+  InstanceRequirements?: InstanceRequirements | undefined;
+  /**
+   * <p>The scaling configuration that defines how the capacity provider scales compute instances, including maximum vCPU count and scaling policies.</p>
+   * @public
+   */
+  CapacityProviderScalingConfig?: CapacityProviderScalingConfig | undefined;
+  /**
+   * <p>The ARN of the KMS key used to encrypt data associated with the capacity provider.</p>
+   * @public
+   */
+  KmsKeyArn?: string | undefined;
+  /**
+   * <p>A list of tags to associate with the capacity provider.</p>
+   * @public
+   */
+  Tags?: Record<string, string> | undefined;
+}
+/**
+ * <p>A capacity provider manages compute resources for Lambda functions.</p>
+ * @public
+ */
+export interface CapacityProvider {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the capacity provider.</p>
+   * @public
+   */
+  CapacityProviderArn: string | undefined;
+  /**
+   * <p>The current state of the capacity provider.</p>
+   * @public
+   */
+  State: CapacityProviderState | undefined;
+  /**
+   * <p>The VPC configuration for the capacity provider.</p>
+   * @public
+   */
+  VpcConfig: CapacityProviderVpcConfig | undefined;
+  /**
+   * <p>The permissions configuration for the capacity provider.</p>
+   * @public
+   */
+  PermissionsConfig: CapacityProviderPermissionsConfig | undefined;
+  /**
+   * <p>The instance requirements for compute resources managed by the capacity provider.</p>
+   * @public
+   */
+  InstanceRequirements?: InstanceRequirements | undefined;
+  /**
+   * <p>The scaling configuration for the capacity provider.</p>
+   * @public
+   */
+  CapacityProviderScalingConfig?: CapacityProviderScalingConfig | undefined;
+  /**
+   * <p>The ARN of the KMS key used to encrypt the capacity provider's resources.</p>
+   * @public
+   */
+  KmsKeyArn?: string | undefined;
+  /**
+   * <p>The date and time when the capacity provider was last modified.</p>
+   * @public
+   */
+  LastModified?: string | undefined;
+}
+/**
+ * @public
+ */
+export interface CreateCapacityProviderResponse {
+  /**
+   * <p>Information about the capacity provider that was created.</p>
+   * @public
+   */
+  CapacityProvider: CapacityProvider | undefined;
+}
+/**
+ * @public
+ */
+export interface DeleteCapacityProviderRequest {
+  /**
+   * <p>The name of the capacity provider to delete.</p>
+   * @public
+   */
+  CapacityProviderName: string | undefined;
+}
+/**
+ * @public
+ */
+export interface DeleteCapacityProviderResponse {
+  /**
+   * <p>Information about the deleted capacity provider.</p>
+   * @public
+   */
+  CapacityProvider: CapacityProvider | undefined;
+}
+/**
+ * @public
+ */
+export interface GetCapacityProviderRequest {
+  /**
+   * <p>The name of the capacity provider to retrieve.</p>
+   * @public
+   */
+  CapacityProviderName: string | undefined;
+}
+/**
+ * @public
+ */
+export interface GetCapacityProviderResponse {
+  /**
+   * <p>Information about the capacity provider, including its configuration and current state.</p>
+   * @public
+   */
+  CapacityProvider: CapacityProvider | undefined;
+}
+/**
+ * @public
+ */
+export interface ListCapacityProvidersRequest {
+  /**
+   * <p>Filter capacity providers by their current state.</p>
+   * @public
+   */
+  State?: CapacityProviderState | undefined;
+  /**
+   * <p>Specify the pagination token that's returned by a previous request to retrieve the next page of results.</p>
+   * @public
+   */
+  Marker?: string | undefined;
+  /**
+   * <p>The maximum number of capacity providers to return.</p>
+   * @public
+   */
+  MaxItems?: number | undefined;
+}
+/**
+ * @public
+ */
+export interface ListCapacityProvidersResponse {
+  /**
+   * <p>A list of capacity providers in your account.</p>
+   * @public
+   */
+  CapacityProviders: CapacityProvider[] | undefined;
+  /**
+   * <p>The pagination token that's included if more results are available.</p>
+   * @public
+   */
+  NextMarker?: string | undefined;
+}
+/**
+ * @public
+ */
+export interface ListFunctionVersionsByCapacityProviderRequest {
+  /**
+   * <p>The name of the capacity provider to list function versions for.</p>
+   * @public
+   */
+  CapacityProviderName: string | undefined;
+  /**
+   * <p>Specify the pagination token that's returned by a previous request to retrieve the next page of results.</p>
+   * @public
+   */
+  Marker?: string | undefined;
+  /**
+   * <p>The maximum number of function versions to return in the response.</p>
+   * @public
+   */
+  MaxItems?: number | undefined;
+}
+/**
+ * <p>Information about a function version that uses a specific capacity provider, including its ARN and current state.</p>
+ * @public
+ */
+export interface FunctionVersionsByCapacityProviderListItem {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the function version.</p>
+   * @public
+   */
+  FunctionArn: string | undefined;
+  /**
+   * <p>The current state of the function version.</p>
+   * @public
+   */
+  State: State | undefined;
+}
+/**
+ * @public
+ */
+export interface ListFunctionVersionsByCapacityProviderResponse {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the capacity provider.</p>
+   * @public
+   */
+  CapacityProviderArn: string | undefined;
+  /**
+   * <p>A list of function versions that use the specified capacity provider.</p>
+   * @public
+   */
+  FunctionVersions: FunctionVersionsByCapacityProviderListItem[] | undefined;
+  /**
+   * <p>The pagination token that's included if more results are available.</p>
+   * @public
+   */
+  NextMarker?: string | undefined;
+}
+/**
+ * @public
+ */
+export interface UpdateCapacityProviderRequest {
+  /**
+   * <p>The name of the capacity provider to update.</p>
+   * @public
+   */
+  CapacityProviderName: string | undefined;
+  /**
+   * <p>The updated scaling configuration for the capacity provider.</p>
+   * @public
+   */
+  CapacityProviderScalingConfig?: CapacityProviderScalingConfig | undefined;
+}
+/**
+ * @public
+ */
+export interface UpdateCapacityProviderResponse {
+  /**
+   * <p>Information about the updated capacity provider.</p>
+   * @public
+   */
+  CapacityProvider: CapacityProvider | undefined;
+}
+/**
+ * <p>Configuration options for callback operations in durable executions, including timeout settings and retry behavior.</p>
  * @public
  */
 export interface CallbackOptions {
+  /**
+   * <p>The timeout for the callback operation in seconds. If not specified or set to 0, the callback has no timeout.</p>
+   * @public
+   */
   TimeoutSeconds?: number | undefined;
+  /**
+   * <p>The heartbeat timeout for the callback operation, in seconds. If not specified or set to 0, heartbeat timeout is disabled.</p>
+   * @public
+   */
   HeartbeatTimeoutSeconds?: number | undefined;
 }
 /**
+ * <p>Configuration options for chained function invocations in durable executions, including retry settings and timeout configuration.</p>
  * @public
  */
 export interface ChainedInvokeOptions {
+  /**
+   * <p>The name or ARN of the Lambda function to invoke.</p>
+   * @public
+   */
   FunctionName: string | undefined;
+  /**
+   * <p>The tenant identifier for the chained invocation.</p>
+   * @public
+   */
   TenantId?: string | undefined;
 }
 /**
+ * <p>Configuration options for a durable execution context.</p>
  * @public
  */
 export interface ContextOptions {
+  /**
+   * <p>Whether the state data of children of the completed context should be included in the invoke payload and <code>GetDurableExecutionState</code> response.</p>
+   * @public
+   */
   ReplayChildren?: boolean | undefined;
 }
 /**
+ * <p>An object that contains error information.</p>
  * @public
  */
 export interface ErrorObject {
+  /**
+   * <p>A human-readable error message.</p>
+   * @public
+   */
   ErrorMessage?: string | undefined;
+  /**
+   * <p>The error type.</p>
+   * @public
+   */
   ErrorType?: string | undefined;
+  /**
+   * <p>Machine-readable error data.</p>
+   * @public
+   */
   ErrorData?: string | undefined;
+  /**
+   * <p>Stack trace information for the error.</p>
+   * @public
+   */
   StackTrace?: string[] | undefined;
 }
 /**
+ * <p>Configuration options for a step operation.</p>
  * @public
  */
 export interface StepOptions {
+  /**
+   * <p>The delay in seconds before the next retry attempt.</p>
+   * @public
+   */
   NextAttemptDelaySeconds?: number | undefined;
 }
 /**
+ * <p>Specifies how long to pause the durable execution.</p>
  * @public
  */
 export interface WaitOptions {
+  /**
+   * <p>The duration to wait, in seconds.</p>
+   * @public
+   */
   WaitSeconds?: number | undefined;
 }
 /**
+ * <p>An update to be applied to an operation during checkpointing.</p>
  * @public
  */
 export interface OperationUpdate {
+  /**
+   * <p>The unique identifier for this operation.</p>
+   * @public
+   */
   Id: string | undefined;
+  /**
+   * <p>The unique identifier of the parent operation, if this operation is running within a child context.</p>
+   * @public
+   */
   ParentId?: string | undefined;
+  /**
+   * <p>The customer-provided name for this operation.</p>
+   * @public
+   */
   Name?: string | undefined;
+  /**
+   * <p>The type of operation to update.</p>
+   * @public
+   */
   Type: OperationType | undefined;
+  /**
+   * <p>The subtype of the operation, providing additional categorization.</p>
+   * @public
+   */
   SubType?: string | undefined;
+  /**
+   * <p>The action to take on the operation.</p>
+   * @public
+   */
   Action: OperationAction | undefined;
+  /**
+   * <p>The payload for successful operations.</p>
+   * @public
+   */
   Payload?: string | undefined;
+  /**
+   * <p>The error information for failed operations.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
+  /**
+   * <p>Options for context operations.</p>
+   * @public
+   */
   ContextOptions?: ContextOptions | undefined;
+  /**
+   * <p>Options for step operations.</p>
+   * @public
+   */
   StepOptions?: StepOptions | undefined;
+  /**
+   * <p>Options for wait operations.</p>
+   * @public
+   */
   WaitOptions?: WaitOptions | undefined;
+  /**
+   * <p>Configuration options for callback operations in durable executions, including timeout settings and retry behavior.</p>
+   * @public
+   */
   CallbackOptions?: CallbackOptions | undefined;
+  /**
+   * <p>Configuration options for chained function invocations in durable executions, including retry settings and timeout configuration.</p>
+   * @public
+   */
   ChainedInvokeOptions?: ChainedInvokeOptions | undefined;
 }
 /**
  * @public
  */
 export interface CheckpointDurableExecutionRequest {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the durable execution.</p>
+   * @public
+   */
   DurableExecutionArn: string | undefined;
+  /**
+   * <p>A unique token that identifies the current checkpoint state. This token is provided by the Lambda runtime and must be used to ensure checkpoints are applied in the correct order. Each checkpoint operation consumes this token and returns a new one.</p>
+   * @public
+   */
   CheckpointToken: string | undefined;
+  /**
+   * <p>An array of state updates to apply during this checkpoint. Each update represents a change to the execution state, such as completing a step, starting a callback, or scheduling a timer. Updates are applied atomically as part of the checkpoint operation.</p>
+   * @public
+   */
   Updates?: OperationUpdate[] | undefined;
+  /**
+   * <p>An optional idempotency token to ensure that duplicate checkpoint requests are handled correctly. If provided, Lambda uses this token to detect and handle duplicate requests within a 15-minute window.</p>
+   * @public
+   */
   ClientToken?: string | undefined;
 }
 /**
+ * <p>Contains details about a callback operation in a durable execution, including the callback token and timeout configuration.</p>
  * @public
  */
 export interface CallbackDetails {
+  /**
+   * <p>The callback ID. Callback IDs are generated by the <code>DurableContext</code> when a durable function calls <code>ctx.waitForCallback</code>.</p>
+   * @public
+   */
   CallbackId?: string | undefined;
+  /**
+   * <p>The response payload from the callback operation as a string.</p>
+   * @public
+   */
   Result?: string | undefined;
+  /**
+   * <p>An error object that contains details about the failure.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
 }
 /**
+ * <p>Contains details about a chained function invocation in a durable execution, including the target function and invocation parameters.</p>
  * @public
  */
 export interface ChainedInvokeDetails {
+  /**
+   * <p>The response payload from the chained invocation.</p>
+   * @public
+   */
   Result?: string | undefined;
+  /**
+   * <p>Details about the chained invocation failure.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
 }
 /**
+ * <p>Details about a durable execution context.</p>
  * @public
  */
 export interface ContextDetails {
+  /**
+   * <p>Whether the state data of child operations of this completed context should be included in the invoke payload and <code>GetDurableExecutionState</code> response.</p>
+   * @public
+   */
   ReplayChildren?: boolean | undefined;
+  /**
+   * <p>The response payload from the context.</p>
+   * @public
+   */
   Result?: string | undefined;
+  /**
+   * <p>Details about the context failure.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
 }
 /**
+ * <p>Details about a <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a>.</p>
  * @public
  */
 export interface ExecutionDetails {
+  /**
+   * <p>The original input payload provided for the durable execution.</p>
+   * @public
+   */
   InputPayload?: string | undefined;
 }
 /**
+ * <p>Details about a step operation.</p>
  * @public
  */
 export interface StepDetails {
+  /**
+   * <p>The current attempt number for this step.</p>
+   * @public
+   */
   Attempt?: number | undefined;
+  /**
+   * <p>The date and time when the next attempt is scheduled, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD). Only populated when the step is in a pending state.</p>
+   * @public
+   */
   NextAttemptTimestamp?: Date | undefined;
+  /**
+   * <p>The JSON response payload from the step operation.</p>
+   * @public
+   */
   Result?: string | undefined;
+  /**
+   * <p>Details about the step failure.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
 }
 /**
+ * <p>Details about a wait operation.</p>
  * @public
  */
 export interface WaitDetails {
+  /**
+   * <p>The date and time when the wait operation is scheduled to complete, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
   ScheduledEndTimestamp?: Date | undefined;
 }
 /**
+ * <p>Information about an operation within a durable execution.</p>
  * @public
  */
 export interface Operation {
+  /**
+   * <p>The unique identifier for this operation.</p>
+   * @public
+   */
   Id: string | undefined;
+  /**
+   * <p>The unique identifier of the parent operation, if this operation is running within a child context.</p>
+   * @public
+   */
   ParentId?: string | undefined;
+  /**
+   * <p>The customer-provided name for this operation.</p>
+   * @public
+   */
   Name?: string | undefined;
+  /**
+   * <p>The type of operation.</p>
+   * @public
+   */
   Type: OperationType | undefined;
+  /**
+   * <p>The subtype of the operation, providing additional categorization.</p>
+   * @public
+   */
   SubType?: string | undefined;
+  /**
+   * <p>The date and time when the operation started, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
   StartTimestamp: Date | undefined;
+  /**
+   * <p>The date and time when the operation ended, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
   EndTimestamp?: Date | undefined;
+  /**
+   * <p>The current status of the operation.</p>
+   * @public
+   */
   Status: OperationStatus | undefined;
+  /**
+   * <p>Details about the execution, if this operation represents an execution.</p>
+   * @public
+   */
   ExecutionDetails?: ExecutionDetails | undefined;
+  /**
+   * <p>Details about the context, if this operation represents a context.</p>
+   * @public
+   */
   ContextDetails?: ContextDetails | undefined;
+  /**
+   * <p>Details about the step, if this operation represents a step.</p>
+   * @public
+   */
   StepDetails?: StepDetails | undefined;
+  /**
+   * <p>Details about the wait operation, if this operation represents a wait.</p>
+   * @public
+   */
   WaitDetails?: WaitDetails | undefined;
+  /**
+   * <p>Contains details about a callback operation in a durable execution, including the callback token and timeout configuration.</p>
+   * @public
+   */
   CallbackDetails?: CallbackDetails | undefined;
+  /**
+   * <p>Contains details about a chained function invocation in a durable execution, including the target function and invocation parameters.</p>
+   * @public
+   */
   ChainedInvokeDetails?: ChainedInvokeDetails | undefined;
 }
 /**
+ * <p>Contains operations that have been updated since the last checkpoint, such as completed asynchronous work like timers or callbacks.</p>
  * @public
  */
 export interface CheckpointUpdatedExecutionState {
+  /**
+   * <p>A list of operations that have been updated since the last checkpoint.</p>
+   * @public
+   */
   Operations?: Operation[] | undefined;
+  /**
+   * <p>Indicates that more results are available. Use this value in a subsequent call to retrieve the next page of results.</p>
+   * @public
+   */
   NextMarker?: string | undefined;
 }
 /**
+ * <p>The response from the CheckpointDurableExecution operation.</p>
  * @public
  */
 export interface CheckpointDurableExecutionResponse {
+  /**
+   * <p>A new checkpoint token to use for the next checkpoint operation. This token replaces the one provided in the request and must be used for subsequent checkpoints to maintain proper ordering.</p>
+   * @public
+   */
   CheckpointToken?: string | undefined;
+  /**
+   * <p>Updated execution state information that includes any changes that occurred since the last checkpoint, such as completed callbacks or expired timers. This allows the SDK to update its internal state during replay.</p>
+   * @public
+   */
   NewExecutionState: CheckpointUpdatedExecutionState | undefined;
 }
 /**
@@ -489,7 +1091,7 @@ export interface CheckpointDurableExecutionResponse {
  */
 export interface CodeSigningPolicies {
   /**
-   * <p>Code signing configuration policy for deployment validation failure. If you set the policy to <code>Enforce</code>, Lambda blocks the deployment request if signature validation checks fail. If you set the policy to <code>Warn</code>, Lambda allows the deployment and creates a CloudWatch log. </p> <p>Default value: <code>Warn</code> </p>
+   * <p>Code signing configuration policy for deployment validation failure. If you set the policy to <code>Enforce</code>, Lambda blocks the deployment request if signature validation checks fail. If you set the policy to <code>Warn</code>, Lambda allows the deployment and issues a new Amazon CloudWatch metric (<code>SignatureValidationErrors</code>) and also stores the warning in the CloudTrail log.</p> <p>Default value: <code>Warn</code> </p>
    * @public
    */
   UntrustedArtifactOnDeployment?: CodeSigningPolicy | undefined;
@@ -700,12 +1302,52 @@ export interface UpdateCodeSigningConfigResponse {
   CodeSigningConfig: CodeSigningConfig | undefined;
 }
 /**
+ * @public
+ */
+export interface DeleteFunctionRequest {
+  /**
+   * <p>The name or ARN of the Lambda function or version.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> – <code>my-function</code> (name-only), <code>my-function:1</code> (with version).</p> </li> <li> <p> <b>Function ARN</b> – <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> – <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>Specify a version to delete. You can't delete a version that an alias references.</p>
+   * @public
+   */
+  Qualifier?: string | undefined;
+}
+/**
+ * @public
+ */
+export interface DeleteFunctionResponse {
+  /**
+   * <p>The HTTP status code returned by the operation.</p>
+   * @public
+   */
+  StatusCode?: number | undefined;
+}
+/**
+ * @public
+ */
+export interface DeleteFunctionEventInvokeConfigRequest {
+  /**
+   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>A version number or alias name.</p>
+   * @public
+   */
+  Qualifier?: string | undefined;
+}
+/**
  * <p>A destination for events that failed processing. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-retain-records.html#invocation-async-destinations">Adding a destination</a>.</p>
  * @public
  */
 export interface OnFailure {
   /**
-   * <p>The Amazon Resource Name (ARN) of the destination resource.</p> <p>To retain records of unsuccessful <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html#invocation-async-destinations">asynchronous invocations</a>, you can configure an Amazon SNS topic, Amazon SQS queue, Amazon S3 bucket, Lambda function, or Amazon EventBridge event bus as the destination.</p> <p>To retain records of failed invocations from <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html">Kinesis</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html">DynamoDB</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kafka.html#services-smaa-onfailure-destination">self-managed Kafka</a> or <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-msk.html#services-msk-onfailure-destination">Amazon MSK</a>, you can configure an Amazon SNS topic, Amazon SQS queue, or Amazon S3 bucket as the destination.</p>
+   * <p>The Amazon Resource Name (ARN) of the destination resource.</p> <p>To retain records of failed invocations from <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html">Kinesis</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html">DynamoDB</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/kafka-on-failure.html">self-managed Apache Kafka</a>, or <a href="https://docs.aws.amazon.com/lambda/latest/dg/kafka-on-failure.html">Amazon MSK</a>, you can configure an Amazon SNS topic, Amazon SQS queue, Amazon S3 bucket, or Kafka topic as the destination.</p> <note> <p>Amazon SNS destinations have a message size limit of 256 KB. If the combined size of the function request and response payload exceeds the limit, Lambda will drop the payload when sending <code>OnFailure</code> event to the destination. For details on this behavior, refer to <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-retain-records.html">Retaining records of asynchronous invocations</a>.</p> </note> <p>To retain records of failed invocations from <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html">Kinesis</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html">DynamoDB</a>, <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-kafka.html#services-smaa-onfailure-destination">self-managed Kafka</a> or <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-msk.html#services-msk-onfailure-destination">Amazon MSK</a>, you can configure an Amazon SNS topic, Amazon SQS queue, or Amazon S3 bucket as the destination.</p>
    * @public
    */
   Destination?: string | undefined;
@@ -716,7 +1358,7 @@ export interface OnFailure {
  */
 export interface OnSuccess {
   /**
-   * <p>The Amazon Resource Name (ARN) of the destination resource.</p>
+   * <p>The Amazon Resource Name (ARN) of the destination resource.</p> <note> <p>Amazon SNS destinations have a message size limit of 256 KB. If the combined size of the function request and response payload exceeds the limit, Lambda will drop the payload when sending <code>OnFailure</code> event to the destination. For details on this behavior, refer to <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-retain-records.html">Retaining records of asynchronous invocations</a>.</p> </note>
    * @public
    */
   Destination?: string | undefined;
@@ -792,20 +1434,25 @@ export interface EventSourceMappingMetricsConfig {
   Metrics?: EventSourceMappingMetric[] | undefined;
 }
 /**
- * <p>The <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode"> provisioned mode</a> configuration for the event source. Use Provisioned Mode to customize the minimum and maximum number of event pollers for your event source. An event poller is a compute unit that provides approximately 5 MBps of throughput.</p>
+ * <p>The <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode"> provisioned mode</a> configuration for the event source. Use Provisioned Mode to customize the minimum and maximum number of event pollers for your event source.</p>
  * @public
  */
 export interface ProvisionedPollerConfig {
   /**
-   * <p>The minimum number of event pollers this event source can scale down to.</p>
+   * <p>The minimum number of event pollers this event source can scale down to. For Amazon SQS events source mappings, default is 2, and minimum 2 required. For Amazon MSK and self-managed Apache Kafka event source mappings, default is 1.</p>
    * @public
    */
   MinimumPollers?: number | undefined;
   /**
-   * <p>The maximum number of event pollers this event source can scale up to.</p>
+   * <p>The maximum number of event pollers this event source can scale up to. For Amazon SQS events source mappings, default is 200, and minimum value allowed is 2. For Amazon MSK and self-managed Apache Kafka event source mappings, default is 200, and minimum value allowed is 1.</p>
    * @public
    */
   MaximumPollers?: number | undefined;
+  /**
+   * <p>(Amazon MSK and self-managed Apache Kafka) The name of the provisioned poller group. Use this option to group multiple ESMs within the event source's VPC to share Event Poller Unit (EPU) capacity. You can use this option to optimize Provisioned mode costs for your ESMs. You can group up to 100 ESMs per poller group and aggregate maximum pollers across all ESMs in a group cannot exceed 2000.</p>
+   * @public
+   */
+  PollerGroupName?: string | undefined;
 }
 /**
  * <p>(Amazon SQS only) The scaling configuration for the event source. To remove the configuration, pass an empty value.</p>
@@ -911,22 +1558,22 @@ export interface CreateEventSourceMappingRequest {
    */
   StartingPositionTimestamp?: Date | undefined;
   /**
-   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Kafka only) A configuration object that specifies the destination of an event after Lambda processes it.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) A configuration object that specifies the destination of an event after Lambda processes it.</p>
    * @public
    */
   DestinationConfig?: DestinationConfig | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) Discard records older than the specified age. The default value is infinite (-1).</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) Discard records older than the specified age. The default value is infinite (-1).</p>
    * @public
    */
   MaximumRecordAgeInSeconds?: number | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) If the function returns an error, split the batch in two and retry.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) If the function returns an error, split the batch in two and retry.</p>
    * @public
    */
   BisectBatchOnFunctionError?: boolean | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) Discard records after the specified number of retries. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record expires.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) Discard records after the specified number of retries. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record expires.</p>
    * @public
    */
   MaximumRetryAttempts?: number | undefined;
@@ -961,7 +1608,7 @@ export interface CreateEventSourceMappingRequest {
    */
   SelfManagedEventSource?: SelfManagedEventSource | undefined;
   /**
-   * <p>(Kinesis, DynamoDB Streams, and Amazon SQS) A list of current response type enums applied to the event source mapping.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, self-managed Apache Kafka, and Amazon SQS) A list of current response type enums applied to the event source mapping.</p>
    * @public
    */
   FunctionResponseTypes?: FunctionResponseType[] | undefined;
@@ -1000,7 +1647,7 @@ export interface CreateEventSourceMappingRequest {
    */
   MetricsConfig?: EventSourceMappingMetricsConfig | undefined;
   /**
-   * <p>(Amazon MSK and self-managed Apache Kafka only) The provisioned mode configuration for the event source. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode">provisioned mode</a>.</p>
+   * <p>(Amazon SQS, Amazon MSK, and self-managed Apache Kafka only) The provisioned mode configuration for the event source. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode">provisioned mode</a>.</p>
    * @public
    */
   ProvisionedPollerConfig?: ProvisionedPollerConfig | undefined;
@@ -1092,7 +1739,7 @@ export interface EventSourceMappingConfiguration {
    */
   StateTransitionReason?: string | undefined;
   /**
-   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka event sources only) A configuration object that specifies the destination of an event after Lambda processes it.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) A configuration object that specifies the destination of an event after Lambda processes it.</p>
    * @public
    */
   DestinationConfig?: DestinationConfig | undefined;
@@ -1117,17 +1764,17 @@ export interface EventSourceMappingConfiguration {
    */
   SelfManagedEventSource?: SelfManagedEventSource | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) Discard records older than the specified age. The default value is -1, which sets the maximum age to infinite. When the value is set to infinite, Lambda never discards old records.</p> <note> <p>The minimum valid value for maximum record age is 60s. Although values less than 60 and greater than -1 fall within the parameter's absolute range, they are not allowed</p> </note>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) Discard records older than the specified age. The default value is -1, which sets the maximum age to infinite. When the value is set to infinite, Lambda never discards old records.</p> <note> <p>The minimum valid value for maximum record age is 60s. Although values less than 60 and greater than -1 fall within the parameter's absolute range, they are not allowed</p> </note>
    * @public
    */
   MaximumRecordAgeInSeconds?: number | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) If the function returns an error, split the batch in two and retry. The default value is false.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) If the function returns an error, split the batch in two and retry. The default value is false.</p>
    * @public
    */
   BisectBatchOnFunctionError?: boolean | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) Discard records after the specified number of retries. The default value is -1, which sets the maximum number of retries to infinite. When MaximumRetryAttempts is infinite, Lambda retries failed records until the record expires in the event source.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) Discard records after the specified number of retries. The default value is -1, which sets the maximum number of retries to infinite. When MaximumRetryAttempts is infinite, Lambda retries failed records until the record expires in the event source.</p>
    * @public
    */
   MaximumRetryAttempts?: number | undefined;
@@ -1137,7 +1784,7 @@ export interface EventSourceMappingConfiguration {
    */
   TumblingWindowInSeconds?: number | undefined;
   /**
-   * <p>(Kinesis, DynamoDB Streams, and Amazon SQS) A list of current response type enums applied to the event source mapping.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, self-managed Apache Kafka, and Amazon SQS) A list of current response type enums applied to the event source mapping.</p>
    * @public
    */
   FunctionResponseTypes?: FunctionResponseType[] | undefined;
@@ -1186,7 +1833,7 @@ export interface EventSourceMappingConfiguration {
    */
   MetricsConfig?: EventSourceMappingMetricsConfig | undefined;
   /**
-   * <p>(Amazon MSK and self-managed Apache Kafka only) The provisioned mode configuration for the event source. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode">provisioned mode</a>.</p>
+   * <p>(Amazon SQS, Amazon MSK, and self-managed Apache Kafka only) The provisioned mode configuration for the event source. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode">provisioned mode</a>.</p>
    * @public
    */
   ProvisionedPollerConfig?: ProvisionedPollerConfig | undefined;
@@ -1286,22 +1933,22 @@ export interface UpdateEventSourceMappingRequest {
    */
   MaximumBatchingWindowInSeconds?: number | undefined;
   /**
-   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Kafka only) A configuration object that specifies the destination of an event after Lambda processes it.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) A configuration object that specifies the destination of an event after Lambda processes it.</p>
    * @public
    */
   DestinationConfig?: DestinationConfig | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) Discard records older than the specified age. The default value is infinite (-1).</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) Discard records older than the specified age. The default value is infinite (-1).</p>
    * @public
    */
   MaximumRecordAgeInSeconds?: number | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) If the function returns an error, split the batch in two and retry.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) If the function returns an error, split the batch in two and retry.</p>
    * @public
    */
   BisectBatchOnFunctionError?: boolean | undefined;
   /**
-   * <p>(Kinesis and DynamoDB Streams only) Discard records after the specified number of retries. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record expires.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, and self-managed Apache Kafka) Discard records after the specified number of retries. The default value is infinite (-1). When set to infinite (-1), failed records are retried until the record expires.</p>
    * @public
    */
   MaximumRetryAttempts?: number | undefined;
@@ -1321,7 +1968,7 @@ export interface UpdateEventSourceMappingRequest {
    */
   TumblingWindowInSeconds?: number | undefined;
   /**
-   * <p>(Kinesis, DynamoDB Streams, and Amazon SQS) A list of current response type enums applied to the event source mapping.</p>
+   * <p>(Kinesis, DynamoDB Streams, Amazon MSK, self-managed Apache Kafka, and Amazon SQS) A list of current response type enums applied to the event source mapping.</p>
    * @public
    */
   FunctionResponseTypes?: FunctionResponseType[] | undefined;
@@ -1360,10 +2007,44 @@ export interface UpdateEventSourceMappingRequest {
    */
   MetricsConfig?: EventSourceMappingMetricsConfig | undefined;
   /**
-   * <p>(Amazon MSK and self-managed Apache Kafka only) The provisioned mode configuration for the event source. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode">provisioned mode</a>.</p>
+   * <p>(Amazon SQS, Amazon MSK, and self-managed Apache Kafka only) The provisioned mode configuration for the event source. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html#invocation-eventsourcemapping-provisioned-mode">provisioned mode</a>.</p>
    * @public
    */
   ProvisionedPollerConfig?: ProvisionedPollerConfig | undefined;
+}
+/**
+ * <p>Configuration for Lambda-managed instances used by the capacity provider.</p>
+ * @public
+ */
+export interface LambdaManagedInstancesCapacityProviderConfig {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the capacity provider.</p>
+   * @public
+   */
+  CapacityProviderArn: string | undefined;
+  /**
+   * <p>The maximum number of concurrent execution environments that can run on each compute instance.</p>
+   * @public
+   */
+  PerExecutionEnvironmentMaxConcurrency?: number | undefined;
+  /**
+   * <p>The amount of memory in GiB allocated per vCPU for execution environments.</p>
+   * @public
+   */
+  ExecutionEnvironmentMemoryGiBPerVCpu?: number | undefined;
+}
+/**
+ * <p>Configuration for the capacity provider that manages compute resources for Lambda functions.</p>
+ * @public
+ */
+export interface CapacityProviderConfig {
+  /**
+   * <p>Configuration for Lambda-managed instances used by the capacity provider.</p>
+   * @public
+   */
+  LambdaManagedInstancesCapacityProviderConfig:
+    | LambdaManagedInstancesCapacityProviderConfig
+    | undefined;
 }
 /**
  * <p>The code for the Lambda function. You can either specify an object in Amazon S3, upload a .zip file archive deployment package directly, or specify the URI of a container image.</p>
@@ -1413,10 +2094,19 @@ export interface DeadLetterConfig {
   TargetArn?: string | undefined;
 }
 /**
+ * <p>Configuration settings for <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable functions</a>, including execution timeout and retention period for execution history.</p>
  * @public
  */
 export interface DurableConfig {
+  /**
+   * <p>The number of days to retain execution history after a durable execution completes. After this period, execution history is no longer available through the GetDurableExecutionHistory API.</p>
+   * @public
+   */
   RetentionPeriodInDays?: number | undefined;
+  /**
+   * <p>The maximum time (in seconds) that a durable execution can run before timing out. This timeout applies to the entire durable execution, not individual function invocations.</p>
+   * @public
+   */
   ExecutionTimeout?: number | undefined;
 }
 /**
@@ -1514,6 +2204,17 @@ export interface SnapStart {
    * @public
    */
   ApplyOn?: SnapStartApplyOn | undefined;
+}
+/**
+ * <p>Specifies the tenant isolation mode configuration for a Lambda function. This allows you to configure specific tenant isolation strategies for your function invocations. Tenant isolation configuration cannot be modified after function creation.</p>
+ * @public
+ */
+export interface TenancyConfig {
+  /**
+   * <p>Tenant isolation mode allows for invocation to be sent to a corresponding execution environment dedicated to a specific tenant ID.</p>
+   * @public
+   */
+  TenantIsolationMode: TenantIsolationMode | undefined;
 }
 /**
  * <p>The function's <a href="https://docs.aws.amazon.com/lambda/latest/dg/services-xray.html">X-Ray</a> tracing configuration. To sample and record incoming requests, set <code>Mode</code> to <code>Active</code>.</p>
@@ -1671,7 +2372,26 @@ export interface CreateFunctionRequest {
    * @public
    */
   LoggingConfig?: LoggingConfig | undefined;
+  /**
+   * <p>Configuration for the capacity provider that manages compute resources for Lambda functions.</p>
+   * @public
+   */
+  CapacityProviderConfig?: CapacityProviderConfig | undefined;
+  /**
+   * <p>Specifies where to publish the function version or configuration.</p>
+   * @public
+   */
+  PublishTo?: FunctionVersionLatestPublished | undefined;
+  /**
+   * <p>Configuration settings for durable functions. Enables creating functions with durability that can remember their state and continue execution even after interruptions.</p>
+   * @public
+   */
   DurableConfig?: DurableConfig | undefined;
+  /**
+   * <p>Configuration for multi-tenant applications that use Lambda functions. Defines tenant isolation settings and resource allocations. Required for functions supporting multiple tenants.</p>
+   * @public
+   */
+  TenancyConfig?: TenancyConfig | undefined;
 }
 /**
  * <p>Error messages for environment variables that couldn't be applied.</p>
@@ -2033,7 +2753,26 @@ export interface FunctionConfiguration {
    * @public
    */
   LoggingConfig?: LoggingConfig | undefined;
+  /**
+   * <p>Configuration for the capacity provider that manages compute resources for Lambda functions.</p>
+   * @public
+   */
+  CapacityProviderConfig?: CapacityProviderConfig | undefined;
+  /**
+   * <p>The SHA256 hash of the function configuration.</p>
+   * @public
+   */
+  ConfigSha256?: string | undefined;
+  /**
+   * <p>The function's durable execution configuration settings, if the function is configured for durability.</p>
+   * @public
+   */
   DurableConfig?: DurableConfig | undefined;
+  /**
+   * <p>The function's tenant isolation configuration settings. Determines whether the Lambda function runs on a shared or dedicated infrastructure per unique tenant.</p>
+   * @public
+   */
+  TenancyConfig?: TenancyConfig | undefined;
 }
 /**
  * <p>The <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">cross-origin resource sharing (CORS)</a> settings for your Lambda function URL. Use CORS to grant access to your function URL from any origin. You can also use CORS to control access for specific HTTP headers and methods in requests to your function URL.</p>
@@ -2086,7 +2825,7 @@ export interface CreateFunctionUrlConfigRequest {
    */
   Qualifier?: string | undefined;
   /**
-   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Security and auth model for Lambda function URLs</a>.</p>
+   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Control access to Lambda function URLs</a>.</p>
    * @public
    */
   AuthType: FunctionUrlAuthType | undefined;
@@ -2096,7 +2835,7 @@ export interface CreateFunctionUrlConfigRequest {
    */
   Cors?: Cors | undefined;
   /**
-   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 20 MB, however, you can <a href="https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html">request a quota increase</a>.</p> </li> </ul>
+   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 200 MB.</p> </li> </ul>
    * @public
    */
   InvokeMode?: InvokeMode | undefined;
@@ -2116,7 +2855,7 @@ export interface CreateFunctionUrlConfigResponse {
    */
   FunctionArn: string | undefined;
   /**
-   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Security and auth model for Lambda function URLs</a>.</p>
+   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Control access to Lambda function URLs</a>.</p>
    * @public
    */
   AuthType: FunctionUrlAuthType | undefined;
@@ -2131,25 +2870,10 @@ export interface CreateFunctionUrlConfigResponse {
    */
   CreationTime: string | undefined;
   /**
-   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 20 MB, however, you can <a href="https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html">request a quota increase</a>.</p> </li> </ul>
+   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 200 MB.</p> </li> </ul>
    * @public
    */
   InvokeMode?: InvokeMode | undefined;
-}
-/**
- * @public
- */
-export interface DeleteFunctionRequest {
-  /**
-   * <p>The name or ARN of the Lambda function or version.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> – <code>my-function</code> (name-only), <code>my-function:1</code> (with version).</p> </li> <li> <p> <b>Function ARN</b> – <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> – <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
-   * @public
-   */
-  FunctionName: string | undefined;
-  /**
-   * <p>Specify a version to delete. You can't delete a version that an alias references.</p>
-   * @public
-   */
-  Qualifier?: string | undefined;
 }
 /**
  * @public
@@ -2170,21 +2894,6 @@ export interface DeleteFunctionConcurrencyRequest {
    * @public
    */
   FunctionName: string | undefined;
-}
-/**
- * @public
- */
-export interface DeleteFunctionEventInvokeConfigRequest {
-  /**
-   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
-   * @public
-   */
-  FunctionName: string | undefined;
-  /**
-   * <p>A version number or alias name.</p>
-   * @public
-   */
-  Qualifier?: string | undefined;
 }
 /**
  * @public
@@ -2366,54 +3075,9 @@ export interface GetFunctionConfigurationRequest {
 /**
  * @public
  */
-export interface FunctionEventInvokeConfig {
-  /**
-   * <p>The date and time that the configuration was last updated.</p>
-   * @public
-   */
-  LastModified?: Date | undefined;
-  /**
-   * <p>The Amazon Resource Name (ARN) of the function.</p>
-   * @public
-   */
-  FunctionArn?: string | undefined;
-  /**
-   * <p>The maximum number of times to retry when the function returns an error.</p>
-   * @public
-   */
-  MaximumRetryAttempts?: number | undefined;
-  /**
-   * <p>The maximum age of a request that Lambda sends to a function for processing.</p>
-   * @public
-   */
-  MaximumEventAgeInSeconds?: number | undefined;
-  /**
-   * <p>A destination for events after they have been sent to a function for processing.</p> <p class="title"> <b>Destinations</b> </p> <ul> <li> <p> <b>Function</b> - The Amazon Resource Name (ARN) of a Lambda function.</p> </li> <li> <p> <b>Queue</b> - The ARN of a standard SQS queue.</p> </li> <li> <p> <b>Bucket</b> - The ARN of an Amazon S3 bucket.</p> </li> <li> <p> <b>Topic</b> - The ARN of a standard SNS topic.</p> </li> <li> <p> <b>Event Bus</b> - The ARN of an Amazon EventBridge event bus.</p> </li> </ul> <note> <p>S3 buckets are supported only for on-failure destinations. To retain records of successful invocations, use another destination type.</p> </note>
-   * @public
-   */
-  DestinationConfig?: DestinationConfig | undefined;
-}
-/**
- * @public
- */
-export interface GetFunctionEventInvokeConfigRequest {
-  /**
-   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
-   * @public
-   */
-  FunctionName: string | undefined;
-  /**
-   * <p>A version number or alias name.</p>
-   * @public
-   */
-  Qualifier?: string | undefined;
-}
-/**
- * @public
- */
 export interface GetFunctionRecursionConfigRequest {
   /**
-   * <p/>
+   * <p>The name of the function.</p>
    * @public
    */
   FunctionName: string | undefined;
@@ -2427,6 +3091,57 @@ export interface GetFunctionRecursionConfigResponse {
    * @public
    */
   RecursiveLoop?: RecursiveLoop | undefined;
+}
+/**
+ * @public
+ */
+export interface GetFunctionScalingConfigRequest {
+  /**
+   * <p>The name or ARN of the Lambda function.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>Specify a version or alias to get the scaling configuration for a published version of the function.</p>
+   * @public
+   */
+  Qualifier: string | undefined;
+}
+/**
+ * <p>Configuration that defines the scaling behavior for a Lambda Managed Instances function, including the minimum and maximum number of execution environments that can be provisioned.</p>
+ * @public
+ */
+export interface FunctionScalingConfig {
+  /**
+   * <p>The minimum number of execution environments to maintain for the function.</p>
+   * @public
+   */
+  MinExecutionEnvironments?: number | undefined;
+  /**
+   * <p>The maximum number of execution environments that can be provisioned for the function.</p>
+   * @public
+   */
+  MaxExecutionEnvironments?: number | undefined;
+}
+/**
+ * @public
+ */
+export interface GetFunctionScalingConfigResponse {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the function.</p>
+   * @public
+   */
+  FunctionArn?: string | undefined;
+  /**
+   * <p>The scaling configuration that is currently applied to the function. This represents the actual scaling settings in effect.</p>
+   * @public
+   */
+  AppliedFunctionScalingConfig?: FunctionScalingConfig | undefined;
+  /**
+   * <p>The scaling configuration that was requested for the function.</p>
+   * @public
+   */
+  RequestedFunctionScalingConfig?: FunctionScalingConfig | undefined;
 }
 /**
  * @public
@@ -2458,7 +3173,7 @@ export interface GetFunctionUrlConfigResponse {
    */
   FunctionArn: string | undefined;
   /**
-   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Security and auth model for Lambda function URLs</a>.</p>
+   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Control access to Lambda function URLs</a>.</p>
    * @public
    */
   AuthType: FunctionUrlAuthType | undefined;
@@ -2478,7 +3193,7 @@ export interface GetFunctionUrlConfigResponse {
    */
   LastModifiedTime: string | undefined;
   /**
-   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 20 MB, however, you can <a href="https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html">request a quota increase</a>.</p> </li> </ul>
+   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 200 MB.</p> </li> </ul>
    * @public
    */
   InvokeMode?: InvokeMode | undefined;
@@ -2572,9 +3287,13 @@ export interface InvocationRequest {
    * @public
    */
   ClientContext?: string | undefined;
+  /**
+   * <p>Optional unique name for the durable execution. When you start your special function, you can give it a unique name to identify this specific execution. It's like giving a nickname to a task.</p>
+   * @public
+   */
   DurableExecutionName?: string | undefined;
   /**
-   * <p>The JSON that you want to provide to your Lambda function as input.</p> <p>You can enter the JSON directly. For example, <code>--payload '\{ "key": "value" \}'</code>. You can also specify a file path. For example, <code>--payload file://payload.json</code>.</p>
+   * <p>The JSON that you want to provide to your Lambda function as input. The maximum payload size is 6 MB for synchronous invocations and 1 MB for asynchronous invocations.</p> <p>You can enter the JSON directly. For example, <code>--payload '\{ "key": "value" \}'</code>. You can also specify a file path. For example, <code>--payload file://payload.json</code>.</p>
    * @public
    */
   Payload?: Uint8Array | undefined;
@@ -2583,6 +3302,11 @@ export interface InvocationRequest {
    * @public
    */
   Qualifier?: string | undefined;
+  /**
+   * <p>The identifier of the tenant in a multi-tenant Lambda function.</p>
+   * @public
+   */
+  TenantId?: string | undefined;
 }
 /**
  * @public
@@ -2613,6 +3337,10 @@ export interface InvocationResponse {
    * @public
    */
   ExecutedVersion?: string | undefined;
+  /**
+   * <p>The ARN of the durable execution that was started. This is returned when invoking a durable function and provides a unique identifier for tracking the execution.</p>
+   * @public
+   */
   DurableExecutionArn?: string | undefined;
 }
 /**
@@ -2677,6 +3405,11 @@ export interface InvokeWithResponseStreamRequest {
    * @public
    */
   Payload?: Uint8Array | undefined;
+  /**
+   * <p>The identifier of the tenant in a multi-tenant Lambda function.</p>
+   * @public
+   */
+  TenantId?: string | undefined;
 }
 /**
  * <p>A response confirming that the event stream is complete.</p>
@@ -2788,41 +3521,6 @@ export interface InvokeWithResponseStreamResponse {
 /**
  * @public
  */
-export interface ListFunctionEventInvokeConfigsRequest {
-  /**
-   * <p>The name or ARN of the Lambda function.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code>.</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
-   * @public
-   */
-  FunctionName: string | undefined;
-  /**
-   * <p>Specify the pagination token that's returned by a previous request to retrieve the next page of results.</p>
-   * @public
-   */
-  Marker?: string | undefined;
-  /**
-   * <p>The maximum number of configurations to return.</p>
-   * @public
-   */
-  MaxItems?: number | undefined;
-}
-/**
- * @public
- */
-export interface ListFunctionEventInvokeConfigsResponse {
-  /**
-   * <p>A list of configurations.</p>
-   * @public
-   */
-  FunctionEventInvokeConfigs?: FunctionEventInvokeConfig[] | undefined;
-  /**
-   * <p>The pagination token that's included if more results are available.</p>
-   * @public
-   */
-  NextMarker?: string | undefined;
-}
-/**
- * @public
- */
 export interface ListFunctionsRequest {
   /**
    * <p>For Lambda@Edge functions, the Amazon Web Services Region of the master function. For example, <code>us-east-1</code> filters the list of functions to include only Lambda@Edge functions replicated from a master function in US East (N. Virginia). If specified, you must set <code>FunctionVersion</code> to <code>ALL</code>.</p>
@@ -2917,7 +3615,7 @@ export interface FunctionUrlConfig {
    */
   AuthType: FunctionUrlAuthType | undefined;
   /**
-   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 20 MB, however, you can <a href="https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html">request a quota increase</a>.</p> </li> </ul>
+   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 200 MB.</p> </li> </ul>
    * @public
    */
   InvokeMode?: InvokeMode | undefined;
@@ -3063,36 +3761,6 @@ export interface PutFunctionConcurrencyRequest {
 /**
  * @public
  */
-export interface PutFunctionEventInvokeConfigRequest {
-  /**
-   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
-   * @public
-   */
-  FunctionName: string | undefined;
-  /**
-   * <p>A version number or alias name.</p>
-   * @public
-   */
-  Qualifier?: string | undefined;
-  /**
-   * <p>The maximum number of times to retry when the function returns an error.</p>
-   * @public
-   */
-  MaximumRetryAttempts?: number | undefined;
-  /**
-   * <p>The maximum age of a request that Lambda sends to a function for processing.</p>
-   * @public
-   */
-  MaximumEventAgeInSeconds?: number | undefined;
-  /**
-   * <p>A destination for events after they have been sent to a function for processing.</p> <p class="title"> <b>Destinations</b> </p> <ul> <li> <p> <b>Function</b> - The Amazon Resource Name (ARN) of a Lambda function.</p> </li> <li> <p> <b>Queue</b> - The ARN of a standard SQS queue.</p> </li> <li> <p> <b>Bucket</b> - The ARN of an Amazon S3 bucket.</p> </li> <li> <p> <b>Topic</b> - The ARN of a standard SNS topic.</p> </li> <li> <p> <b>Event Bus</b> - The ARN of an Amazon EventBridge event bus.</p> </li> </ul> <note> <p>S3 buckets are supported only for on-failure destinations. To retain records of successful invocations, use another destination type.</p> </note>
-   * @public
-   */
-  DestinationConfig?: DestinationConfig | undefined;
-}
-/**
- * @public
- */
 export interface PutFunctionRecursionConfigRequest {
   /**
    * <p>The name or ARN of the Lambda function.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> – <code>my-function</code>.</p> </li> <li> <p> <b>Function ARN</b> – <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> – <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
@@ -3114,6 +3782,36 @@ export interface PutFunctionRecursionConfigResponse {
    * @public
    */
   RecursiveLoop?: RecursiveLoop | undefined;
+}
+/**
+ * @public
+ */
+export interface PutFunctionScalingConfigRequest {
+  /**
+   * <p>The name or ARN of the Lambda function.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>Specify a version or alias to set the scaling configuration for a published version of the function.</p>
+   * @public
+   */
+  Qualifier: string | undefined;
+  /**
+   * <p>The scaling configuration to apply to the function, including minimum and maximum execution environment limits.</p>
+   * @public
+   */
+  FunctionScalingConfig?: FunctionScalingConfig | undefined;
+}
+/**
+ * @public
+ */
+export interface PutFunctionScalingConfigResponse {
+  /**
+   * <p>The current state of the function after applying the scaling configuration.</p>
+   * @public
+   */
+  FunctionState?: State | undefined;
 }
 /**
  * @public
@@ -3219,6 +3917,11 @@ export interface UpdateFunctionCodeRequest {
    * @public
    */
   SourceKMSKeyArn?: string | undefined;
+  /**
+   * <p>Specifies where to publish the function version or configuration.</p>
+   * @public
+   */
+  PublishTo?: FunctionVersionLatestPublished | undefined;
 }
 /**
  * @public
@@ -3319,37 +4022,16 @@ export interface UpdateFunctionConfigurationRequest {
    * @public
    */
   LoggingConfig?: LoggingConfig | undefined;
+  /**
+   * <p>Configuration for the capacity provider that manages compute resources for Lambda functions.</p>
+   * @public
+   */
+  CapacityProviderConfig?: CapacityProviderConfig | undefined;
+  /**
+   * <p>Configuration settings for durable functions. Allows updating execution timeout and retention period for functions with durability enabled.</p>
+   * @public
+   */
   DurableConfig?: DurableConfig | undefined;
-}
-/**
- * @public
- */
-export interface UpdateFunctionEventInvokeConfigRequest {
-  /**
-   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
-   * @public
-   */
-  FunctionName: string | undefined;
-  /**
-   * <p>A version number or alias name.</p>
-   * @public
-   */
-  Qualifier?: string | undefined;
-  /**
-   * <p>The maximum number of times to retry when the function returns an error.</p>
-   * @public
-   */
-  MaximumRetryAttempts?: number | undefined;
-  /**
-   * <p>The maximum age of a request that Lambda sends to a function for processing.</p>
-   * @public
-   */
-  MaximumEventAgeInSeconds?: number | undefined;
-  /**
-   * <p>A destination for events after they have been sent to a function for processing.</p> <p class="title"> <b>Destinations</b> </p> <ul> <li> <p> <b>Function</b> - The Amazon Resource Name (ARN) of a Lambda function.</p> </li> <li> <p> <b>Queue</b> - The ARN of a standard SQS queue.</p> </li> <li> <p> <b>Bucket</b> - The ARN of an Amazon S3 bucket.</p> </li> <li> <p> <b>Topic</b> - The ARN of a standard SNS topic.</p> </li> <li> <p> <b>Event Bus</b> - The ARN of an Amazon EventBridge event bus.</p> </li> </ul> <note> <p>S3 buckets are supported only for on-failure destinations. To retain records of successful invocations, use another destination type.</p> </note>
-   * @public
-   */
-  DestinationConfig?: DestinationConfig | undefined;
 }
 /**
  * @public
@@ -3366,7 +4048,7 @@ export interface UpdateFunctionUrlConfigRequest {
    */
   Qualifier?: string | undefined;
   /**
-   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Security and auth model for Lambda function URLs</a>.</p>
+   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Control access to Lambda function URLs</a>.</p>
    * @public
    */
   AuthType?: FunctionUrlAuthType | undefined;
@@ -3376,7 +4058,7 @@ export interface UpdateFunctionUrlConfigRequest {
    */
   Cors?: Cors | undefined;
   /**
-   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 20 MB, however, you can <a href="https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html">request a quota increase</a>.</p> </li> </ul>
+   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 200 MB.</p> </li> </ul>
    * @public
    */
   InvokeMode?: InvokeMode | undefined;
@@ -3396,7 +4078,7 @@ export interface UpdateFunctionUrlConfigResponse {
    */
   FunctionArn: string | undefined;
   /**
-   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Security and auth model for Lambda function URLs</a>.</p>
+   * <p>The type of authentication that your function URL uses. Set to <code>AWS_IAM</code> if you want to restrict access to authenticated users only. Set to <code>NONE</code> if you want to bypass IAM authentication to create a public endpoint. For more information, see <a href="https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html">Control access to Lambda function URLs</a>.</p>
    * @public
    */
   AuthType: FunctionUrlAuthType | undefined;
@@ -3416,7 +4098,7 @@ export interface UpdateFunctionUrlConfigResponse {
    */
   LastModifiedTime: string | undefined;
   /**
-   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 20 MB, however, you can <a href="https://docs.aws.amazon.com/servicequotas/latest/userguide/request-quota-increase.html">request a quota increase</a>.</p> </li> </ul>
+   * <p>Use one of the following options:</p> <ul> <li> <p> <code>BUFFERED</code> – This is the default option. Lambda invokes your function using the <code>Invoke</code> API operation. Invocation results are available when the payload is complete. The maximum payload size is 6 MB.</p> </li> <li> <p> <code>RESPONSE_STREAM</code> – Your function streams payload results as they become available. Lambda invokes your function using the <code>InvokeWithResponseStream</code> API operation. The maximum response payload size is 200 MB.</p> </li> </ul>
    * @public
    */
   InvokeMode?: InvokeMode | undefined;
@@ -3615,6 +4297,11 @@ export interface PublishVersionRequest {
    * @public
    */
   RevisionId?: string | undefined;
+  /**
+   * <p>Specifies where to publish the function version or configuration.</p>
+   * @public
+   */
+  PublishTo?: FunctionVersionLatestPublished | undefined;
 }
 /**
  * @public
@@ -3639,279 +4326,757 @@ export interface GetAccountSettingsResponse {
  * @public
  */
 export interface GetDurableExecutionRequest {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the durable execution.</p>
+   * @public
+   */
   DurableExecutionArn: string | undefined;
 }
 /**
+ * <p>Contains trace headers for the Lambda durable execution.</p>
  * @public
  */
 export interface TraceHeader {
+  /**
+   * <p>The X-Ray trace header associated with the durable execution.</p>
+   * @public
+   */
   XAmznTraceId?: string | undefined;
 }
 /**
+ * <p>The response from the GetDurableExecution operation, containing detailed information about the durable execution.</p>
  * @public
  */
 export interface GetDurableExecutionResponse {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the durable execution.</p>
+   * @public
+   */
   DurableExecutionArn: string | undefined;
+  /**
+   * <p>The name of the durable execution. This is either the name you provided when invoking the function, or a system-generated unique identifier if no name was provided.</p>
+   * @public
+   */
   DurableExecutionName: string | undefined;
+  /**
+   * <p>The Amazon Resource Name (ARN) of the Lambda function that was invoked to start this durable execution.</p>
+   * @public
+   */
   FunctionArn: string | undefined;
+  /**
+   * <p>The JSON input payload that was provided when the durable execution was started. For asynchronous invocations, this is limited to 256 KB. For synchronous invocations, this can be up to 6 MB.</p>
+   * @public
+   */
   InputPayload?: string | undefined;
+  /**
+   * <p>The JSON result returned by the durable execution if it completed successfully. This field is only present when the execution status is <code>SUCCEEDED</code>. The result is limited to 256 KB.</p>
+   * @public
+   */
   Result?: string | undefined;
+  /**
+   * <p>Error information if the durable execution failed. This field is only present when the execution status is <code>FAILED</code>, <code>TIMED_OUT</code>, or <code>STOPPED</code>. The combined size of all error fields is limited to 256 KB.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
+  /**
+   * <p>The date and time when the durable execution started, in Unix timestamp format.</p>
+   * @public
+   */
   StartTimestamp: Date | undefined;
+  /**
+   * <p>The current status of the durable execution. Valid values are <code>RUNNING</code>, <code>SUCCEEDED</code>, <code>FAILED</code>, <code>TIMED_OUT</code>, and <code>STOPPED</code>.</p>
+   * @public
+   */
   Status: ExecutionStatus | undefined;
+  /**
+   * <p>The date and time when the durable execution ended, in Unix timestamp format. This field is only present if the execution has completed (status is <code>SUCCEEDED</code>, <code>FAILED</code>, <code>TIMED_OUT</code>, or <code>STOPPED</code>).</p>
+   * @public
+   */
   EndTimestamp?: Date | undefined;
+  /**
+   * <p>The version of the Lambda function that was invoked for this durable execution. This ensures that all replays during the execution use the same function version.</p>
+   * @public
+   */
   Version?: string | undefined;
+  /**
+   * <p>The trace headers associated with the durable execution.</p>
+   * @public
+   */
   TraceHeader?: TraceHeader | undefined;
 }
 /**
  * @public
  */
 export interface GetDurableExecutionHistoryRequest {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the durable execution.</p>
+   * @public
+   */
   DurableExecutionArn: string | undefined;
+  /**
+   * <p>Specifies whether to include execution data such as step results and callback payloads in the history events. Set to <code>true</code> to include data, or <code>false</code> to exclude it for a more compact response. The default is <code>true</code>.</p>
+   * @public
+   */
   IncludeExecutionData?: boolean | undefined;
+  /**
+   * <p>The maximum number of history events to return per call. You can use <code>Marker</code> to retrieve additional pages of results. The default is 100 and the maximum allowed is 1000. A value of 0 uses the default.</p>
+   * @public
+   */
   MaxItems?: number | undefined;
+  /**
+   * <p>If <code>NextMarker</code> was returned from a previous request, use this value to retrieve the next page of results. Each pagination token expires after 24 hours.</p>
+   * @public
+   */
   Marker?: string | undefined;
+  /**
+   * <p>When set to <code>true</code>, returns the history events in reverse chronological order (newest first). By default, events are returned in chronological order (oldest first).</p>
+   * @public
+   */
   ReverseOrder?: boolean | undefined;
 }
 /**
+ * <p>Error information for an event.</p>
  * @public
  */
 export interface EventError {
+  /**
+   * <p>The error payload.</p>
+   * @public
+   */
   Payload?: ErrorObject | undefined;
+  /**
+   * <p>Indicates if the error payload was truncated due to size limits.</p>
+   * @public
+   */
   Truncated?: boolean | undefined;
 }
 /**
+ * <p>Contains details about a failed callback operation, including error information and the reason for failure.</p>
  * @public
  */
 export interface CallbackFailedDetails {
+  /**
+   * <p>An error object that contains details about the failure.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Contains details about a callback operation that has started, including timing information and callback metadata.</p>
  * @public
  */
 export interface CallbackStartedDetails {
+  /**
+   * <p>The callback ID. Callback IDs are generated by the <code>DurableContext</code> when a durable function calls <code>ctx.waitForCallback</code>.</p>
+   * @public
+   */
   CallbackId: string | undefined;
+  /**
+   * <p>The heartbeat timeout value, in seconds.</p>
+   * @public
+   */
   HeartbeatTimeout?: number | undefined;
+  /**
+   * <p>The timeout value, in seconds.</p>
+   * @public
+   */
   Timeout?: number | undefined;
 }
 /**
+ * <p>Result information for an event.</p>
  * @public
  */
 export interface EventResult {
+  /**
+   * <p>The result payload.</p>
+   * @public
+   */
   Payload?: string | undefined;
+  /**
+   * <p>Indicates if the error payload was truncated due to size limits.</p>
+   * @public
+   */
   Truncated?: boolean | undefined;
 }
 /**
+ * <p>Contains details about a successfully completed callback operation, including the result data and completion timestamp.</p>
  * @public
  */
 export interface CallbackSucceededDetails {
+  /**
+   * <p>The response payload from the successful operation.</p>
+   * @public
+   */
   Result: EventResult | undefined;
 }
 /**
+ * <p>Contains details about a callback operation that timed out, including timeout duration and any partial results.</p>
  * @public
  */
 export interface CallbackTimedOutDetails {
+  /**
+   * <p>Details about the callback timeout.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Contains details about a failed chained function invocation, including error information and failure reason.</p>
  * @public
  */
 export interface ChainedInvokeFailedDetails {
+  /**
+   * <p>Details about the chained invocation failure.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Input information for an event.</p>
  * @public
  */
 export interface EventInput {
+  /**
+   * <p>The input payload.</p>
+   * @public
+   */
   Payload?: string | undefined;
+  /**
+   * <p>Indicates if the error payload was truncated due to size limits.</p>
+   * @public
+   */
   Truncated?: boolean | undefined;
 }
 /**
+ * <p>Contains details about a chained function invocation that has started execution, including start time and execution context.</p>
  * @public
  */
 export interface ChainedInvokeStartedDetails {
+  /**
+   * <p>The name or ARN of the Lambda function being invoked.</p>
+   * @public
+   */
   FunctionName: string | undefined;
+  /**
+   * <p>The tenant identifier for the chained invocation.</p>
+   * @public
+   */
   TenantId?: string | undefined;
+  /**
+   * <p>The JSON input payload provided to the chained invocation.</p>
+   * @public
+   */
   Input?: EventInput | undefined;
+  /**
+   * <p>The version of the function that was executed.</p>
+   * @public
+   */
   ExecutedVersion?: string | undefined;
+  /**
+   * <p>The Amazon Resource Name (ARN) that identifies the durable execution.</p>
+   * @public
+   */
   DurableExecutionArn?: string | undefined;
 }
 /**
+ * <p>Details about a chained invocation that was stopped.</p>
  * @public
  */
 export interface ChainedInvokeStoppedDetails {
+  /**
+   * <p>Details about why the chained invocation stopped.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Details about a chained invocation that succeeded.</p>
  * @public
  */
 export interface ChainedInvokeSucceededDetails {
+  /**
+   * <p>The response payload from the successful operation.</p>
+   * @public
+   */
   Result: EventResult | undefined;
 }
 /**
+ * <p>Details about a chained invocation that timed out.</p>
  * @public
  */
 export interface ChainedInvokeTimedOutDetails {
+  /**
+   * <p>Details about the chained invocation timeout.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Details about a context that failed.</p>
  * @public
  */
 export interface ContextFailedDetails {
+  /**
+   * <p>Details about the context failure.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Details about a context that has started.</p>
  * @public
  */
 export interface ContextStartedDetails {}
 /**
+ * <p>Details about a context that succeeded.</p>
  * @public
  */
 export interface ContextSucceededDetails {
+  /**
+   * <p>The JSON response payload from the successful context.</p>
+   * @public
+   */
   Result: EventResult | undefined;
 }
 /**
+ * <p>Details about a failed <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a>.</p>
  * @public
  */
 export interface ExecutionFailedDetails {
+  /**
+   * <p>Details about the execution failure.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Details about a durable execution that started.</p>
  * @public
  */
 export interface ExecutionStartedDetails {
+  /**
+   * <p>The input payload provided for the durable execution.</p>
+   * @public
+   */
   Input: EventInput | undefined;
+  /**
+   * <p>The maximum amount of time that the durable execution is allowed to run, in seconds.</p>
+   * @public
+   */
   ExecutionTimeout: number | undefined;
 }
 /**
+ * <p>Details about a <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a> that stopped.</p>
  * @public
  */
 export interface ExecutionStoppedDetails {
+  /**
+   * <p>Details about why the execution stopped.</p>
+   * @public
+   */
   Error: EventError | undefined;
 }
 /**
+ * <p>Details about a <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a> that succeeded.</p>
  * @public
  */
 export interface ExecutionSucceededDetails {
+  /**
+   * <p>The response payload from the successful operation.</p>
+   * @public
+   */
   Result: EventResult | undefined;
 }
 /**
+ * <p>Details about a <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a> that timed out.</p>
  * @public
  */
 export interface ExecutionTimedOutDetails {
+  /**
+   * <p>Details about the execution timeout.</p>
+   * @public
+   */
   Error?: EventError | undefined;
 }
 /**
+ * <p>Details about a function invocation that completed.</p>
  * @public
  */
 export interface InvocationCompletedDetails {
+  /**
+   * <p>The date and time when the invocation started, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
   StartTimestamp: Date | undefined;
+  /**
+   * <p>The date and time when the invocation ended, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
   EndTimestamp: Date | undefined;
+  /**
+   * <p>The request ID for the invocation.</p>
+   * @public
+   */
   RequestId: string | undefined;
+  /**
+   * <p>Details about the invocation failure.</p>
+   * @public
+   */
   Error?: EventError | undefined;
 }
 /**
+ * <p>Information about retry attempts for an operation.</p>
  * @public
  */
 export interface RetryDetails {
+  /**
+   * <p>The current attempt number for this operation.</p>
+   * @public
+   */
   CurrentAttempt?: number | undefined;
+  /**
+   * <p>The delay before the next retry attempt, in seconds.</p>
+   * @public
+   */
   NextAttemptDelaySeconds?: number | undefined;
 }
 /**
+ * <p>Details about a step that failed.</p>
  * @public
  */
 export interface StepFailedDetails {
+  /**
+   * <p>Details about the step failure.</p>
+   * @public
+   */
   Error: EventError | undefined;
+  /**
+   * <p>Information about retry attempts for this step operation.</p>
+   * @public
+   */
   RetryDetails: RetryDetails | undefined;
 }
 /**
+ * <p>Details about a step that has started.</p>
  * @public
  */
 export interface StepStartedDetails {}
 /**
+ * <p>Details about a step that succeeded.</p>
  * @public
  */
 export interface StepSucceededDetails {
+  /**
+   * <p>The response payload from the successful operation.</p>
+   * @public
+   */
   Result: EventResult | undefined;
+  /**
+   * <p>Information about retry attempts for this step operation.</p>
+   * @public
+   */
   RetryDetails: RetryDetails | undefined;
 }
 /**
+ * <p>Details about a wait operation that was cancelled.</p>
  * @public
  */
 export interface WaitCancelledDetails {
+  /**
+   * <p>Details about why the wait operation was cancelled.</p>
+   * @public
+   */
   Error?: EventError | undefined;
 }
 /**
+ * <p>Details about a wait operation that has started.</p>
  * @public
  */
 export interface WaitStartedDetails {
+  /**
+   * <p>The duration to wait, in seconds.</p>
+   * @public
+   */
   Duration: number | undefined;
+  /**
+   * <p>The date and time when the wait operation is scheduled to complete, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
   ScheduledEndTimestamp: Date | undefined;
 }
 /**
+ * <p>Details about a wait operation that succeeded.</p>
  * @public
  */
 export interface WaitSucceededDetails {
+  /**
+   * <p>The wait duration, in seconds.</p>
+   * @public
+   */
   Duration?: number | undefined;
 }
 /**
+ * <p>An event that occurred during the execution of a durable function.</p>
  * @public
  */
 export interface Event {
+  /**
+   * <p>The type of event that occurred.</p>
+   * @public
+   */
   EventType?: EventType | undefined;
+  /**
+   * <p>The subtype of the event, providing additional categorization.</p>
+   * @public
+   */
   SubType?: string | undefined;
+  /**
+   * <p>The unique identifier for this event. Event IDs increment sequentially.</p>
+   * @public
+   */
   EventId?: number | undefined;
+  /**
+   * <p>The unique identifier for this operation.</p>
+   * @public
+   */
   Id?: string | undefined;
+  /**
+   * <p>The customer-provided name for this operation.</p>
+   * @public
+   */
   Name?: string | undefined;
+  /**
+   * <p>The date and time when this event occurred, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
   EventTimestamp?: Date | undefined;
+  /**
+   * <p>The unique identifier of the parent operation, if this operation is running within a child context.</p>
+   * @public
+   */
   ParentId?: string | undefined;
+  /**
+   * <p>Details about an execution that started.</p>
+   * @public
+   */
   ExecutionStartedDetails?: ExecutionStartedDetails | undefined;
+  /**
+   * <p>Details about an execution that succeeded.</p>
+   * @public
+   */
   ExecutionSucceededDetails?: ExecutionSucceededDetails | undefined;
+  /**
+   * <p>Details about an execution that failed.</p>
+   * @public
+   */
   ExecutionFailedDetails?: ExecutionFailedDetails | undefined;
+  /**
+   * <p>Details about an execution that timed out.</p>
+   * @public
+   */
   ExecutionTimedOutDetails?: ExecutionTimedOutDetails | undefined;
+  /**
+   * <p>Details about an execution that was stopped.</p>
+   * @public
+   */
   ExecutionStoppedDetails?: ExecutionStoppedDetails | undefined;
+  /**
+   * <p>Details about a context that started.</p>
+   * @public
+   */
   ContextStartedDetails?: ContextStartedDetails | undefined;
+  /**
+   * <p>Details about a context that succeeded.</p>
+   * @public
+   */
   ContextSucceededDetails?: ContextSucceededDetails | undefined;
+  /**
+   * <p>Details about a context that failed.</p>
+   * @public
+   */
   ContextFailedDetails?: ContextFailedDetails | undefined;
+  /**
+   * <p>Details about a wait operation that started.</p>
+   * @public
+   */
   WaitStartedDetails?: WaitStartedDetails | undefined;
+  /**
+   * <p>Details about a wait operation that succeeded.</p>
+   * @public
+   */
   WaitSucceededDetails?: WaitSucceededDetails | undefined;
+  /**
+   * <p>Details about a wait operation that was cancelled.</p>
+   * @public
+   */
   WaitCancelledDetails?: WaitCancelledDetails | undefined;
+  /**
+   * <p>Details about a step that started.</p>
+   * @public
+   */
   StepStartedDetails?: StepStartedDetails | undefined;
+  /**
+   * <p>Details about a step that succeeded.</p>
+   * @public
+   */
   StepSucceededDetails?: StepSucceededDetails | undefined;
+  /**
+   * <p>Details about a step that failed.</p>
+   * @public
+   */
   StepFailedDetails?: StepFailedDetails | undefined;
+  /**
+   * <p>Contains details about a chained function invocation that has started execution, including start time and execution context.</p>
+   * @public
+   */
   ChainedInvokeStartedDetails?: ChainedInvokeStartedDetails | undefined;
+  /**
+   * <p>Details about a chained invocation that succeeded.</p>
+   * @public
+   */
   ChainedInvokeSucceededDetails?: ChainedInvokeSucceededDetails | undefined;
+  /**
+   * <p>Contains details about a failed chained function invocation, including error information and failure reason.</p>
+   * @public
+   */
   ChainedInvokeFailedDetails?: ChainedInvokeFailedDetails | undefined;
+  /**
+   * <p>Details about a chained invocation that timed out.</p>
+   * @public
+   */
   ChainedInvokeTimedOutDetails?: ChainedInvokeTimedOutDetails | undefined;
+  /**
+   * <p>Details about a chained invocation that was stopped.</p>
+   * @public
+   */
   ChainedInvokeStoppedDetails?: ChainedInvokeStoppedDetails | undefined;
+  /**
+   * <p>Contains details about a callback operation that has started, including timing information and callback metadata.</p>
+   * @public
+   */
   CallbackStartedDetails?: CallbackStartedDetails | undefined;
+  /**
+   * <p>Contains details about a successfully completed callback operation, including the result data and completion timestamp.</p>
+   * @public
+   */
   CallbackSucceededDetails?: CallbackSucceededDetails | undefined;
+  /**
+   * <p>Contains details about a failed callback operation, including error information and the reason for failure.</p>
+   * @public
+   */
   CallbackFailedDetails?: CallbackFailedDetails | undefined;
+  /**
+   * <p>Contains details about a callback operation that timed out, including timeout duration and any partial results.</p>
+   * @public
+   */
   CallbackTimedOutDetails?: CallbackTimedOutDetails | undefined;
+  /**
+   * <p>Details about a function invocation that completed.</p>
+   * @public
+   */
   InvocationCompletedDetails?: InvocationCompletedDetails | undefined;
 }
 /**
+ * <p>The response from the GetDurableExecutionHistory operation, containing the execution history and events.</p>
  * @public
  */
 export interface GetDurableExecutionHistoryResponse {
+  /**
+   * <p>An array of execution history events, ordered chronologically unless <code>ReverseOrder</code> is set to <code>true</code>. Each event represents a significant occurrence during the execution, such as step completion or callback resolution.</p>
+   * @public
+   */
   Events: Event[] | undefined;
+  /**
+   * <p>If present, indicates that more history events are available. Use this value as the <code>Marker</code> parameter in a subsequent request to retrieve the next page of results.</p>
+   * @public
+   */
   NextMarker?: string | undefined;
 }
 /**
  * @public
  */
 export interface GetDurableExecutionStateRequest {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the durable execution.</p>
+   * @public
+   */
   DurableExecutionArn: string | undefined;
+  /**
+   * <p>A checkpoint token that identifies the current state of the execution. This token is provided by the Lambda runtime and ensures that state retrieval is consistent with the current execution context.</p>
+   * @public
+   */
   CheckpointToken: string | undefined;
+  /**
+   * <p>If <code>NextMarker</code> was returned from a previous request, use this value to retrieve the next page of operations. Each pagination token expires after 24 hours.</p>
+   * @public
+   */
   Marker?: string | undefined;
+  /**
+   * <p>The maximum number of operations to return per call. You can use <code>Marker</code> to retrieve additional pages of results. The default is 100 and the maximum allowed is 1000. A value of 0 uses the default.</p>
+   * @public
+   */
   MaxItems?: number | undefined;
+}
+/**
+ * <p>The response from the GetDurableExecutionState operation, containing the current execution state for replay.</p>
+ * @public
+ */
+export interface GetDurableExecutionStateResponse {
+  /**
+   * <p>An array of operations that represent the current state of the durable execution. Operations are ordered by their start sequence number in ascending order and include information needed for replay processing.</p>
+   * @public
+   */
+  Operations: Operation[] | undefined;
+  /**
+   * <p>If present, indicates that more operations are available. Use this value as the <code>Marker</code> parameter in a subsequent request to retrieve the next page of results.</p>
+   * @public
+   */
+  NextMarker?: string | undefined;
 }
 /**
  * @public
  */
-export interface GetDurableExecutionStateResponse {
-  Operations: Operation[] | undefined;
-  NextMarker?: string | undefined;
+export interface FunctionEventInvokeConfig {
+  /**
+   * <p>The date and time that the configuration was last updated.</p>
+   * @public
+   */
+  LastModified?: Date | undefined;
+  /**
+   * <p>The Amazon Resource Name (ARN) of the function.</p>
+   * @public
+   */
+  FunctionArn?: string | undefined;
+  /**
+   * <p>The maximum number of times to retry when the function returns an error.</p>
+   * @public
+   */
+  MaximumRetryAttempts?: number | undefined;
+  /**
+   * <p>The maximum age of a request that Lambda sends to a function for processing.</p>
+   * @public
+   */
+  MaximumEventAgeInSeconds?: number | undefined;
+  /**
+   * <p>A destination for events after they have been sent to a function for processing.</p> <p class="title"> <b>Destinations</b> </p> <ul> <li> <p> <b>Function</b> - The Amazon Resource Name (ARN) of a Lambda function.</p> </li> <li> <p> <b>Queue</b> - The ARN of a standard SQS queue.</p> </li> <li> <p> <b>Bucket</b> - The ARN of an Amazon S3 bucket.</p> </li> <li> <p> <b>Topic</b> - The ARN of a standard SNS topic.</p> </li> <li> <p> <b>Event Bus</b> - The ARN of an Amazon EventBridge event bus.</p> </li> </ul> <note> <p>S3 buckets are supported only for on-failure destinations. To retain records of successful invocations, use another destination type.</p> </note>
+   * @public
+   */
+  DestinationConfig?: DestinationConfig | undefined;
+}
+/**
+ * @public
+ */
+export interface GetFunctionEventInvokeConfigRequest {
+  /**
+   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>A version number or alias name.</p>
+   * @public
+   */
+  Qualifier?: string | undefined;
 }
 /**
  * @public
@@ -4351,32 +5516,137 @@ export interface RemoveLayerVersionPermissionRequest {
  * @public
  */
 export interface ListDurableExecutionsByFunctionRequest {
+  /**
+   * <p>The name or ARN of the Lambda function. You can specify a function name, a partial ARN, or a full ARN.</p>
+   * @public
+   */
   FunctionName: string | undefined;
+  /**
+   * <p>The function version or alias. If not specified, lists executions for the $LATEST version.</p>
+   * @public
+   */
   Qualifier?: string | undefined;
+  /**
+   * <p>Filter executions by name. Only executions with names that contain this string are returned.</p>
+   * @public
+   */
   DurableExecutionName?: string | undefined;
+  /**
+   * <p>Filter executions by status. Valid values: RUNNING, SUCCEEDED, FAILED, TIMED_OUT, STOPPED.</p>
+   * @public
+   */
   Statuses?: ExecutionStatus[] | undefined;
+  /**
+   * <p>Filter executions that started after this timestamp (ISO 8601 format).</p>
+   * @public
+   */
   StartedAfter?: Date | undefined;
+  /**
+   * <p>Filter executions that started before this timestamp (ISO 8601 format).</p>
+   * @public
+   */
   StartedBefore?: Date | undefined;
+  /**
+   * <p>Set to true to return results in reverse chronological order (newest first). Default is false.</p>
+   * @public
+   */
   ReverseOrder?: boolean | undefined;
+  /**
+   * <p>Pagination token from a previous request to continue retrieving results.</p>
+   * @public
+   */
   Marker?: string | undefined;
+  /**
+   * <p>Maximum number of executions to return (1-1000). Default is 100.</p>
+   * @public
+   */
+  MaxItems?: number | undefined;
+}
+/**
+ * <p>Information about a <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a>.</p>
+ * @public
+ */
+export interface Execution {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the durable execution, if this execution is a durable execution.</p>
+   * @public
+   */
+  DurableExecutionArn: string | undefined;
+  /**
+   * <p>The unique name of the durable execution, if one was provided when the execution was started.</p>
+   * @public
+   */
+  DurableExecutionName: string | undefined;
+  /**
+   * <p>The Amazon Resource Name (ARN) of the Lambda function.</p>
+   * @public
+   */
+  FunctionArn: string | undefined;
+  /**
+   * <p>The current status of the durable execution.</p>
+   * @public
+   */
+  Status: ExecutionStatus | undefined;
+  /**
+   * <p>The date and time when the durable execution started, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
+  StartTimestamp: Date | undefined;
+  /**
+   * <p>The date and time when the durable execution ended, in <a href="https://www.w3.org/TR/NOTE-datetime">ISO-8601 format</a> (YYYY-MM-DDThh:mm:ss.sTZD).</p>
+   * @public
+   */
+  EndTimestamp?: Date | undefined;
+}
+/**
+ * <p>The response from the ListDurableExecutionsByFunction operation, containing a list of durable executions and pagination information.</p>
+ * @public
+ */
+export interface ListDurableExecutionsByFunctionResponse {
+  /**
+   * <p>List of durable execution summaries matching the filter criteria.</p>
+   * @public
+   */
+  DurableExecutions?: Execution[] | undefined;
+  /**
+   * <p>Pagination token for retrieving additional results. Present only if there are more results available.</p>
+   * @public
+   */
+  NextMarker?: string | undefined;
+}
+/**
+ * @public
+ */
+export interface ListFunctionEventInvokeConfigsRequest {
+  /**
+   * <p>The name or ARN of the Lambda function.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code>.</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>Specify the pagination token that's returned by a previous request to retrieve the next page of results.</p>
+   * @public
+   */
+  Marker?: string | undefined;
+  /**
+   * <p>The maximum number of configurations to return.</p>
+   * @public
+   */
   MaxItems?: number | undefined;
 }
 /**
  * @public
  */
-export interface Execution {
-  DurableExecutionArn: string | undefined;
-  DurableExecutionName: string | undefined;
-  FunctionArn: string | undefined;
-  Status: ExecutionStatus | undefined;
-  StartTimestamp: Date | undefined;
-  EndTimestamp?: Date | undefined;
-}
-/**
- * @public
- */
-export interface ListDurableExecutionsByFunctionResponse {
-  DurableExecutions?: Execution[] | undefined;
+export interface ListFunctionEventInvokeConfigsResponse {
+  /**
+   * <p>A list of configurations.</p>
+   * @public
+   */
+  FunctionEventInvokeConfigs?: FunctionEventInvokeConfig[] | undefined;
+  /**
+   * <p>The pagination token that's included if more results are available.</p>
+   * @public
+   */
   NextMarker?: string | undefined;
 }
 /**
@@ -4547,8 +5817,46 @@ export interface PutProvisionedConcurrencyConfigResponse {
 /**
  * @public
  */
+export interface PutFunctionEventInvokeConfigRequest {
+  /**
+   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>A version number or alias name.</p>
+   * @public
+   */
+  Qualifier?: string | undefined;
+  /**
+   * <p>The maximum number of times to retry when the function returns an error.</p>
+   * @public
+   */
+  MaximumRetryAttempts?: number | undefined;
+  /**
+   * <p>The maximum age of a request that Lambda sends to a function for processing.</p>
+   * @public
+   */
+  MaximumEventAgeInSeconds?: number | undefined;
+  /**
+   * <p>A destination for events after they have been sent to a function for processing.</p> <p class="title"> <b>Destinations</b> </p> <ul> <li> <p> <b>Function</b> - The Amazon Resource Name (ARN) of a Lambda function.</p> </li> <li> <p> <b>Queue</b> - The ARN of a standard SQS queue.</p> </li> <li> <p> <b>Bucket</b> - The ARN of an Amazon S3 bucket.</p> </li> <li> <p> <b>Topic</b> - The ARN of a standard SNS topic.</p> </li> <li> <p> <b>Event Bus</b> - The ARN of an Amazon EventBridge event bus.</p> </li> </ul> <note> <p>S3 buckets are supported only for on-failure destinations. To retain records of successful invocations, use another destination type.</p> </note>
+   * @public
+   */
+  DestinationConfig?: DestinationConfig | undefined;
+}
+/**
+ * @public
+ */
 export interface SendDurableExecutionCallbackFailureRequest {
+  /**
+   * <p>The unique identifier for the callback operation.</p>
+   * @public
+   */
   CallbackId: string | undefined;
+  /**
+   * <p>Error details describing why the callback operation failed.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
 }
 /**
@@ -4559,6 +5867,10 @@ export interface SendDurableExecutionCallbackFailureResponse {}
  * @public
  */
 export interface SendDurableExecutionCallbackHeartbeatRequest {
+  /**
+   * <p>The unique identifier for the callback operation.</p>
+   * @public
+   */
   CallbackId: string | undefined;
 }
 /**
@@ -4569,7 +5881,15 @@ export interface SendDurableExecutionCallbackHeartbeatResponse {}
  * @public
  */
 export interface SendDurableExecutionCallbackSuccessRequest {
+  /**
+   * <p>The unique identifier for the callback operation.</p>
+   * @public
+   */
   CallbackId: string | undefined;
+  /**
+   * <p>The result data from the successful callback operation. Maximum size is 256 KB.</p>
+   * @public
+   */
   Result?: Uint8Array | undefined;
 }
 /**
@@ -4580,13 +5900,25 @@ export interface SendDurableExecutionCallbackSuccessResponse {}
  * @public
  */
 export interface StopDurableExecutionRequest {
+  /**
+   * <p>The Amazon Resource Name (ARN) of the durable execution.</p>
+   * @public
+   */
   DurableExecutionArn: string | undefined;
+  /**
+   * <p>Optional error details explaining why the execution is being stopped.</p>
+   * @public
+   */
   Error?: ErrorObject | undefined;
 }
 /**
  * @public
  */
 export interface StopDurableExecutionResponse {
+  /**
+   * <p>The timestamp when the execution was stopped (ISO 8601 format).</p>
+   * @public
+   */
   StopTimestamp: Date | undefined;
 }
 /**
@@ -4618,4 +5950,34 @@ export interface UntagResourceRequest {
    * @public
    */
   TagKeys: string[] | undefined;
+}
+/**
+ * @public
+ */
+export interface UpdateFunctionEventInvokeConfigRequest {
+  /**
+   * <p>The name or ARN of the Lambda function, version, or alias.</p> <p class="title"> <b>Name formats</b> </p> <ul> <li> <p> <b>Function name</b> - <code>my-function</code> (name-only), <code>my-function:v1</code> (with alias).</p> </li> <li> <p> <b>Function ARN</b> - <code>arn:aws:lambda:us-west-2:123456789012:function:my-function</code>.</p> </li> <li> <p> <b>Partial ARN</b> - <code>123456789012:function:my-function</code>.</p> </li> </ul> <p>You can append a version number or alias to any of the formats. The length constraint applies only to the full ARN. If you specify only the function name, it is limited to 64 characters in length.</p>
+   * @public
+   */
+  FunctionName: string | undefined;
+  /**
+   * <p>A version number or alias name.</p>
+   * @public
+   */
+  Qualifier?: string | undefined;
+  /**
+   * <p>The maximum number of times to retry when the function returns an error.</p>
+   * @public
+   */
+  MaximumRetryAttempts?: number | undefined;
+  /**
+   * <p>The maximum age of a request that Lambda sends to a function for processing.</p>
+   * @public
+   */
+  MaximumEventAgeInSeconds?: number | undefined;
+  /**
+   * <p>A destination for events after they have been sent to a function for processing.</p> <p class="title"> <b>Destinations</b> </p> <ul> <li> <p> <b>Function</b> - The Amazon Resource Name (ARN) of a Lambda function.</p> </li> <li> <p> <b>Queue</b> - The ARN of a standard SQS queue.</p> </li> <li> <p> <b>Bucket</b> - The ARN of an Amazon S3 bucket.</p> </li> <li> <p> <b>Topic</b> - The ARN of a standard SNS topic.</p> </li> <li> <p> <b>Event Bus</b> - The ARN of an Amazon EventBridge event bus.</p> </li> </ul> <note> <p>S3 buckets are supported only for on-failure destinations. To retain records of successful invocations, use another destination type.</p> </note>
+   * @public
+   */
+  DestinationConfig?: DestinationConfig | undefined;
 }

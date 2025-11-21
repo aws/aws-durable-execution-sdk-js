@@ -51,8 +51,7 @@ declare const GetDurableExecutionCommand_base: {
   getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Retrieves detailed information about a specific <a href="https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html">durable execution</a>, including its current status, input payload, result or error information, and execution metadata such as start time and usage statistics.</p>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
@@ -113,6 +112,7 @@ declare const GetDurableExecutionCommand_base: {
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @public
  */
 export declare class GetDurableExecutionCommand extends GetDurableExecutionCommand_base {
   /** @internal type navigation helper, not in runtime. */

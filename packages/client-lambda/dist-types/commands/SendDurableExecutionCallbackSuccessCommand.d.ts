@@ -63,8 +63,7 @@ declare const SendDurableExecutionCallbackSuccessCommand_base: {
   getEndpointParameterInstructions(): import("@smithy/middleware-endpoint").EndpointParameterInstructions;
 };
 /**
- * @public
- *
+ * <p>Sends a successful completion response for a callback operation in a durable execution. Use this API when an external system has successfully completed a callback operation.</p>
  * @example
  * Use a bare-bones client and the command you need to make an API call.
  * ```javascript
@@ -90,6 +89,7 @@ declare const SendDurableExecutionCallbackSuccessCommand_base: {
  * @see {@link LambdaClientResolvedConfig | config} for LambdaClient's `config` shape.
  *
  * @throws {@link CallbackTimeoutException} (client fault)
+ *  <p>The callback ID token has either expired or the callback associated with the token has already been closed.</p>
  *
  * @throws {@link InvalidParameterValueException} (client fault)
  *  <p>One of the parameters in the request is not valid.</p>
@@ -104,6 +104,7 @@ declare const SendDurableExecutionCallbackSuccessCommand_base: {
  * <p>Base exception class for all service exceptions from Lambda service.</p>
  *
  *
+ * @public
  */
 export declare class SendDurableExecutionCallbackSuccessCommand extends SendDurableExecutionCallbackSuccessCommand_base {
   /** @internal type navigation helper, not in runtime. */

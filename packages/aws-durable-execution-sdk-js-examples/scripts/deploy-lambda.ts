@@ -13,8 +13,6 @@ import {
   UpdateFunctionConfigurationCommand,
   Runtime,
   GetFunctionConfigurationCommandOutput,
-  ResourceNotFoundException,
-  ResourceConflictException,
   UpdateFunctionConfigurationCommandInput,
   DeleteFunctionCommand,
 } from "@aws-sdk/client-lambda";
@@ -155,7 +153,7 @@ async function checkFunctionExists(
     );
     return true;
   } catch (error: unknown) {
-    if (error instanceof ResourceNotFoundException) {
+    if (error instanceof Error && error.name === "ResourceNotFoundException") {
       return false;
     }
     throw error;
@@ -171,7 +169,8 @@ async function retryOnConflict<T>(
       return await operation();
     } catch (error: unknown) {
       if (
-        error instanceof ResourceConflictException &&
+        error instanceof Error &&
+        error.name === "ResourceConflictException" &&
         attempt < maxRetries - 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -404,6 +403,9 @@ async function main(): Promise<void> {
     console.log("Deployment completed successfully!");
   } catch (error) {
     console.error("Deployment failed:", error);
+    if (error && typeof error === "object" && "$response" in error) {
+      console.error("Error response: ", error.$response);
+    }
     process.exit(1);
   }
 }

@@ -105,6 +105,23 @@ export class TooManyRequestsException extends __BaseException {
     this.Reason = opts.Reason;
   }
 }
+export class CapacityProviderLimitExceededException extends __BaseException {
+  name = "CapacityProviderLimitExceededException";
+  $fault = "client";
+  Type;
+  constructor(opts) {
+    super({
+      name: "CapacityProviderLimitExceededException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(
+      this,
+      CapacityProviderLimitExceededException.prototype,
+    );
+    this.Type = opts.Type;
+  }
+}
 export class ResourceInUseException extends __BaseException {
   name = "ResourceInUseException";
   $fault = "client";
@@ -165,6 +182,23 @@ export class CodeVerificationFailedException extends __BaseException {
     Object.setPrototypeOf(this, CodeVerificationFailedException.prototype);
     this.Type = opts.Type;
     this.Message = opts.Message;
+  }
+}
+export class FunctionVersionsPerCapacityProviderLimitExceededException extends __BaseException {
+  name = "FunctionVersionsPerCapacityProviderLimitExceededException";
+  $fault = "client";
+  Type;
+  constructor(opts) {
+    super({
+      name: "FunctionVersionsPerCapacityProviderLimitExceededException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(
+      this,
+      FunctionVersionsPerCapacityProviderLimitExceededException.prototype,
+    );
+    this.Type = opts.Type;
   }
 }
 export class InvalidCodeSignatureException extends __BaseException {
@@ -470,6 +504,22 @@ export class KMSNotFoundException extends __BaseException {
       ...opts,
     });
     Object.setPrototypeOf(this, KMSNotFoundException.prototype);
+    this.Type = opts.Type;
+    this.Message = opts.Message;
+  }
+}
+export class NoPublishedVersionException extends __BaseException {
+  name = "NoPublishedVersionException";
+  $fault = "client";
+  Type;
+  Message;
+  constructor(opts) {
+    super({
+      name: "NoPublishedVersionException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, NoPublishedVersionException.prototype);
     this.Type = opts.Type;
     this.Message = opts.Message;
   }

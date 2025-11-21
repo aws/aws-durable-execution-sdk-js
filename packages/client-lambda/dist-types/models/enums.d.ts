@@ -101,6 +101,64 @@ export type Architecture = (typeof Architecture)[keyof typeof Architecture];
  * @public
  * @enum
  */
+export declare const CapacityProviderScalingMode: {
+  readonly Auto: "Auto";
+  readonly Manual: "Manual";
+};
+/**
+ * @public
+ */
+export type CapacityProviderScalingMode =
+  (typeof CapacityProviderScalingMode)[keyof typeof CapacityProviderScalingMode];
+/**
+ * @public
+ * @enum
+ */
+export declare const CapacityProviderPredefinedMetricType: {
+  readonly LambdaCapacityProviderAverageCPUUtilization: "LambdaCapacityProviderAverageCPUUtilization";
+};
+/**
+ * @public
+ */
+export type CapacityProviderPredefinedMetricType =
+  (typeof CapacityProviderPredefinedMetricType)[keyof typeof CapacityProviderPredefinedMetricType];
+/**
+ * @public
+ * @enum
+ */
+export declare const CapacityProviderState: {
+  readonly Active: "Active";
+  readonly Deleting: "Deleting";
+  readonly Failed: "Failed";
+  readonly Pending: "Pending";
+};
+/**
+ * @public
+ */
+export type CapacityProviderState =
+  (typeof CapacityProviderState)[keyof typeof CapacityProviderState];
+/**
+ * @public
+ * @enum
+ */
+export declare const State: {
+  readonly Active: "Active";
+  readonly ActiveNonInvocable: "ActiveNonInvocable";
+  readonly Deactivated: "Deactivated";
+  readonly Deactivating: "Deactivating";
+  readonly Deleting: "Deleting";
+  readonly Failed: "Failed";
+  readonly Inactive: "Inactive";
+  readonly Pending: "Pending";
+};
+/**
+ * @public
+ */
+export type State = (typeof State)[keyof typeof State];
+/**
+ * @public
+ * @enum
+ */
 export declare const OperationAction: {
   readonly CANCEL: "CANCEL";
   readonly FAIL: "FAIL";
@@ -283,6 +341,18 @@ export type PackageType = (typeof PackageType)[keyof typeof PackageType];
  * @public
  * @enum
  */
+export declare const FunctionVersionLatestPublished: {
+  readonly LATEST_PUBLISHED: "LATEST_PUBLISHED";
+};
+/**
+ * @public
+ */
+export type FunctionVersionLatestPublished =
+  (typeof FunctionVersionLatestPublished)[keyof typeof FunctionVersionLatestPublished];
+/**
+ * @public
+ * @enum
+ */
 export declare const Runtime: {
   readonly dotnet6: "dotnet6";
   readonly dotnet8: "dotnet8";
@@ -294,6 +364,7 @@ export declare const Runtime: {
   readonly java11: "java11";
   readonly java17: "java17";
   readonly java21: "java21";
+  readonly java25: "java25";
   readonly java8: "java8";
   readonly java8al2: "java8.al2";
   readonly nodejs: "nodejs";
@@ -304,6 +375,7 @@ export declare const Runtime: {
   readonly nodejs18x: "nodejs18.x";
   readonly nodejs20x: "nodejs20.x";
   readonly nodejs22x: "nodejs22.x";
+  readonly nodejs24x: "nodejs24.x";
   readonly nodejs43: "nodejs4.3";
   readonly nodejs43edge: "nodejs4.3-edge";
   readonly nodejs610: "nodejs6.10";
@@ -316,6 +388,7 @@ export declare const Runtime: {
   readonly python311: "python3.11";
   readonly python312: "python3.12";
   readonly python313: "python3.13";
+  readonly python314: "python3.14";
   readonly python36: "python3.6";
   readonly python37: "python3.7";
   readonly python38: "python3.8";
@@ -347,6 +420,18 @@ export type SnapStartApplyOn =
  * @public
  * @enum
  */
+export declare const TenantIsolationMode: {
+  readonly PER_TENANT: "PER_TENANT";
+};
+/**
+ * @public
+ */
+export type TenantIsolationMode =
+  (typeof TenantIsolationMode)[keyof typeof TenantIsolationMode];
+/**
+ * @public
+ * @enum
+ */
 export declare const TracingMode: {
   readonly Active: "Active";
   readonly PassThrough: "PassThrough";
@@ -374,15 +459,26 @@ export type LastUpdateStatus =
  * @enum
  */
 export declare const LastUpdateStatusReasonCode: {
+  readonly CapacityProviderScalingLimitExceeded: "CapacityProviderScalingLimitExceeded";
   readonly DisabledKMSKey: "DisabledKMSKey";
+  readonly EC2RequestLimitExceeded: "EC2RequestLimitExceeded";
   readonly EFSIOError: "EFSIOError";
   readonly EFSMountConnectivityError: "EFSMountConnectivityError";
   readonly EFSMountFailure: "EFSMountFailure";
   readonly EFSMountTimeout: "EFSMountTimeout";
   readonly EniLimitExceeded: "EniLimitExceeded";
   readonly FunctionError: "FunctionError";
+  readonly FunctionErrorExtensionInitError: "FunctionError.ExtensionInitError";
+  readonly FunctionErrorInitResourceExhausted: "FunctionError.InitResourceExhausted";
+  readonly FunctionErrorInitTimeout: "FunctionError.InitTimeout";
+  readonly FunctionErrorInvalidEntryPoint: "FunctionError.InvalidEntryPoint";
+  readonly FunctionErrorInvalidWorkingDirectory: "FunctionError.InvalidWorkingDirectory";
+  readonly FunctionErrorPermissionDenied: "FunctionError.PermissionDenied";
+  readonly FunctionErrorRuntimeInitError: "FunctionError.RuntimeInitError";
+  readonly FunctionErrorTooManyExtensions: "FunctionError.TooManyExtensions";
   readonly ImageAccessDenied: "ImageAccessDenied";
   readonly ImageDeleted: "ImageDeleted";
+  readonly InsufficientCapacity: "InsufficientCapacity";
   readonly InsufficientRolePermissions: "InsufficientRolePermissions";
   readonly InternalError: "InternalError";
   readonly InvalidConfiguration: "InvalidConfiguration";
@@ -395,6 +491,7 @@ export declare const LastUpdateStatusReasonCode: {
   readonly KMSKeyAccessDenied: "KMSKeyAccessDenied";
   readonly KMSKeyNotFound: "KMSKeyNotFound";
   readonly SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses";
+  readonly VcpuLimitExceeded: "VcpuLimitExceeded";
 };
 /**
  * @public
@@ -418,33 +515,30 @@ export type SnapStartOptimizationStatus =
  * @public
  * @enum
  */
-export declare const State: {
-  readonly Active: "Active";
-  readonly Failed: "Failed";
-  readonly Inactive: "Inactive";
-  readonly Pending: "Pending";
-};
-/**
- * @public
- */
-export type State = (typeof State)[keyof typeof State];
-/**
- * @public
- * @enum
- */
 export declare const StateReasonCode: {
+  readonly CapacityProviderScalingLimitExceeded: "CapacityProviderScalingLimitExceeded";
   readonly Creating: "Creating";
   readonly DisabledKMSKey: "DisabledKMSKey";
   readonly DrainingDurableExecutions: "DrainingDurableExecutions";
+  readonly EC2RequestLimitExceeded: "EC2RequestLimitExceeded";
   readonly EFSIOError: "EFSIOError";
   readonly EFSMountConnectivityError: "EFSMountConnectivityError";
   readonly EFSMountFailure: "EFSMountFailure";
   readonly EFSMountTimeout: "EFSMountTimeout";
   readonly EniLimitExceeded: "EniLimitExceeded";
   readonly FunctionError: "FunctionError";
+  readonly FunctionErrorExtensionInitError: "FunctionError.ExtensionInitError";
+  readonly FunctionErrorInitResourceExhausted: "FunctionError.InitResourceExhausted";
+  readonly FunctionErrorInitTimeout: "FunctionError.InitTimeout";
+  readonly FunctionErrorInvalidEntryPoint: "FunctionError.InvalidEntryPoint";
+  readonly FunctionErrorInvalidWorkingDirectory: "FunctionError.InvalidWorkingDirectory";
+  readonly FunctionErrorPermissionDenied: "FunctionError.PermissionDenied";
+  readonly FunctionErrorRuntimeInitError: "FunctionError.RuntimeInitError";
+  readonly FunctionErrorTooManyExtensions: "FunctionError.TooManyExtensions";
   readonly Idle: "Idle";
   readonly ImageAccessDenied: "ImageAccessDenied";
   readonly ImageDeleted: "ImageDeleted";
+  readonly InsufficientCapacity: "InsufficientCapacity";
   readonly InsufficientRolePermissions: "InsufficientRolePermissions";
   readonly InternalError: "InternalError";
   readonly InvalidConfiguration: "InvalidConfiguration";
@@ -458,6 +552,7 @@ export declare const StateReasonCode: {
   readonly KMSKeyNotFound: "KMSKeyNotFound";
   readonly Restoring: "Restoring";
   readonly SubnetOutOfIPAddresses: "SubnetOutOfIPAddresses";
+  readonly VcpuLimitExceeded: "VcpuLimitExceeded";
 };
 /**
  * @public

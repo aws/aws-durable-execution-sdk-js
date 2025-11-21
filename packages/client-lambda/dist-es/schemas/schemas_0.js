@@ -3,7 +3,9 @@ const _AA = "AliasArn";
 const _AC = "AliasConfiguration";
 const _ACc = "AccessConfigs";
 const _ACl = "AllowCredentials";
+const _AFSC = "AppliedFunctionScalingConfig";
 const _AH = "AllowHeaders";
+const _AIT = "AllowedInstanceTypes";
 const _AL = "AccountLimit";
 const _ALL = "ApplicationLogLevel";
 const _ALVP = "AddLayerVersionPermission";
@@ -41,6 +43,9 @@ const _CAo = "CompatibleArchitecture";
 const _CAr = "CreateAlias";
 const _CAu = "CurrentAttempt";
 const _CC = "ClientContext";
+const _CCP = "CreateCapacityProvider";
+const _CCPR = "CreateCapacityProviderRequest";
+const _CCPRr = "CreateCapacityProviderResponse";
 const _CCSC = "CreateCodeSigningConfig";
 const _CCSCR = "CreateCodeSigningConfigRequest";
 const _CCSCRr = "CreateCodeSigningConfigResponse";
@@ -72,6 +77,18 @@ const _CITOD = "ChainedInvokeTimedOutDetails";
 const _CN = "CollectionName";
 const _CO = "CallbackOptions";
 const _COo = "ContextOptions";
+const _CP = "CapacityProvider";
+const _CPA = "CapacityProviderArn";
+const _CPC = "CapacityProviderConfig";
+const _CPL = "CapacityProvidersList";
+const _CPLEE = "CapacityProviderLimitExceededException";
+const _CPN = "CapacityProviderName";
+const _CPORA = "CapacityProviderOperatorRoleArn";
+const _CPPC = "CapacityProviderPermissionsConfig";
+const _CPSC = "CapacityProviderScalingConfig";
+const _CPSPL = "CapacityProviderScalingPoliciesList";
+const _CPVC = "CapacityProviderVpcConfig";
+const _CPa = "CapacityProviders";
 const _CR = "CompatibleRuntimes";
 const _CRo = "CompatibleRuntime";
 const _CS = "CodeSize";
@@ -90,6 +107,7 @@ const _CSP = "CodeSigningPolicies";
 const _CSU = "CodeSizeUnzipped";
 const _CSZ = "CodeSizeZipped";
 const _CSo = "CodeSha256";
+const _CSon = "ConfigSha256";
 const _CT = "CheckpointToken";
 const _CTE = "CallbackTimeoutException";
 const _CTOD = "CallbackTimedOutDetails";
@@ -107,6 +125,9 @@ const _D = "Description";
 const _DA = "DeleteAlias";
 const _DAR = "DeleteAliasRequest";
 const _DC = "DestinationConfig";
+const _DCP = "DeleteCapacityProvider";
+const _DCPR = "DeleteCapacityProviderRequest";
+const _DCPRe = "DeleteCapacityProviderResponse";
 const _DCSC = "DeleteCodeSigningConfig";
 const _DCSCR = "DeleteCodeSigningConfigRequest";
 const _DCSCRe = "DeleteCodeSigningConfigResponse";
@@ -126,6 +147,7 @@ const _DFCSCR = "DeleteFunctionCodeSigningConfigRequest";
 const _DFEIC = "DeleteFunctionEventInvokeConfig";
 const _DFEICR = "DeleteFunctionEventInvokeConfigRequest";
 const _DFR = "DeleteFunctionRequest";
+const _DFRe = "DeleteFunctionResponse";
 const _DFUC = "DeleteFunctionUrlConfig";
 const _DFUCR = "DeleteFunctionUrlConfigRequest";
 const _DLC = "DeadLetterConfig";
@@ -147,6 +169,7 @@ const _ED = "ErrorData";
 const _EDr = "ErrorDetails";
 const _EDx = "ExecutionDetails";
 const _EE = "EnvironmentError";
+const _EEMGBPVC = "ExecutionEnvironmentMemoryGiBPerVCpu";
 const _EEv = "EventError";
 const _EFD = "ExecutionFailedDetails";
 const _EFSIOE = "EFSIOException";
@@ -155,6 +178,7 @@ const _EFSMFE = "EFSMountFailureException";
 const _EFSMTE = "EFSMountTimeoutException";
 const _EH = "ExposeHeaders";
 const _EI = "EventId";
+const _EIT = "ExcludedInstanceTypes";
 const _EIv = "EventInput";
 const _EM = "ErrorMessage";
 const _ENILRE = "ENILimitReachedException";
@@ -209,15 +233,21 @@ const _FL = "FilterList";
 const _FLu = "FunctionList";
 const _FN = "FunctionName";
 const _FRT = "FunctionResponseTypes";
+const _FS = "FunctionState";
 const _FSC = "FileSystemConfigs";
 const _FSCL = "FileSystemConfigList";
 const _FSCi = "FileSystemConfig";
+const _FSCu = "FunctionScalingConfig";
 const _FU = "FunctionUrl";
 const _FUAT = "FunctionUrlAuthType";
 const _FUC = "FunctionUrlConfig";
 const _FUCL = "FunctionUrlConfigList";
 const _FUCu = "FunctionUrlConfigs";
 const _FV = "FunctionVersion";
+const _FVBCPL = "FunctionVersionsByCapacityProviderList";
+const _FVBCPLI = "FunctionVersionsByCapacityProviderListItem";
+const _FVPCPLEE = "FunctionVersionsPerCapacityProviderLimitExceededException";
+const _FVu = "FunctionVersions";
 const _Fi = "Filters";
 const _Fu = "Functions";
 const _GA = "GetAlias";
@@ -225,6 +255,9 @@ const _GAR = "GetAliasRequest";
 const _GAS = "GetAccountSettings";
 const _GASR = "GetAccountSettingsRequest";
 const _GASRe = "GetAccountSettingsResponse";
+const _GCP = "GetCapacityProvider";
+const _GCPR = "GetCapacityProviderRequest";
+const _GCPRe = "GetCapacityProviderResponse";
 const _GCSC = "GetCodeSigningConfig";
 const _GCSCR = "GetCodeSigningConfigRequest";
 const _GCSCRe = "GetCodeSigningConfigResponse";
@@ -255,6 +288,9 @@ const _GFRC = "GetFunctionRecursionConfig";
 const _GFRCR = "GetFunctionRecursionConfigRequest";
 const _GFRCRe = "GetFunctionRecursionConfigResponse";
 const _GFRe = "GetFunctionResponse";
+const _GFSC = "GetFunctionScalingConfig";
+const _GFSCR = "GetFunctionScalingConfigRequest";
+const _GFSCRe = "GetFunctionScalingConfigResponse";
 const _GFUC = "GetFunctionUrlConfig";
 const _GFUCR = "GetFunctionUrlConfigRequest";
 const _GFUCRe = "GetFunctionUrlConfigResponse";
@@ -294,11 +330,12 @@ const _IED = "IncludeExecutionData";
 const _IM = "InvokeMode";
 const _IP = "InputPayload";
 const _IPVE = "InvalidParameterValueException";
-const _IR = "InvocationRequest";
+const _IR = "InstanceRequirements";
 const _IRCE = "InvalidRequestContentException";
 const _IRE = "InvalidRuntimeException";
 const _IRSU = "InvokeResponseStreamUpdate";
-const _IRn = "InvocationResponse";
+const _IRn = "InvocationRequest";
+const _IRnv = "InvocationResponse";
 const _ISGIDE = "InvalidSecurityGroupIDException";
 const _ISIDE = "InvalidSubnetIDException";
 const _IT = "InvocationType";
@@ -312,6 +349,7 @@ const _IWRSRn = "InvokeWithResponseStreamResponse";
 const _IZFE = "InvalidZipFileException";
 const _Id = "Id";
 const _In = "Invoke";
+const _KKA = "KmsKeyArn";
 const _KMSADE = "KMSAccessDeniedException";
 const _KMSDE = "KMSDisabledException";
 const _KMSISE = "KMSInvalidStateException";
@@ -328,6 +366,9 @@ const _LAR = "ListAliasesRequest";
 const _LARi = "ListAliasesResponse";
 const _LAi = "ListAliases";
 const _LC = "LoggingConfig";
+const _LCP = "ListCapacityProviders";
+const _LCPR = "ListCapacityProvidersRequest";
+const _LCPRi = "ListCapacityProvidersResponse";
 const _LCSC = "ListCodeSigningConfigs";
 const _LCSCR = "ListCodeSigningConfigsRequest";
 const _LCSCRi = "ListCodeSigningConfigsResponse";
@@ -349,6 +390,9 @@ const _LFRi = "ListFunctionsResponse";
 const _LFUC = "ListFunctionUrlConfigs";
 const _LFUCR = "ListFunctionUrlConfigsRequest";
 const _LFUCRi = "ListFunctionUrlConfigsResponse";
+const _LFVBCP = "ListFunctionVersionsByCapacityProvider";
+const _LFVBCPR = "ListFunctionVersionsByCapacityProviderRequest";
+const _LFVBCPRi = "ListFunctionVersionsByCapacityProviderResponse";
 const _LFi = "ListFunctions";
 const _LG = "LogGroup";
 const _LI = "LicenseInfo";
@@ -361,6 +405,7 @@ const _LLVR = "ListLayerVersionsRequest";
 const _LLVRi = "ListLayerVersionsResponse";
 const _LLi = "ListLayers";
 const _LM = "LastModified";
+const _LMICPC = "LambdaManagedInstancesCapacityProviderConfig";
 const _LMP = "LocalMountPath";
 const _LMT = "LastModifiedTime";
 const _LMV = "LatestMatchingVersion";
@@ -396,6 +441,8 @@ const _MBWIS = "MaximumBatchingWindowInSeconds";
 const _MC = "MetricsConfig";
 const _MCa = "MaximumConcurrency";
 const _MEAIS = "MaximumEventAgeInSeconds";
+const _MEE = "MinExecutionEnvironments";
+const _MEEa = "MaxExecutionEnvironments";
 const _MI = "MaxItems";
 const _MP = "MinimumPollers";
 const _MPa = "MaximumPollers";
@@ -403,6 +450,7 @@ const _MR = "MasterRegion";
 const _MRA = "MaximumRetryAttempts";
 const _MRAIS = "MaximumRecordAgeInSeconds";
 const _MS = "MemorySize";
+const _MVCC = "MaxVCpuCount";
 const _Ma = "Marker";
 const _Me = "Metrics";
 const _Mo = "Mode";
@@ -411,6 +459,7 @@ const _NADS = "NextAttemptDelaySeconds";
 const _NAT = "NextAttemptTimestamp";
 const _NES = "NewExecutionState";
 const _NM = "NextMarker";
+const _NPVE = "NoPublishedVersionException";
 const _O = "Operations";
 const _OF = "OnFailure";
 const _OI = "OrganizationId";
@@ -422,12 +471,14 @@ const _OU = "OperationUpdate";
 const _OUp = "OperationUpdates";
 const _Op = "Operation";
 const _P = "Principal";
-const _PC = "PayloadChunk";
+const _PC = "PermissionsConfig";
 const _PCC = "ProvisionedConcurrencyConfigs";
 const _PCCL = "ProvisionedConcurrencyConfigList";
 const _PCCLI = "ProvisionedConcurrencyConfigListItem";
 const _PCCNFE = "ProvisionedConcurrencyConfigNotFoundException";
 const _PCE = "ProvisionedConcurrentExecutions";
+const _PCa = "PayloadChunk";
+const _PEEMC = "PerExecutionEnvironmentMaxConcurrency";
 const _PF = "ParallelizationFactor";
 const _PFC = "PutFunctionConcurrency";
 const _PFCR = "PutFunctionConcurrencyRequest";
@@ -440,11 +491,16 @@ const _PFEICR = "PutFunctionEventInvokeConfigRequest";
 const _PFRC = "PutFunctionRecursionConfig";
 const _PFRCR = "PutFunctionRecursionConfigRequest";
 const _PFRCRu = "PutFunctionRecursionConfigResponse";
+const _PFSC = "PutFunctionScalingConfig";
+const _PFSCR = "PutFunctionScalingConfigRequest";
+const _PFSCRu = "PutFunctionScalingConfigResponse";
+const _PGN = "PollerGroupName";
 const _PI = "ParentId";
 const _PLEE = "PolicyLengthExceededException";
 const _PLV = "PublishLayerVersion";
 const _PLVR = "PublishLayerVersionRequest";
 const _PLVRu = "PublishLayerVersionResponse";
+const _PMT = "PredefinedMetricType";
 const _POID = "PrincipalOrgID";
 const _PPC = "ProvisionedPollerConfig";
 const _PPCC = "PutProvisionedConcurrencyConfig";
@@ -454,6 +510,7 @@ const _PRMC = "PutRuntimeManagementConfig";
 const _PRMCR = "PutRuntimeManagementConfigRequest";
 const _PRMCRu = "PutRuntimeManagementConfigResponse";
 const _PT = "PackageType";
+const _PTu = "PublishTo";
 const _PV = "PublishVersion";
 const _PVR = "PublishVersionRequest";
 const _Pa = "Payload";
@@ -469,6 +526,7 @@ const _RCE = "ReservedConcurrentExecutions";
 const _RCEe = "ResourceConflictException";
 const _RCe = "ReplayChildren";
 const _RD = "RetryDetails";
+const _RFSC = "RequestedFunctionScalingConfig";
 const _RI = "RevisionId";
 const _RIE = "RecursiveInvocationException";
 const _RIU = "ResolvedImageUri";
@@ -528,14 +586,16 @@ const _SJA = "SigningJobArn";
 const _SK = "S3Key";
 const _SKMSKA = "SourceKMSKeyArn";
 const _SLL = "SystemLogLevel";
+const _SM = "ScalingMode";
 const _SMES = "SelfManagedEventSource";
 const _SMKESC = "SelfManagedKafkaEventSourceConfig";
 const _SO = "StepOptions";
 const _SOV = "S3ObjectVersion";
-const _SP = "StartingPosition";
+const _SP = "ScalingPolicies";
 const _SPT = "StartingPositionTimestamp";
 const _SPVA = "SigningProfileVersionArns";
 const _SPVAi = "SigningProfileVersionArn";
+const _SPt = "StartingPosition";
 const _SR = "StateReason";
 const _SRC = "SchemaRegistryConfig";
 const _SRCt = "StateReasonCode";
@@ -567,14 +627,18 @@ const _TA = "TargetArn";
 const _TC = "TracingConfig";
 const _TCR = "TracingConfigResponse";
 const _TCS = "TotalCodeSize";
+const _TCe = "TenancyConfig";
 const _TE = "TagsError";
 const _TH = "TraceHeader";
 const _TI = "TenantId";
+const _TIM = "TenantIsolationMode";
 const _TK = "TagKeys";
 const _TMRE = "TooManyRequestsException";
 const _TR = "TagResource";
 const _TRR = "TagResourceRequest";
 const _TS = "TimeoutSeconds";
+const _TTSP = "TargetTrackingScalingPolicy";
+const _TV = "TargetValue";
 const _TWIS = "TumblingWindowInSeconds";
 const _Ta = "Tags";
 const _To = "Topics";
@@ -585,6 +649,9 @@ const _UA = "UpdateAlias";
 const _UAOD = "UntrustedArtifactOnDeployment";
 const _UAR = "UpdateAliasRequest";
 const _UCE = "UnreservedConcurrentExecutions";
+const _UCP = "UpdateCapacityProvider";
+const _UCPR = "UpdateCapacityProviderRequest";
+const _UCPRp = "UpdateCapacityProviderResponse";
 const _UCSC = "UpdateCodeSigningConfig";
 const _UCSCR = "UpdateCodeSigningConfigRequest";
 const _UCSCRp = "UpdateCodeSigningConfigResponse";
@@ -627,7 +694,8 @@ const _XAFE = "X-Amz-Function-Error";
 const _XAIT = "X-Amz-Invocation-Type";
 const _XALR = "X-Amz-Log-Result";
 const _XALT = "X-Amz-Log-Type";
-const _XATI = "XAmznTraceId";
+const _XATI = "X-Amz-Tenant-Id";
+const _XATIm = "XAmznTraceId";
 const _ZF = "ZipFile";
 const _c = "client";
 const _e = "error";
@@ -646,6 +714,7 @@ const n0 = "com.amazonaws.lambda";
 import { TypeRegistry } from "@smithy/core/schema";
 import {
   CallbackTimeoutException as __CallbackTimeoutException,
+  CapacityProviderLimitExceededException as __CapacityProviderLimitExceededException,
   CodeSigningConfigNotFoundException as __CodeSigningConfigNotFoundException,
   CodeStorageExceededException as __CodeStorageExceededException,
   CodeVerificationFailedException as __CodeVerificationFailedException,
@@ -658,6 +727,7 @@ import {
   EFSMountFailureException as __EFSMountFailureException,
   EFSMountTimeoutException as __EFSMountTimeoutException,
   ENILimitReachedException as __ENILimitReachedException,
+  FunctionVersionsPerCapacityProviderLimitExceededException as __FunctionVersionsPerCapacityProviderLimitExceededException,
   InvalidCodeSignatureException as __InvalidCodeSignatureException,
   InvalidParameterValueException as __InvalidParameterValueException,
   InvalidRequestContentException as __InvalidRequestContentException,
@@ -669,6 +739,7 @@ import {
   KMSDisabledException as __KMSDisabledException,
   KMSInvalidStateException as __KMSInvalidStateException,
   KMSNotFoundException as __KMSNotFoundException,
+  NoPublishedVersionException as __NoPublishedVersionException,
   PolicyLengthExceededException as __PolicyLengthExceededException,
   PreconditionFailedException as __PreconditionFailedException,
   ProvisionedConcurrencyConfigNotFoundException as __ProvisionedConcurrencyConfigNotFoundException,
@@ -841,6 +912,63 @@ TypeRegistry.for(n0).registerError(
   CallbackTimeoutException,
   __CallbackTimeoutException,
 );
+export var CapacityProvider = [
+  3,
+  n0,
+  _CP,
+  0,
+  [_CPA, _St, _VC, _PC, _IR, _CPSC, _KKA, _LM],
+  [
+    0,
+    0,
+    () => CapacityProviderVpcConfig,
+    () => CapacityProviderPermissionsConfig,
+    () => InstanceRequirements,
+    () => CapacityProviderScalingConfig,
+    0,
+    0,
+  ],
+];
+export var CapacityProviderConfig = [
+  3,
+  n0,
+  _CPC,
+  0,
+  [_LMICPC],
+  [() => LambdaManagedInstancesCapacityProviderConfig],
+];
+export var CapacityProviderLimitExceededException = [
+  -3,
+  n0,
+  _CPLEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  CapacityProviderLimitExceededException,
+  __CapacityProviderLimitExceededException,
+);
+export var CapacityProviderPermissionsConfig = [3, n0, _CPPC, 0, [_CPORA], [0]];
+export var CapacityProviderScalingConfig = [
+  3,
+  n0,
+  _CPSC,
+  0,
+  [_MVCC, _SM, _SP],
+  [1, 0, () => CapacityProviderScalingPoliciesList],
+];
+export var CapacityProviderVpcConfig = [
+  3,
+  n0,
+  _CPVC,
+  0,
+  [_SIu, _SGI],
+  [64 | 0, 64 | 0],
+];
 export var ChainedInvokeDetails = [
   3,
   n0,
@@ -1014,6 +1142,30 @@ export var CreateAliasRequest = [
   [_FN, _N, _FV, _D, _RC],
   [[0, 1], 0, 0, 0, () => AliasRoutingConfiguration],
 ];
+export var CreateCapacityProviderRequest = [
+  3,
+  n0,
+  _CCPR,
+  0,
+  [_CPN, _VC, _PC, _IR, _CPSC, _KKA, _Ta],
+  [
+    0,
+    () => CapacityProviderVpcConfig,
+    () => CapacityProviderPermissionsConfig,
+    () => InstanceRequirements,
+    () => CapacityProviderScalingConfig,
+    0,
+    128 | 0,
+  ],
+];
+export var CreateCapacityProviderResponse = [
+  3,
+  n0,
+  _CCPRr,
+  0,
+  [_CP],
+  [() => CapacityProvider],
+];
 export var CreateCodeSigningConfigRequest = [
   3,
   n0,
@@ -1043,7 +1195,7 @@ export var CreateEventSourceMappingRequest = [
     _FCi,
     _MBWIS,
     _PF,
-    _SP,
+    _SPt,
     _SPT,
     _DC,
     _MRAIS,
@@ -1124,7 +1276,10 @@ export var CreateFunctionRequest = [
     _ES,
     _SSn,
     _LC,
+    _CPC,
+    _PTu,
     _DCu,
+    _TCe,
   ],
   [
     0,
@@ -1151,7 +1306,10 @@ export var CreateFunctionRequest = [
     () => EphemeralStorage,
     () => SnapStart,
     () => LoggingConfig,
+    () => CapacityProviderConfig,
+    0,
     () => DurableConfig,
+    () => TenancyConfig,
   ],
 ];
 export var CreateFunctionUrlConfigRequest = [
@@ -1192,6 +1350,15 @@ export var DeleteAliasRequest = [
     [0, 1],
     [0, 1],
   ],
+];
+export var DeleteCapacityProviderRequest = [3, n0, _DCPR, 0, [_CPN], [[0, 1]]];
+export var DeleteCapacityProviderResponse = [
+  3,
+  n0,
+  _DCPRe,
+  0,
+  [_CP],
+  [() => CapacityProvider],
 ];
 export var DeleteCodeSigningConfigRequest = [
   3,
@@ -1258,6 +1425,7 @@ export var DeleteFunctionRequest = [
     ],
   ],
 ];
+export var DeleteFunctionResponse = [3, n0, _DFRe, 0, [_SCt], [[1, 32]]];
 export var DeleteFunctionUrlConfigRequest = [
   3,
   n0,
@@ -1594,7 +1762,7 @@ export var EventSourceMappingConfiguration = [
   0,
   [
     _UUID,
-    _SP,
+    _SPt,
     _SPT,
     _BSa,
     _MBWIS,
@@ -1787,7 +1955,10 @@ export var FunctionConfiguration = [
     _SSn,
     _RVC,
     _LC,
+    _CPC,
+    _CSon,
     _DCu,
+    _TCe,
   ],
   [
     0,
@@ -1826,7 +1997,10 @@ export var FunctionConfiguration = [
     () => SnapStartResponse,
     [() => RuntimeVersionConfig, 0],
     () => LoggingConfig,
+    () => CapacityProviderConfig,
+    0,
     () => DurableConfig,
+    () => TenancyConfig,
   ],
 ];
 export var FunctionEventInvokeConfig = [
@@ -1837,6 +2011,7 @@ export var FunctionEventInvokeConfig = [
   [_LM, _FA, _MRA, _MEAIS, _DC],
   [4, 0, 1, 1, () => DestinationConfig],
 ];
+export var FunctionScalingConfig = [3, n0, _FSCu, 0, [_MEE, _MEEa], [1, 1]];
 export var FunctionUrlConfig = [
   3,
   n0,
@@ -1845,6 +2020,29 @@ export var FunctionUrlConfig = [
   [_FU, _FA, _CTr, _LMT, _Co, _AT, _IM],
   [0, 0, 0, 0, () => Cors, 0, 0],
 ];
+export var FunctionVersionsByCapacityProviderListItem = [
+  3,
+  n0,
+  _FVBCPLI,
+  0,
+  [_FA, _St],
+  [0, 0],
+];
+export var FunctionVersionsPerCapacityProviderLimitExceededException = [
+  -3,
+  n0,
+  _FVPCPLEE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _m],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  FunctionVersionsPerCapacityProviderLimitExceededException,
+  __FunctionVersionsPerCapacityProviderLimitExceededException,
+);
 export var GetAccountSettingsRequest = [3, n0, _GASR, 0, [], []];
 export var GetAccountSettingsResponse = [
   3,
@@ -1864,6 +2062,15 @@ export var GetAliasRequest = [
     [0, 1],
     [0, 1],
   ],
+];
+export var GetCapacityProviderRequest = [3, n0, _GCPR, 0, [_CPN], [[0, 1]]];
+export var GetCapacityProviderResponse = [
+  3,
+  n0,
+  _GCPRe,
+  0,
+  [_CP],
+  [() => CapacityProvider],
 ];
 export var GetCodeSigningConfigRequest = [3, n0, _GCSCR, 0, [_CSCA], [[0, 1]]];
 export var GetCodeSigningConfigResponse = [
@@ -2063,6 +2270,30 @@ export var GetFunctionResponse = [
     () => Concurrency,
   ],
 ];
+export var GetFunctionScalingConfigRequest = [
+  3,
+  n0,
+  _GFSCR,
+  0,
+  [_FN, _Q],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+  ],
+];
+export var GetFunctionScalingConfigResponse = [
+  3,
+  n0,
+  _GFSCRe,
+  0,
+  [_FA, _AFSC, _RFSC],
+  [0, () => FunctionScalingConfig, () => FunctionScalingConfig],
+];
 export var GetFunctionUrlConfigRequest = [
   3,
   n0,
@@ -2222,6 +2453,14 @@ export var ImageConfigResponse = [
   [_IC, _E],
   [() => ImageConfig, [() => ImageConfigError, 0]],
 ];
+export var InstanceRequirements = [
+  3,
+  n0,
+  _IR,
+  0,
+  [_Ar, _AIT, _EIT],
+  [64 | 0, 64 | 0, 64 | 0],
+];
 export var InvalidCodeSignatureException = [
   -3,
   n0,
@@ -2338,9 +2577,9 @@ export var InvocationCompletedDetails = [
 export var InvocationRequest = [
   3,
   n0,
-  _IR,
+  _IRn,
   0,
-  [_FN, _IT, _LT, _CC, _DEN, _Pa, _Q],
+  [_FN, _IT, _LT, _CC, _DEN, _Pa, _Q, _TI],
   [
     [0, 1],
     [
@@ -2374,12 +2613,18 @@ export var InvocationRequest = [
         [_hQ]: _Q,
       },
     ],
+    [
+      0,
+      {
+        [_hH]: _XATI,
+      },
+    ],
   ],
 ];
 export var InvocationResponse = [
   3,
   n0,
-  _IRn,
+  _IRnv,
   0,
   [_SCt, _FE, _LR, _Pa, _EV, _DEA],
   [
@@ -2451,7 +2696,7 @@ export var InvokeWithResponseStreamRequest = [
   n0,
   _IWRSR,
   0,
-  [_FN, _IT, _LT, _CC, _Q, _Pa],
+  [_FN, _IT, _LT, _CC, _Q, _Pa, _TI],
   [
     [0, 1],
     [
@@ -2479,6 +2724,12 @@ export var InvokeWithResponseStreamRequest = [
       },
     ],
     [() => _Blob, 16],
+    [
+      0,
+      {
+        [_hH]: _XATI,
+      },
+    ],
   ],
 ];
 export var InvokeWithResponseStreamResponse = [
@@ -2586,6 +2837,14 @@ TypeRegistry.for(n0).registerError(
   KMSNotFoundException,
   __KMSNotFoundException,
 );
+export var LambdaManagedInstancesCapacityProviderConfig = [
+  3,
+  n0,
+  _LMICPC,
+  0,
+  [_CPA, _PEEMC, _EEMGBPVC],
+  [0, 1, 1],
+];
 export var Layer = [3, n0, _La, 0, [_Arn, _CS, _SPVAi, _SJA], [0, 1, 0, 0]];
 export var LayersListItem = [
   3,
@@ -2654,6 +2913,41 @@ export var ListAliasesResponse = [
   0,
   [_NM, _Al],
   [0, () => AliasList],
+];
+export var ListCapacityProvidersRequest = [
+  3,
+  n0,
+  _LCPR,
+  0,
+  [_St, _Ma, _MI],
+  [
+    [
+      0,
+      {
+        [_hQ]: _St,
+      },
+    ],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListCapacityProvidersResponse = [
+  3,
+  n0,
+  _LCPRi,
+  0,
+  [_CPa, _NM],
+  [() => CapacityProvidersList, 0],
 ];
 export var ListCodeSigningConfigsRequest = [
   3,
@@ -2922,6 +3216,36 @@ export var ListFunctionUrlConfigsResponse = [
   [_FUCu, _NM],
   [() => FunctionUrlConfigList, 0],
 ];
+export var ListFunctionVersionsByCapacityProviderRequest = [
+  3,
+  n0,
+  _LFVBCPR,
+  0,
+  [_CPN, _Ma, _MI],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Ma,
+      },
+    ],
+    [
+      1,
+      {
+        [_hQ]: _MI,
+      },
+    ],
+  ],
+];
+export var ListFunctionVersionsByCapacityProviderResponse = [
+  3,
+  n0,
+  _LFVBCPRi,
+  0,
+  [_CPA, _FVu, _NM],
+  [0, () => FunctionVersionsByCapacityProviderList, 0],
+];
 export var ListLayersRequest = [
   3,
   n0,
@@ -3075,6 +3399,21 @@ export var LoggingConfig = [
   [_LF, _ALL, _SLL, _LG],
   [0, 0, 0, 0],
 ];
+export var NoPublishedVersionException = [
+  -3,
+  n0,
+  _NPVE,
+  {
+    [_e]: _c,
+    [_hE]: 400,
+  },
+  [_Ty, _M],
+  [0, 0],
+];
+TypeRegistry.for(n0).registerError(
+  NoPublishedVersionException,
+  __NoPublishedVersionException,
+);
 export var OnFailure = [3, n0, _OF, 0, [_De], [0]];
 export var OnSuccess = [3, n0, _OS, 0, [_De], [0]];
 export var Operation = [
@@ -3175,7 +3514,14 @@ TypeRegistry.for(n0).registerError(
   ProvisionedConcurrencyConfigNotFoundException,
   __ProvisionedConcurrencyConfigNotFoundException,
 );
-export var ProvisionedPollerConfig = [3, n0, _PPC, 0, [_MP, _MPa], [1, 1]];
+export var ProvisionedPollerConfig = [
+  3,
+  n0,
+  _PPC,
+  0,
+  [_MP, _MPa, _PGN],
+  [1, 1, 0],
+];
 export var PublishLayerVersionRequest = [
   3,
   n0,
@@ -3197,8 +3543,8 @@ export var PublishVersionRequest = [
   n0,
   _PVR,
   0,
-  [_FN, _CSo, _D, _RI],
-  [[0, 1], 0, 0, 0],
+  [_FN, _CSo, _D, _RI, _PTu],
+  [[0, 1], 0, 0, 0, 0],
 ];
 export var PutFunctionCodeSigningConfigRequest = [
   3,
@@ -3252,6 +3598,24 @@ export var PutFunctionRecursionConfigRequest = [
   [[0, 1], 0],
 ];
 export var PutFunctionRecursionConfigResponse = [3, n0, _PFRCRu, 0, [_RL], [0]];
+export var PutFunctionScalingConfigRequest = [
+  3,
+  n0,
+  _PFSCR,
+  0,
+  [_FN, _Q, _FSCu],
+  [
+    [0, 1],
+    [
+      0,
+      {
+        [_hQ]: _Q,
+      },
+    ],
+    () => FunctionScalingConfig,
+  ],
+];
+export var PutFunctionScalingConfigResponse = [3, n0, _PFSCRu, 0, [_FS], [0]];
 export var PutProvisionedConcurrencyConfigRequest = [
   3,
   n0,
@@ -3649,6 +4013,8 @@ TypeRegistry.for(n0).registerError(
 );
 export var TagResourceRequest = [3, n0, _TRR, 0, [_Re, _Ta], [[0, 1], 128 | 0]];
 export var TagsError = [3, n0, _TE, 0, [_EC, _M], [0, 0]];
+export var TargetTrackingScalingPolicy = [3, n0, _TTSP, 0, [_PMT, _TV], [0, 1]];
+export var TenancyConfig = [3, n0, _TCe, 0, [_TIM], [0]];
 export var TooManyRequestsException = [
   -3,
   n0,
@@ -3674,7 +4040,7 @@ TypeRegistry.for(n0).registerError(
   TooManyRequestsException,
   __TooManyRequestsException,
 );
-export var TraceHeader = [3, n0, _TH, 0, [_XATI], [0]];
+export var TraceHeader = [3, n0, _TH, 0, [_XATIm], [0]];
 export var TracingConfig = [3, n0, _TC, 0, [_Mo], [0]];
 export var TracingConfigResponse = [3, n0, _TCR, 0, [_Mo], [0]];
 export var UnsupportedMediaTypeException = [
@@ -3715,6 +4081,22 @@ export var UpdateAliasRequest = [
   0,
   [_FN, _N, _FV, _D, _RC, _RI],
   [[0, 1], [0, 1], 0, 0, () => AliasRoutingConfiguration, 0],
+];
+export var UpdateCapacityProviderRequest = [
+  3,
+  n0,
+  _UCPR,
+  0,
+  [_CPN, _CPSC],
+  [[0, 1], () => CapacityProviderScalingConfig],
+];
+export var UpdateCapacityProviderResponse = [
+  3,
+  n0,
+  _UCPRp,
+  0,
+  [_CP],
+  [() => CapacityProvider],
 ];
 export var UpdateCodeSigningConfigRequest = [
   3,
@@ -3789,8 +4171,8 @@ export var UpdateFunctionCodeRequest = [
   n0,
   _UFCR,
   0,
-  [_FN, _ZF, _SB, _SK, _SOV, _IU, _Pu, _DR, _RI, _Ar, _SKMSKA],
-  [[0, 1], [() => _Blob, 0], 0, 0, 0, 0, 2, 2, 0, 64 | 0, 0],
+  [_FN, _ZF, _SB, _SK, _SOV, _IU, _Pu, _DR, _RI, _Ar, _SKMSKA, _PTu],
+  [[0, 1], [() => _Blob, 0], 0, 0, 0, 0, 2, 2, 0, 64 | 0, 0, 0],
 ];
 export var UpdateFunctionConfigurationRequest = [
   3,
@@ -3817,6 +4199,7 @@ export var UpdateFunctionConfigurationRequest = [
     _ES,
     _SSn,
     _LC,
+    _CPC,
     _DCu,
   ],
   [
@@ -3839,6 +4222,7 @@ export var UpdateFunctionConfigurationRequest = [
     () => EphemeralStorage,
     () => SnapStart,
     () => LoggingConfig,
+    () => CapacityProviderConfig,
     () => DurableConfig,
   ],
 ];
@@ -3933,6 +4317,16 @@ export var AliasList = [1, n0, _ALl, 0, () => AliasConfiguration];
 export var AllowMethodsList = 64 | 0;
 export var AllowOriginsList = 64 | 0;
 export var ArchitecturesList = 64 | 0;
+export var CapacityProviderScalingPoliciesList = [
+  1,
+  n0,
+  _CPSPL,
+  0,
+  () => TargetTrackingScalingPolicy,
+];
+export var CapacityProviderSecurityGroupIds = 64 | 0;
+export var CapacityProvidersList = [1, n0, _CPL, 0, () => CapacityProvider];
+export var CapacityProviderSubnetIds = 64 | 0;
 export var CodeSigningConfigList = [1, n0, _CSCL, 0, () => CodeSigningConfig];
 export var CompatibleArchitectures = 64 | 0;
 export var CompatibleRuntimes = 64 | 0;
@@ -3961,7 +4355,15 @@ export var FunctionEventInvokeConfigList = [
 export var FunctionList = [1, n0, _FLu, 0, [() => FunctionConfiguration, 0]];
 export var FunctionResponseTypeList = 64 | 0;
 export var FunctionUrlConfigList = [1, n0, _FUCL, 0, () => FunctionUrlConfig];
+export var FunctionVersionsByCapacityProviderList = [
+  1,
+  n0,
+  _FVBCPL,
+  0,
+  () => FunctionVersionsByCapacityProviderListItem,
+];
 export var HeadersList = 64 | 0;
+export var InstanceTypeSet = 64 | 0;
 export var KafkaSchemaRegistryAccessConfigList = [
   1,
   n0,
@@ -4022,7 +4424,7 @@ export var InvokeWithResponseStreamResponseEvent = [
   {
     [_s]: 1,
   },
-  [_PC, _ICn],
+  [_PCa, _ICn],
   [
     [() => InvokeResponseStreamUpdate, 0],
     () => InvokeWithResponseStreamCompleteEvent,
@@ -4075,6 +4477,16 @@ export var CreateAlias = [
   },
   () => CreateAliasRequest,
   () => AliasConfiguration,
+];
+export var CreateCapacityProvider = [
+  9,
+  n0,
+  _CCP,
+  {
+    [_h]: ["POST", "/2025-11-30/capacity-providers", 202],
+  },
+  () => CreateCapacityProviderRequest,
+  () => CreateCapacityProviderResponse,
 ];
 export var CreateCodeSigningConfig = [
   9,
@@ -4130,6 +4542,20 @@ export var DeleteAlias = [
   () => DeleteAliasRequest,
   () => __Unit,
 ];
+export var DeleteCapacityProvider = [
+  9,
+  n0,
+  _DCP,
+  {
+    [_h]: [
+      "DELETE",
+      "/2025-11-30/capacity-providers/{CapacityProviderName}",
+      202,
+    ],
+  },
+  () => DeleteCapacityProviderRequest,
+  () => DeleteCapacityProviderResponse,
+];
 export var DeleteCodeSigningConfig = [
   9,
   n0,
@@ -4159,10 +4585,10 @@ export var DeleteFunction = [
   n0,
   _DF,
   {
-    [_h]: ["DELETE", "/2015-03-31/functions/{FunctionName}", 204],
+    [_h]: ["DELETE", "/2015-03-31/functions/{FunctionName}", 200],
   },
   () => DeleteFunctionRequest,
-  () => __Unit,
+  () => DeleteFunctionResponse,
 ];
 export var DeleteFunctionCodeSigningConfig = [
   9,
@@ -4259,6 +4685,16 @@ export var GetAlias = [
   },
   () => GetAliasRequest,
   () => AliasConfiguration,
+];
+export var GetCapacityProvider = [
+  9,
+  n0,
+  _GCP,
+  {
+    [_h]: ["GET", "/2025-11-30/capacity-providers/{CapacityProviderName}", 200],
+  },
+  () => GetCapacityProviderRequest,
+  () => GetCapacityProviderResponse,
 ];
 export var GetCodeSigningConfig = [
   9,
@@ -4390,6 +4826,20 @@ export var GetFunctionRecursionConfig = [
   () => GetFunctionRecursionConfigRequest,
   () => GetFunctionRecursionConfigResponse,
 ];
+export var GetFunctionScalingConfig = [
+  9,
+  n0,
+  _GFSC,
+  {
+    [_h]: [
+      "GET",
+      "/2025-11-30/functions/{FunctionName}/function-scaling-config",
+      200,
+    ],
+  },
+  () => GetFunctionScalingConfigRequest,
+  () => GetFunctionScalingConfigResponse,
+];
 export var GetFunctionUrlConfig = [
   9,
   n0,
@@ -4520,6 +4970,16 @@ export var ListAliases = [
   () => ListAliasesRequest,
   () => ListAliasesResponse,
 ];
+export var ListCapacityProviders = [
+  9,
+  n0,
+  _LCP,
+  {
+    [_h]: ["GET", "/2025-11-30/capacity-providers", 200],
+  },
+  () => ListCapacityProvidersRequest,
+  () => ListCapacityProvidersResponse,
+];
 export var ListCodeSigningConfigs = [
   9,
   n0,
@@ -4601,6 +5061,20 @@ export var ListFunctionUrlConfigs = [
   },
   () => ListFunctionUrlConfigsRequest,
   () => ListFunctionUrlConfigsResponse,
+];
+export var ListFunctionVersionsByCapacityProvider = [
+  9,
+  n0,
+  _LFVBCP,
+  {
+    [_h]: [
+      "GET",
+      "/2025-11-30/capacity-providers/{CapacityProviderName}/function-versions",
+      200,
+    ],
+  },
+  () => ListFunctionVersionsByCapacityProviderRequest,
+  () => ListFunctionVersionsByCapacityProviderResponse,
 ];
 export var ListLayers = [
   9,
@@ -4723,6 +5197,20 @@ export var PutFunctionRecursionConfig = [
   },
   () => PutFunctionRecursionConfigRequest,
   () => PutFunctionRecursionConfigResponse,
+];
+export var PutFunctionScalingConfig = [
+  9,
+  n0,
+  _PFSC,
+  {
+    [_h]: [
+      "PUT",
+      "/2025-11-30/functions/{FunctionName}/function-scaling-config",
+      202,
+    ],
+  },
+  () => PutFunctionScalingConfigRequest,
+  () => PutFunctionScalingConfigResponse,
 ];
 export var PutProvisionedConcurrencyConfig = [
   9,
@@ -4865,6 +5353,16 @@ export var UpdateAlias = [
   },
   () => UpdateAliasRequest,
   () => AliasConfiguration,
+];
+export var UpdateCapacityProvider = [
+  9,
+  n0,
+  _UCP,
+  {
+    [_h]: ["PUT", "/2025-11-30/capacity-providers/{CapacityProviderName}", 202],
+  },
+  () => UpdateCapacityProviderRequest,
+  () => UpdateCapacityProviderResponse,
 ];
 export var UpdateCodeSigningConfig = [
   9,

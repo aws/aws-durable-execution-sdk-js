@@ -177,6 +177,7 @@ declare const DeleteEventSourceMappingCommand_base: {
  * //   ProvisionedPollerConfig: { // ProvisionedPollerConfig
  * //     MinimumPollers: Number("int"),
  * //     MaximumPollers: Number("int"),
+ * //     PollerGroupName: "STRING_VALUE",
  * //   },
  * // };
  *

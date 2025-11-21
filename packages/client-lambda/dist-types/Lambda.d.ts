@@ -16,6 +16,10 @@ import {
   CreateAliasCommandOutput,
 } from "./commands/CreateAliasCommand";
 import {
+  CreateCapacityProviderCommandInput,
+  CreateCapacityProviderCommandOutput,
+} from "./commands/CreateCapacityProviderCommand";
+import {
   CreateCodeSigningConfigCommandInput,
   CreateCodeSigningConfigCommandOutput,
 } from "./commands/CreateCodeSigningConfigCommand";
@@ -35,6 +39,10 @@ import {
   DeleteAliasCommandInput,
   DeleteAliasCommandOutput,
 } from "./commands/DeleteAliasCommand";
+import {
+  DeleteCapacityProviderCommandInput,
+  DeleteCapacityProviderCommandOutput,
+} from "./commands/DeleteCapacityProviderCommand";
 import {
   DeleteCodeSigningConfigCommandInput,
   DeleteCodeSigningConfigCommandOutput,
@@ -80,6 +88,10 @@ import {
   GetAliasCommandOutput,
 } from "./commands/GetAliasCommand";
 import {
+  GetCapacityProviderCommandInput,
+  GetCapacityProviderCommandOutput,
+} from "./commands/GetCapacityProviderCommand";
+import {
   GetCodeSigningConfigCommandInput,
   GetCodeSigningConfigCommandOutput,
 } from "./commands/GetCodeSigningConfigCommand";
@@ -123,6 +135,10 @@ import {
   GetFunctionRecursionConfigCommandInput,
   GetFunctionRecursionConfigCommandOutput,
 } from "./commands/GetFunctionRecursionConfigCommand";
+import {
+  GetFunctionScalingConfigCommandInput,
+  GetFunctionScalingConfigCommandOutput,
+} from "./commands/GetFunctionScalingConfigCommand";
 import {
   GetFunctionUrlConfigCommandInput,
   GetFunctionUrlConfigCommandOutput,
@@ -168,6 +184,10 @@ import {
   ListAliasesCommandOutput,
 } from "./commands/ListAliasesCommand";
 import {
+  ListCapacityProvidersCommandInput,
+  ListCapacityProvidersCommandOutput,
+} from "./commands/ListCapacityProvidersCommand";
+import {
   ListCodeSigningConfigsCommandInput,
   ListCodeSigningConfigsCommandOutput,
 } from "./commands/ListCodeSigningConfigsCommand";
@@ -195,6 +215,10 @@ import {
   ListFunctionUrlConfigsCommandInput,
   ListFunctionUrlConfigsCommandOutput,
 } from "./commands/ListFunctionUrlConfigsCommand";
+import {
+  ListFunctionVersionsByCapacityProviderCommandInput,
+  ListFunctionVersionsByCapacityProviderCommandOutput,
+} from "./commands/ListFunctionVersionsByCapacityProviderCommand";
 import {
   ListLayersCommandInput,
   ListLayersCommandOutput,
@@ -240,6 +264,10 @@ import {
   PutFunctionRecursionConfigCommandOutput,
 } from "./commands/PutFunctionRecursionConfigCommand";
 import {
+  PutFunctionScalingConfigCommandInput,
+  PutFunctionScalingConfigCommandOutput,
+} from "./commands/PutFunctionScalingConfigCommand";
+import {
   PutProvisionedConcurrencyConfigCommandInput,
   PutProvisionedConcurrencyConfigCommandOutput,
 } from "./commands/PutProvisionedConcurrencyConfigCommand";
@@ -283,6 +311,10 @@ import {
   UpdateAliasCommandInput,
   UpdateAliasCommandOutput,
 } from "./commands/UpdateAliasCommand";
+import {
+  UpdateCapacityProviderCommandInput,
+  UpdateCapacityProviderCommandOutput,
+} from "./commands/UpdateCapacityProviderCommand";
 import {
   UpdateCodeSigningConfigCommandInput,
   UpdateCodeSigningConfigCommandOutput,
@@ -374,6 +406,22 @@ export interface Lambda {
     cb: (err: any, data?: CreateAliasCommandOutput) => void,
   ): void;
   /**
+   * @see {@link CreateCapacityProviderCommand}
+   */
+  createCapacityProvider(
+    args: CreateCapacityProviderCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<CreateCapacityProviderCommandOutput>;
+  createCapacityProvider(
+    args: CreateCapacityProviderCommandInput,
+    cb: (err: any, data?: CreateCapacityProviderCommandOutput) => void,
+  ): void;
+  createCapacityProvider(
+    args: CreateCapacityProviderCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (err: any, data?: CreateCapacityProviderCommandOutput) => void,
+  ): void;
+  /**
    * @see {@link CreateCodeSigningConfigCommand}
    */
   createCodeSigningConfig(
@@ -452,6 +500,22 @@ export interface Lambda {
     args: DeleteAliasCommandInput,
     options: __HttpHandlerOptions,
     cb: (err: any, data?: DeleteAliasCommandOutput) => void,
+  ): void;
+  /**
+   * @see {@link DeleteCapacityProviderCommand}
+   */
+  deleteCapacityProvider(
+    args: DeleteCapacityProviderCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<DeleteCapacityProviderCommandOutput>;
+  deleteCapacityProvider(
+    args: DeleteCapacityProviderCommandInput,
+    cb: (err: any, data?: DeleteCapacityProviderCommandOutput) => void,
+  ): void;
+  deleteCapacityProvider(
+    args: DeleteCapacityProviderCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (err: any, data?: DeleteCapacityProviderCommandOutput) => void,
   ): void;
   /**
    * @see {@link DeleteCodeSigningConfigCommand}
@@ -637,6 +701,22 @@ export interface Lambda {
     cb: (err: any, data?: GetAliasCommandOutput) => void,
   ): void;
   /**
+   * @see {@link GetCapacityProviderCommand}
+   */
+  getCapacityProvider(
+    args: GetCapacityProviderCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<GetCapacityProviderCommandOutput>;
+  getCapacityProvider(
+    args: GetCapacityProviderCommandInput,
+    cb: (err: any, data?: GetCapacityProviderCommandOutput) => void,
+  ): void;
+  getCapacityProvider(
+    args: GetCapacityProviderCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (err: any, data?: GetCapacityProviderCommandOutput) => void,
+  ): void;
+  /**
    * @see {@link GetCodeSigningConfigCommand}
    */
   getCodeSigningConfig(
@@ -811,6 +891,22 @@ export interface Lambda {
     args: GetFunctionRecursionConfigCommandInput,
     options: __HttpHandlerOptions,
     cb: (err: any, data?: GetFunctionRecursionConfigCommandOutput) => void,
+  ): void;
+  /**
+   * @see {@link GetFunctionScalingConfigCommand}
+   */
+  getFunctionScalingConfig(
+    args: GetFunctionScalingConfigCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<GetFunctionScalingConfigCommandOutput>;
+  getFunctionScalingConfig(
+    args: GetFunctionScalingConfigCommandInput,
+    cb: (err: any, data?: GetFunctionScalingConfigCommandOutput) => void,
+  ): void;
+  getFunctionScalingConfig(
+    args: GetFunctionScalingConfigCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (err: any, data?: GetFunctionScalingConfigCommandOutput) => void,
   ): void;
   /**
    * @see {@link GetFunctionUrlConfigCommand}
@@ -989,6 +1085,23 @@ export interface Lambda {
     cb: (err: any, data?: ListAliasesCommandOutput) => void,
   ): void;
   /**
+   * @see {@link ListCapacityProvidersCommand}
+   */
+  listCapacityProviders(): Promise<ListCapacityProvidersCommandOutput>;
+  listCapacityProviders(
+    args: ListCapacityProvidersCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<ListCapacityProvidersCommandOutput>;
+  listCapacityProviders(
+    args: ListCapacityProvidersCommandInput,
+    cb: (err: any, data?: ListCapacityProvidersCommandOutput) => void,
+  ): void;
+  listCapacityProviders(
+    args: ListCapacityProvidersCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (err: any, data?: ListCapacityProvidersCommandOutput) => void,
+  ): void;
+  /**
    * @see {@link ListCodeSigningConfigsCommand}
    */
   listCodeSigningConfigs(): Promise<ListCodeSigningConfigsCommandOutput>;
@@ -1108,6 +1221,28 @@ export interface Lambda {
     args: ListFunctionUrlConfigsCommandInput,
     options: __HttpHandlerOptions,
     cb: (err: any, data?: ListFunctionUrlConfigsCommandOutput) => void,
+  ): void;
+  /**
+   * @see {@link ListFunctionVersionsByCapacityProviderCommand}
+   */
+  listFunctionVersionsByCapacityProvider(
+    args: ListFunctionVersionsByCapacityProviderCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<ListFunctionVersionsByCapacityProviderCommandOutput>;
+  listFunctionVersionsByCapacityProvider(
+    args: ListFunctionVersionsByCapacityProviderCommandInput,
+    cb: (
+      err: any,
+      data?: ListFunctionVersionsByCapacityProviderCommandOutput,
+    ) => void,
+  ): void;
+  listFunctionVersionsByCapacityProvider(
+    args: ListFunctionVersionsByCapacityProviderCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (
+      err: any,
+      data?: ListFunctionVersionsByCapacityProviderCommandOutput,
+    ) => void,
   ): void;
   /**
    * @see {@link ListLayersCommand}
@@ -1291,6 +1426,22 @@ export interface Lambda {
     args: PutFunctionRecursionConfigCommandInput,
     options: __HttpHandlerOptions,
     cb: (err: any, data?: PutFunctionRecursionConfigCommandOutput) => void,
+  ): void;
+  /**
+   * @see {@link PutFunctionScalingConfigCommand}
+   */
+  putFunctionScalingConfig(
+    args: PutFunctionScalingConfigCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<PutFunctionScalingConfigCommandOutput>;
+  putFunctionScalingConfig(
+    args: PutFunctionScalingConfigCommandInput,
+    cb: (err: any, data?: PutFunctionScalingConfigCommandOutput) => void,
+  ): void;
+  putFunctionScalingConfig(
+    args: PutFunctionScalingConfigCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (err: any, data?: PutFunctionScalingConfigCommandOutput) => void,
   ): void;
   /**
    * @see {@link PutProvisionedConcurrencyConfigCommand}
@@ -1485,6 +1636,22 @@ export interface Lambda {
     args: UpdateAliasCommandInput,
     options: __HttpHandlerOptions,
     cb: (err: any, data?: UpdateAliasCommandOutput) => void,
+  ): void;
+  /**
+   * @see {@link UpdateCapacityProviderCommand}
+   */
+  updateCapacityProvider(
+    args: UpdateCapacityProviderCommandInput,
+    options?: __HttpHandlerOptions,
+  ): Promise<UpdateCapacityProviderCommandOutput>;
+  updateCapacityProvider(
+    args: UpdateCapacityProviderCommandInput,
+    cb: (err: any, data?: UpdateCapacityProviderCommandOutput) => void,
+  ): void;
+  updateCapacityProvider(
+    args: UpdateCapacityProviderCommandInput,
+    options: __HttpHandlerOptions,
+    cb: (err: any, data?: UpdateCapacityProviderCommandOutput) => void,
   ): void;
   /**
    * @see {@link UpdateCodeSigningConfigCommand}

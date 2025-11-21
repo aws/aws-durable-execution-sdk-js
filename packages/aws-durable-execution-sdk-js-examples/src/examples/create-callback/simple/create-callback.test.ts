@@ -49,13 +49,8 @@ createTests({
 
       expect(callbackOp.getCallbackDetails()?.error).toBeUndefined();
 
-      // There is a bug in the AWS SDK that causes `undefined` to be serialized into `{}` when
-      // calling SendDurableExecutionCallbackSuccess.
-      // The result should be undefined, but we can't send the success with undefined.
-      // expect(callbackOp.getCallbackDetails()?.result).toBeUndefined()
-      // expect(execution.getResult()).toBeUndefined();
-      expect(callbackOp.getCallbackDetails()?.result).toStrictEqual({});
-      expect(execution.getResult()).toStrictEqual("{}");
+      expect(callbackOp.getCallbackDetails()?.result).toBeUndefined();
+      expect(execution.getResult()).toBeUndefined();
     });
 
     it("function completes when callback fails with undefined error message - edge case", async () => {

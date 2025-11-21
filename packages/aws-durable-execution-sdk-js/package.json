@@ -62,7 +62,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.938.0"
+    "@aws-sdk/client-lambda": "^3.942.0"
   },
   "private": false
 }
