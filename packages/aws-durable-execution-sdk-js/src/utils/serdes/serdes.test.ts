@@ -73,8 +73,8 @@ describe("Serdes", () => {
 
   describe("createClassSerdes", () => {
     class TestClass {
-      name: string = "";
-      value: number = 0;
+      name = "";
+      value = 0;
 
       constructor(name?: string, value?: number) {
         if (name) this.name = name;
@@ -128,7 +128,7 @@ describe("Serdes", () => {
 
     it("should handle class instances with Date properties", async () => {
       class ClassWithDate {
-        name: string = "";
+        name = "";
         createdAt: Date;
 
         constructor(name?: string) {
@@ -166,7 +166,7 @@ describe("Serdes", () => {
 
   describe("createClassSerdesWithDates", () => {
     class ClassWithDate {
-      name: string = "";
+      name = "";
       createdAt: Date;
       updatedAt: Date | null = null;
 
@@ -259,7 +259,7 @@ describe("Serdes", () => {
 
     it("should handle nested Date properties", async () => {
       class ClassWithNestedDate {
-        name: string = "";
+        name = "";
         metadata: {
           createdAt: Date;
           updatedAt: Date;

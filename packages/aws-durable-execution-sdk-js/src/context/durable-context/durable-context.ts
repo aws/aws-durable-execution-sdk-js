@@ -51,9 +51,9 @@ import { validateContextUsage } from "../../utils/context-tracker/context-tracke
 
 export class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
-  private _stepCounter: number = 0;
+  private _stepCounter = 0;
   private contextLogger: Logger | null;
-  private modeAwareLoggingEnabled: boolean = true;
+  private modeAwareLoggingEnabled = true;
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
   private checkpoint: ReturnType<typeof createCheckpoint>;
@@ -361,7 +361,7 @@ export class DurableContextImpl implements DurableContext {
   }
 
   waitForCallback<T>(
-    nameOrSubmitter?: string | undefined | WaitForCallbackSubmitterFunc,
+    nameOrSubmitter?: string | WaitForCallbackSubmitterFunc,
     submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
   ): DurablePromise<T> {
@@ -376,7 +376,7 @@ export class DurableContextImpl implements DurableContext {
         this.runInChildContext.bind(this),
       );
       return waitForCallbackHandler(
-        nameOrSubmitter!,
+        nameOrSubmitter,
         submitterOrConfig,
         maybeConfig,
       );
@@ -413,7 +413,7 @@ export class DurableContextImpl implements DurableContext {
         ? waitForConditionHandler(
             nameOrCheckFunc,
             checkFuncOrConfig as WaitForConditionCheckFunc<T>,
-            maybeConfig!,
+            maybeConfig,
           )
         : waitForConditionHandler(
             nameOrCheckFunc,

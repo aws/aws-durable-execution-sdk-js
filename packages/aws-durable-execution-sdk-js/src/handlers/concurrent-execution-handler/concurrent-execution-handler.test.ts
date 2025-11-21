@@ -742,7 +742,7 @@ describe("ConcurrencyController", () => {
       const executor = jest.fn();
 
       // Resolve in reverse order
-      let resolvers: Array<(value: any) => void> = [];
+      const resolvers: ((value: any) => void)[] = [];
       mockParentContext.runInChildContext.mockImplementation(() => {
         return new Promise((resolve) => {
           resolvers.push(resolve);

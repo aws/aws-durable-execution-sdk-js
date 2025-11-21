@@ -72,14 +72,8 @@ export class DurablePromise<T> implements Promise<T> {
    * Triggers execution if not already started
    */
   then<TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | undefined
-      | null,
-    onrejected?:
-      | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
-      | undefined
-      | null,
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2> {
     return this.ensureExecution().then(onfulfilled, onrejected);
   }
@@ -89,10 +83,7 @@ export class DurablePromise<T> implements Promise<T> {
    * Triggers execution if not already started
    */
   catch<TResult = never>(
-    onrejected?:
-      | ((reason: unknown) => TResult | PromiseLike<TResult>)
-      | undefined
-      | null,
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
   ): Promise<T | TResult> {
     return this.ensureExecution().catch(onrejected);
   }
@@ -101,14 +92,12 @@ export class DurablePromise<T> implements Promise<T> {
    * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected)
    * Triggers execution if not already started
    */
-  finally(onfinally?: (() => void) | undefined | null): Promise<T> {
+  finally(onfinally?: (() => void) | null): Promise<T> {
     return this.ensureExecution().finally(onfinally);
   }
 
   /** Returns the string tag for the promise type */
-  get [Symbol.toStringTag](): string {
-    return "DurablePromise";
-  }
+  readonly [Symbol.toStringTag] = "DurablePromise";
 
   /**
    * Check if the promise has been executed (awaited or had .then/.catch/.finally called)

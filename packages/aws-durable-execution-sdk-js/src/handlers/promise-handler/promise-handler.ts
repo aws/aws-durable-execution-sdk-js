@@ -56,9 +56,7 @@ function createErrorAwareSerdes<T>(): Serdes<PromiseSettledResult<T>[]> {
       data: string | undefined,
       _context: SerdesContext,
     ): Promise<PromiseSettledResult<T>[] | undefined> =>
-      data !== undefined
-        ? (restoreErrors(JSON.parse(data)) as PromiseSettledResult<T>[])
-        : undefined,
+      data !== undefined ? restoreErrors(JSON.parse(data)) : undefined,
   };
 }
 
@@ -69,7 +67,6 @@ const stepConfig = {
   }),
 };
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export const createPromiseHandler = (step: DurableContext["step"]) => {
   const parseParams = <T>(
     nameOrPromises: string | undefined | Promise<T>[],

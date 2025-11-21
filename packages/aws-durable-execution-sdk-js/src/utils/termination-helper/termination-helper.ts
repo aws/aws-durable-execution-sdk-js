@@ -113,7 +113,7 @@ export function terminate<T>(
 
       // Check if there are active operations before terminating
       const tracker = context.activeOperationsTracker;
-      if (tracker && tracker.hasActive()) {
+      if (tracker?.hasActive()) {
         log("⏳", "Deferring termination - active operations in progress:", {
           activeCount: tracker.getCount(),
           reason,
@@ -152,7 +152,7 @@ export function terminate<T>(
 
   // No parent context - check active operations and terminate
   const tracker = context.activeOperationsTracker;
-  if (tracker && tracker.hasActive()) {
+  if (tracker?.hasActive()) {
     log("⏳", "Deferring termination - active operations in progress:", {
       activeCount: tracker.getCount(),
       reason,

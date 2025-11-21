@@ -441,7 +441,7 @@ describe("Run In Child Context Handler", () => {
 describe("runInChildContext with custom serdes", () => {
   class TestResult {
     constructor(
-      public value: string = "",
+      public value = "",
       public timestamp: Date = new Date(),
     ) {}
   }

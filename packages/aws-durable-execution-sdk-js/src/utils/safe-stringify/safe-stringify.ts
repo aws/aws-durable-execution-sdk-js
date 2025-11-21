@@ -11,6 +11,7 @@ export const safeStringify = (data: unknown): string => {
           // Handle Error objects by extracting their properties
           if (value instanceof Error) {
             return {
+              // eslint-disable-next-line @typescript-eslint/no-misused-spread
               ...value,
               name: value.name,
               message: value.message,

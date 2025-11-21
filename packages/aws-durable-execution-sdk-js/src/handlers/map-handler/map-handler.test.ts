@@ -258,7 +258,7 @@ describe("Map Handler", () => {
         for (let i = 0; i < executionItems.length; i++) {
           const item = executionItems[i];
           const mockChildContext = {} as DurableContext;
-          const result = await (executor as any)(item, mockChildContext);
+          const result = await executor(item, mockChildContext);
           results.push({
             index: i,
             result,

@@ -77,7 +77,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     }
 
     // Phase 2 execution should have happened (more checkpoint calls)
-    expect((waitPromise as DurablePromise<void>).isExecuted).toBe(true);
+    expect(waitPromise.isExecuted).toBe(true);
     expect(mockCheckpoint.mock.calls.length).toBeGreaterThan(phase1Calls);
   });
 
@@ -95,8 +95,8 @@ describe("Wait Handler Two-Phase Execution", () => {
     const wait2 = waitHandler({ seconds: 1 });
 
     // Neither should be executed yet
-    expect((wait1 as DurablePromise<void>).isExecuted).toBe(false);
-    expect((wait2 as DurablePromise<void>).isExecuted).toBe(false);
+    expect(wait1.isExecuted).toBe(false);
+    expect(wait2.isExecuted).toBe(false);
 
     // Phase 2: Use Promise.race - this should trigger execution
     try {
@@ -106,9 +106,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     }
 
     // At least one should be executed
-    const executed =
-      (wait1 as DurablePromise<void>).isExecuted ||
-      (wait2 as DurablePromise<void>).isExecuted;
+    const executed = wait1.isExecuted || wait2.isExecuted;
     expect(executed).toBe(true);
   });
 
@@ -123,13 +121,13 @@ describe("Wait Handler Two-Phase Execution", () => {
 
     // Phase 1: Create the promise
     const waitPromise = waitHandler({ seconds: 5 });
-    expect((waitPromise as DurablePromise<void>).isExecuted).toBe(false);
+    expect(waitPromise.isExecuted).toBe(false);
 
     // Phase 2: Call .then - this should trigger execution
     waitPromise.then(() => {}).catch(() => {});
 
     // Should be marked as executed
-    expect((waitPromise as DurablePromise<void>).isExecuted).toBe(true);
+    expect(waitPromise.isExecuted).toBe(true);
   });
 
   it("should only checkpoint once when stepData already exists", async () => {

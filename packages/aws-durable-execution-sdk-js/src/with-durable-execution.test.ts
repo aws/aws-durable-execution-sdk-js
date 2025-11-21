@@ -402,9 +402,6 @@ describe("withDurableExecution", () => {
     // Setup - Create a test UnrecoverableInvocationError
     class TestInvocationError extends UnrecoverableInvocationError {
       readonly terminationReason = TerminationReason.CUSTOM;
-      constructor(message: string) {
-        super(message);
-      }
     }
 
     const testError = new TestInvocationError("Test invocation error");
@@ -428,9 +425,6 @@ describe("withDurableExecution", () => {
     // Setup - Create a custom UnrecoverableInvocationError
     class CustomInvocationError extends UnrecoverableInvocationError {
       readonly terminationReason = TerminationReason.CUSTOM;
-      constructor(message: string) {
-        super(message);
-      }
     }
 
     const customError = new CustomInvocationError("Custom invocation error");
@@ -454,9 +448,6 @@ describe("withDurableExecution", () => {
     // Setup - Create a custom UnrecoverableExecutionError
     class CustomExecutionError extends UnrecoverableExecutionError {
       readonly terminationReason = TerminationReason.CUSTOM;
-      constructor(message: string) {
-        super(message);
-      }
     }
 
     const executionError = new CustomExecutionError("Custom execution error");

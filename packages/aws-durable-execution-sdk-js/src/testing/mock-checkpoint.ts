@@ -1,11 +1,11 @@
 import { OperationUpdate } from "@aws-sdk/client-lambda";
 
-export type CheckpointFunction = {
+export interface CheckpointFunction {
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;
   setTerminating(): void;
   hasPendingAncestorCompletion(stepId: string): boolean;
-};
+}
 
 export const createMockCheckpoint = (
   mockImplementation?: (

@@ -118,7 +118,7 @@ export class ConcurrencyController {
     executionContext: ExecutionContext,
     parentEntityId: string,
   ): Promise<BatchResult<R>> {
-    const resultItems: Array<BatchItem<R>> = [];
+    const resultItems: BatchItem<R>[] = [];
 
     log("🔄", `Replaying ${items.length} items sequentially`, {
       targetTotalCount,
@@ -238,9 +238,7 @@ export class ConcurrencyController {
     config: ConcurrencyConfig<R>,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
-    const resultItems: Array<BatchItem<R> | undefined> = new Array(
-      items.length,
-    );
+    const resultItems = new Array<BatchItem<R> | undefined>(items.length);
     const startedItems = new Set<number>();
 
     let activeCount = 0;
@@ -389,9 +387,9 @@ export class ConcurrencyController {
           // Include all items that were started (have a value in resultItems)
           // Create shallow copy to prevent mutations from affecting the returned result
           const finalBatchItems: BatchItem<R>[] = [];
-          for (let i = 0; i < resultItems.length; i++) {
-            if (resultItems[i] !== undefined) {
-              finalBatchItems.push({ ...resultItems[i]! });
+          for (const resultItem of resultItems) {
+            if (resultItem !== undefined) {
+              finalBatchItems.push({ ...resultItem });
             }
           }
 
@@ -528,7 +526,7 @@ export const createConcurrentExecutionHandler = (
       ) {
         return restoreBatchResult<TResult>(result);
       }
-      return result as BatchResult<TResult>;
+      return result;
     });
   };
 };

@@ -27,13 +27,13 @@ export interface BatchItem<R> {
  */
 export interface BatchResult<R> {
   /** All items in the batch with their results/errors */
-  all: Array<BatchItem<R>>;
+  all: BatchItem<R>[];
   /** Returns only the items that succeeded */
-  succeeded(): Array<BatchItem<R> & { result: R }>;
+  succeeded(): (BatchItem<R> & { result: R })[];
   /** Returns only the items that failed */
-  failed(): Array<BatchItem<R> & { error: ChildContextError }>;
+  failed(): (BatchItem<R> & { error: ChildContextError })[];
   /** Returns only the items that are still in progress */
-  started(): Array<BatchItem<R> & { status: BatchItemStatus.STARTED }>;
+  started(): (BatchItem<R> & { status: BatchItemStatus.STARTED })[];
   /** Overall status of the batch (SUCCEEDED if no failures, FAILED otherwise) */
   status: BatchItemStatus.SUCCEEDED | BatchItemStatus.FAILED;
   /** Reason why the batch completed */
@@ -46,9 +46,9 @@ export interface BatchResult<R> {
   /** Throws the first error if any item failed */
   throwIfError(): void;
   /** Returns array of all successful results */
-  getResults(): Array<R>;
+  getResults(): R[];
   /** Returns array of all errors */
-  getErrors(): Array<ChildContextError>;
+  getErrors(): ChildContextError[];
   /** Number of successful items */
   successCount: number;
   /** Number of failed items */

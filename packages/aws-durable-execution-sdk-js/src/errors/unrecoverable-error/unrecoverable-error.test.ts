@@ -11,26 +11,14 @@ import { TerminationReason } from "../../termination-manager/types";
 // Create concrete implementations for testing
 class TestUnrecoverableError extends UnrecoverableError {
   readonly terminationReason = TerminationReason.CUSTOM;
-
-  constructor(message: string, originalError?: Error) {
-    super(message, originalError);
-  }
 }
 
 class TestExecutionError extends UnrecoverableExecutionError {
   readonly terminationReason = TerminationReason.CUSTOM;
-
-  constructor(message: string, originalError?: Error) {
-    super(message, originalError);
-  }
 }
 
 class TestInvocationError extends UnrecoverableInvocationError {
   readonly terminationReason = TerminationReason.CUSTOM;
-
-  constructor(message: string, originalError?: Error) {
-    super(message, originalError);
-  }
 }
 
 describe("UnrecoverableError", () => {
