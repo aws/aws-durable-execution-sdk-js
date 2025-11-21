@@ -1,5 +1,5 @@
 import { createRunInChildContextHandler } from "./run-in-child-context-handler";
-import { ExecutionContext, DurableContext } from "../../types";
+import { ExecutionContext } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
 

@@ -64,7 +64,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     // Phase 1: Create the promise - this executes the logic immediately
     const promise = waitForConditionHandler(checkFn, {
       initialState: 0,
-      waitStrategy: (state) => ({ shouldContinue: false }),
+      waitStrategy: (_state) => ({ shouldContinue: false }),
     });
 
     // Should return a DurablePromise
@@ -101,7 +101,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     // Phase 1: Create the promise
     const promise = waitForConditionHandler(checkFn, {
       initialState: "initial",
-      waitStrategy: (state) => ({ shouldContinue: false }),
+      waitStrategy: (_state) => ({ shouldContinue: false }),
     });
 
     // Wait briefly for phase 1 to execute
@@ -140,7 +140,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     executionOrder.push("promise-created");
     const promise = waitForConditionHandler(checkFn, {
       initialState: 0,
-      waitStrategy: (state) => ({ shouldContinue: false }),
+      waitStrategy: (_state) => ({ shouldContinue: false }),
     });
     executionOrder.push("after-handler-call");
 
