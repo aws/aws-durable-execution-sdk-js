@@ -61,6 +61,7 @@ describe("ApiStorage", () => {
         connectionTimeout: 5000,
         socketTimeout: 50000,
         requestTimeout: 55000,
+        throwOnRequestTimeout: true,
         httpsAgent: expect.any(Object),
       }),
     });
