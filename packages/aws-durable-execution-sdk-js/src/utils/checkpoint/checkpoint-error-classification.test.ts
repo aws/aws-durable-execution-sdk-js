@@ -54,6 +54,19 @@ describe("Checkpoint Error Classification", () => {
     expect(result.message).toContain("Invalid parameter value");
   });
 
+  it("should classify 429 errors as invocation error (retryable)", () => {
+    const awsError = {
+      name: "TooManyRequestsException",
+      message: "Rate limit exceeded",
+      $metadata: { httpStatusCode: 429 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
+    expect(result.message).toContain("Rate limit exceeded");
+  });
+
   it("should classify 4xx InvalidParameterValueException without Invalid Checkpoint Token as execution error", () => {
     const awsError = {
       name: "InvalidParameterValueException",

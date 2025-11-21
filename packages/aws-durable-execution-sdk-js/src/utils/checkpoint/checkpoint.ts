@@ -239,8 +239,13 @@ class CheckpointHandler {
       );
     }
 
-    // Other 4xx errors
-    if (statusCode && statusCode >= 400 && statusCode < 500) {
+    // Non-retryable errors (4xx except 429)
+    if (
+      statusCode &&
+      statusCode >= 400 &&
+      statusCode < 500 &&
+      statusCode !== 429
+    ) {
       return new CheckpointUnrecoverableExecutionError(
         `Checkpoint failed: ${errorMessage}`,
         originalError,
