@@ -1,13 +1,11 @@
-import { createStepHandler } from "./step-handler";
-import { ExecutionContext } from "../../types";
+import { createWaitForConditionHandler } from "./wait-for-condition-handler";
+import { ExecutionContext, WaitForConditionCheckFunc } from "../../types";
 import { EventEmitter } from "events";
 import { DurablePromise } from "../../types/durable-promise";
-import { Context } from "aws-lambda";
 
-describe("Step Handler Two-Phase Execution", () => {
+describe("WaitForCondition Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: any;
-  let mockParentContext: Context;
   let createStepId: () => string;
   let createContextLogger: (stepId: string, attempt?: number) => any;
   let addRunningOperation: jest.Mock;
@@ -34,10 +32,6 @@ describe("Step Handler Two-Phase Execution", () => {
       .fn()
       .mockReturnValue(false);
 
-    mockParentContext = {
-      getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
-    } as any;
-
     createStepId = (): string => `step-${++stepIdCounter}`;
     createContextLogger = jest.fn().mockReturnValue({
       info: jest.fn(),
@@ -50,104 +44,124 @@ describe("Step Handler Two-Phase Execution", () => {
     getOperationsEmitter = (): EventEmitter => new EventEmitter();
   });
 
-  it("should execute step logic in phase 1 immediately", async () => {
-    const stepHandler = createStepHandler(
+  it("should execute check function in phase 1 immediately", async () => {
+    const waitForConditionHandler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
-      mockParentContext,
       createStepId,
       createContextLogger,
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
       getOperationsEmitter,
+      undefined,
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    const checkFn: WaitForConditionCheckFunc<number> = jest
+      .fn()
+      .mockResolvedValue(10);
 
     // Phase 1: Create the promise - this executes the logic immediately
-    const stepPromise = stepHandler(stepFn);
+    const promise = waitForConditionHandler(checkFn, {
+      initialState: 0,
+      waitStrategy: (_state) => ({ shouldContinue: false }),
+    });
 
     // Should return a DurablePromise
-    expect(stepPromise).toBeInstanceOf(DurablePromise);
+    expect(promise).toBeInstanceOf(DurablePromise);
 
     // Wait briefly for phase 1 to start executing
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    // Phase 1 should have executed the step function (before we await the promise)
-    expect(stepFn).toHaveBeenCalled();
+    // Phase 1 should have executed the check function (before we await the promise)
+    expect(checkFn).toHaveBeenCalled();
     expect(mockCheckpoint).toHaveBeenCalled();
 
     // Now await the promise to verify it completes
-    await stepPromise;
+    await promise;
   });
 
   it("should return cached result in phase 2 when awaited", async () => {
-    const stepHandler = createStepHandler(
+    const waitForConditionHandler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
-      mockParentContext,
       createStepId,
       createContextLogger,
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
       getOperationsEmitter,
+      undefined,
     );
 
-    const stepFn = jest.fn().mockResolvedValue("test-result");
+    const checkFn: WaitForConditionCheckFunc<string> = jest
+      .fn()
+      .mockResolvedValue("completed");
 
     // Phase 1: Create the promise
-    const stepPromise = stepHandler(stepFn);
+    const promise = waitForConditionHandler(checkFn, {
+      initialState: "initial",
+      waitStrategy: (_state) => ({ shouldContinue: false }),
+    });
 
     // Wait briefly for phase 1 to execute
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    // Step function should have been called before we await the promise
-    const phase1Calls = stepFn.mock.calls.length;
-    expect(phase1Calls).toBeGreaterThan(0);
+    // Check function should have been called before we await the promise
+    expect(checkFn).toHaveBeenCalledTimes(1);
 
-    // Phase 2: Await the promise - should return cached result
-    const result = await stepPromise;
+    // Phase 2: Await the promise to get the result
+    const result = await promise;
 
-    // Should return the result from phase 1
-    expect(result).toBe("test-result");
-
-    // Step function should not be called again in phase 2
-    expect(stepFn.mock.calls.length).toBe(phase1Calls);
-
-    // Promise should be marked as executed
-    expect((stepPromise as DurablePromise<string>).isExecuted).toBe(true);
+    expect(result).toBe("completed");
+    expect(checkFn).toHaveBeenCalledTimes(1);
   });
 
-  it("should mark isAwaited and invoke callback when promise is awaited", async () => {
-    const stepHandler = createStepHandler(
+  it("should execute check function before await", async () => {
+    const waitForConditionHandler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
-      mockParentContext,
       createStepId,
       createContextLogger,
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
       getOperationsEmitter,
+      undefined,
     );
 
-    const stepFn = jest.fn().mockResolvedValue("result");
+    let executionOrder: string[] = [];
+    const checkFn: WaitForConditionCheckFunc<number> = jest.fn(async () => {
+      executionOrder.push("check-executed");
+      return 42;
+    });
 
     // Phase 1: Create the promise
-    const stepPromise = stepHandler(stepFn);
+    executionOrder.push("promise-created");
+    const promise = waitForConditionHandler(checkFn, {
+      initialState: 0,
+      waitStrategy: (_state) => ({ shouldContinue: false }),
+    });
+    executionOrder.push("after-handler-call");
 
-    // Wait for phase 1 to complete
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait briefly for phase 1 to execute
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
-    // Promise should not be marked as executed yet (not awaited)
-    expect((stepPromise as DurablePromise<string>).isExecuted).toBe(false);
+    // Check should have executed before we await
+    expect(checkFn).toHaveBeenCalled();
 
-    // Phase 2: Await the promise
-    await stepPromise;
+    executionOrder.push("before-await");
+    const result = await promise;
+    executionOrder.push("after-await");
 
-    // Now it should be marked as executed
-    expect((stepPromise as DurablePromise<string>).isExecuted).toBe(true);
+    // Verify execution order: check should execute before await
+    expect(executionOrder).toEqual([
+      "promise-created",
+      "check-executed",
+      "after-handler-call",
+      "before-await",
+      "after-await",
+    ]);
+    expect(result).toBe(42);
   });
 });

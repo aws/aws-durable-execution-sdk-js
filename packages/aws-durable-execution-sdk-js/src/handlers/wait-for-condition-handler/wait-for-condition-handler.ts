@@ -6,6 +6,7 @@ import {
   OperationSubType,
   WaitForConditionContext,
   Logger,
+  DurablePromise,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { terminate } from "../../utils/termination-helper/termination-helper";
@@ -41,6 +42,7 @@ const waitForContinuation = async (
   hasRunningOperations: () => boolean,
   checkpoint: ReturnType<typeof createCheckpoint>,
   operationsEmitter: EventEmitter,
+  onAwaitedChange?: (callback: () => void) => void,
 ): Promise<void> => {
   const stepData = context.getStepData(stepId);
 
@@ -65,6 +67,7 @@ const waitForContinuation = async (
     hasRunningOperations,
     operationsEmitter,
     checkpoint,
+    onAwaitedChange,
   });
 
   // Return to let the main loop re-evaluate step status
@@ -81,112 +84,151 @@ export const createWaitForConditionHandler = (
   getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
 ) => {
-  return async <T>(
+  return <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T>,
     checkOrConfig?: WaitForConditionCheckFunc<T> | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
-  ): Promise<T> => {
-    let name: string | undefined;
-    let check: WaitForConditionCheckFunc<T>;
-    let config: WaitForConditionConfig<T>;
+  ): DurablePromise<T> => {
+    // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
+    let phase1Result: T | undefined;
+    let phase1Error: unknown;
+    let isAwaited = false;
+    let waitingCallback: (() => void) | undefined;
 
-    // Parse overloaded parameters
-    if (typeof nameOrCheck === "string" || nameOrCheck === undefined) {
-      name = nameOrCheck;
-      check = checkOrConfig as WaitForConditionCheckFunc<T>;
-      config = maybeConfig as WaitForConditionConfig<T>;
-    } else {
-      check = nameOrCheck;
-      config = checkOrConfig as WaitForConditionConfig<T>;
-    }
+    const setWaitingCallback = (cb: () => void): void => {
+      waitingCallback = cb;
+    };
 
-    if (!config || !config.waitStrategy || config.initialState === undefined) {
-      throw new Error(
-        "waitForCondition requires config with waitStrategy and initialState",
-      );
-    }
+    // Phase 1: Start execution immediately and capture result/error
+    const phase1Promise = (async (): Promise<T> => {
+      let name: string | undefined;
+      let check: WaitForConditionCheckFunc<T>;
+      let config: WaitForConditionConfig<T>;
 
-    const stepId = createStepId();
-
-    log("🔄", "Running waitForCondition:", {
-      stepId,
-      name,
-      config,
-    });
-
-    // Main waitForCondition logic - can be re-executed if step status changes
-    while (true) {
-      try {
-        const stepData = context.getStepData(stepId);
-
-        // Check if already completed
-        if (stepData?.Status === OperationStatus.SUCCEEDED) {
-          return await handleCompletedWaitForCondition<T>(
-            context,
-            stepId,
-            name,
-            config.serdes,
-          );
-        }
-
-        if (stepData?.Status === OperationStatus.FAILED) {
-          // Return an async rejected promise to ensure it's handled asynchronously
-          return (async (): Promise<T> => {
-            // Reconstruct the original error from stored ErrorObject
-            if (stepData.StepDetails?.Error) {
-              throw DurableOperationError.fromErrorObject(
-                stepData.StepDetails.Error,
-              );
-            } else {
-              // Fallback for legacy data without Error field
-              const errorMessage = stepData?.StepDetails?.Result;
-              throw new WaitForConditionError(
-                errorMessage || "waitForCondition failed",
-              );
-            }
-          })();
-        }
-
-        // If PENDING, wait for timer to complete
-        if (stepData?.Status === OperationStatus.PENDING) {
-          await waitForContinuation(
-            context,
-            stepId,
-            name,
-            hasRunningOperations,
-            checkpoint,
-            getOperationsEmitter(),
-          );
-          continue; // Re-evaluate step status after waiting
-        }
-
-        // Execute check function for READY, STARTED, or first time (undefined)
-        const result = await executeWaitForCondition(
-          context,
-          checkpoint,
-          stepId,
-          name,
-          check,
-          config,
-          createContextLogger,
-          addRunningOperation,
-          removeRunningOperation,
-          hasRunningOperations,
-          getOperationsEmitter,
-          parentId,
-        );
-
-        // If executeWaitForCondition signals to continue the main loop, do so
-        if (result === CONTINUE_MAIN_LOOP) {
-          continue;
-        }
-
-        return result;
-      } catch (error) {
-        // For any error from executeWaitForCondition, re-throw it
-        throw error;
+      // Parse overloaded parameters - validation errors thrown here are async
+      if (typeof nameOrCheck === "string" || nameOrCheck === undefined) {
+        name = nameOrCheck;
+        check = checkOrConfig as WaitForConditionCheckFunc<T>;
+        config = maybeConfig as WaitForConditionConfig<T>;
+      } else {
+        check = nameOrCheck;
+        config = checkOrConfig as WaitForConditionConfig<T>;
       }
-    }
+
+      if (
+        !config ||
+        !config.waitStrategy ||
+        config.initialState === undefined
+      ) {
+        throw new Error(
+          "waitForCondition requires config with waitStrategy and initialState",
+        );
+      }
+
+      const stepId = createStepId();
+
+      log("🔄", "Running waitForCondition:", {
+        stepId,
+        name,
+        config,
+      });
+      // Main waitForCondition logic - can be re-executed if step status changes
+      while (true) {
+        try {
+          const stepData = context.getStepData(stepId);
+
+          // Check if already completed
+          if (stepData?.Status === OperationStatus.SUCCEEDED) {
+            return await handleCompletedWaitForCondition<T>(
+              context,
+              stepId,
+              name,
+              config.serdes,
+            );
+          }
+
+          if (stepData?.Status === OperationStatus.FAILED) {
+            // Return an async rejected promise to ensure it's handled asynchronously
+            return (async (): Promise<T> => {
+              // Reconstruct the original error from stored ErrorObject
+              if (stepData.StepDetails?.Error) {
+                throw DurableOperationError.fromErrorObject(
+                  stepData.StepDetails.Error,
+                );
+              } else {
+                // Fallback for legacy data without Error field
+                const errorMessage = stepData?.StepDetails?.Result;
+                throw new WaitForConditionError(
+                  errorMessage || "waitForCondition failed",
+                );
+              }
+            })();
+          }
+
+          // If PENDING, wait for timer to complete
+          if (stepData?.Status === OperationStatus.PENDING) {
+            await waitForContinuation(
+              context,
+              stepId,
+              name,
+              hasRunningOperations,
+              checkpoint,
+              getOperationsEmitter(),
+              isAwaited ? undefined : setWaitingCallback,
+            );
+            continue; // Re-evaluate step status after waiting
+          }
+
+          // Execute check function for READY, STARTED, or first time (undefined)
+          const result = await executeWaitForCondition(
+            context,
+            checkpoint,
+            stepId,
+            name,
+            check,
+            config,
+            createContextLogger,
+            addRunningOperation,
+            removeRunningOperation,
+            hasRunningOperations,
+            getOperationsEmitter,
+            parentId,
+            isAwaited ? undefined : setWaitingCallback,
+          );
+
+          // If executeWaitForCondition signals to continue the main loop, do so
+          if (result === CONTINUE_MAIN_LOOP) {
+            continue;
+          }
+
+          return result;
+        } catch (error) {
+          // For any error from executeWaitForCondition, re-throw it
+          throw error;
+        }
+      }
+    })()
+      .then((result) => {
+        phase1Result = result;
+      })
+      .catch((error) => {
+        phase1Error = error;
+      });
+
+    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    return new DurablePromise(async () => {
+      // When promise is awaited, mark as awaited and invoke waiting callback
+      isAwaited = true;
+      if (waitingCallback) {
+        waitingCallback();
+      }
+
+      await phase1Promise;
+      if (phase1Error !== undefined) {
+        throw phase1Error;
+      }
+      return phase1Result!;
+    });
   };
 };
 
@@ -227,6 +269,7 @@ export const executeWaitForCondition = async <T>(
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
+  onAwaitedChange?: ((callback: () => void) => void) | undefined,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   const serdes = config.serdes || defaultSerdes;
 
@@ -383,6 +426,7 @@ export const executeWaitForCondition = async <T>(
         hasRunningOperations,
         checkpoint,
         getOperationsEmitter(),
+        onAwaitedChange,
       );
       return CONTINUE_MAIN_LOOP;
     }
