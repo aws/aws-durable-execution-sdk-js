@@ -427,13 +427,13 @@ export class DurableContextImpl implements DurableContext {
     itemsOrMapFunc: TInput[] | MapFunc<TInput, TOutput>,
     mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
     maybeConfig?: MapConfig<TInput, TOutput>,
-  ): Promise<BatchResult<TOutput>> {
+  ): DurablePromise<BatchResult<TOutput>> {
     validateContextUsage(
       this._stepPrefix,
       "map",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const mapHandler = createMapHandler(
         this.executionContext,
         this._executeConcurrently.bind(this),
@@ -456,13 +456,13 @@ export class DurableContextImpl implements DurableContext {
       | (ParallelFunc<T> | NamedParallelBranch<T>)[]
       | ParallelConfig<T>,
     maybeConfig?: ParallelConfig<T>,
-  ): Promise<BatchResult<T>> {
+  ): DurablePromise<BatchResult<T>> {
     validateContextUsage(
       this._stepPrefix,
       "parallel",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const parallelHandler = createParallelHandler(
         this.executionContext,
         this._executeConcurrently.bind(this),
@@ -480,13 +480,13 @@ export class DurableContextImpl implements DurableContext {
       | ConcurrentExecutor<TItem, TResult>
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>> {
+  ): DurablePromise<BatchResult<TResult>> {
     validateContextUsage(
       this._stepPrefix,
       "_executeConcurrently",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
         this.executionContext,
         this.runInChildContext.bind(this),
