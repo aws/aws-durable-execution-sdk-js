@@ -57,12 +57,12 @@ describe("ApiStorage", () => {
   test("should initialize with correct endpoint and region", () => {
     // Verify that LambdaClient was constructed with the correct parameters
     expect(LambdaClient).toHaveBeenCalledWith({
-      requestHandler: {
+      requestHandler: expect.objectContaining({
         connectionTimeout: 5000,
         socketTimeout: 50000,
         requestTimeout: 55000,
-        throwOnRequestTimeout: true,
-      },
+        httpsAgent: expect.any(Object),
+      }),
     });
   });
 

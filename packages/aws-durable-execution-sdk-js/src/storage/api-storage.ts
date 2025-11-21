@@ -6,9 +6,22 @@ import {
   GetDurableExecutionStateResponse,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
+import { Agent } from "https";
 import { ExecutionState } from "./storage";
 import { log } from "../utils/logger/logger";
 import { Logger } from "../types";
+
+// Reuse HTTPS agent with keepAlive to prevent DNS exhaustion
+// keepAlive: true - Reuse TCP connections
+// maxSockets: 50 - Max concurrent connections
+// maxFreeSockets: 10 - Keep up to 10 idle connections in pool
+// timeout: 60000 - Keep idle connections alive for 60 seconds
+const httpsAgent = new Agent({
+  keepAlive: true,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 60000,
+});
 
 /**
  * Implementation of ExecutionState that uses the new \@aws-sdk/client-lambda
@@ -19,10 +32,10 @@ export class ApiStorage implements ExecutionState {
   constructor() {
     this.client = new LambdaClient({
       requestHandler: {
+        httpsAgent,
         connectionTimeout: 5000,
         socketTimeout: 50000,
         requestTimeout: 55000,
-        throwOnRequestTimeout: true,
       },
     });
   }
