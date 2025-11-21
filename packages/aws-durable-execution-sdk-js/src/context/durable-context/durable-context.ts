@@ -237,13 +237,13 @@ export class DurableContextImpl implements DurableContext {
     funcIdOrInput?: string | I,
     inputOrConfig?: I | InvokeConfig<I, O>,
     maybeConfig?: InvokeConfig<I, O>,
-  ): Promise<O> {
+  ): DurablePromise<O> {
     validateContextUsage(
       this._stepPrefix,
       "invoke",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const invokeHandler = createInvokeHandler(
         this.executionContext,
         this.checkpoint,
@@ -268,13 +268,13 @@ export class DurableContextImpl implements DurableContext {
     nameOrFn: string | undefined | ChildFunc<T>,
     fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "runInChildContext",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const blockHandler = createRunInChildContextHandler(
         this.executionContext,
         this.checkpoint,
@@ -284,23 +284,20 @@ export class DurableContextImpl implements DurableContext {
         createDurableContext,
         this._parentId,
       );
-      const promise = blockHandler(nameOrFn, fnOrOptions, maybeOptions);
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise;
+      return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
   }
 
   wait(
     nameOrDuration: string | Duration,
     maybeDuration?: Duration,
-  ): Promise<void> {
+  ): DurablePromise<void> {
     validateContextUsage(
       this._stepPrefix,
       "wait",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const waitHandler = createWaitHandler(
         this.executionContext,
         this.checkpoint,
@@ -367,27 +364,22 @@ export class DurableContextImpl implements DurableContext {
     nameOrSubmitter?: string | undefined | WaitForCallbackSubmitterFunc,
     submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "waitForCallback",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
         this.executionContext,
         this.runInChildContext.bind(this),
       );
-      const promise = waitForCallbackHandler(
+      return waitForCallbackHandler(
         nameOrSubmitter!,
         submitterOrConfig,
         maybeConfig,
       );
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise?.finally(() => {
-        this.checkAndUpdateReplayMode();
-      });
     });
   }
 
@@ -397,13 +389,13 @@ export class DurableContextImpl implements DurableContext {
       | WaitForConditionCheckFunc<T>
       | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
-  ): Promise<T> {
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "waitForCondition",
       this.executionContext.terminationManager,
     );
-    return this.withModeManagement(() => {
+    return this.withDurableModeManagement(() => {
       const waitForConditionHandler = createWaitForConditionHandler(
         this.executionContext,
         this.checkpoint,
@@ -416,20 +408,17 @@ export class DurableContextImpl implements DurableContext {
         this._parentId,
       );
 
-      const promise =
-        typeof nameOrCheckFunc === "string" || nameOrCheckFunc === undefined
-          ? waitForConditionHandler(
-              nameOrCheckFunc,
-              checkFuncOrConfig as WaitForConditionCheckFunc<T>,
-              maybeConfig!,
-            )
-          : waitForConditionHandler(
-              nameOrCheckFunc,
-              checkFuncOrConfig as WaitForConditionConfig<T>,
-            );
-      // Prevent unhandled promise rejections
-      promise?.catch(() => {});
-      return promise;
+      return typeof nameOrCheckFunc === "string" ||
+        nameOrCheckFunc === undefined
+        ? waitForConditionHandler(
+            nameOrCheckFunc,
+            checkFuncOrConfig as WaitForConditionCheckFunc<T>,
+            maybeConfig!,
+          )
+        : waitForConditionHandler(
+            nameOrCheckFunc,
+            checkFuncOrConfig as WaitForConditionConfig<T>,
+          );
     });
   }
 
