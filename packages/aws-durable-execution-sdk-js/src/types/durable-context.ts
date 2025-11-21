@@ -28,8 +28,43 @@ export interface DurableContext {
    * The underlying AWS Lambda context
    */
   lambdaContext: Context;
+  
   /**
-   * Logger instance for this context, enriched with execution context information
+   * Logger instance for this context, automatically enriched with durable execution metadata.
+   * 
+   * **Automatic Enrichment:**
+   * All log entries are automatically enhanced with:
+   * - `timestamp`: ISO timestamp of the log entry
+   * - `execution_arn`: Durable execution ARN for tracing
+   * - `step_id`: Current step identifier (when logging from within a step)
+   * - `level`: Log level (info, error, warn, debug)
+   * - `message`: The log message
+   * 
+   * **Output Format:**
+   * ```json
+   * {
+   *   "timestamp": "2025-11-21T18:39:24.743Z",
+   *   "execution_arn": "arn:aws:lambda:...",
+   *   "level": "info", 
+   *   "step_id": "abc123",
+   *   "message": "User action completed",
+   *   "data": { "userId": "123", "action": "login" }
+   * }
+   * ```
+   * 
+   * @example
+   * ```typescript
+   * // Basic usage
+   * context.logger.info("User logged in", { userId: "123" });
+   * 
+   * // Error logging
+   * context.logger.error("Database connection failed", error, { retryCount: 3 });
+   * 
+   * // With custom logger (handles circular refs)
+   * import { Logger } from '@aws-lambda-powertools/logger';
+   * const powertoolsLogger = new Logger();
+   * context.configureLogger({ customLogger: powertoolsLogger });
+   * ```
    */
   logger: Logger;
 

@@ -1,14 +1,26 @@
 import { createDefaultLogger } from "./default-logger";
 
 describe("Default Logger", () => {
-  let consoleSpy: jest.SpyInstance;
+  let consoleSpies: {
+    log: jest.SpyInstance;
+    info: jest.SpyInstance;
+    error: jest.SpyInstance;
+    warn: jest.SpyInstance;
+    debug: jest.SpyInstance;
+  };
 
   beforeEach(() => {
-    consoleSpy = jest.spyOn(console, "log").mockImplementation();
+    consoleSpies = {
+      log: jest.spyOn(console, "log").mockImplementation(),
+      info: jest.spyOn(console, "info").mockImplementation(),
+      error: jest.spyOn(console, "error").mockImplementation(),
+      warn: jest.spyOn(console, "warn").mockImplementation(),
+      debug: jest.spyOn(console, "debug").mockImplementation(),
+    };
   });
 
   afterEach(() => {
-    consoleSpy.mockRestore();
+    Object.values(consoleSpies).forEach(spy => spy.mockRestore());
   });
 
   it("should create a logger with all required methods", () => {
@@ -21,60 +33,35 @@ describe("Default Logger", () => {
     expect(logger).toHaveProperty("debug");
   });
 
-  it("should log with custom level and all parameters", () => {
+  it("should output structured data using appropriate console methods", () => {
     const logger = createDefaultLogger();
-    const testData = { key: "value" };
-    const testError = new Error("test error");
+    const structuredData = {
+      timestamp: "2025-11-21T18:33:33.938Z",
+      execution_arn: "test-arn",
+      level: "info",
+      step_id: "abc123",
+      message: "structured message",
+    };
 
-    logger.log?.("custom", "test message", testData, testError);
+    logger.info("structured message", structuredData);
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "custom",
-      "test message",
-      testData,
-      testError,
-    );
+    expect(consoleSpies.info).toHaveBeenCalledWith(structuredData);
   });
 
-  it("should log info messages", () => {
+  it("should use correct console methods for each log level", () => {
     const logger = createDefaultLogger();
-    const testData = { info: "data" };
+    const testData = { test: "data" };
 
+    logger.log?.("custom", "test message", testData);
     logger.info("info message", testData);
-
-    expect(consoleSpy).toHaveBeenCalledWith("info", "info message", testData);
-  });
-
-  it("should log error messages", () => {
-    const logger = createDefaultLogger();
-    const testError = new Error("test error");
-    const testData = { error: "data" };
-
-    logger.error("error message", testError, testData);
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "error",
-      "error message",
-      testError,
-      testData,
-    );
-  });
-
-  it("should log warn messages", () => {
-    const logger = createDefaultLogger();
-    const testData = { warn: "data" };
-
+    logger.error("error message", new Error("test"), testData);
     logger.warn("warn message", testData);
-
-    expect(consoleSpy).toHaveBeenCalledWith("warn", "warn message", testData);
-  });
-
-  it("should log debug messages", () => {
-    const logger = createDefaultLogger();
-    const testData = { debug: "data" };
-
     logger.debug("debug message", testData);
 
-    expect(consoleSpy).toHaveBeenCalledWith("debug", "debug message", testData);
+    expect(consoleSpies.log).toHaveBeenCalledWith(testData);
+    expect(consoleSpies.info).toHaveBeenCalledWith(testData);
+    expect(consoleSpies.error).toHaveBeenCalledWith(testData);
+    expect(consoleSpies.warn).toHaveBeenCalledWith(testData);
+    expect(consoleSpies.debug).toHaveBeenCalledWith(testData);
   });
 });
