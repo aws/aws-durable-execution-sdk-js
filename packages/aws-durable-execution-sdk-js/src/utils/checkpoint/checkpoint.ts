@@ -196,9 +196,10 @@ class CheckpointHandler {
 
   /**
    * Classifies checkpoint errors based on AWS SDK error response
-   * - 4xx with "Invalid Checkpoint Token" -\> CheckpointUnrecoverableInvocationError
-   * - Other 4xx -\> CheckpointUnrecoverableExecutionError
-   * - 5xx -\> CheckpointUnrecoverableInvocationError
+   * - 4xx with "Invalid Checkpoint Token" -> CheckpointUnrecoverableInvocationError
+   * - 429 or ThrottlingException -> CheckpointUnrecoverableInvocationError (backend will retry)
+   * - Other 4xx -> CheckpointUnrecoverableExecutionError
+   * - 5xx -> CheckpointUnrecoverableInvocationError
    */
   private classifyCheckpointError(
     error: unknown,
@@ -235,6 +236,19 @@ class CheckpointHandler {
     ) {
       return new CheckpointUnrecoverableInvocationError(
         `Checkpoint failed: ${errorMessage}`,
+        originalError,
+      );
+    }
+
+    // Throttling errors - terminate invocation so backend can retry with backoff
+    // Lambda uses 400 with ThrottlingException, API Gateway uses 429
+    if (
+      statusCode === 429 ||
+      errorName === "ThrottlingException" ||
+      errorName === "TooManyRequestsException"
+    ) {
+      return new CheckpointUnrecoverableInvocationError(
+        `Checkpoint throttled: ${errorMessage}`,
         originalError,
       );
     }

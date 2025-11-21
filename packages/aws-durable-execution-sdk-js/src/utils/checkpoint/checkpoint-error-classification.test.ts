@@ -41,6 +41,32 @@ describe("Checkpoint Error Classification", () => {
     expect(result.message).toContain("Invalid Checkpoint Token");
   });
 
+  it("should classify 429 throttling as invocation error for backend retry", () => {
+    const awsError = {
+      name: "TooManyRequestsException",
+      message: "Rate exceeded",
+      $metadata: { httpStatusCode: 429 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
+    expect(result.message).toContain("Checkpoint throttled");
+  });
+
+  it("should classify ThrottlingException (400) as invocation error for backend retry", () => {
+    const awsError = {
+      name: "ThrottlingException",
+      message: "Rate exceeded",
+      $metadata: { httpStatusCode: 400 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
+    expect(result.message).toContain("Checkpoint throttled");
+  });
+
   it("should classify other 4xx errors as execution error", () => {
     const awsError = {
       name: "ValidationException",
