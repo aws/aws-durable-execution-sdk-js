@@ -27,8 +27,8 @@ export const createMapHandler = (
     mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
     maybeConfig?: MapConfig<TInput, TOutput>,
   ): DurablePromise<BatchResult<TOutput>> => {
-    // Delegate to the concurrent execution handler
-    return new DurablePromise(async () => {
+    // Phase 1: Parse parameters and start execution immediately
+    const phase1Promise = (async () => {
       let name: string | undefined;
       let items: TInput[];
       let mapFunc: MapFunc<TInput, TOutput>;
@@ -94,6 +94,11 @@ export const createMapHandler = (
       });
 
       return result;
+    })();
+
+    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    return new DurablePromise(async () => {
+      return await phase1Promise;
     });
   };
 };
