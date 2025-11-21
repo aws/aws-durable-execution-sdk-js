@@ -436,11 +436,6 @@ export const createConcurrentExecutionHandler = (
     maybeConfig?: ConcurrencyConfig<TResult>,
   ): DurablePromise<BatchResult<TResult>> => {
     // Phase 1: Start execution immediately
-    let phase1Result: BatchResult<TResult> | undefined;
-    let phase1Error: unknown;
-    let _isAwaited = false;
-    let _waitingCallback: (() => void) | undefined;
-
     const phase1Promise = (async (): Promise<BatchResult<TResult>> => {
       let name: string | undefined;
       let items: ConcurrentExecutionItem<TItem>[];
@@ -522,43 +517,27 @@ export const createConcurrentExecutionHandler = (
         );
       };
 
-      return await runInChildContext(name, executeOperation, {
+      const result = await runInChildContext(name, executeOperation, {
         subType: config?.topLevelSubType,
         summaryGenerator: config?.summaryGenerator,
         serdes: config?.serdes,
-      }).then((result) => {
-        // Restore BatchResult methods if the result came from deserialized data
-        if (
-          result &&
-          typeof result === "object" &&
-          "all" in result &&
-          Array.isArray(result.all)
-        ) {
-          return restoreBatchResult<TResult>(result);
-        }
-        return result as BatchResult<TResult>;
       });
-    })()
-      .then((result) => {
-        phase1Result = result;
-      })
-      .catch((error) => {
-        phase1Error = error;
-      });
+
+      // Restore BatchResult methods if the result came from deserialized data
+      if (
+        result &&
+        typeof result === "object" &&
+        "all" in result &&
+        Array.isArray(result.all)
+      ) {
+        return restoreBatchResult<TResult>(result);
+      }
+      return result as BatchResult<TResult>;
+    })();
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
     return new DurablePromise(async () => {
-      // When promise is awaited, mark as awaited and invoke waiting callback
-      _isAwaited = true;
-      if (_waitingCallback) {
-        _waitingCallback();
-      }
-
-      await phase1Promise;
-      if (phase1Error !== undefined) {
-        throw phase1Error;
-      }
-      return phase1Result!;
+      return await phase1Promise;
     });
   };
 };
