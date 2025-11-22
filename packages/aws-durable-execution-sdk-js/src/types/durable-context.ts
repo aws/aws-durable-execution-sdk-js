@@ -29,10 +29,10 @@ export interface DurableContext {
    * The underlying AWS Lambda context
    */
   lambdaContext: Context;
-  
+
   /**
    * Logger instance for this context, automatically enriched with durable execution metadata.
-   * 
+   *
    * **Automatic Enrichment:**
    * All log entries are automatically enhanced with:
    * - `timestamp`: ISO timestamp of the log entry
@@ -40,27 +40,27 @@ export interface DurableContext {
    * - `step_id`: Current step identifier (when logging from within a step)
    * - `level`: Log level (info, error, warn, debug)
    * - `message`: The log message
-   * 
+   *
    * **Output Format:**
    * ```json
    * {
    *   "timestamp": "2025-11-21T18:39:24.743Z",
    *   "execution_arn": "arn:aws:lambda:...",
-   *   "level": "info", 
+   *   "level": "info",
    *   "step_id": "abc123",
    *   "message": "User action completed",
    *   "data": { "userId": "123", "action": "login" }
    * }
    * ```
-   * 
+   *
    * @example
    * ```typescript
    * // Basic usage
    * context.logger.info("User logged in", { userId: "123" });
-   * 
+   *
    * // Error logging
    * context.logger.error("Database connection failed", error, { retryCount: 3 });
-   * 
+   *
    * // With custom logger (handles circular refs)
    * import { Logger } from '@aws-lambda-powertools/logger';
    * const powertoolsLogger = new Logger();
@@ -115,7 +115,7 @@ export interface DurableContext {
     name: string | undefined,
     fn: StepFunc<T>,
     config?: StepConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Executes a function as a durable step with automatic retry and state persistence
@@ -205,7 +205,7 @@ export interface DurableContext {
     name: string | undefined,
     fn: ChildFunc<T>,
     config?: ChildConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Runs a function in a child context with isolated state and execution tracking
@@ -221,7 +221,10 @@ export interface DurableContext {
    * );
    * ```
    */
-  runInChildContext<T>(fn: ChildFunc<T>, config?: ChildConfig<T>): DurablePromise<T>;
+  runInChildContext<T>(
+    fn: ChildFunc<T>,
+    config?: ChildConfig<T>,
+  ): DurablePromise<T>;
 
   /**
    * Pauses execution for the specified duration
@@ -605,7 +608,10 @@ export interface DurableContext {
      * );
      * ```
      */
-    all<T>(name: string | undefined, promises: DurablePromise<T>[]): DurablePromise<T[]>;
+    all<T>(
+      name: string | undefined,
+      promises: DurablePromise<T>[],
+    ): DurablePromise<T[]>;
 
     /**
      * Waits for all promises to resolve and returns an array of all results
@@ -682,7 +688,9 @@ export interface DurableContext {
      *
      * @param promises - Array of promises to wait for (already executing)
      */
-    allSettled<T>(promises: DurablePromise<T>[]): DurablePromise<PromiseSettledResult<T>[]>;
+    allSettled<T>(
+      promises: DurablePromise<T>[],
+    ): DurablePromise<PromiseSettledResult<T>[]>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -720,7 +728,10 @@ export interface DurableContext {
      * );
      * ```
      */
-    any<T>(name: string | undefined, promises: DurablePromise<T>[]): DurablePromise<T>;
+    any<T>(
+      name: string | undefined,
+      promises: DurablePromise<T>[],
+    ): DurablePromise<T>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -762,7 +773,10 @@ export interface DurableContext {
      * );
      * ```
      */
-    race<T>(name: string | undefined, promises: DurablePromise<T>[]): DurablePromise<T>;
+    race<T>(
+      name: string | undefined,
+      promises: DurablePromise<T>[],
+    ): DurablePromise<T>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)

@@ -1,6 +1,5 @@
 import {
   DurableContext,
-  DurablePromise,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
@@ -19,11 +18,7 @@ export const handler = withDurableExecution(
       () => new Promise((resolve) => setTimeout(resolve, 3000)),
     );
 
-    const results = await context.promise.all([
-      new DurablePromise(() => promise1),
-      new DurablePromise(() => promise2),
-      new DurablePromise(() => promise3),
-    ]);
+    const results = await context.promise.all([promise1, promise2, promise3]);
 
     return results;
   },
