@@ -605,7 +605,7 @@ export interface DurableContext {
      * );
      * ```
      */
-    all<T>(name: string | undefined, promises: Promise<T>[]): DurablePromise<T[]>;
+    all<T>(name: string | undefined, promises: DurablePromise<T>[]): DurablePromise<T[]>;
 
     /**
      * Waits for all promises to resolve and returns an array of all results
@@ -630,7 +630,7 @@ export interface DurableContext {
      * ]);
      * ```
      */
-    all<T>(promises: Promise<T>[]): DurablePromise<T[]>;
+    all<T>(promises: DurablePromise<T>[]): DurablePromise<T[]>;
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
@@ -670,7 +670,7 @@ export interface DurableContext {
      */
     allSettled<T>(
       name: string | undefined,
-      promises: Promise<T>[],
+      promises: DurablePromise<T>[],
     ): DurablePromise<PromiseSettledResult<T>[]>;
 
     /**
@@ -682,7 +682,7 @@ export interface DurableContext {
      *
      * @param promises - Array of promises to wait for (already executing)
      */
-    allSettled<T>(promises: Promise<T>[]): DurablePromise<PromiseSettledResult<T>[]>;
+    allSettled<T>(promises: DurablePromise<T>[]): DurablePromise<PromiseSettledResult<T>[]>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -720,7 +720,7 @@ export interface DurableContext {
      * );
      * ```
      */
-    any<T>(name: string | undefined, promises: Promise<T>[]): DurablePromise<T>;
+    any<T>(name: string | undefined, promises: DurablePromise<T>[]): DurablePromise<T>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -731,7 +731,7 @@ export interface DurableContext {
      *
      * @param promises - Array of promises to race (already executing)
      */
-    any<T>(promises: Promise<T>[]): DurablePromise<T>;
+    any<T>(promises: DurablePromise<T>[]): DurablePromise<T>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
@@ -762,7 +762,7 @@ export interface DurableContext {
      * );
      * ```
      */
-    race<T>(name: string | undefined, promises: Promise<T>[]): DurablePromise<T>;
+    race<T>(name: string | undefined, promises: DurablePromise<T>[]): DurablePromise<T>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
@@ -773,7 +773,7 @@ export interface DurableContext {
      *
      * @param promises - Array of promises to race (already executing)
      */
-    race<T>(promises: Promise<T>[]): DurablePromise<T>;
+    race<T>(promises: DurablePromise<T>[]): DurablePromise<T>;
   };
 
   /**
