@@ -37,7 +37,7 @@ export const handler = withDurableExecution(
     );
 
     // Wait for both to complete
-    const results = await context.promise.all([task1, task2]);
+    const results = await context.promise.all([new DurablePromise(() => task1), new DurablePromise(() => task2)]);
 
     return results;
   },

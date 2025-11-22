@@ -58,9 +58,9 @@ export const handler = withDurableExecution(
     // Example 1: Promise.all - wait for all promises to complete
     log("Testing Promise.all...");
     const allResults = await context.promise.all("all-steps", [
-      step1Promise,
-      step2Promise,
-      step3Promise,
+      new DurablePromise(() => step1Promise),
+      new DurablePromise(() => step2Promise),
+      new DurablePromise(() => step3Promise),
     ]);
     log("All results:", allResults);
 
@@ -76,7 +76,7 @@ export const handler = withDurableExecution(
       return "Fast result";
     });
 
-    const raceResult = await context.promise.race([step4Promise, step5Promise]);
+    const raceResult = await context.promise.race([new DurablePromise(() => step4Promise), new DurablePromise(() => step5Promise)]);
     log("Race result:", raceResult);
 
     // Example 3: Promise.allSettled - wait for all promises regardless of success/failure
@@ -94,8 +94,8 @@ export const handler = withDurableExecution(
     );
 
     const settledResults = await context.promise.allSettled("settled-steps", [
-      successPromise,
-      failurePromise,
+      new DurablePromise(() => successPromise),
+      new DurablePromise(() => failurePromise),
     ]);
     log("Settled results:", settledResults);
 
@@ -125,9 +125,9 @@ export const handler = withDurableExecution(
     let anyResult;
     try {
       anyResult = await context.promise.any([
-        failPromise1,
-        failPromise2,
-        successPromise2,
+        new DurablePromise(() => failPromise1),
+        new DurablePromise(() => failPromise2),
+        new DurablePromise(() => successPromise2),
       ]);
       log("Any result:", anyResult);
     } catch (error) {

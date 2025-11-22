@@ -26,7 +26,7 @@ export const handler = withDurableExecution(
     );
 
     try {
-      await context.promise.all([failurePromise]);
+      await context.promise.all([new DurablePromise(() => failurePromise)]);
     } catch {
       // ignoring error should not fail execution
     }
@@ -52,13 +52,13 @@ export const handler = withDurableExecution(
 
     // Immediate usage
     try {
-      await context.promise.all([step1]);
+      await context.promise.all([new DurablePromise(() => step1)]);
     } catch {
       // ignoring error should not cause unhandled rejection
     }
 
     try {
-      await context.promise.any([step2]);
+      await context.promise.any([new DurablePromise(() => step2)]);
     } catch {
       // ignoring error should not cause unhandled rejection
     }
@@ -81,7 +81,7 @@ export const handler = withDurableExecution(
     );
 
     try {
-      await context.promise.all([step3]);
+      await context.promise.all([new DurablePromise(() => step3)]);
     } catch {
       // ignoring error should not cause unhandled rejection
     }
@@ -89,7 +89,7 @@ export const handler = withDurableExecution(
     await context.wait("wait-middle", { seconds: 1 });
 
     try {
-      await context.promise.any([step4]);
+      await context.promise.any([new DurablePromise(() => step4)]);
     } catch {
       // ignoring error should not cause unhandled rejection
     }
@@ -114,13 +114,13 @@ export const handler = withDurableExecution(
     await context.wait("wait-before-final", { seconds: 1 });
 
     try {
-      await context.promise.all([step5]);
+      await context.promise.all([new DurablePromise(() => step5)]);
     } catch {
       // ignoring error should not cause unhandled rejection in replay
     }
 
     try {
-      await context.promise.any([step6]);
+      await context.promise.any([new DurablePromise(() => step6)]);
     } catch {
       // ignoring error should not cause unhandled rejection in replay
     }
