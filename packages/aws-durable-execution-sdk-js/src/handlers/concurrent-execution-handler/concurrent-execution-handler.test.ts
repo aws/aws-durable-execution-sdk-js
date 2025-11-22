@@ -825,4 +825,3 @@ describe("ConcurrencyController", () => {
       );
     });
   });
-});
