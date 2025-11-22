@@ -1,5 +1,6 @@
 import {
   DurableContext,
+  DurablePromise,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
@@ -37,7 +38,10 @@ export const handler = withDurableExecution(
     );
 
     // Wait for both to complete
-    const results = await context.promise.all([new DurablePromise(() => task1), new DurablePromise(() => task2)]);
+    const results = await context.promise.all([
+      new DurablePromise(() => task1),
+      new DurablePromise(() => task2),
+    ]);
 
     return results;
   },

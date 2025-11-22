@@ -1,5 +1,6 @@
 import {
   DurableContext,
+  DurablePromise,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";

@@ -1,5 +1,6 @@
 import {
   DurableContext,
+  DurablePromise,
   StepConfig,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
@@ -76,7 +77,10 @@ export const handler = withDurableExecution(
       return "Fast result";
     });
 
-    const raceResult = await context.promise.race([new DurablePromise(() => step4Promise), new DurablePromise(() => step5Promise)]);
+    const raceResult = await context.promise.race([
+      new DurablePromise(() => step4Promise),
+      new DurablePromise(() => step5Promise),
+    ]);
     log("Race result:", raceResult);
 
     // Example 3: Promise.allSettled - wait for all promises regardless of success/failure

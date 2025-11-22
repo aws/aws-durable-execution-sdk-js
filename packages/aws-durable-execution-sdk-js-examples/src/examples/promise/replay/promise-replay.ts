@@ -1,5 +1,6 @@
 import {
   DurableContext,
+  DurablePromise,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
@@ -24,7 +25,9 @@ export const handler = withDurableExecution(
       },
     );
 
-    await context.promise.allSettled([new DurablePromise(() => failurePromise)]);
+    await context.promise.allSettled([
+      new DurablePromise(() => failurePromise),
+    ]);
     await context.wait({ seconds: 1 });
 
     const successStep = await context.step(async () => {
