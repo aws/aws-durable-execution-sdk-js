@@ -31,7 +31,7 @@ export const createCallback = (
   parentId?: string,
 ) => {
   return <T>(
-    nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
+    nameOrConfig?: string | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
   ): DurablePromise<CreateCallbackResult<T>> => {
     let name: string | undefined;

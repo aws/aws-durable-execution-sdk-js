@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * @fileoverview ESLint plugin to enforce kebab-case for file names
  */
@@ -77,7 +79,8 @@ function findProjectRoot(startDir) {
   return null;
 }
 
-module.exports = {
+/** @type {import('eslint').ESLint.Plugin} */
+const plugin = {
   rules: {
     "kebab-case": {
       meta: {
@@ -87,7 +90,7 @@ module.exports = {
           category: "Stylistic Issues",
           recommended: true,
         },
-        fixable: null,
+        fixable: undefined,
         schema: [],
       },
       create: function (context) {
@@ -95,7 +98,7 @@ module.exports = {
         let ignorePatterns = defaultIgnorePatterns;
 
         // Function to check if a path should be ignored
-        const shouldIgnorePath = (filePath) => {
+        const shouldIgnorePath = (/** @type {string} */ filePath) => {
           // Convert to posix path for consistent pattern matching
           const posixPath = filePath.split(path.sep).join("/");
 
@@ -178,3 +181,5 @@ module.exports = {
     },
   },
 };
+
+module.exports = plugin;

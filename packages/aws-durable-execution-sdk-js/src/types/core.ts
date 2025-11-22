@@ -10,9 +10,10 @@ export enum DurableExecutionMode {
   ReplaySucceededContext = "ReplaySucceededContext",
 }
 
-export interface LambdaHandler<T> {
-  (event: T, context: Context): Promise<DurableExecutionInvocationOutput>;
-}
+export type LambdaHandler<T> = (
+  event: T,
+  context: Context,
+) => Promise<DurableExecutionInvocationOutput>;
 
 // TODO - prefer to import this entire input model from the SDK,
 // but it's not part of the frontend model so it doesn't get generated.

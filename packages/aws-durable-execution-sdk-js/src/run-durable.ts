@@ -15,6 +15,7 @@ async function runHandler(
   try {
     // Dynamically import the handler module
     const module = await import(handlerPath);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const handler = module.default || module.handler;
 
     if (typeof handler !== "function") {

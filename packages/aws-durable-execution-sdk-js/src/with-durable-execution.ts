@@ -216,19 +216,14 @@ export const withDurableExecution = <Input, Output>(
   ): Promise<DurableExecutionInvocationOutput> => {
     const { executionContext, durableExecutionMode, checkpointToken } =
       await initializeExecutionContext(event);
-    let response: DurableExecutionInvocationOutput | null = null;
-    try {
-      response = await runHandler(
-        event,
-        context,
-        executionContext,
-        durableExecutionMode,
-        checkpointToken,
-        handler,
-      );
-      return response;
-    } catch (err) {
-      throw err;
-    }
+
+    return runHandler(
+      event,
+      context,
+      executionContext,
+      durableExecutionMode,
+      checkpointToken,
+      handler,
+    );
   };
 };

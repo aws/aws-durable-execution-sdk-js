@@ -14,7 +14,7 @@ export const validateReplayConsistency = (
   context: ExecutionContext,
 ): void => {
   // Skip validation if no checkpoint data exists or if Type is undefined (first execution)
-  if (!checkpointData || !checkpointData.Type) {
+  if (!checkpointData?.Type) {
     return;
   }
 

@@ -158,19 +158,16 @@ export const createStepHandler = (
           }
 
           if (stepData?.Status === OperationStatus.FAILED) {
-            // Return an async rejected promise to ensure it's handled asynchronously
-            return (async (): Promise<T> => {
-              // Reconstruct the original error from stored ErrorObject
-              if (stepData.StepDetails?.Error) {
-                throw DurableOperationError.fromErrorObject(
-                  stepData.StepDetails.Error,
-                );
-              } else {
-                // Fallback for legacy data without Error field
-                const errorMessage = stepData?.StepDetails?.Result;
-                throw new StepError(errorMessage || "Unknown error");
-              }
-            })();
+            // Reconstruct the original error from stored ErrorObject
+            if (stepData.StepDetails?.Error) {
+              throw DurableOperationError.fromErrorObject(
+                stepData.StepDetails.Error,
+              );
+            } else {
+              // Fallback for legacy data without Error field
+              const errorMessage = stepData?.StepDetails?.Result;
+              throw new StepError(errorMessage || "Unknown error");
+            }
           }
 
           // If PENDING, wait for timer to complete
@@ -362,7 +359,7 @@ export const executeStep = async <T>(
   getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
   options?: StepConfig<T>,
-  onAwaitedChange?: ((callback: () => void) => void) | undefined,
+  onAwaitedChange?: (callback: () => void) => void,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   // Determine step semantics (default to AT_LEAST_ONCE_PER_RETRY if not specified)
   const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;

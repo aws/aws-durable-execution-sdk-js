@@ -3,28 +3,28 @@ import { ChildContextError } from "../errors/durable-error/durable-error";
 
 export class MockBatchResult<R> implements BatchResult<R> {
   constructor(
-    public readonly all: Array<BatchItem<R>>,
+    public readonly all: BatchItem<R>[],
     public readonly completionReason:
       | "ALL_COMPLETED"
       | "MIN_SUCCESSFUL_REACHED"
       | "FAILURE_TOLERANCE_EXCEEDED" = "ALL_COMPLETED",
   ) {}
 
-  succeeded(): Array<BatchItem<R> & { result: R }> {
+  succeeded(): (BatchItem<R> & { result: R })[] {
     return this.all.filter(
       (item): item is BatchItem<R> & { result: R } =>
         item.status === BatchItemStatus.SUCCEEDED && item.result !== undefined,
     );
   }
 
-  failed(): Array<BatchItem<R> & { error: ChildContextError }> {
+  failed(): (BatchItem<R> & { error: ChildContextError })[] {
     return this.all.filter(
       (item): item is BatchItem<R> & { error: ChildContextError } =>
         item.status === BatchItemStatus.FAILED && item.error !== undefined,
     );
   }
 
-  started(): Array<BatchItem<R> & { status: BatchItemStatus.STARTED }> {
+  started(): (BatchItem<R> & { status: BatchItemStatus.STARTED })[] {
     return this.all.filter(
       (item): item is BatchItem<R> & { status: BatchItemStatus.STARTED } =>
         item.status === BatchItemStatus.STARTED,
@@ -48,11 +48,11 @@ export class MockBatchResult<R> implements BatchResult<R> {
     }
   }
 
-  getResults(): Array<R> {
+  getResults(): R[] {
     return this.succeeded().map((item) => item.result);
   }
 
-  getErrors(): Array<ChildContextError> {
+  getErrors(): ChildContextError[] {
     return this.failed().map((item) => item.error);
   }
 

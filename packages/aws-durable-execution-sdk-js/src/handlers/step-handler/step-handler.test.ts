@@ -839,28 +839,16 @@ describe("Step Handler", () => {
     // Create a concrete test class for UnrecoverableExecutionError
     class TestUnrecoverableExecutionError extends UnrecoverableExecutionError {
       readonly terminationReason = TerminationReason.CUSTOM;
-
-      constructor(message: string) {
-        super(message);
-      }
     }
 
     // Create a concrete test class for UnrecoverableInvocationError
     class TestUnrecoverableInvocationError extends UnrecoverableInvocationError {
       readonly terminationReason = TerminationReason.CUSTOM;
-
-      constructor(message: string) {
-        super(message);
-      }
     }
 
     // Create a concrete test class for generic UnrecoverableError
     class TestGenericUnrecoverableError extends UnrecoverableError {
       readonly terminationReason = TerminationReason.CUSTOM;
-
-      constructor(message: string) {
-        super(message);
-      }
     }
 
     test("should handle UnrecoverableExecutionError thrown by step function", async () => {

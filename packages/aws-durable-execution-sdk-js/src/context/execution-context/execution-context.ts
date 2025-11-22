@@ -56,16 +56,15 @@ export const initializeExecutionContext = async (
 
   log("📝", "Operations:", operationsArray);
 
-  const stepData: Record<string, Operation> = operationsArray.reduce(
-    (acc, operation: Operation) => {
-      if (operation.Id) {
-        // The stepData received from backend has Id and ParentId as hash, so no need to hash it again
-        acc[operation.Id] = operation;
-      }
-      return acc;
-    },
-    {} as Record<string, Operation>,
-  );
+  const stepData: Record<string, Operation> = operationsArray.reduce<
+    Record<string, Operation>
+  >((acc, operation: Operation) => {
+    if (operation.Id) {
+      // The stepData received from backend has Id and ParentId as hash, so no need to hash it again
+      acc[operation.Id] = operation;
+    }
+    return acc;
+  }, {});
 
   log("📝", "Loaded step data:", stepData);
 

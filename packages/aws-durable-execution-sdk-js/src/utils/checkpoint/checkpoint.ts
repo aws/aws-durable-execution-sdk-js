@@ -28,10 +28,10 @@ class CheckpointHandler {
   private queue: QueuedCheckpoint[] = [];
   private isProcessing = false;
   private currentTaskToken: string;
-  private forceCheckpointPromises: Array<{
+  private forceCheckpointPromises: {
     resolve: () => void;
     reject: (error: Error) => void;
-  }> = [];
+  }[] = [];
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
   private pendingCompletions = new Set<string>(); // Track stepIds with pending SUCCEED/FAIL
@@ -493,11 +493,11 @@ export const createCheckpoint = (
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<void> => {
-    return await singletonCheckpointHandler!.checkpoint(stepId, data);
+    await singletonCheckpointHandler!.checkpoint(stepId, data);
   };
 
   checkpoint.force = async (): Promise<void> => {
-    return await singletonCheckpointHandler!.forceCheckpoint();
+    await singletonCheckpointHandler!.forceCheckpoint();
   };
 
   checkpoint.setTerminating = (): void => {
