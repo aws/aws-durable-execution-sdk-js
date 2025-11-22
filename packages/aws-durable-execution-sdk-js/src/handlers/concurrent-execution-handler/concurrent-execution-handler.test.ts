@@ -499,7 +499,6 @@ describe("ConcurrencyController", () => {
             resolve("result");
           }, 10);
         }));
-        });
       });
 
       await controller.executeItems(items, executor, mockParentContext, {
@@ -825,3 +824,4 @@ describe("ConcurrencyController", () => {
       );
     });
   });
+});
