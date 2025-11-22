@@ -136,7 +136,7 @@ export interface DurableContext {
    * );
    * ```
    */
-  step<T>(fn: StepFunc<T>, config?: StepConfig<T>): Promise<T>;
+  step<T>(fn: StepFunc<T>, config?: StepConfig<T>): DurablePromise<T>;
 
   /**
    * Invokes another durable function with the specified input
@@ -159,7 +159,7 @@ export interface DurableContext {
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
 
   /**
    * Invokes another durable function with the specified input
@@ -179,7 +179,7 @@ export interface DurableContext {
     funcId: string,
     input: I,
     config?: InvokeConfig<I, O>,
-  ): Promise<O>;
+  ): DurablePromise<O>;
 
   /**
    * Runs a function in a child context with isolated state and execution tracking
@@ -221,7 +221,7 @@ export interface DurableContext {
    * );
    * ```
    */
-  runInChildContext<T>(fn: ChildFunc<T>, config?: ChildConfig<T>): Promise<T>;
+  runInChildContext<T>(fn: ChildFunc<T>, config?: ChildConfig<T>): DurablePromise<T>;
 
   /**
    * Pauses execution for the specified duration
@@ -236,7 +236,7 @@ export interface DurableContext {
    * await context.wait("long-delay", { minutes: 5, seconds: 30 });
    * ```
    */
-  wait(name: string, duration: Duration): Promise<void>;
+  wait(name: string, duration: Duration): DurablePromise<void>;
 
   /**
    * Pauses execution for the specified duration
@@ -250,7 +250,7 @@ export interface DurableContext {
    * await context.wait({ hours: 1, minutes: 30 });
    * ```
    */
-  wait(duration: Duration): Promise<void>;
+  wait(duration: Duration): DurablePromise<void>;
 
   /**
    * Waits for a condition to be met by periodically checking state
@@ -281,7 +281,7 @@ export interface DurableContext {
     name: string | undefined,
     checkFunc: WaitForConditionCheckFunc<T>,
     config: WaitForConditionConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Waits for a condition to be met by periodically checking state
@@ -305,7 +305,7 @@ export interface DurableContext {
   waitForCondition<T>(
     checkFunc: WaitForConditionCheckFunc<T>,
     config: WaitForConditionConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Creates a callback that external systems can complete
@@ -330,7 +330,7 @@ export interface DurableContext {
   createCallback<T>(
     name: string | undefined,
     config?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>>;
+  ): DurablePromise<CreateCallbackResult<T>>;
 
   /**
    * Creates a callback that external systems can complete
@@ -348,7 +348,7 @@ export interface DurableContext {
    */
   createCallback<T>(
     config?: CreateCallbackConfig<T>,
-  ): Promise<CreateCallbackResult<T>>;
+  ): DurablePromise<CreateCallbackResult<T>>;
 
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
@@ -372,7 +372,7 @@ export interface DurableContext {
     name: string | undefined,
     submitter: WaitForCallbackSubmitterFunc,
     config?: WaitForCallbackConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
@@ -391,7 +391,7 @@ export interface DurableContext {
   waitForCallback<T>(
     submitter: WaitForCallbackSubmitterFunc,
     config?: WaitForCallbackConfig<T>,
-  ): Promise<T>;
+  ): DurablePromise<T>;
 
   /**
    * Maps over an array of items with a function, executing in parallel with optional concurrency control
@@ -549,7 +549,7 @@ export interface DurableContext {
           ? ReturnType
           : never
     >,
-  ): Promise<
+  ): DurablePromise<
     BatchResult<
       Branches[number] extends ParallelFunc<infer ReturnType>
         ? ReturnType
