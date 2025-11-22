@@ -535,6 +535,10 @@ export const createConcurrentExecutionHandler = (
       return result as BatchResult<TResult>;
     })();
 
+    // Attach catch handler to prevent unhandled promise rejections
+    // The error will still be thrown when the DurablePromise is awaited
+    phase1Promise.catch(() => {});
+
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
     return new DurablePromise(async () => {
       return await phase1Promise;

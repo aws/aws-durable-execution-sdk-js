@@ -28,7 +28,7 @@ export const createMapHandler = (
     maybeConfig?: MapConfig<TInput, TOutput>,
   ): DurablePromise<BatchResult<TOutput>> => {
     // Phase 1: Parse parameters and start execution immediately
-    const phase1Promise = (async () => {
+    const phase1Promise = (async (): Promise<BatchResult<TOutput>> => {
       let name: string | undefined;
       let items: TInput[];
       let mapFunc: MapFunc<TInput, TOutput>;
@@ -95,6 +95,10 @@ export const createMapHandler = (
 
       return result;
     })();
+
+    // Attach catch handler to prevent unhandled promise rejections
+    // The error will still be thrown when the DurablePromise is awaited
+    phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
     return new DurablePromise(async () => {
