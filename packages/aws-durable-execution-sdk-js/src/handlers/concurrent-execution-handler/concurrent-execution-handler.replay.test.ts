@@ -3,6 +3,7 @@ import {
   DurableContext,
   DurableExecutionMode,
   ExecutionContext,
+  DurablePromise,
 } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 
@@ -66,9 +67,11 @@ describe("ConcurrencyController - Replay Mode", () => {
     });
 
     mockParentContext.runInChildContext.mockImplementation(
-      async (nameOrFn, fnOrConfig) => {
+      (nameOrFn, fnOrConfig) => {
         const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
-        return await (fn as any)({} as any);
+        return new DurablePromise(async () => {
+          return await (fn as any)({} as any);
+        });
       },
     );
 
@@ -136,13 +139,15 @@ describe("ConcurrencyController - Replay Mode", () => {
     });
 
     mockParentContext.runInChildContext.mockImplementation(
-      async (nameOrFn, fnOrConfig) => {
+      (nameOrFn, fnOrConfig) => {
         const name = typeof nameOrFn === "string" ? nameOrFn : undefined;
         const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
-        if (name === "item-1") {
-          throw new Error("Replay error");
-        }
-        return await (fn as any)({} as any);
+        return new DurablePromise(async () => {
+          if (name === "item-1") {
+            throw new Error("Replay error");
+          }
+          return await (fn as any)({} as any);
+        });
       },
     );
 
