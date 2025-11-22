@@ -12,13 +12,9 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    const step1 = context.step(async () => "result 1");
-    const step2 = context.step(async () => "result 2");
-    const step3 = context.step(async () => "result 3");
-
-    const promise1 = new DurablePromise(() => step1);
-    const promise2 = new DurablePromise(() => step2);
-    const promise3 = new DurablePromise(() => step3);
+    const promise1 = context.step(async () => "result 1");
+    const promise2 = context.step(async () => "result 2");
+    const promise3 = context.step(async () => "result 3");
 
     const results = await context.promise.all([promise1, promise2, promise3]);
 
