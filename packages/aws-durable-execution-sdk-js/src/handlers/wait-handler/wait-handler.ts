@@ -127,6 +127,10 @@ export const createWaitHandler = (
       log("✅", "Wait phase 1 complete:", { stepId, name: actualName });
     });
 
+    // Attach catch handler to prevent unhandled promise rejections
+    // The error will still be thrown when the DurablePromise is awaited
+    phase1Promise.catch(() => {});
+
     // Return DurablePromise that will execute phase 2 when awaited
     return new DurablePromise(async () => {
       // Wait for phase 1 to complete first

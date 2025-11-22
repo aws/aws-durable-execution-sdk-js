@@ -1,4 +1,4 @@
-import { DurableContext, RetryDecision } from "../../types";
+import { DurableContext, RetryDecision, DurablePromise } from "../../types";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
 // Minimal error decoration for Promise.allSettled results
@@ -84,61 +84,84 @@ export const createPromiseHandler = (step: DurableContext["step"]) => {
   const all = <T>(
     nameOrPromises: string | undefined | Promise<T>[],
     maybePromises?: Promise<T>[],
-  ): Promise<T[]> => {
-    const { name, promises } = parseParams(nameOrPromises, maybePromises);
+  ): DurablePromise<T[]> => {
+    return new DurablePromise(async () => {
+      const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Immediately attach catch handlers to prevent unhandled rejections
-    // while preserving the original promise behavior for Promise.all
-    promises.forEach((p) => p.catch(() => {}));
+      // Convert DurablePromise objects to regular promises and attach catch handlers
+      const regularPromises = promises.map((p) => {
+        // Attach catch handler to prevent unhandled rejections
+        const regularPromise = Promise.resolve(p);
+        regularPromise.catch(() => {}); // Prevent unhandled rejection
+        return regularPromise;
+      });
 
-    // Wrap Promise.all execution in a step for persistence
-    // This ensures Promise.all is called inside the step where errors can be handled
-    return step(name, () => Promise.all(promises), stepConfig);
+      // Wrap Promise.all execution in a step for persistence
+      return await step(name, () => Promise.all(regularPromises), stepConfig);
+    });
   };
 
   const allSettled = <T>(
     nameOrPromises: string | undefined | Promise<T>[],
     maybePromises?: Promise<T>[],
-  ): Promise<PromiseSettledResult<T>[]> => {
-    const { name, promises } = parseParams(nameOrPromises, maybePromises);
+  ): DurablePromise<PromiseSettledResult<T>[]> => {
+    return new DurablePromise(async () => {
+      const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Immediately attach catch handlers to prevent unhandled rejections
-    // while preserving the original promise behavior for Promise.allSettled
-    promises.forEach((p) => p.catch(() => {}));
+      // Convert DurablePromise objects to regular promises and attach catch handlers
+      const regularPromises = promises.map((p) => {
+        // Attach catch handler to prevent unhandled rejections
+        const regularPromise = Promise.resolve(p);
+        regularPromise.catch(() => {}); // Prevent unhandled rejection
+        return regularPromise;
+      });
 
-    // Wrap Promise.allSettled execution in a step for persistence
-    return step(name, () => Promise.allSettled(promises), {
-      ...stepConfig,
-      serdes: createErrorAwareSerdes<T>(),
+      // Wrap Promise.allSettled execution in a step for persistence
+      return await step(name, () => Promise.allSettled(regularPromises), {
+        ...stepConfig,
+        serdes: createErrorAwareSerdes<T>(),
+      });
     });
   };
 
   const any = <T>(
     nameOrPromises: string | undefined | Promise<T>[],
     maybePromises?: Promise<T>[],
-  ): Promise<T> => {
-    const { name, promises } = parseParams(nameOrPromises, maybePromises);
+  ): DurablePromise<T> => {
+    return new DurablePromise(async () => {
+      const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Immediately attach catch handlers to prevent unhandled rejections
-    // while preserving the original promise behavior for Promise.any
-    promises.forEach((p) => p.catch(() => {}));
+      // Convert DurablePromise objects to regular promises and attach catch handlers
+      const regularPromises = promises.map((p) => {
+        // Attach catch handler to prevent unhandled rejections
+        const regularPromise = Promise.resolve(p);
+        regularPromise.catch(() => {}); // Prevent unhandled rejection
+        return regularPromise;
+      });
 
-    // Wrap Promise.any execution in a step for persistence
-    return step(name, () => Promise.any(promises), stepConfig);
+      // Wrap Promise.any execution in a step for persistence
+      return await step(name, () => Promise.any(regularPromises), stepConfig);
+    });
   };
 
   const race = <T>(
     nameOrPromises: string | undefined | Promise<T>[],
     maybePromises?: Promise<T>[],
-  ): Promise<T> => {
-    const { name, promises } = parseParams(nameOrPromises, maybePromises);
+  ): DurablePromise<T> => {
+    return new DurablePromise(async () => {
+      const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-    // Immediately attach catch handlers to prevent unhandled rejections
-    // while preserving the original promise behavior for Promise.race
-    promises.forEach((p) => p.catch(() => {}));
+      // Convert DurablePromise objects to regular promises and attach catch handlers
+      const regularPromises = promises.map((p) => {
+        // Attach catch handler to prevent unhandled rejections
+        const regularPromise = Promise.resolve(p);
+        regularPromise.catch(() => {}); // Prevent unhandled rejection
+        return regularPromise;
+      });
 
-    // Wrap Promise.race execution in a step for persistence
-    return step(name, () => Promise.race(promises), stepConfig);
+      // Wrap Promise.race execution in a step for persistence
+      return await step(name, () => Promise.race(regularPromises), stepConfig);
+    });
   };
 
   return {

@@ -8,6 +8,7 @@ import {
   ConcurrentExecutor,
   BatchResult,
   BatchItem,
+  DurablePromise,
 } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
@@ -424,7 +425,7 @@ export const createConcurrentExecutionHandler = (
   runInChildContext: DurableContext["runInChildContext"],
   skipNextOperation: () => void,
 ) => {
-  return async <TItem, TResult>(
+  return <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
@@ -433,92 +434,95 @@ export const createConcurrentExecutionHandler = (
       | ConcurrentExecutor<TItem, TResult>
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
-  ): Promise<BatchResult<TResult>> => {
-    let name: string | undefined;
-    let items: ConcurrentExecutionItem<TItem>[];
-    let executor: ConcurrentExecutor<TItem, TResult>;
-    let config: ConcurrencyConfig<TResult> | undefined;
+  ): DurablePromise<BatchResult<TResult>> => {
+    // Phase 1: Start execution immediately
+    const phase1Promise = (async (): Promise<BatchResult<TResult>> => {
+      let name: string | undefined;
+      let items: ConcurrentExecutionItem<TItem>[];
+      let executor: ConcurrentExecutor<TItem, TResult>;
+      let config: ConcurrencyConfig<TResult> | undefined;
 
-    if (typeof nameOrItems === "string" || nameOrItems === undefined) {
-      name = nameOrItems;
-      items = itemsOrExecutor as ConcurrentExecutionItem<TItem>[];
-      executor = executorOrConfig as ConcurrentExecutor<TItem, TResult>;
-      config = maybeConfig;
-    } else {
-      items = nameOrItems;
-      executor = itemsOrExecutor as ConcurrentExecutor<TItem, TResult>;
-      config = executorOrConfig as ConcurrencyConfig<TResult>;
-    }
+      if (typeof nameOrItems === "string" || nameOrItems === undefined) {
+        name = nameOrItems;
+        items = itemsOrExecutor as ConcurrentExecutionItem<TItem>[];
+        executor = executorOrConfig as ConcurrentExecutor<TItem, TResult>;
+        config = maybeConfig;
+      } else {
+        items = nameOrItems;
+        executor = itemsOrExecutor as ConcurrentExecutor<TItem, TResult>;
+        config = executorOrConfig as ConcurrencyConfig<TResult>;
+      }
 
-    log("🔄", "Starting concurrent execution:", {
-      name,
-      itemCount: items.length,
-      maxConcurrency: config?.maxConcurrency,
-    });
-
-    if (!Array.isArray(items)) {
-      throw new Error("Concurrent execution requires an array of items");
-    }
-
-    if (typeof executor !== "function") {
-      throw new Error("Concurrent execution requires an executor function");
-    }
-
-    if (
-      config?.maxConcurrency !== undefined &&
-      config.maxConcurrency !== null &&
-      config.maxConcurrency <= 0
-    ) {
-      throw new Error(
-        `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
-      );
-    }
-
-    const executeOperation = async (
-      executionContext: DurableContext,
-    ): Promise<BatchResult<TResult>> => {
-      const concurrencyController = new ConcurrencyController(
-        "concurrent-execution",
-        skipNextOperation,
-      );
-
-      // Access durableExecutionMode from the context - it's set by runInChildContext
-      // based on determineChildReplayMode logic
-      const durableExecutionMode = (
-        executionContext as unknown as {
-          durableExecutionMode: DurableExecutionMode;
-        }
-      ).durableExecutionMode;
-
-      // Get the entity ID (step prefix) from the child context
-      const entityId = (
-        executionContext as unknown as {
-          _stepPrefix?: string;
-        }
-      )._stepPrefix;
-
-      log("🔄", "Concurrent execution mode:", {
-        mode: durableExecutionMode,
+      log("🔄", "Starting concurrent execution:", {
+        name,
         itemCount: items.length,
-        entityId,
+        maxConcurrency: config?.maxConcurrency,
       });
 
-      return await concurrencyController.executeItems(
-        items,
-        executor,
-        executionContext,
-        config || {},
-        durableExecutionMode,
-        entityId,
-        context,
-      );
-    };
+      if (!Array.isArray(items)) {
+        throw new Error("Concurrent execution requires an array of items");
+      }
 
-    return await runInChildContext(name, executeOperation, {
-      subType: config?.topLevelSubType,
-      summaryGenerator: config?.summaryGenerator,
-      serdes: config?.serdes,
-    }).then((result) => {
+      if (typeof executor !== "function") {
+        throw new Error("Concurrent execution requires an executor function");
+      }
+
+      if (
+        config?.maxConcurrency !== undefined &&
+        config.maxConcurrency !== null &&
+        config.maxConcurrency <= 0
+      ) {
+        throw new Error(
+          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
+        );
+      }
+
+      const executeOperation = async (
+        executionContext: DurableContext,
+      ): Promise<BatchResult<TResult>> => {
+        const concurrencyController = new ConcurrencyController(
+          "concurrent-execution",
+          skipNextOperation,
+        );
+
+        // Access durableExecutionMode from the context - it's set by runInChildContext
+        // based on determineChildReplayMode logic
+        const durableExecutionMode = (
+          executionContext as unknown as {
+            durableExecutionMode: DurableExecutionMode;
+          }
+        ).durableExecutionMode;
+
+        // Get the entity ID (step prefix) from the child context
+        const entityId = (
+          executionContext as unknown as {
+            _stepPrefix?: string;
+          }
+        )._stepPrefix;
+
+        log("🔄", "Concurrent execution mode:", {
+          mode: durableExecutionMode,
+          itemCount: items.length,
+          entityId,
+        });
+
+        return await concurrencyController.executeItems(
+          items,
+          executor,
+          executionContext,
+          config || {},
+          durableExecutionMode,
+          entityId,
+          context,
+        );
+      };
+
+      const result = await runInChildContext(name, executeOperation, {
+        subType: config?.topLevelSubType,
+        summaryGenerator: config?.summaryGenerator,
+        serdes: config?.serdes,
+      });
+
       // Restore BatchResult methods if the result came from deserialized data
       if (
         result &&
@@ -529,6 +533,15 @@ export const createConcurrentExecutionHandler = (
         return restoreBatchResult<TResult>(result);
       }
       return result as BatchResult<TResult>;
+    })();
+
+    // Attach catch handler to prevent unhandled promise rejections
+    // The error will still be thrown when the DurablePromise is awaited
+    phase1Promise.catch(() => {});
+
+    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    return new DurablePromise(async () => {
+      return await phase1Promise;
     });
   };
 };

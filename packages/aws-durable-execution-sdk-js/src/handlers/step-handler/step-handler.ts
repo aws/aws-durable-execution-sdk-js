@@ -120,8 +120,6 @@ export const createStepHandler = (
     log("▶️", "Running step:", { stepId, name, options });
 
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
-    let phase1Result: T | undefined;
-    let phase1Error: unknown;
     let isAwaited = false;
     let waitingCallback: (() => void) | undefined;
 
@@ -302,13 +300,11 @@ export const createStepHandler = (
           );
         }
       }
-    })()
-      .then((result) => {
-        phase1Result = result;
-      })
-      .catch((error) => {
-        phase1Error = error;
-      });
+    })();
+
+    // Attach catch handler to prevent unhandled promise rejections
+    // The error will still be thrown when the DurablePromise is awaited
+    phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
     return new DurablePromise(async () => {
@@ -318,11 +314,7 @@ export const createStepHandler = (
         waitingCallback();
       }
 
-      await phase1Promise;
-      if (phase1Error !== undefined) {
-        throw phase1Error;
-      }
-      return phase1Result!;
+      return await phase1Promise;
     });
   };
 };

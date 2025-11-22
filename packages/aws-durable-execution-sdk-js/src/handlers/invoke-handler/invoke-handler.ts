@@ -222,6 +222,10 @@ export const createInvokeHandler = (
         throw error; // Re-throw to fail phase 1
       });
 
+    // Attach catch handler to prevent unhandled promise rejections
+    // The error will still be thrown when the DurablePromise is awaited
+    startInvokePromise.catch(() => {});
+
     // Return DurablePromise that will execute phase 2 when awaited
     return new DurablePromise(async () => {
       // Wait for phase 1 to complete first
