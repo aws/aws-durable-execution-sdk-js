@@ -32,8 +32,8 @@ export const createParallelHandler = (
       | ParallelConfig<T>,
     maybeConfig?: ParallelConfig<T>,
   ): DurablePromise<BatchResult<T>> => {
-    // Delegate to the concurrent execution handler
-    return new DurablePromise(async () => {
+    // Phase 1: Parse parameters and start execution immediately
+    const phase1Promise = (async (): Promise<BatchResult<T>> => {
       let name: string | undefined;
       let branches: (ParallelFunc<T> | NamedParallelBranch<T>)[];
       let config: ParallelConfig<T> | undefined;
@@ -127,6 +127,15 @@ export const createParallelHandler = (
       });
 
       return result;
+    })();
+
+    // Attach catch handler to prevent unhandled promise rejections
+    // The error will still be thrown when the DurablePromise is awaited
+    phase1Promise.catch(() => {});
+
+    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    return new DurablePromise(async () => {
+      return await phase1Promise;
     });
   };
 };
