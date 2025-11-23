@@ -3,7 +3,7 @@ import {
   CheckpointFunction,
 } from "../../testing/mock-checkpoint";
 import { createStepHandler } from "./step-handler";
-import { ExecutionContext, StepSemantics, Logger } from "../../types";
+import { ExecutionContext, StepSemantics, DurableLogger } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -73,7 +73,7 @@ describe("Step Handler", () => {
       warn: jest.fn(),
       debug: jest.fn(),
     };
-    const createMockEnrichedLogger = (): Logger => mockLogger;
+    const createMockEnrichedLogger = (): DurableLogger => mockLogger;
 
     stepHandler = createStepHandler(
       mockExecutionContext,
@@ -1019,5 +1019,122 @@ describe("Step Handler", () => {
           'Deserialization failed for step "test-step" (test-step-id): Deserialization failed',
       });
     }, 10000);
+  });
+
+  test("should pass currentAttempt + 1 to createContextLogger when no previous attempt", async () => {
+    const stepFn = jest.fn().mockResolvedValue("step-result");
+    const mockCreateContextLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
+
+    // Create step handler with our mock logger factory
+    const stepHandlerWithMockLogger = createStepHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockCreateContextLogger,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
+      jest.fn(() => false), // hasRunningOperations
+      () => mockOperationsEmitter,
+    );
+
+    // No previous attempt (should pass 1)
+    await stepHandlerWithMockLogger("test-step", stepFn);
+
+    expect(mockCreateContextLogger).toHaveBeenCalledWith("test-step-id", 1);
+  });
+
+  test("should pass currentAttempt + 1 to createContextLogger when previous attempt exists", async () => {
+    const stepFn = jest.fn().mockResolvedValue("step-result");
+    const mockCreateContextLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
+
+    // Create step handler with our mock logger factory
+    const stepHandlerWithMockLogger = createStepHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockCreateContextLogger,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
+      jest.fn(() => false), // hasRunningOperations
+      () => mockOperationsEmitter,
+    );
+
+    // Previous attempt was 2 (should pass 3)
+    createStepId.mockReturnValue("test-step-id-2");
+    const stepId = "test-step-id-2";
+    const hashedStepId = hashId(stepId);
+    mockExecutionContext._stepData = {
+      [hashedStepId]: {
+        Id: hashedStepId,
+        Status: OperationStatus.STARTED,
+        StepDetails: {
+          Attempt: 2,
+        },
+      },
+    } as any;
+
+    await stepHandlerWithMockLogger("test-step-2", stepFn, {
+      semantics: StepSemantics.AtLeastOncePerRetry, // Re-execute for STARTED status
+    });
+
+    expect(mockCreateContextLogger).toHaveBeenCalledWith("test-step-id-2", 3);
+  });
+
+  test("should pass currentAttempt + 1 to createContextLogger when previous attempt is 0", async () => {
+    const stepFn = jest.fn().mockResolvedValue("step-result");
+    const mockCreateContextLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
+
+    // Create step handler with our mock logger factory
+    const stepHandlerWithMockLogger = createStepHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockCreateContextLogger,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
+      jest.fn(() => false), // hasRunningOperations
+      () => mockOperationsEmitter,
+    );
+
+    // Previous attempt was 0 (should pass 1)
+    createStepId.mockReturnValue("test-step-id-3");
+    const stepId = "test-step-id-3";
+    const hashedStepId = hashId(stepId);
+    mockExecutionContext._stepData = {
+      [hashedStepId]: {
+        Id: hashedStepId,
+        Status: OperationStatus.STARTED,
+        StepDetails: {
+          Attempt: 0,
+        },
+      },
+    } as any;
+
+    await stepHandlerWithMockLogger("test-step-3", stepFn, {
+      semantics: StepSemantics.AtLeastOncePerRetry, // Re-execute for STARTED status
+    });
+
+    expect(mockCreateContextLogger).toHaveBeenCalledWith("test-step-id-3", 1);
   });
 });

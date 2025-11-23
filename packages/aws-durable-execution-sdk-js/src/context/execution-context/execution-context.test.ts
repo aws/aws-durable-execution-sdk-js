@@ -7,11 +7,16 @@ import { getExecutionState } from "../../storage/storage";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { initializeExecutionContext } from "./execution-context";
+import { createTestDurableContext } from "../../testing/create-test-durable-context";
+import { createContextLoggerFactory } from "../../utils/logger/context-logger";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 // Mock dependencies
 jest.mock("../../storage/storage");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../termination-manager/termination-manager");
+jest.mock("../../utils/logger/context-logger");
+jest.mock("../../utils/logger/default-logger");
 
 describe("initializeExecutionContext", () => {
   // Matcher for Logger interface
@@ -71,6 +76,8 @@ describe("initializeExecutionContext", () => {
     mockStepSucceededEvent,
   ];
 
+  const mockLambdaContext = createTestDurableContext().context.lambdaContext;
+
   const mockExecutionState = {
     checkpoint: jest.fn(),
     getStepData: jest.fn(),
@@ -81,6 +88,28 @@ describe("initializeExecutionContext", () => {
 
     // Setup default mocks
     (getExecutionState as jest.Mock).mockReturnValue(mockExecutionState);
+
+    // Mock context logger factory to return a mock function that returns a logger
+    const mockLogger = {
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    };
+    const mockLoggerFactory = jest.fn().mockReturnValue(mockLogger);
+    (createContextLoggerFactory as jest.Mock).mockReturnValue(
+      mockLoggerFactory,
+    );
+
+    // Mock default logger
+    (createDefaultLogger as jest.Mock).mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
 
     // Mock environment variables
     process.env.DURABLE_VERBOSE_MODE = "false";
@@ -93,20 +122,27 @@ describe("initializeExecutionContext", () => {
 
   it("should initialize execution context with basic event", async () => {
     // Execute
-    const result = await initializeExecutionContext(mockEvent);
+    const result = await initializeExecutionContext(
+      mockEvent,
+      mockLambdaContext,
+    );
 
     // Verify
     expect(getExecutionState).toHaveBeenCalled();
-    expect(result).toEqual(
-      expect.objectContaining({
-        executionContext: expect.objectContaining({
-          state: mockExecutionState,
-          _stepData: {},
-        }),
-        checkpointToken: mockCheckpointToken,
-      }),
-    );
-    expect(result.executionContext.terminationManager).toBeDefined();
+    expect(result).toStrictEqual({
+      checkpointToken: mockCheckpointToken,
+      durableExecutionMode: expect.any(String),
+      executionContext: {
+        state: mockExecutionState,
+        _stepData: {},
+        terminationManager: expect.any(Object),
+        activeOperationsTracker: expect.any(Object),
+        durableExecutionArn: mockDurableExecutionArn,
+        getStepData: expect.any(Function),
+        tenantId: mockLambdaContext.tenantId,
+        requestId: mockLambdaContext.awsRequestId,
+      },
+    });
   });
 
   it("should initialize execution context in verbose mode", async () => {
@@ -114,7 +150,7 @@ describe("initializeExecutionContext", () => {
     process.env.DURABLE_VERBOSE_MODE = "true";
 
     // Execute
-    await initializeExecutionContext(mockEvent);
+    await initializeExecutionContext(mockEvent, mockLambdaContext);
 
     // Verify
     expect(log).toHaveBeenCalledWith(
@@ -154,7 +190,10 @@ describe("initializeExecutionContext", () => {
     };
 
     // Execute
-    const result = await initializeExecutionContext(eventWithStepData);
+    const result = await initializeExecutionContext(
+      eventWithStepData,
+      mockLambdaContext,
+    );
 
     // Verify
     expect(result.executionContext._stepData).toEqual({
@@ -175,7 +214,10 @@ describe("initializeExecutionContext", () => {
     };
 
     // Execute
-    const result = await initializeExecutionContext(eventWithoutStepData);
+    const result = await initializeExecutionContext(
+      eventWithoutStepData,
+      mockLambdaContext,
+    );
 
     // Verify
     expect(result.executionContext._stepData).toEqual({});
@@ -197,7 +239,10 @@ describe("initializeExecutionContext", () => {
     });
 
     // Execute
-    const result = await initializeExecutionContext(eventWithNextMarker);
+    const result = await initializeExecutionContext(
+      eventWithNextMarker,
+      mockLambdaContext,
+    );
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
@@ -253,7 +298,10 @@ describe("initializeExecutionContext", () => {
     });
 
     // Execute
-    const result = await initializeExecutionContext(eventWithNextMarker);
+    const result = await initializeExecutionContext(
+      eventWithNextMarker,
+      mockLambdaContext,
+    );
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
@@ -305,6 +353,7 @@ describe("initializeExecutionContext", () => {
     // Execute
     const result = await initializeExecutionContext(
       eventWithNextMarkerButNoOperations,
+      mockLambdaContext,
     );
 
     // Verify
@@ -344,7 +393,10 @@ describe("initializeExecutionContext", () => {
     });
 
     // Execute
-    const result = await initializeExecutionContext(eventWithNextMarker);
+    const result = await initializeExecutionContext(
+      eventWithNextMarker,
+      mockLambdaContext,
+    );
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
@@ -380,6 +432,7 @@ describe("initializeExecutionContext", () => {
     // Execute
     const result = await initializeExecutionContext(
       eventWithUndefinedOperations,
+      mockLambdaContext,
     );
 
     // Verify - should handle undefined operations gracefully and get execution event from pagination
@@ -399,7 +452,7 @@ describe("initializeExecutionContext", () => {
     };
 
     // Execute
-    await initializeExecutionContext(eventWithLocalRunner);
+    await initializeExecutionContext(eventWithLocalRunner, mockLambdaContext);
 
     // Verify
     expect(getExecutionState).toHaveBeenCalled();
@@ -422,7 +475,10 @@ describe("initializeExecutionContext", () => {
     });
 
     // Execute
-    const result = await initializeExecutionContext(eventWithNextMarker);
+    const result = await initializeExecutionContext(
+      eventWithNextMarker,
+      mockLambdaContext,
+    );
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
@@ -457,7 +513,10 @@ describe("initializeExecutionContext", () => {
     };
 
     // Execute
-    const result = await initializeExecutionContext(eventWithStep);
+    const result = await initializeExecutionContext(
+      eventWithStep,
+      mockLambdaContext,
+    );
 
     // Verify getStepData method exists and works
     expect(result.executionContext.getStepData).toBeDefined();
@@ -472,10 +531,28 @@ describe("initializeExecutionContext", () => {
 
   it("should return undefined from getStepData when step not found", async () => {
     // Execute
-    const result = await initializeExecutionContext(mockEvent);
+    const result = await initializeExecutionContext(
+      mockEvent,
+      mockLambdaContext,
+    );
 
     // Verify getStepData returns undefined for non-existent step
     const stepData = result.executionContext.getStepData("nonExistentStep");
     expect(stepData).toBeUndefined();
+  });
+
+  it("should call createContextLoggerFactory with correct parameters", async () => {
+    // Execute
+    await initializeExecutionContext(mockEvent, mockLambdaContext);
+
+    // Verify createContextLoggerFactory was called with correct parameters
+    expect(createContextLoggerFactory).toHaveBeenCalledWith(
+      {
+        durableExecutionArn: mockDurableExecutionArn,
+        requestId: mockLambdaContext.awsRequestId,
+        tenantId: mockLambdaContext.tenantId,
+      },
+      createDefaultLogger,
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { Context } from "aws-lambda";
-import { Logger, LoggerConfig } from "./logger";
+import { LoggerConfig } from "./logger";
 import { StepFunc, StepConfig } from "./step";
 import { ChildFunc, ChildConfig } from "./child-context";
 import { InvokeConfig } from "./invoke";
@@ -23,51 +23,55 @@ import {
   BatchResult,
 } from "./batch";
 import { DurablePromise } from "./durable-promise";
+import { DurableLogger } from "./durable-logger";
 
 export interface DurableContext {
   /**
    * The underlying AWS Lambda context
    */
   lambdaContext: Context;
-  
+
   /**
    * Logger instance for this context, automatically enriched with durable execution metadata.
-   * 
+   *
    * **Automatic Enrichment:**
    * All log entries are automatically enhanced with:
    * - `timestamp`: ISO timestamp of the log entry
-   * - `execution_arn`: Durable execution ARN for tracing
-   * - `step_id`: Current step identifier (when logging from within a step)
-   * - `level`: Log level (info, error, warn, debug)
+   * - `executionArn`: Durable execution ARN for tracing
+   * - `attempt`: The operation attempt number (when logging from within a step)
+   * - `operationId`: Current step identifier (when logging from within a step)
+   * - `level`: Log level (INFO, ERROR, WARN, DEBUG)
    * - `message`: The log message
-   * 
+   * - `requestId`: The invocation request ID
+   * - `tenantId`: The invocation tenant ID if it exists
+   *
    * **Output Format:**
    * ```json
    * {
    *   "timestamp": "2025-11-21T18:39:24.743Z",
-   *   "execution_arn": "arn:aws:lambda:...",
-   *   "level": "info", 
-   *   "step_id": "abc123",
-   *   "message": "User action completed",
-   *   "data": { "userId": "123", "action": "login" }
+   *   "executionArn": "arn:aws:lambda:...",
+   *   "level": "INFO",
+   *   "operationId": "abc123",
+   *   "message": { "userId": "123", "action": "login" }
+   *   "requestId": "",
    * }
    * ```
-   * 
+   *
    * @example
    * ```typescript
    * // Basic usage
    * context.logger.info("User logged in", { userId: "123" });
-   * 
+   *
    * // Error logging
    * context.logger.error("Database connection failed", error, { retryCount: 3 });
-   * 
-   * // With custom logger (handles circular refs)
+   *
+   * // With custom logger
    * import { Logger } from '@aws-lambda-powertools/logger';
    * const powertoolsLogger = new Logger();
    * context.configureLogger({ customLogger: powertoolsLogger });
    * ```
    */
-  logger: Logger;
+  logger: DurableLogger;
 
   /**
    * Executes a function as a durable step with automatic retry and state persistence

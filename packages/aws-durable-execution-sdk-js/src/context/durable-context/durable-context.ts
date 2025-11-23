@@ -20,7 +20,7 @@ import {
   ConcurrentExecutionItem,
   ConcurrentExecutor,
   ConcurrencyConfig,
-  Logger,
+  EnrichedDurableLogger,
   LoggerConfig,
   InvokeConfig,
   DurableExecutionMode,
@@ -45,6 +45,7 @@ import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { ModeManagement } from "./mode-management/mode-management";
 import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
+import { DurableLogger } from "../../types/durable-logger";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
 import { validateContextUsage } from "../../utils/context-tracker/context-tracker";
@@ -52,7 +53,7 @@ import { validateContextUsage } from "../../utils/context-tracker/context-tracke
 export class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
-  private contextLogger: Logger | null;
+  private contextLogger: EnrichedDurableLogger | null;
   private modeAwareLoggingEnabled: boolean = true;
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
@@ -68,7 +69,7 @@ export class DurableContextImpl implements DurableContext {
     durableExecutionMode: DurableExecutionMode,
     stepPrefix?: string,
     checkpointToken?: string,
-    inheritedLogger?: Logger | null,
+    inheritedLogger?: EnrichedDurableLogger | null,
     parentId?: string,
   ) {
     this._stepPrefix = stepPrefix;
@@ -82,7 +83,7 @@ export class DurableContextImpl implements DurableContext {
     );
     this.durableExecutionMode = durableExecutionMode;
 
-    const getLogger = (): Logger => {
+    const getLogger = (): EnrichedDurableLogger => {
       return this.contextLogger || createDefaultLogger();
     };
 
@@ -102,7 +103,7 @@ export class DurableContextImpl implements DurableContext {
     );
   }
 
-  get logger(): Logger {
+  get logger(): DurableLogger {
     return createModeAwareLogger(
       this.durableExecutionMode,
       this.createContextLogger,
@@ -515,7 +516,7 @@ export const createDurableContext = (
   durableExecutionMode: DurableExecutionMode,
   stepPrefix?: string,
   checkpointToken?: string,
-  inheritedLogger?: Logger | null,
+  inheritedLogger?: EnrichedDurableLogger | null,
   parentId?: string,
 ): DurableContextImpl => {
   return new DurableContextImpl(

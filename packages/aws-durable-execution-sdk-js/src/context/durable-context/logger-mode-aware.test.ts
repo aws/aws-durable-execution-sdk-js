@@ -1,5 +1,9 @@
 import { createDurableContext } from "./durable-context";
-import { DurableExecutionMode, ExecutionContext, Logger } from "../../types";
+import {
+  DurableExecutionMode,
+  ExecutionContext,
+  EnrichedDurableLogger,
+} from "../../types";
 import { Context } from "aws-lambda";
 
 describe("DurableContext logger modeAware configuration", () => {
@@ -33,7 +37,7 @@ describe("DurableContext logger modeAware configuration", () => {
   };
 
   test("should suppress logs during replay when modeAware is true (default)", () => {
-    const customLogger: Logger = {
+    const customLogger: EnrichedDurableLogger = {
       log: jest.fn(),
       info: jest.fn(),
       error: jest.fn(),
@@ -53,7 +57,7 @@ describe("DurableContext logger modeAware configuration", () => {
   });
 
   test("should log during replay when modeAware is false", () => {
-    const customLogger: Logger = {
+    const customLogger: EnrichedDurableLogger = {
       log: jest.fn(),
       info: jest.fn(),
       error: jest.fn(),
@@ -70,17 +74,17 @@ describe("DurableContext logger modeAware configuration", () => {
 
     context.logger.info("replay message");
     expect(customLogger.info).toHaveBeenCalledWith(
-      "replay message",
       expect.objectContaining({
-        level: "info",
-        message: "replay message",
-        execution_arn: "test-arn",
+        timestamp: expect.any(String),
+        level: "INFO",
+        executionArn: "test-arn",
       }),
+      "replay message",
     );
   });
 
   test("should always log during execution mode regardless of modeAware", () => {
-    const customLogger: Logger = {
+    const customLogger: EnrichedDurableLogger = {
       log: jest.fn(),
       info: jest.fn(),
       error: jest.fn(),
@@ -100,7 +104,7 @@ describe("DurableContext logger modeAware configuration", () => {
   });
 
   test("should allow toggling modeAware at runtime", () => {
-    const customLogger: Logger = {
+    const customLogger: EnrichedDurableLogger = {
       log: jest.fn(),
       info: jest.fn(),
       error: jest.fn(),
@@ -147,7 +151,7 @@ describe("DurableContext logger modeAware configuration", () => {
   });
 
   test("should handle multiple partial configurations correctly", () => {
-    const customLogger1: Logger = {
+    const customLogger1: EnrichedDurableLogger = {
       log: jest.fn(),
       info: jest.fn(),
       error: jest.fn(),
@@ -155,7 +159,7 @@ describe("DurableContext logger modeAware configuration", () => {
       debug: jest.fn(),
     };
 
-    const customLogger2: Logger = {
+    const customLogger2: EnrichedDurableLogger = {
       log: jest.fn(),
       info: jest.fn(),
       error: jest.fn(),
@@ -192,7 +196,7 @@ describe("DurableContext logger modeAware configuration", () => {
   });
 
   test("should preserve settings when called with empty config", () => {
-    const customLogger: Logger = {
+    const customLogger: EnrichedDurableLogger = {
       log: jest.fn(),
       info: jest.fn(),
       error: jest.fn(),

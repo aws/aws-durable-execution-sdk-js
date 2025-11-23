@@ -51,6 +51,8 @@ describe("CheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      requestId: "",
+      tenantId: undefined,
     } satisfies ExecutionContext;
 
     checkpointHandler = new CheckpointHandler(
@@ -689,6 +691,8 @@ describe("deleteCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData1, stepId);
       }),
+      requestId: "",
+      tenantId: undefined,
     } satisfies ExecutionContext;
 
     const stepData2 = {};
@@ -700,6 +704,8 @@ describe("deleteCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData2, stepId);
       }),
+      requestId: "",
+      tenantId: undefined,
     } satisfies ExecutionContext;
   });
 
@@ -956,6 +962,8 @@ describe("createCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      requestId: "mock-request-id",
+      tenantId: undefined,
     } satisfies ExecutionContext;
   });
 

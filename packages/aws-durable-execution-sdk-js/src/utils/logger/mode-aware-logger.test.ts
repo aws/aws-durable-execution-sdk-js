@@ -1,9 +1,13 @@
 import { createModeAwareLogger } from "./mode-aware-logger";
-import { ExecutionContext, Logger, DurableExecutionMode } from "../../types";
+import {
+  ExecutionContext,
+  EnrichedDurableLogger,
+  DurableExecutionMode,
+} from "../../types";
 
 describe("Mode-Aware Logger", () => {
   let _mockExecutionContext: ExecutionContext;
-  let mockEnrichedLogger: Logger;
+  let mockEnrichedLogger: EnrichedDurableLogger;
   let mockCreateContextLogger: jest.Mock;
 
   beforeEach(() => {
@@ -41,10 +45,7 @@ describe("Mode-Aware Logger", () => {
 
     logger.info("test message");
 
-    expect(mockEnrichedLogger.info).toHaveBeenCalledWith(
-      "test message",
-      undefined,
-    );
+    expect(mockEnrichedLogger.info).toHaveBeenCalledWith("test message");
   });
 
   test("should not log in ReplayMode when modeAware is enabled", () => {
@@ -100,7 +101,12 @@ describe("Mode-Aware Logger", () => {
       false,
     );
 
-    logger.log?.("custom", "log message", { data: "test" }, new Error("test"));
+    logger.log?.(
+      "custom" as any,
+      "log message",
+      { data: "test" },
+      new Error("test"),
+    );
     logger.error("error message", new Error("test"), { data: "test" });
     logger.warn("warn message", { data: "test" });
     logger.debug("debug message", { data: "test" });
@@ -131,7 +137,7 @@ describe("Mode-Aware Logger", () => {
       true,
     );
 
-    logger.log?.("custom", "log message");
+    logger.log?.("custom" as any, "log message");
     logger.error("error message", new Error("test"));
     logger.warn("warn message");
     logger.debug("debug message");

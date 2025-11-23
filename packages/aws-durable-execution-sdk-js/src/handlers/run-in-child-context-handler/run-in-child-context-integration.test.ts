@@ -61,6 +61,8 @@ describe("Run In Child Context Integration Tests", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
+      requestId: "mock-request-id",
+      tenantId: undefined,
     } satisfies ExecutionContext;
 
     mockParentContext = { awsRequestId: "mock-request-id" };

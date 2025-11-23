@@ -6,8 +6,8 @@ import {
   StepSemantics,
   OperationSubType,
   StepContext,
-  Logger,
   DurablePromise,
+  DurableLogger,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import {
@@ -90,7 +90,7 @@ export const createStepHandler = (
   checkpoint: ReturnType<typeof createCheckpoint>,
   parentContext: Context,
   createStepId: () => string,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  createContextLogger: (stepId: string, attempt?: number) => DurableLogger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
@@ -347,7 +347,7 @@ export const executeStep = async <T>(
   stepId: string,
   name: string | undefined,
   fn: StepFunc<T>,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  createContextLogger: (stepId: string, attempt?: number) => DurableLogger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
@@ -393,7 +393,8 @@ export const executeStep = async <T>(
 
     // Create step context with enriched logger
     const stepContext: StepContext = {
-      logger: createContextLogger(stepId, currentAttempt),
+      // The attempt that is running is the attempt from the step data (previous step attempt) + 1
+      logger: createContextLogger(stepId, currentAttempt + 1),
     };
 
     // Execute the step function with stepContext

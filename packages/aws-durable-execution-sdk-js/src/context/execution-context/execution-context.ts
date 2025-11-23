@@ -8,12 +8,17 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
-import { createContextLoggerFactory } from "../../utils/logger/context-logger";
+import {
+  ContextLoggerContext,
+  createContextLoggerFactory,
+} from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { ActiveOperationsTracker } from "../../utils/termination-helper/active-operations-tracker";
+import { Context } from "aws-lambda";
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
+  context: Context,
 ): Promise<{
   executionContext: ExecutionContext;
   durableExecutionMode: DurableExecutionMode;
@@ -28,11 +33,15 @@ export const initializeExecutionContext = async (
   const state = getExecutionState();
 
   // Create logger for initialization errors using existing logger factory
-  const tempContext = { durableExecutionArn } as ExecutionContext;
+  const tempContext: ContextLoggerContext = {
+    durableExecutionArn,
+    requestId: context.awsRequestId,
+    tenantId: context.tenantId,
+  };
   const initLogger = createContextLoggerFactory(
     tempContext,
     createDefaultLogger,
-  )("");
+  )();
 
   const operationsArray = [...(event.InitialExecutionState.Operations || [])];
   let nextMarker = event.InitialExecutionState.NextMarker;
@@ -79,6 +88,8 @@ export const initializeExecutionContext = async (
       getStepData(stepId: string): Operation | undefined {
         return getStepDataUtil(stepData, stepId);
       },
+      tenantId: context.tenantId,
+      requestId: context.awsRequestId,
     },
     durableExecutionMode,
     checkpointToken,

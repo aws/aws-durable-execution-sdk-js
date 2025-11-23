@@ -1,12 +1,16 @@
 import { createDurableContext } from "./durable-context";
-import { ExecutionContext, Logger, DurableExecutionMode } from "../../types";
+import {
+  ExecutionContext,
+  EnrichedDurableLogger,
+  DurableExecutionMode,
+} from "../../types";
 import { Context } from "aws-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 describe("DurableContext Logger Property", () => {
   let mockExecutionContext: ExecutionContext;
   let mockParentContext: Context;
-  let customLogger: Logger;
+  let customLogger: EnrichedDurableLogger;
 
   beforeEach(() => {
     customLogger = {
@@ -66,13 +70,13 @@ describe("DurableContext Logger Property", () => {
 
     // Logger is enriched with execution context (no step_id at top level)
     expect(customLogger.info).toHaveBeenCalledWith(
-      "test message",
       expect.objectContaining({
-        execution_arn: "test-arn",
-        level: "info",
-        message: "test message",
-        data: { data: "test" },
+        timestamp: expect.any(String),
+        executionArn: "test-arn",
+        level: "INFO",
       }),
+      "test message",
+      { data: "test" },
     );
 
     // Verify step_id is NOT present
@@ -99,10 +103,12 @@ describe("DurableContext Logger Property", () => {
     // Custom logger should only be called for the second message
     expect(customLogger.info).toHaveBeenCalledTimes(1);
     expect(customLogger.info).toHaveBeenCalledWith(
-      "message2",
       expect.objectContaining({
-        execution_arn: "test-arn",
+        timestamp: expect.any(String),
+        executionArn: "test-arn",
+        level: "INFO",
       }),
+      "message2",
     );
 
     // Verify step_id is NOT present
@@ -121,10 +127,12 @@ describe("DurableContext Logger Property", () => {
 
     contextExecution.logger.info("execution mode message");
     expect(customLogger.info).toHaveBeenCalledWith(
-      "execution mode message",
       expect.objectContaining({
-        execution_arn: "test-arn",
+        timestamp: expect.any(String),
+        executionArn: "test-arn",
+        level: "INFO",
       }),
+      "execution mode message",
     );
 
     // Verify step_id is NOT present
@@ -160,7 +168,7 @@ describe("DurableContext Logger Property", () => {
     expect(customLogger.info).not.toHaveBeenCalled();
   });
 
-  test("Logger in child context should have step ID", () => {
+  test("Logger in child context should have operation ID", () => {
     // Create a child context with a step prefix
     const childContext = createDurableContext(
       mockExecutionContext,
@@ -174,11 +182,13 @@ describe("DurableContext Logger Property", () => {
 
     // Child context logger should have step_id populated with the hashed prefix
     expect(customLogger.info).toHaveBeenCalledWith(
-      "child message",
       expect.objectContaining({
-        execution_arn: "test-arn",
-        step_id: hashId("1"),
+        timestamp: expect.any(String),
+        operationId: hashId("1"),
+        executionArn: "test-arn",
+        level: "INFO",
       }),
+      "child message",
     );
   });
 });

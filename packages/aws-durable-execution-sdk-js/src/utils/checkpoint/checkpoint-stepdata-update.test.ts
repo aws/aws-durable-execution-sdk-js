@@ -41,6 +41,8 @@ describe("CheckpointHandler - StepData Update", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      requestId: "mock-request-id",
+      tenantId: undefined,
     };
 
     checkpointHandler = new CheckpointHandler(

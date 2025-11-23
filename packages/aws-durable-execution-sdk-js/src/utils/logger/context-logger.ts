@@ -1,71 +1,55 @@
-import { Logger, ExecutionContext } from "../../types";
+import {
+  EnrichedDurableLogger,
+  DurableLogLevel,
+  DurableLogData,
+} from "../../types";
 import { hashId } from "../step-id-utils/step-id-utils";
+import { DurableLogger } from "../../types/durable-logger";
+
+export interface ContextLoggerContext {
+  durableExecutionArn: string;
+  requestId: string;
+  tenantId: string | undefined;
+}
 
 export const createContextLoggerFactory = (
-  executionContext: ExecutionContext,
-  getLogger: () => Logger,
+  executionContext: ContextLoggerContext,
+  getLogger: () => EnrichedDurableLogger,
 ) => {
-  return (stepId: string, attempt?: number): Logger => {
+  return (operationId?: string, attempt?: number): DurableLogger => {
     const baseLogger = getLogger();
 
-    const createLogEntry = (
-      level: string,
-      message?: string,
-      data?: unknown,
-      error?: Error,
-    ): Record<string, unknown> => {
-      const entry: Record<string, unknown> = {
+    const createLogData = (level: DurableLogLevel): DurableLogData => {
+      return {
         timestamp: new Date().toISOString(),
-        execution_arn: executionContext.durableExecutionArn,
+        executionArn: executionContext.durableExecutionArn,
         level,
+        requestId: executionContext.requestId,
+        tenantId: executionContext.tenantId,
+        operationId: operationId ? hashId(operationId) : undefined,
+        attempt,
       };
-
-      if (stepId) entry.step_id = hashId(stepId);
-      if (attempt !== undefined) entry.attempt = attempt;
-      if (message) entry.message = message;
-      if (data) entry.data = data;
-      if (error) {
-        entry.error = {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        };
-      }
-
-      return entry;
     };
 
+    const baseLog = baseLogger.log?.bind(baseLogger);
+
     return {
-      log: baseLogger.log
-        ? (
-            level: string,
-            message?: string,
-            data?: unknown,
-            error?: Error,
-          ): void => {
-            baseLogger.log!(
-              level,
-              message,
-              createLogEntry(level, message, data, error),
-              error,
-            );
+      log: baseLog
+        ? (level: DurableLogLevel, ...params: unknown[]): void => {
+            baseLog(level, createLogData(level), ...params);
           }
         : undefined,
-      info: (message?: string, data?: unknown): void => {
-        baseLogger.info(message, createLogEntry("info", message, data));
+      info: (...params: unknown[]): void => {
+        baseLogger.info(createLogData(DurableLogLevel.INFO), ...params);
       },
-      error: (message?: string, error?: Error, data?: unknown): void => {
-        baseLogger.error(
-          message,
-          error,
-          createLogEntry("error", message, data, error),
-        );
+      error: (...params: unknown[]): void => {
+        baseLogger.error(createLogData(DurableLogLevel.ERROR), ...params);
       },
-      warn: (message?: string, data?: unknown): void => {
-        baseLogger.warn(message, createLogEntry("warn", message, data));
+      warn: (...params: unknown[]): void => {
+        baseLogger.warn(createLogData(DurableLogLevel.WARN), ...params);
       },
-      debug: (message?: string, data?: unknown): void => {
-        baseLogger.debug(message, createLogEntry("debug", message, data));
+      debug: (...params: unknown[]): void => {
+        baseLogger.debug(createLogData(DurableLogLevel.DEBUG), ...params);
       },
     };
   };

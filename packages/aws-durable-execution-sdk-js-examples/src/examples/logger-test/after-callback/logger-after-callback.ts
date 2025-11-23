@@ -1,4 +1,7 @@
-import { withDurableExecution, Logger } from "@aws/durable-execution-sdk-js";
+import {
+  withDurableExecution,
+  EnrichedDurableLogger,
+} from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 import * as fs from "fs";
 
@@ -15,32 +18,32 @@ interface LoggerTestEvent {
 export const handler = withDurableExecution(
   async (event: LoggerTestEvent, context) => {
     if (event.logFilePath) {
-      const fileLogger: Logger = {
-        log: (level, message, data) => {
+      const fileLogger: EnrichedDurableLogger = {
+        log: (level, data, message) => {
           fs.appendFileSync(
             event.logFilePath!,
             JSON.stringify({ level, message, data }) + "\n",
           );
         },
-        info: (message, data) => {
+        info: (data, message) => {
           fs.appendFileSync(
             event.logFilePath!,
             JSON.stringify({ level: "info", message, data }) + "\n",
           );
         },
-        error: (message, error, data) => {
+        error: (data, message) => {
           fs.appendFileSync(
             event.logFilePath!,
-            JSON.stringify({ level: "error", message, error, data }) + "\n",
+            JSON.stringify({ level: "error", message, data }) + "\n",
           );
         },
-        warn: (message, data) => {
+        warn: (data, message) => {
           fs.appendFileSync(
             event.logFilePath!,
             JSON.stringify({ level: "warn", message, data }) + "\n",
           );
         },
-        debug: (message, data) => {
+        debug: (data, message) => {
           fs.appendFileSync(
             event.logFilePath!,
             JSON.stringify({ level: "debug", message, data }) + "\n",

@@ -81,5 +81,7 @@ export interface ExecutionContext {
   terminationManager: TerminationManager;
   durableExecutionArn: string;
   activeOperationsTracker?: ActiveOperationsTracker;
+  requestId: string;
+  tenantId: string | undefined;
   getStepData(stepId: string): Operation | undefined;
 }

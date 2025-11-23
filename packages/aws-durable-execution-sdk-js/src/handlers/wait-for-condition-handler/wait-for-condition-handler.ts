@@ -5,8 +5,8 @@ import {
   WaitForConditionDecision,
   OperationSubType,
   WaitForConditionContext,
-  Logger,
   DurablePromise,
+  DurableLogger,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { terminate } from "../../utils/termination-helper/termination-helper";
@@ -77,7 +77,7 @@ export const createWaitForConditionHandler = (
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  createContextLogger: (stepId: string, attempt?: number) => DurableLogger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
@@ -255,7 +255,7 @@ export const executeWaitForCondition = async <T>(
   name: string | undefined,
   check: WaitForConditionCheckFunc<T>,
   config: WaitForConditionConfig<T>,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  createContextLogger: (stepId: string, attempt?: number) => DurableLogger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,

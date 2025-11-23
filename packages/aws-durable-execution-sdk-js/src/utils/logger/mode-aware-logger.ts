@@ -1,11 +1,12 @@
-import { Logger, DurableExecutionMode } from "../../types";
+import { DurableExecutionMode, DurableLogLevel } from "../../types";
+import { DurableLogger } from "../../types/durable-logger";
 
 export const createModeAwareLogger = (
   durableExecutionMode: DurableExecutionMode,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  createContextLogger: (stepId: string, attempt?: number) => DurableLogger,
   modeAwareEnabled: boolean,
   stepPrefix?: string,
-): Logger => {
+): DurableLogger => {
   // Use context logger factory with stepPrefix as step ID (or undefined for top level)
   const enrichedLogger = createContextLogger(stepPrefix || "", undefined);
 
@@ -14,28 +15,25 @@ export const createModeAwareLogger = (
     !modeAwareEnabled ||
     durableExecutionMode === DurableExecutionMode.ExecutionMode;
 
+  const enrichedLog = enrichedLogger.log?.bind(enrichedLogger);
+
   return {
-    log: enrichedLogger.log
-      ? (
-          level: string,
-          message?: string,
-          data?: unknown,
-          error?: Error,
-        ): void => {
-          if (shouldLog()) enrichedLogger.log!(level, message, data, error);
+    log: enrichedLog
+      ? (level: DurableLogLevel, ...params: unknown[]): void => {
+          if (shouldLog()) enrichedLog(level, ...params);
         }
       : undefined,
-    info: (message?: string, data?: unknown): void => {
-      if (shouldLog()) enrichedLogger.info(message, data);
+    info: (...params: unknown[]): void => {
+      if (shouldLog()) enrichedLogger.info(...params);
     },
-    error: (message?: string, error?: Error, data?: unknown): void => {
-      if (shouldLog()) enrichedLogger.error(message, error, data);
+    error: (...params: unknown[]): void => {
+      if (shouldLog()) enrichedLogger.error(...params);
     },
-    warn: (message?: string, data?: unknown): void => {
-      if (shouldLog()) enrichedLogger.warn(message, data);
+    warn: (...params: unknown[]): void => {
+      if (shouldLog()) enrichedLogger.warn(...params);
     },
-    debug: (message?: string, data?: unknown): void => {
-      if (shouldLog()) enrichedLogger.debug(message, data);
+    debug: (...params: unknown[]): void => {
+      if (shouldLog()) enrichedLogger.debug(...params);
     },
   };
 };

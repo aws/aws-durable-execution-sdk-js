@@ -71,6 +71,8 @@ export function createTestDurableContext(options?: {
     getStepData(stepId: string): Operation | undefined {
       return getStepDataUtil(stepData, stepId);
     },
+    requestId: "mock-request-id",
+    tenantId: undefined,
   };
 
   const mockLambdaContext: Context = {

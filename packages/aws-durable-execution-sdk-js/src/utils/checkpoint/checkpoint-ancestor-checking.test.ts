@@ -42,6 +42,8 @@ describe("CheckpointHandler - Ancestor Checking", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      requestId: "mock-request-id",
+      tenantId: undefined,
     } satisfies ExecutionContext;
 
     checkpointHandler = new CheckpointHandler(

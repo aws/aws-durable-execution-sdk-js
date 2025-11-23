@@ -4,19 +4,19 @@ import {
   GetDurableExecutionStateResponse,
 } from "@aws-sdk/client-lambda";
 import { ApiStorage } from "./api-storage";
-import { Logger } from "../types";
+import { EnrichedDurableLogger } from "../types";
 
 export interface ExecutionState {
   getStepData(
     taskToken: string,
     durableExecutionArn: string,
     nextToken: string,
-    logger?: Logger,
+    logger?: EnrichedDurableLogger,
   ): Promise<GetDurableExecutionStateResponse>;
   checkpoint(
     taskToken: string,
     data: CheckpointDurableExecutionRequest,
-    logger?: Logger,
+    logger?: EnrichedDurableLogger,
   ): Promise<CheckpointDurableExecutionResponse>;
 }
 

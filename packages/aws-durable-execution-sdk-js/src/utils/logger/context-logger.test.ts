@@ -1,10 +1,15 @@
 import { createContextLoggerFactory } from "./context-logger";
-import { Logger, ExecutionContext } from "../../types";
+import {
+  DurableLogData,
+  EnrichedDurableLogger,
+  ExecutionContext,
+  DurableLogLevel,
+} from "../../types";
 import { hashId } from "../step-id-utils/step-id-utils";
 
 describe("Context Logger", () => {
-  let mockBaseLogger: Logger;
-  let mockGetLogger: () => Logger;
+  let mockBaseLogger: EnrichedDurableLogger;
+  let mockGetLogger: () => EnrichedDurableLogger;
   let mockExecutionContext: ExecutionContext;
 
   beforeEach(() => {
@@ -18,7 +23,18 @@ describe("Context Logger", () => {
     mockGetLogger = jest.fn().mockReturnValue(mockBaseLogger);
     mockExecutionContext = {
       durableExecutionArn: "test-execution-arn",
+      requestId: "mock-request-id",
+      tenantId: "test-tenant-id",
     } as ExecutionContext;
+
+    // Mock Date.prototype.toISOString for consistent timestamps
+    jest
+      .spyOn(Date.prototype, "toISOString")
+      .mockReturnValue("2025-11-21T18:33:33.938Z");
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   test("should create context logger with enriched data", () => {
@@ -31,16 +47,17 @@ describe("Context Logger", () => {
     logger.info("test message", { key: "value" });
 
     expect(mockBaseLogger.info).toHaveBeenCalledWith(
-      "test message",
       expect.objectContaining({
-        execution_arn: "test-execution-arn",
-        step_id: hashId("test-step"),
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: DurableLogLevel.INFO,
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
         attempt: 1,
-        level: "info",
-        message: "test message",
-        data: { key: "value" },
-        timestamp: expect.any(String),
       }),
+      "test message",
+      { key: "value" },
     );
   });
 
@@ -54,19 +71,16 @@ describe("Context Logger", () => {
     logger.warn("warning");
 
     expect(mockBaseLogger.warn).toHaveBeenCalledWith(
-      "warning",
       expect.objectContaining({
-        execution_arn: "test-execution-arn",
-        step_id: hashId("test-step"),
-        level: "warn",
-        message: "warning",
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: DurableLogLevel.WARN,
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+        attempt: undefined,
       }),
-    );
-    expect(mockBaseLogger.warn).toHaveBeenCalledWith(
       "warning",
-      expect.not.objectContaining({
-        attempt: expect.anything(),
-      }),
     );
   });
 
@@ -81,18 +95,18 @@ describe("Context Logger", () => {
     logger.error("error message", testError, { extra: "data" });
 
     expect(mockBaseLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: DurableLogLevel.ERROR,
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+        attempt: undefined,
+      }),
       "error message",
       testError,
-      expect.objectContaining({
-        level: "error",
-        message: "error message",
-        data: { extra: "data" },
-        error: {
-          name: "Error",
-          message: "test error",
-          stack: expect.any(String),
-        },
-      }),
+      { extra: "data" },
     );
   });
 
@@ -106,11 +120,16 @@ describe("Context Logger", () => {
     logger.debug("debug info");
 
     expect(mockBaseLogger.debug).toHaveBeenCalledWith(
-      "debug info",
       expect.objectContaining({
-        level: "debug",
-        message: "debug info",
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: DurableLogLevel.DEBUG,
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("debug-step"),
+        attempt: undefined,
       }),
+      "debug info",
     );
   });
 
@@ -122,21 +141,26 @@ describe("Context Logger", () => {
     const logger = factory("generic-step");
     const testError = new Error("generic error");
 
-    logger.log?.("custom", "custom message", { custom: "data" }, testError);
+    logger.log?.(
+      "custom" as any,
+      "custom message",
+      { custom: "data" },
+      testError,
+    );
 
     expect(mockBaseLogger.log).toHaveBeenCalledWith(
       "custom",
-      "custom message",
       expect.objectContaining({
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
         level: "custom",
-        message: "custom message",
-        data: { custom: "data" },
-        error: {
-          name: "Error",
-          message: "generic error",
-          stack: expect.any(String),
-        },
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("generic-step"),
+        attempt: undefined,
       }),
+      "custom message",
+      { custom: "data" },
       testError,
     );
   });
@@ -145,26 +169,30 @@ describe("Context Logger", () => {
     const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
     // Create a default logger that mimics the one in durable-context
-    const createDefaultLogger = (): Logger => ({
-      log: (level: string, message?: string, data?: any, error?: Error) =>
+    const createDefaultLogger = (): EnrichedDurableLogger => ({
+      log: (
+        level: string,
+        durableLogData: DurableLogData,
+        ...optionalParams: unknown[]
+      ) =>
         // eslint-disable-next-line no-console
-        console.log(level, message, data, error),
-      info: (message?: string, data?: any) =>
+        console.log(level, durableLogData, ...optionalParams),
+      info: (durableLogData: DurableLogData, ...optionalParams: unknown[]) =>
         // eslint-disable-next-line no-console
-        console.log("info", message, data),
-      error: (message?: string, error?: Error, data?: any) =>
+        console.log("info", durableLogData, ...optionalParams),
+      error: (durableLogData: DurableLogData, ...optionalParams: unknown[]) =>
         // eslint-disable-next-line no-console
-        console.log("error", message, error, data),
-      warn: (message?: string, data?: any) =>
+        console.log("error", durableLogData, ...optionalParams),
+      warn: (durableLogData: DurableLogData, ...optionalParams: unknown[]) =>
         // eslint-disable-next-line no-console
-        console.log("warn", message, data),
-      debug: (message?: string, data?: any) =>
+        console.log("warn", durableLogData, ...optionalParams),
+      debug: (durableLogData: DurableLogData, ...optionalParams: unknown[]) =>
         // eslint-disable-next-line no-console
-        console.log("debug", message, data),
+        console.log("debug", durableLogData, ...optionalParams),
     });
 
     const defaultLogger = createDefaultLogger();
-    const getDefaultLogger = (): Logger => defaultLogger;
+    const getDefaultLogger = (): EnrichedDurableLogger => defaultLogger;
 
     const factory = createContextLoggerFactory(
       mockExecutionContext,
@@ -174,7 +202,7 @@ describe("Context Logger", () => {
 
     // Test all logger methods to ensure coverage
     logger.log?.(
-      "custom",
+      "custom" as any,
       "log message",
       { data: "test" },
       new Error("test error"),
@@ -184,35 +212,172 @@ describe("Context Logger", () => {
     logger.warn("warn message", { warn: "data" });
     logger.debug("debug message", { debug: "data" });
 
-    // Verify console.log was called (default logger was used)
+    // Verify console.log was called with DurableLogData as first param
     expect(consoleSpy).toHaveBeenCalledWith(
       "custom",
+      expect.objectContaining({
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: "custom",
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+      }),
       "log message",
-      expect.any(Object),
+      { data: "test" },
       expect.any(Error),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "info",
+      expect.objectContaining({
+        level: DurableLogLevel.INFO,
+      }),
       "info message",
-      expect.any(Object),
+      { info: "data" },
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "error",
+      expect.objectContaining({
+        level: DurableLogLevel.ERROR,
+      }),
       "error message",
       expect.any(Error),
-      expect.any(Object),
+      { error: "data" },
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "warn",
+      expect.objectContaining({
+        level: DurableLogLevel.WARN,
+      }),
       "warn message",
-      expect.any(Object),
+      { warn: "data" },
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "debug",
+      expect.objectContaining({
+        level: DurableLogLevel.DEBUG,
+      }),
       "debug message",
-      expect.any(Object),
+      { debug: "data" },
     );
 
     consoleSpy.mockRestore();
+  });
+
+  test("should handle context without operationId", () => {
+    const factory = createContextLoggerFactory(
+      mockExecutionContext,
+      mockGetLogger,
+    );
+    const logger = factory(); // No operationId provided
+
+    logger.info("test message");
+
+    expect(mockBaseLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: DurableLogLevel.INFO,
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: undefined,
+        attempt: undefined,
+      }),
+      "test message",
+    );
+  });
+
+  test("should handle context without tenantId", () => {
+    const contextWithoutTenant = {
+      ...mockExecutionContext,
+      tenantId: undefined,
+    };
+
+    const factory = createContextLoggerFactory(
+      contextWithoutTenant,
+      mockGetLogger,
+    );
+    const logger = factory("test-step");
+
+    logger.info("test message");
+
+    expect(mockBaseLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: DurableLogLevel.INFO,
+        requestId: "mock-request-id",
+        tenantId: undefined,
+        operationId: hashId("test-step"),
+        attempt: undefined,
+      }),
+      "test message",
+    );
+  });
+
+  test("should handle baseLogger.log being undefined", () => {
+    const loggerWithoutLogMethod = {
+      ...mockBaseLogger,
+      log: undefined,
+    };
+    const getLoggerWithoutLog = (): EnrichedDurableLogger =>
+      loggerWithoutLogMethod;
+
+    const factory = createContextLoggerFactory(
+      mockExecutionContext,
+      getLoggerWithoutLog,
+    );
+    const logger = factory("test-step");
+
+    // The log method should be undefined
+    expect(logger.log).toBeUndefined();
+
+    // Other methods should still work
+    logger.info("test message");
+    expect(mockBaseLogger.info).toHaveBeenCalled();
+  });
+
+  test("should capture baseLogger.log reference at creation time to prevent race conditions", () => {
+    const originalLogFn = jest.fn();
+    const dynamicLogger: EnrichedDurableLogger = {
+      log: originalLogFn,
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    };
+
+    const getDynamicLogger = (): EnrichedDurableLogger => dynamicLogger;
+
+    const factory = createContextLoggerFactory(
+      mockExecutionContext,
+      getDynamicLogger,
+    );
+    const logger = factory("test-step");
+
+    // Verify the log method was captured and is available
+    expect(logger.log).toBeDefined();
+
+    // Now modify the dynamic logger's log method to undefined
+    // This simulates a scenario where the base logger changes after context logger creation
+    dynamicLogger.log = undefined;
+
+    // The context logger should still work because it captured the original reference
+    logger.log?.("INFO", "test message");
+
+    // Verify the original log method was called, not the undefined one
+    expect(originalLogFn).toHaveBeenCalledWith(
+      "INFO",
+      expect.objectContaining({
+        timestamp: "2025-11-21T18:33:33.938Z",
+        executionArn: "test-execution-arn",
+        level: "INFO",
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+        attempt: undefined,
+      }),
+      "test message",
+    );
   });
 });

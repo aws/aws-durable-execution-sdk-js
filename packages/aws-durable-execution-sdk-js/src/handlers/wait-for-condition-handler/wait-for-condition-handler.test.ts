@@ -8,8 +8,8 @@ import {
   WaitForConditionCheckFunc,
   WaitForConditionConfig,
   OperationSubType,
-  Logger,
   DurablePromise,
+  DurableLogger,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -66,7 +66,7 @@ describe("WaitForCondition Handler", () => {
       warn: jest.fn(),
       debug: jest.fn(),
     };
-    const createMockEnrichedLogger = (): Logger => mockLogger;
+    const createMockEnrichedLogger = (): DurableLogger => mockLogger;
 
     waitForConditionHandler = createWaitForConditionHandler(
       mockExecutionContext,
