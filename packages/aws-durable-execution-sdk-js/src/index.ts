@@ -24,6 +24,7 @@ export {
   InvokeConfig,
   JitterStrategy,
   Duration,
+  DurableLogData,
 } from "./types";
 export { DurablePromise } from "./types/durable-promise";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";

@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { DurableLogLevel } from ".";
+
+export type DurableLogField = unknown;
 
 /**
  * Base logger interface that users interact with. This logger is attached to the durable
@@ -20,10 +20,10 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.log("INFO", "User logged in", \{ userId: "XXX" \})
    */
-  log?(
+  log(
     level: `${DurableLogLevel}`,
-    message?: any,
-    ...optionalParams: any[]
+    message?: DurableLogField,
+    ...optionalParams: DurableLogField[]
   ): void;
 
   /**
@@ -32,7 +32,7 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.error("Database query failed", dbError, \{ query: "SELECT * FROM users" \})
    */
-  error(message?: any, ...optionalParams: any[]): void;
+  error(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
 
   /**
    * Log warning messages with optional additional parameters
@@ -40,7 +40,7 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.warn("Rate limit approaching", \{ currentRate: 95, limit: 100 \})
    */
-  warn(message?: any, ...optionalParams: any[]): void;
+  warn(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
 
   /**
    * Log informational messages with optional additional parameters
@@ -48,7 +48,7 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.info("User action completed", \{ userId: "123", action: "login" \})
    */
-  info(message?: any, ...optionalParams: any[]): void;
+  info(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
 
   /**
    * Log debug messages with optional additional parameters
@@ -56,5 +56,5 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.debug("Processing step", \{ stepName: "validation", duration: 150 \})
    */
-  debug(message?: any, ...optionalParams: any[]): void;
+  debug(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
 }

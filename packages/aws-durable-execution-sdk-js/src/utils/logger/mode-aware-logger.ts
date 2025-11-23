@@ -1,5 +1,5 @@
 import { DurableExecutionMode, DurableLogLevel } from "../../types";
-import { DurableLogger } from "../../types/durable-logger";
+import { DurableLogField, DurableLogger } from "../../types/durable-logger";
 
 export const createModeAwareLogger = (
   durableExecutionMode: DurableExecutionMode,
@@ -15,24 +15,22 @@ export const createModeAwareLogger = (
     !modeAwareEnabled ||
     durableExecutionMode === DurableExecutionMode.ExecutionMode;
 
-  const enrichedLog = enrichedLogger.log?.bind(enrichedLogger);
+  const enrichedLog = enrichedLogger.log.bind(enrichedLogger);
 
   return {
-    log: enrichedLog
-      ? (level: DurableLogLevel, ...params: unknown[]): void => {
-          if (shouldLog()) enrichedLog(level, ...params);
-        }
-      : undefined,
-    info: (...params: unknown[]): void => {
+    log: (level: DurableLogLevel, ...params: DurableLogField[]): void => {
+      if (shouldLog()) enrichedLog(level, ...params);
+    },
+    info: (...params: DurableLogField[]): void => {
       if (shouldLog()) enrichedLogger.info(...params);
     },
-    error: (...params: unknown[]): void => {
+    error: (...params: DurableLogField[]): void => {
       if (shouldLog()) enrichedLogger.error(...params);
     },
-    warn: (...params: unknown[]): void => {
+    warn: (...params: DurableLogField[]): void => {
       if (shouldLog()) enrichedLogger.warn(...params);
     },
-    debug: (...params: unknown[]): void => {
+    debug: (...params: DurableLogField[]): void => {
       if (shouldLog()) enrichedLogger.debug(...params);
     },
   };

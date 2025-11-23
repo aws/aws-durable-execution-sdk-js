@@ -4,7 +4,7 @@ import {
   DurableLogData,
 } from "../../types";
 import { hashId } from "../step-id-utils/step-id-utils";
-import { DurableLogger } from "../../types/durable-logger";
+import { DurableLogField, DurableLogger } from "../../types/durable-logger";
 
 export interface ContextLoggerContext {
   durableExecutionArn: string;
@@ -19,11 +19,9 @@ export const createContextLoggerFactory = (
   return (operationId?: string, attempt?: number): DurableLogger => {
     const baseLogger = getLogger();
 
-    const createLogData = (level: DurableLogLevel): DurableLogData => {
+    const createLogData = (): DurableLogData => {
       return {
-        timestamp: new Date().toISOString(),
         executionArn: executionContext.durableExecutionArn,
-        level,
         requestId: executionContext.requestId,
         tenantId: executionContext.tenantId,
         operationId: operationId ? hashId(operationId) : undefined,
@@ -33,24 +31,44 @@ export const createContextLoggerFactory = (
 
     const baseLog = baseLogger.log?.bind(baseLogger);
 
-    return {
+    const contextLogger: DurableLogger = {
       log: baseLog
         ? (level: DurableLogLevel, ...params: unknown[]): void => {
-            baseLog(level, createLogData(level), ...params);
+            baseLog(level, createLogData(), ...params);
           }
-        : undefined,
-      info: (...params: unknown[]): void => {
-        baseLogger.info(createLogData(DurableLogLevel.INFO), ...params);
+        : (level: DurableLogLevel, ...params: DurableLogField[]): void => {
+            switch (level) {
+              case DurableLogLevel.INFO:
+                contextLogger.info(...params);
+                break;
+              case DurableLogLevel.WARN:
+                contextLogger.warn(...params);
+                break;
+              case DurableLogLevel.ERROR:
+                contextLogger.error(...params);
+                break;
+              case DurableLogLevel.DEBUG:
+                contextLogger.debug(...params);
+                break;
+              default:
+                contextLogger.info(...params);
+                break;
+            }
+          },
+      info: (...params: DurableLogField[]): void => {
+        baseLogger.info(createLogData(), ...params);
       },
-      error: (...params: unknown[]): void => {
-        baseLogger.error(createLogData(DurableLogLevel.ERROR), ...params);
+      error: (...params: DurableLogField[]): void => {
+        baseLogger.error(createLogData(), ...params);
       },
-      warn: (...params: unknown[]): void => {
-        baseLogger.warn(createLogData(DurableLogLevel.WARN), ...params);
+      warn: (...params: DurableLogField[]): void => {
+        baseLogger.warn(createLogData(), ...params);
       },
-      debug: (...params: unknown[]): void => {
-        baseLogger.debug(createLogData(DurableLogLevel.DEBUG), ...params);
+      debug: (...params: DurableLogField[]): void => {
+        baseLogger.debug(createLogData(), ...params);
       },
     };
+
+    return contextLogger;
   };
 };

@@ -3,13 +3,14 @@ import {
   EnrichedDurableLogger,
   DurableLogLevel,
   DurableLogData,
+  DurableLogField,
 } from "../../types";
 import util from "node:util";
 
 /**
  * Log entry that is emitted by the default logger.
  */
-interface DurableLogEntry extends DurableLogData {
+interface DefaultDurableLogEntry extends DurableLogData {
   /**
    * Message property is used for all the parameters that the customer passes to the default logger
    */
@@ -17,6 +18,9 @@ interface DurableLogEntry extends DurableLogData {
   errorType?: string;
   errorMessage?: string;
   stackTrace?: string[];
+
+  level: DurableLogLevel;
+  timestamp: string;
 }
 
 // The logic from this file is based on the NodeJS RIC LogPatch functionality for parity with standard Lambda functions. We should always
@@ -34,7 +38,10 @@ interface DurableLogEntry extends DurableLogData {
  * @param value - The value being stringified
  * @returns The original value, or a structured error object for Error instances
  */
-function jsonErrorReplacer(_key: string, value: unknown): unknown {
+function jsonErrorReplacer(
+  _key: string,
+  value: DurableLogField,
+): DurableLogField {
   if (value instanceof Error) {
     return Object.assign(
       {
@@ -74,12 +81,12 @@ function jsonErrorReplacer(_key: string, value: unknown): unknown {
 function formatDurableLogData(
   level: DurableLogLevel,
   logData: DurableLogData,
-  ...messageParams: unknown[]
+  ...messageParams: DurableLogField[]
 ): string {
-  const result: DurableLogEntry = {
+  const result: DefaultDurableLogEntry = {
     requestId: logData.requestId,
     timestamp: new Date().toISOString(),
-    level,
+    level: level.toUpperCase() as DefaultDurableLogEntry["level"],
     executionArn: logData.executionArn,
   };
 
@@ -169,7 +176,7 @@ export const createDefaultLogger = (): EnrichedDurableLogger => {
           logger.error(data, ...params);
           break;
         default:
-          logger.debug(data, ...params);
+          logger.info(data, ...params);
           break;
       }
     },
@@ -200,7 +207,10 @@ export const createDefaultLogger = (): EnrichedDurableLogger => {
   // Enable methods based on priority: higher priority = more restrictive
   // e.g., if WARN is set (priority 4), only WARN and ERROR methods are enabled
   if (levels.DEBUG.priority >= lambdaLogLevel.priority) {
-    logger.debug = (data: DurableLogData, ...params: unknown[]): void => {
+    logger.debug = (
+      data: DurableLogData,
+      ...params: DurableLogField[]
+    ): void => {
       consoleLogger.debug(
         formatDurableLogData(DurableLogLevel.DEBUG, data, ...params),
       );
@@ -208,7 +218,10 @@ export const createDefaultLogger = (): EnrichedDurableLogger => {
   }
 
   if (levels.INFO.priority >= lambdaLogLevel.priority) {
-    logger.info = (data: DurableLogData, ...params: unknown[]): void => {
+    logger.info = (
+      data: DurableLogData,
+      ...params: DurableLogField[]
+    ): void => {
       consoleLogger.info(
         formatDurableLogData(DurableLogLevel.INFO, data, ...params),
       );
@@ -216,7 +229,10 @@ export const createDefaultLogger = (): EnrichedDurableLogger => {
   }
 
   if (levels.WARN.priority >= lambdaLogLevel.priority) {
-    logger.warn = (data: DurableLogData, ...params: unknown[]): void => {
+    logger.warn = (
+      data: DurableLogData,
+      ...params: DurableLogField[]
+    ): void => {
       consoleLogger.warn(
         formatDurableLogData(DurableLogLevel.WARN, data, ...params),
       );
@@ -224,7 +240,10 @@ export const createDefaultLogger = (): EnrichedDurableLogger => {
   }
 
   if (levels.ERROR.priority >= lambdaLogLevel.priority) {
-    logger.error = (data: DurableLogData, ...params: unknown[]): void => {
+    logger.error = (
+      data: DurableLogData,
+      ...params: DurableLogField[]
+    ): void => {
       consoleLogger.error(
         formatDurableLogData(DurableLogLevel.ERROR, data, ...params),
       );

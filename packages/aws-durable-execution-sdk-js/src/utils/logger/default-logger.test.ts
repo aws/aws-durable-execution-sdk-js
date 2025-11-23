@@ -294,14 +294,14 @@ describe("Default Logger", () => {
       });
     });
 
-    it("should default to DEBUG level for unknown log levels", () => {
+    it("should default to INFO level for unknown log levels", () => {
       const logger = createDefaultLogger();
       const durableLogData: DurableLogData = {
         requestId: "mock-request-id",
         executionArn: "test-arn",
         operationId: "abc123",
         timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.DEBUG,
+        level: DurableLogLevel.INFO,
       };
 
       logger.log?.(
@@ -310,11 +310,11 @@ describe("Default Logger", () => {
         "test message",
       );
 
-      expect(mockConsole.debug).toHaveBeenCalledWith(
+      expect(mockConsole.info).toHaveBeenCalledWith(
         JSON.stringify({
           requestId: "mock-request-id",
           timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.DEBUG,
+          level: DurableLogLevel.INFO,
           executionArn: "test-arn",
           operationId: "abc123",
           message: "test message",

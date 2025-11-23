@@ -20,10 +20,10 @@ export const handler = withDurableExecution(async (_event, context) => {
 
   // Test the generic log method with different levels
   await context.step("log-level-step", async (stepContext) => {
-    stepContext.logger.log?.("DEBUG", "Step debug via log method");
-    stepContext.logger.log?.("INFO", "Step info via log method");
-    stepContext.logger.log?.("WARN", "Step warn via log method");
-    stepContext.logger.log?.("ERROR", "Step error via log method");
+    stepContext.logger.log("DEBUG", "Step debug via log method");
+    stepContext.logger.log("INFO", "Step info via log method");
+    stepContext.logger.log("WARN", "Step warn via log method");
+    stepContext.logger.log("ERROR", "Step error via log method");
     return "step completed";
   });
 

@@ -47,15 +47,13 @@ describe("Context Logger", () => {
     logger.info("test message", { key: "value" });
 
     expect(mockBaseLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: DurableLogLevel.INFO,
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: hashId("test-step"),
         attempt: 1,
-      }),
+      },
       "test message",
       { key: "value" },
     );
@@ -71,15 +69,13 @@ describe("Context Logger", () => {
     logger.warn("warning");
 
     expect(mockBaseLogger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: DurableLogLevel.WARN,
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: hashId("test-step"),
         attempt: undefined,
-      }),
+      },
       "warning",
     );
   });
@@ -95,15 +91,13 @@ describe("Context Logger", () => {
     logger.error("error message", testError, { extra: "data" });
 
     expect(mockBaseLogger.error).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: DurableLogLevel.ERROR,
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: hashId("test-step"),
         attempt: undefined,
-      }),
+      },
       "error message",
       testError,
       { extra: "data" },
@@ -120,15 +114,13 @@ describe("Context Logger", () => {
     logger.debug("debug info");
 
     expect(mockBaseLogger.debug).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: DurableLogLevel.DEBUG,
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: hashId("debug-step"),
         attempt: undefined,
-      }),
+      },
       "debug info",
     );
   });
@@ -150,15 +142,13 @@ describe("Context Logger", () => {
 
     expect(mockBaseLogger.log).toHaveBeenCalledWith(
       "custom",
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: "custom",
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: hashId("generic-step"),
         attempt: undefined,
-      }),
+      },
       "custom message",
       { custom: "data" },
       testError,
@@ -215,50 +205,66 @@ describe("Context Logger", () => {
     // Verify console.log was called with DurableLogData as first param
     expect(consoleSpy).toHaveBeenCalledWith(
       "custom",
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: "custom",
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: hashId("test-step"),
-      }),
+      },
       "log message",
       { data: "test" },
       expect.any(Error),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "info",
-      expect.objectContaining({
-        level: DurableLogLevel.INFO,
-      }),
+      {
+        executionArn: "test-execution-arn",
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+      },
       "info message",
-      { info: "data" },
+      {
+        info: "data",
+      },
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "error",
-      expect.objectContaining({
-        level: DurableLogLevel.ERROR,
-      }),
+      {
+        executionArn: "test-execution-arn",
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+      },
       "error message",
       expect.any(Error),
       { error: "data" },
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "warn",
-      expect.objectContaining({
-        level: DurableLogLevel.WARN,
-      }),
+      {
+        executionArn: "test-execution-arn",
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+      },
       "warn message",
-      { warn: "data" },
+      {
+        warn: "data",
+      },
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       "debug",
-      expect.objectContaining({
-        level: DurableLogLevel.DEBUG,
-      }),
+      {
+        executionArn: "test-execution-arn",
+        requestId: "mock-request-id",
+        tenantId: "test-tenant-id",
+        operationId: hashId("test-step"),
+      },
       "debug message",
-      { debug: "data" },
+      {
+        debug: "data",
+      },
     );
 
     consoleSpy.mockRestore();
@@ -274,15 +280,13 @@ describe("Context Logger", () => {
     logger.info("test message");
 
     expect(mockBaseLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: DurableLogLevel.INFO,
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: undefined,
         attempt: undefined,
-      }),
+      },
       "test message",
     );
   });
@@ -302,15 +306,13 @@ describe("Context Logger", () => {
     logger.info("test message");
 
     expect(mockBaseLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: DurableLogLevel.INFO,
         requestId: "mock-request-id",
         tenantId: undefined,
         operationId: hashId("test-step"),
         attempt: undefined,
-      }),
+      },
       "test message",
     );
   });
@@ -329,12 +331,19 @@ describe("Context Logger", () => {
     );
     const logger = factory("test-step");
 
-    // The log method should be undefined
-    expect(logger.log).toBeUndefined();
+    // The log method should not be undefined
+    expect(logger.log).not.toBeUndefined();
 
-    // Other methods should still work
-    logger.info("test message");
-    expect(mockBaseLogger.info).toHaveBeenCalled();
+    // Logger.log should still work with default behaviour
+    logger.log("INFO", "test message");
+    logger.log("WARN", "test message");
+    logger.log("ERROR", "test message");
+    logger.log("DEBUG", "test message");
+    logger.log("custom" as any, "test message");
+    expect(mockBaseLogger.info).toHaveBeenCalledTimes(2);
+    expect(mockBaseLogger.warn).toHaveBeenCalledTimes(1);
+    expect(mockBaseLogger.error).toHaveBeenCalledTimes(1);
+    expect(mockBaseLogger.debug).toHaveBeenCalledTimes(1);
   });
 
   test("should capture baseLogger.log reference at creation time to prevent race conditions", () => {
@@ -363,20 +372,18 @@ describe("Context Logger", () => {
     dynamicLogger.log = undefined;
 
     // The context logger should still work because it captured the original reference
-    logger.log?.("INFO", "test message");
+    logger.log("INFO", "test message");
 
     // Verify the original log method was called, not the undefined one
     expect(originalLogFn).toHaveBeenCalledWith(
       "INFO",
-      expect.objectContaining({
-        timestamp: "2025-11-21T18:33:33.938Z",
+      {
         executionArn: "test-execution-arn",
-        level: "INFO",
         requestId: "mock-request-id",
         tenantId: "test-tenant-id",
         operationId: hashId("test-step"),
         attempt: undefined,
-      }),
+      },
       "test message",
     );
   });
