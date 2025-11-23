@@ -68,15 +68,6 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: os
-    attributes:
-      label: Operating System
-      description: What OS are you using?
-      placeholder: e.g., macOS 14, Ubuntu 22.04, Windows 11
-    validations:
-      required: false
-
   - type: dropdown
     id: regression
     attributes:
