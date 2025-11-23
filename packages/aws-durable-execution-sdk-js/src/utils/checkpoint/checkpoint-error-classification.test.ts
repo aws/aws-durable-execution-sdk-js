@@ -3,12 +3,15 @@ import {
   CheckpointUnrecoverableInvocationError,
   CheckpointUnrecoverableExecutionError,
 } from "../../errors/checkpoint-errors/checkpoint-errors";
-import { ExecutionContext } from "../../types";
+import { DurableLogger, ExecutionContext } from "../../types";
 import { EventEmitter } from "events";
+import { createContextLoggerFactory } from "../logger/context-logger";
+import { createDefaultLogger } from "../logger/default-logger";
 
 describe("Checkpoint Error Classification", () => {
   let handler: CheckpointHandler;
   let mockContext: ExecutionContext;
+  let mockLogger: DurableLogger;
 
   beforeEach(() => {
     mockContext = {
@@ -23,9 +26,17 @@ describe("Checkpoint Error Classification", () => {
         getTerminationPromise: jest.fn(),
       },
     } as any;
+    mockLogger = createContextLoggerFactory(mockContext, () =>
+      createDefaultLogger(),
+    )();
 
     const emitter = new EventEmitter();
-    handler = new CheckpointHandler(mockContext, "test-token", emitter);
+    handler = new CheckpointHandler(
+      mockContext,
+      "test-token",
+      emitter,
+      mockLogger,
+    );
   });
 
   it("should classify 4xx InvalidParameterValueException with Invalid Checkpoint Token as invocation error", () => {

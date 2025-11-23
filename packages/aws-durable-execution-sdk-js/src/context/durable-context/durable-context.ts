@@ -53,7 +53,7 @@ import { validateContextUsage } from "../../utils/context-tracker/context-tracke
 export class DurableContextImpl implements DurableContext {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
-  private contextLogger: EnrichedDurableLogger | null;
+  private contextLogger: EnrichedDurableLogger;
   private modeAwareLoggingEnabled: boolean = true;
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
@@ -67,29 +67,31 @@ export class DurableContextImpl implements DurableContext {
     private executionContext: ExecutionContext,
     public lambdaContext: Context,
     durableExecutionMode: DurableExecutionMode,
+    inheritedLogger: EnrichedDurableLogger,
     stepPrefix?: string,
     checkpointToken?: string,
-    inheritedLogger?: EnrichedDurableLogger | null,
     parentId?: string,
   ) {
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
-    this.contextLogger = inheritedLogger || null;
-    this.checkpoint = createCheckpoint(
-      executionContext,
-      checkpointToken || "",
-      this.operationsEmitter,
-      this.contextLogger || undefined,
-    );
+    this.contextLogger = inheritedLogger;
+
     this.durableExecutionMode = durableExecutionMode;
 
     const getLogger = (): EnrichedDurableLogger => {
-      return this.contextLogger || createDefaultLogger();
+      return this.contextLogger;
     };
 
     this.createContextLogger = createContextLoggerFactory(
       executionContext,
       getLogger,
+    );
+
+    this.checkpoint = createCheckpoint(
+      executionContext,
+      checkpointToken || "",
+      this.operationsEmitter,
+      this.createContextLogger(),
     );
 
     this.modeManagement = new ModeManagement(
@@ -514,18 +516,18 @@ export const createDurableContext = (
   executionContext: ExecutionContext,
   parentContext: Context,
   durableExecutionMode: DurableExecutionMode,
+  inheritedLogger: EnrichedDurableLogger,
   stepPrefix?: string,
   checkpointToken?: string,
-  inheritedLogger?: EnrichedDurableLogger | null,
   parentId?: string,
 ): DurableContextImpl => {
   return new DurableContextImpl(
     executionContext,
     parentContext,
     durableExecutionMode,
+    inheritedLogger,
     stepPrefix,
     checkpointToken,
-    inheritedLogger,
     parentId,
   );
 };

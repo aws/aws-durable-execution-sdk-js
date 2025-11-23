@@ -306,6 +306,13 @@ describe("withDurableExecution", () => {
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       expect.any(Object),
+      {
+        debug: expect.any(Function),
+        error: expect.any(Function),
+        info: expect.any(Function),
+        warn: expect.any(Function),
+        log: expect.any(Function),
+      },
     );
     expect(mockCheckpoint).toHaveBeenCalledWith(
       expect.stringMatching(/^execution-result-\d+$/),
@@ -346,6 +353,13 @@ describe("withDurableExecution", () => {
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       expect.any(Object),
+      {
+        debug: expect.any(Function),
+        error: expect.any(Function),
+        info: expect.any(Function),
+        warn: expect.any(Function),
+        log: expect.any(Function),
+      },
     );
     expect(mockCheckpoint).toHaveBeenCalledWith(
       expect.stringMatching(/^execution-result-\d+$/),

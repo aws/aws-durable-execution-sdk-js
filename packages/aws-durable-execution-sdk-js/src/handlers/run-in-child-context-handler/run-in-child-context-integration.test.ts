@@ -13,6 +13,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { deleteCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 // Mock the TerminationManager class
 jest.mock("../../termination-manager/termination-manager");
@@ -71,6 +72,7 @@ describe("Run In Child Context Integration Tests", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
   });
 

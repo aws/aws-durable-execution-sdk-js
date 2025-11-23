@@ -11,6 +11,7 @@ import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { ExecutionContext, DurableExecutionMode } from "../types";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
+import { createDefaultLogger } from "../utils/logger/default-logger";
 
 /**
  * In-memory storage for testing - no API calls
@@ -95,6 +96,7 @@ export function createTestDurableContext(options?: {
     executionContext,
     mockLambdaContext,
     options?.durableExecutionMode || DurableExecutionMode.ExecutionMode,
+    createDefaultLogger(),
     options?.stepPrefix,
     "test-checkpoint-token",
   );

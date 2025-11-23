@@ -24,6 +24,8 @@ import {
 import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { runWithContext } from "./utils/context-tracker/context-tracker";
+import { createDefaultLogger } from "./utils/logger/default-logger";
+import { createContextLoggerFactory } from "./utils/logger/context-logger";
 
 type DurableHandler<Input, Output> = (
   event: Input,
@@ -42,10 +44,13 @@ async function runHandler<Input, Output>(
   // Clear any existing checkpoint handler from previous invocations (warm Lambda)
   deleteCheckpoint();
 
+  const defaultLogger = createDefaultLogger();
+
   const durableContext = createDurableContext(
     executionContext,
     context,
     durableExecutionMode,
+    defaultLogger,
     undefined,
     checkpointToken,
   );
@@ -158,6 +163,7 @@ async function runHandler<Input, Output>(
         executionContext,
         checkpointToken,
         stepDataEmitter,
+        createContextLoggerFactory(executionContext, () => defaultLogger)(),
       );
       const stepId = `execution-result-${Date.now()}`;
 

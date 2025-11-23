@@ -15,7 +15,13 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 jest.mock("../../storage/storage");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../termination-manager/termination-manager");
-jest.mock("../../utils/logger/context-logger");
+jest.mock("../../utils/logger/context-logger", () => {
+  return {
+    createContextLoggerFactory: jest
+      .fn()
+      .mockReturnValue(() => createDefaultLogger()),
+  };
+});
 jest.mock("../../utils/logger/default-logger");
 
 describe("initializeExecutionContext", () => {

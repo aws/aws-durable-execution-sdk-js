@@ -5,6 +5,7 @@ import {
   EnrichedDurableLogger,
 } from "../../types";
 import { Context } from "aws-lambda";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 describe("DurableContext logger modeAware configuration", () => {
   const mockExecutionContext: ExecutionContext = {
@@ -49,6 +50,7 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
     context.configureLogger({ customLogger });
 
@@ -69,14 +71,13 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
     context.configureLogger({ customLogger, modeAware: false });
 
     context.logger.info("replay message");
     expect(customLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
-        timestamp: expect.any(String),
-        level: "INFO",
         executionArn: "test-arn",
       }),
       "replay message",
@@ -96,6 +97,7 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
     context.configureLogger({ customLogger, modeAware: true });
 
@@ -116,6 +118,7 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
     context.configureLogger({ customLogger });
 
@@ -139,6 +142,7 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
     context.configureLogger({});
 
@@ -171,6 +175,7 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
 
     // First: set custom logger only
@@ -208,6 +213,7 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
 
     // Set custom logger and modeAware=false

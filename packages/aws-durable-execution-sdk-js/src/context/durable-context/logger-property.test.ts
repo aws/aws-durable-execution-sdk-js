@@ -6,6 +6,7 @@ import {
 } from "../../types";
 import { Context } from "aws-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 describe("DurableContext Logger Property", () => {
   let mockExecutionContext: ExecutionContext;
@@ -46,6 +47,7 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
 
     expect(context.logger).toBeDefined();
@@ -60,6 +62,7 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
 
     // Set custom logger
@@ -71,9 +74,7 @@ describe("DurableContext Logger Property", () => {
     // Logger is enriched with execution context (no step_id at top level)
     expect(customLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
-        timestamp: expect.any(String),
         executionArn: "test-arn",
-        level: "INFO",
       }),
       "test message",
       { data: "test" },
@@ -85,14 +86,26 @@ describe("DurableContext Logger Property", () => {
   });
 
   test("Logger property should be a live reference (getter)", () => {
+    const defaultLogger = createDefaultLogger();
+
+    const infoLogSpy = jest.spyOn(defaultLogger, "info").mockImplementation();
+
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      defaultLogger,
     );
 
     // Call logger before setting custom logger
     context.logger.info("message1");
+
+    expect(infoLogSpy).toHaveBeenCalledWith(
+      {
+        executionArn: "test-arn",
+      },
+      "message1",
+    );
 
     // Set custom logger
     context.configureLogger({ customLogger });
@@ -104,9 +117,7 @@ describe("DurableContext Logger Property", () => {
     expect(customLogger.info).toHaveBeenCalledTimes(1);
     expect(customLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
-        timestamp: expect.any(String),
         executionArn: "test-arn",
-        level: "INFO",
       }),
       "message2",
     );
@@ -122,15 +133,14 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
     contextExecution.configureLogger({ customLogger });
 
     contextExecution.logger.info("execution mode message");
     expect(customLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
-        timestamp: expect.any(String),
         executionArn: "test-arn",
-        level: "INFO",
       }),
       "execution mode message",
     );
@@ -147,6 +157,7 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
     contextReplay.configureLogger({ customLogger });
 
@@ -161,6 +172,7 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplaySucceededContext,
+      createDefaultLogger(),
     );
     contextReplaySucceeded.configureLogger({ customLogger });
 
@@ -174,6 +186,7 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
       "1", // stepPrefix for child context
     );
     childContext.configureLogger({ customLogger });
@@ -182,12 +195,10 @@ describe("DurableContext Logger Property", () => {
 
     // Child context logger should have step_id populated with the hashed prefix
     expect(customLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({
-        timestamp: expect.any(String),
+      {
         operationId: hashId("1"),
         executionArn: "test-arn",
-        level: "INFO",
-      }),
+      },
       "child message",
     );
   });

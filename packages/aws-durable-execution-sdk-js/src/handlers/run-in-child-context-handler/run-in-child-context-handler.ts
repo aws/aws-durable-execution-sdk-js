@@ -69,9 +69,9 @@ export const createRunInChildContextHandler = (
     executionContext: ExecutionContext,
     parentContext: Context,
     durableExecutionMode: DurableExecutionMode,
+    inheritedLogger: EnrichedDurableLogger,
     stepPrefix?: string,
     checkpointToken?: string,
-    inheritedLogger?: EnrichedDurableLogger | null,
     parentId?: string,
   ) => DurableContext,
   parentId?: string,
@@ -186,9 +186,9 @@ export const handleCompletedChildContext = async <T>(
     executionContext: ExecutionContext,
     parentContext: Context,
     durableExecutionMode: DurableExecutionMode,
+    logger: EnrichedDurableLogger,
     entityId: string,
     checkpointToken: string | undefined,
-    logger: EnrichedDurableLogger,
     parentId?: string,
   ) => DurableContext,
 ): Promise<T> => {
@@ -221,9 +221,9 @@ export const handleCompletedChildContext = async <T>(
       context,
       parentContext,
       DurableExecutionMode.ReplaySucceededContext,
+      getParentLogger(),
       entityId,
       undefined,
-      getParentLogger(),
       entityId, // parentId
     );
 
@@ -259,9 +259,9 @@ export const executeChildContext = async <T>(
     executionContext: ExecutionContext,
     parentContext: Context,
     durableExecutionMode: DurableExecutionMode,
+    logger: EnrichedDurableLogger,
     entityId: string,
     checkpointToken: string | undefined,
-    logger: EnrichedDurableLogger,
     parentId?: string,
   ) => DurableContext,
   parentId?: string,
@@ -286,9 +286,9 @@ export const executeChildContext = async <T>(
     context,
     parentContext,
     determineChildReplayMode(context, entityId),
+    getParentLogger(),
     entityId,
     undefined,
-    getParentLogger(),
     entityId, // parentId
   );
 

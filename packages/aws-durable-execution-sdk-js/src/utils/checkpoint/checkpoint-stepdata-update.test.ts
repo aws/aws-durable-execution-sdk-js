@@ -1,5 +1,5 @@
 import { CheckpointHandler } from "./checkpoint";
-import { ExecutionContext, OperationSubType } from "../../types";
+import { DurableLogger, ExecutionContext, OperationSubType } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   CheckpointDurableExecutionResponse,
@@ -10,12 +10,15 @@ import {
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { createContextLoggerFactory } from "../logger/context-logger";
+import { createDefaultLogger } from "../logger/default-logger";
 
 describe("CheckpointHandler - StepData Update", () => {
   let mockContext: ExecutionContext;
   let mockState: any;
   let checkpointHandler: CheckpointHandler;
   let mockEmitter: EventEmitter;
+  let mockLogger: DurableLogger;
 
   beforeEach(() => {
     mockEmitter = new EventEmitter();
@@ -45,10 +48,15 @@ describe("CheckpointHandler - StepData Update", () => {
       tenantId: undefined,
     };
 
+    mockLogger = createContextLoggerFactory(mockContext, () =>
+      createDefaultLogger(),
+    )();
+
     checkpointHandler = new CheckpointHandler(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
   });
 
