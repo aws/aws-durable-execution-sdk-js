@@ -3,6 +3,7 @@ import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateCommand,
+  GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
@@ -31,33 +32,20 @@ export class LocalRunnerStorage implements ExecutionState {
   }
 
   async getStepData(
-    checkpointToken: string,
-    durableExecutionArn: string,
-    nextMarker: string,
+    params: GetDurableExecutionStateRequest,
   ): Promise<GetDurableExecutionStateResponse> {
     const response = await this.client.send(
-      new GetDurableExecutionStateCommand({
-        DurableExecutionArn: durableExecutionArn,
-        CheckpointToken: checkpointToken,
-        Marker: nextMarker,
-        MaxItems: 1000,
-      }),
+      new GetDurableExecutionStateCommand(params),
     );
 
     return response;
   }
 
   async checkpoint(
-    checkpointToken: string,
-    data: CheckpointDurableExecutionRequest,
+    params: CheckpointDurableExecutionRequest,
   ): Promise<CheckpointDurableExecutionResponse> {
     const response = await this.client.send(
-      new CheckpointDurableExecutionCommand({
-        DurableExecutionArn: data.DurableExecutionArn,
-        CheckpointToken: checkpointToken,
-        ClientToken: data.ClientToken,
-        Updates: data.Updates,
-      }),
+      new CheckpointDurableExecutionCommand(params),
     );
 
     return response;

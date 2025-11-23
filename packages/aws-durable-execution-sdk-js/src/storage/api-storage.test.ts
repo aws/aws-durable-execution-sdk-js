@@ -72,11 +72,12 @@ describe("ApiStorage", () => {
     mockLambdaClient.send.mockResolvedValue(mockResponse);
 
     // Call getStepData
-    const result = await apiStorage.getStepData(
-      "checkpoint-token",
-      "durable-execution-arn",
-      "next-marker",
-    );
+    const result = await apiStorage.getStepData({
+      CheckpointToken: "checkpoint-token",
+      DurableExecutionArn: "durable-execution-arn",
+      Marker: "next-marker",
+      MaxItems: 1000,
+    });
 
     // Verify that GetDurableExecutionStateCommand was constructed with the correct parameters
     expect(GetDurableExecutionStateCommand).toHaveBeenCalledWith({
@@ -103,7 +104,7 @@ describe("ApiStorage", () => {
     // Create checkpoint data
     const checkpointData: CheckpointDurableExecutionRequest = {
       DurableExecutionArn: "test-durable-execution-arn",
-      CheckpointToken: "",
+      CheckpointToken: "task-token",
       Updates: [
         {
           Id: "test-step-1",
@@ -115,7 +116,7 @@ describe("ApiStorage", () => {
     };
 
     // Call checkpoint
-    const result = await apiStorage.checkpoint("task-token", checkpointData);
+    const result = await apiStorage.checkpoint(checkpointData);
 
     // Verify that CheckpointDurableExecutionCommand was constructed with the correct parameters
     expect(CheckpointDurableExecutionCommand).toHaveBeenCalledWith({
@@ -140,18 +141,18 @@ describe("ApiStorage", () => {
 
     // Call getStepData and expect it to throw
     await expect(
-      apiStorage.getStepData(
-        "task-token",
-        "durable-execution-arn",
-        "next-token",
-      ),
+      apiStorage.getStepData({
+        CheckpointToken: "task-token",
+        DurableExecutionArn: "durable-execution-arn",
+        Marker: "next-token",
+      }),
     ).rejects.toThrow("Lambda client error");
 
     // Call checkpoint and expect it to throw
     await expect(
-      apiStorage.checkpoint("task-token", {
+      apiStorage.checkpoint({
         DurableExecutionArn: "",
-        CheckpointToken: "",
+        CheckpointToken: "task-token",
         Updates: [
           {
             Id: "test-step-2",
@@ -174,11 +175,11 @@ describe("ApiStorage", () => {
 
     // Call getStepData and expect it to throw
     try {
-      await apiStorage.getStepData(
-        "checkpoint-token",
-        "test-execution-arn",
-        "next-marker",
-      );
+      await apiStorage.getStepData({
+        CheckpointToken: "checkpoint-token",
+        DurableExecutionArn: "test-execution-arn",
+        Marker: "next-marker",
+      });
     } catch (_error) {
       // Expected to throw
     }
@@ -204,13 +205,13 @@ describe("ApiStorage", () => {
 
     const checkpointData: CheckpointDurableExecutionRequest = {
       DurableExecutionArn: "test-execution-arn-2",
-      CheckpointToken: "",
+      CheckpointToken: "checkpoint-token",
       Updates: [],
     };
 
     // Call checkpoint and expect it to throw
     try {
-      await apiStorage.checkpoint("checkpoint-token", checkpointData);
+      await apiStorage.checkpoint(checkpointData);
     } catch (_error) {
       // Expected to throw
     }
@@ -233,11 +234,11 @@ describe("ApiStorage", () => {
 
     // Call getStepData and expect it to throw
     await expect(
-      apiStorage.getStepData(
-        "checkpoint-token",
-        "test-execution-arn",
-        "next-marker",
-      ),
+      apiStorage.getStepData({
+        CheckpointToken: "checkpoint-token",
+        DurableExecutionArn: "test-execution-arn",
+        Marker: "next-marker",
+      }),
     ).rejects.toThrow("Network error");
 
     // Verify error was logged
@@ -269,9 +270,11 @@ describe("ApiStorage", () => {
 
     try {
       await apiStorage.getStepData(
-        "checkpoint-token",
-        "test-execution-arn",
-        "next-marker",
+        {
+          CheckpointToken: "checkpoint-token",
+          DurableExecutionArn: "test-execution-arn",
+          Marker: "next-marker",
+        },
         mockLogger,
       );
     } catch (_error) {
@@ -303,16 +306,12 @@ describe("ApiStorage", () => {
 
     const checkpointData: CheckpointDurableExecutionRequest = {
       DurableExecutionArn: "test-execution-arn",
-      CheckpointToken: "",
+      CheckpointToken: "checkpoint-token",
       Updates: [],
     };
 
     try {
-      await apiStorage.checkpoint(
-        "checkpoint-token",
-        checkpointData,
-        mockLogger,
-      );
+      await apiStorage.checkpoint(checkpointData, mockLogger);
     } catch (_error) {
       // Expected to throw
     }

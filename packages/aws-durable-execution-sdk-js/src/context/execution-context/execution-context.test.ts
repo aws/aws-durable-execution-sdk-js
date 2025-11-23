@@ -246,9 +246,12 @@ describe("initializeExecutionContext", () => {
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token1",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token1",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({
@@ -305,15 +308,21 @@ describe("initializeExecutionContext", () => {
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token1",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token1",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token2",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token2",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({
@@ -358,16 +367,22 @@ describe("initializeExecutionContext", () => {
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token1",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token1",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
 
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token2",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token2",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
 
@@ -400,9 +415,12 @@ describe("initializeExecutionContext", () => {
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token1",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token1",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
     expect(mockExecutionState.getStepData).toHaveBeenCalledTimes(1); // Should only be called once
@@ -437,9 +455,12 @@ describe("initializeExecutionContext", () => {
 
     // Verify - should handle undefined operations gracefully and get execution event from pagination
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token1",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token1",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({});
@@ -482,9 +503,12 @@ describe("initializeExecutionContext", () => {
 
     // Verify
     expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
-      mockCheckpointToken,
-      "test-durable-execution-arn",
-      "token1",
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: "test-durable-execution-arn",
+        Marker: "token1",
+        MaxItems: 1000,
+      },
       expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({

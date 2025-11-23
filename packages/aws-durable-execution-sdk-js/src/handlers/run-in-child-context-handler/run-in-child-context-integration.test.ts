@@ -72,13 +72,11 @@ describe("Run In Child Context Integration Tests", () => {
         getStepData: jest.fn().mockResolvedValue({}),
         checkpoint: jest
           .fn()
-          .mockImplementation(
-            (taskToken: string, data: CheckpointDurableExecutionRequest) => {
-              const checkpointToken = data.CheckpointToken;
-              checkpointCalls.push({ checkpointToken, data });
-              return Promise.resolve({ CheckpointToken: "mock-token" });
-            },
-          ),
+          .mockImplementation((data: CheckpointDurableExecutionRequest) => {
+            const checkpointToken = data.CheckpointToken;
+            checkpointCalls.push({ checkpointToken, data });
+            return Promise.resolve({ CheckpointToken: "mock-token" });
+          }),
       },
       _stepData: {},
       terminationManager: mockTerminationManager,

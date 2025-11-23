@@ -3,6 +3,7 @@ import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateCommand,
+  GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
@@ -14,7 +15,7 @@ import { DurableLogger } from "../types/durable-logger";
  * Implementation of ExecutionState that uses the new \@aws-sdk/client-lambda
  */
 export class ApiStorage implements ExecutionState {
-  protected client: LambdaClient;
+  private client: LambdaClient;
 
   constructor() {
     this.client = new LambdaClient({
@@ -28,25 +29,22 @@ export class ApiStorage implements ExecutionState {
   }
 
   /**
-   * Gets step data from the durable execution
-   * @param checkpointToken - The checkpoint token
-   * @param nextMarker - The pagination token
+   * Gets operation state data from the durable execution
+   * @param params - The GetDurableExecutionState request
    * @param logger - Optional developer logger for error reporting
    * @returns Response with operations data
    */
   async getStepData(
-    checkpointToken: string,
-    durableExecutionArn: string,
-    nextMarker: string,
+    params: GetDurableExecutionStateRequest,
     logger?: DurableLogger,
   ): Promise<GetDurableExecutionStateResponse> {
     try {
       const response = await this.client.send(
         new GetDurableExecutionStateCommand({
-          DurableExecutionArn: durableExecutionArn,
-          CheckpointToken: checkpointToken,
-          Marker: nextMarker,
-          MaxItems: 1000,
+          DurableExecutionArn: params.DurableExecutionArn,
+          CheckpointToken: params.CheckpointToken,
+          Marker: params.Marker,
+          MaxItems: params.MaxItems,
         }),
       );
 
@@ -57,9 +55,9 @@ export class ApiStorage implements ExecutionState {
         error,
         requestId: (error as { $metadata?: { requestId?: string } })?.$metadata
           ?.requestId,
-        DurableExecutionArn: durableExecutionArn,
-        CheckpointToken: checkpointToken,
-        Marker: nextMarker,
+        DurableExecutionArn: params.DurableExecutionArn,
+        CheckpointToken: params.CheckpointToken,
+        Marker: params.Marker,
       });
 
       // Developer logging if logger provided
@@ -76,23 +74,21 @@ export class ApiStorage implements ExecutionState {
 
   /**
    * Checkpoints the durable execution with operation updates
-   * @param checkpointToken - The checkpoint token
-   * @param data - The checkpoint data
+   * @param params - The checkpoint request
    * @param logger - Optional developer logger for error reporting
    * @returns Checkpoint response
    */
   async checkpoint(
-    checkpointToken: string,
-    data: CheckpointDurableExecutionRequest,
+    params: CheckpointDurableExecutionRequest,
     logger?: DurableLogger,
   ): Promise<CheckpointDurableExecutionResponse> {
     try {
       const response = await this.client.send(
         new CheckpointDurableExecutionCommand({
-          DurableExecutionArn: data.DurableExecutionArn,
-          CheckpointToken: checkpointToken,
-          ClientToken: data.ClientToken,
-          Updates: data.Updates,
+          DurableExecutionArn: params.DurableExecutionArn,
+          CheckpointToken: params.CheckpointToken,
+          ClientToken: params.ClientToken,
+          Updates: params.Updates,
         }),
       );
       return response;
@@ -102,9 +98,9 @@ export class ApiStorage implements ExecutionState {
         error,
         requestId: (error as { $metadata?: { requestId?: string } })?.$metadata
           ?.requestId,
-        DurableExecutionArn: data.DurableExecutionArn,
-        CheckpointToken: checkpointToken,
-        ClientToken: data.ClientToken,
+        DurableExecutionArn: params.DurableExecutionArn,
+        CheckpointToken: params.CheckpointToken,
+        ClientToken: params.ClientToken,
       });
 
       // Developer logging if logger provided

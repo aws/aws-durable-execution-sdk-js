@@ -40,9 +40,12 @@ export const initializeExecutionContext = async (
 
   while (nextMarker) {
     const response = await state.getStepData(
-      checkpointToken,
-      durableExecutionArn,
-      nextMarker,
+      {
+        CheckpointToken: checkpointToken,
+        Marker: nextMarker,
+        DurableExecutionArn: durableExecutionArn,
+        MaxItems: 1000,
+      },
       initLogger,
     );
     operationsArray.push(...(response.Operations || []));
