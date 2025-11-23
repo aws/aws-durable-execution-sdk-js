@@ -1,0 +1,45 @@
+name: 📚 Documentation Issue
+description: Report an issue with documentation
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation!
+
+  - type: input
+    id: title
+    attributes:
+      label: Title
+      description: Brief description of the documentation issue
+      placeholder: e.g., Missing information about...
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: Issue
+      description: Describe the documentation issue
+      placeholder: The documentation says... but it should say...
+    validations:
+      required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: Page/Location
+      description: Link to the page or specify where in the docs this occurs
+      placeholder: https://... or README.md section "..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested Fix
+      description: How should this be corrected?
+      placeholder: This could be fixed by...
+    validations:
+      required: false
