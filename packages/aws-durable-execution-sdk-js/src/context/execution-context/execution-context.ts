@@ -1,4 +1,4 @@
-import { Operation } from "@aws-sdk/client-lambda";
+import { Operation, OperationType } from "@aws-sdk/client-lambda";
 import { getExecutionState } from "../../storage/storage";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
@@ -18,6 +18,7 @@ export const initializeExecutionContext = async (
   executionContext: ExecutionContext;
   durableExecutionMode: DurableExecutionMode;
   checkpointToken: string;
+  executionOperation: Operation;
 }> => {
   log("🔵", "Initializing durable function with event:", event);
   log("📍", "Function Input:", event);
@@ -69,6 +70,14 @@ export const initializeExecutionContext = async (
 
   log("📝", "Loaded step data:", stepData);
 
+  const executionOperation = operationsArray.find(
+    (operation: Operation) => operation.Type === OperationType.EXECUTION,
+  );
+
+  if (!executionOperation) {
+    throw new Error("No execution event found in operations array");
+  }
+
   return {
     executionContext: {
       state,
@@ -82,5 +91,6 @@ export const initializeExecutionContext = async (
     },
     durableExecutionMode,
     checkpointToken,
+    executionOperation,
   };
 };

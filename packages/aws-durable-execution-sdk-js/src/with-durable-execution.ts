@@ -1,4 +1,4 @@
-import { OperationType } from "@aws-sdk/client-lambda";
+import { Operation, OperationType } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { EventEmitter } from "events";
@@ -38,6 +38,7 @@ async function runHandler<Input, Output>(
   durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
   handler: DurableHandler<Input, Output>,
+  executionOperation: Operation,
 ): Promise<DurableExecutionInvocationOutput> {
   // Clear any existing checkpoint handler from previous invocations (warm Lambda)
   deleteCheckpoint();
@@ -51,9 +52,9 @@ async function runHandler<Input, Output>(
   );
 
   // Extract customerHandlerEvent from the original event
-  const initialExecutionEvent = event.InitialExecutionState.Operations?.[0];
+  const initialExecutionEvent = executionOperation;
   const customerHandlerEvent = JSON.parse(
-    initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
+    initialExecutionEvent.ExecutionDetails?.InputPayload ?? "{}",
   );
 
   try {
@@ -214,8 +215,12 @@ export const withDurableExecution = <Input, Output>(
     event: DurableExecutionInvocationInput,
     context: Context,
   ): Promise<DurableExecutionInvocationOutput> => {
-    const { executionContext, durableExecutionMode, checkpointToken } =
-      await initializeExecutionContext(event);
+    const {
+      executionContext,
+      durableExecutionMode,
+      checkpointToken,
+      executionOperation,
+    } = await initializeExecutionContext(event);
     let response: DurableExecutionInvocationOutput | null = null;
     try {
       response = await runHandler(
@@ -225,6 +230,7 @@ export const withDurableExecution = <Input, Output>(
         durableExecutionMode,
         checkpointToken,
         handler,
+        executionOperation,
       );
       return response;
     } catch (err) {

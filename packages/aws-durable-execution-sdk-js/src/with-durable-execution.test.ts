@@ -16,6 +16,7 @@ import {
 } from "./utils/checkpoint/checkpoint";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
+import { Operation, OperationType } from "@aws-sdk/client-lambda";
 
 // Mock dependencies
 jest.mock("./context/execution-context/execution-context");
@@ -66,10 +67,22 @@ describe("withDurableExecution", () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
 
+    // Setup default execution operation
+    const mockExecutionOperation: Operation = {
+      Id: "execution-id",
+      Type: OperationType.EXECUTION,
+      StartTimestamp: new Date(),
+      Status: "STARTED",
+      ExecutionDetails: {
+        InputPayload: JSON.stringify(mockCustomerHandlerEvent),
+      },
+    };
+
     // Setup default mocks
     (initializeExecutionContext as jest.Mock).mockResolvedValue({
       executionContext: mockExecutionContext,
       checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      executionOperation: mockExecutionOperation,
     });
     (createDurableContext as jest.Mock).mockReturnValue(mockDurableContext);
 
@@ -200,9 +213,22 @@ describe("withDurableExecution", () => {
       ...mockExecutionContext,
       isVerbose: true,
     };
+
+    // Create execution operation for this test
+    const mockExecutionOperation: Operation = {
+      Id: "execution-id-verbose",
+      Type: OperationType.EXECUTION,
+      StartTimestamp: new Date(),
+      Status: "STARTED",
+      ExecutionDetails: {
+        InputPayload: JSON.stringify(mockCustomerHandlerEvent),
+      },
+    };
+
     (initializeExecutionContext as jest.Mock).mockResolvedValue({
       executionContext: verboseExecutionContext,
       checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      executionOperation: mockExecutionOperation,
     });
 
     const mockResult = { success: true };

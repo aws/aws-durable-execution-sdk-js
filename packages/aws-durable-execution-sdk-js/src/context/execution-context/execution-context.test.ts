@@ -293,7 +293,7 @@ describe("initializeExecutionContext", () => {
       };
 
     mockExecutionState.getStepData.mockResolvedValueOnce({
-      Operations: [mockCustomerHandlerEvent],
+      Operations: [mockExecutionEvent], // First response contains the execution event
       NextMarker: "token2",
     });
 
@@ -477,5 +477,74 @@ describe("initializeExecutionContext", () => {
     // Verify getStepData returns undefined for non-existent step
     const stepData = result.executionContext.getStepData("nonExistentStep");
     expect(stepData).toBeUndefined();
+  });
+
+  describe("executionOperation handling", () => {
+    it("should throw an error when no execution operation is found", async () => {
+      // Setup - create event with no execution operation
+      const eventWithoutExecution: DurableExecutionInvocationInput = {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: mockDurableExecutionArn,
+        InitialExecutionState: {
+          Operations: [mockStepSucceededEvent], // Only step operations, no execution operation
+          NextMarker: "",
+        },
+      };
+
+      // Execute & Verify
+      await expect(
+        initializeExecutionContext(eventWithoutExecution),
+      ).rejects.toThrow("No execution event found in operations array");
+    });
+
+    it("should return the execution operation when it exists in InitialExecutionState.Operations", async () => {
+      // Setup - event with execution operation in initial state
+      const eventWithExecution: DurableExecutionInvocationInput = {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: mockDurableExecutionArn,
+        InitialExecutionState: {
+          Operations: [mockExecutionEvent, mockStepSucceededEvent],
+          NextMarker: "",
+        },
+      };
+
+      // Execute
+      const result = await initializeExecutionContext(eventWithExecution);
+
+      // Verify
+      expect(result.executionOperation).toEqual(mockExecutionEvent);
+      expect(result.executionOperation.Type).toBe(OperationType.EXECUTION);
+    });
+
+    it("should return the execution operation when it exists in getStepData response", async () => {
+      // Setup - event with no initial operations but execution operation in getStepData response
+      const eventWithPagination: DurableExecutionInvocationInput = {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: mockDurableExecutionArn,
+        InitialExecutionState: {
+          Operations: [], // No initial operations
+          NextMarker: "token1",
+        },
+      };
+
+      // Mock getStepData to return execution operation
+      mockExecutionState.getStepData.mockResolvedValueOnce({
+        Operations: [mockExecutionEvent, mockStepSucceededEvent],
+        NextMarker: "",
+      });
+
+      // Execute
+      const result = await initializeExecutionContext(eventWithPagination);
+
+      // Verify
+      expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+        mockCheckpointToken,
+        mockDurableExecutionArn,
+        "token1",
+        expectLogger,
+      );
+      expect(result.executionOperation).toEqual(mockExecutionEvent);
+      expect(result.executionOperation.Type).toBe(OperationType.EXECUTION);
+    });
   });
 });
