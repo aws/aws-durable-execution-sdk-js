@@ -5,7 +5,6 @@ import {
   DurablePromise,
 } from "../../types";
 import { InvokeError } from "../../errors/durable-error/durable-error";
-import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationAction,
   OperationStatus,
@@ -193,7 +192,7 @@ export const createInvokeHandler = (
 
           // No other operations running - terminate
           log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
-          return terminate(
+          return durablePromise.getTerminationMethod()(
             context,
             TerminationReason.OPERATION_TERMINATED,
             stepId,
@@ -229,12 +228,14 @@ export const createInvokeHandler = (
     startInvokePromise.catch(() => {});
 
     // Return DurablePromise that will execute phase 2 when awaited
-    return new DurablePromise(async () => {
+    const durablePromise = new DurablePromise(async () => {
       // Wait for phase 1 to complete first
       await startInvokePromise;
       // Then execute phase 2
       return await continueInvokeOperation();
     });
+
+    return durablePromise;
   }
 
   return invokeHandler;

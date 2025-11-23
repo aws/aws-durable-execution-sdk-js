@@ -1,5 +1,4 @@
 import { ExecutionContext, OperationSubType, Duration } from "../../types";
-import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationStatus,
   OperationType,
@@ -94,7 +93,7 @@ export const createWaitHandler = (
           // Phase 1: Just return without terminating
           // Phase 2: Terminate
           if (canTerminate) {
-            return terminate(
+            return durablePromise.getTerminationMethod()(
               context,
               TerminationReason.WAIT_SCHEDULED,
               `Operation ${actualName || stepId} scheduled to wait`,
@@ -132,12 +131,14 @@ export const createWaitHandler = (
     phase1Promise.catch(() => {});
 
     // Return DurablePromise that will execute phase 2 when awaited
-    return new DurablePromise(async () => {
+    const durablePromise = new DurablePromise(async () => {
       // Wait for phase 1 to complete first
       await phase1Promise;
       // Then execute phase 2
       await executeWaitLogic(true);
     });
+
+    return durablePromise;
   }
 
   return waitHandler;

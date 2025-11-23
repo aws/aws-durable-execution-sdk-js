@@ -1,4 +1,5 @@
 import { ExecutionContext } from "../../types";
+import { TerminationFunction } from "../../types/termination-function";
 import { UnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 import { TerminationReason } from "../../termination-manager/types";
 import { log } from "../logger/logger";
@@ -90,11 +91,11 @@ function hasPendingAncestorCompletion(
  * @param message - The termination message
  * @returns A never-resolving promise
  */
-export function terminate<T>(
+export const terminate: TerminationFunction = <T>(
   context: ExecutionContext,
   reason: TerminationReason,
   message: string,
-): Promise<T> {
+): Promise<T> => {
   const activeContext = getActiveContext();
 
   // If we have a parent context, add delay to let checkpoints process
@@ -208,7 +209,7 @@ export function terminate<T>(
   });
 
   return new Promise<T>(() => {});
-}
+};
 
 /**
  * Terminates execution for unrecoverable errors and returns a never-resolving promise

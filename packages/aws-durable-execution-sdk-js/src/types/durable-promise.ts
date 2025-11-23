@@ -1,3 +1,6 @@
+import { terminate } from "../utils/termination-helper/termination-helper";
+import { TerminationFunction } from "./termination-function";
+
 /**
  * A promise that defers execution until it's awaited or .then/.catch/.finally is called
  */
@@ -44,6 +47,9 @@ export class DurablePromise<T> implements Promise<T> {
 
   /** Flag indicating whether the promise has been executed (awaited or chained) */
   private _isExecuted = false;
+
+  /** Optional custom termination function, defaults to the imported terminate function */
+  private _terminationMethod: TerminationFunction = terminate;
 
   /**
    * Creates a new DurablePromise
@@ -116,5 +122,22 @@ export class DurablePromise<T> implements Promise<T> {
    */
   get isExecuted(): boolean {
     return this._isExecuted;
+  }
+
+  /**
+   * Attach a custom termination method to this promise
+   * @param terminationMethod - The termination function to use
+   * @internal
+   */
+  attachTerminationMethod(terminationMethod: TerminationFunction): void {
+    this._terminationMethod = terminationMethod;
+  }
+
+  /**
+   * Get the current termination method
+   * @internal
+   */
+  getTerminationMethod(): TerminationFunction {
+    return this._terminationMethod;
   }
 }

@@ -1174,3 +1174,65 @@ describe("Step Handler", () => {
     });
   });
 });
+
+describe("step-handler termination method", () => {
+  it("should use custom termination method when attached", async () => {
+    const customTerminate = jest.fn().mockReturnValue(new Promise(() => {}));
+
+    const mockContext = {
+      getStepData: jest
+        .fn()
+        .mockReturnValue({ Status: OperationStatus.PENDING }),
+      terminationManager: { terminate: jest.fn() },
+      durableExecutionArn: "arn:test",
+    } as unknown as ExecutionContext;
+
+    const stepHandler = createStepHandler(
+      mockContext,
+      jest.fn() as any,
+      {} as any,
+      jest.fn().mockReturnValue("step-1"),
+      jest.fn(),
+      jest.fn(),
+      jest.fn(),
+      jest.fn().mockReturnValue(false),
+      jest.fn().mockReturnValue(new EventEmitter()),
+      undefined,
+    );
+
+    const promise = stepHandler(async () => "result");
+    promise.attachTerminationMethod(customTerminate);
+
+    // Verify the custom termination method is attached
+    expect(promise.getTerminationMethod()).toBe(customTerminate);
+  });
+
+  it("should use default termination method when not attached", async () => {
+    const mockContext = {
+      getStepData: jest
+        .fn()
+        .mockReturnValue({ Status: OperationStatus.PENDING }),
+      terminationManager: { terminate: jest.fn() },
+      durableExecutionArn: "arn:test",
+    } as unknown as ExecutionContext;
+
+    const stepHandler = createStepHandler(
+      mockContext,
+      jest.fn() as any,
+      {} as any,
+      jest.fn().mockReturnValue("step-1"),
+      jest.fn(),
+      jest.fn(),
+      jest.fn(),
+      jest.fn().mockReturnValue(false),
+      jest.fn().mockReturnValue(new EventEmitter()),
+      undefined,
+    );
+
+    const promise = stepHandler(async () => "result");
+
+    // Verify the default termination method is set
+    expect(promise.getTerminationMethod()).toBeDefined();
+    expect(typeof promise.getTerminationMethod()).toBe("function");
+  });
+});

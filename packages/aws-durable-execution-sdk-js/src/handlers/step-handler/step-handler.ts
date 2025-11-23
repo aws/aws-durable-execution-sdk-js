@@ -9,11 +9,9 @@ import {
   DurablePromise,
   DurableExecutionMode,
 } from "../../types";
+import { TerminationFunction } from "../../types/termination-function";
 import { durationToSeconds } from "../../utils/duration/duration";
-import {
-  terminate,
-  terminateForUnrecoverableError,
-} from "../../utils/termination-helper/termination-helper";
+import { terminateForUnrecoverableError } from "../../utils/termination-helper/termination-helper";
 import { Context } from "aws-lambda";
 import {
   OperationAction,
@@ -52,6 +50,7 @@ const waitForContinuation = async (
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   checkpoint: Checkpoint,
+  getTerminationMethod: () => TerminationFunction,
   onAwaitedChange?: (callback: () => void) => void,
 ): Promise<void> => {
   const stepData = context.getStepData(stepId);
@@ -59,7 +58,7 @@ const waitForContinuation = async (
   // Check if there are any ongoing operations
   if (!hasRunningOperations()) {
     // No ongoing operations - safe to terminate
-    return terminate(
+    return getTerminationMethod()(
       context,
       TerminationReason.RETRY_SCHEDULED,
       `Retry scheduled for ${name || stepId}`,
@@ -128,6 +127,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
       waitingCallback = cb;
     };
 
+    // Create DurablePromise first so we can reference it
+    let durablePromise: DurablePromise<T>;
+
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
       // Main step logic - can be re-executed if step status changes
@@ -181,6 +183,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               hasRunningOperations,
               getOperationsEmitter,
               checkpoint,
+              () => durablePromise.getTerminationMethod(),
               isAwaited ? undefined : setWaitingCallback,
             );
             continue; // Re-evaluate step status after waiting
@@ -258,6 +261,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                   hasRunningOperations,
                   getOperationsEmitter,
                   checkpoint,
+                  () => durablePromise.getTerminationMethod(),
                   isAwaited ? undefined : setWaitingCallback,
                 );
                 continue; // Re-evaluate step status after waiting
@@ -278,6 +282,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             hasRunningOperations,
             getOperationsEmitter,
             parentId,
+            () => durablePromise.getTerminationMethod(),
             options,
             isAwaited ? undefined : setWaitingCallback,
           );
@@ -308,7 +313,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
     phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(async () => {
+    durablePromise = new DurablePromise(async () => {
       // When promise is awaited, mark as awaited and invoke waiting callback
       isAwaited = true;
       if (waitingCallback) {
@@ -317,6 +322,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
       return await phase1Promise;
     });
+
+    return durablePromise;
   };
 };
 
@@ -354,6 +361,7 @@ export const executeStep = async <T, Logger extends DurableLogger>(
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
+  getTerminationMethod: () => TerminationFunction,
   options?: StepConfig<T>,
   onAwaitedChange?: ((callback: () => void) => void) | undefined,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
@@ -543,6 +551,7 @@ export const executeStep = async <T, Logger extends DurableLogger>(
         hasRunningOperations,
         getOperationsEmitter,
         checkpoint,
+        getTerminationMethod,
         onAwaitedChange,
       );
       return CONTINUE_MAIN_LOOP;

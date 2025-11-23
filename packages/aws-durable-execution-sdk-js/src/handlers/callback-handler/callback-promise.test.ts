@@ -267,3 +267,52 @@ describe("createCallbackPromise", () => {
     });
   });
 });
+
+describe("callback-promise termination method", () => {
+  it("should use custom termination method when attached", async () => {
+    const customTerminate = jest.fn().mockReturnValue(new Promise(() => {}));
+
+    const mockContext = {
+      getStepData: jest.fn().mockReturnValue(null),
+      terminationManager: { terminate: jest.fn() },
+    } as unknown as ExecutionContext;
+
+    const promise = createCallbackPromise(
+      mockContext,
+      "step-1",
+      "test-callback",
+      { serialize: async (v) => v as any, deserialize: async (v) => v as any },
+      jest.fn().mockReturnValue(false),
+      new EventEmitter(),
+      "test message",
+      jest.fn(),
+    );
+
+    promise.attachTerminationMethod(customTerminate);
+
+    // Verify the custom termination method is attached
+    expect(promise.getTerminationMethod()).toBe(customTerminate);
+  });
+
+  it("should use default termination method when not attached", async () => {
+    const mockContext = {
+      getStepData: jest.fn().mockReturnValue(null),
+      terminationManager: { terminate: jest.fn() },
+    } as unknown as ExecutionContext;
+
+    const promise = createCallbackPromise(
+      mockContext,
+      "step-1",
+      "test-callback",
+      { serialize: async (v) => v as any, deserialize: async (v) => v as any },
+      jest.fn().mockReturnValue(false),
+      new EventEmitter(),
+      "test message",
+      jest.fn(),
+    );
+
+    // Verify the default termination method is set
+    expect(promise.getTerminationMethod()).toBeDefined();
+    expect(typeof promise.getTerminationMethod()).toBe("function");
+  });
+});

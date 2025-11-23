@@ -805,3 +805,69 @@ describe("WaitForCondition Handler", () => {
     });
   });
 });
+
+describe("wait-for-condition-handler termination method", () => {
+  it("should use custom termination method when attached", async () => {
+    const customTerminate = jest.fn().mockReturnValue(new Promise(() => {}));
+
+    const mockContext = {
+      getStepData: jest
+        .fn()
+        .mockReturnValue({ Status: OperationStatus.PENDING }),
+      terminationManager: { terminate: jest.fn() },
+      durableExecutionArn: "arn:test",
+    } as unknown as ExecutionContext;
+
+    const handler = createWaitForConditionHandler(
+      mockContext,
+      jest.fn() as any,
+      jest.fn().mockReturnValue("step-1"),
+      jest.fn(),
+      jest.fn(),
+      jest.fn(),
+      jest.fn().mockReturnValue(false),
+      jest.fn().mockReturnValue(new EventEmitter()),
+      undefined,
+    );
+
+    const promise = handler(async () => ({ shouldContinue: false }), {
+      initialState: { shouldContinue: false },
+      waitStrategy: () => ({ shouldContinue: false }),
+    });
+    promise.attachTerminationMethod(customTerminate);
+
+    // Verify the custom termination method is attached
+    expect(promise.getTerminationMethod()).toBe(customTerminate);
+  });
+
+  it("should use default termination method when not attached", async () => {
+    const mockContext = {
+      getStepData: jest
+        .fn()
+        .mockReturnValue({ Status: OperationStatus.PENDING }),
+      terminationManager: { terminate: jest.fn() },
+      durableExecutionArn: "arn:test",
+    } as unknown as ExecutionContext;
+
+    const handler = createWaitForConditionHandler(
+      mockContext,
+      jest.fn() as any,
+      jest.fn().mockReturnValue("step-1"),
+      jest.fn(),
+      jest.fn(),
+      jest.fn(),
+      jest.fn().mockReturnValue(false),
+      jest.fn().mockReturnValue(new EventEmitter()),
+      undefined,
+    );
+
+    const promise = handler(async () => ({ shouldContinue: false }), {
+      initialState: { shouldContinue: false },
+      waitStrategy: () => ({ shouldContinue: false }),
+    });
+
+    // Verify the default termination method is set
+    expect(promise.getTerminationMethod()).toBeDefined();
+    expect(typeof promise.getTerminationMethod()).toBe("function");
+  });
+});

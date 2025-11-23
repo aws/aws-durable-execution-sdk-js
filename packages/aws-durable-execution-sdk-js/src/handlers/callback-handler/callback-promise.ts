@@ -1,6 +1,5 @@
 import { ExecutionContext, DurablePromise } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
-import { terminate } from "../../utils/termination-helper/termination-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
@@ -19,7 +18,7 @@ export const createCallbackPromise = <T>(
   terminationMessage: string,
   checkAndUpdateReplayMode: () => void,
 ): DurablePromise<T> => {
-  return new DurablePromise(async (): Promise<T> => {
+  const durablePromise = new DurablePromise(async (): Promise<T> => {
     log("🔄", "Callback promise phase 2 executing:", { stepId, stepName });
 
     // Main callback logic - can be re-executed if step status changes
@@ -48,7 +47,7 @@ export const createCallbackPromise = <T>(
 
         // No other operations and no step data - terminate gracefully
         log("⏳", "No step data found and no running operations, terminating");
-        return terminate(
+        return durablePromise.getTerminationMethod()(
           context,
           TerminationReason.CALLBACK_PENDING,
           terminationMessage,
@@ -118,7 +117,7 @@ export const createCallbackPromise = <T>(
 
         // No other operations running - terminate
         log("⏳", "Callback still pending, terminating");
-        return terminate(
+        return durablePromise.getTerminationMethod()(
           context,
           TerminationReason.CALLBACK_PENDING,
           terminationMessage,
@@ -129,4 +128,6 @@ export const createCallbackPromise = <T>(
       throw new CallbackError(`Unexpected callback status: ${stepData.Status}`);
     }
   });
+
+  return durablePromise;
 };

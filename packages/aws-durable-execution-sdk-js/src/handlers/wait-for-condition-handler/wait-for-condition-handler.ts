@@ -8,8 +8,8 @@ import {
   DurablePromise,
   DurableExecutionMode,
 } from "../../types";
+import { TerminationFunction } from "../../types/termination-function";
 import { durationToSeconds } from "../../utils/duration/duration";
-import { terminate } from "../../utils/termination-helper/termination-helper";
 import {
   OperationAction,
   OperationStatus,
@@ -43,6 +43,7 @@ const waitForContinuation = async (
   hasRunningOperations: () => boolean,
   checkpoint: Checkpoint,
   operationsEmitter: EventEmitter,
+  getTerminationMethod: () => TerminationFunction,
   onAwaitedChange?: (callback: () => void) => void,
 ): Promise<void> => {
   const stepData = context.getStepData(stepId);
@@ -50,7 +51,7 @@ const waitForContinuation = async (
   // Check if there are any ongoing operations
   if (!hasRunningOperations()) {
     // No ongoing operations - safe to terminate
-    return terminate(
+    return getTerminationMethod()(
       context,
       TerminationReason.RETRY_SCHEDULED,
       `Retry scheduled for ${name || stepId}`,
@@ -99,6 +100,9 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
     const setWaitingCallback = (cb: () => void): void => {
       waitingCallback = cb;
     };
+
+    // Create DurablePromise first so we can reference it
+    let durablePromise: DurablePromise<T>;
 
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
@@ -175,6 +179,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               hasRunningOperations,
               checkpoint,
               getOperationsEmitter(),
+              () => durablePromise.getTerminationMethod(),
               isAwaited ? undefined : setWaitingCallback,
             );
             continue; // Re-evaluate step status after waiting
@@ -194,6 +199,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             hasRunningOperations,
             getOperationsEmitter,
             parentId,
+            () => durablePromise.getTerminationMethod(),
             isAwaited ? undefined : setWaitingCallback,
           );
 
@@ -215,7 +221,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
     phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(async () => {
+    durablePromise = new DurablePromise(async () => {
       // When promise is awaited, mark as awaited and invoke waiting callback
       isAwaited = true;
       if (waitingCallback) {
@@ -224,6 +230,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
       return await phase1Promise;
     });
+
+    return durablePromise;
   };
 };
 
@@ -264,6 +272,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
   parentId: string | undefined,
+  getTerminationMethod: () => TerminationFunction,
   onAwaitedChange?: ((callback: () => void) => void) | undefined,
 ): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
   const serdes = config.serdes || defaultSerdes;
@@ -425,6 +434,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
         hasRunningOperations,
         checkpoint,
         getOperationsEmitter(),
+        getTerminationMethod,
         onAwaitedChange,
       );
       return CONTINUE_MAIN_LOOP;

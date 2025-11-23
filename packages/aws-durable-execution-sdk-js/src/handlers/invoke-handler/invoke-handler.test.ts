@@ -560,3 +560,55 @@ describe("InvokeHandler", () => {
     });
   });
 });
+
+describe("invoke-handler termination method", () => {
+  it("should use custom termination method when attached", async () => {
+    const customTerminate = jest.fn().mockReturnValue(new Promise(() => {}));
+
+    const mockContext = {
+      getStepData: jest
+        .fn()
+        .mockReturnValue({ Status: OperationStatus.STARTED }),
+      terminationManager: { terminate: jest.fn() },
+      durableExecutionArn: "arn:test",
+    } as unknown as ExecutionContext;
+
+    const invokeHandler = createInvokeHandler(
+      mockContext,
+      jest.fn() as any,
+      jest.fn().mockReturnValue("step-1"),
+      jest.fn().mockReturnValue(false),
+      jest.fn().mockReturnValue(new EventEmitter()),
+    );
+
+    const promise = invokeHandler("test-function", {});
+    promise.attachTerminationMethod(customTerminate);
+
+    // Verify the custom termination method is attached
+    expect(promise.getTerminationMethod()).toBe(customTerminate);
+  });
+
+  it("should use default termination method when not attached", async () => {
+    const mockContext = {
+      getStepData: jest
+        .fn()
+        .mockReturnValue({ Status: OperationStatus.STARTED }),
+      terminationManager: { terminate: jest.fn() },
+      durableExecutionArn: "arn:test",
+    } as unknown as ExecutionContext;
+
+    const invokeHandler = createInvokeHandler(
+      mockContext,
+      jest.fn() as any,
+      jest.fn().mockReturnValue("step-1"),
+      jest.fn().mockReturnValue(false),
+      jest.fn().mockReturnValue(new EventEmitter()),
+    );
+
+    const promise = invokeHandler("test-function", {});
+
+    // Verify the default termination method is set
+    expect(promise.getTerminationMethod()).toBeDefined();
+    expect(typeof promise.getTerminationMethod()).toBe("function");
+  });
+});
