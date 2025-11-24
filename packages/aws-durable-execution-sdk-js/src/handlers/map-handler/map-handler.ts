@@ -8,30 +8,33 @@ import {
   OperationSubType,
   BatchResult,
   DurablePromise,
+  DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createMapSummaryGenerator } from "../../utils/summary-generators/summary-generators";
 
-export const createMapHandler = (
+export const createMapHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   executeConcurrently: <TItem, TResult>(
     name: string | undefined,
     items: ConcurrentExecutionItem<TItem>[],
-    executor: ConcurrentExecutor<TItem, TResult>,
+    executor: ConcurrentExecutor<TItem, TResult, Logger>,
     config?: ConcurrencyConfig<TResult>,
   ) => DurablePromise<BatchResult<TResult>>,
 ) => {
   return <TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],
-    itemsOrMapFunc?: TInput[] | MapFunc<TInput, TOutput>,
-    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
+    itemsOrMapFunc?: TInput[] | MapFunc<TInput, TOutput, Logger>,
+    mapFuncOrConfig?:
+      | MapFunc<TInput, TOutput, Logger>
+      | MapConfig<TInput, TOutput>,
     maybeConfig?: MapConfig<TInput, TOutput>,
   ): DurablePromise<BatchResult<TOutput>> => {
     // Phase 1: Parse parameters and start execution immediately
     const phase1Promise = (async (): Promise<BatchResult<TOutput>> => {
       let name: string | undefined;
       let items: TInput[];
-      let mapFunc: MapFunc<TInput, TOutput>;
+      let mapFunc: MapFunc<TInput, TOutput, Logger>;
       let config: MapConfig<TInput, TOutput> | undefined;
 
       // Parse overloaded parameters
@@ -39,12 +42,12 @@ export const createMapHandler = (
         // Case: map(name, items, mapFunc, config?)
         name = nameOrItems;
         items = itemsOrMapFunc as TInput[];
-        mapFunc = mapFuncOrConfig as MapFunc<TInput, TOutput>;
+        mapFunc = mapFuncOrConfig as MapFunc<TInput, TOutput, Logger>;
         config = maybeConfig;
       } else {
         // Case: map(items, mapFunc, config?)
         items = nameOrItems;
-        mapFunc = itemsOrMapFunc as MapFunc<TInput, TOutput>;
+        mapFunc = itemsOrMapFunc as MapFunc<TInput, TOutput, Logger>;
         config = mapFuncOrConfig as MapConfig<TInput, TOutput>;
       }
 
@@ -74,10 +77,11 @@ export const createMapHandler = (
       );
 
       // Create executor that calls mapFunc
-      const executor: ConcurrentExecutor<TInput, TOutput> = async (
+      const executor: ConcurrentExecutor<TInput, TOutput, Logger> = async (
         executionItem,
         childContext,
-      ) => mapFunc(childContext, executionItem.data, executionItem.index, items);
+      ) =>
+        mapFunc(childContext, executionItem.data, executionItem.index, items);
 
       const result = await executeConcurrently(name, executionItems, executor, {
         maxConcurrency: config?.maxConcurrency,

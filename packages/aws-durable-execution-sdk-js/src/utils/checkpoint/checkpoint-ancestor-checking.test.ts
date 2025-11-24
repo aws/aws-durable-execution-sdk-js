@@ -5,7 +5,6 @@ import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { CheckpointHandler } from "./checkpoint";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
-import { createContextLoggerFactory } from "../logger/context-logger";
 import { createDefaultLogger } from "../logger/default-logger";
 
 // Mock dependencies
@@ -48,9 +47,7 @@ describe("CheckpointHandler - Ancestor Checking", () => {
       requestId: "mock-request-id",
       tenantId: undefined,
     } satisfies ExecutionContext;
-    mockLogger = createContextLoggerFactory(mockContext, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger = createDefaultLogger(mockContext);
 
     checkpointHandler = new CheckpointHandler(
       mockContext,

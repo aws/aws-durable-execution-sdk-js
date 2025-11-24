@@ -20,12 +20,12 @@ import {
   ConcurrentExecutionItem,
   ConcurrentExecutor,
   ConcurrencyConfig,
-  EnrichedDurableLogger,
   LoggerConfig,
   InvokeConfig,
   DurableExecutionMode,
   BatchResult,
   DurablePromise,
+  DurableLogData,
 } from "../../types";
 import { Context } from "aws-lambda";
 import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
@@ -41,24 +41,30 @@ import { createParallelHandler } from "../../handlers/parallel-handler/parallel-
 import { createPromiseHandler } from "../../handlers/promise-handler/promise-handler";
 import { createConcurrentExecutionHandler } from "../../handlers/concurrent-execution-handler/concurrent-execution-handler";
 import { OperationStatus } from "@aws-sdk/client-lambda";
-import { createContextLoggerFactory } from "../../utils/logger/context-logger";
-import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { ModeManagement } from "./mode-management/mode-management";
-import { createModeAwareLogger } from "../../utils/logger/mode-aware-logger";
-import { DurableLogger } from "../../types/durable-logger";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
-import { validateContextUsage } from "../../utils/context-tracker/context-tracker";
+import {
+  getActiveContext,
+  validateContextUsage,
+} from "../../utils/context-tracker/context-tracker";
+import {
+  DurableLogger,
+  DurableLoggingContext,
+} from "../../types/durable-logger";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-export class DurableContextImpl implements DurableContext {
+export class DurableContextImpl<Logger extends DurableLogger>
+  implements DurableContext<Logger>
+{
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
-  private contextLogger: EnrichedDurableLogger;
+  private contextLogger: Logger;
   private modeAwareLoggingEnabled: boolean = true;
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
   private checkpoint: ReturnType<typeof createCheckpoint>;
-  private createContextLogger: ReturnType<typeof createContextLoggerFactory>;
   private durableExecutionMode: DurableExecutionMode;
   private _parentId?: string;
   private modeManagement: ModeManagement;
@@ -67,7 +73,7 @@ export class DurableContextImpl implements DurableContext {
     private executionContext: ExecutionContext,
     public lambdaContext: Context,
     durableExecutionMode: DurableExecutionMode,
-    inheritedLogger: EnrichedDurableLogger,
+    inheritedLogger: Logger,
     stepPrefix?: string,
     checkpointToken?: string,
     parentId?: string,
@@ -75,23 +81,17 @@ export class DurableContextImpl implements DurableContext {
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
     this.contextLogger = inheritedLogger;
+    this.contextLogger.configureDurableLoggingContext(
+      this.getDurableLoggingContext(),
+    );
 
     this.durableExecutionMode = durableExecutionMode;
-
-    const getLogger = (): EnrichedDurableLogger => {
-      return this.contextLogger;
-    };
-
-    this.createContextLogger = createContextLoggerFactory(
-      executionContext,
-      getLogger,
-    );
 
     this.checkpoint = createCheckpoint(
       executionContext,
       checkpointToken || "",
       this.operationsEmitter,
-      this.createContextLogger(),
+      createDefaultLogger(this.executionContext),
     );
 
     this.modeManagement = new ModeManagement(
@@ -105,13 +105,50 @@ export class DurableContextImpl implements DurableContext {
     );
   }
 
-  get logger(): DurableLogger {
-    return createModeAwareLogger(
-      this.durableExecutionMode,
-      this.createContextLogger,
-      this.modeAwareLoggingEnabled,
-      this._stepPrefix,
-    );
+  getDurableLoggingContext(): DurableLoggingContext {
+    return {
+      shouldLog: (): boolean => {
+        const activeContext = getActiveContext();
+
+        if (!this.modeAwareLoggingEnabled || !activeContext) {
+          return true;
+        }
+
+        if (activeContext.contextId === "root") {
+          return (
+            this.durableExecutionMode === DurableExecutionMode.ExecutionMode
+          );
+        }
+
+        return (
+          activeContext.durableExecutionMode ===
+          DurableExecutionMode.ExecutionMode
+        );
+      },
+      getDurableLogData: (): DurableLogData => {
+        const activeContext = getActiveContext();
+
+        const result: DurableLogData = {
+          executionArn: this.executionContext.durableExecutionArn,
+          requestId: this.executionContext.requestId,
+          tenantId: this.executionContext.tenantId,
+          operationId:
+            !activeContext || activeContext?.contextId === "root"
+              ? undefined
+              : hashId(activeContext.contextId),
+        };
+
+        if (activeContext?.attempt !== undefined) {
+          result.attempt = activeContext.attempt;
+        }
+
+        return result;
+      },
+    };
+  }
+
+  get logger(): Logger {
+    return this.contextLogger;
   }
 
   private createStepId(): string {
@@ -207,8 +244,8 @@ export class DurableContextImpl implements DurableContext {
   }
 
   step<T>(
-    nameOrFn: string | undefined | StepFunc<T>,
-    fnOrOptions?: StepFunc<T> | StepConfig<T>,
+    nameOrFn: string | undefined | StepFunc<T, Logger>,
+    fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
   ): DurablePromise<T> {
     validateContextUsage(
@@ -223,7 +260,7 @@ export class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.lambdaContext,
         this.createStepId.bind(this),
-        this.createContextLogger,
+        this.contextLogger,
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
@@ -268,8 +305,8 @@ export class DurableContextImpl implements DurableContext {
   }
 
   runInChildContext<T>(
-    nameOrFn: string | undefined | ChildFunc<T>,
-    fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
+    nameOrFn: string | undefined | ChildFunc<T, Logger>,
+    fnOrOptions?: ChildFunc<T, Logger> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
   ): DurablePromise<T> {
     validateContextUsage(
@@ -283,7 +320,7 @@ export class DurableContextImpl implements DurableContext {
         this.checkpoint,
         this.lambdaContext,
         this.createStepId.bind(this),
-        () => this.contextLogger || createDefaultLogger(),
+        () => this.contextLogger,
         createDurableContext,
         this._parentId,
       );
@@ -331,9 +368,12 @@ export class DurableContextImpl implements DurableContext {
    * // Later, disable mode-aware logging without changing the custom logger
    * context.configureLogger(\{ modeAware: false \});
    */
-  configureLogger(config: LoggerConfig): void {
+  configureLogger(config: LoggerConfig<Logger>): void {
     if (config.customLogger !== undefined) {
       this.contextLogger = config.customLogger;
+      this.contextLogger.configureDurableLoggingContext(
+        this.getDurableLoggingContext(),
+      );
     }
     if (config.modeAware !== undefined) {
       this.modeAwareLoggingEnabled = config.modeAware;
@@ -364,8 +404,10 @@ export class DurableContextImpl implements DurableContext {
   }
 
   waitForCallback<T>(
-    nameOrSubmitter?: string | undefined | WaitForCallbackSubmitterFunc,
-    submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
+    nameOrSubmitter?: string | undefined | WaitForCallbackSubmitterFunc<Logger>,
+    submitterOrConfig?:
+      | WaitForCallbackSubmitterFunc<Logger>
+      | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
   ): DurablePromise<T> {
     validateContextUsage(
@@ -387,9 +429,9 @@ export class DurableContextImpl implements DurableContext {
   }
 
   waitForCondition<T>(
-    nameOrCheckFunc: string | undefined | WaitForConditionCheckFunc<T>,
+    nameOrCheckFunc: string | undefined | WaitForConditionCheckFunc<T, Logger>,
     checkFuncOrConfig?:
-      | WaitForConditionCheckFunc<T>
+      | WaitForConditionCheckFunc<T, Logger>
       | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
   ): DurablePromise<T> {
@@ -403,7 +445,7 @@ export class DurableContextImpl implements DurableContext {
         this.executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
-        this.createContextLogger,
+        this.contextLogger,
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
@@ -415,7 +457,7 @@ export class DurableContextImpl implements DurableContext {
         nameOrCheckFunc === undefined
         ? waitForConditionHandler(
             nameOrCheckFunc,
-            checkFuncOrConfig as WaitForConditionCheckFunc<T>,
+            checkFuncOrConfig as WaitForConditionCheckFunc<T, Logger>,
             maybeConfig!,
           )
         : waitForConditionHandler(
@@ -427,8 +469,10 @@ export class DurableContextImpl implements DurableContext {
 
   map<TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],
-    itemsOrMapFunc: TInput[] | MapFunc<TInput, TOutput>,
-    mapFuncOrConfig?: MapFunc<TInput, TOutput> | MapConfig<TInput, TOutput>,
+    itemsOrMapFunc: TInput[] | MapFunc<TInput, TOutput, Logger>,
+    mapFuncOrConfig?:
+      | MapFunc<TInput, TOutput, Logger>
+      | MapConfig<TInput, TOutput>,
     maybeConfig?: MapConfig<TInput, TOutput>,
   ): DurablePromise<BatchResult<TOutput>> {
     validateContextUsage(
@@ -454,9 +498,9 @@ export class DurableContextImpl implements DurableContext {
     nameOrBranches:
       | string
       | undefined
-      | (ParallelFunc<T> | NamedParallelBranch<T>)[],
+      | (ParallelFunc<T, Logger> | NamedParallelBranch<T, Logger>)[],
     branchesOrConfig?:
-      | (ParallelFunc<T> | NamedParallelBranch<T>)[]
+      | (ParallelFunc<T, Logger> | NamedParallelBranch<T, Logger>)[]
       | ParallelConfig<T>,
     maybeConfig?: ParallelConfig<T>,
   ): DurablePromise<BatchResult<T>> {
@@ -478,9 +522,9 @@ export class DurableContextImpl implements DurableContext {
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
-      | ConcurrentExecutor<TItem, TResult>,
+      | ConcurrentExecutor<TItem, TResult, Logger>,
     executorOrConfig?:
-      | ConcurrentExecutor<TItem, TResult>
+      | ConcurrentExecutor<TItem, TResult, Logger>
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
   ): DurablePromise<BatchResult<TResult>> {
@@ -507,21 +551,21 @@ export class DurableContextImpl implements DurableContext {
     });
   }
 
-  get promise(): DurableContext["promise"] {
+  get promise(): DurableContext<Logger>["promise"] {
     return createPromiseHandler(this.step.bind(this));
   }
 }
 
-export const createDurableContext = (
+export const createDurableContext = <Logger extends DurableLogger>(
   executionContext: ExecutionContext,
   parentContext: Context,
   durableExecutionMode: DurableExecutionMode,
-  inheritedLogger: EnrichedDurableLogger,
+  inheritedLogger: Logger,
   stepPrefix?: string,
   checkpointToken?: string,
   parentId?: string,
-): DurableContextImpl => {
-  return new DurableContextImpl(
+): DurableContextImpl<Logger> => {
+  return new DurableContextImpl<Logger>(
     executionContext,
     parentContext,
     durableExecutionMode,

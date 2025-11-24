@@ -1,5 +1,9 @@
 import { DurableLogData, DurableLogLevel } from "../../types";
-import { createDefaultLogger } from "./default-logger";
+import {
+  createDefaultLogger,
+  DefaultLogger,
+  LoggingExecutionContext,
+} from "./default-logger";
 import { Console } from "node:console";
 
 // Mock the Console constructor
@@ -47,670 +51,625 @@ describe("Default Logger", () => {
     jest.restoreAllMocks();
   });
 
-  it("should create a logger with all required methods", () => {
-    const logger = createDefaultLogger();
+  const loggingExecutionContext: LoggingExecutionContext = {
+    durableExecutionArn: "durable-execution-arn",
+    requestId: "request-id",
+    tenantId: undefined,
+  };
 
-    expect(logger).toHaveProperty("log");
-    expect(logger).toHaveProperty("info");
-    expect(logger).toHaveProperty("error");
-    expect(logger).toHaveProperty("warn");
-    expect(logger).toHaveProperty("debug");
+  describe("createDefaultLogger function", () => {
+    it("should create a logger with all required methods", () => {
+      const logger = createDefaultLogger(loggingExecutionContext);
+
+      expect(logger).toHaveProperty("log");
+      expect(logger).toHaveProperty("info");
+      expect(logger).toHaveProperty("error");
+      expect(logger).toHaveProperty("warn");
+      expect(logger).toHaveProperty("debug");
+      expect(logger).toHaveProperty("configureDurableLoggingContext");
+    });
+
+    it("should return DefaultLogger instance", () => {
+      const logger = createDefaultLogger(loggingExecutionContext);
+      expect(logger).toBeInstanceOf(DefaultLogger);
+    });
   });
 
-  describe("log method", () => {
-    it("should format and output structured JSON for each log level", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
+  describe("DefaultLogger class", () => {
+    describe("constructor", () => {
+      it("should create logger with execution context", () => {
+        const logger = new DefaultLogger(loggingExecutionContext);
+        expect(logger).toBeInstanceOf(DefaultLogger);
+      });
 
-      logger.log?.(DurableLogLevel.DEBUG, durableLogData, "debug message");
-      logger.log?.(DurableLogLevel.INFO, durableLogData, "info message");
-      logger.log?.(DurableLogLevel.WARN, durableLogData, "warn message");
-      logger.log?.(DurableLogLevel.ERROR, durableLogData, "error message");
-
-      expect(mockConsole.debug).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.DEBUG,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "debug message",
-        }),
-      );
-
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "info message",
-        }),
-      );
-
-      expect(mockConsole.warn).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.WARN,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "warn message",
-        }),
-      );
-
-      expect(mockConsole.error).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.ERROR,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "error message",
-        }),
-      );
+      it("should create logger without execution context", () => {
+        const logger = new DefaultLogger();
+        expect(logger).toBeInstanceOf(DefaultLogger);
+      });
     });
 
-    it("should include tenantId when provided", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        tenantId: "test-tenant",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
+    describe("log method", () => {
+      it("should format and output structured JSON for each log level", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
 
-      logger.log?.(DurableLogLevel.INFO, durableLogData, "test message");
+        logger.log?.(DurableLogLevel.DEBUG, "debug message");
+        logger.log?.(DurableLogLevel.INFO, "info message");
+        logger.log?.(DurableLogLevel.WARN, "warn message");
+        logger.log?.(DurableLogLevel.ERROR, "error message");
 
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
+        expect(mockConsole.debug).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "DEBUG",
+            executionArn: "durable-execution-arn",
+            message: "debug message",
+          }),
+        );
+
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "durable-execution-arn",
+            message: "info message",
+          }),
+        );
+
+        expect(mockConsole.warn).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "WARN",
+            executionArn: "durable-execution-arn",
+            message: "warn message",
+          }),
+        );
+
+        expect(mockConsole.error).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "ERROR",
+            executionArn: "durable-execution-arn",
+            message: "error message",
+          }),
+        );
+      });
+
+      it("should use configureDurableLoggingContext when provided", () => {
+        const logger = createDefaultLogger();
+        const mockDurableLogData: DurableLogData = {
           requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
           executionArn: "test-arn",
+          operationId: "abc123",
           tenantId: "test-tenant",
-          operationId: "abc123",
-          message: "test message",
-        }),
-      );
-    });
+        };
 
-    it("should include attempt field when provided", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "retry-step",
-        attempt: 2,
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
+        logger.configureDurableLoggingContext({
+          shouldLog: () => true,
+          getDurableLogData: () => mockDurableLogData,
+        });
 
-      logger.log?.(
-        DurableLogLevel.INFO,
-        durableLogData,
-        "retry attempt message",
-      );
+        logger.log?.(DurableLogLevel.INFO, "test message");
 
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "mock-request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "test-arn",
+            tenantId: "test-tenant",
+            operationId: "abc123",
+            message: "test message",
+          }),
+        );
+      });
+
+      it("should include attempt field when provided", () => {
+        const logger = createDefaultLogger();
+        const mockDurableLogData: DurableLogData = {
           requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
           executionArn: "test-arn",
           operationId: "retry-step",
           attempt: 2,
-          message: "retry attempt message",
-        }),
-      );
-    });
+        };
 
-    it("should omit operationId and attempt when undefined", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: undefined,
-        attempt: undefined,
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
+        logger.configureDurableLoggingContext({
+          shouldLog: () => true,
+          getDurableLogData: () => mockDurableLogData,
+        });
 
-      logger.log?.(DurableLogLevel.INFO, durableLogData, "test message");
+        logger.log?.(DurableLogLevel.INFO, "retry attempt message");
 
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
-          executionArn: "test-arn",
-          message: "test message",
-        }),
-      );
-    });
-
-    it("should handle multiple message parameters with util.format", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
-
-      logger.log?.(
-        DurableLogLevel.INFO,
-        durableLogData,
-        "Hello %s",
-        "world",
-        123,
-      );
-
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "Hello world 123",
-        }),
-      );
-    });
-
-    it("should handle Error objects and extract error information", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-      };
-      const error = new Error("Test error");
-      error.stack = "Error: Test error\n    at test.js:1:1";
-
-      logger.log?.(
-        DurableLogLevel.ERROR,
-        durableLogData,
-        "Error occurred:",
-        error,
-      );
-
-      const expectedCall = mockConsole.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(expectedCall);
-
-      expect(parsedLog).toMatchObject({
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        message: "Error occurred: Error: Test error\n    at test.js:1:1",
-        errorType: "Error",
-        errorMessage: "Test error",
-        stackTrace: ["Error: Test error", "    at test.js:1:1"],
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "mock-request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "test-arn",
+            operationId: "retry-step",
+            attempt: 2,
+            message: "retry attempt message",
+          }),
+        );
       });
-    });
 
-    it("should handle single parameter that is an Error object", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-      };
-      const error = new Error("Test error");
-      error.stack = "Error: Test error\n    at test.js:1:1";
+      it("should omit operationId and attempt when undefined", () => {
+        const logger = createDefaultLogger();
+        const mockDurableLogData: DurableLogData = {
+          requestId: "mock-request-id",
+          executionArn: "test-arn",
+          operationId: undefined,
+          attempt: undefined,
+        };
 
-      logger.log?.(DurableLogLevel.ERROR, durableLogData, error);
+        logger.configureDurableLoggingContext({
+          shouldLog: () => true,
+          getDurableLogData: () => mockDurableLogData,
+        });
 
-      const expectedCall = mockConsole.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(expectedCall);
+        logger.log?.(DurableLogLevel.INFO, "test message");
 
-      expect(parsedLog).toMatchObject({
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        message: {
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "mock-request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "test-arn",
+            message: "test message",
+          }),
+        );
+      });
+
+      it("should handle multiple message parameters with util.format", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.log?.(DurableLogLevel.INFO, "Hello %s", "world", 123);
+
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "durable-execution-arn",
+            message: "Hello world 123",
+          }),
+        );
+      });
+
+      it("should handle Error objects and extract error information", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+        const error = new Error("Test error");
+        error.stack = "Error: Test error\n    at test.js:1:1";
+
+        logger.log?.(DurableLogLevel.ERROR, "Error occurred:", error);
+
+        const expectedCall = mockConsole.error.mock.calls[0][0];
+        const parsedLog = JSON.parse(expectedCall);
+
+        expect(parsedLog).toMatchObject({
+          timestamp: "2025-11-21T18:33:33.938Z",
+          level: "ERROR",
+          requestId: "request-id",
+          executionArn: "durable-execution-arn",
+          message: "Error occurred: Error: Test error\n    at test.js:1:1",
           errorType: "Error",
           errorMessage: "Test error",
           stackTrace: ["Error: Test error", "    at test.js:1:1"],
-        },
+        });
       });
-    });
 
-    it("should default to INFO level for unknown log levels", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
+      it("should handle single parameter that is an Error object", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+        const error = new Error("Test error");
+        error.stack = "Error: Test error\n    at test.js:1:1";
 
-      logger.log?.(
-        "UNKNOWN" as DurableLogLevel,
-        durableLogData,
-        "test message",
-      );
+        logger.log?.(DurableLogLevel.ERROR, error);
 
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
+        const expectedCall = mockConsole.error.mock.calls[0][0];
+        const parsedLog = JSON.parse(expectedCall);
+
+        expect(parsedLog).toMatchObject({
           timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
+          level: "ERROR",
+          requestId: "request-id",
+          executionArn: "durable-execution-arn",
+          message: {
+            errorType: "Error",
+            errorMessage: "Test error",
+            stackTrace: ["Error: Test error", "    at test.js:1:1"],
+          },
+        });
+      });
+
+      it("should default to INFO level for unknown log levels", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.log?.("UNKNOWN" as DurableLogLevel, "test message");
+
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "durable-execution-arn",
+            message: "test message",
+          }),
+        );
+      });
+
+      it("should handle JSON stringify errors and fall back to util.format", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        // Create an object with circular reference to trigger stringify error
+        const circularObj: any = { name: "circular" };
+        circularObj.self = circularObj;
+
+        logger.log?.(DurableLogLevel.INFO, circularObj);
+
+        // Should fall back to util.format and stringify without error replacer
+        // util.format handles circular references with a detailed representation
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "durable-execution-arn",
+            message: "<ref *1> { name: 'circular', self: [Circular *1] }",
+          }),
+        );
+      });
+
+      it("should handle Error objects with no constructor name", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        // Create error with no constructor name
+        const errorWithoutConstructor = Object.create(Error.prototype);
+        errorWithoutConstructor.message = "Test error";
+        errorWithoutConstructor.stack = "Test error\n    at test.js:1:1";
+        errorWithoutConstructor.constructor = null;
+
+        logger.log?.(DurableLogLevel.ERROR, errorWithoutConstructor);
+
+        const expectedCall = mockConsole.error.mock.calls[0][0];
+        const parsedLog = JSON.parse(expectedCall);
+
+        expect(parsedLog).toMatchObject({
+          timestamp: "2025-11-21T18:33:33.938Z",
+          level: "ERROR",
+          requestId: "request-id",
+          executionArn: "durable-execution-arn",
+          message: {
+            errorType: "UnknownError",
+            errorMessage: "Test error",
+            stackTrace: ["Test error", "    at test.js:1:1"],
+          },
+        });
+      });
+
+      it("should handle Error objects with non-string stack", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        // Create error with non-string stack
+        const errorWithArrayStack = new Error("Test error");
+        errorWithArrayStack.stack = [
+          "Error: Test error",
+          "    at test.js:1:1",
+        ] as any;
+
+        logger.log?.(DurableLogLevel.ERROR, errorWithArrayStack);
+
+        const expectedCall = mockConsole.error.mock.calls[0][0];
+        const parsedLog = JSON.parse(expectedCall);
+
+        expect(parsedLog).toMatchObject({
+          timestamp: "2025-11-21T18:33:33.938Z",
+          level: "ERROR",
+          requestId: "request-id",
+          executionArn: "durable-execution-arn",
+          message: {
+            errorType: "Error",
+            errorMessage: "Test error",
+            stackTrace: ["Error: Test error", "    at test.js:1:1"],
+          },
+        });
+      });
+
+      it("should handle tenantId as null", () => {
+        const logger = createDefaultLogger();
+        const mockDurableLogData: DurableLogData = {
+          requestId: "mock-request-id",
           executionArn: "test-arn",
           operationId: "abc123",
-          message: "test message",
-        }),
-      );
-    });
+          tenantId: null as any,
+        };
 
-    it("should handle JSON stringify errors and fall back to util.format", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
+        logger.configureDurableLoggingContext({
+          shouldLog: () => true,
+          getDurableLogData: () => mockDurableLogData,
+        });
 
-      // Create an object with circular reference to trigger stringify error
-      const circularObj: any = { name: "circular" };
-      circularObj.self = circularObj;
+        logger.log?.(DurableLogLevel.INFO, "test message");
 
-      logger.log?.(DurableLogLevel.INFO, durableLogData, circularObj);
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "mock-request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "test-arn",
+            operationId: "abc123",
+            message: "test message",
+          }),
+        );
+      });
 
-      // Should fall back to util.format and stringify without error replacer
-      // util.format handles circular references with a detailed representation
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
+      it("should handle Error with no constructor in multi-param case", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        // Create error with no constructor name
+        const errorWithoutConstructor = Object.create(Error.prototype);
+        errorWithoutConstructor.message = "Test error";
+        errorWithoutConstructor.stack = "Test error\n    at test.js:1:1";
+        errorWithoutConstructor.constructor = null;
+
+        logger.log?.(
+          DurableLogLevel.ERROR,
+          "Error occurred:",
+          errorWithoutConstructor,
+        );
+
+        const expectedCall = mockConsole.error.mock.calls[0][0];
+        const parsedLog = JSON.parse(expectedCall);
+
+        expect(parsedLog).toMatchObject({
           timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "<ref *1> { name: 'circular', self: [Circular *1] }",
-        }),
-      );
-    });
-
-    it("should handle Error objects with no constructor name", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-      };
-
-      // Create error with no constructor name
-      const errorWithoutConstructor = Object.create(Error.prototype);
-      errorWithoutConstructor.message = "Test error";
-      errorWithoutConstructor.stack = "Test error\n    at test.js:1:1";
-      errorWithoutConstructor.constructor = null;
-
-      logger.log?.(
-        DurableLogLevel.ERROR,
-        durableLogData,
-        errorWithoutConstructor,
-      );
-
-      const expectedCall = mockConsole.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(expectedCall);
-
-      expect(parsedLog).toMatchObject({
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        message: {
+          level: "ERROR",
+          requestId: "request-id",
+          executionArn: "durable-execution-arn",
+          message:
+            "Error occurred: Error {\n  message: 'Test error',\n  stack: 'Test error\\n    at test.js:1:1',\n  constructor: null\n}",
           errorType: "UnknownError",
           errorMessage: "Test error",
           stackTrace: ["Test error", "    at test.js:1:1"],
-        },
+        });
       });
-    });
 
-    it("should handle Error objects with non-string stack", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-      };
+      it("should handle Error with non-string stack in multi-param case", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
 
-      // Create error with non-string stack
-      const errorWithArrayStack = new Error("Test error");
-      errorWithArrayStack.stack = [
-        "Error: Test error",
-        "    at test.js:1:1",
-      ] as any;
+        // Create error with non-string stack
+        const errorWithArrayStack = new Error("Test error");
+        errorWithArrayStack.stack = undefined as any;
 
-      logger.log?.(DurableLogLevel.ERROR, durableLogData, errorWithArrayStack);
+        logger.log?.(
+          DurableLogLevel.ERROR,
+          "Error occurred:",
+          errorWithArrayStack,
+        );
 
-      const expectedCall = mockConsole.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(expectedCall);
+        const expectedCall = mockConsole.error.mock.calls[0][0];
+        const parsedLog = JSON.parse(expectedCall);
 
-      expect(parsedLog).toMatchObject({
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        message: {
+        expect(parsedLog).toMatchObject({
+          timestamp: "2025-11-21T18:33:33.938Z",
+          level: "ERROR",
+          requestId: "request-id",
+          executionArn: "durable-execution-arn",
+          message: "Error occurred: [Error: Test error]",
           errorType: "Error",
           errorMessage: "Test error",
-          stackTrace: ["Error: Test error", "    at test.js:1:1"],
-        },
+          stackTrace: [],
+        });
+      });
+
+      it("should throw error when no logging context is configured", () => {
+        const logger = new DefaultLogger();
+
+        expect(() => {
+          logger.log?.(DurableLogLevel.INFO, "test message");
+        }).toThrow(
+          "DurableLoggingContext is not configured. Please call configureDurableLoggingContext before logging.",
+        );
       });
     });
 
-    it("should handle tenantId as null", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        tenantId: null as any,
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
+    describe("log level filtering", () => {
+      it("should enable all methods when AWS_LAMBDA_LOG_LEVEL is DEBUG", () => {
+        process.env["AWS_LAMBDA_LOG_LEVEL"] = "DEBUG";
+        const logger = createDefaultLogger(loggingExecutionContext);
 
-      logger.log?.(DurableLogLevel.INFO, durableLogData, "test message");
+        logger.debug("debug message");
+        logger.info("info message");
+        logger.warn("warn message");
+        logger.error("error message");
 
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
+        expect(mockConsole.debug).toHaveBeenCalled();
+        expect(mockConsole.info).toHaveBeenCalled();
+        expect(mockConsole.warn).toHaveBeenCalled();
+        expect(mockConsole.error).toHaveBeenCalled();
+      });
+
+      it("should disable debug when AWS_LAMBDA_LOG_LEVEL is INFO", () => {
+        process.env["AWS_LAMBDA_LOG_LEVEL"] = "INFO";
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.debug("debug message");
+        logger.info("info message");
+        logger.warn("warn message");
+        logger.error("error message");
+
+        expect(mockConsole.debug).not.toHaveBeenCalled();
+        expect(mockConsole.info).toHaveBeenCalled();
+        expect(mockConsole.warn).toHaveBeenCalled();
+        expect(mockConsole.error).toHaveBeenCalled();
+      });
+
+      it("should disable debug and info when AWS_LAMBDA_LOG_LEVEL is WARN", () => {
+        process.env["AWS_LAMBDA_LOG_LEVEL"] = "WARN";
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.debug("debug message");
+        logger.info("info message");
+        logger.warn("warn message");
+        logger.error("error message");
+
+        expect(mockConsole.debug).not.toHaveBeenCalled();
+        expect(mockConsole.info).not.toHaveBeenCalled();
+        expect(mockConsole.warn).toHaveBeenCalled();
+        expect(mockConsole.error).toHaveBeenCalled();
+      });
+
+      it("should only enable error when AWS_LAMBDA_LOG_LEVEL is ERROR", () => {
+        process.env["AWS_LAMBDA_LOG_LEVEL"] = "ERROR";
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.debug("debug message");
+        logger.info("info message");
+        logger.warn("warn message");
+        logger.error("error message");
+
+        expect(mockConsole.debug).not.toHaveBeenCalled();
+        expect(mockConsole.info).not.toHaveBeenCalled();
+        expect(mockConsole.warn).not.toHaveBeenCalled();
+        expect(mockConsole.error).toHaveBeenCalled();
+      });
+
+      it("should default to DEBUG level when AWS_LAMBDA_LOG_LEVEL is invalid", () => {
+        process.env["AWS_LAMBDA_LOG_LEVEL"] = "INVALID";
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.debug("debug message");
+
+        expect(mockConsole.debug).toHaveBeenCalled();
+      });
+
+      it("should default to DEBUG level when AWS_LAMBDA_LOG_LEVEL is not set", () => {
+        delete process.env["AWS_LAMBDA_LOG_LEVEL"];
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.debug("debug message");
+
+        expect(mockConsole.debug).toHaveBeenCalled();
+      });
+
+      it("should respect shouldLog() from DurableLoggingContext", () => {
+        const logger = createDefaultLogger();
+        const mockDurableLogData: DurableLogData = {
           requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
           executionArn: "test-arn",
-          operationId: "abc123",
-          message: "test message",
-        }),
-      );
-    });
+        };
 
-    it("should handle Error with no constructor in multi-param case", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-      };
+        logger.configureDurableLoggingContext({
+          shouldLog: () => false, // Should not log
+          getDurableLogData: () => mockDurableLogData,
+        });
 
-      // Create error with no constructor name
-      const errorWithoutConstructor = Object.create(Error.prototype);
-      errorWithoutConstructor.message = "Test error";
-      errorWithoutConstructor.stack = "Test error\n    at test.js:1:1";
-      errorWithoutConstructor.constructor = null;
+        logger.info("test message");
 
-      logger.log?.(
-        DurableLogLevel.ERROR,
-        durableLogData,
-        "Error occurred:",
-        errorWithoutConstructor,
-      );
-
-      const expectedCall = mockConsole.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(expectedCall);
-
-      expect(parsedLog).toMatchObject({
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        message:
-          "Error occurred: Error {\n  message: 'Test error',\n  stack: 'Test error\\n    at test.js:1:1',\n  constructor: null\n}",
-        errorType: "UnknownError",
-        errorMessage: "Test error",
-        stackTrace: ["Test error", "    at test.js:1:1"],
+        expect(mockConsole.info).not.toHaveBeenCalled();
       });
     });
 
-    it("should handle Error with non-string stack in multi-param case", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-      };
+    describe("individual logging methods output format", () => {
+      it("should format output correctly for each individual method", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
 
-      // Create error with non-string stack
-      const errorWithArrayStack = new Error("Test error");
-      errorWithArrayStack.stack = undefined as any;
+        logger.info("info message");
+        logger.error("error message");
+        logger.warn("warn message");
+        logger.debug("debug message");
 
-      logger.log?.(
-        DurableLogLevel.ERROR,
-        durableLogData,
-        "Error occurred:",
-        errorWithArrayStack,
-      );
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "durable-execution-arn",
+            message: "info message",
+          }),
+        );
 
-      const expectedCall = mockConsole.error.mock.calls[0][0];
-      const parsedLog = JSON.parse(expectedCall);
+        expect(mockConsole.error).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "ERROR",
+            executionArn: "durable-execution-arn",
+            message: "error message",
+          }),
+        );
 
-      expect(parsedLog).toMatchObject({
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        message: "Error occurred: [Error: Test error]",
-        errorType: "Error",
-        errorMessage: "Test error",
-        stackTrace: [],
+        expect(mockConsole.warn).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "WARN",
+            executionArn: "durable-execution-arn",
+            message: "warn message",
+          }),
+        );
+
+        expect(mockConsole.debug).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "DEBUG",
+            executionArn: "durable-execution-arn",
+            message: "debug message",
+          }),
+        );
+      });
+
+      it("should handle optional message parameter", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        logger.info(); // No message
+        logger.info("with message");
+
+        expect(mockConsole.info).toHaveBeenCalledTimes(2);
+
+        // First call with no message - util.format() with no args returns empty string
+        const firstCall = JSON.parse(mockConsole.info.mock.calls[0][0]);
+        expect(firstCall.message).toBe("");
+
+        // Second call with message
+        const secondCall = JSON.parse(mockConsole.info.mock.calls[1][0]);
+        expect(secondCall.message).toBe("with message");
       });
     });
-  });
 
-  describe("log level filtering", () => {
-    it("should enable all methods when AWS_LAMBDA_LOG_LEVEL is DEBUG", () => {
-      process.env["AWS_LAMBDA_LOG_LEVEL"] = "DEBUG";
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.DEBUG,
-      };
+    describe("configureDurableLoggingContext method", () => {
+      it("should configure logging context correctly", () => {
+        const logger = new DefaultLogger();
+        const mockDurableLogData: DurableLogData = {
+          requestId: "custom-request-id",
+          executionArn: "custom-arn",
+          operationId: "custom-operation",
+        };
 
-      logger.debug?.(durableLogData, "debug message");
-      logger.info?.(durableLogData, "info message");
-      logger.warn?.(durableLogData, "warn message");
-      logger.error?.(durableLogData, "error message");
+        const mockContext = {
+          shouldLog: jest.fn().mockReturnValue(true),
+          getDurableLogData: jest.fn().mockReturnValue(mockDurableLogData),
+        };
 
-      expect(mockConsole.debug).toHaveBeenCalled();
-      expect(mockConsole.info).toHaveBeenCalled();
-      expect(mockConsole.warn).toHaveBeenCalled();
-      expect(mockConsole.error).toHaveBeenCalled();
-    });
+        logger.configureDurableLoggingContext(mockContext);
+        logger.info("test message");
 
-    it("should disable debug when AWS_LAMBDA_LOG_LEVEL is INFO", () => {
-      process.env["AWS_LAMBDA_LOG_LEVEL"] = "INFO";
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
-
-      logger.debug?.(durableLogData, "debug message");
-      logger.info?.(durableLogData, "info message");
-      logger.warn?.(durableLogData, "warn message");
-      logger.error?.(durableLogData, "error message");
-
-      expect(mockConsole.debug).not.toHaveBeenCalled();
-      expect(mockConsole.info).toHaveBeenCalled();
-      expect(mockConsole.warn).toHaveBeenCalled();
-      expect(mockConsole.error).toHaveBeenCalled();
-    });
-
-    it("should disable debug and info when AWS_LAMBDA_LOG_LEVEL is WARN", () => {
-      process.env["AWS_LAMBDA_LOG_LEVEL"] = "WARN";
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.WARN,
-      };
-
-      logger.debug?.(durableLogData, "debug message");
-      logger.info?.(durableLogData, "info message");
-      logger.warn?.(durableLogData, "warn message");
-      logger.error?.(durableLogData, "error message");
-
-      expect(mockConsole.debug).not.toHaveBeenCalled();
-      expect(mockConsole.info).not.toHaveBeenCalled();
-      expect(mockConsole.warn).toHaveBeenCalled();
-      expect(mockConsole.error).toHaveBeenCalled();
-    });
-
-    it("should only enable error when AWS_LAMBDA_LOG_LEVEL is ERROR", () => {
-      process.env["AWS_LAMBDA_LOG_LEVEL"] = "ERROR";
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.ERROR,
-      };
-
-      logger.debug?.(durableLogData, "debug message");
-      logger.info?.(durableLogData, "info message");
-      logger.warn?.(durableLogData, "warn message");
-      logger.error?.(durableLogData, "error message");
-
-      expect(mockConsole.debug).not.toHaveBeenCalled();
-      expect(mockConsole.info).not.toHaveBeenCalled();
-      expect(mockConsole.warn).not.toHaveBeenCalled();
-      expect(mockConsole.error).toHaveBeenCalled();
-    });
-
-    it("should default to DEBUG level when AWS_LAMBDA_LOG_LEVEL is invalid", () => {
-      process.env["AWS_LAMBDA_LOG_LEVEL"] = "INVALID";
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.DEBUG,
-      };
-
-      logger.debug?.(durableLogData, "debug message");
-
-      expect(mockConsole.debug).toHaveBeenCalled();
-    });
-
-    it("should default to DEBUG level when AWS_LAMBDA_LOG_LEVEL is not set", () => {
-      delete process.env["AWS_LAMBDA_LOG_LEVEL"];
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.DEBUG,
-      };
-
-      logger.debug?.(durableLogData, "debug message");
-
-      expect(mockConsole.debug).toHaveBeenCalled();
-    });
-  });
-
-  describe("individual logging methods output format", () => {
-    it("should format output correctly for each individual method", () => {
-      const logger = createDefaultLogger();
-      const durableLogData: DurableLogData = {
-        requestId: "mock-request-id",
-        executionArn: "test-arn",
-        operationId: "abc123",
-        timestamp: "2025-11-21T18:33:33.938Z",
-        level: DurableLogLevel.INFO,
-      };
-
-      logger.info?.(durableLogData, "info message");
-      logger.error?.(durableLogData, "error message");
-      logger.warn?.(durableLogData, "warn message");
-      logger.debug?.(durableLogData, "debug message");
-
-      expect(mockConsole.info).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.INFO,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "info message",
-        }),
-      );
-
-      expect(mockConsole.error).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.ERROR,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "error message",
-        }),
-      );
-
-      expect(mockConsole.warn).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.WARN,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "warn message",
-        }),
-      );
-
-      expect(mockConsole.debug).toHaveBeenCalledWith(
-        JSON.stringify({
-          requestId: "mock-request-id",
-          timestamp: "2025-11-21T18:33:33.938Z",
-          level: DurableLogLevel.DEBUG,
-          executionArn: "test-arn",
-          operationId: "abc123",
-          message: "debug message",
-        }),
-      );
+        expect(mockContext.shouldLog).toHaveBeenCalled();
+        expect(mockContext.getDurableLogData).toHaveBeenCalled();
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "custom-request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "custom-arn",
+            operationId: "custom-operation",
+            message: "test message",
+          }),
+        );
+      });
     });
   });
 });

@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   DurableContext,
   DurableExecutionMode,
+  DurableLogger,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
@@ -21,7 +22,7 @@ jest.mock("../../termination-manager/termination-manager");
 describe("Run In Child Context Integration Tests", () => {
   let mockExecutionContext: ExecutionContext;
   let mockParentContext: any;
-  let durableContext: DurableContext;
+  let durableContext: DurableContext<DurableLogger>;
   let checkpointCalls: any[] = [];
 
   beforeEach(() => {
@@ -77,7 +78,7 @@ describe("Run In Child Context Integration Tests", () => {
   });
 
   test("should execute child context with child context", async () => {
-    let capturedChildContext: DurableContext | undefined;
+    let capturedChildContext: DurableContext<DurableLogger> | undefined;
 
     const result = await durableContext.runInChildContext(
       "test-child-context",

@@ -1,11 +1,18 @@
 import { Console } from "node:console";
-import {
-  EnrichedDurableLogger,
-  DurableLogLevel,
-  DurableLogData,
-  DurableLogField,
-} from "../../types";
+import { DurableLogLevel, DurableLogData } from "../../types";
 import util from "node:util";
+import {
+  DurableLogger,
+  DurableLoggingContext,
+} from "../../types/durable-logger";
+
+export interface LoggingExecutionContext {
+  durableExecutionArn: string;
+  requestId: string;
+  tenantId: string | undefined;
+}
+
+type DurableLogField = unknown;
 
 /**
  * Log entry that is emitted by the default logger.
@@ -127,7 +134,7 @@ function formatDurableLogData(
 }
 
 /**
- * Creates a default logger that outputs structured logs to console.
+ * Default logger class that outputs structured logs to console.
  *
  * This logger emulates the AWS Lambda Runtime Interface Client (RIC) console patching
  * behavior to maintain parity with standard Lambda function logging while providing
@@ -144,111 +151,227 @@ function formatDurableLogData(
  * Individual logger methods (info, error, warn, debug) are dynamically enabled/disabled
  * based on the configured log level, defaulting to no-op functions when disabled.
  * This mirrors how RIC patches console methods conditionally.
- *
- * @returns EnrichedDurableLogger instance with structured logging capabilities
  */
-export const createDefaultLogger = (): EnrichedDurableLogger => {
-  // Override the RIC logger to provide custom attributes on the structured log output
-  const consoleLogger = new Console({
-    stdout: process.stdout,
-    stderr: process.stderr,
-  });
+export class DefaultLogger implements DurableLogger {
+  private consoleLogger: Console;
+  private durableLoggingContext: DurableLoggingContext | undefined = undefined;
+  private executionContext: LoggingExecutionContext | undefined;
+  private noOpLog = (): void => {};
 
-  const noOpLog = (): void => {};
+  constructor(executionContext?: LoggingExecutionContext) {
+    this.executionContext = executionContext;
 
-  const logger: EnrichedDurableLogger = {
-    log: (
-      level: DurableLogLevel,
-      data: DurableLogData,
-      ...params: unknown[]
-    ): void => {
-      switch (level) {
-        case DurableLogLevel.DEBUG:
-          logger.debug(data, ...params);
-          break;
-        case DurableLogLevel.INFO:
-          logger.info(data, ...params);
-          break;
-        case DurableLogLevel.WARN:
-          logger.warn(data, ...params);
-          break;
-        case DurableLogLevel.ERROR:
-          logger.error(data, ...params);
-          break;
-        default:
-          logger.info(data, ...params);
-          break;
-      }
-    },
-    info: noOpLog,
-    error: noOpLog,
-    warn: noOpLog,
-    debug: noOpLog,
-  };
+    // Override the RIC logger to provide custom attributes on the structured log output
+    this.consoleLogger = new Console({
+      stdout: process.stdout,
+      stderr: process.stderr,
+    });
 
-  const levels = {
-    DEBUG: { name: "DEBUG", priority: 2 },
-    INFO: { name: "INFO", priority: 3 },
-    WARN: { name: "WARN", priority: 4 },
-    ERROR: { name: "ERROR", priority: 5 },
-    // Not implemented yet. Can be implemented later
-    // TRACE: { name: "TRACE", priority: 1 },
-    // FATAL: { name: "FATAL", priority: 6 },
-  };
+    // Initialize methods with no-op and then configure based on log level
+    this.info = this.noOpLog;
+    this.error = this.noOpLog;
+    this.warn = this.noOpLog;
+    this.debug = this.noOpLog;
 
-  const logLevelEnvVariable =
-    process.env["AWS_LAMBDA_LOG_LEVEL"]?.toUpperCase();
-  // Default to DEBUG level when env var is invalid/missing
-  const lambdaLogLevel =
-    logLevelEnvVariable && logLevelEnvVariable in levels
-      ? levels[logLevelEnvVariable as keyof typeof levels]
-      : levels.DEBUG;
+    this.configureLogLevel();
+  }
 
-  // Enable methods based on priority: higher priority = more restrictive
-  // e.g., if WARN is set (priority 4), only WARN and ERROR methods are enabled
-  if (levels.DEBUG.priority >= lambdaLogLevel.priority) {
-    logger.debug = (
-      data: DurableLogData,
-      ...params: DurableLogField[]
-    ): void => {
-      consoleLogger.debug(
-        formatDurableLogData(DurableLogLevel.DEBUG, data, ...params),
+  private configureLogLevel(): void {
+    const levels = {
+      DEBUG: { name: "DEBUG", priority: 2 },
+      INFO: { name: "INFO", priority: 3 },
+      WARN: { name: "WARN", priority: 4 },
+      ERROR: { name: "ERROR", priority: 5 },
+      // Not implemented yet. Can be implemented later
+      // TRACE: { name: "TRACE", priority: 1 },
+      // FATAL: { name: "FATAL", priority: 6 },
+    };
+
+    const logLevelEnvVariable =
+      process.env["AWS_LAMBDA_LOG_LEVEL"]?.toUpperCase();
+    // Default to DEBUG level when env var is invalid/missing
+    const lambdaLogLevel =
+      logLevelEnvVariable && logLevelEnvVariable in levels
+        ? levels[logLevelEnvVariable as keyof typeof levels]
+        : levels.DEBUG;
+
+    // Enable methods based on priority: higher priority = more restrictive
+    // e.g., if WARN is set (priority 4), only WARN and ERROR methods are enabled
+    if (levels.DEBUG.priority >= lambdaLogLevel.priority) {
+      this.debug = (
+        message?: DurableLogField,
+        ...optionalParams: DurableLogField[]
+      ): void => {
+        const loggingContext = this.ensureDurableLoggingContext();
+        if (loggingContext.shouldLog()) {
+          const params =
+            message !== undefined
+              ? [message, ...optionalParams]
+              : optionalParams;
+          this.consoleLogger.debug(
+            formatDurableLogData(
+              DurableLogLevel.DEBUG,
+              loggingContext.getDurableLogData(),
+              ...params,
+            ),
+          );
+        }
+      };
+    }
+
+    if (levels.INFO.priority >= lambdaLogLevel.priority) {
+      this.info = (
+        message?: DurableLogField,
+        ...optionalParams: DurableLogField[]
+      ): void => {
+        const loggingContext = this.ensureDurableLoggingContext();
+        if (loggingContext.shouldLog()) {
+          const params =
+            message !== undefined
+              ? [message, ...optionalParams]
+              : optionalParams;
+          this.consoleLogger.info(
+            formatDurableLogData(
+              DurableLogLevel.INFO,
+              loggingContext.getDurableLogData(),
+              ...params,
+            ),
+          );
+        }
+      };
+    }
+
+    if (levels.WARN.priority >= lambdaLogLevel.priority) {
+      this.warn = (
+        message?: DurableLogField,
+        ...optionalParams: DurableLogField[]
+      ): void => {
+        const loggingContext = this.ensureDurableLoggingContext();
+        if (loggingContext.shouldLog()) {
+          const params =
+            message !== undefined
+              ? [message, ...optionalParams]
+              : optionalParams;
+          this.consoleLogger.warn(
+            formatDurableLogData(
+              DurableLogLevel.WARN,
+              loggingContext.getDurableLogData(),
+              ...params,
+            ),
+          );
+        }
+      };
+    }
+
+    if (levels.ERROR.priority >= lambdaLogLevel.priority) {
+      this.error = (
+        message?: DurableLogField,
+        ...optionalParams: DurableLogField[]
+      ): void => {
+        const loggingContext = this.ensureDurableLoggingContext();
+        if (loggingContext.shouldLog()) {
+          const params =
+            message !== undefined
+              ? [message, ...optionalParams]
+              : optionalParams;
+          this.consoleLogger.error(
+            formatDurableLogData(
+              DurableLogLevel.ERROR,
+              loggingContext.getDurableLogData(),
+              ...params,
+            ),
+          );
+        }
+      };
+    }
+  }
+
+  private ensureDurableLoggingContext(): DurableLoggingContext {
+    const context = this.executionContext;
+
+    if (!this.durableLoggingContext && !context) {
+      throw new Error(
+        "DurableLoggingContext is not configured. Please call configureDurableLoggingContext before logging.",
       );
+    }
+
+    if (this.durableLoggingContext) {
+      return this.durableLoggingContext;
+    }
+
+    if (!context) {
+      throw new Error("Execution context is not provided.");
+    }
+
+    return {
+      shouldLog: () => true,
+      getDurableLogData: (): DurableLogData => {
+        return {
+          requestId: context.requestId,
+          executionArn: context.durableExecutionArn,
+          tenantId: context.tenantId,
+        };
+      },
     };
   }
 
-  if (levels.INFO.priority >= lambdaLogLevel.priority) {
-    logger.info = (
-      data: DurableLogData,
-      ...params: DurableLogField[]
-    ): void => {
-      consoleLogger.info(
-        formatDurableLogData(DurableLogLevel.INFO, data, ...params),
-      );
-    };
+  log(
+    level: `${DurableLogLevel}`,
+    message?: DurableLogField,
+    ...optionalParams: DurableLogField[]
+  ): void {
+    switch (level) {
+      case DurableLogLevel.DEBUG:
+        this.debug(message, ...optionalParams);
+        break;
+      case DurableLogLevel.INFO:
+        this.info(message, ...optionalParams);
+        break;
+      case DurableLogLevel.WARN:
+        this.warn(message, ...optionalParams);
+        break;
+      case DurableLogLevel.ERROR:
+        this.error(message, ...optionalParams);
+        break;
+      default:
+        this.info(message, ...optionalParams);
+        break;
+    }
   }
 
-  if (levels.WARN.priority >= lambdaLogLevel.priority) {
-    logger.warn = (
-      data: DurableLogData,
-      ...params: DurableLogField[]
-    ): void => {
-      consoleLogger.warn(
-        formatDurableLogData(DurableLogLevel.WARN, data, ...params),
-      );
-    };
-  }
+  // These method signatures will be set dynamically in configureLogLevel()
+  info: (
+    message?: DurableLogField,
+    ...optionalParams: DurableLogField[]
+  ) => void;
+  error: (
+    message?: DurableLogField,
+    ...optionalParams: DurableLogField[]
+  ) => void;
+  warn: (
+    message?: DurableLogField,
+    ...optionalParams: DurableLogField[]
+  ) => void;
+  debug: (
+    message?: DurableLogField,
+    ...optionalParams: DurableLogField[]
+  ) => void;
 
-  if (levels.ERROR.priority >= lambdaLogLevel.priority) {
-    logger.error = (
-      data: DurableLogData,
-      ...params: DurableLogField[]
-    ): void => {
-      consoleLogger.error(
-        formatDurableLogData(DurableLogLevel.ERROR, data, ...params),
-      );
-    };
+  configureDurableLoggingContext(
+    durableLoggingContext: DurableLoggingContext,
+  ): void {
+    this.durableLoggingContext = durableLoggingContext;
   }
+}
 
-  return logger;
+/**
+ * Creates a default logger that outputs structured logs to console.
+ *
+ * @param executionContext - Optional execution context for logging
+ * @returns DefaultLogger instance
+ */
+export const createDefaultLogger = (
+  executionContext?: LoggingExecutionContext,
+): DurableLogger => {
+  return new DefaultLogger(executionContext);
 };

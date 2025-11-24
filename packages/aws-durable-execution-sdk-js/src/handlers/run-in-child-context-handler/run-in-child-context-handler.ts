@@ -4,7 +4,6 @@ import {
   ChildConfig,
   OperationSubType,
   DurableExecutionMode,
-  EnrichedDurableLogger,
   DurableContext,
 } from "../../types";
 import { Context } from "aws-lambda";
@@ -28,6 +27,7 @@ import {
 } from "../../errors/durable-error/durable-error";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
+import { DurableLogger } from "../../types/durable-logger";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -59,35 +59,35 @@ export const determineChildReplayMode = (
   return DurableExecutionMode.ExecutionMode;
 };
 
-export const createRunInChildContextHandler = (
+export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   parentContext: Context,
   createStepId: () => string,
-  getParentLogger: () => EnrichedDurableLogger,
+  getParentLogger: () => Logger,
   createChildContext: (
     executionContext: ExecutionContext,
     parentContext: Context,
     durableExecutionMode: DurableExecutionMode,
-    inheritedLogger: EnrichedDurableLogger,
+    inheritedLogger: Logger,
     stepPrefix?: string,
     checkpointToken?: string,
     parentId?: string,
-  ) => DurableContext,
+  ) => DurableContext<Logger>,
   parentId?: string,
 ) => {
   return <T>(
-    nameOrFn: string | undefined | ChildFunc<T>,
-    fnOrOptions?: ChildFunc<T> | ChildConfig<T>,
+    nameOrFn: string | undefined | ChildFunc<T, Logger>,
+    fnOrOptions?: ChildFunc<T, Logger> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
   ): DurablePromise<T> => {
     let name: string | undefined;
-    let fn: ChildFunc<T>;
+    let fn: ChildFunc<T, Logger>;
     let options: ChildConfig<T> | undefined;
 
     if (typeof nameOrFn === "string" || nameOrFn === undefined) {
       name = nameOrFn;
-      fn = fnOrOptions as ChildFunc<T>;
+      fn = fnOrOptions as ChildFunc<T, Logger>;
       options = maybeOptions;
     } else {
       fn = nameOrFn;
@@ -174,23 +174,26 @@ export const createRunInChildContextHandler = (
   };
 };
 
-export const handleCompletedChildContext = async <T>(
+export const handleCompletedChildContext = async <
+  T,
+  Logger extends DurableLogger,
+>(
   context: ExecutionContext,
   parentContext: Context,
   entityId: string,
   stepName: string | undefined,
-  fn: ChildFunc<T>,
+  fn: ChildFunc<T, Logger>,
   options: ChildConfig<T> | undefined,
-  getParentLogger: () => EnrichedDurableLogger,
+  getParentLogger: () => Logger,
   createChildContext: (
     executionContext: ExecutionContext,
     parentContext: Context,
     durableExecutionMode: DurableExecutionMode,
-    logger: EnrichedDurableLogger,
+    logger: Logger,
     entityId: string,
     checkpointToken: string | undefined,
     parentId?: string,
-  ) => DurableContext,
+  ) => DurableContext<Logger>,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
   const stepData = context.getStepData(entityId);
@@ -246,24 +249,24 @@ export const handleCompletedChildContext = async <T>(
   );
 };
 
-export const executeChildContext = async <T>(
+export const executeChildContext = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   parentContext: Context,
   entityId: string,
   name: string | undefined,
-  fn: ChildFunc<T>,
+  fn: ChildFunc<T, Logger>,
   options: ChildConfig<T> | undefined,
-  getParentLogger: () => EnrichedDurableLogger,
+  getParentLogger: () => Logger,
   createChildContext: (
     executionContext: ExecutionContext,
     parentContext: Context,
     durableExecutionMode: DurableExecutionMode,
-    logger: EnrichedDurableLogger,
+    logger: Logger,
     entityId: string,
     checkpointToken: string | undefined,
     parentId?: string,
-  ) => DurableContext,
+  ) => DurableContext<Logger>,
   parentId?: string,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
@@ -281,11 +284,12 @@ export const executeChildContext = async <T>(
     });
   }
 
+  const childReplayMode = determineChildReplayMode(context, entityId);
   // Create a child context with the entity ID as prefix
   const durableChildContext = createChildContext(
     context,
     parentContext,
-    determineChildReplayMode(context, entityId),
+    childReplayMode,
     getParentLogger(),
     entityId,
     undefined,
@@ -294,8 +298,12 @@ export const executeChildContext = async <T>(
 
   try {
     // Execute the child context function with context tracking
-    const result = await runWithContext(entityId, parentId, () =>
-      fn(durableChildContext),
+    const result = await runWithContext(
+      entityId,
+      parentId,
+      () => fn(durableChildContext),
+      undefined,
+      childReplayMode,
     );
 
     // Serialize the result for consistency

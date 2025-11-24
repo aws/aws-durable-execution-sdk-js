@@ -7,21 +7,13 @@ import { getExecutionState } from "../../storage/storage";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { initializeExecutionContext } from "./execution-context";
-import { createTestDurableContext } from "../../testing/create-test-durable-context";
-import { createContextLoggerFactory } from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { Context } from "aws-lambda";
 
 // Mock dependencies
 jest.mock("../../storage/storage");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../termination-manager/termination-manager");
-jest.mock("../../utils/logger/context-logger", () => {
-  return {
-    createContextLoggerFactory: jest
-      .fn()
-      .mockReturnValue(() => createDefaultLogger()),
-  };
-});
 jest.mock("../../utils/logger/default-logger");
 
 describe("initializeExecutionContext", () => {
@@ -82,7 +74,20 @@ describe("initializeExecutionContext", () => {
     mockStepSucceededEvent,
   ];
 
-  const mockLambdaContext = createTestDurableContext().context.lambdaContext;
+  const mockLambdaContext: Context = {
+    callbackWaitsForEmptyEventLoop: false,
+    functionName: "test-function",
+    functionVersion: "1",
+    invokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:test",
+    memoryLimitInMB: "128",
+    awsRequestId: "test-request-id",
+    logGroupName: "/aws/lambda/test",
+    logStreamName: "test-stream",
+    getRemainingTimeInMillis: () => 30000,
+    done: () => {},
+    fail: () => {},
+    succeed: () => {},
+  };
 
   const mockExecutionState = {
     checkpoint: jest.fn(),
@@ -95,19 +100,6 @@ describe("initializeExecutionContext", () => {
     // Setup default mocks
     (getExecutionState as jest.Mock).mockReturnValue(mockExecutionState);
 
-    // Mock context logger factory to return a mock function that returns a logger
-    const mockLogger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
-    const mockLoggerFactory = jest.fn().mockReturnValue(mockLogger);
-    (createContextLoggerFactory as jest.Mock).mockReturnValue(
-      mockLoggerFactory,
-    );
-
     // Mock default logger
     (createDefaultLogger as jest.Mock).mockReturnValue({
       log: jest.fn(),
@@ -115,6 +107,7 @@ describe("initializeExecutionContext", () => {
       error: jest.fn(),
       warn: jest.fn(),
       debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
     });
 
     // Mock environment variables
@@ -545,20 +538,5 @@ describe("initializeExecutionContext", () => {
     // Verify getStepData returns undefined for non-existent step
     const stepData = result.executionContext.getStepData("nonExistentStep");
     expect(stepData).toBeUndefined();
-  });
-
-  it("should call createContextLoggerFactory with correct parameters", async () => {
-    // Execute
-    await initializeExecutionContext(mockEvent, mockLambdaContext);
-
-    // Verify createContextLoggerFactory was called with correct parameters
-    expect(createContextLoggerFactory).toHaveBeenCalledWith(
-      {
-        durableExecutionArn: mockDurableExecutionArn,
-        requestId: mockLambdaContext.awsRequestId,
-        tenantId: mockLambdaContext.tenantId,
-      },
-      createDefaultLogger,
-    );
   });
 });

@@ -15,7 +15,6 @@ import {
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
-import { createContextLoggerFactory } from "../logger/context-logger";
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
@@ -57,9 +56,7 @@ describe("CheckpointHandler", () => {
       requestId: "",
       tenantId: undefined,
     } satisfies ExecutionContext;
-    mockLogger = createContextLoggerFactory(mockContext, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger = createDefaultLogger(mockContext);
 
     checkpointHandler = new CheckpointHandler(
       mockContext,
@@ -717,12 +714,8 @@ describe("deleteCheckpointHandler", () => {
       tenantId: undefined,
     } satisfies ExecutionContext;
 
-    mockLogger1 = createContextLoggerFactory(mockContext1, () =>
-      createDefaultLogger(),
-    )();
-    mockLogger2 = createContextLoggerFactory(mockContext2, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger1 = createDefaultLogger(mockContext1);
+    mockLogger2 = createDefaultLogger(mockContext2);
   });
 
   it("should remove existing handler from the global map", async () => {
@@ -992,9 +985,7 @@ describe("createCheckpointHandler", () => {
       requestId: "mock-request-id",
       tenantId: undefined,
     } satisfies ExecutionContext;
-    mockLogger = createContextLoggerFactory(mockContext, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger = createDefaultLogger(mockContext);
   });
 
   it("should successfully create a checkpoint", async () => {
@@ -1182,7 +1173,7 @@ describe("createCheckpointHandler", () => {
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
-      createContextLoggerFactory(mockContext2, () => createDefaultLogger())(),
+      createDefaultLogger(mockContext2),
     );
 
     // Execute checkpoints from both contexts

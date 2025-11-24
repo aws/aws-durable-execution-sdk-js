@@ -8,10 +8,6 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
-import {
-  ContextLoggerContext,
-  createContextLoggerFactory,
-} from "../../utils/logger/context-logger";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { ActiveOperationsTracker } from "../../utils/termination-helper/active-operations-tracker";
 import { Context } from "aws-lambda";
@@ -33,15 +29,11 @@ export const initializeExecutionContext = async (
   const state = getExecutionState();
 
   // Create logger for initialization errors using existing logger factory
-  const tempContext: ContextLoggerContext = {
+  const initLogger = createDefaultLogger({
     durableExecutionArn,
     requestId: context.awsRequestId,
     tenantId: context.tenantId,
-  };
-  const initLogger = createContextLoggerFactory(
-    tempContext,
-    createDefaultLogger,
-  )();
+  });
 
   const operationsArray = [...(event.InitialExecutionState.Operations || [])];
   let nextMarker = event.InitialExecutionState.NextMarker;

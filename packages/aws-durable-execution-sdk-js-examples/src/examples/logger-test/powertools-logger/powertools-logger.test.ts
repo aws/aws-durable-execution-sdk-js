@@ -84,32 +84,10 @@ createTests({
               "INFO",
               "Info message: General information about execution",
             ),
-            createPowertoolsLogExpectation(
-              "DEBUG",
-              "Step debug via log method",
-              true,
-              1,
-            ),
-            createPowertoolsLogExpectation(
-              "INFO",
-              "Step info via log method",
-              true,
-              1,
-            ),
             createPowertoolsLogExpectation("INFO", "Before wait operation"),
             createPowertoolsLogExpectation(
               "INFO",
               "After wait operation - logger still works",
-            ),
-            createPowertoolsLogExpectation(
-              "INFO",
-              "User %s (ID: %d) completed operation",
-              false,
-              undefined,
-              "TestUser",
-              {
-                "customMessage-1": "12345",
-              },
             ),
             createPowertoolsLogExpectation(
               "INFO",
@@ -123,9 +101,11 @@ createTests({
             ),
             createPowertoolsLogExpectation(
               "INFO",
-              { stepData: "value", num: 42 },
+              "message",
               true,
               1,
+              undefined,
+              { stepData: "value", num: 42 },
             ),
           ];
 
@@ -138,18 +118,6 @@ createTests({
             createPowertoolsLogExpectation(
               "ERROR",
               "Error message: Something went wrong (simulated)",
-            ),
-            createPowertoolsLogExpectation(
-              "WARN",
-              "Step warn via log method",
-              true,
-              1,
-            ),
-            createPowertoolsLogExpectation(
-              "ERROR",
-              "Step error via log method",
-              true,
-              1,
             ),
             createPowertoolsLogExpectation(
               "WARN",
@@ -179,22 +147,16 @@ createTests({
               timestamp: expect.any(String),
               level: "ERROR",
               execution_arn: expect.any(String),
-              message: "Error: Direct error logging\n    at handler.ts:123:45",
+              message: "message",
               sampling_rate: 0,
-              service: "powertools-logger",
-            },
-            // Step error logging (single parameter with operation_id)
-            {
-              request_id: expect.any(String),
-              timestamp: expect.any(String),
-              level: "ERROR",
-              execution_arn: expect.any(String),
-              operation_id: expect.any(String),
-              message: expect.stringMatching(
-                "Error: Step context direct error",
-              ),
+              error: {
+                location: expect.any(String),
+                message: "Step context direct error",
+                name: "Error",
+                stack: expect.any(String),
+              },
               attempt: 1,
-              sampling_rate: 0,
+              operation_id: expect.any(String),
               service: "powertools-logger",
             },
             // Multiple error logging in context
@@ -203,16 +165,15 @@ createTests({
               timestamp: expect.any(String),
               level: "ERROR",
               execution_arn: expect.any(String),
-              message: "Multiple errors in context:",
+              message: "Errors in context:",
               error: {
                 location: expect.any(String),
-                message: "Second error",
+                message: "First error",
                 name: "Error",
                 stack: expect.any(String),
               },
               sampling_rate: 0,
               service: "powertools-logger",
-              extra: "additional data",
             },
           ];
 

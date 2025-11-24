@@ -18,13 +18,13 @@ export {
   WaitForConditionConfig,
   WaitForConditionDecision,
   WaitForConditionWaitStrategyFunc,
-  EnrichedDurableLogger,
   DurableLogger,
   LambdaHandler,
   InvokeConfig,
   JitterStrategy,
   Duration,
   DurableLogData,
+  DurableLoggingContext,
 } from "./types";
 export { DurablePromise } from "./types/durable-promise";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";

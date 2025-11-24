@@ -6,7 +6,6 @@ import {
 } from "../utils/checkpoint/checkpoint";
 import { DurableLogger, ExecutionContext } from "../types";
 import { EventEmitter } from "events";
-import { createContextLoggerFactory } from "../utils/logger/context-logger";
 import { createDefaultLogger } from "../utils/logger/default-logger";
 
 describe("TerminationManager Checkpoint Integration", () => {
@@ -32,9 +31,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       terminationManager,
     } as unknown as ExecutionContext;
 
-    mockLogger = createContextLoggerFactory(mockContext, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger = createDefaultLogger(mockContext);
   });
 
   afterEach(() => {

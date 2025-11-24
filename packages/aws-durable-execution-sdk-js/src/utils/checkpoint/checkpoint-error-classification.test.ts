@@ -5,7 +5,6 @@ import {
 } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { DurableLogger, ExecutionContext } from "../../types";
 import { EventEmitter } from "events";
-import { createContextLoggerFactory } from "../logger/context-logger";
 import { createDefaultLogger } from "../logger/default-logger";
 
 describe("Checkpoint Error Classification", () => {
@@ -26,9 +25,7 @@ describe("Checkpoint Error Classification", () => {
         getTerminationPromise: jest.fn(),
       },
     } as any;
-    mockLogger = createContextLoggerFactory(mockContext, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger = createDefaultLogger(mockContext);
 
     const emitter = new EventEmitter();
     handler = new CheckpointHandler(

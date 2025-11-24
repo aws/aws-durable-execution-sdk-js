@@ -19,11 +19,17 @@ import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { EventEmitter } from "events";
+import { DurableExecutionMode } from "../../types/core";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 jest.mock("../../utils/retry/retry-presets/retry-presets", () => ({
   retryPresets: {
     default: jest.fn(),
   },
+}));
+
+jest.mock("../../utils/context-tracker/context-tracker", () => ({
+  ...jest.requireActual("../../utils/context-tracker/context-tracker"),
 }));
 
 describe("Step Handler", () => {
@@ -72,15 +78,15 @@ describe("Step Handler", () => {
       error: jest.fn(),
       warn: jest.fn(),
       debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
     };
-    const createMockEnrichedLogger = (): DurableLogger => mockLogger;
 
     stepHandler = createStepHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       createStepId,
-      createMockEnrichedLogger,
+      mockLogger,
       jest.fn(), // addRunningOperation
       jest.fn(), // removeRunningOperation
       jest.fn(() => false), // hasRunningOperations
@@ -1021,120 +1027,150 @@ describe("Step Handler", () => {
     }, 10000);
   });
 
-  test("should pass currentAttempt + 1 to createContextLogger when no previous attempt", async () => {
-    const stepFn = jest.fn().mockResolvedValue("step-result");
-    const mockCreateContextLogger = jest.fn().mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
+  // Test cases for runWithContext logic - verifying attempt + 1 and ExecutionMode passing
+  describe("runWithContext Integration", () => {
+    beforeEach(() => {
+      // Setup runWithContext mock to return the step function result for these specific tests
+      (runWithContext as jest.Mock) = jest
+        .fn()
+        .mockImplementation(async (stepId, parentId, fn, attempt, mode) => {
+          try {
+            return await fn();
+          } catch (error) {
+            // Re-throw errors so they can be handled by the step handler logic
+            throw error;
+          }
+        });
     });
 
-    // Create step handler with our mock logger factory
-    const stepHandlerWithMockLogger = createStepHandler(
-      mockExecutionContext,
-      mockCheckpoint,
-      mockParentContext,
-      createStepId,
-      mockCreateContextLogger,
-      jest.fn(), // addRunningOperation
-      jest.fn(), // removeRunningOperation
-      jest.fn(() => false), // hasRunningOperations
-      () => mockOperationsEmitter,
-    );
+    test("should call runWithContext with correct parameters for new step (attempt 0 -> 1)", async () => {
+      const stepFn = jest.fn().mockResolvedValue("step-result");
 
-    // No previous attempt (should pass 1)
-    await stepHandlerWithMockLogger("test-step", stepFn);
+      await stepHandler("test-step", stepFn);
 
-    expect(mockCreateContextLogger).toHaveBeenCalledWith("test-step-id", 1);
-  });
-
-  test("should pass currentAttempt + 1 to createContextLogger when previous attempt exists", async () => {
-    const stepFn = jest.fn().mockResolvedValue("step-result");
-    const mockCreateContextLogger = jest.fn().mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
+      // Verify runWithContext was called with correct parameters
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        undefined, // parentId is undefined in this test setup
+        expect.any(Function), // The wrapped step function
+        1, // currentAttempt (0) + 1 = 1
+        DurableExecutionMode.ExecutionMode,
+      );
     });
 
-    // Create step handler with our mock logger factory
-    const stepHandlerWithMockLogger = createStepHandler(
-      mockExecutionContext,
-      mockCheckpoint,
-      mockParentContext,
-      createStepId,
-      mockCreateContextLogger,
-      jest.fn(), // addRunningOperation
-      jest.fn(), // removeRunningOperation
-      jest.fn(() => false), // hasRunningOperations
-      () => mockOperationsEmitter,
-    );
-
-    // Previous attempt was 2 (should pass 3)
-    createStepId.mockReturnValue("test-step-id-2");
-    const stepId = "test-step-id-2";
-    const hashedStepId = hashId(stepId);
-    mockExecutionContext._stepData = {
-      [hashedStepId]: {
-        Id: hashedStepId,
-        Status: OperationStatus.STARTED,
-        StepDetails: {
-          Attempt: 2,
+    test("should call runWithContext with correct attempt number for retry step (attempt 2 -> 3)", async () => {
+      // Set up a step that was previously attempted 2 times (so attempt = 2)
+      const stepId = "test-step-id";
+      const hashedStepId = hashId(stepId);
+      mockExecutionContext._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED, // Will be re-executed with AT_LEAST_ONCE_PER_RETRY
+          StepDetails: {
+            Attempt: 2, // Previous attempt was 2
+          },
         },
-      },
-    } as any;
+      } as any;
 
-    await stepHandlerWithMockLogger("test-step-2", stepFn, {
-      semantics: StepSemantics.AtLeastOncePerRetry, // Re-execute for STARTED status
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+
+      await stepHandler("test-step", stepFn);
+
+      // Verify runWithContext was called with attempt 3 (2 + 1)
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        undefined,
+        expect.any(Function),
+        3, // currentAttempt (2) + 1 = 3
+        DurableExecutionMode.ExecutionMode,
+      );
     });
 
-    expect(mockCreateContextLogger).toHaveBeenCalledWith("test-step-id-2", 3);
-  });
-
-  test("should pass currentAttempt + 1 to createContextLogger when previous attempt is 0", async () => {
-    const stepFn = jest.fn().mockResolvedValue("step-result");
-    const mockCreateContextLogger = jest.fn().mockReturnValue({
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    });
-
-    // Create step handler with our mock logger factory
-    const stepHandlerWithMockLogger = createStepHandler(
-      mockExecutionContext,
-      mockCheckpoint,
-      mockParentContext,
-      createStepId,
-      mockCreateContextLogger,
-      jest.fn(), // addRunningOperation
-      jest.fn(), // removeRunningOperation
-      jest.fn(() => false), // hasRunningOperations
-      () => mockOperationsEmitter,
-    );
-
-    // Previous attempt was 0 (should pass 1)
-    createStepId.mockReturnValue("test-step-id-3");
-    const stepId = "test-step-id-3";
-    const hashedStepId = hashId(stepId);
-    mockExecutionContext._stepData = {
-      [hashedStepId]: {
-        Id: hashedStepId,
-        Status: OperationStatus.STARTED,
-        StepDetails: {
-          Attempt: 0,
+    test("should call runWithContext with attempt 1 when step data has no attempt field", async () => {
+      // Set up a step that was started but has no attempt field (should default to 0)
+      const stepId = "test-step-id";
+      const hashedStepId = hashId(stepId);
+      mockExecutionContext._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          StepDetails: {}, // No Attempt field
         },
-      },
-    } as any;
+      } as any;
 
-    await stepHandlerWithMockLogger("test-step-3", stepFn, {
-      semantics: StepSemantics.AtLeastOncePerRetry, // Re-execute for STARTED status
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+
+      await stepHandler("test-step", stepFn);
+
+      // Verify runWithContext was called with attempt 1 (0 + 1 = 1)
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        undefined,
+        expect.any(Function),
+        1, // currentAttempt (0 default) + 1 = 1
+        DurableExecutionMode.ExecutionMode,
+      );
     });
 
-    expect(mockCreateContextLogger).toHaveBeenCalledWith("test-step-id-3", 1);
+    test("should call runWithContext with correct stepId and parentId when parentId is provided", async () => {
+      // Create a new step handler with a parentId
+      const stepHandlerWithParent = createStepHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        {
+          log: jest.fn(),
+          info: jest.fn(),
+          error: jest.fn(),
+          warn: jest.fn(),
+          debug: jest.fn(),
+          configureDurableLoggingContext: jest.fn(),
+        },
+        jest.fn(), // addRunningOperation
+        jest.fn(), // removeRunningOperation
+        jest.fn(() => false), // hasRunningOperations
+        () => mockOperationsEmitter,
+        "parent-step-id", // parentId
+      );
+
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+
+      await stepHandlerWithParent("test-step", stepFn);
+
+      // Verify runWithContext was called with correct stepId and parentId
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        "parent-step-id", // parentId should be passed through
+        expect.any(Function),
+        1, // currentAttempt (0) + 1 = 1
+        DurableExecutionMode.ExecutionMode,
+      );
+    });
+
+    test("should pass the step function through runWithContext correctly", async () => {
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+      let capturedFunction: (() => Promise<unknown>) | undefined;
+
+      // Capture the function passed to runWithContext
+      (runWithContext as jest.Mock).mockImplementation(
+        async (stepId, parentId, fn, attempt, mode) => {
+          capturedFunction = fn;
+          return await fn();
+        },
+      );
+
+      await stepHandler("test-step", stepFn);
+
+      // Verify that the captured function calls our step function with StepContext
+      expect(capturedFunction).toBeDefined();
+
+      // The captured function should be the wrapped version that calls stepFn with StepContext
+      expect(stepFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logger: expect.anything(),
+        }),
+      );
+    });
   });
 });

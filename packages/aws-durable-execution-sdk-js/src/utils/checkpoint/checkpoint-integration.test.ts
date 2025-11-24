@@ -6,7 +6,6 @@ import { hashId } from "../step-id-utils/step-id-utils";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { EventEmitter } from "events";
-import { createContextLoggerFactory } from "../logger/context-logger";
 import { createDefaultLogger } from "../logger/default-logger";
 
 // Mock dependencies
@@ -42,9 +41,7 @@ describe("Checkpoint Integration Tests", () => {
       terminationManager: mockTerminationManager,
     });
 
-    mockLogger = createContextLoggerFactory(mockContext, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger = createDefaultLogger(mockContext);
   });
 
   it("should demonstrate performance improvement with batching", async () => {
@@ -243,7 +240,7 @@ describe("Checkpoint Integration Tests", () => {
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
-      createContextLoggerFactory(mockContext2, () => createDefaultLogger())(),
+      mockLogger,
     ); // Should return same handler (first context)
 
     // Execute checkpoints - both should use the first context (mockContext)

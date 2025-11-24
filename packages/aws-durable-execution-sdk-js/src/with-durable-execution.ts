@@ -13,6 +13,7 @@ import {
 import { TerminationReason } from "./termination-manager/types";
 
 import {
+  DurableLogger,
   DurableContext,
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
@@ -25,32 +26,35 @@ import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { runWithContext } from "./utils/context-tracker/context-tracker";
 import { createDefaultLogger } from "./utils/logger/default-logger";
-import { createContextLoggerFactory } from "./utils/logger/context-logger";
 
-type DurableHandler<Input, Output> = (
-  event: Input,
-  context: DurableContext,
-) => Promise<Output>;
+type DurableHandler<
+  Input,
+  Output,
+  Logger extends DurableLogger = DurableLogger,
+> = (event: Input, context: DurableContext<Logger>) => Promise<Output>;
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
-async function runHandler<Input, Output>(
+async function runHandler<
+  Input,
+  Output,
+  Logger extends DurableLogger = DurableLogger,
+>(
   event: DurableExecutionInvocationInput,
   context: Context,
   executionContext: ExecutionContext,
   durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
-  handler: DurableHandler<Input, Output>,
+  handler: DurableHandler<Input, Output, Logger>,
 ): Promise<DurableExecutionInvocationOutput> {
   // Clear any existing checkpoint handler from previous invocations (warm Lambda)
   deleteCheckpoint();
 
-  const defaultLogger = createDefaultLogger();
-
-  const durableContext = createDurableContext(
+  const durableContext = createDurableContext<Logger>(
     executionContext,
     context,
     durableExecutionMode,
-    defaultLogger,
+    // Default logger may not have the same type as Logger, but we should always provide a default logger even if the user overrides it
+    createDefaultLogger() as Logger,
     undefined,
     checkpointToken,
   );
@@ -163,7 +167,7 @@ async function runHandler<Input, Output>(
         executionContext,
         checkpointToken,
         stepDataEmitter,
-        createContextLoggerFactory(executionContext, () => defaultLogger)(),
+        createDefaultLogger(executionContext),
       );
       const stepId = `execution-result-${Date.now()}`;
 
@@ -213,8 +217,12 @@ async function runHandler<Input, Output>(
   }
 }
 
-export const withDurableExecution = <Input, Output>(
-  handler: DurableHandler<Input, Output>,
+export const withDurableExecution = <
+  Input,
+  Output,
+  Logger extends DurableLogger = DurableLogger,
+>(
+  handler: DurableHandler<Input, Output, Logger>,
 ): LambdaHandler<DurableExecutionInvocationInput> => {
   return async (
     event: DurableExecutionInvocationInput,

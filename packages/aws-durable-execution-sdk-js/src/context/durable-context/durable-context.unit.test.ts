@@ -1,14 +1,11 @@
 import { createDurableContext } from "./durable-context";
-import {
-  DurableExecutionMode,
-  Duration,
-  EnrichedDurableLogger,
-} from "../../types";
+import { DurableExecutionMode, Duration } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { DurableLogger } from "../../types/durable-logger";
 
 jest.mock("../../utils/checkpoint/checkpoint");
 jest.mock("../../handlers/step-handler/step-handler");
@@ -30,7 +27,7 @@ jest.mock(
 
 describe("DurableContext", () => {
   let mockContext: Context;
-  let mockLogger: EnrichedDurableLogger;
+  let mockLogger: DurableLogger;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -512,6 +509,7 @@ describe("DurableContext", () => {
         warn: jest.fn(),
         info: jest.fn(),
         debug: jest.fn(),
+        configureDurableLoggingContext: jest.fn(),
       };
 
       expect(() => context.configureLogger({ customLogger })).not.toThrow();

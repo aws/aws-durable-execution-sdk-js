@@ -13,6 +13,12 @@ import {
 } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import { DurableExecutionMode } from "../../types/core";
+
+jest.mock("../../utils/context-tracker/context-tracker", () => ({
+  ...jest.requireActual("../../utils/context-tracker/context-tracker"),
+}));
 
 describe("Run In Child Context Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -598,5 +604,259 @@ describe("runInChildContext with custom serdes", () => {
 
     expect(childFn).not.toHaveBeenCalled();
     expect(mockCheckpoint).not.toHaveBeenCalled();
+  });
+});
+
+// Test cases for runWithContext logic - verifying the different modes and parameters
+describe("runWithContext Integration", () => {
+  let mockExecutionContext: jest.Mocked<ExecutionContext>;
+  let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
+  let mockParentContext: any;
+  let createStepId: jest.Mock;
+  let runInChildContextHandler: ReturnType<
+    typeof createRunInChildContextHandler
+  >;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+
+    mockExecutionContext = {
+      state: {
+        getStepData: jest.fn(),
+        checkpoint: jest.fn(),
+      },
+      _stepData: {},
+      terminationManager: {
+        terminate: jest.fn(),
+        getTerminationPromise: jest.fn(),
+      },
+      mutex: {
+        lock: jest.fn((fn) => fn()),
+      },
+      getStepData: jest.fn((stepId: string) => {
+        return getStepData(mockExecutionContext._stepData, stepId);
+      }),
+    } as unknown as jest.Mocked<ExecutionContext>;
+
+    mockCheckpoint = createMockCheckpoint();
+    mockParentContext = { awsRequestId: "mock-request-id" };
+    createStepId = jest.fn().mockReturnValue("child-context-id");
+    const mockGetLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
+    const mockCreateChildContext = jest.fn().mockReturnValue({
+      _stepPrefix: "child-context-id",
+    });
+    const mockParentDurableContext = "parent-step-123";
+
+    runInChildContextHandler = createRunInChildContextHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockGetLogger,
+      mockCreateChildContext,
+      mockParentDurableContext,
+    );
+
+    // Setup runWithContext mock to return the function result
+    (runWithContext as jest.Mock) = jest
+      .fn()
+      .mockImplementation(async (stepId, parentId, fn, attempt, mode) => {
+        try {
+          return await fn();
+        } catch (error) {
+          throw error;
+        }
+      });
+  });
+
+  it("should call runWithContext with ExecutionMode for new child context", async () => {
+    const childFn = jest.fn().mockResolvedValue("child-result");
+
+    await runInChildContextHandler("test-child", childFn);
+
+    // Verify runWithContext was called with correct parameters for ExecutionMode
+    expect(runWithContext).toHaveBeenCalledWith(
+      "child-context-id",
+      "parent-step-123", // parentId from handler setup
+      expect.any(Function), // The wrapped child function
+      undefined, // No attempt number for child contexts
+      DurableExecutionMode.ExecutionMode,
+    );
+  });
+
+  it("should call runWithContext with ReplayMode for completed child context", async () => {
+    // Set up a completed child context
+    mockExecutionContext._stepData[hashId("child-context-id")] = {
+      Id: "child-context-id",
+      Type: OperationType.CONTEXT,
+      Status: OperationStatus.SUCCEEDED,
+      ContextDetails: {
+        Result: '"cached-result"',
+      },
+    } as any;
+
+    const childFn = jest.fn();
+
+    const result = await runInChildContextHandler("test-child", childFn);
+
+    expect(result).toBe("cached-result");
+    // Should not call runWithContext for cached results
+    expect(runWithContext).not.toHaveBeenCalled();
+    expect(childFn).not.toHaveBeenCalled();
+  });
+
+  it("should call runWithContext with ReplaySucceededContext for ReplayChildren mode", async () => {
+    // Set up a completed child context with ReplayChildren flag
+    mockExecutionContext._stepData[hashId("child-context-id")] = {
+      Id: "child-context-id",
+      Type: OperationType.CONTEXT,
+      Status: OperationStatus.SUCCEEDED,
+      ContextDetails: {
+        Result: '"original-result"',
+        ReplayChildren: true,
+      },
+    } as any;
+
+    const childFn = jest.fn().mockResolvedValue("replayed-result");
+
+    const result = await runInChildContextHandler("test-child", childFn);
+
+    expect(result).toBe("replayed-result");
+    // Verify runWithContext was called for ReplayChildren mode
+    expect(runWithContext).toHaveBeenCalledWith(
+      "child-context-id",
+      "child-context-id", // parentId becomes entityId in ReplayChildren mode
+      expect.any(Function), // The wrapped child function
+    );
+  });
+
+  it("should call runWithContext with ReplayMode for failed child context in execution", async () => {
+    // Set up a failed child context to trigger ReplayMode
+    mockExecutionContext._stepData[hashId("child-context-id")] = {
+      Id: "child-context-id",
+      Type: OperationType.CONTEXT,
+      Status: OperationStatus.FAILED,
+      ContextDetails: {
+        Error: createErrorObjectFromError(new Error("Previous failure")),
+      },
+    } as any;
+
+    const childFn = jest.fn();
+
+    await expect(
+      runInChildContextHandler("test-child", childFn),
+    ).rejects.toThrow("Previous failure");
+
+    // Should not call runWithContext for failed cached results
+    expect(runWithContext).not.toHaveBeenCalled();
+    expect(childFn).not.toHaveBeenCalled();
+  });
+
+  it("should pass the child function through runWithContext correctly", async () => {
+    const childFn = jest.fn().mockResolvedValue("child-result");
+    let capturedFunction: (() => Promise<unknown>) | undefined;
+
+    // Capture the function passed to runWithContext
+    (runWithContext as jest.Mock).mockImplementation(
+      async (stepId, parentId, fn, attempt, mode) => {
+        capturedFunction = fn;
+        return await fn();
+      },
+    );
+
+    await runInChildContextHandler("test-child", childFn);
+
+    // Verify that the captured function calls our child function with DurableContext
+    expect(capturedFunction).toBeDefined();
+
+    // The captured function should be the wrapped version that calls childFn with DurableContext
+    expect(childFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _stepPrefix: "child-context-id",
+      }),
+    );
+  });
+
+  it("should call runWithContext with correct entityId as both stepId and parentId in ReplayChildren", async () => {
+    // Set up ReplayChildren scenario
+    mockExecutionContext._stepData[hashId("child-context-id")] = {
+      Id: "child-context-id",
+      Type: OperationType.CONTEXT,
+      Status: OperationStatus.SUCCEEDED,
+      ContextDetails: {
+        ReplayChildren: true,
+      },
+    } as any;
+
+    const childFn = jest.fn().mockResolvedValue("replayed-result");
+
+    await runInChildContextHandler("test-child", childFn);
+
+    // In ReplayChildren mode, both stepId and parentId should be the entityId
+    expect(runWithContext).toHaveBeenCalledWith(
+      "child-context-id", // stepId = entityId
+      "child-context-id", // parentId = entityId (not the original parentId)
+      expect.any(Function),
+    );
+  });
+
+  it("should use determineChildReplayMode logic correctly", async () => {
+    // Test ExecutionMode for new context (no existing step data)
+    const childFn1 = jest.fn().mockResolvedValue("result1");
+    await runInChildContextHandler("test-child-1", childFn1);
+
+    expect(runWithContext).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.any(Function),
+      undefined,
+      DurableExecutionMode.ExecutionMode,
+    );
+
+    // Reset and test with STARTED status (should still be ExecutionMode)
+    jest.clearAllMocks();
+    createStepId.mockReturnValue("child-context-id-2");
+    mockExecutionContext._stepData[hashId("child-context-id-2")] = {
+      Id: "child-context-id-2",
+      Status: OperationStatus.STARTED,
+    } as any;
+
+    const childFn2 = jest.fn().mockResolvedValue("result2");
+    await runInChildContextHandler("test-child-2", childFn2);
+
+    expect(runWithContext).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.any(Function),
+      undefined,
+      DurableExecutionMode.ExecutionMode,
+    );
+  });
+
+  it("should handle different execution modes based on step status", async () => {
+    // Test ReplayMode for SUCCEEDED without ReplayChildren
+    createStepId.mockReturnValue("child-context-replay");
+    mockExecutionContext._stepData[hashId("child-context-replay")] = {
+      Id: "child-context-replay",
+      Status: OperationStatus.SUCCEEDED,
+      ContextDetails: {
+        Result: '"replay-result"',
+        // No ReplayChildren flag
+      },
+    } as any;
+
+    const childFn = jest.fn();
+    const result = await runInChildContextHandler("test-replay", childFn);
+
+    // Should return cached result without calling runWithContext
+    expect(result).toBe("replay-result");
+    expect(runWithContext).not.toHaveBeenCalled();
+    expect(childFn).not.toHaveBeenCalled();
   });
 });

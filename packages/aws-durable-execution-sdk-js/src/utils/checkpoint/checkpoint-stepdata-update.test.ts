@@ -10,7 +10,6 @@ import {
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
-import { createContextLoggerFactory } from "../logger/context-logger";
 import { createDefaultLogger } from "../logger/default-logger";
 
 describe("CheckpointHandler - StepData Update", () => {
@@ -48,9 +47,7 @@ describe("CheckpointHandler - StepData Update", () => {
       tenantId: undefined,
     };
 
-    mockLogger = createContextLoggerFactory(mockContext, () =>
-      createDefaultLogger(),
-    )();
+    mockLogger = createDefaultLogger(mockContext);
 
     checkpointHandler = new CheckpointHandler(
       mockContext,

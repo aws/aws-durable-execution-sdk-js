@@ -1,5 +1,6 @@
 import { ConcurrencyController } from "./concurrent-execution-handler";
 import {
+  DurableLogger,
   DurableContext,
   DurableExecutionMode,
   ExecutionContext,
@@ -7,8 +8,8 @@ import {
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 
 describe("ConcurrencyController - Replay Mode", () => {
-  let controller: ConcurrencyController;
-  let mockParentContext: jest.Mocked<DurableContext>;
+  let controller: ConcurrencyController<DurableLogger>;
+  let mockParentContext: jest.Mocked<DurableContext<DurableLogger>>;
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
   let mockSkipNextOperation: jest.Mock;
 

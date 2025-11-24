@@ -9,7 +9,11 @@ import {
 } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
-import { ExecutionContext, DurableExecutionMode } from "../types";
+import {
+  ExecutionContext,
+  DurableExecutionMode,
+  DurableLogger,
+} from "../types";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../utils/logger/default-logger";
 
@@ -45,7 +49,7 @@ export function createTestDurableContext(options?: {
   existingOperations?: Operation[];
   lambdaContext?: Partial<Context>;
 }): {
-  context: DurableContextImpl;
+  context: DurableContextImpl<DurableLogger>;
   storage: InMemoryStorage;
   executionContext: ExecutionContext;
 } {
@@ -92,7 +96,7 @@ export function createTestDurableContext(options?: {
     ...options?.lambdaContext,
   };
 
-  const context = createDurableContext(
+  const context = createDurableContext<DurableLogger>(
     executionContext,
     mockLambdaContext,
     options?.durableExecutionMode || DurableExecutionMode.ExecutionMode,

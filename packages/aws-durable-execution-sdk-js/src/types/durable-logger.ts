@@ -1,17 +1,10 @@
-import { DurableLogLevel } from ".";
+import { DurableLogData, DurableLogLevel } from "./logger";
 
-export type DurableLogField = unknown;
+export interface DurableLoggingContext {
+  shouldLog: () => boolean;
+  getDurableLogData: () => DurableLogData;
+}
 
-/**
- * Base logger interface that users interact with. This logger is attached to the durable
- * and step context and is used to log messages during execution.
- *
- * Custom loggers should implement EnrichedDurableLogger instead of this logger, since EnrichedDurableLogger
- * provides the DurableLogEntry as the first argument to custom log methods.
- *
- * By default, all logs are structured and automatically enriched with execution metadata.
- * such as timestamp, executionArn, operationId, etc.
- */
 export interface DurableLogger {
   /**
    * Generic log method with configurable level
@@ -20,11 +13,7 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.log("INFO", "User logged in", \{ userId: "XXX" \})
    */
-  log(
-    level: `${DurableLogLevel}`,
-    message?: DurableLogField,
-    ...optionalParams: DurableLogField[]
-  ): void;
+  log?(level: `${DurableLogLevel}`, ...params: any): void;
 
   /**
    * Log error messages with optional message and additional parameters
@@ -32,7 +21,7 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.error("Database query failed", dbError, \{ query: "SELECT * FROM users" \})
    */
-  error(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
+  error(...params: any): void;
 
   /**
    * Log warning messages with optional additional parameters
@@ -40,7 +29,7 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.warn("Rate limit approaching", \{ currentRate: 95, limit: 100 \})
    */
-  warn(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
+  warn(...params: any): void;
 
   /**
    * Log informational messages with optional additional parameters
@@ -48,7 +37,7 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.info("User action completed", \{ userId: "123", action: "login" \})
    */
-  info(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
+  info(...params: any): void;
 
   /**
    * Log debug messages with optional additional parameters
@@ -56,5 +45,9 @@ export interface DurableLogger {
    * @param optionalParams - Additional data to include in log entry
    * @example context.logger.debug("Processing step", \{ stepName: "validation", duration: 150 \})
    */
-  debug(message?: DurableLogField, ...optionalParams: DurableLogField[]): void;
+  debug(...params: any): void;
+
+  configureDurableLoggingContext(
+    durableLoggingContext: DurableLoggingContext,
+  ): void;
 }

@@ -1,6 +1,6 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { StepContext } from "./logger";
-import { Duration } from "../types";
+import { DurableLogger, Duration } from "../types";
 
 export interface RetryDecision {
   shouldRetry: boolean;
@@ -43,4 +43,6 @@ export interface StepConfig<T> {
  * @param context - Context for logging and other operations during step execution
  * @returns Promise resolving to the step result
  */
-export type StepFunc<T> = (context: StepContext) => Promise<T>;
+export type StepFunc<T, Logger extends DurableLogger> = (
+  context: StepContext<Logger>,
+) => Promise<T>;

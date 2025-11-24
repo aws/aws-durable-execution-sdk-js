@@ -1,5 +1,5 @@
 import { createParallelHandler } from "./parallel-handler";
-import { ExecutionContext, ParallelFunc } from "../../types";
+import { DurableLogger, ExecutionContext, ParallelFunc } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 
 describe("Parallel Handler Two-Phase Execution", () => {
@@ -34,7 +34,7 @@ describe("Parallel Handler Two-Phase Execution", () => {
       mockExecuteConcurrently,
     );
 
-    const branch1: ParallelFunc<string> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("branch1-result");
 
@@ -64,7 +64,7 @@ describe("Parallel Handler Two-Phase Execution", () => {
       mockExecuteConcurrently,
     );
 
-    const branch1: ParallelFunc<string> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("result");
 

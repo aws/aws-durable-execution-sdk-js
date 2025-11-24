@@ -264,6 +264,7 @@ describe("ApiStorage", () => {
       warn: jest.fn(),
       debug: jest.fn(),
       log: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
     };
 
     try {
@@ -297,6 +298,7 @@ describe("ApiStorage", () => {
       warn: jest.fn(),
       debug: jest.fn(),
       log: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
     };
 
     const checkpointData: CheckpointDurableExecutionRequest = {
