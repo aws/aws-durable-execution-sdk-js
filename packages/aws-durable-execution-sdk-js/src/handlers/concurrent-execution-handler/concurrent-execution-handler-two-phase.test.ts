@@ -27,7 +27,7 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
     // Mock runInChildContext to track when execution starts
     mockRunInChildContext = jest
       .fn()
-      .mockImplementation(async (name, fn, config) => {
+      .mockImplementation(async (name, fn, _config) => {
         executionStarted = true;
         // Create a mock child context with runInChildContext method
         const mockChildContext = {
