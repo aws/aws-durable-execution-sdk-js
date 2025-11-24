@@ -78,9 +78,9 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
   step: DurableContext<Logger>["step"],
 ) => {
   const parseParams = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
-  ): { name: string | undefined; promises: Promise<T>[] } => {
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ): { name: string | undefined; promises: DurablePromise<T>[] } => {
     if (typeof nameOrPromises === "string" || nameOrPromises === undefined) {
       return { name: nameOrPromises, promises: maybePromises! };
     }
@@ -88,42 +88,26 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
   };
 
   const all = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
   ): DurablePromise<T[]> => {
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Convert DurablePromise objects to regular promises and attach catch handlers
-      const regularPromises = promises.map((p) => {
-        // Attach catch handler to prevent unhandled rejections
-        const regularPromise = Promise.resolve(p);
-        regularPromise.catch(() => {}); // Prevent unhandled rejection
-        return regularPromise;
-      });
-
       // Wrap Promise.all execution in a step for persistence
-      return await step(name, () => Promise.all(regularPromises), stepConfig);
+      return await step(name, () => Promise.all(promises), stepConfig);
     });
   };
 
   const allSettled = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
   ): DurablePromise<PromiseSettledResult<T>[]> => {
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Convert DurablePromise objects to regular promises and attach catch handlers
-      const regularPromises = promises.map((p) => {
-        // Attach catch handler to prevent unhandled rejections
-        const regularPromise = Promise.resolve(p);
-        regularPromise.catch(() => {}); // Prevent unhandled rejection
-        return regularPromise;
-      });
-
       // Wrap Promise.allSettled execution in a step for persistence
-      return await step(name, () => Promise.allSettled(regularPromises), {
+      return await step(name, () => Promise.allSettled(promises), {
         ...stepConfig,
         serdes: createErrorAwareSerdes<T>(),
       });
@@ -131,42 +115,26 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
   };
 
   const any = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
   ): DurablePromise<T> => {
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Convert DurablePromise objects to regular promises and attach catch handlers
-      const regularPromises = promises.map((p) => {
-        // Attach catch handler to prevent unhandled rejections
-        const regularPromise = Promise.resolve(p);
-        regularPromise.catch(() => {}); // Prevent unhandled rejection
-        return regularPromise;
-      });
-
       // Wrap Promise.any execution in a step for persistence
-      return await step(name, () => Promise.any(regularPromises), stepConfig);
+      return await step(name, () => Promise.any(promises), stepConfig);
     });
   };
 
   const race = <T>(
-    nameOrPromises: string | undefined | Promise<T>[],
-    maybePromises?: Promise<T>[],
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
   ): DurablePromise<T> => {
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Convert DurablePromise objects to regular promises and attach catch handlers
-      const regularPromises = promises.map((p) => {
-        // Attach catch handler to prevent unhandled rejections
-        const regularPromise = Promise.resolve(p);
-        regularPromise.catch(() => {}); // Prevent unhandled rejection
-        return regularPromise;
-      });
-
       // Wrap Promise.race execution in a step for persistence
-      return await step(name, () => Promise.race(regularPromises), stepConfig);
+      return await step(name, () => Promise.race(promises), stepConfig);
     });
   };
 

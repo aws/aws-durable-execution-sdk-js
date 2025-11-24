@@ -1,4 +1,5 @@
 import { createPromiseHandler } from "./promise-handler";
+import { DurablePromise } from "../../types/durable-promise";
 
 describe("Promise Handler", () => {
   let mockStep: jest.Mock;
@@ -9,9 +10,32 @@ describe("Promise Handler", () => {
     promiseHandler = createPromiseHandler(mockStep);
   });
 
+  describe("type constraints", () => {
+    it("should only accept DurablePromise arrays", () => {
+      // This test verifies at compile time that only DurablePromise is accepted
+      const durablePromises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2))
+      ];
+
+      // These should compile without errors
+      expect(() => promiseHandler.all(durablePromises)).not.toThrow();
+      expect(() => promiseHandler.allSettled(durablePromises)).not.toThrow();
+      expect(() => promiseHandler.any(durablePromises)).not.toThrow();
+      expect(() => promiseHandler.race(durablePromises)).not.toThrow();
+
+      // Regular Promise arrays would cause TypeScript compilation errors
+      // const regularPromises = [Promise.resolve(1), Promise.resolve(2)];
+      // promiseHandler.all(regularPromises); // ❌ Would not compile
+    });
+  });
+
   describe("error deserialization", () => {
     it("should use custom serdes for allSettled to preserve Error objects", async () => {
-      const promises = [Promise.resolve(1), Promise.reject(new Error("test"))];
+      const promises = [
+        new DurablePromise(() => new DurablePromise(() => Promise.resolve(1))),
+        new DurablePromise(() => new DurablePromise(() => Promise.reject(new Error("test"))))
+      ];
       mockStep.mockImplementation(async (name, fn, config) => {
         // Simulate serialization/deserialization cycle
         const result = await fn();
@@ -35,7 +59,10 @@ describe("Promise Handler", () => {
     });
 
     it("should use real errorAwareSerdes for allSettled", async () => {
-      const promises = [Promise.resolve(1), Promise.reject(new Error("test"))];
+      const promises = [
+        new DurablePromise(() => new DurablePromise(() => Promise.resolve(1))),
+        new DurablePromise(() => new DurablePromise(() => Promise.reject(new Error("test"))))
+      ];
 
       // Spy on step to capture the actual serdes and use it
       mockStep.mockImplementation(async (name, fn, config) => {
@@ -72,7 +99,7 @@ describe("Promise Handler", () => {
       const customError = new TypeError("Custom type error");
       customError.stack = "Custom stack trace";
 
-      const promises = [Promise.resolve(1), Promise.reject(customError)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.reject(customError))];
       mockStep.mockImplementation(async (name, fn, config) => {
         const result = await fn();
         const serialized = await config.serdes.serialize(result, {
@@ -116,11 +143,11 @@ describe("Promise Handler", () => {
         return await fn();
       });
 
-      await promiseHandler.allSettled([Promise.resolve(1)]);
+      await promiseHandler.allSettled([new DurablePromise(() => Promise.resolve(1))]);
     });
 
     it("should handle errors without name property", async () => {
-      const promises = [Promise.resolve(1), Promise.reject(new Error("test"))];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.reject(new Error("test")))];
       mockStep.mockImplementation(async (name, fn, config) => {
         const result = await fn();
         // Manually create a result with an error that has no name property
@@ -159,7 +186,7 @@ describe("Promise Handler", () => {
 
   describe("retry behavior", () => {
     it("should configure steps with no-retry strategy", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockResolvedValue([1, 2]);
 
       await promiseHandler.all(promises);
@@ -179,7 +206,7 @@ describe("Promise Handler", () => {
     });
 
     it("should accept undefined as name parameter", async () => {
-      const promises = [Promise.resolve(1)];
+      const promises = [new DurablePromise(() => Promise.resolve(1))];
       mockStep.mockResolvedValue([1]);
 
       await promiseHandler.all(undefined, promises);
@@ -194,7 +221,7 @@ describe("Promise Handler", () => {
     });
 
     it("should configure named steps with no-retry strategy", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockResolvedValue([1, 2]);
 
       await promiseHandler.all("test-all", promises);
@@ -216,7 +243,7 @@ describe("Promise Handler", () => {
 
   describe("all", () => {
     it("should call step with Promise.all when no name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.all(promises);
@@ -232,7 +259,7 @@ describe("Promise Handler", () => {
     });
 
     it("should call step with name when name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.all("test-all", promises);
@@ -247,8 +274,8 @@ describe("Promise Handler", () => {
 
     it("should handle rejections correctly (fail fast)", async () => {
       const promises = [
-        Promise.resolve(1),
-        Promise.reject(new Error("test error")),
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.reject(new Error("test error"))),
       ];
       mockStep.mockImplementation(async (_, fn) => await fn());
 
@@ -258,7 +285,7 @@ describe("Promise Handler", () => {
 
   describe("allSettled", () => {
     it("should call step with Promise.allSettled when no name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       const expectedResult = [
         { status: "fulfilled", value: 1 },
         { status: "fulfilled", value: 2 },
@@ -277,7 +304,7 @@ describe("Promise Handler", () => {
     });
 
     it("should call step with name when name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.allSettled(
@@ -297,8 +324,8 @@ describe("Promise Handler", () => {
 
     it("should handle rejections without throwing", async () => {
       const promises = [
-        Promise.resolve(1),
-        Promise.reject(new Error("test error")),
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.reject(new Error("test error"))),
       ];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
@@ -315,7 +342,7 @@ describe("Promise Handler", () => {
 
   describe("any", () => {
     it("should call step with Promise.any when no name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.any(promises);
@@ -331,7 +358,7 @@ describe("Promise Handler", () => {
     });
 
     it("should call step with name when name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.any("test-any", promises);
@@ -346,8 +373,8 @@ describe("Promise Handler", () => {
 
     it("should throw AggregateError when all promises reject", async () => {
       const promises = [
-        Promise.reject(new Error("error1")),
-        Promise.reject(new Error("error2")),
+        new DurablePromise(() => Promise.reject(new Error("error1"))),
+        new DurablePromise(() => Promise.reject(new Error("error2"))),
       ];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
@@ -358,8 +385,8 @@ describe("Promise Handler", () => {
 
     it("should return first fulfilled value when some promises succeed", async () => {
       const promises = [
-        Promise.reject(new Error("error")),
-        Promise.resolve("success"),
+        new DurablePromise(() => Promise.reject(new Error("error"))),
+        new DurablePromise(() => Promise.resolve("success")),
       ];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
@@ -370,7 +397,7 @@ describe("Promise Handler", () => {
 
   describe("race", () => {
     it("should call step with Promise.race when no name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.race(promises);
@@ -386,7 +413,7 @@ describe("Promise Handler", () => {
     });
 
     it("should call step with name when name provided", async () => {
-      const promises = [Promise.resolve(1), Promise.resolve(2)];
+      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.race("test-race", promises);
@@ -401,10 +428,10 @@ describe("Promise Handler", () => {
 
     it("should throw error when fastest promise rejects", async () => {
       const promises = [
-        Promise.reject(new Error("fast error")),
-        new Promise((resolve) =>
+        new DurablePromise(() => Promise.reject(new Error("fast error"))),
+        new DurablePromise(() => new Promise((resolve) =>
           setTimeout(() => resolve("slow success"), 100),
-        ),
+        )),
       ];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
@@ -413,10 +440,10 @@ describe("Promise Handler", () => {
 
     it("should return value when fastest promise resolves", async () => {
       const promises = [
-        Promise.resolve("fast success"),
-        new Promise((_, reject) =>
+        new DurablePromise(() => Promise.resolve("fast success")),
+        new DurablePromise(() => new Promise((_, reject) =>
           setTimeout(() => reject(new Error("slow error")), 100),
-        ),
+        )),
       ];
       mockStep.mockImplementation(async (name, fn) => await fn());
 
