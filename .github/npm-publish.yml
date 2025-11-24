@@ -17,17 +17,22 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
-
-  publish-npm:
-    needs: build
+  - name: Publish packages
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org/
-      - run: npm ci
-      - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+    needs: build
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        registry-url: https://registry.npmjs.org/
+    run: |
+      for package_dir in packages/*; do
+        if [[ -d "$package_dir" && { "$package_dir" == "aws-durable-execution-sdk-js-testing" || "$package_dir" == "aws-durable-execution-sdk-js" ]]; then
+          cd "$package_dir"
+          echo "Publishing package in $package_dir"
+          npm publish --access public # Adjust --access as needed
+          cd - # Go back to the root directory
+        fi
+      done
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
