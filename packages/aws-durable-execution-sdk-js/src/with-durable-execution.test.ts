@@ -10,10 +10,7 @@ import { TerminationReason } from "./termination-manager/types";
 import { Context } from "aws-lambda";
 import { log } from "./utils/logger/logger";
 import { DurableExecutionInvocationInput, InvocationStatus } from "./types";
-import {
-  createCheckpoint,
-  deleteCheckpoint,
-} from "./utils/checkpoint/checkpoint";
+import { createCheckpoint } from "./utils/checkpoint/checkpoint";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 
@@ -477,30 +474,6 @@ describe("withDurableExecution", () => {
     expect(response).toEqual({
       Status: InvocationStatus.FAILED,
       Error: createErrorObjectFromError(executionError),
-    });
-  });
-
-  it("should call deleteCheckpoint when initializing durable function", async () => {
-    // Setup
-    const mockResult = { success: true };
-    const mockHandler = jest.fn().mockResolvedValue(mockResult);
-    mockTerminationManager.getTerminationPromise.mockReturnValue(
-      new Promise(() => {}),
-    ); // Never resolves
-
-    // Execute
-    const wrappedHandler = withDurableExecution(mockHandler);
-    const response = await wrappedHandler(mockEvent, mockContext);
-    expect(deleteCheckpoint).toHaveBeenCalledTimes(1);
-
-    // Verify
-    expect(mockHandler).toHaveBeenCalledWith(
-      mockCustomerHandlerEvent,
-      mockDurableContext,
-    );
-    expect(response).toEqual({
-      Status: InvocationStatus.SUCCEEDED,
-      Result: JSON.stringify(mockResult),
     });
   });
 });

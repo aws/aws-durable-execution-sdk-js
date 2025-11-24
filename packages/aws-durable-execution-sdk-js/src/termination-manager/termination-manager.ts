@@ -19,19 +19,26 @@ import {
   TerminationReason,
 } from "./types";
 import { setCheckpointTerminating } from "../utils/checkpoint/checkpoint";
+import type { ExecutionContext } from "../types/core";
 
 export class TerminationManager extends EventEmitter {
   private isTerminated = false;
   private terminationDetails?: TerminationDetails;
   private resolveTermination?: (result: TerminationResponse) => void;
   private terminationPromise: Promise<TerminationResponse>;
+  private executionContext?: ExecutionContext;
 
-  constructor() {
+  constructor(executionContext?: ExecutionContext) {
     super();
+    this.executionContext = executionContext;
     // Create the promise immediately during construction
     this.terminationPromise = new Promise((resolve) => {
       this.resolveTermination = resolve;
     });
+  }
+
+  setExecutionContext(executionContext: ExecutionContext): void {
+    this.executionContext = executionContext;
   }
 
   terminate(options: TerminationOptions = {}): void {
@@ -40,7 +47,9 @@ export class TerminationManager extends EventEmitter {
     this.isTerminated = true;
 
     // Set checkpoint termination flag before any other termination logic
-    setCheckpointTerminating();
+    if (this.executionContext) {
+      setCheckpointTerminating(this.executionContext);
+    }
 
     this.terminationDetails = {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,

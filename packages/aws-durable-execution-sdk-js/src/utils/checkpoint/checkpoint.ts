@@ -465,9 +465,6 @@ class CheckpointHandler {
   }
 }
 
-// Singleton checkpoint handler
-let singletonCheckpointHandler: CheckpointHandler | null = null;
-
 export const createCheckpoint = (
   context: ExecutionContext,
   taskToken: string,
@@ -479,9 +476,9 @@ export const createCheckpoint = (
   setTerminating(): void;
   hasPendingAncestorCompletion(stepId: string): boolean;
 } => {
-  // Return existing handler if it exists, otherwise create new one
-  if (!singletonCheckpointHandler) {
-    singletonCheckpointHandler = new CheckpointHandler(
+  // Create new handler instance for this execution context
+  if (!context.checkpointHandler) {
+    context.checkpointHandler = new CheckpointHandler(
       context,
       taskToken,
       stepDataEmitter,
@@ -493,37 +490,36 @@ export const createCheckpoint = (
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<void> => {
-    return await singletonCheckpointHandler!.checkpoint(stepId, data);
+    return await context.checkpointHandler!.checkpoint(stepId, data);
   };
 
   checkpoint.force = async (): Promise<void> => {
-    return await singletonCheckpointHandler!.forceCheckpoint();
+    return await context.checkpointHandler!.forceCheckpoint();
   };
 
   checkpoint.setTerminating = (): void => {
-    singletonCheckpointHandler!.setTerminating();
+    context.checkpointHandler!.setTerminating();
   };
 
   checkpoint.hasPendingAncestorCompletion = (stepId: string): boolean => {
-    return singletonCheckpointHandler!.hasPendingAncestorCompletion(stepId);
+    return context.checkpointHandler!.hasPendingAncestorCompletion(stepId);
   };
 
   return checkpoint;
 };
 
-export const deleteCheckpoint = (): void => {
-  singletonCheckpointHandler = null;
-};
-
-export const setCheckpointTerminating = (): void => {
-  if (singletonCheckpointHandler) {
-    singletonCheckpointHandler.setTerminating();
+export const setCheckpointTerminating = (context: ExecutionContext): void => {
+  if (context.checkpointHandler) {
+    context.checkpointHandler.setTerminating();
   }
 };
 
-export const hasPendingAncestorCompletion = (stepId: string): boolean => {
-  if (singletonCheckpointHandler) {
-    return singletonCheckpointHandler.hasPendingAncestorCompletion(stepId);
+export const hasPendingAncestorCompletion = (
+  context: ExecutionContext,
+  stepId: string,
+): boolean => {
+  if (context.checkpointHandler) {
+    return context.checkpointHandler.hasPendingAncestorCompletion(stepId);
   }
   return false;
 };

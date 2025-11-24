@@ -21,7 +21,7 @@ function hasFinishedAncestor(
   }
 
   // First check if any ancestor has a pending completion checkpoint
-  if (hasPendingAncestorCompletion(parentId)) {
+  if (hasPendingAncestorCompletion(context, parentId)) {
     log("🔍", "hasFinishedAncestor: Found ancestor with pending completion!", {
       parentId,
     });

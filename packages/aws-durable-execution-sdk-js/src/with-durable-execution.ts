@@ -6,10 +6,7 @@ import { EventEmitter } from "events";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
-import {
-  createCheckpoint,
-  deleteCheckpoint,
-} from "./utils/checkpoint/checkpoint";
+import { createCheckpoint } from "./utils/checkpoint/checkpoint";
 import { TerminationReason } from "./termination-manager/types";
 
 import {
@@ -39,9 +36,6 @@ async function runHandler<Input, Output>(
   checkpointToken: string,
   handler: DurableHandler<Input, Output>,
 ): Promise<DurableExecutionInvocationOutput> {
-  // Clear any existing checkpoint handler from previous invocations (warm Lambda)
-  deleteCheckpoint();
-
   const durableContext = createDurableContext(
     executionContext,
     context,

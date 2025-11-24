@@ -69,17 +69,22 @@ export const initializeExecutionContext = async (
 
   log("📝", "Loaded step data:", stepData);
 
-  return {
-    executionContext: {
-      state,
-      _stepData: stepData,
-      terminationManager: new TerminationManager(),
-      activeOperationsTracker: new ActiveOperationsTracker(),
-      durableExecutionArn,
-      getStepData(stepId: string): Operation | undefined {
-        return getStepDataUtil(stepData, stepId);
-      },
+  const executionContext: ExecutionContext = {
+    state,
+    _stepData: stepData,
+    terminationManager: new TerminationManager(),
+    activeOperationsTracker: new ActiveOperationsTracker(),
+    durableExecutionArn,
+    getStepData(stepId: string): Operation | undefined {
+      return getStepDataUtil(stepData, stepId);
     },
+  };
+
+  // Set the execution context on the termination manager
+  executionContext.terminationManager.setExecutionContext(executionContext);
+
+  return {
+    executionContext,
     durableExecutionMode,
     checkpointToken,
   };

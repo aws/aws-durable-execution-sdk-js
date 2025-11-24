@@ -1,5 +1,9 @@
 import { createConcurrentExecutionHandler } from "./concurrent-execution-handler";
-import { ExecutionContext, ConcurrentExecutionItem, ConcurrentExecutor } from "../../types";
+import {
+  ExecutionContext,
+  ConcurrentExecutionItem,
+  ConcurrentExecutor,
+} from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 
 describe("Concurrent Execution Handler Two-Phase Execution", () => {
@@ -20,16 +24,20 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
     } as any;
 
     // Mock runInChildContext to track when execution starts
-    mockRunInChildContext = jest.fn().mockImplementation(async (name, fn, config) => {
-      executionStarted = true;
-      // Create a mock child context with runInChildContext method
-      const mockChildContext = {
-        runInChildContext: jest.fn().mockImplementation(async (childName, childFn) => {
-          return await childFn({} as any);
-        }),
-      };
-      return await fn(mockChildContext);
-    });
+    mockRunInChildContext = jest
+      .fn()
+      .mockImplementation(async (name, fn, _config) => {
+        executionStarted = true;
+        // Create a mock child context with runInChildContext method
+        const mockChildContext = {
+          runInChildContext: jest
+            .fn()
+            .mockImplementation(async (childName, childFn) => {
+              return await childFn({} as any);
+            }),
+        };
+        return await fn(mockChildContext);
+      });
 
     mockStep = jest.fn().mockImplementation(async (name, fn) => {
       return await fn();

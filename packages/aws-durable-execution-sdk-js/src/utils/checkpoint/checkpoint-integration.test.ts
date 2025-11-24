@@ -1,4 +1,4 @@
-import { createCheckpoint, deleteCheckpoint } from "./checkpoint";
+import { createCheckpoint } from "./checkpoint";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -71,7 +71,6 @@ describe("Checkpoint Integration Tests", () => {
   });
 
   it("should handle mixed operation types in a single batch", async () => {
-    deleteCheckpoint(); // Clean up singleton
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
@@ -150,7 +149,6 @@ describe("Checkpoint Integration Tests", () => {
   });
 
   it("should process all operations immediately regardless of count", async () => {
-    deleteCheckpoint(); // Clean up singleton
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
@@ -184,7 +182,6 @@ describe("Checkpoint Integration Tests", () => {
   });
 
   it("should handle large numbers of operations in a single batch", async () => {
-    deleteCheckpoint(); // Clean up singleton
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
@@ -216,7 +213,6 @@ describe("Checkpoint Integration Tests", () => {
   });
 
   it("should use the first execution context when multiple contexts are created", async () => {
-    deleteCheckpoint(); // Clean up singleton
     // Create second context
     const mockContext2 = {
       ...mockContext,

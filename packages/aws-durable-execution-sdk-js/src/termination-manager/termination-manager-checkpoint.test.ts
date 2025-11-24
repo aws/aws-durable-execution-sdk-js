@@ -1,9 +1,6 @@
 import { TerminationManager } from "./termination-manager";
 import { TerminationReason } from "./types";
-import {
-  createCheckpoint,
-  deleteCheckpoint,
-} from "../utils/checkpoint/checkpoint";
+import { createCheckpoint } from "../utils/checkpoint/checkpoint";
 import { ExecutionContext } from "../types";
 import { EventEmitter } from "events";
 
@@ -13,7 +10,6 @@ describe("TerminationManager Checkpoint Integration", () => {
   let mockEmitter: EventEmitter;
 
   beforeEach(() => {
-    deleteCheckpoint();
     terminationManager = new TerminationManager();
     mockEmitter = new EventEmitter();
 
@@ -30,9 +26,7 @@ describe("TerminationManager Checkpoint Integration", () => {
     } as unknown as ExecutionContext;
   });
 
-  afterEach(() => {
-    deleteCheckpoint();
-  });
+  afterEach(() => {});
 
   test("should set checkpoint terminating flag when terminate is called", async () => {
     const checkpoint = createCheckpoint(

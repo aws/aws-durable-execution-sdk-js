@@ -3,6 +3,7 @@ import { TerminationManager } from "../termination-manager/termination-manager";
 import { ExecutionState } from "../storage/storage";
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 import { ActiveOperationsTracker } from "../utils/termination-helper/active-operations-tracker";
+import type { CheckpointHandler } from "../utils/checkpoint/checkpoint";
 
 export enum DurableExecutionMode {
   ExecutionMode = "ExecutionMode",
@@ -81,5 +82,6 @@ export interface ExecutionContext {
   terminationManager: TerminationManager;
   durableExecutionArn: string;
   activeOperationsTracker?: ActiveOperationsTracker;
+  checkpointHandler?: CheckpointHandler;
   getStepData(stepId: string): Operation | undefined;
 }

@@ -12,7 +12,6 @@ import {
   CheckpointDurableExecutionRequest,
 } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
-import { deleteCheckpoint } from "../../utils/checkpoint/checkpoint";
 
 // Mock the TerminationManager class
 jest.mock("../../termination-manager/termination-manager");
@@ -28,9 +27,6 @@ describe("Run In Child Context Integration Tests", () => {
     jest.resetAllMocks();
 
     checkpointCalls = [];
-
-    // Clear singleton checkpoint handler
-    deleteCheckpoint();
 
     // Create proper mocks for TerminationManager
     const mockTerminationManager = {
