@@ -3,7 +3,7 @@ import { ExecutionContext, OperationSubType } from "../../types";
 import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { hashId } from "../step-id-utils/step-id-utils";
-import { createMockExecutionContext } from "../../testing/mock-context";
+import { createTestExecutionContext } from "../../testing/create-test-execution-context";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { EventEmitter } from "events";
 
@@ -24,20 +24,18 @@ describe("Checkpoint Integration Tests", () => {
     jest.clearAllMocks();
     mockEmitter = new EventEmitter();
 
-    mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
-
     mockState = {
       checkpoint: jest.fn().mockResolvedValue({
         checkpointToken: mockNewTaskToken,
       }),
     };
 
-    mockContext = createMockExecutionContext({
+    mockContext = createTestExecutionContext({
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
-      terminationManager: mockTerminationManager,
     });
+    mockTerminationManager = mockContext.terminationManager;
+    jest.spyOn(mockTerminationManager, "terminate");
   });
 
   it("should demonstrate performance improvement with batching", async () => {
@@ -212,11 +210,12 @@ describe("Checkpoint Integration Tests", () => {
     );
   });
 
-  it("should use the first execution context when multiple contexts are created", async () => {
+  it("should use separate checkpoint handlers for different execution contexts", async () => {
     // Create second context
-    const mockContext2 = {
-      ...mockContext,
-    } satisfies ExecutionContext;
+    const mockContext2 = createTestExecutionContext({
+      durableExecutionArn: "test-durable-execution-arn",
+      state: mockState,
+    });
 
     const checkpoint1 = createCheckpoint(
       mockContext,
@@ -227,9 +226,9 @@ describe("Checkpoint Integration Tests", () => {
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
-    ); // Should return same handler (first context)
+    ); // Should create separate handler for each context
 
-    // Execute checkpoints - both should use the first context (mockContext)
+    // Execute checkpoints - each should use its own context
     const promises = [
       checkpoint1("step-1", { Action: OperationAction.START }),
       checkpoint2("step-2", { Action: OperationAction.START }),
@@ -237,15 +236,16 @@ describe("Checkpoint Integration Tests", () => {
 
     await Promise.all(promises);
 
-    // Should have made one checkpoint call with both operations batched using first context
-    expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+    // Should have made two separate checkpoint calls (one per context)
+    expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
 
-    // Verify the call used the first token (from mockContext)
+    // Verify both calls used the same token
     const calls = mockState.checkpoint.mock.calls;
     expect(calls[0][0]).toBe(TEST_CONSTANTS.CHECKPOINT_TOKEN);
+    expect(calls[1][0]).toBe(TEST_CONSTANTS.CHECKPOINT_TOKEN);
 
-    // Verify both operations were included in the batch
-    const checkpointData = calls[0][1];
-    expect(checkpointData.Updates).toHaveLength(2);
+    // Verify each call has one operation
+    expect(calls[0][1].Updates).toHaveLength(1);
+    expect(calls[1][1].Updates).toHaveLength(1);
   });
 });

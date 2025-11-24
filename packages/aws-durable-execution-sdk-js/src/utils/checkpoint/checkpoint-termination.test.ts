@@ -1,7 +1,7 @@
 import { CheckpointHandler } from "./checkpoint";
 import { ExecutionContext } from "../../types";
-import { TerminationManager } from "../../termination-manager/termination-manager";
 import { EventEmitter } from "events";
+import { createTestExecutionContext } from "../../testing/create-test-execution-context";
 
 describe("CheckpointHandler Termination Behavior", () => {
   let mockContext: ExecutionContext;
@@ -10,20 +10,14 @@ describe("CheckpointHandler Termination Behavior", () => {
 
   beforeEach(() => {
     stepDataEmitter = new EventEmitter();
-    mockContext = {
-      executionContextId: "test-id",
-      customerHandlerEvent: {},
+
+    mockContext = createTestExecutionContext({
+      durableExecutionArn: "test-arn",
       state: {
         checkpoint: jest.fn(),
         getStepData: jest.fn(),
       },
-      _stepData: {},
-      _durableExecutionMode: "ExecutionMode" as any,
-      terminationManager: new TerminationManager(),
-      isVerbose: false,
-      durableExecutionArn: "test-arn",
-      getStepData: jest.fn(),
-    } as any;
+    });
 
     checkpointHandler = new (CheckpointHandler as any)(
       mockContext,

@@ -1,6 +1,5 @@
 import { CheckpointHandler } from "./checkpoint";
 import { ExecutionContext, OperationSubType } from "../../types";
-import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   CheckpointDurableExecutionResponse,
   Operation,
@@ -8,8 +7,8 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
-import { getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { createTestExecutionContext } from "../../testing/create-test-execution-context";
 
 describe("CheckpointHandler - StepData Update", () => {
   let mockContext: ExecutionContext;
@@ -32,16 +31,13 @@ describe("CheckpointHandler - StepData Update", () => {
         StartTimestamp: new Date(),
       },
     };
-    mockContext = {
-      state: mockState,
-      _stepData: stepData,
-      terminationManager: new TerminationManager(),
+
+    mockContext = createTestExecutionContext({
       durableExecutionArn:
         "arn:aws:durable-execution:us-east-1:123456789012:execution/test-execution",
-      getStepData: jest.fn((stepId: string) => {
-        return getStepData(stepData, stepId);
-      }),
-    };
+      stepData,
+      state: mockState,
+    });
 
     checkpointHandler = new CheckpointHandler(
       mockContext,

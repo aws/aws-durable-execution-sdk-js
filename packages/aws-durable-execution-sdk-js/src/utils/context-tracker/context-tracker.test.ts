@@ -5,6 +5,7 @@ import {
 } from "./context-tracker";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
+import { createTestExecutionContext } from "../../testing/create-test-execution-context";
 
 describe("context-tracker", () => {
   describe("getActiveContext", () => {
@@ -62,7 +63,8 @@ describe("context-tracker", () => {
     let terminationManager: TerminationManager;
 
     beforeEach(() => {
-      terminationManager = new TerminationManager();
+      const executionContext = createTestExecutionContext();
+      terminationManager = executionContext.terminationManager;
     });
 
     it("should not terminate when no active context", () => {

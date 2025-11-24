@@ -1,11 +1,13 @@
 import { TerminationManager } from "./termination-manager";
 import { TerminationReason } from "./types";
+import { createTestExecutionContext } from "../testing/create-test-execution-context";
 
 describe("TerminationManager", () => {
   let terminationManager: TerminationManager;
 
   beforeEach(() => {
-    terminationManager = new TerminationManager();
+    const executionContext = createTestExecutionContext();
+    terminationManager = executionContext.terminationManager;
     jest.resetAllMocks();
   });
 

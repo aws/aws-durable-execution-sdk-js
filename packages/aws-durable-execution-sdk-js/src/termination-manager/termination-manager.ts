@@ -26,9 +26,9 @@ export class TerminationManager extends EventEmitter {
   private terminationDetails?: TerminationDetails;
   private resolveTermination?: (result: TerminationResponse) => void;
   private terminationPromise: Promise<TerminationResponse>;
-  private executionContext?: ExecutionContext;
+  private readonly executionContext: ExecutionContext;
 
-  constructor(executionContext?: ExecutionContext) {
+  constructor(executionContext: ExecutionContext) {
     super();
     this.executionContext = executionContext;
     // Create the promise immediately during construction
@@ -37,19 +37,13 @@ export class TerminationManager extends EventEmitter {
     });
   }
 
-  setExecutionContext(executionContext: ExecutionContext): void {
-    this.executionContext = executionContext;
-  }
-
   terminate(options: TerminationOptions = {}): void {
     if (this.isTerminated) return;
 
     this.isTerminated = true;
 
     // Set checkpoint termination flag before any other termination logic
-    if (this.executionContext) {
-      setCheckpointTerminating(this.executionContext);
-    }
+    setCheckpointTerminating(this.executionContext);
 
     this.terminationDetails = {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,

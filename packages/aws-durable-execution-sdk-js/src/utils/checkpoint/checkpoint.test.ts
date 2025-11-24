@@ -8,7 +8,8 @@ import { TerminationReason } from "../../termination-manager/types";
 import { OperationSubType, ExecutionContext } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { CheckpointHandler, createCheckpoint } from "./checkpoint";
-import { hashId, getStepData } from "../step-id-utils/step-id-utils";
+import { createTestExecutionContext } from "../../testing/create-test-execution-context";
+import { hashId } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
 
 // Mock dependencies
@@ -29,25 +30,18 @@ describe("CheckpointHandler", () => {
     jest.clearAllMocks();
     mockEmitter = new EventEmitter();
 
-    mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
-
     mockState = {
       checkpoint: jest.fn().mockResolvedValue({
         CheckpointToken: mockNewTaskToken,
       }),
     };
 
-    const stepData = {};
-    mockContext = {
+    mockContext = createTestExecutionContext({
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
-      _stepData: stepData,
-      terminationManager: mockTerminationManager,
-      getStepData: jest.fn((stepId: string) => {
-        return getStepData(stepData, stepId);
-      }),
-    } satisfies ExecutionContext;
+    });
+    mockTerminationManager = mockContext.terminationManager;
+    jest.spyOn(mockTerminationManager, "terminate");
 
     checkpointHandler = new CheckpointHandler(
       mockContext,
@@ -662,24 +656,17 @@ describe("createCheckpointHandler", () => {
     jest.clearAllMocks();
     mockEmitter = new EventEmitter();
 
-    mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
-
     mockState = {
       checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
       getStepData: jest.fn(),
     };
 
-    const stepData = {};
-    mockContext = {
+    mockContext = createTestExecutionContext({
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
-      _stepData: stepData,
-      terminationManager: mockTerminationManager,
-      getStepData: jest.fn((stepId: string) => {
-        return getStepData(stepData, stepId);
-      }),
-    } satisfies ExecutionContext;
+    });
+    mockTerminationManager = mockContext.terminationManager;
+    jest.spyOn(mockTerminationManager, "terminate");
   });
 
   it("should successfully create a checkpoint", async () => {
@@ -804,11 +791,12 @@ describe("createCheckpointHandler", () => {
     expect(mockState.checkpoint).toHaveBeenCalled();
   });
 
-  it("should use the first context when multiple contexts are created", async () => {
+  it("should use separate checkpoint handlers for different execution contexts", async () => {
     // Setup second context
-    const mockContext2 = {
-      ...mockContext,
-    } satisfies ExecutionContext;
+    const mockContext2 = createTestExecutionContext({
+      durableExecutionArn: "test-durable-execution-arn",
+      state: mockState,
+    });
 
     const checkpoint1 = createCheckpoint(
       mockContext,
@@ -819,9 +807,9 @@ describe("createCheckpointHandler", () => {
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
-    ); // Should return same handler (first context)
+    ); // Should create separate handler for each context
 
-    // Execute checkpoints - both should use the first context (mockContext)
+    // Execute checkpoints - each should use its own context
     const promises = [
       checkpoint1("step-1", { Action: OperationAction.START }),
       checkpoint2("step-2", { Action: OperationAction.START }),
@@ -829,23 +817,25 @@ describe("createCheckpointHandler", () => {
 
     await Promise.all(promises);
 
-    // Verify they were processed together using the first context
-    expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+    // Verify they were processed separately (one call per context)
+    expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
 
-    // Verify the call used the first token (from mockContext)
+    // Verify both calls used the same token
     const calls = mockState.checkpoint.mock.calls;
     expect(calls[0][0]).toBe(TEST_CONSTANTS.CHECKPOINT_TOKEN);
+    expect(calls[1][0]).toBe(TEST_CONSTANTS.CHECKPOINT_TOKEN);
 
-    // Verify both operations were included in the batch
-    const checkpointData = calls[0][1];
-    expect(checkpointData.Updates).toHaveLength(2);
+    // Verify each call has one operation
+    expect(calls[0][1].Updates).toHaveLength(1);
+    expect(calls[1][1].Updates).toHaveLength(1);
   });
 
-  it("should use the same handler for equivalent execution context ids, but different objects", async () => {
+  it("should use separate handlers for different execution context objects", async () => {
     // Setup second context
-    const mockContext2 = {
-      ...mockContext,
-    } satisfies ExecutionContext;
+    const mockContext2 = createTestExecutionContext({
+      durableExecutionArn: "test-durable-execution-arn",
+      state: mockState,
+    });
 
     const checkpoint1 = createCheckpoint(
       mockContext,
@@ -866,14 +856,15 @@ describe("createCheckpointHandler", () => {
 
     await Promise.all(promises);
 
-    // Verify they were processed separately (one checkpoint calls)
-    expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+    // Verify they were processed separately (two checkpoint calls)
+    expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
 
-    // Verify each call had the correct token
+    // Verify each call had the correct token and one operation
     const calls = mockState.checkpoint.mock.calls;
-    expect(calls[0][1].Updates).toHaveLength(2);
+    expect(calls[0][1].Updates).toHaveLength(1);
+    expect(calls[1][1].Updates).toHaveLength(1);
     expect(calls[0][1].Updates[0].Id).toBe(hashId("step-1"));
-    expect(calls[0][1].Updates[1].Id).toBe(hashId("step-2"));
+    expect(calls[1][1].Updates[0].Id).toBe(hashId("step-2"));
   });
 
   it("should split large payloads into multiple API calls when exceeding 750KB limit", async () => {

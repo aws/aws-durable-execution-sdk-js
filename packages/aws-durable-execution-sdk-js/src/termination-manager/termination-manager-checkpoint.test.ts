@@ -3,6 +3,7 @@ import { TerminationReason } from "./types";
 import { createCheckpoint } from "../utils/checkpoint/checkpoint";
 import { ExecutionContext } from "../types";
 import { EventEmitter } from "events";
+import { createTestExecutionContext } from "../testing/create-test-execution-context";
 
 describe("TerminationManager Checkpoint Integration", () => {
   let terminationManager: TerminationManager;
@@ -10,20 +11,18 @@ describe("TerminationManager Checkpoint Integration", () => {
   let mockEmitter: EventEmitter;
 
   beforeEach(() => {
-    terminationManager = new TerminationManager();
     mockEmitter = new EventEmitter();
 
-    mockContext = {
-      durableExecutionArn: "test-arn",
+    mockContext = createTestExecutionContext({
       state: {
         checkpoint: jest.fn().mockResolvedValue({
           CheckpointToken: "new-token",
           NewExecutionState: { Operations: [] },
         }),
+        getStepData: jest.fn(),
       },
-      _stepData: {},
-      terminationManager,
-    } as unknown as ExecutionContext;
+    });
+    terminationManager = mockContext.terminationManager;
   });
 
   afterEach(() => {});

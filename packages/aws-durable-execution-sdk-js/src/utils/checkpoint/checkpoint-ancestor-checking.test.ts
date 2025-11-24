@@ -3,8 +3,9 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { ExecutionContext } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { CheckpointHandler } from "./checkpoint";
-import { hashId, getStepData } from "../step-id-utils/step-id-utils";
+import { hashId } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { createTestExecutionContext } from "../../testing/create-test-execution-context";
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
@@ -24,25 +25,18 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     jest.clearAllMocks();
     mockEmitter = new EventEmitter();
 
-    mockTerminationManager = new TerminationManager();
-    jest.spyOn(mockTerminationManager, "terminate");
-
     mockState = {
       checkpoint: jest.fn().mockResolvedValue({
         CheckpointToken: mockNewTaskToken,
       }),
     };
 
-    const stepData = {};
-    mockContext = {
+    mockContext = createTestExecutionContext({
       durableExecutionArn: "test-durable-execution-arn",
       state: mockState,
-      _stepData: stepData,
-      terminationManager: mockTerminationManager,
-      getStepData: jest.fn((stepId: string) => {
-        return getStepData(stepData, stepId);
-      }),
-    } satisfies ExecutionContext;
+    });
+    mockTerminationManager = mockContext.terminationManager;
+    jest.spyOn(mockTerminationManager, "terminate");
 
     checkpointHandler = new CheckpointHandler(
       mockContext,

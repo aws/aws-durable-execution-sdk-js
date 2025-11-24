@@ -4,6 +4,7 @@ import { ExecutionState } from "../storage/storage";
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 import { ActiveOperationsTracker } from "../utils/termination-helper/active-operations-tracker";
 import type { CheckpointHandler } from "../utils/checkpoint/checkpoint";
+import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
 
 export enum DurableExecutionMode {
   ExecutionMode = "ExecutionMode",
@@ -76,12 +77,28 @@ export type Duration =
   | { minutes: number; seconds?: number }
   | { seconds: number };
 
-export interface ExecutionContext {
-  state: ExecutionState;
-  _stepData: Record<string, Operation>; // Private, use getStepData() instead
-  terminationManager: TerminationManager;
-  durableExecutionArn: string;
-  activeOperationsTracker?: ActiveOperationsTracker;
-  checkpointHandler?: CheckpointHandler;
-  getStepData(stepId: string): Operation | undefined;
+export class ExecutionContext {
+  public readonly state: ExecutionState;
+  public _stepData: Record<string, Operation>; // Private, use getStepData() instead
+  public readonly terminationManager: TerminationManager;
+  public readonly durableExecutionArn: string;
+  public readonly activeOperationsTracker?: ActiveOperationsTracker;
+  public checkpointHandler?: CheckpointHandler;
+
+  constructor(
+    state: ExecutionState,
+    stepData: Record<string, Operation>,
+    durableExecutionArn: string,
+    activeOperationsTracker?: ActiveOperationsTracker,
+  ) {
+    this.state = state;
+    this._stepData = stepData;
+    this.durableExecutionArn = durableExecutionArn;
+    this.activeOperationsTracker = activeOperationsTracker;
+    this.terminationManager = new TerminationManager(this);
+  }
+
+  getStepData(stepId: string): Operation | undefined {
+    return getStepDataUtil(this._stepData, stepId);
+  }
 }

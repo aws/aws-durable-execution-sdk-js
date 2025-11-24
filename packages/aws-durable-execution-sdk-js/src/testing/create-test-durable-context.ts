@@ -8,9 +8,7 @@ import {
   DurableContextImpl,
 } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
-import { TerminationManager } from "../termination-manager/termination-manager";
 import { ExecutionContext, DurableExecutionMode } from "../types";
-import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
 
 /**
  * In-memory storage for testing - no API calls
@@ -62,16 +60,11 @@ export function createTestDurableContext(options?: {
     }
   });
 
-  const executionContext: ExecutionContext = {
-    state: storage,
-    _stepData: stepData,
-    terminationManager: new TerminationManager(),
-    durableExecutionArn:
-      "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
-    getStepData(stepId: string): Operation | undefined {
-      return getStepDataUtil(stepData, stepId);
-    },
-  };
+  const executionContext = new ExecutionContext(
+    storage,
+    stepData,
+    "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
+  );
 
   const mockLambdaContext: Context = {
     callbackWaitsForEmptyEventLoop: false,
