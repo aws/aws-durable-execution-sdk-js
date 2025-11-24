@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   DurableContext,
   DurableExecutionMode,
+  DurableLogger,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { deleteCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 // Mock the TerminationManager class
 jest.mock("../../termination-manager/termination-manager");
@@ -20,7 +22,7 @@ jest.mock("../../termination-manager/termination-manager");
 describe("Run In Child Context Integration Tests", () => {
   let mockExecutionContext: ExecutionContext;
   let mockParentContext: any;
-  let durableContext: DurableContext;
+  let durableContext: DurableContext<DurableLogger>;
   let checkpointCalls: any[] = [];
 
   beforeEach(() => {
@@ -61,6 +63,8 @@ describe("Run In Child Context Integration Tests", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
+      requestId: "mock-request-id",
+      tenantId: undefined,
     } satisfies ExecutionContext;
 
     mockParentContext = { awsRequestId: "mock-request-id" };
@@ -69,11 +73,12 @@ describe("Run In Child Context Integration Tests", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
   });
 
   test("should execute child context with child context", async () => {
-    let capturedChildContext: DurableContext | undefined;
+    let capturedChildContext: DurableContext<DurableLogger> | undefined;
 
     const result = await durableContext.runInChildContext(
       "test-child-context",

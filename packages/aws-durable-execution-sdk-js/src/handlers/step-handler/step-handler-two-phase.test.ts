@@ -3,13 +3,13 @@ import { ExecutionContext } from "../../types";
 import { EventEmitter } from "events";
 import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 describe("Step Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: any;
   let mockParentContext: Context;
   let createStepId: () => string;
-  let createContextLogger: (stepId: string, attempt?: number) => any;
   let addRunningOperation: jest.Mock;
   let removeRunningOperation: jest.Mock;
   let hasRunningOperations: () => boolean;
@@ -39,11 +39,6 @@ describe("Step Handler Two-Phase Execution", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-    createContextLogger = jest.fn().mockReturnValue({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    });
     addRunningOperation = jest.fn();
     removeRunningOperation = jest.fn();
     hasRunningOperations = jest.fn().mockReturnValue(false) as () => boolean;
@@ -56,7 +51,7 @@ describe("Step Handler Two-Phase Execution", () => {
       mockCheckpoint,
       mockParentContext,
       createStepId,
-      createContextLogger,
+      createDefaultLogger(),
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
@@ -88,7 +83,7 @@ describe("Step Handler Two-Phase Execution", () => {
       mockCheckpoint,
       mockParentContext,
       createStepId,
-      createContextLogger,
+      createDefaultLogger(),
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
@@ -126,7 +121,7 @@ describe("Step Handler Two-Phase Execution", () => {
       mockCheckpoint,
       mockParentContext,
       createStepId,
-      createContextLogger,
+      createDefaultLogger(),
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,

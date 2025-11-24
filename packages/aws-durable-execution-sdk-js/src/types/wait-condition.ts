@@ -1,6 +1,6 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { WaitForConditionContext } from "./logger";
-import { Duration } from "../types";
+import { DurableLogger, Duration } from "../types";
 
 /**
  * Function that checks and updates state for waitForCondition operations
@@ -8,9 +8,9 @@ import { Duration } from "../types";
  * @param context - Context for logging and other operations during state checking
  * @returns Promise resolving to the updated state
  */
-export type WaitForConditionCheckFunc<T> = (
+export type WaitForConditionCheckFunc<T, Logger extends DurableLogger> = (
   state: T,
-  context: WaitForConditionContext,
+  context: WaitForConditionContext<Logger>,
 ) => Promise<T>;
 
 /**

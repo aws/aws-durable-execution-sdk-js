@@ -4,6 +4,7 @@ import {
   ParallelFunc,
   NamedParallelBranch,
   BatchItemStatus,
+  DurableLogger,
 } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
 
@@ -38,7 +39,7 @@ describe("Parallel Handler", () => {
 
   describe("parameter parsing", () => {
     it("should handle name and branches", async () => {
-      const branch1: ParallelFunc<string> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
@@ -73,7 +74,7 @@ describe("Parallel Handler", () => {
     });
 
     it("should handle branches and config", async () => {
-      const branch1: ParallelFunc<string> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
@@ -109,7 +110,7 @@ describe("Parallel Handler", () => {
     });
 
     it("should handle name, branches and config", async () => {
-      const branch1: ParallelFunc<string> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
@@ -146,10 +147,10 @@ describe("Parallel Handler", () => {
   });
 
   it("should execute parallel branches and return BatchResult", async () => {
-    const branch1: ParallelFunc<string> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("result1");
-    const branch2: ParallelFunc<string> = jest
+    const branch2: ParallelFunc<string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("result2");
     const branches = [branch1, branch2];
@@ -177,7 +178,7 @@ describe("Parallel Handler", () => {
   });
 
   it("should handle empty branches", async () => {
-    const branches: ParallelFunc<any>[] = [];
+    const branches: ParallelFunc<any, DurableLogger>[] = [];
 
     mockExecuteConcurrently.mockResolvedValue(new MockBatchResult([]) as any);
 
@@ -194,7 +195,7 @@ describe("Parallel Handler", () => {
 
     const consoleSpy = jest.spyOn(console, "debug").mockImplementation();
 
-    const branch1: ParallelFunc<string> = jest
+    const branch1: ParallelFunc<string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("result1");
     const branches = [branch1];
@@ -254,7 +255,7 @@ describe("Parallel Handler", () => {
 
   describe("named branches", () => {
     it("should handle named parallel branches", async () => {
-      const namedBranch: NamedParallelBranch<string> = {
+      const namedBranch: NamedParallelBranch<string, DurableLogger> = {
         name: "custom-branch",
         func: jest.fn().mockResolvedValue("result1"),
       };
@@ -290,11 +291,11 @@ describe("Parallel Handler", () => {
     });
 
     it("should handle mixed named and unnamed branches", async () => {
-      const namedBranch: NamedParallelBranch<string> = {
+      const namedBranch: NamedParallelBranch<string, DurableLogger> = {
         name: "named-branch",
         func: jest.fn().mockResolvedValue("result1"),
       };
-      const unnamedBranch: ParallelFunc<string> = jest
+      const unnamedBranch: ParallelFunc<string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result2");
       const branches = [namedBranch, unnamedBranch];
@@ -336,10 +337,10 @@ describe("Parallel Handler", () => {
     });
 
     it("should use undefined names for unnamed branches", async () => {
-      const branch1: ParallelFunc<string> = jest
+      const branch1: ParallelFunc<string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result1");
-      const branch2: ParallelFunc<string> = jest
+      const branch2: ParallelFunc<string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result2");
       const branches = [branch1, branch2];

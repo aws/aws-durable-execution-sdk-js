@@ -3,7 +3,7 @@ import {
   CheckpointFunction,
 } from "../../testing/mock-checkpoint";
 import { createStepHandler } from "./step-handler";
-import { ExecutionContext, StepSemantics, Logger } from "../../types";
+import { ExecutionContext, StepSemantics, DurableLogger } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -19,11 +19,17 @@ import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { EventEmitter } from "events";
+import { DurableExecutionMode } from "../../types/core";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 jest.mock("../../utils/retry/retry-presets/retry-presets", () => ({
   retryPresets: {
     default: jest.fn(),
   },
+}));
+
+jest.mock("../../utils/context-tracker/context-tracker", () => ({
+  ...jest.requireActual("../../utils/context-tracker/context-tracker"),
 }));
 
 describe("Step Handler", () => {
@@ -72,15 +78,15 @@ describe("Step Handler", () => {
       error: jest.fn(),
       warn: jest.fn(),
       debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
     };
-    const createMockEnrichedLogger = (): Logger => mockLogger;
 
     stepHandler = createStepHandler(
       mockExecutionContext,
       mockCheckpoint,
       mockParentContext,
       createStepId,
-      createMockEnrichedLogger,
+      mockLogger,
       jest.fn(), // addRunningOperation
       jest.fn(), // removeRunningOperation
       jest.fn(() => false), // hasRunningOperations
@@ -1019,5 +1025,152 @@ describe("Step Handler", () => {
           'Deserialization failed for step "test-step" (test-step-id): Deserialization failed',
       });
     }, 10000);
+  });
+
+  // Test cases for runWithContext logic - verifying attempt + 1 and ExecutionMode passing
+  describe("runWithContext Integration", () => {
+    beforeEach(() => {
+      // Setup runWithContext mock to return the step function result for these specific tests
+      (runWithContext as jest.Mock) = jest
+        .fn()
+        .mockImplementation(async (stepId, parentId, fn, attempt, mode) => {
+          try {
+            return await fn();
+          } catch (error) {
+            // Re-throw errors so they can be handled by the step handler logic
+            throw error;
+          }
+        });
+    });
+
+    test("should call runWithContext with correct parameters for new step (attempt 0 -> 1)", async () => {
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+
+      await stepHandler("test-step", stepFn);
+
+      // Verify runWithContext was called with correct parameters
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        undefined, // parentId is undefined in this test setup
+        expect.any(Function), // The wrapped step function
+        1, // currentAttempt (0) + 1 = 1
+        DurableExecutionMode.ExecutionMode,
+      );
+    });
+
+    test("should call runWithContext with correct attempt number for retry step (attempt 2 -> 3)", async () => {
+      // Set up a step that was previously attempted 2 times (so attempt = 2)
+      const stepId = "test-step-id";
+      const hashedStepId = hashId(stepId);
+      mockExecutionContext._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED, // Will be re-executed with AT_LEAST_ONCE_PER_RETRY
+          StepDetails: {
+            Attempt: 2, // Previous attempt was 2
+          },
+        },
+      } as any;
+
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+
+      await stepHandler("test-step", stepFn);
+
+      // Verify runWithContext was called with attempt 3 (2 + 1)
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        undefined,
+        expect.any(Function),
+        3, // currentAttempt (2) + 1 = 3
+        DurableExecutionMode.ExecutionMode,
+      );
+    });
+
+    test("should call runWithContext with attempt 1 when step data has no attempt field", async () => {
+      // Set up a step that was started but has no attempt field (should default to 0)
+      const stepId = "test-step-id";
+      const hashedStepId = hashId(stepId);
+      mockExecutionContext._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          StepDetails: {}, // No Attempt field
+        },
+      } as any;
+
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+
+      await stepHandler("test-step", stepFn);
+
+      // Verify runWithContext was called with attempt 1 (0 + 1 = 1)
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        undefined,
+        expect.any(Function),
+        1, // currentAttempt (0 default) + 1 = 1
+        DurableExecutionMode.ExecutionMode,
+      );
+    });
+
+    test("should call runWithContext with correct stepId and parentId when parentId is provided", async () => {
+      // Create a new step handler with a parentId
+      const stepHandlerWithParent = createStepHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        {
+          log: jest.fn(),
+          info: jest.fn(),
+          error: jest.fn(),
+          warn: jest.fn(),
+          debug: jest.fn(),
+          configureDurableLoggingContext: jest.fn(),
+        },
+        jest.fn(), // addRunningOperation
+        jest.fn(), // removeRunningOperation
+        jest.fn(() => false), // hasRunningOperations
+        () => mockOperationsEmitter,
+        "parent-step-id", // parentId
+      );
+
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+
+      await stepHandlerWithParent("test-step", stepFn);
+
+      // Verify runWithContext was called with correct stepId and parentId
+      expect(runWithContext).toHaveBeenCalledWith(
+        "test-step-id",
+        "parent-step-id", // parentId should be passed through
+        expect.any(Function),
+        1, // currentAttempt (0) + 1 = 1
+        DurableExecutionMode.ExecutionMode,
+      );
+    });
+
+    test("should pass the step function through runWithContext correctly", async () => {
+      const stepFn = jest.fn().mockResolvedValue("step-result");
+      let capturedFunction: (() => Promise<unknown>) | undefined;
+
+      // Capture the function passed to runWithContext
+      (runWithContext as jest.Mock).mockImplementation(
+        async (stepId, parentId, fn, attempt, mode) => {
+          capturedFunction = fn;
+          return await fn();
+        },
+      );
+
+      await stepHandler("test-step", stepFn);
+
+      // Verify that the captured function calls our step function with StepContext
+      expect(capturedFunction).toBeDefined();
+
+      // The captured function should be the wrapped version that calls stepFn with StepContext
+      expect(stepFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logger: expect.anything(),
+        }),
+      );
+    });
   });
 });

@@ -4,6 +4,7 @@ import {
 } from "../../testing/mock-checkpoint";
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
 import {
+  DurableLogger,
   ExecutionContext,
   WaitForConditionCheckFunc,
   WaitForConditionConfig,
@@ -13,6 +14,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 describe("WaitForCondition Handler Timing Tests", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -48,7 +50,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
       mockExecutionContext,
       mockCheckpoint,
       createStepId,
-      jest.fn().mockReturnValue({ log: jest.fn() }),
+      createDefaultLogger(),
       jest.fn(),
       jest.fn(),
       jest.fn().mockReturnValue(false),
@@ -59,9 +61,10 @@ describe("WaitForCondition Handler Timing Tests", () => {
 
   describe("WaitForCondition Timing and Concurrency Tests", () => {
     test("should terminate when retry is scheduled and no running operations", async () => {
-      const checkFn: WaitForConditionCheckFunc<{ complete: boolean }> = jest
-        .fn()
-        .mockReturnValue({ complete: false });
+      const checkFn: WaitForConditionCheckFunc<
+        { complete: boolean },
+        DurableLogger
+      > = jest.fn().mockReturnValue({ complete: false });
 
       const config: WaitForConditionConfig<{ complete: boolean }> = {
         initialState: { complete: false },
@@ -74,7 +77,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         mockExecutionContext,
         mockCheckpoint,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
@@ -112,9 +115,10 @@ describe("WaitForCondition Handler Timing Tests", () => {
 
       mockExecutionContext.getStepData = mockGetStepData;
 
-      const checkFn: WaitForConditionCheckFunc<{ complete: boolean }> = jest
-        .fn()
-        .mockReturnValue({ complete: true });
+      const checkFn: WaitForConditionCheckFunc<
+        { complete: boolean },
+        DurableLogger
+      > = jest.fn().mockReturnValue({ complete: true });
 
       const config: WaitForConditionConfig<{ complete: boolean }> = {
         initialState: { complete: false },
@@ -132,7 +136,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         mockExecutionContext,
         mockCheckpoint,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
@@ -155,7 +159,10 @@ describe("WaitForCondition Handler Timing Tests", () => {
       const stepId = "test-step-id";
       const hashedStepId = hashId(stepId);
 
-      const checkFn: WaitForConditionCheckFunc<{ count: number }> = jest
+      const checkFn: WaitForConditionCheckFunc<
+        { count: number },
+        DurableLogger
+      > = jest
         .fn()
         .mockReturnValueOnce({ count: 1 })
         .mockReturnValueOnce({ count: 2 });
@@ -194,7 +201,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         mockExecutionContext,
         mockCheckpoint,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
@@ -229,7 +236,10 @@ describe("WaitForCondition Handler Timing Tests", () => {
         },
       } as any;
 
-      const checkFn: WaitForConditionCheckFunc<{ progress: number }> = jest
+      const checkFn: WaitForConditionCheckFunc<
+        { progress: number },
+        DurableLogger
+      > = jest
         .fn()
         .mockReturnValueOnce({ progress: 75 })
         .mockReturnValueOnce({ progress: 100 });
@@ -271,7 +281,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         mockExecutionContext,
         mockCheckpoint,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
@@ -293,7 +303,10 @@ describe("WaitForCondition Handler Timing Tests", () => {
       const stepId = "test-step-id";
       const hashedStepId = hashId(stepId);
 
-      const checkFn: WaitForConditionCheckFunc<{ attempts: number }> = jest
+      const checkFn: WaitForConditionCheckFunc<
+        { attempts: number },
+        DurableLogger
+      > = jest
         .fn()
         .mockReturnValueOnce({ attempts: 1 })
         .mockReturnValueOnce({ attempts: 2 })
@@ -345,7 +358,7 @@ describe("WaitForCondition Handler Timing Tests", () => {
         mockExecutionContext,
         mockCheckpoint,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,

@@ -1,12 +1,14 @@
 import { createDurableContext } from "./durable-context";
-import { ExecutionContext, Logger, DurableExecutionMode } from "../../types";
+import { ExecutionContext, DurableExecutionMode } from "../../types";
 import { Context } from "aws-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 describe("DurableContext Logger Property", () => {
   let mockExecutionContext: ExecutionContext;
   let mockParentContext: Context;
-  let customLogger: Logger;
+  let customLogger: any;
 
   beforeEach(() => {
     customLogger = {
@@ -15,6 +17,7 @@ describe("DurableContext Logger Property", () => {
       error: jest.fn(),
       warn: jest.fn(),
       debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
     };
 
     mockExecutionContext = {
@@ -42,6 +45,7 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
 
     expect(context.logger).toBeDefined();
@@ -56,6 +60,7 @@ describe("DurableContext Logger Property", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
 
     // Set custom logger
@@ -64,31 +69,36 @@ describe("DurableContext Logger Property", () => {
     // Verify it works by calling a method
     context.logger.info("test message", { data: "test" });
 
-    // Logger is enriched with execution context (no step_id at top level)
-    expect(customLogger.info).toHaveBeenCalledWith(
-      "test message",
+    // In the new interface, logger methods take messages directly
+    expect(customLogger.info).toHaveBeenCalledWith("test message", {
+      data: "test",
+    });
+
+    // Verify configureDurableLoggingContext was called to set up the context
+    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith(
       expect.objectContaining({
-        execution_arn: "test-arn",
-        level: "info",
-        message: "test message",
-        data: { data: "test" },
+        shouldLog: expect.any(Function),
+        getDurableLogData: expect.any(Function),
       }),
     );
-
-    // Verify step_id is NOT present
-    const callArgs = (customLogger.info as jest.Mock).mock.calls[0][1];
-    expect(callArgs).not.toHaveProperty("step_id");
   });
 
   test("Logger property should be a live reference (getter)", () => {
+    const defaultLogger = createDefaultLogger();
+
+    const infoLogSpy = jest.spyOn(defaultLogger, "info").mockImplementation();
+
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      defaultLogger,
     );
 
     // Call logger before setting custom logger
     context.logger.info("message1");
+
+    expect(infoLogSpy).toHaveBeenCalledWith("message1");
 
     // Set custom logger
     context.configureLogger({ customLogger });
@@ -98,87 +108,283 @@ describe("DurableContext Logger Property", () => {
 
     // Custom logger should only be called for the second message
     expect(customLogger.info).toHaveBeenCalledTimes(1);
-    expect(customLogger.info).toHaveBeenCalledWith(
-      "message2",
+    expect(customLogger.info).toHaveBeenCalledWith("message2");
+
+    // Verify configureDurableLoggingContext was called to set up the context
+    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith(
       expect.objectContaining({
-        execution_arn: "test-arn",
+        shouldLog: expect.any(Function),
+        getDurableLogData: expect.any(Function),
       }),
     );
-
-    // Verify step_id is NOT present
-    const callArgs = (customLogger.info as jest.Mock).mock.calls[0][1];
-    expect(callArgs).not.toHaveProperty("step_id");
   });
 
   test("Logger should only log in ExecutionMode", () => {
+    // Helper to create a mock logger that respects shouldLog
+    const createMockLogger = () => {
+      let loggingContext: any = null;
+      const infoMock = jest.fn();
+
+      return {
+        log: jest.fn(),
+        info: jest.fn((...args: any[]) => {
+          if (!loggingContext || loggingContext.shouldLog()) {
+            infoMock(...args);
+          }
+        }),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        configureDurableLoggingContext: jest.fn((ctx: any) => {
+          loggingContext = ctx;
+        }),
+        _getInfoMock: () => infoMock,
+      };
+    };
+
+    const executionModeLogger = createMockLogger();
+    const replayModeLogger = createMockLogger();
+    const replaySucceededLogger = createMockLogger();
+
     // Test in ExecutionMode
     const contextExecution = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
-    contextExecution.configureLogger({ customLogger });
+    contextExecution.configureLogger({
+      customLogger: executionModeLogger as any,
+    });
 
-    contextExecution.logger.info("execution mode message");
-    expect(customLogger.info).toHaveBeenCalledWith(
+    // Simulate being inside an operation with ExecutionMode
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        contextExecution.logger.info("execution mode message");
+      },
+      undefined,
+      DurableExecutionMode.ExecutionMode,
+    );
+    expect(executionModeLogger._getInfoMock()).toHaveBeenCalledWith(
       "execution mode message",
-      expect.objectContaining({
-        execution_arn: "test-arn",
-      }),
     );
-
-    // Verify step_id is NOT present
-    const callArgs = (customLogger.info as jest.Mock).mock.calls[0][1];
-    expect(callArgs).not.toHaveProperty("step_id");
-
-    // Reset mock
-    jest.clearAllMocks();
 
     // Test in ReplayMode - should NOT log when modeAware is true (default)
     const contextReplay = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
-    contextReplay.configureLogger({ customLogger });
+    contextReplay.configureLogger({ customLogger: replayModeLogger as any });
 
-    contextReplay.logger.info("replay mode message");
-    expect(customLogger.info).not.toHaveBeenCalled();
-
-    // Reset mock
-    jest.clearAllMocks();
+    // Simulate being inside an operation with ReplayMode
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        contextReplay.logger.info("replay mode message");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(replayModeLogger._getInfoMock()).not.toHaveBeenCalled();
 
     // Test in ReplaySucceededContext - should NOT log when modeAware is true (default)
     const contextReplaySucceeded = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplaySucceededContext,
+      createDefaultLogger(),
     );
-    contextReplaySucceeded.configureLogger({ customLogger });
+    contextReplaySucceeded.configureLogger({
+      customLogger: replaySucceededLogger as any,
+    });
 
-    contextReplaySucceeded.logger.info("replay succeeded message");
-    expect(customLogger.info).not.toHaveBeenCalled();
+    // Simulate being inside an operation with ReplaySucceededContext
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        contextReplaySucceeded.logger.info("replay succeeded message");
+      },
+      undefined,
+      DurableExecutionMode.ReplaySucceededContext,
+    );
+    expect(replaySucceededLogger._getInfoMock()).not.toHaveBeenCalled();
   });
 
-  test("Logger in child context should have step ID", () => {
+  test("configureDurableLoggingContext should be called when configureLogger is called", () => {
+    const logger1: any = {
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
+    };
+
+    const logger2: any = {
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
+    };
+
+    const context = createDurableContext(
+      mockExecutionContext,
+      mockParentContext,
+      DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
+    );
+
+    // First call to configureLogger with logger1
+    context.configureLogger({ customLogger: logger1 });
+
+    // Verify configureDurableLoggingContext was called on logger1
+    expect(logger1.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
+    expect(logger1.configureDurableLoggingContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shouldLog: expect.any(Function),
+        getDurableLogData: expect.any(Function),
+      }),
+    );
+
+    // Capture the context passed to logger1
+    const logger1Context = (logger1.configureDurableLoggingContext as jest.Mock)
+      .mock.calls[0][0];
+
+    // Second call to configureLogger with logger2
+    context.configureLogger({ customLogger: logger2 });
+
+    // Verify configureDurableLoggingContext was called on logger2
+    expect(logger2.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
+    expect(logger2.configureDurableLoggingContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shouldLog: expect.any(Function),
+        getDurableLogData: expect.any(Function),
+      }),
+    );
+
+    // Verify logger1 was not called again
+    expect(logger1.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
+
+    // Capture the context passed to logger2
+    const logger2Context = (logger2.configureDurableLoggingContext as jest.Mock)
+      .mock.calls[0][0];
+
+    // Verify both contexts have the same structure but are different instances
+    expect(logger1Context).toHaveProperty("shouldLog");
+    expect(logger1Context).toHaveProperty("getDurableLogData");
+    expect(logger2Context).toHaveProperty("shouldLog");
+    expect(logger2Context).toHaveProperty("getDurableLogData");
+
+    // Test that the logging context functions work correctly
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        const logData1 = logger1Context.getDurableLogData();
+        const logData2 = logger2Context.getDurableLogData();
+
+        // Both should return the same data since they're from the same context
+        expect(logData1).toEqual(logData2);
+        expect(logData1).toEqual(
+          expect.objectContaining({
+            executionArn: "test-arn",
+            requestId: mockExecutionContext.requestId,
+          }),
+        );
+      },
+      undefined,
+      DurableExecutionMode.ExecutionMode,
+    );
+  });
+
+  test("configureDurableLoggingContext should not be called when only modeAware changes", () => {
+    const context = createDurableContext(
+      mockExecutionContext,
+      mockParentContext,
+      DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
+    );
+
+    // Set custom logger
+    context.configureLogger({ customLogger });
+    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledTimes(
+      1,
+    );
+
+    // Change only modeAware - should NOT call configureDurableLoggingContext again
+    context.configureLogger({ modeAware: false });
+    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledTimes(
+      1,
+    );
+
+    // Change modeAware again - still should NOT call configureDurableLoggingContext
+    context.configureLogger({ modeAware: true });
+    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledTimes(
+      1,
+    );
+  });
+
+  test("Logger in child context should have operation ID", () => {
+    // Use a fresh mock logger for this test
+    const childLogger: any = {
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn(),
+    };
+
     // Create a child context with a step prefix
     const childContext = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
       "1", // stepPrefix for child context
     );
-    childContext.configureLogger({ customLogger });
+    childContext.configureLogger({ customLogger: childLogger });
 
-    childContext.logger.info("child message");
-
-    // Child context logger should have step_id populated with the hashed prefix
-    expect(customLogger.info).toHaveBeenCalledWith(
-      "child message",
+    // The operationId should be configured through configureDurableLoggingContext
+    expect(childLogger.configureDurableLoggingContext).toHaveBeenCalledWith(
       expect.objectContaining({
-        execution_arn: "test-arn",
-        step_id: hashId("1"),
+        shouldLog: expect.any(Function),
+        getDurableLogData: expect.any(Function),
       }),
+    );
+
+    // Verify the getDurableLogData function returns the correct operationId
+    // when called within a child context
+    const contextArg = (childLogger.configureDurableLoggingContext as jest.Mock)
+      .mock.calls[0][0];
+
+    // Simulate being inside a child context operation
+    runWithContext(
+      "1", // contextId matching the stepPrefix
+      undefined,
+      () => {
+        const durableLogData = contextArg.getDurableLogData();
+        expect(durableLogData).toEqual(
+          expect.objectContaining({
+            operationId: hashId("1"),
+            executionArn: "test-arn",
+          }),
+        );
+
+        // Also verify the logger actually logs the message
+        childContext.logger.info("child message");
+        expect(childLogger.info).toHaveBeenCalledWith("child message");
+      },
+      undefined,
+      DurableExecutionMode.ExecutionMode,
     );
   });
 });

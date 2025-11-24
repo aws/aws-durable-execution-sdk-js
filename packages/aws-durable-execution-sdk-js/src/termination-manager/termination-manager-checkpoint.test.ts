@@ -4,13 +4,15 @@ import {
   createCheckpoint,
   deleteCheckpoint,
 } from "../utils/checkpoint/checkpoint";
-import { ExecutionContext } from "../types";
+import { DurableLogger, ExecutionContext } from "../types";
 import { EventEmitter } from "events";
+import { createDefaultLogger } from "../utils/logger/default-logger";
 
 describe("TerminationManager Checkpoint Integration", () => {
   let terminationManager: TerminationManager;
   let mockContext: ExecutionContext;
   let mockEmitter: EventEmitter;
+  let mockLogger: DurableLogger;
 
   beforeEach(() => {
     deleteCheckpoint();
@@ -28,6 +30,8 @@ describe("TerminationManager Checkpoint Integration", () => {
       _stepData: {},
       terminationManager,
     } as unknown as ExecutionContext;
+
+    mockLogger = createDefaultLogger(mockContext);
   });
 
   afterEach(() => {
@@ -39,6 +43,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       mockContext,
       "initial-token",
       mockEmitter,
+      mockLogger,
     );
 
     // Checkpoint should work before termination
@@ -79,6 +84,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       mockContext,
       "initial-token",
       mockEmitter,
+      mockLogger,
     );
     const mockCheckpointFn = mockContext.state.checkpoint as jest.Mock;
 
@@ -133,6 +139,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       mockContext,
       "initial-token",
       mockEmitter,
+      mockLogger,
     );
 
     // Terminate and set checkpoint terminating flag
@@ -161,6 +168,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       mockContext,
       "initial-token",
       mockEmitter,
+      mockLogger,
     );
 
     terminationManager.terminate();

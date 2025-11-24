@@ -1,5 +1,5 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
-import { BatchItemStatus, DurableContext } from "../../types";
+import { BatchItemStatus, DurableLogger, DurableContext } from "../../types";
 
 describe("ConcurrentExecutionHandler Integration Tests", () => {
   it("should execute items concurrently with real DurableContext", async () => {
@@ -83,7 +83,10 @@ describe("ConcurrentExecutionHandler Integration Tests", () => {
 
     const result = await context._executeConcurrently(
       items,
-      async (item: (typeof items)[0], childContext: DurableContext) => {
+      async (
+        item: (typeof items)[0],
+        childContext: DurableContext<DurableLogger>,
+      ) => {
         childContexts.push(childContext);
 
         // Use child context to run a step

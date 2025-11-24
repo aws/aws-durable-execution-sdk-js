@@ -8,23 +8,26 @@ import {
   WaitForCallbackContext,
   StepContext,
   DurablePromise,
+  DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 
-export const createWaitForCallbackHandler = (
+export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  runInChildContext: DurableContext["runInChildContext"],
+  runInChildContext: DurableContext<Logger>["runInChildContext"],
 ) => {
   return <T>(
-    nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc,
-    submitterOrConfig?: WaitForCallbackSubmitterFunc | WaitForCallbackConfig<T>,
+    nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc<Logger>,
+    submitterOrConfig?:
+      | WaitForCallbackSubmitterFunc<Logger>
+      | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
   ): DurablePromise<T> => {
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
       let name: string | undefined;
-      let submitter: WaitForCallbackSubmitterFunc;
+      let submitter: WaitForCallbackSubmitterFunc<Logger>;
       let config: WaitForCallbackConfig<T> | undefined;
 
       // Parse the overloaded parameters - validation errors thrown here are async
@@ -57,7 +60,9 @@ export const createWaitForCallbackHandler = (
       });
 
       // Use runInChildContext to ensure proper ID generation and isolation
-      const childFunction = async (childCtx: DurableContext): Promise<T> => {
+      const childFunction = async (
+        childCtx: DurableContext<Logger>,
+      ): Promise<T> => {
         // Convert WaitForCallbackConfig to CreateCallbackConfig
         const createCallbackConfig: CreateCallbackConfig<T> | undefined = config
           ? {
@@ -78,9 +83,9 @@ export const createWaitForCallbackHandler = (
 
         // Execute the submitter step (submitter is now mandatory)
         await childCtx.step(
-          async (stepContext: StepContext) => {
+          async (stepContext: StepContext<Logger>) => {
             // Use the step's built-in logger instead of creating a new one
-            const callbackContext: WaitForCallbackContext = {
+            const callbackContext: WaitForCallbackContext<Logger> = {
               logger: stepContext.logger,
             };
 

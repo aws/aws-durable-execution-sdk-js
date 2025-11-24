@@ -1,4 +1,9 @@
-import { DurableContext, RetryDecision, DurablePromise } from "../../types";
+import {
+  DurableContext,
+  RetryDecision,
+  DurablePromise,
+  DurableLogger,
+} from "../../types";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
 // Minimal error decoration for Promise.allSettled results
@@ -69,8 +74,9 @@ const stepConfig = {
   }),
 };
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export const createPromiseHandler = (step: DurableContext["step"]) => {
+export const createPromiseHandler = <Logger extends DurableLogger>(
+  step: DurableContext<Logger>["step"],
+) => {
   const parseParams = <T>(
     nameOrPromises: string | undefined | Promise<T>[],
     maybePromises?: Promise<T>[],

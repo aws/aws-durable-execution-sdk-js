@@ -1,5 +1,5 @@
 import { createMapHandler } from "./map-handler";
-import { ExecutionContext, MapFunc } from "../../types";
+import { DurableLogger, ExecutionContext, MapFunc } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 
 describe("Map Handler Two-Phase Execution", () => {
@@ -32,7 +32,7 @@ describe("Map Handler Two-Phase Execution", () => {
     const mapHandler = createMapHandler(mockContext, mockExecuteConcurrently);
 
     const items = ["item1"];
-    const mapFunc: MapFunc<string, string> = jest
+    const mapFunc: MapFunc<string, string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("processed");
 
@@ -58,7 +58,7 @@ describe("Map Handler Two-Phase Execution", () => {
     const mapHandler = createMapHandler(mockContext, mockExecuteConcurrently);
 
     const items = ["item1"];
-    const mapFunc: MapFunc<string, string> = jest
+    const mapFunc: MapFunc<string, string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("result");
 

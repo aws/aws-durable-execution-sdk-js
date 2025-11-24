@@ -5,7 +5,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import { OperationSubType, ExecutionContext } from "../../types";
+import { OperationSubType, ExecutionContext, DurableLogger } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import {
   CheckpointHandler,
@@ -14,6 +14,7 @@ import {
 } from "./checkpoint";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { createDefaultLogger } from "../logger/default-logger";
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
@@ -26,6 +27,7 @@ describe("CheckpointHandler", () => {
   let mockContext: ExecutionContext;
   let checkpointHandler: CheckpointHandler;
   let mockEmitter: EventEmitter;
+  let mockLogger: DurableLogger;
 
   const mockNewTaskToken = "new-task-token";
 
@@ -51,12 +53,16 @@ describe("CheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      requestId: "",
+      tenantId: undefined,
     } satisfies ExecutionContext;
+    mockLogger = createDefaultLogger(mockContext);
 
     checkpointHandler = new CheckpointHandler(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
   });
 
@@ -87,7 +93,7 @@ describe("CheckpointHandler", () => {
             },
           ],
         },
-        undefined, // logger parameter
+        mockLogger,
       );
     });
   });
@@ -599,7 +605,7 @@ describe("CheckpointHandler", () => {
             },
           ],
         },
-        undefined, // logger parameter
+        mockLogger,
       );
     });
   });
@@ -656,6 +662,8 @@ describe("deleteCheckpointHandler", () => {
   let mockContext1: ExecutionContext;
   let mockContext2: ExecutionContext;
   let mockEmitter: EventEmitter;
+  let mockLogger1: DurableLogger;
+  let mockLogger2: DurableLogger;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -689,6 +697,8 @@ describe("deleteCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData1, stepId);
       }),
+      requestId: "",
+      tenantId: undefined,
     } satisfies ExecutionContext;
 
     const stepData2 = {};
@@ -700,7 +710,12 @@ describe("deleteCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData2, stepId);
       }),
+      requestId: "",
+      tenantId: undefined,
     } satisfies ExecutionContext;
+
+    mockLogger1 = createDefaultLogger(mockContext1);
+    mockLogger2 = createDefaultLogger(mockContext2);
   });
 
   it("should remove existing handler from the global map", async () => {
@@ -709,6 +724,7 @@ describe("deleteCheckpointHandler", () => {
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger1,
     );
 
     // Verify handler exists by using it
@@ -723,6 +739,7 @@ describe("deleteCheckpointHandler", () => {
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger1,
     );
 
     // The new handler should be a different instance, evidenced by separate batching behavior
@@ -739,11 +756,13 @@ describe("deleteCheckpointHandler", () => {
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger1,
     );
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger2,
     ); // This replaces the first
 
     // Use the first handler (checkpoint1's context) - both calls will be batched
@@ -768,6 +787,7 @@ describe("deleteCheckpointHandler", () => {
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger1,
     );
     await checkpoint3("step-3", { Action: OperationAction.START });
     // After cleanup, new handler is created, so this is a separate call
@@ -783,6 +803,7 @@ describe("deleteCheckpointHandler", () => {
       mockContext1,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger1,
     );
 
     // Try to create with second context - should return same handler (first context)
@@ -790,6 +811,7 @@ describe("deleteCheckpointHandler", () => {
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger2,
     );
 
     // Both checkpoint functions should use the first context (mockContext1)
@@ -817,6 +839,7 @@ describe("deleteCheckpointHandler", () => {
         mockContext1,
         "test-token",
         mockEmitter,
+        mockLogger1,
       );
 
       await checkpoint.force();
@@ -828,7 +851,7 @@ describe("deleteCheckpointHandler", () => {
           CheckpointToken: "test-token",
           Updates: [],
         },
-        undefined,
+        mockLogger1,
       );
     });
 
@@ -837,6 +860,7 @@ describe("deleteCheckpointHandler", () => {
         mockContext1,
         "test-token",
         mockEmitter,
+        mockLogger1,
       );
 
       // Make checkpoint API slow to simulate ongoing processing
@@ -892,7 +916,7 @@ describe("deleteCheckpointHandler", () => {
             },
           ],
         },
-        undefined,
+        mockLogger1,
       );
     });
 
@@ -901,6 +925,7 @@ describe("deleteCheckpointHandler", () => {
         mockContext1,
         "test-token",
         mockEmitter,
+        mockLogger1,
       );
       const error = new Error("Checkpoint failed");
       mockState1.checkpoint.mockRejectedValue(error);
@@ -932,6 +957,7 @@ describe("createCheckpointHandler", () => {
   let mockTerminationManager: TerminationManager;
   let mockState: any;
   let mockContext: ExecutionContext;
+  let mockLogger: DurableLogger;
   let mockEmitter: EventEmitter;
 
   beforeEach(() => {
@@ -956,7 +982,10 @@ describe("createCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      requestId: "mock-request-id",
+      tenantId: undefined,
     } satisfies ExecutionContext;
+    mockLogger = createDefaultLogger(mockContext);
   });
 
   it("should successfully create a checkpoint", async () => {
@@ -972,6 +1001,7 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
     await checkpoint(mockStepId, checkpointData);
 
@@ -989,7 +1019,7 @@ describe("createCheckpointHandler", () => {
           }),
         ]),
       }),
-      undefined, // logger parameter
+      mockLogger,
     );
   });
 
@@ -1000,6 +1030,7 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
 
     // Mock checkpoint to delay so we can test batching
@@ -1051,11 +1082,13 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
     const checkpoint2 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
 
     // Mock to delay first checkpoint
@@ -1094,11 +1127,13 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     ); // Should return same handler (first context)
 
     // Execute checkpoints - both should use the first context (mockContext)
@@ -1132,11 +1167,13 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      createDefaultLogger(mockContext2),
     );
 
     // Execute checkpoints from both contexts
@@ -1163,6 +1200,7 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
 
     // Create large payload data that will exceed 750KB when combined
@@ -1197,6 +1235,7 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
 
     // Create large payload data that will exceed 750KB when combined
@@ -1231,6 +1270,7 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
 
     // Create items where first is large enough to trigger size limit
@@ -1276,6 +1316,7 @@ describe("createCheckpointHandler", () => {
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
 
     // Mock checkpoint response with operations

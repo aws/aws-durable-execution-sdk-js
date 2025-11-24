@@ -3,6 +3,7 @@ import { RetryDecision } from "./step";
 import { WaitForCallbackContext } from "./logger";
 import { Duration } from "./core";
 import { DurablePromise } from "./durable-promise";
+import { DurableLogger } from "./durable-logger";
 
 /**
  * Configuration options for createCallback operations
@@ -38,7 +39,7 @@ export type CreateCallbackResult<T> = [DurablePromise<T>, string];
  * @param context - Context for logging and other operations during callback submission
  * @returns Promise that resolves when the callback ID has been successfully submitted
  */
-export type WaitForCallbackSubmitterFunc = (
+export type WaitForCallbackSubmitterFunc<Logger extends DurableLogger> = (
   callbackId: string,
-  context: WaitForCallbackContext,
+  context: WaitForCallbackContext<Logger>,
 ) => Promise<void>;
