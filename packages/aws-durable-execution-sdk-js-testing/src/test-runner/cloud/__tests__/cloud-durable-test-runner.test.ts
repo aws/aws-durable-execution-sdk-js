@@ -10,8 +10,10 @@ import {
   GetDurableExecutionCommandOutput,
   OperationStatus,
   OperationType,
+  InvocationType,
 } from "@aws-sdk/client-lambda";
 import { CloudDurableTestRunner } from "../cloud-durable-test-runner";
+import { TestResult, WaitingOperationStatus } from "../../durable-test-runner";
 
 jest.mock("@aws-sdk/client-lambda");
 
@@ -830,6 +832,125 @@ describe("CloudDurableTestRunner", () => {
       const result = await runPromise;
 
       expect(result).toBeDefined();
+    });
+  });
+
+  describe("Operation rejection scenarios", () => {
+    it("should reject pending operation promises when execution completes successfully", async () => {
+      setupMockApiResponses(mockSend, {
+        executionResponse: {
+          Status: ExecutionStatus.SUCCEEDED,
+          Result: '{"success": true}',
+          $metadata: {},
+          DurableExecutionArn: undefined,
+          DurableExecutionName: undefined,
+          FunctionArn: undefined,
+          StartTimestamp: undefined,
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+        config: {
+          invocationType: InvocationType.Event,
+        },
+      });
+
+      // Get an operation that will never be found in the history
+      const operation = runner.getOperation("nonexistent-operation");
+
+      const runPromise = runner.run();
+
+      const waitPromise = operation.waitForData();
+
+      const [waitResult, runResult] = await Promise.allSettled([
+        waitPromise,
+        runPromise,
+        jest.advanceTimersByTimeAsync(1000),
+      ]);
+
+      expect(runResult.status).toBe("fulfilled");
+      expect(
+        (
+          runResult as PromiseFulfilledResult<TestResult<unknown>>
+        ).value.getResult(),
+      ).not.toBeUndefined();
+
+      // The waiting operation should be rejected
+      expect(waitResult.status).toBe("rejected");
+      expect((waitResult as PromiseRejectedResult).reason).toEqual(
+        new Error(
+          "Operation was not found during execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+        ),
+      );
+    });
+
+    it("should reject pending operation promises when execution fails", async () => {
+      setupMockApiResponses(mockSend, {
+        executionResponse: {
+          Status: ExecutionStatus.FAILED,
+          Error: {
+            ErrorMessage: "ExecutionFailed",
+            ErrorType: "TestError",
+          },
+          $metadata: {},
+          DurableExecutionArn: undefined,
+          DurableExecutionName: undefined,
+          FunctionArn: undefined,
+          StartTimestamp: undefined,
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+        config: {
+          invocationType: InvocationType.Event,
+        },
+      });
+
+      // Get operations that will never be found
+      const operation1 = runner.getOperationById("missing-op-1");
+      const operation2 = runner.getOperationById("missing-op-2");
+
+      const waitPromise1 = operation1.waitForData();
+      const waitPromise2 = operation2.waitForData(
+        WaitingOperationStatus.COMPLETED,
+      );
+
+      const runPromise = runner.run();
+
+      // The run should complete with failed execution
+      const [waitResult1, waitResult2, runResult] = await Promise.allSettled([
+        waitPromise1,
+        waitPromise2,
+        runPromise,
+        jest.advanceTimersByTimeAsync(1000),
+      ]);
+
+      expect(runResult.status).toBe("fulfilled");
+      expect(
+        (
+          runResult as PromiseFulfilledResult<TestResult<unknown>>
+        ).value.getError(),
+      ).toEqual({
+        errorMessage: "ExecutionFailed",
+        errorType: "TestError",
+      });
+
+      // The waiting operation should be rejected
+      expect(waitResult1.status).toBe("rejected");
+      expect((waitResult1 as PromiseRejectedResult).reason).toEqual(
+        new Error(
+          "Operation was not found during execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+        ),
+      );
+
+      expect(waitResult2.status).toBe("rejected");
+      expect((waitResult2 as PromiseRejectedResult).reason).toEqual(
+        new Error(
+          "Operation was not found during execution completion. Expected status: COMPLETED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+        ),
+      );
     });
   });
 });

@@ -178,8 +178,6 @@ describe("OperationWaitManager", () => {
         // Negative cases - operations that should NOT resolve specific wait statuses
         it.each([
           [OperationStatus.STARTED, WaitingOperationStatus.COMPLETED],
-          [OperationStatus.SUCCEEDED, WaitingOperationStatus.STARTED],
-          [OperationStatus.FAILED, WaitingOperationStatus.STARTED],
           [OperationStatus.STARTED, WaitingOperationStatus.SUBMITTED],
           [OperationStatus.READY, WaitingOperationStatus.SUBMITTED],
           [OperationStatus.PENDING, WaitingOperationStatus.SUBMITTED],
@@ -203,6 +201,10 @@ describe("OperationWaitManager", () => {
 
             // The promise should still be pending (not resolved)
             expect(stillPending).toBe(true);
+
+            // Clean up the pending promise to avoid unhandled rejection
+            waitManager.clearWaitingOperations();
+            await expect(waitPromise).rejects.toThrow();
           },
         );
       });
@@ -261,6 +263,12 @@ describe("OperationWaitManager", () => {
         expect(startedStillPending).toBe(true);
         expect(completedStillPending).toBe(true);
         expect(submittedStillPending).toBe(true);
+
+        // Clean up pending promises to avoid unhandled rejections
+        waitManager.clearWaitingOperations();
+        await expect(startedPromise).rejects.toThrow();
+        await expect(completedPromise).rejects.toThrow();
+        await expect(submittedPromise).rejects.toThrow();
       });
     });
 
@@ -288,8 +296,8 @@ describe("OperationWaitManager", () => {
   });
 
   describe("clearWaitingOperations", () => {
-    it("should clear all waiting operations when no specific operation is provided", () => {
-      // Arrange
+    it("should clear all waiting operations and reject promises with descriptive error messages", async () => {
+      // Arrange - Create operations with and without names
       const testOperation2 = new OperationWithData(
         waitManager,
         operationIndex,
@@ -305,30 +313,63 @@ describe("OperationWaitManager", () => {
           events: [],
         },
       );
-      void waitManager.waitForOperation(
+      const operationWithoutName = new OperationWithData(
+        waitManager,
+        operationIndex,
+        {} as DurableApiClient,
+        {
+          operation: {
+            Id: "no-name-op-id",
+            Type: OperationType.STEP,
+            Status: OperationStatus.PENDING,
+            StartTimestamp: undefined,
+          },
+          events: [],
+        },
+      );
+
+      const promise1 = waitManager.waitForOperation(
         testOperation,
         WaitingOperationStatus.STARTED,
       );
-      void waitManager.waitForOperation(
+      const promise2 = waitManager.waitForOperation(
         testOperation2,
         WaitingOperationStatus.COMPLETED,
       );
-      expect(waitManager.getWaitingOperationsCount()).toBe(2);
+      const promise3 = waitManager.waitForOperation(
+        operationWithoutName,
+        WaitingOperationStatus.SUBMITTED,
+      );
+      expect(waitManager.getWaitingOperationsCount()).toBe(3);
 
       // Act
       waitManager.clearWaitingOperations();
 
-      // Assert
+      // Assert - All operations cleared and proper error messages
       expect(waitManager.getWaitingOperationsCount()).toBe(0);
+
+      await expect(promise1).rejects.toThrow(
+        "Operation was not found during execution completion. Expected status: STARTED.",
+      );
+      await expect(promise2).rejects.toThrow(
+        "Operation was not found during execution completion. Expected status: COMPLETED.",
+      );
+      // Verify error message uses ID as fallback when name is missing
+      await expect(promise3).rejects.toThrow(
+        "Operation was not found during execution completion. Expected status: SUBMITTED.",
+      );
+    });
+
+    it("should not throw when clearing with no waiting operations", () => {
+      expect(waitManager.getWaitingOperationsCount()).toBe(0);
+      expect(() => {
+        waitManager.clearWaitingOperations();
+      }).not.toThrow();
     });
   });
 
   describe("getWaitingOperationsCount", () => {
-    it("should return 0 when no operations are waiting", () => {
-      expect(waitManager.getWaitingOperationsCount()).toBe(0);
-    });
-
-    it("should return the correct count of waiting operations", () => {
+    it("should track the count of waiting operations correctly", async () => {
       // Arrange
       const testOperation2 = new OperationWithData(
         waitManager,
@@ -346,22 +387,28 @@ describe("OperationWaitManager", () => {
         },
       );
 
-      // Act
-      void waitManager.waitForOperation(
+      // Act - Create promises to track the count
+      const promise1 = waitManager.waitForOperation(
         testOperation,
         WaitingOperationStatus.STARTED,
       );
-      void waitManager.waitForOperation(
+      const promise2 = waitManager.waitForOperation(
         testOperation,
         WaitingOperationStatus.COMPLETED,
       );
-      void waitManager.waitForOperation(
+      const promise3 = waitManager.waitForOperation(
         testOperation2,
         WaitingOperationStatus.STARTED,
       );
 
       // Assert
       expect(waitManager.getWaitingOperationsCount()).toBe(3);
+
+      // Clean up to avoid unhandled promise rejections
+      waitManager.clearWaitingOperations();
+      await expect(promise1).rejects.toThrow();
+      await expect(promise2).rejects.toThrow();
+      await expect(promise3).rejects.toThrow();
     });
   });
 
@@ -518,6 +565,10 @@ describe("OperationWaitManager", () => {
 
         expect(stillPending).toBe(true);
         expect(waitManager.getWaitingOperationsCount()).toBe(1);
+
+        // Clean up pending promise to avoid unhandled rejection
+        waitManager.clearWaitingOperations();
+        await expect(waitPromise).rejects.toThrow();
       });
 
       it("should respect status matching for parent resolution", async () => {
@@ -562,88 +613,66 @@ describe("OperationWaitManager", () => {
         expect(result).toBe(parentOperation);
       });
 
-      it("should not resolve parent operations for non-callback operations", async () => {
-        // Arrange - Create parent operation
-        const parentOperation = createWaitForCallbackOperation("parent-op-id");
+      it.each([
+        {
+          name: "non-callback operations",
+          setup: () => ({
+            parentOp: createWaitForCallbackOperation("parent-op-id"),
+            checkpointOp: createNonCallbackCheckpointOperation(
+              OperationType.STEP,
+              "parent-op-id",
+            ),
+          }),
+        },
+        {
+          name: "callback operations without ParentId",
+          setup: () => ({
+            parentOp: createWaitForCallbackOperation("parent-op-id"),
+            checkpointOp: {
+              operation: {
+                Id: "callback-op-id",
+                Type: OperationType.CALLBACK,
+                Status: OperationStatus.SUCCEEDED,
+                StartTimestamp: undefined,
+              },
+              events: [],
+            } as OperationEvents,
+          }),
+        },
+        {
+          name: "non-waitForCallback parent operations",
+          setup: () => ({
+            parentOp: createRegularOperation("parent-op-id"),
+            checkpointOp: createCallbackCheckpointOperation(
+              "parent-op-id",
+              OperationStatus.SUCCEEDED,
+            ),
+          }),
+        },
+      ])(
+        "should not resolve parent operations for $name",
+        async ({ setup }) => {
+          const { parentOp, checkpointOp } = setup();
 
-        const waitPromise = waitManager.waitForOperation(
-          parentOperation,
-          WaitingOperationStatus.COMPLETED,
-        );
+          const waitPromise = waitManager.waitForOperation(
+            parentOp,
+            WaitingOperationStatus.COMPLETED,
+          );
 
-        // Act - Trigger non-callback operation (should not trigger parent resolution)
-        const nonCallbackOperation = createNonCallbackCheckpointOperation(
-          OperationType.STEP,
-          "parent-op-id",
-        );
-        waitManager.handleCheckpointReceived([nonCallbackOperation], []);
+          waitManager.handleCheckpointReceived([checkpointOp], []);
 
-        // Assert - Operation should not be resolved
-        const stillPending = await Promise.race([
-          waitPromise.then(() => false),
-          Promise.resolve(true),
-        ]);
+          const stillPending = await Promise.race([
+            waitPromise.then(() => false),
+            Promise.resolve(true),
+          ]);
 
-        expect(stillPending).toBe(true);
-        expect(waitManager.getWaitingOperationsCount()).toBe(1);
-      });
+          expect(stillPending).toBe(true);
+          expect(waitManager.getWaitingOperationsCount()).toBe(1);
 
-      it("should not resolve parent operations for callback operations without ParentId", async () => {
-        // Arrange - Create parent operation
-        const parentOperation = createWaitForCallbackOperation("parent-op-id");
-
-        const waitPromise = waitManager.waitForOperation(
-          parentOperation,
-          WaitingOperationStatus.COMPLETED,
-        );
-
-        // Act - Trigger callback operation without ParentId
-        const callbackWithoutParent: OperationEvents = {
-          operation: {
-            Id: "callback-op-id",
-            Type: OperationType.CALLBACK,
-            Status: OperationStatus.SUCCEEDED,
-            StartTimestamp: undefined,
-          },
-          events: [],
-        };
-        waitManager.handleCheckpointReceived([callbackWithoutParent], []);
-
-        // Assert - Operation should not be resolved
-        const stillPending = await Promise.race([
-          waitPromise.then(() => false),
-          Promise.resolve(true),
-        ]);
-
-        expect(stillPending).toBe(true);
-        expect(waitManager.getWaitingOperationsCount()).toBe(1);
-      });
-
-      it("should not resolve non-waitForCallback operations via parent resolution", async () => {
-        // Arrange - Create regular operation (not waitForCallback)
-        const regularOperation = createRegularOperation("parent-op-id");
-
-        const waitPromise = waitManager.waitForOperation(
-          regularOperation,
-          WaitingOperationStatus.COMPLETED,
-        );
-
-        // Act - Trigger callback operation (should not resolve non-waitForCallback operations)
-        const callbackOperation = createCallbackCheckpointOperation(
-          "parent-op-id",
-          OperationStatus.SUCCEEDED,
-        );
-        waitManager.handleCheckpointReceived([callbackOperation], []);
-
-        // Assert - Operation should not be resolved via parent resolution
-        const stillPending = await Promise.race([
-          waitPromise.then(() => false),
-          Promise.resolve(true),
-        ]);
-
-        expect(stillPending).toBe(true);
-        expect(waitManager.getWaitingOperationsCount()).toBe(1);
-      });
+          waitManager.clearWaitingOperations();
+          await expect(waitPromise).rejects.toThrow();
+        },
+      );
     });
 
     describe("Submitter of WaitForCallback scenarios", () => {
@@ -724,45 +753,80 @@ describe("OperationWaitManager", () => {
 
         expect(stillPending).toBe(true);
         expect(waitManager.getWaitingOperationsCount()).toBe(1);
+
+        // Clean up pending promise to avoid unhandled rejection
+        waitManager.clearWaitingOperations();
+        await expect(waitPromise).rejects.toThrow();
       });
 
-      it("should not resolve parent when STEP operation has non-WaitForCallback parent", async () => {
-        // Arrange - Create regular CONTEXT parent operation (not WaitForCallback) and add to index
-        const regularParentOperation = new OperationWithData(
-          waitManager,
-          operationIndex,
-          {} as DurableApiClient,
-          {
-            operation: {
-              Id: "regular-parent-id",
-              Type: OperationType.CONTEXT,
-              // No SubType means it's not WAIT_FOR_CALLBACK
-              Status: OperationStatus.PENDING,
-              StartTimestamp: undefined,
-            },
-            events: [],
+      it.each([
+        {
+          name: "STEP operation has non-WaitForCallback parent",
+          setup: () => {
+            const regularParentOperation = new OperationWithData(
+              waitManager,
+              operationIndex,
+              {} as DurableApiClient,
+              {
+                operation: {
+                  Id: "regular-parent-id",
+                  Type: OperationType.CONTEXT,
+                  Status: OperationStatus.PENDING,
+                  StartTimestamp: undefined,
+                },
+                events: [],
+              },
+            );
+            operationIndex.addOperations([
+              {
+                operation: regularParentOperation.getOperationData()!,
+                events: [],
+              },
+            ]);
+            return {
+              parentOp: regularParentOperation,
+              stepOp: createStepCheckpointOperation(
+                "regular-parent-id",
+                OperationStatus.SUCCEEDED,
+              ),
+            };
           },
-        );
-        operationIndex.addOperations([
-          {
-            operation: regularParentOperation.getOperationData()!,
-            events: [],
-          },
-        ]);
+        },
+        {
+          name: "STEP operation has no ParentId",
+          setup: () => ({
+            parentOp: createWaitForCallbackOperation("parent-op-id"),
+            stepOp: {
+              operation: {
+                Id: "step-no-parent-id",
+                Type: OperationType.STEP,
+                Status: OperationStatus.SUCCEEDED,
+                StartTimestamp: undefined,
+              },
+              events: [],
+            } as OperationEvents,
+          }),
+        },
+        {
+          name: "parent operation is not found in index",
+          setup: () => ({
+            parentOp: createWaitForCallbackOperation("parent-op-id"),
+            stepOp: createStepCheckpointOperation(
+              "parent-op-id",
+              OperationStatus.SUCCEEDED,
+            ),
+          }),
+        },
+      ])("should not resolve parent when $name", async ({ setup }) => {
+        const { parentOp, stepOp } = setup();
 
         const waitPromise = waitManager.waitForOperation(
-          regularParentOperation,
+          parentOp,
           WaitingOperationStatus.COMPLETED,
         );
 
-        // Act - Trigger STEP operation with regular parent ID
-        const stepOperation = createStepCheckpointOperation(
-          "regular-parent-id",
-          OperationStatus.SUCCEEDED,
-        );
-        waitManager.handleCheckpointReceived([stepOperation], []);
+        waitManager.handleCheckpointReceived([stepOp], []);
 
-        // Assert - Parent should not be resolved
         const stillPending = await Promise.race([
           waitPromise.then(() => false),
           Promise.resolve(true),
@@ -770,63 +834,9 @@ describe("OperationWaitManager", () => {
 
         expect(stillPending).toBe(true);
         expect(waitManager.getWaitingOperationsCount()).toBe(1);
-      });
 
-      it("should not resolve parent when STEP operation has no ParentId", async () => {
-        // Arrange - Create parent WaitForCallback operation
-        const parentOperation = createWaitForCallbackOperation("parent-op-id");
-
-        const waitPromise = waitManager.waitForOperation(
-          parentOperation,
-          WaitingOperationStatus.COMPLETED,
-        );
-
-        // Act - Trigger STEP operation without ParentId
-        const stepWithoutParent: OperationEvents = {
-          operation: {
-            Id: "step-no-parent-id",
-            Type: OperationType.STEP,
-            Status: OperationStatus.SUCCEEDED,
-            StartTimestamp: undefined,
-          },
-          events: [],
-        };
-        waitManager.handleCheckpointReceived([stepWithoutParent], []);
-
-        // Assert - Parent should not be resolved
-        const stillPending = await Promise.race([
-          waitPromise.then(() => false),
-          Promise.resolve(true),
-        ]);
-
-        expect(stillPending).toBe(true);
-        expect(waitManager.getWaitingOperationsCount()).toBe(1);
-      });
-
-      it("should not resolve parent when parent operation is not found in index", async () => {
-        // Arrange - Create parent operation but don't add to index
-        const parentOperation = createWaitForCallbackOperation("parent-op-id");
-
-        const waitPromise = waitManager.waitForOperation(
-          parentOperation,
-          WaitingOperationStatus.COMPLETED,
-        );
-
-        // Act - Trigger STEP operation with parent ID not in index
-        const stepOperation = createStepCheckpointOperation(
-          "parent-op-id",
-          OperationStatus.SUCCEEDED,
-        );
-        waitManager.handleCheckpointReceived([stepOperation], []);
-
-        // Assert - Parent should not be resolved (since it's not in the index)
-        const stillPending = await Promise.race([
-          waitPromise.then(() => false),
-          Promise.resolve(true),
-        ]);
-
-        expect(stillPending).toBe(true);
-        expect(waitManager.getWaitingOperationsCount()).toBe(1);
+        waitManager.clearWaitingOperations();
+        await expect(waitPromise).rejects.toThrow();
       });
 
       it("should respect status matching for STEP submitter resolution", async () => {

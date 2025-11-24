@@ -301,6 +301,26 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(result.getResult()).toBe(true);
   });
 
+  it("should reject waiting promise if execution completes", async () => {
+    const handler = withDurableExecution(() => {
+      return Promise.resolve("result");
+    });
+
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: handler,
+    });
+
+    const resultPromise = runner.run();
+
+    await expect(
+      runner.getOperation("non-existent").waitForData(),
+    ).rejects.toThrow(
+      "Operation was not found after execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+    );
+
+    expect((await resultPromise).getResult()).toBe("result");
+  });
+
   // enable when language SDK supports concurrent waits
   it.skip("should prevent scheduled function interference in parallel wait scenario", async () => {
     // This test creates a scenario where multiple wait operations could create

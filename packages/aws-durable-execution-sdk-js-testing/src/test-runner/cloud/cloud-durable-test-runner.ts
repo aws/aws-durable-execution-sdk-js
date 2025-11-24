@@ -126,6 +126,7 @@ export class CloudDurableTestRunner<ResultType>
       );
     } finally {
       historyPoller.stopPolling();
+      this.waitManager.clearWaitingOperations();
     }
   }
 
