@@ -8,15 +8,6 @@ body:
       value: |
         Thanks for taking the time to suggest a new feature!
 
-  - type: input
-    id: title
-    attributes:
-      label: Title
-      description: Brief description of the feature
-      placeholder: e.g., Add support for...
-    validations:
-      required: true
-
   - type: textarea
     id: what
     attributes:
