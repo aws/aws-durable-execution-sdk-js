@@ -4,6 +4,7 @@ import {
   DurableContext,
   MapFunc,
   BatchItemStatus,
+  DurableLogger,
 } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { MockBatchResult } from "../../testing/mock-batch-result";
@@ -26,7 +27,7 @@ describe("Map Handler", () => {
   describe("parameter parsing", () => {
     it("should parse parameters with name", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string, string> = jest
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result");
 
@@ -59,7 +60,7 @@ describe("Map Handler", () => {
 
     it("should parse parameters without name", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string, string> = jest
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result");
 
@@ -88,7 +89,7 @@ describe("Map Handler", () => {
 
     it("should accept undefined as name parameter", async () => {
       const items = ["item"];
-      const mapFunc: MapFunc<string, string> = jest.fn();
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest.fn();
 
       const mockResult = new MockBatchResult([
         { index: 0, result: "result", status: BatchItemStatus.SUCCEEDED },
@@ -111,7 +112,7 @@ describe("Map Handler", () => {
 
     it("should parse parameters with config", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string, string> = jest
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result");
       const config = {
@@ -152,7 +153,7 @@ describe("Map Handler", () => {
 
   describe("validation", () => {
     it("should throw error for non-array items", async () => {
-      const mapFunc: MapFunc<string, string> = jest.fn();
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest.fn();
 
       await expect(mapHandler("not-an-array" as any, mapFunc)).rejects.toThrow(
         "Map operation requires an array of items",
@@ -171,7 +172,7 @@ describe("Map Handler", () => {
   describe("execution", () => {
     it("should handle empty array", async () => {
       const items: string[] = [];
-      const mapFunc: MapFunc<string, string> = jest.fn();
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest.fn();
 
       const mockResult = new MockBatchResult([]);
       mockExecuteConcurrently.mockResolvedValue(mockResult as any);
@@ -193,7 +194,7 @@ describe("Map Handler", () => {
 
     it("should create correct execution items", async () => {
       const items = ["item1", "item2", "item3"];
-      const mapFunc: MapFunc<string, string> = jest
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result");
 
@@ -224,7 +225,7 @@ describe("Map Handler", () => {
 
     it("should return BatchResult with correct structure", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string, string> = jest
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
         .fn()
         .mockResolvedValueOnce("result1")
         .mockResolvedValueOnce("result2");
@@ -245,7 +246,7 @@ describe("Map Handler", () => {
 
     it("should create executor that calls mapFunc correctly", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string, string> = jest
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
         .fn()
         .mockResolvedValueOnce("result1")
         .mockResolvedValueOnce("result2");
@@ -257,7 +258,7 @@ describe("Map Handler", () => {
         const results = [];
         for (let i = 0; i < executionItems.length; i++) {
           const item = executionItems[i];
-          const mockChildContext = {} as DurableContext;
+          const mockChildContext = {} as DurableContext<DurableLogger>;
           const result = await (executor as any)(item, mockChildContext);
           results.push({
             index: i,
@@ -288,7 +289,7 @@ describe("Map Handler", () => {
 
     it("should pass through maxConcurrency config", async () => {
       const items = ["item1", "item2"];
-      const mapFunc: MapFunc<string, string> = jest
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result");
       const config = {
@@ -322,9 +323,11 @@ describe("Map Handler", () => {
           { id: "user1", name: "Alice" },
           { id: "user2", name: "Bob" },
         ];
-        const mapFunc: MapFunc<{ id: string; name: string }, string> = jest
-          .fn()
-          .mockResolvedValue("processed");
+        const mapFunc: MapFunc<
+          { id: string; name: string },
+          string,
+          DurableLogger
+        > = jest.fn().mockResolvedValue("processed");
         const itemNamer = (item: any, _index: number): string =>
           `User-${item.id}`;
 
@@ -353,7 +356,7 @@ describe("Map Handler", () => {
 
       it("should use undefined names when itemNamer is not provided", async () => {
         const items = ["item1", "item2"];
-        const mapFunc: MapFunc<string, string> = jest
+        const mapFunc: MapFunc<string, string, DurableLogger> = jest
           .fn()
           .mockResolvedValue("processed");
 
@@ -382,7 +385,7 @@ describe("Map Handler", () => {
 
       it("should pass item and index to itemNamer", async () => {
         const items = ["a", "b", "c"];
-        const mapFunc: MapFunc<string, string> = jest
+        const mapFunc: MapFunc<string, string, DurableLogger> = jest
           .fn()
           .mockResolvedValue("processed");
         const itemNamer = jest.fn(

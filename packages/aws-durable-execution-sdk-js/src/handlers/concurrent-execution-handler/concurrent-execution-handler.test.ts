@@ -2,14 +2,20 @@ import {
   createConcurrentExecutionHandler,
   ConcurrencyController,
 } from "./concurrent-execution-handler";
-import { ExecutionContext, DurableContext, BatchItemStatus, DurablePromise } from "../../types";
+import {
+  ExecutionContext,
+  DurableContext,
+  BatchItemStatus,
+  DurableLogger,
+  DurablePromise,
+} from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 describe("Concurrent Execution Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
   let mockRunInChildContext: jest.MockedFunction<
-    DurableContext["runInChildContext"]
+    DurableContext<DurableLogger>["runInChildContext"]
   >;
   let concurrentExecutionHandler: ReturnType<
     typeof createConcurrentExecutionHandler
@@ -418,8 +424,8 @@ describe("Concurrent Execution Handler", () => {
 });
 
 describe("ConcurrencyController", () => {
-  let controller: ConcurrencyController;
-  let mockParentContext: jest.Mocked<DurableContext>;
+  let controller: ConcurrencyController<DurableLogger>;
+  let mockParentContext: jest.Mocked<DurableContext<DurableLogger>>;
 
   beforeEach(() => {
     controller = new ConcurrencyController("test-operation", jest.fn());

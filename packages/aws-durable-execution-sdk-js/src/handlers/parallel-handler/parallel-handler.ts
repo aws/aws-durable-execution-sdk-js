@@ -9,16 +9,17 @@ import {
   NamedParallelBranch,
   BatchResult,
   DurablePromise,
+  DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
 
-export const createParallelHandler = (
+export const createParallelHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   executeConcurrently: <TItem, TResult>(
     name: string | undefined,
     items: ConcurrentExecutionItem<TItem>[],
-    executor: ConcurrentExecutor<TItem, TResult>,
+    executor: ConcurrentExecutor<TItem, TResult, Logger>,
     config?: ConcurrencyConfig<TResult>,
   ) => DurablePromise<BatchResult<TResult>>,
 ) => {
@@ -26,16 +27,19 @@ export const createParallelHandler = (
     nameOrBranches:
       | string
       | undefined
-      | (ParallelFunc<T> | NamedParallelBranch<T>)[],
+      | (ParallelFunc<T, Logger> | NamedParallelBranch<T, Logger>)[],
     branchesOrConfig?:
-      | (ParallelFunc<T> | NamedParallelBranch<T>)[]
+      | (ParallelFunc<T, Logger> | NamedParallelBranch<T, Logger>)[]
       | ParallelConfig<T>,
     maybeConfig?: ParallelConfig<T>,
   ): DurablePromise<BatchResult<T>> => {
     // Phase 1: Parse parameters and start execution immediately
     const phase1Promise = (async (): Promise<BatchResult<T>> => {
       let name: string | undefined;
-      let branches: (ParallelFunc<T> | NamedParallelBranch<T>)[];
+      let branches: (
+        | ParallelFunc<T, Logger>
+        | NamedParallelBranch<T, Logger>
+      )[];
       let config: ParallelConfig<T> | undefined;
 
       // Parse overloaded parameters
@@ -43,8 +47,8 @@ export const createParallelHandler = (
         // Case: parallel(name, branches, config?)
         name = nameOrBranches;
         branches = branchesOrConfig as (
-          | ParallelFunc<T>
-          | NamedParallelBranch<T>
+          | ParallelFunc<T, Logger>
+          | NamedParallelBranch<T, Logger>
         )[];
         config = maybeConfig;
       } else {
@@ -79,7 +83,7 @@ export const createParallelHandler = (
       }
 
       // Convert to concurrent execution items
-      const executionItems: ConcurrentExecutionItem<ParallelFunc<T>>[] =
+      const executionItems: ConcurrentExecutionItem<ParallelFunc<T, Logger>>[] =
         branches.map((branch, index) => {
           const isNamedBranch = typeof branch === "object" && "func" in branch;
           const func = isNamedBranch ? branch.func : branch;
@@ -94,10 +98,11 @@ export const createParallelHandler = (
         });
 
       // Create executor that calls the branch function
-      const executor: ConcurrentExecutor<ParallelFunc<T>, T> = async (
-        executionItem,
-        childContext,
-      ) => {
+      const executor: ConcurrentExecutor<
+        ParallelFunc<T, Logger>,
+        T,
+        Logger
+      > = async (executionItem, childContext) => {
         log("🔀", "Processing parallel branch:", {
           index: executionItem.index,
         });

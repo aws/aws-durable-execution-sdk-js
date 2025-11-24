@@ -5,8 +5,8 @@ import {
   WaitForConditionDecision,
   OperationSubType,
   WaitForConditionContext,
-  Logger,
   DurablePromise,
+  DurableExecutionMode,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { terminate } from "../../utils/termination-helper/termination-helper";
@@ -31,6 +31,7 @@ import {
   DurableOperationError,
   WaitForConditionError,
 } from "../../errors/durable-error/durable-error";
+import { DurableLogger } from "../../types/durable-logger";
 
 // Special symbol to indicate that the main loop should continue
 const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
@@ -73,11 +74,11 @@ const waitForContinuation = async (
   // Return to let the main loop re-evaluate step status
 };
 
-export const createWaitForConditionHandler = (
+export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   createStepId: () => string,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  logger: Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
@@ -85,8 +86,10 @@ export const createWaitForConditionHandler = (
   parentId: string | undefined,
 ) => {
   return <T>(
-    nameOrCheck: string | undefined | WaitForConditionCheckFunc<T>,
-    checkOrConfig?: WaitForConditionCheckFunc<T> | WaitForConditionConfig<T>,
+    nameOrCheck: string | undefined | WaitForConditionCheckFunc<T, Logger>,
+    checkOrConfig?:
+      | WaitForConditionCheckFunc<T, Logger>
+      | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
   ): DurablePromise<T> => {
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
@@ -100,13 +103,13 @@ export const createWaitForConditionHandler = (
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
       let name: string | undefined;
-      let check: WaitForConditionCheckFunc<T>;
+      let check: WaitForConditionCheckFunc<T, Logger>;
       let config: WaitForConditionConfig<T>;
 
       // Parse overloaded parameters - validation errors thrown here are async
       if (typeof nameOrCheck === "string" || nameOrCheck === undefined) {
         name = nameOrCheck;
-        check = checkOrConfig as WaitForConditionCheckFunc<T>;
+        check = checkOrConfig as WaitForConditionCheckFunc<T, Logger>;
         config = maybeConfig as WaitForConditionConfig<T>;
       } else {
         check = nameOrCheck;
@@ -185,7 +188,7 @@ export const createWaitForConditionHandler = (
             name,
             check,
             config,
-            createContextLogger,
+            logger,
             addRunningOperation,
             removeRunningOperation,
             hasRunningOperations,
@@ -248,14 +251,14 @@ export const handleCompletedWaitForCondition = async <T>(
   );
 };
 
-export const executeWaitForCondition = async <T>(
+export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   stepId: string,
   name: string | undefined,
-  check: WaitForConditionCheckFunc<T>,
+  check: WaitForConditionCheckFunc<T, Logger>,
   config: WaitForConditionConfig<T>,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  logger: Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
@@ -321,16 +324,20 @@ export const executeWaitForCondition = async <T>(
 
   try {
     // Create WaitForConditionContext with enriched logger for the check function
-    const waitForConditionContext: WaitForConditionContext = {
-      logger: createContextLogger(stepId, currentAttempt),
+    const waitForConditionContext: WaitForConditionContext<Logger> = {
+      logger,
     };
 
     // Execute the check function
     addRunningOperation(stepId);
     let newState: T;
     try {
-      newState = await runWithContext(stepId, parentId, () =>
-        check(currentState, waitForConditionContext),
+      newState = await runWithContext(
+        stepId,
+        parentId,
+        () => check(currentState, waitForConditionContext),
+        currentAttempt + 1,
+        DurableExecutionMode.ExecutionMode,
       );
     } finally {
       removeRunningOperation(stepId);

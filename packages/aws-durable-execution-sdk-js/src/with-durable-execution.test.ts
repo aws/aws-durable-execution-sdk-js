@@ -16,6 +16,7 @@ import {
 } from "./utils/checkpoint/checkpoint";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
+import { DefaultLogger } from "./utils/logger/default-logger";
 
 // Mock dependencies
 jest.mock("./context/execution-context/execution-context");
@@ -306,6 +307,7 @@ describe("withDurableExecution", () => {
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       expect.any(Object),
+      expect.any(DefaultLogger),
     );
     expect(mockCheckpoint).toHaveBeenCalledWith(
       expect.stringMatching(/^execution-result-\d+$/),
@@ -346,6 +348,7 @@ describe("withDurableExecution", () => {
       mockExecutionContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       expect.any(Object),
+      expect.any(DefaultLogger),
     );
     expect(mockCheckpoint).toHaveBeenCalledWith(
       expect.stringMatching(/^execution-result-\d+$/),

@@ -8,7 +8,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { ExecutionState } from "./storage";
 import { log } from "../utils/logger/logger";
-import { Logger } from "../types";
+import { DurableLogger } from "../types/durable-logger";
 
 /**
  * Implementation of ExecutionState that uses the new \@aws-sdk/client-lambda
@@ -38,7 +38,7 @@ export class ApiStorage implements ExecutionState {
     checkpointToken: string,
     durableExecutionArn: string,
     nextMarker: string,
-    logger?: Logger,
+    logger?: DurableLogger,
   ): Promise<GetDurableExecutionStateResponse> {
     try {
       const response = await this.client.send(
@@ -84,7 +84,7 @@ export class ApiStorage implements ExecutionState {
   async checkpoint(
     checkpointToken: string,
     data: CheckpointDurableExecutionRequest,
-    logger?: Logger,
+    logger?: DurableLogger,
   ): Promise<CheckpointDurableExecutionResponse> {
     try {
       const response = await this.client.send(

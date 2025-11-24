@@ -9,6 +9,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 describe("Step Handler Timing Tests", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -52,7 +53,7 @@ describe("Step Handler Timing Tests", () => {
         mockCheckpoint,
         mockParentContext,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
@@ -101,7 +102,7 @@ describe("Step Handler Timing Tests", () => {
         mockCheckpoint,
         mockParentContext,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
@@ -156,7 +157,7 @@ describe("Step Handler Timing Tests", () => {
         mockCheckpoint,
         mockParentContext,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
@@ -207,7 +208,7 @@ describe("Step Handler Timing Tests", () => {
         mockCheckpoint,
         mockParentContext,
         createStepId,
-        jest.fn().mockReturnValue({ log: jest.fn() }),
+        createDefaultLogger(),
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,

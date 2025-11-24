@@ -1,8 +1,33 @@
 import { createDurableContext } from "./durable-context";
-import { DurableExecutionMode, ExecutionContext, Logger } from "../../types";
+import { DurableExecutionMode, ExecutionContext } from "../../types";
 import { Context } from "aws-lambda";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { DurableLogger } from "../../types/durable-logger";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 describe("DurableContext logger modeAware configuration", () => {
+  // Helper to create a mock logger that respects shouldLog
+  const createMockLogger = () => {
+    let loggingContext: any = null;
+    const infoMock = jest.fn();
+
+    return {
+      log: jest.fn(),
+      info: jest.fn((...args: any[]) => {
+        if (!loggingContext || loggingContext.shouldLog()) {
+          infoMock(...args);
+        }
+      }),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+      configureDurableLoggingContext: jest.fn((ctx: any) => {
+        loggingContext = ctx;
+      }),
+      _getInfoMock: () => infoMock,
+    };
+  };
+
   const mockExecutionContext: ExecutionContext = {
     _stepData: {},
     durableExecutionArn: "test-arn",
@@ -33,101 +58,128 @@ describe("DurableContext logger modeAware configuration", () => {
   };
 
   test("should suppress logs during replay when modeAware is true (default)", () => {
-    const customLogger: Logger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
+    const customLogger = createMockLogger();
 
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
-    context.configureLogger({ customLogger });
+    context.configureLogger({ customLogger: customLogger as any });
 
-    context.logger.info("replay message");
-    expect(customLogger.info).not.toHaveBeenCalled();
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("replay message");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger._getInfoMock()).not.toHaveBeenCalled();
   });
 
   test("should log during replay when modeAware is false", () => {
-    const customLogger: Logger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
+    const customLogger = createMockLogger();
 
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
-    context.configureLogger({ customLogger, modeAware: false });
+    context.configureLogger({
+      customLogger: customLogger as any,
+      modeAware: false,
+    });
 
-    context.logger.info("replay message");
-    expect(customLogger.info).toHaveBeenCalledWith(
-      "replay message",
-      expect.objectContaining({
-        level: "info",
-        message: "replay message",
-        execution_arn: "test-arn",
-      }),
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("replay message");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
     );
+    expect(customLogger._getInfoMock()).toHaveBeenCalledWith("replay message");
   });
 
   test("should always log during execution mode regardless of modeAware", () => {
-    const customLogger: Logger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
+    const customLogger = createMockLogger();
 
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
+      createDefaultLogger(),
     );
-    context.configureLogger({ customLogger, modeAware: true });
+    context.configureLogger({
+      customLogger: customLogger as any,
+      modeAware: true,
+    });
 
-    context.logger.info("execution message");
-    expect(customLogger.info).toHaveBeenCalled();
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("execution message");
+      },
+      undefined,
+      DurableExecutionMode.ExecutionMode,
+    );
+    expect(customLogger._getInfoMock()).toHaveBeenCalled();
   });
 
   test("should allow toggling modeAware at runtime", () => {
-    const customLogger: Logger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
+    const customLogger = createMockLogger();
 
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
-    context.configureLogger({ customLogger });
+    context.configureLogger({ customLogger: customLogger as any });
 
     // Default: modeAware = true, should not log during replay
-    context.logger.info("message1");
-    expect(customLogger.info).not.toHaveBeenCalled();
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message1");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger._getInfoMock()).not.toHaveBeenCalled();
 
     // Disable modeAware: should log during replay
     context.configureLogger({ modeAware: false });
-    context.logger.info("message2");
-    expect(customLogger.info).toHaveBeenCalledTimes(1);
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message2");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger._getInfoMock()).toHaveBeenCalledTimes(1);
 
     // Re-enable modeAware: should not log during replay again
     context.configureLogger({ modeAware: true });
-    context.logger.info("message3");
-    expect(customLogger.info).toHaveBeenCalledTimes(1); // Still 1, no new call
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message3");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger._getInfoMock()).toHaveBeenCalledTimes(1); // Still 1, no new call
   });
 
   test("should use default modeAware=true when called with empty config", () => {
@@ -135,6 +187,7 @@ describe("DurableContext logger modeAware configuration", () => {
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
     context.configureLogger({});
 
@@ -147,73 +200,107 @@ describe("DurableContext logger modeAware configuration", () => {
   });
 
   test("should handle multiple partial configurations correctly", () => {
-    const customLogger1: Logger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
-
-    const customLogger2: Logger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
+    const customLogger1 = createMockLogger();
+    const customLogger2 = createMockLogger();
 
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
 
     // First: set custom logger only
-    context.configureLogger({ customLogger: customLogger1 });
-    context.logger.info("message1");
-    expect(customLogger1.info).not.toHaveBeenCalled(); // modeAware=true by default
+    context.configureLogger({ customLogger: customLogger1 as any });
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message1");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger1._getInfoMock()).not.toHaveBeenCalled(); // modeAware=true by default
 
     // Second: change modeAware only (should keep customLogger1)
     context.configureLogger({ modeAware: false });
-    context.logger.info("message2");
-    expect(customLogger1.info).toHaveBeenCalledTimes(1); // Now logs with customLogger1
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message2");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger1._getInfoMock()).toHaveBeenCalledTimes(1); // Now logs with customLogger1
 
     // Third: change custom logger only (should keep modeAware=false)
-    context.configureLogger({ customLogger: customLogger2 });
-    context.logger.info("message3");
-    expect(customLogger1.info).toHaveBeenCalledTimes(1); // No more calls to logger1
-    expect(customLogger2.info).toHaveBeenCalledTimes(1); // Now uses logger2
+    context.configureLogger({ customLogger: customLogger2 as any });
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message3");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger1._getInfoMock()).toHaveBeenCalledTimes(1); // No more calls to logger1
+    expect(customLogger2._getInfoMock()).toHaveBeenCalledTimes(1); // Now uses logger2
 
     // Fourth: change modeAware back to true (should keep customLogger2)
     context.configureLogger({ modeAware: true });
-    context.logger.info("message4");
-    expect(customLogger2.info).toHaveBeenCalledTimes(1); // No new calls, suppressed
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message4");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger2._getInfoMock()).toHaveBeenCalledTimes(1); // No new calls, suppressed
   });
 
   test("should preserve settings when called with empty config", () => {
-    const customLogger: Logger = {
-      log: jest.fn(),
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn(),
-    };
+    const customLogger = createMockLogger();
 
     const context = createDurableContext(
       mockExecutionContext,
       mockParentContext,
       DurableExecutionMode.ReplayMode,
+      createDefaultLogger(),
     );
 
     // Set custom logger and modeAware=false
-    context.configureLogger({ customLogger, modeAware: false });
-    context.logger.info("message1");
-    expect(customLogger.info).toHaveBeenCalledTimes(1);
+    context.configureLogger({
+      customLogger: customLogger as any,
+      modeAware: false,
+    });
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message1");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger._getInfoMock()).toHaveBeenCalledTimes(1);
 
     // Call with empty config - should preserve both settings
     context.configureLogger({});
-    context.logger.info("message2");
-    expect(customLogger.info).toHaveBeenCalledTimes(2); // Still uses customLogger with modeAware=false
+    runWithContext(
+      "root",
+      undefined,
+      () => {
+        context.logger.info("message2");
+      },
+      undefined,
+      DurableExecutionMode.ReplayMode,
+    );
+    expect(customLogger._getInfoMock()).toHaveBeenCalledTimes(2); // Still uses customLogger with modeAware=false
   });
 });

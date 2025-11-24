@@ -9,8 +9,13 @@ import {
 } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
-import { ExecutionContext, DurableExecutionMode } from "../types";
+import {
+  ExecutionContext,
+  DurableExecutionMode,
+  DurableLogger,
+} from "../types";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
+import { createDefaultLogger } from "../utils/logger/default-logger";
 
 /**
  * In-memory storage for testing - no API calls
@@ -44,7 +49,7 @@ export function createTestDurableContext(options?: {
   existingOperations?: Operation[];
   lambdaContext?: Partial<Context>;
 }): {
-  context: DurableContextImpl;
+  context: DurableContextImpl<DurableLogger>;
   storage: InMemoryStorage;
   executionContext: ExecutionContext;
 } {
@@ -71,6 +76,8 @@ export function createTestDurableContext(options?: {
     getStepData(stepId: string): Operation | undefined {
       return getStepDataUtil(stepData, stepId);
     },
+    requestId: "mock-request-id",
+    tenantId: undefined,
   };
 
   const mockLambdaContext: Context = {
@@ -89,10 +96,11 @@ export function createTestDurableContext(options?: {
     ...options?.lambdaContext,
   };
 
-  const context = createDurableContext(
+  const context = createDurableContext<DurableLogger>(
     executionContext,
     mockLambdaContext,
     options?.durableExecutionMode || DurableExecutionMode.ExecutionMode,
+    createDefaultLogger(),
     options?.stepPrefix,
     "test-checkpoint-token",
   );

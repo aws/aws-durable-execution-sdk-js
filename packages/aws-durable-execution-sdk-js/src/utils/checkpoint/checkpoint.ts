@@ -5,7 +5,7 @@ import {
   OperationStatus,
   OperationAction,
 } from "@aws-sdk/client-lambda";
-import { ExecutionContext, Logger } from "../../types";
+import { ExecutionContext, DurableLogger } from "../../types";
 import { log } from "../logger/logger";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";
@@ -41,7 +41,7 @@ class CheckpointHandler {
     private context: ExecutionContext,
     initialTaskToken: string,
     private stepDataEmitter: EventEmitter,
-    private logger?: Logger,
+    private logger: DurableLogger,
   ) {
     this.currentTaskToken = initialTaskToken;
   }
@@ -472,7 +472,7 @@ export const createCheckpoint = (
   context: ExecutionContext,
   taskToken: string,
   stepDataEmitter: EventEmitter,
-  logger?: Logger,
+  logger: DurableLogger,
 ): {
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;

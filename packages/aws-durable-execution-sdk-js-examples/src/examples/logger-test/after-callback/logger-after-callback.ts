@@ -1,6 +1,6 @@
-import { withDurableExecution, Logger } from "@aws/durable-execution-sdk-js";
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import * as fs from "fs";
+import { FileLogger } from "../../../utils/file-logger";
 
 export const config: ExampleConfig = {
   name: "Logger After Callback",
@@ -15,38 +15,7 @@ interface LoggerTestEvent {
 export const handler = withDurableExecution(
   async (event: LoggerTestEvent, context) => {
     if (event.logFilePath) {
-      const fileLogger: Logger = {
-        log: (level, message, data) => {
-          fs.appendFileSync(
-            event.logFilePath!,
-            JSON.stringify({ level, message, data }) + "\n",
-          );
-        },
-        info: (message, data) => {
-          fs.appendFileSync(
-            event.logFilePath!,
-            JSON.stringify({ level: "info", message, data }) + "\n",
-          );
-        },
-        error: (message, error, data) => {
-          fs.appendFileSync(
-            event.logFilePath!,
-            JSON.stringify({ level: "error", message, error, data }) + "\n",
-          );
-        },
-        warn: (message, data) => {
-          fs.appendFileSync(
-            event.logFilePath!,
-            JSON.stringify({ level: "warn", message, data }) + "\n",
-          );
-        },
-        debug: (message, data) => {
-          fs.appendFileSync(
-            event.logFilePath!,
-            JSON.stringify({ level: "debug", message, data }) + "\n",
-          );
-        },
-      };
+      const fileLogger = new FileLogger(event.logFilePath);
 
       context.configureLogger({
         customLogger: fileLogger,

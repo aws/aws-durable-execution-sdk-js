@@ -9,6 +9,7 @@ import {
   BatchResult,
   BatchItem,
   DurablePromise,
+  DurableLogger,
 } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
@@ -16,7 +17,7 @@ import { BatchResultImpl, restoreBatchResult } from "./batch-result";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 
-export class ConcurrencyController {
+export class ConcurrencyController<Logger extends DurableLogger> {
   constructor(
     private readonly operationName: string,
     private readonly skipNextOperation: () => void,
@@ -39,8 +40,8 @@ export class ConcurrencyController {
 
   async executeItems<T, R>(
     items: ConcurrentExecutionItem<T>[],
-    executor: ConcurrentExecutor<T, R>,
-    parentContext: DurableContext,
+    executor: ConcurrentExecutor<T, R, Logger>,
+    parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
     durableExecutionMode: DurableExecutionMode = DurableExecutionMode.ExecutionMode,
     entityId?: string,
@@ -112,8 +113,8 @@ export class ConcurrencyController {
 
   private async replayItems<T, R>(
     items: ConcurrentExecutionItem<T>[],
-    executor: ConcurrentExecutor<T, R>,
-    parentContext: DurableContext,
+    executor: ConcurrentExecutor<T, R, Logger>,
+    parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
     targetTotalCount: number,
     executionContext: ExecutionContext,
@@ -234,8 +235,8 @@ export class ConcurrencyController {
 
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
-    executor: ConcurrentExecutor<T, R>,
-    parentContext: DurableContext,
+    executor: ConcurrentExecutor<T, R, Logger>,
+    parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
@@ -420,18 +421,18 @@ export class ConcurrencyController {
   }
 }
 
-export const createConcurrentExecutionHandler = (
+export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  runInChildContext: DurableContext["runInChildContext"],
+  runInChildContext: DurableContext<Logger>["runInChildContext"],
   skipNextOperation: () => void,
 ) => {
   return <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
     itemsOrExecutor?:
       | ConcurrentExecutionItem<TItem>[]
-      | ConcurrentExecutor<TItem, TResult>,
+      | ConcurrentExecutor<TItem, TResult, Logger>,
     executorOrConfig?:
-      | ConcurrentExecutor<TItem, TResult>
+      | ConcurrentExecutor<TItem, TResult, Logger>
       | ConcurrencyConfig<TResult>,
     maybeConfig?: ConcurrencyConfig<TResult>,
   ): DurablePromise<BatchResult<TResult>> => {
@@ -439,17 +440,25 @@ export const createConcurrentExecutionHandler = (
     const phase1Promise = (async (): Promise<BatchResult<TResult>> => {
       let name: string | undefined;
       let items: ConcurrentExecutionItem<TItem>[];
-      let executor: ConcurrentExecutor<TItem, TResult>;
+      let executor: ConcurrentExecutor<TItem, TResult, Logger>;
       let config: ConcurrencyConfig<TResult> | undefined;
 
       if (typeof nameOrItems === "string" || nameOrItems === undefined) {
         name = nameOrItems;
         items = itemsOrExecutor as ConcurrentExecutionItem<TItem>[];
-        executor = executorOrConfig as ConcurrentExecutor<TItem, TResult>;
+        executor = executorOrConfig as ConcurrentExecutor<
+          TItem,
+          TResult,
+          Logger
+        >;
         config = maybeConfig;
       } else {
         items = nameOrItems;
-        executor = itemsOrExecutor as ConcurrentExecutor<TItem, TResult>;
+        executor = itemsOrExecutor as ConcurrentExecutor<
+          TItem,
+          TResult,
+          Logger
+        >;
         config = executorOrConfig as ConcurrencyConfig<TResult>;
       }
 
@@ -478,9 +487,9 @@ export const createConcurrentExecutionHandler = (
       }
 
       const executeOperation = async (
-        executionContext: DurableContext,
+        executionContext: DurableContext<Logger>,
       ): Promise<BatchResult<TResult>> => {
-        const concurrencyController = new ConcurrencyController(
+        const concurrencyController = new ConcurrencyController<Logger>(
           "concurrent-execution",
           skipNextOperation,
         );

@@ -1,6 +1,7 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { DurableContext } from "./durable-context";
 import { ChildContextError } from "../errors/durable-error/durable-error";
+import { DurableLogger } from "./durable-logger";
 
 export enum BatchItemStatus {
   SUCCEEDED = "SUCCEEDED",
@@ -76,8 +77,8 @@ export interface CompletionConfig {
  * @param array - The original array being mapped over
  * @returns Promise resolving to the transformed value
  */
-export type MapFunc<TInput, TOutput> = (
-  context: DurableContext,
+export type MapFunc<TInput, TOutput, Logger extends DurableLogger> = (
+  context: DurableContext<Logger>,
   item: TInput,
   index: number,
   array: TInput[],
@@ -104,14 +105,16 @@ export interface MapConfig<TItem, TResult> {
  * @param context - DurableContext for executing durable operations within the branch
  * @returns Promise resolving to the branch result
  */
-export type ParallelFunc<T> = (context: DurableContext) => Promise<T>;
+export type ParallelFunc<T, Logger extends DurableLogger> = (
+  context: DurableContext<Logger>,
+) => Promise<T>;
 
 /**
  * Named parallel branch with optional custom name
  */
-export interface NamedParallelBranch<T> {
+export interface NamedParallelBranch<T, Logger extends DurableLogger> {
   name?: string;
-  func: ParallelFunc<T>;
+  func: ParallelFunc<T, Logger>;
 }
 
 /**
@@ -145,9 +148,9 @@ export interface ConcurrentExecutionItem<T> {
 /**
  * Executor function type for concurrent execution
  */
-export type ConcurrentExecutor<TItem, TResult> = (
+export type ConcurrentExecutor<TItem, TResult, Logger extends DurableLogger> = (
   item: ConcurrentExecutionItem<TItem>,
-  childContext: DurableContext,
+  childContext: DurableContext<Logger>,
 ) => Promise<TResult>;
 
 /**

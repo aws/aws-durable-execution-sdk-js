@@ -1,13 +1,17 @@
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
-import { ExecutionContext, WaitForConditionCheckFunc } from "../../types";
+import {
+  DurableLogger,
+  ExecutionContext,
+  WaitForConditionCheckFunc,
+} from "../../types";
 import { EventEmitter } from "events";
 import { DurablePromise } from "../../types/durable-promise";
+import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 describe("WaitForCondition Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: any;
   let createStepId: () => string;
-  let createContextLogger: (stepId: string, attempt?: number) => any;
   let addRunningOperation: jest.Mock;
   let removeRunningOperation: jest.Mock;
   let hasRunningOperations: () => boolean;
@@ -33,11 +37,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       .mockReturnValue(false);
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-    createContextLogger = jest.fn().mockReturnValue({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    });
+
     addRunningOperation = jest.fn();
     removeRunningOperation = jest.fn();
     hasRunningOperations = jest.fn().mockReturnValue(false) as () => boolean;
@@ -49,7 +49,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
-      createContextLogger,
+      createDefaultLogger(),
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
@@ -57,7 +57,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       undefined,
     );
 
-    const checkFn: WaitForConditionCheckFunc<number> = jest
+    const checkFn: WaitForConditionCheckFunc<number, DurableLogger> = jest
       .fn()
       .mockResolvedValue(10);
 
@@ -86,7 +86,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
-      createContextLogger,
+      createDefaultLogger(),
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
@@ -94,7 +94,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       undefined,
     );
 
-    const checkFn: WaitForConditionCheckFunc<string> = jest
+    const checkFn: WaitForConditionCheckFunc<string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("completed");
 
@@ -122,7 +122,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       mockContext,
       mockCheckpoint,
       createStepId,
-      createContextLogger,
+      createDefaultLogger(),
       addRunningOperation,
       removeRunningOperation,
       hasRunningOperations,
@@ -131,10 +131,12 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     );
 
     let executionOrder: string[] = [];
-    const checkFn: WaitForConditionCheckFunc<number> = jest.fn(async () => {
-      executionOrder.push("check-executed");
-      return 42;
-    });
+    const checkFn: WaitForConditionCheckFunc<number, DurableLogger> = jest.fn(
+      async () => {
+        executionOrder.push("check-executed");
+        return 42;
+      },
+    );
 
     // Phase 1: Create the promise
     executionOrder.push("promise-created");

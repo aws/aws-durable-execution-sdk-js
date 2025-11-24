@@ -6,8 +6,8 @@ import {
   StepSemantics,
   OperationSubType,
   StepContext,
-  Logger,
   DurablePromise,
+  DurableExecutionMode,
 } from "../../types";
 import { durationToSeconds } from "../../utils/duration/duration";
 import {
@@ -40,6 +40,7 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import { DurableLogger } from "../../types/durable-logger";
 
 // Special symbol to indicate that the main loop should continue
 const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
@@ -85,12 +86,12 @@ const waitForContinuation = async (
 /**
  * Creates a step handler for executing durable steps with two-phase execution.
  */
-export const createStepHandler = (
+export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   parentContext: Context,
   createStepId: () => string,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  logger: Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
@@ -98,17 +99,17 @@ export const createStepHandler = (
   parentId?: string,
 ) => {
   return <T>(
-    nameOrFn: string | undefined | StepFunc<T>,
-    fnOrOptions?: StepFunc<T> | StepConfig<T>,
+    nameOrFn: string | undefined | StepFunc<T, Logger>,
+    fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
   ): DurablePromise<T> => {
     let name: string | undefined;
-    let fn: StepFunc<T>;
+    let fn: StepFunc<T, Logger>;
     let options: StepConfig<T> | undefined;
 
     if (typeof nameOrFn === "string" || nameOrFn === undefined) {
       name = nameOrFn;
-      fn = fnOrOptions as StepFunc<T>;
+      fn = fnOrOptions as StepFunc<T, Logger>;
       options = maybeOptions;
     } else {
       fn = nameOrFn;
@@ -271,7 +272,7 @@ export const createStepHandler = (
             stepId,
             name,
             fn,
-            createContextLogger,
+            logger,
             addRunningOperation,
             removeRunningOperation,
             hasRunningOperations,
@@ -341,13 +342,13 @@ export const handleCompletedStep = async <T>(
   );
 };
 
-export const executeStep = async <T>(
+export const executeStep = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: ReturnType<typeof createCheckpoint>,
   stepId: string,
   name: string | undefined,
-  fn: StepFunc<T>,
-  createContextLogger: (stepId: string, attempt?: number) => Logger,
+  fn: StepFunc<T, Logger>,
+  logger: Logger,
   addRunningOperation: (stepId: string) => void,
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
@@ -392,15 +393,23 @@ export const executeStep = async <T>(
     const currentAttempt = stepData?.StepDetails?.Attempt || 0;
 
     // Create step context with enriched logger
-    const stepContext: StepContext = {
-      logger: createContextLogger(stepId, currentAttempt),
+    const stepContext: StepContext<Logger> = {
+      logger,
     };
 
     // Execute the step function with stepContext
     addRunningOperation(stepId);
     let result: T;
     try {
-      result = await runWithContext(stepId, parentId, () => fn(stepContext));
+      result = await runWithContext(
+        stepId,
+        parentId,
+        () => fn(stepContext),
+        // The attempt that is running is the attempt from the step data (previous step attempt) + 1
+        currentAttempt + 1,
+        // Alwasy in execution mode when running step operations
+        DurableExecutionMode.ExecutionMode,
+      );
     } finally {
       removeRunningOperation(stepId);
     }

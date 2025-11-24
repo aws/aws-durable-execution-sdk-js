@@ -1,52 +1,27 @@
+import { DurableLogger } from "./durable-logger";
+
 /**
- * Generic logger interface for custom logger implementations.
- * Provides structured logging capabilities for durable execution contexts.
- * 
- * When used through DurableContext, all log entries are automatically enriched
- * with execution metadata (timestamp, execution_arn, step_id, etc.).
+ * Log data passed to the enriched durable logger
  */
-export interface Logger {
-  /** 
-   * Generic log method with configurable level (optional for compatibility with popular loggers)
-   * @param level - Log level (e.g., "info", "error", "warn", "debug")
-   * @param message - Log message
-   * @param data - Additional structured data to include in log entry
-   * @param error - Error object (for error-level logs)
-   */
-  log?(level: string, message?: string, data?: unknown, error?: Error): void;
-  
-  /** 
-   * Log error messages with optional error object and additional data
-   * @param message - Error description
-   * @param error - Error object with stack trace
-   * @param data - Additional context data
-   * @example context.logger.error("Database query failed", dbError, \{ query: "SELECT * FROM users" \})
-   */
-  error(message?: string, error?: Error, data?: unknown): void;
-  
-  /** 
-   * Log warning messages with optional additional data
-   * @param message - Warning message
-   * @param data - Additional context data
-   * @example context.logger.warn("Rate limit approaching", \{ currentRate: 95, limit: 100 \})
-   */
-  warn(message?: string, data?: unknown): void;
-  
-  /** 
-   * Log informational messages with optional additional data
-   * @param message - Information message
-   * @param data - Additional context data
-   * @example context.logger.info("User action completed", \{ userId: "123", action: "login" \})
-   */
-  info(message?: string, data?: unknown): void;
-  
-  /** 
-   * Log debug messages with optional additional data
-   * @param message - Debug message
-   * @param data - Additional context data
-   * @example context.logger.debug("Processing step", \{ stepName: "validation", duration: 150 \})
-   */
-  debug(message?: string, data?: unknown): void;
+export interface DurableLogData {
+  requestId: string;
+  executionArn: string;
+  tenantId?: string;
+  operationId?: string;
+  attempt?: number;
+  // We aren't attaching any additional properties, but this is
+  // added for type-compatibility with popular loggers like powertools
+  [key: string]: unknown;
+}
+
+/**
+ * Log level supported by the durable logger
+ */
+export enum DurableLogLevel {
+  INFO = "INFO",
+  WARN = "WARN",
+  ERROR = "ERROR",
+  DEBUG = "DEBUG",
 }
 
 /**
@@ -55,7 +30,7 @@ export interface Logger {
  * This interface supports partial configuration - you can provide only the properties
  * you want to update. Omitted properties will retain their current values.
  */
-export interface LoggerConfig {
+export interface LoggerConfig<Logger extends DurableLogger> {
   /**
    * Custom logger implementation to use instead of the default console logger
    */
@@ -72,10 +47,13 @@ export interface LoggerConfig {
  * Base interface for operation contexts.
  * Do not use directly - use specific context types like StepContext, WaitForConditionContext, etc.
  */
-export interface OperationContext {
-  logger: Logger;
+export interface OperationContext<Logger extends DurableLogger> {
+  logger: Logger; // Basic durable logger which will be parsed by the enriched durable logger
 }
 
-export type StepContext = OperationContext;
-export type WaitForConditionContext = OperationContext;
-export type WaitForCallbackContext = OperationContext;
+export type StepContext<Logger extends DurableLogger> =
+  OperationContext<Logger>;
+export type WaitForConditionContext<Logger extends DurableLogger> =
+  OperationContext<Logger>;
+export type WaitForCallbackContext<Logger extends DurableLogger> =
+  OperationContext<Logger>;

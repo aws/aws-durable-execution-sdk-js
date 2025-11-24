@@ -1,10 +1,11 @@
 import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
-import { ExecutionContext } from "../../types";
+import { DurableLogger, ExecutionContext } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { CheckpointHandler } from "./checkpoint";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
+import { createDefaultLogger } from "../logger/default-logger";
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
@@ -17,6 +18,7 @@ describe("CheckpointHandler - Ancestor Checking", () => {
   let mockContext: ExecutionContext;
   let checkpointHandler: CheckpointHandler;
   let mockEmitter: EventEmitter;
+  let mockLogger: DurableLogger;
 
   const mockNewTaskToken = "new-task-token";
 
@@ -42,12 +44,16 @@ describe("CheckpointHandler - Ancestor Checking", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      requestId: "mock-request-id",
+      tenantId: undefined,
     } satisfies ExecutionContext;
+    mockLogger = createDefaultLogger(mockContext);
 
     checkpointHandler = new CheckpointHandler(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
+      mockLogger,
     );
   });
 

@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ConcurrentExecutionItem,
   ConcurrentExecutor,
+  DurableLogger,
 } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 
@@ -55,7 +56,7 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
       { id: "item1", data: "test1", index: 0 },
     ];
 
-    const executor: ConcurrentExecutor<string, string> = jest
+    const executor: ConcurrentExecutor<string, string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("processed");
 
@@ -91,7 +92,7 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
       { id: "item1", data: "test1", index: 0 },
     ];
 
-    const executor: ConcurrentExecutor<string, string> = jest
+    const executor: ConcurrentExecutor<string, string, DurableLogger> = jest
       .fn()
       .mockResolvedValue("result");
 
