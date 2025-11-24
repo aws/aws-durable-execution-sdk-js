@@ -26,13 +26,14 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org/
       - run: |
-          for package_dir in packages/*; do \
-          if [[ -d "$package_dir" && { "$package_dir" == "aws-durable-execution-sdk-js-testing" || "$package_dir" == "aws-durable-execution-sdk-js" ]]; then \
+          for package_dir in packages/*; \
+          do \
+          if [ -d "$package_dir" ] && [[ "$package_dir" == "packages/aws-durable-execution-sdk-js-testing" || "$package_dir" == "packages/aws-durable-execution-sdk-js" ]]; then \
             cd "$package_dir" \
             echo "Publishing package in $package_dir" \
             npm publish --access public # Adjust --access as needed \
-            cd - # Go back to the root directory \
-            fi \
-          done \
+            cd ../.. # Go back to the root directory \
+          fi \
+          done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
