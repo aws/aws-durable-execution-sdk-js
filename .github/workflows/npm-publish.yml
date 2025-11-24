@@ -36,6 +36,6 @@ jobs:
             cd ../.. \
           fi \
           done
-        shell: bash
       - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          shell: bash
