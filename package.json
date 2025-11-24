@@ -1,0 +1,25 @@
+{
+  "name": "aws-durable-execution-sdk-js",
+  "version": "0.0.0",
+  "description": "",
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "install-all": "npm install && npm install --workspaces",
+    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing,
+    "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing,
+    "postpublish": "git restore .",
+    "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:aws/aws-durable-execution-sdk-js.git"
+  },
+  "author": {
+    "name": "Amazon Web Services",
+    "url": "https://aws.amazon.com"
+  },
+  "license": "Apache-2.0"
+}
