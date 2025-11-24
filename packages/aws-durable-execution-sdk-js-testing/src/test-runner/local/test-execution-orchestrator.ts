@@ -585,6 +585,14 @@ export class TestExecutionOrchestrator {
         value,
       );
 
+      this.operationStorage.addHistoryEvent(
+        await this.invocationTracker.completeInvocation(
+          executionId,
+          invocationId,
+          "Error" in value ? value.Error : undefined,
+        ),
+      );
+
       if (value.Status === InvocationStatus.SUCCEEDED) {
         this.executionState.resolveWith({
           result: value.Result,
@@ -596,21 +604,12 @@ export class TestExecutionOrchestrator {
           status: OperationStatus.FAILED,
         });
       }
-
-      this.operationStorage.addHistoryEvent(
-        await this.invocationTracker.completeInvocation(
-          executionId,
-          invocationId,
-          "Error" in value ? value.Error : undefined,
-        ),
-      );
     } catch (err) {
       defaultLogger.debug(
         `Handler failed for invocationId=${invocationId}:`,
         err,
       );
 
-      this.executionState.rejectWith(err);
       this.operationStorage.addHistoryEvent(
         await this.invocationTracker.completeInvocation(
           executionId,
@@ -623,6 +622,7 @@ export class TestExecutionOrchestrator {
           },
         ),
       );
+      this.executionState.rejectWith(err);
     }
   }
 }
