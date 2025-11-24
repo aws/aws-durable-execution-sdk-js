@@ -81,7 +81,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
     this.contextLogger = inheritedLogger;
-    this.contextLogger.configureDurableLoggingContext(
+    this.contextLogger.configureDurableLoggingContext?.(
       this.getDurableLoggingContext(),
     );
 
@@ -371,7 +371,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
   configureLogger(config: LoggerConfig<Logger>): void {
     if (config.customLogger !== undefined) {
       this.contextLogger = config.customLogger;
-      this.contextLogger.configureDurableLoggingContext(
+      this.contextLogger.configureDurableLoggingContext?.(
         this.getDurableLoggingContext(),
       );
     }

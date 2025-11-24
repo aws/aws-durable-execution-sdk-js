@@ -47,7 +47,13 @@ export interface DurableLogger {
    */
   debug(...params: any): void;
 
-  configureDurableLoggingContext(
+  /**
+   * This function will be called by the language SDK before logging any records. The durableLoggingContext
+   * can be stored and used by custom loggers to implement mode-aware logging, or logging of custom durable metadata
+   * such as operationId, attempt, executionArn, etc.
+   * @param durableLoggingContext - The logging context provided by the Durable Execution Language SDK
+   */
+  configureDurableLoggingContext?(
     durableLoggingContext: DurableLoggingContext,
   ): void;
 }

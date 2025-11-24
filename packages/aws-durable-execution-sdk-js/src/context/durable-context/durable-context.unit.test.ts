@@ -514,6 +514,150 @@ describe("DurableContext", () => {
 
       expect(() => context.configureLogger({ customLogger })).not.toThrow();
     });
+
+    it("should work with custom logger without configureDurableLoggingContext", () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLogger,
+      );
+
+      const customLoggerWithoutConfigure = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        // configureDurableLoggingContext is undefined/missing
+      };
+
+      expect(() =>
+        context.configureLogger({ customLogger: customLoggerWithoutConfigure }),
+      ).not.toThrow();
+      expect(context.logger).toBe(customLoggerWithoutConfigure);
+    });
+
+    it("should call configureDurableLoggingContext when available during logger configuration", () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLogger,
+      );
+
+      const configureMock = jest.fn();
+      const customLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        configureDurableLoggingContext: configureMock,
+      };
+
+      context.configureLogger({ customLogger });
+
+      expect(configureMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shouldLog: expect.any(Function),
+          getDurableLogData: expect.any(Function),
+        }),
+      );
+    });
+  });
+
+  describe("configureDurableLoggingContext handling", () => {
+    it("should create context with logger that has configureDurableLoggingContext", () => {
+      const configureMock = jest.fn();
+      const loggerWithConfigure = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        configureDurableLoggingContext: configureMock,
+      };
+
+      const executionContext = createMockExecutionContext();
+
+      expect(() =>
+        createDurableContext(
+          executionContext,
+          mockContext,
+          DurableExecutionMode.ExecutionMode,
+          loggerWithConfigure,
+        ),
+      ).not.toThrow();
+
+      expect(configureMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          shouldLog: expect.any(Function),
+          getDurableLogData: expect.any(Function),
+        }),
+      );
+    });
+
+    it("should create context with logger without configureDurableLoggingContext", () => {
+      const loggerWithoutConfigure = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        // configureDurableLoggingContext is undefined/missing
+      };
+
+      const executionContext = createMockExecutionContext();
+
+      expect(() =>
+        createDurableContext(
+          executionContext,
+          mockContext,
+          DurableExecutionMode.ExecutionMode,
+          loggerWithoutConfigure,
+        ),
+      ).not.toThrow();
+
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        loggerWithoutConfigure,
+      );
+
+      expect(context.logger).toBe(loggerWithoutConfigure);
+    });
+
+    it("should not call configureDurableLoggingContext when configuring logger with modeAware only", () => {
+      const configureMock = jest.fn();
+      const loggerWithConfigure = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        configureDurableLoggingContext: configureMock,
+      };
+
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        loggerWithConfigure,
+      );
+
+      // Clear any calls from constructor
+      configureMock.mockClear();
+
+      // Only configure modeAware, not customLogger
+      context.configureLogger({ modeAware: false });
+
+      expect(configureMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("promise utilities", () => {

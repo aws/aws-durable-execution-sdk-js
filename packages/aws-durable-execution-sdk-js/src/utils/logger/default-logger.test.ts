@@ -147,7 +147,7 @@ describe("Default Logger", () => {
           tenantId: "test-tenant",
         };
 
-        logger.configureDurableLoggingContext({
+        logger.configureDurableLoggingContext?.({
           shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
@@ -176,7 +176,7 @@ describe("Default Logger", () => {
           attempt: 2,
         };
 
-        logger.configureDurableLoggingContext({
+        logger.configureDurableLoggingContext?.({
           shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
@@ -205,7 +205,7 @@ describe("Default Logger", () => {
           attempt: undefined,
         };
 
-        logger.configureDurableLoggingContext({
+        logger.configureDurableLoggingContext?.({
           shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
@@ -386,7 +386,7 @@ describe("Default Logger", () => {
           tenantId: null as any,
         };
 
-        logger.configureDurableLoggingContext({
+        logger.configureDurableLoggingContext?.({
           shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
@@ -561,7 +561,7 @@ describe("Default Logger", () => {
           executionArn: "test-arn",
         };
 
-        logger.configureDurableLoggingContext({
+        logger.configureDurableLoggingContext?.({
           shouldLog: () => false, // Should not log
           getDurableLogData: () => mockDurableLogData,
         });
@@ -640,7 +640,7 @@ describe("Default Logger", () => {
       });
     });
 
-    describe("configureDurableLoggingContext method", () => {
+    describe("configureDurableLoggingContext?. method", () => {
       it("should configure logging context correctly", () => {
         const logger = new DefaultLogger();
         const mockDurableLogData: DurableLogData = {
@@ -654,7 +654,7 @@ describe("Default Logger", () => {
           getDurableLogData: jest.fn().mockReturnValue(mockDurableLogData),
         };
 
-        logger.configureDurableLoggingContext(mockContext);
+        logger.configureDurableLoggingContext?.(mockContext);
         logger.info("test message");
 
         expect(mockContext.shouldLog).toHaveBeenCalled();
