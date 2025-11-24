@@ -8,8 +8,8 @@
   "type": "module",
   "scripts": {
     "install-all": "npm install && npm install --workspaces",
-    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing,
-    "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing,
+    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing",
+    "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing",
     "postpublish": "git restore .",
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
   },
