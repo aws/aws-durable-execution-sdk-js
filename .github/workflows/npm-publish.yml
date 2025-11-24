@@ -35,6 +35,6 @@ jobs:
             npm publish --access public \
             cd ../.. \
           fi \
-          done \
-        env:
+          done
+      - env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
