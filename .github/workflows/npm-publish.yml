@@ -30,7 +30,7 @@ jobs:
       - name: Make script executable
         run: chmod +x ./workflows/iterate-publish.sh
       - name: iterate and publish
-        run: iterate-publish.sh
+        run: ./workflows/iterate-publish.sh
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
