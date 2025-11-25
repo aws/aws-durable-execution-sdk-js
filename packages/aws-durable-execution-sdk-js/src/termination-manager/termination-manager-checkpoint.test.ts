@@ -1,12 +1,23 @@
 import { TerminationManager } from "./termination-manager";
 import { TerminationReason } from "./types";
 import {
-  createCheckpoint,
+  CheckpointManager,
   deleteCheckpoint,
 } from "../utils/checkpoint/checkpoint";
+import { CheckpointFunction } from "../testing/mock-checkpoint";
 import { DurableLogger, ExecutionContext } from "../types";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../utils/logger/default-logger";
+
+// Helper function to create checkpoint function from manager
+const createCheckpoint = (context: any, token: string, emitter: any, logger: any): any => {
+  const manager = new CheckpointManager(context.durableExecutionArn, {}, context.state, context.terminationManager, undefined, token, emitter, logger);
+  const checkpoint = (stepId: string, data: any): Promise<any> => manager.checkpoint(stepId, data);
+  checkpoint.force = (): Promise<any> => manager.forceCheckpoint();
+  checkpoint.setTerminating = (): void => manager.setTerminating();
+  checkpoint.hasPendingAncestorCompletion = (): boolean => false;
+  return checkpoint;
+};
 
 describe("TerminationManager Checkpoint Integration", () => {
   let terminationManager: TerminationManager;
@@ -44,7 +55,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       "initial-token",
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Checkpoint should work before termination
     await checkpoint("step-1", {
@@ -85,7 +96,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       "initial-token",
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
     const mockCheckpointFn = mockContext.state.checkpoint as jest.Mock;
 
     // Queue a checkpoint first
@@ -140,7 +151,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       "initial-token",
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Terminate and set checkpoint terminating flag
     terminationManager.terminate();
@@ -169,7 +180,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       "initial-token",
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     terminationManager.terminate();
     terminationManager.terminate();

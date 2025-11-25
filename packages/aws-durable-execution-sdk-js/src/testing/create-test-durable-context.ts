@@ -102,7 +102,7 @@ export function createTestDurableContext(options?: {
     options?.durableExecutionMode || DurableExecutionMode.ExecutionMode,
     createDefaultLogger(),
     options?.stepPrefix,
-    "test-checkpoint-token",
+    undefined, // No DurableExecution for test context
   );
 
   return { context, storage, executionContext };

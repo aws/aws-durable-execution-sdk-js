@@ -121,7 +121,7 @@ describe("DurableContext Logger Property", () => {
 
   test("Logger should only log in ExecutionMode", () => {
     // Helper to create a mock logger that respects shouldLog
-    const createMockLogger = () => {
+    const createMockLogger = (): any => {
       let loggingContext: any = null;
       const infoMock = jest.fn();
 
@@ -135,10 +135,10 @@ describe("DurableContext Logger Property", () => {
         error: jest.fn(),
         warn: jest.fn(),
         debug: jest.fn(),
-        configureDurableLoggingContext: jest.fn((ctx: any) => {
+        configureDurableLoggingContext: jest.fn((ctx: any): void => {
           loggingContext = ctx;
         }),
-        _getInfoMock: () => infoMock,
+        _getInfoMock: (): any => infoMock,
       };
     };
 

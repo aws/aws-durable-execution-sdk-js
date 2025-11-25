@@ -626,7 +626,7 @@ describe("WaitForCondition Handler", () => {
       // Setup runWithContext mock to return the check function result for these specific tests
       (runWithContext as jest.Mock) = jest
         .fn()
-        .mockImplementation(async (stepId, parentId, fn, attempt, mode) => {
+        .mockImplementation(async (stepId, parentId, fn, _attempt, _mode) => {
           try {
             return await fn();
           } catch (error) {
@@ -720,7 +720,7 @@ describe("WaitForCondition Handler", () => {
 
       // Capture the function passed to runWithContext
       (runWithContext as jest.Mock).mockImplementation(
-        async (stepId, parentId, fn, attempt, mode) => {
+        async (stepId, parentId, fn, _attempt, _mode) => {
           capturedFunction = fn;
           return await fn();
         },

@@ -1,8 +1,6 @@
 import { ExecutionContext } from "../../types";
-import {
-  createCheckpoint,
-  STEP_DATA_UPDATED_EVENT,
-} from "../checkpoint/checkpoint";
+import { STEP_DATA_UPDATED_EVENT } from "../checkpoint/checkpoint-manager";
+import { CheckpointLike } from "../checkpoint/checkpoint-helper";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../constants/constants";
 import { hashId } from "../step-id-utils/step-id-utils";
@@ -24,8 +22,8 @@ export interface WaitBeforeContinueOptions {
   hasRunningOperations: () => boolean;
   /** EventEmitter for operations completion events */
   operationsEmitter: EventEmitter;
-  /** Checkpoint object to force refresh when timer expires */
-  checkpoint?: ReturnType<typeof createCheckpoint>;
+  /** Checkpoint manager to force refresh when timer expires */
+  checkpoint?: CheckpointLike;
   /** Function to set callback that will be invoked when promise is awaited */
   onAwaitedChange?: (callback: () => void) => void;
 }
@@ -160,7 +158,11 @@ export async function waitBeforeContinue(
 
   // If timer expired, force checkpoint to get fresh data from API
   if (result.reason === "timer" && result.timerExpired && checkpoint) {
-    await checkpoint.force();
+    if (typeof checkpoint === 'function' && checkpoint.force) {
+      await checkpoint.force();
+    } else if (typeof checkpoint !== 'function' && checkpoint.forceCheckpoint) {
+      await checkpoint.forceCheckpoint();
+    }
   }
 
   return result;

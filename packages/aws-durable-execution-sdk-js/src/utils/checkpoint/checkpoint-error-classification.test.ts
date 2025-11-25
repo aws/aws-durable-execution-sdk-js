@@ -1,4 +1,5 @@
-import { CheckpointHandler } from "./checkpoint";
+import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
+import { CheckpointManager } from "./checkpoint-manager";
 import {
   CheckpointUnrecoverableInvocationError,
   CheckpointUnrecoverableExecutionError,
@@ -8,7 +9,7 @@ import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 
 describe("Checkpoint Error Classification", () => {
-  let handler: CheckpointHandler;
+  let handler: CheckpointManager;
   let mockContext: ExecutionContext;
   let mockLogger: DurableLogger;
 
@@ -28,7 +29,7 @@ describe("Checkpoint Error Classification", () => {
     mockLogger = createDefaultLogger(mockContext);
 
     const emitter = new EventEmitter();
-    handler = new CheckpointHandler(
+    handler = createTestCheckpointManager(
       mockContext,
       "test-token",
       emitter,

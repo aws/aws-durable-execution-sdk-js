@@ -13,7 +13,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
@@ -61,7 +61,7 @@ export const determineChildReplayMode = (
 
 export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: ReturnType<typeof createCheckpoint>,
+  checkpoint: CheckpointLike,
   parentContext: Context,
   createStepId: () => string,
   getParentLogger: () => Logger,
@@ -251,7 +251,7 @@ export const handleCompletedChildContext = async <
 
 export const executeChildContext = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: ReturnType<typeof createCheckpoint>,
+  checkpoint: CheckpointLike,
   parentContext: Context,
   entityId: string,
   name: string | undefined,
@@ -274,7 +274,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   // Checkpoint at start if not already started (fire-and-forget for performance)
   if (context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint(entityId, {
+    callCheckpoint(checkpoint, entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.START,
@@ -342,7 +342,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     }
 
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    await checkpoint(entityId, {
+    await callCheckpoint(checkpoint, entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.SUCCEED,
@@ -368,7 +368,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
     // Always checkpoint failures
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    await checkpoint(entityId, {
+    await callCheckpoint(checkpoint, entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.FAIL,

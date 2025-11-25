@@ -12,7 +12,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
@@ -25,7 +25,7 @@ import { validateReplayConsistency } from "../../utils/replay-validation/replay-
 
 export const createInvokeHandler = (
   context: ExecutionContext,
-  checkpoint: ReturnType<typeof createCheckpoint>,
+  checkpoint: CheckpointLike,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
@@ -108,7 +108,7 @@ export const createInvokeHandler = (
       );
 
       // Create checkpoint for the invoke operation
-      await checkpoint(stepId, {
+      await callCheckpoint(checkpoint, stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.START,

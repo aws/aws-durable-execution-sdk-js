@@ -16,7 +16,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
@@ -41,7 +41,7 @@ const waitForContinuation = async (
   stepId: string,
   name: string | undefined,
   hasRunningOperations: () => boolean,
-  checkpoint: ReturnType<typeof createCheckpoint>,
+  checkpoint: CheckpointLike,
   operationsEmitter: EventEmitter,
   onAwaitedChange?: (callback: () => void) => void,
 ): Promise<void> => {
@@ -76,7 +76,7 @@ const waitForContinuation = async (
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: ReturnType<typeof createCheckpoint>,
+  checkpoint: CheckpointLike,
   createStepId: () => string,
   logger: Logger,
   addRunningOperation: (stepId: string) => void,
@@ -253,7 +253,7 @@ export const handleCompletedWaitForCondition = async <T>(
 
 export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: ReturnType<typeof createCheckpoint>,
+  checkpoint: CheckpointLike,
   stepId: string,
   name: string | undefined,
   check: WaitForConditionCheckFunc<T, Logger>,
@@ -312,7 +312,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
   // Checkpoint START for observability (fire and forget) - only if not already started
   const stepData = context.getStepData(stepId);
   if (stepData?.Status !== OperationStatus.STARTED) {
-    checkpoint(stepId, {
+    callCheckpoint(checkpoint, stepId, {
       Id: stepId,
       ParentId: parentId,
       Action: OperationAction.START,
@@ -383,7 +383,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
 
     if (!decision.shouldContinue) {
       // Condition is met - complete successfully
-      await checkpoint(stepId, {
+      await callCheckpoint(checkpoint, stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.SUCCEED,
@@ -404,7 +404,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
     } else {
       // Condition not met - schedule retry
       // Only checkpoint the state, not the attempt number (system handles that)
-      await checkpoint(stepId, {
+      await callCheckpoint(checkpoint, stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.RETRY,
@@ -439,7 +439,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
 
     // Mark as failed - waitForCondition doesn't have its own retry logic for errors
     // If the check function throws, it's considered a failure
-    await checkpoint(stepId, {
+    await callCheckpoint(checkpoint, stepId, {
       Id: stepId,
       ParentId: parentId,
       Action: OperationAction.FAIL,

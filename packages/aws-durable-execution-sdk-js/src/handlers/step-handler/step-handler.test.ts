@@ -3,7 +3,7 @@ import {
   CheckpointFunction,
 } from "../../testing/mock-checkpoint";
 import { createStepHandler } from "./step-handler";
-import { ExecutionContext, StepSemantics, DurableLogger } from "../../types";
+import { ExecutionContext, StepSemantics } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -1033,7 +1033,7 @@ describe("Step Handler", () => {
       // Setup runWithContext mock to return the step function result for these specific tests
       (runWithContext as jest.Mock) = jest
         .fn()
-        .mockImplementation(async (stepId, parentId, fn, attempt, mode) => {
+        .mockImplementation(async (stepId, parentId, fn, _attempt, _mode) => {
           try {
             return await fn();
           } catch (error) {
@@ -1154,7 +1154,7 @@ describe("Step Handler", () => {
 
       // Capture the function passed to runWithContext
       (runWithContext as jest.Mock).mockImplementation(
-        async (stepId, parentId, fn, attempt, mode) => {
+        async (stepId, parentId, fn, _attempt, _mode) => {
           capturedFunction = fn;
           return await fn();
         },

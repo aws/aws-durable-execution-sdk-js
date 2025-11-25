@@ -2,12 +2,11 @@ import { createDurableContext } from "./durable-context";
 import { DurableExecutionMode, ExecutionContext } from "../../types";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
-import { DurableLogger } from "../../types/durable-logger";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 describe("DurableContext logger modeAware configuration", () => {
   // Helper to create a mock logger that respects shouldLog
-  const createMockLogger = () => {
+  const createMockLogger = (): any => {
     let loggingContext: any = null;
     const infoMock = jest.fn();
 
@@ -28,7 +27,7 @@ describe("DurableContext logger modeAware configuration", () => {
     };
   };
 
-  const mockExecutionContext: ExecutionContext = {
+  const mockExecutionContext = (): ExecutionContext => ({
     _stepData: {},
     durableExecutionArn: "test-arn",
     terminationManager: {
@@ -40,7 +39,7 @@ describe("DurableContext logger modeAware configuration", () => {
       getStepData: jest.fn(),
       checkpoint: jest.fn(),
     },
-  } as any;
+  } as any);
 
   const mockParentContext: Context = {
     functionName: "test-function",

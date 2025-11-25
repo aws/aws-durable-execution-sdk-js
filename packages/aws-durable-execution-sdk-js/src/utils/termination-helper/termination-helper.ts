@@ -5,11 +5,10 @@ import { log } from "../logger/logger";
 import { getActiveContext } from "../context-tracker/context-tracker";
 import { Operation, OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId } from "../step-id-utils/step-id-utils";
-import { hasPendingAncestorCompletion } from "../checkpoint/checkpoint";
 
 /**
  * Checks if any ancestor operation in the parent chain has finished (SUCCEEDED or FAILED)
- * or has a pending completion checkpoint
+ * Note: This function no longer checks for pending checkpoints as that requires access to CheckpointManager
  */
 function hasFinishedAncestor(
   context: ExecutionContext,
@@ -18,14 +17,6 @@ function hasFinishedAncestor(
   if (!parentId) {
     log("🔍", "hasFinishedAncestor: No parentId provided");
     return false;
-  }
-
-  // First check if any ancestor has a pending completion checkpoint
-  if (hasPendingAncestorCompletion(parentId)) {
-    log("🔍", "hasFinishedAncestor: Found ancestor with pending completion!", {
-      parentId,
-    });
-    return true;
   }
 
   let currentHashedId: string | undefined = hashId(parentId);

@@ -152,7 +152,7 @@ describe("waitBeforeContinue", () => {
   test("should call checkpoint.force when timer expires", async () => {
     const expiredTime = new Date(Date.now() - 1000); // Already expired
     const mockCheckpoint = {
-      force: jest.fn().mockResolvedValue(undefined),
+      forceCheckpoint: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     const result = await waitBeforeContinue({
@@ -169,7 +169,7 @@ describe("waitBeforeContinue", () => {
 
     expect(result.reason).toBe("timer");
     expect(result.timerExpired).toBe(true);
-    expect(mockCheckpoint.force).toHaveBeenCalled();
+    expect(mockCheckpoint.forceCheckpoint).toHaveBeenCalled();
   });
 
   test("should resolve when onAwaitedChange callback is invoked", async () => {
