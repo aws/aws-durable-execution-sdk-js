@@ -1,18 +1,30 @@
 import { TerminationManager } from "./termination-manager";
 import { TerminationReason } from "./types";
-import {
-  CheckpointManager,
-  deleteCheckpoint,
-} from "../utils/checkpoint/checkpoint";
+import { CheckpointManager } from "../utils/checkpoint/checkpoint-manager";
 import { CheckpointFunction } from "../testing/mock-checkpoint";
 import { DurableLogger, ExecutionContext } from "../types";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../utils/logger/default-logger";
 
 // Helper function to create checkpoint function from manager
-const createCheckpoint = (context: any, token: string, emitter: any, logger: any): any => {
-  const manager = new CheckpointManager(context.durableExecutionArn, {}, context.state, context.terminationManager, undefined, token, emitter, logger);
-  const checkpoint = (stepId: string, data: any): Promise<any> => manager.checkpoint(stepId, data);
+const createCheckpoint = (
+  context: any,
+  token: string,
+  emitter: any,
+  logger: any,
+): any => {
+  const manager = new CheckpointManager(
+    context.durableExecutionArn,
+    {},
+    context.state,
+    context.terminationManager,
+    undefined,
+    token,
+    emitter,
+    logger,
+  );
+  const checkpoint = (stepId: string, data: any): Promise<any> =>
+    manager.checkpoint(stepId, data);
   checkpoint.force = (): Promise<any> => manager.forceCheckpoint();
   checkpoint.setTerminating = (): void => manager.setTerminating();
   checkpoint.hasPendingAncestorCompletion = (): boolean => false;
@@ -26,7 +38,6 @@ describe("TerminationManager Checkpoint Integration", () => {
   let mockLogger: DurableLogger;
 
   beforeEach(() => {
-    deleteCheckpoint();
     terminationManager = new TerminationManager();
     mockEmitter = new EventEmitter();
 
@@ -45,9 +56,7 @@ describe("TerminationManager Checkpoint Integration", () => {
     mockLogger = createDefaultLogger(mockContext);
   });
 
-  afterEach(() => {
-    deleteCheckpoint();
-  });
+  afterEach(() => {});
 
   test("should set checkpoint terminating flag when terminate is called", async () => {
     const checkpoint = createCheckpoint(

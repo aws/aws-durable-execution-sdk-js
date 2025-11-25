@@ -3,7 +3,7 @@ import { ExecutionContext } from "../../types";
 import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../constants/constants";
-import { STEP_DATA_UPDATED_EVENT } from "../checkpoint/checkpoint";
+import { STEP_DATA_UPDATED_EVENT } from "../checkpoint/checkpoint-manager";
 import { hashId } from "../step-id-utils/step-id-utils";
 
 describe("waitBeforeContinue", () => {

@@ -16,7 +16,6 @@ import {
   CheckpointDurableExecutionRequest,
 } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
-import { deleteCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 // Mock the TerminationManager class
@@ -36,7 +35,6 @@ describe("Run In Child Context Integration Tests", () => {
     checkpointCalls = [];
 
     // Clear singleton checkpoint handler
-    deleteCheckpoint();
 
     mockDurableExecution = {
       checkpointManager: {

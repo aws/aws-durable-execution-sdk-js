@@ -1,4 +1,4 @@
-import { deleteCheckpoint, CheckpointManager } from "./checkpoint";
+import { CheckpointManager } from "./checkpoint-manager";
 import { CheckpointFunction } from "../../testing/mock-checkpoint";
 import { DurableLogger, ExecutionContext, OperationSubType } from "../../types";
 import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
@@ -48,7 +48,7 @@ describe("Checkpoint Integration Tests", () => {
 
   it("should demonstrate performance improvement with batching", async () => {
     const checkpointManager = new CheckpointManager(
-      'test-arn',
+      "test-arn",
       {},
       mockState,
       { terminate: jest.fn() } as any,
@@ -57,7 +57,8 @@ describe("Checkpoint Integration Tests", () => {
       mockEmitter,
       mockLogger,
     );
-    const checkpoint = (stepId: string, data: any): Promise<any> => checkpointManager.checkpoint(stepId, data);
+    const checkpoint = (stepId: string, data: any): Promise<any> =>
+      checkpointManager.checkpoint(stepId, data);
 
     // Create many concurrent checkpoint requests
     const promises = Array.from({ length: 8 }, (_, i) =>
@@ -78,14 +79,13 @@ describe("Checkpoint Integration Tests", () => {
     const totalUpdates = mockState.checkpoint.mock.calls.reduce(
       (sum: number, call: any) => sum + call[1].Updates.length,
       0,
-) as unknown as CheckpointFunction;
+    ) as unknown as CheckpointFunction;
     expect(totalUpdates).toBe(8);
   });
 
   it("should handle mixed operation types in a single batch", async () => {
-    deleteCheckpoint(); // Clean up singleton
     const checkpointManager = new CheckpointManager(
-      'test-arn',
+      "test-arn",
       {},
       mockState,
       { terminate: jest.fn() } as any,
@@ -94,7 +94,8 @@ describe("Checkpoint Integration Tests", () => {
       mockEmitter,
       mockLogger,
     );
-    const checkpoint = (stepId: string, data: any): Promise<any> => checkpointManager.checkpoint(stepId, data);
+    const checkpoint = (stepId: string, data: any): Promise<any> =>
+      checkpointManager.checkpoint(stepId, data);
 
     // Create checkpoints with different operation types and actions
     const promises = [
@@ -164,13 +165,12 @@ describe("Checkpoint Integration Tests", () => {
         ]),
       }),
       mockLogger,
-) as unknown as CheckpointFunction;
+    ) as unknown as CheckpointFunction;
   });
 
   it("should process all operations immediately regardless of count", async () => {
-    deleteCheckpoint(); // Clean up singleton
     const checkpointManager = new CheckpointManager(
-      'test-arn',
+      "test-arn",
       {},
       mockState,
       { terminate: jest.fn() } as any,
@@ -179,7 +179,8 @@ describe("Checkpoint Integration Tests", () => {
       mockEmitter,
       mockLogger,
     );
-    const checkpoint = (stepId: string, data: any): Promise<any> => checkpointManager.checkpoint(stepId, data);
+    const checkpoint = (stepId: string, data: any): Promise<any> =>
+      checkpointManager.checkpoint(stepId, data);
 
     // Create many requests (previously would have been split by max batch size)
     const promises = Array.from({ length: 10 }, (_, i) =>
@@ -204,13 +205,12 @@ describe("Checkpoint Integration Tests", () => {
         ),
       }),
       mockLogger,
-) as unknown as CheckpointFunction;
+    ) as unknown as CheckpointFunction;
   });
 
   it("should handle large numbers of operations in a single batch", async () => {
-    deleteCheckpoint(); // Clean up singleton
     const checkpointManager = new CheckpointManager(
-      'test-arn',
+      "test-arn",
       {},
       mockState,
       { terminate: jest.fn() } as any,
@@ -219,7 +219,8 @@ describe("Checkpoint Integration Tests", () => {
       mockEmitter,
       mockLogger,
     );
-    const checkpoint = (stepId: string, data: any): Promise<any> => checkpointManager.checkpoint(stepId, data);
+    const checkpoint = (stepId: string, data: any): Promise<any> =>
+      checkpointManager.checkpoint(stepId, data);
 
     // Create many requests (previously would have required multiple batches)
     const promises = Array.from({ length: 15 }, (_, i) =>
@@ -239,22 +240,20 @@ describe("Checkpoint Integration Tests", () => {
     // Verify all operations were processed
     const processedIds = mockState.checkpoint.mock.calls[0][1].Updates.map(
       (update: any) => update.Id,
-) as unknown as CheckpointFunction;
+    ) as unknown as CheckpointFunction;
     expect(processedIds).toEqual(
       Array.from({ length: 15 }, (_, i) => hashId(`step-${i}`)),
-) as unknown as CheckpointFunction;
+    ) as unknown as CheckpointFunction;
   });
 
   it("should use the first execution context when multiple contexts are created", async () => {
-    deleteCheckpoint(); // Clean up singleton
-    
     // Create second mock state
     mockState2 = {
       checkpoint: jest.fn().mockResolvedValue({
         checkpointToken: mockNewTaskToken,
       }),
     };
-    
+
     // Create second context
     const _mockContext2 = createMockExecutionContext({
       durableExecutionArn: "test-durable-execution-arn-2",
@@ -263,7 +262,7 @@ describe("Checkpoint Integration Tests", () => {
     });
 
     const checkpointManager1 = new CheckpointManager(
-      'test-arn',
+      "test-arn",
       {},
       mockState,
       { terminate: jest.fn() } as any,
@@ -272,10 +271,11 @@ describe("Checkpoint Integration Tests", () => {
       mockEmitter,
       mockLogger,
     );
-    const checkpoint1 = (stepId: string, data: any): Promise<any> => checkpointManager1.checkpoint(stepId, data);
-    
+    const checkpoint1 = (stepId: string, data: any): Promise<any> =>
+      checkpointManager1.checkpoint(stepId, data);
+
     const checkpointManager2 = new CheckpointManager(
-      'test-arn-2',
+      "test-arn-2",
       {},
       mockState2,
       { terminate: jest.fn() } as any,
@@ -284,7 +284,8 @@ describe("Checkpoint Integration Tests", () => {
       mockEmitter,
       mockLogger,
     );
-    const checkpoint2 = (stepId: string, data: any): Promise<any> => checkpointManager2.checkpoint(stepId, data);
+    const checkpoint2 = (stepId: string, data: any): Promise<any> =>
+      checkpointManager2.checkpoint(stepId, data);
 
     // Execute checkpoints - each should use its own context
     const promises = [
