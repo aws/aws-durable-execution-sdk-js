@@ -13,7 +13,7 @@ export const config: ExampleConfig = {
 export const handler = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {
     try {
-      const result = await context.waitForCallback<{ data: string }>(
+      const result = await context.waitForCallback(
         "failing-submitter-callback",
         async () => {
           await new Promise((resolve) => setTimeout(resolve, 500));

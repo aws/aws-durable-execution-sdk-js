@@ -13,13 +13,11 @@ export const config: ExampleConfig = {
 export const handler = withDurableExecution(
   async (event: unknown, context: DurableContext) => {
     try {
-      const result = await context.waitForCallback<{ data: string }>(
-        async () => {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          // Submitter succeeds - simulates successful external API call setup
-          return Promise.resolve();
-        },
-      );
+      const result = await context.waitForCallback(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Submitter succeeds - simulates successful external API call setup
+        return Promise.resolve();
+      });
 
       return {
         callbackResult: result,

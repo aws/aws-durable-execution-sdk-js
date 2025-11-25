@@ -17,7 +17,7 @@ export const handler = withDurableExecution(
     },
     context: DurableContext,
   ) => {
-    const result = await context.waitForCallback<{ processed: number }>(
+    const result = await context.waitForCallback(
       async () => {
         // Simulate long-running submitter function
         await new Promise((resolve) =>

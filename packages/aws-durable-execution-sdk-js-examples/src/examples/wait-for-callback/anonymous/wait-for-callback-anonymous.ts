@@ -12,7 +12,7 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: unknown, context: DurableContext) => {
-    const result = await context.waitForCallback<{ data: string }>(async () => {
+    const result = await context.waitForCallback(async () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       return Promise.resolve();
     });

@@ -154,11 +154,9 @@ describe("WaitForCallback Operations Integration", () => {
         const handler = withDurableExecution<unknown, unknown>(
           async (_event: unknown, context: DurableContext) => {
             try {
-              const result = await context.waitForCallback<{ data: string }>(
-                () => {
-                  throw new Error("Submitter failed immediately");
-                },
-              );
+              const result = await context.waitForCallback(() => {
+                throw new Error("Submitter failed immediately");
+              });
 
               return {
                 callbackResult: result,
@@ -197,11 +195,9 @@ describe("WaitForCallback Operations Integration", () => {
         const handler = withDurableExecution<unknown, unknown>(
           async (_event: unknown, context: DurableContext) => {
             try {
-              const result = await context.waitForCallback<{ data: string }>(
-                () => {
-                  return Promise.reject(new Error("Async submitter failure"));
-                },
-              );
+              const result = await context.waitForCallback(() => {
+                return Promise.reject(new Error("Async submitter failure"));
+              });
 
               return {
                 callbackResult: result,
@@ -244,7 +240,7 @@ describe("WaitForCallback Operations Integration", () => {
       const handler = withDurableExecution<unknown, unknown>(
         async (_event: unknown, context: DurableContext) => {
           try {
-            const result = await context.waitForCallback<{ data: string }>(
+            const result = await context.waitForCallback(
               async (id) => {
                 callbackId = id;
 

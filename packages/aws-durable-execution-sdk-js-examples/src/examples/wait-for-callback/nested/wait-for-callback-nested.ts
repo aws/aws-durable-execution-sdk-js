@@ -12,7 +12,7 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: unknown, context: DurableContext) => {
-    const outerResult = await context.waitForCallback<{ level: string }>(
+    const outerResult = await context.waitForCallback(
       "outer-callback-op",
       async () => {
         return Promise.resolve();
@@ -22,11 +22,12 @@ export const handler = withDurableExecution(
     const nestedResult = await context.runInChildContext(
       "outer-child-context",
       async (outerChildContext) => {
-        const innerResult = await outerChildContext.waitForCallback<{
-          level: string;
-        }>("inner-callback-op", async () => {
-          return Promise.resolve();
-        });
+        const innerResult = await outerChildContext.waitForCallback(
+          "inner-callback-op",
+          async () => {
+            return Promise.resolve();
+          },
+        );
 
         // Nested child context with another callback
         const deepNestedResult = await outerChildContext.runInChildContext(
@@ -35,11 +36,12 @@ export const handler = withDurableExecution(
             await innerChildContext.wait("deep-wait", { seconds: 5 });
 
             const nestedCallbackResult =
-              await innerChildContext.waitForCallback<{
-                level: string;
-              }>("nested-callback-op", async () => {
-                return Promise.resolve();
-              });
+              await innerChildContext.waitForCallback(
+                "nested-callback-op",
+                async () => {
+                  return Promise.resolve();
+                },
+              );
 
             return {
               nestedCallback: nestedCallbackResult,

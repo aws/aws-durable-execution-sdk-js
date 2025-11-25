@@ -14,7 +14,7 @@ export const handler = withDurableExecution(
   async (event: { shouldFail?: boolean }, context: DurableContext) => {
     const shouldFail = event.shouldFail ?? false;
 
-    const result = await context.waitForCallback<{ data: string }>(
+    const result = await context.waitForCallback(
       "retry-submitter-callback",
       async (callbackId, ctx) => {
         ctx.logger.info("Submitting callback to external system", {

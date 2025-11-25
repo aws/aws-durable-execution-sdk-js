@@ -19,13 +19,14 @@ export const handler = withDurableExecution(
       return Promise.resolve({ userId: 123, name: "John Doe" });
     });
 
-    const callbackResult = await context.waitForCallback<{
-      processed: boolean;
-    }>("wait-for-callback", async () => {
-      // Submitter uses data from previous step
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      return Promise.resolve();
-    });
+    const callbackResult = await context.waitForCallback(
+      "wait-for-callback",
+      async () => {
+        // Submitter uses data from previous step
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return Promise.resolve();
+      },
+    );
 
     await context.wait("final-wait", { seconds: 2 });
 

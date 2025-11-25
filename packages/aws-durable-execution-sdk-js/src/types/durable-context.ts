@@ -334,7 +334,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * const approvalResult = await callbackPromise;
    * ```
    */
-  createCallback<T>(
+  createCallback<T = string>(
     name: string | undefined,
     config?: CreateCallbackConfig<T>,
   ): DurablePromise<CreateCallbackResult<T>>;
@@ -353,7 +353,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * const result = await promise;
    * ```
    */
-  createCallback<T>(
+  createCallback<T = string>(
     config?: CreateCallbackConfig<T>,
   ): DurablePromise<CreateCallbackResult<T>>;
 
@@ -375,7 +375,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  waitForCallback<T>(
+  waitForCallback<T = string>(
     name: string | undefined,
     submitter: WaitForCallbackSubmitterFunc<Logger>,
     config?: WaitForCallbackConfig<T>,
@@ -395,7 +395,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  waitForCallback<T>(
+  waitForCallback<T = string>(
     submitter: WaitForCallbackSubmitterFunc<Logger>,
     config?: WaitForCallbackConfig<T>,
   ): DurablePromise<T>;
