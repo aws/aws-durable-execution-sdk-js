@@ -10,7 +10,7 @@ export const config: ExampleConfig = {
     "Demonstrates waitForCallback with custom serialization/deserialization",
 };
 
-interface CustomData {
+export interface CustomData {
   id: number;
   message: string;
   timestamp: Date;
@@ -18,21 +18,10 @@ interface CustomData {
     version: string;
     processed: boolean;
   };
+  circular: CustomData | undefined;
 }
 
 const customSerdes = {
-  serialize: async (
-    data: CustomData | undefined,
-  ): Promise<string | undefined> => {
-    if (data === undefined) return Promise.resolve(undefined);
-    return Promise.resolve(
-      JSON.stringify({
-        ...data,
-        timestamp: data.timestamp.toISOString(),
-        _serializedBy: "custom-serdes-v1",
-      }),
-    );
-  },
   deserialize: async (
     str: string | undefined,
   ): Promise<CustomData | undefined> => {
@@ -45,20 +34,29 @@ const customSerdes = {
         version: string;
         processed: boolean;
       };
-      _serializedBy: string;
     };
-    return Promise.resolve({
+    const result: CustomData = {
       id: parsed.id,
       message: parsed.message,
       timestamp: new Date(parsed.timestamp),
-      metadata: parsed.metadata,
-    });
+      metadata: {
+        ...parsed.metadata,
+        // Set to true by serdes, but always false in the callback result
+        processed: true,
+      },
+      circular: undefined,
+    };
+
+    // Deserializing into a circular reference should cause no issues
+    result.circular = result;
+
+    return result;
   },
 };
 
 export const handler = withDurableExecution(
   async (event: unknown, context: DurableContext) => {
-    const result = await context.waitForCallback<CustomData>(
+    const result = await context.waitForCallback(
       "custom-serdes-callback",
       async () => {
         // Submitter succeeds
@@ -70,9 +68,28 @@ export const handler = withDurableExecution(
       },
     );
 
+    const isSerdesProcessedBefore = await context.step(() =>
+      Promise.resolve(result.metadata.processed),
+    );
+
+    const isDateBeforeReplay = await context.step(() =>
+      Promise.resolve(result.timestamp instanceof Date),
+    );
+
+    await context.wait({ seconds: 1 });
+
+    const hasCircularReference = result.circular === result;
+
+    // Don't return the circular result to avoid result serialization issues
+    delete result.circular;
+
     return {
       receivedData: result,
-      isDateObject: result.timestamp instanceof Date,
+      hasCircularReference,
+      isDateAfterReplay: result.timestamp instanceof Date,
+      isDateBeforeReplay: isDateBeforeReplay,
+      isSerdesProcessedBefore: isSerdesProcessedBefore,
+      isSerdesProcessedAfter: result.metadata.processed,
     };
   },
 );

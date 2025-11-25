@@ -8,30 +8,30 @@ import { DurableLogger } from "./durable-logger";
 /**
  * Configuration options for createCallback operations
  */
-export interface CreateCallbackConfig<T> {
+export interface CreateCallbackConfig<T = string> {
   /** Maximum time to wait for callback submission */
   timeout?: Duration;
   /** Heartbeat timeout to detect stalled callback operations */
   heartbeatTimeout?: Duration;
-  /** Serialization/deserialization configuration for callback data */
-  serdes?: Serdes<T>;
+  /** Deserialization configuration for callback data */
+  serdes?: Omit<Serdes<T>, "serialize">;
 }
 
 /**
  * Configuration options for waitForCallback operations
  */
-export interface WaitForCallbackConfig<T> {
+export interface WaitForCallbackConfig<T = string> {
   /** Maximum time to wait for callback */
   timeout?: Duration;
   /** Heartbeat timeout to detect stalled operations */
   heartbeatTimeout?: Duration;
   /** Strategy for retrying failed callback submissions */
   retryStrategy?: (error: Error, attemptCount: number) => RetryDecision;
-  /** Serialization/deserialization configuration for callback data */
-  serdes?: Serdes<T>;
+  /** Deserialization configuration for callback data */
+  serdes?: Omit<Serdes<T>, "serialize">;
 }
 
-export type CreateCallbackResult<T> = [DurablePromise<T>, string];
+export type CreateCallbackResult<T = string> = [DurablePromise<T>, string];
 
 /**
  * Function that submits a callback ID to an external system

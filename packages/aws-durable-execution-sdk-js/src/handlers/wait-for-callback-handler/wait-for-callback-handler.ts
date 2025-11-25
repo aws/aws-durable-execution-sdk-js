@@ -1,3 +1,4 @@
+import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   ExecutionContext,
   WaitForCallbackSubmitterFunc,
@@ -11,9 +12,11 @@ import {
   DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
+import { createPassThroughSerdes } from "../callback-handler/callback";
 
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
+  getNextStepId: () => string,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
 ) => {
   return <T>(
@@ -23,36 +26,44 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       | WaitForCallbackConfig<T>,
     maybeConfig?: WaitForCallbackConfig<T>,
   ): DurablePromise<T> => {
+    let name: string | undefined;
+    let submitter: WaitForCallbackSubmitterFunc<Logger>;
+    let config: WaitForCallbackConfig<T> | undefined;
+
+    // Parse the overloaded parameters - validation errors thrown here are async
+    if (typeof nameOrSubmitter === "string" || nameOrSubmitter === undefined) {
+      // Case: waitForCallback("name", submitterFunc, config?) or waitForCallback(undefined, submitterFunc, config?)
+      name = nameOrSubmitter;
+      if (typeof submitterOrConfig === "function") {
+        submitter = submitterOrConfig;
+        config = maybeConfig;
+      } else {
+        return new DurablePromise(() =>
+          Promise.reject(
+            new Error(
+              "waitForCallback requires a submitter function when name is provided",
+            ),
+          ),
+        );
+      }
+    } else if (typeof nameOrSubmitter === "function") {
+      // Case: waitForCallback(submitterFunc, config?)
+      submitter = nameOrSubmitter;
+      config = submitterOrConfig as WaitForCallbackConfig<T>;
+    } else {
+      return new DurablePromise(() =>
+        Promise.reject(
+          new Error("waitForCallback requires a submitter function"),
+        ),
+      );
+    }
+
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     // Phase 1: Start execution immediately and capture result/error
-    const phase1Promise = (async (): Promise<T> => {
-      let name: string | undefined;
-      let submitter: WaitForCallbackSubmitterFunc<Logger>;
-      let config: WaitForCallbackConfig<T> | undefined;
-
-      // Parse the overloaded parameters - validation errors thrown here are async
-      if (
-        typeof nameOrSubmitter === "string" ||
-        nameOrSubmitter === undefined
-      ) {
-        // Case: waitForCallback("name", submitterFunc, config?) or waitForCallback(undefined, submitterFunc, config?)
-        name = nameOrSubmitter;
-        if (typeof submitterOrConfig === "function") {
-          submitter = submitterOrConfig;
-          config = maybeConfig;
-        } else {
-          throw new Error(
-            "waitForCallback requires a submitter function when name is provided",
-          );
-        }
-      } else if (typeof nameOrSubmitter === "function") {
-        // Case: waitForCallback(submitterFunc, config?)
-        submitter = nameOrSubmitter;
-        config = submitterOrConfig as WaitForCallbackConfig<T>;
-      } else {
-        throw new Error("waitForCallback requires a submitter function");
-      }
-
+    const phase1Promise = (async (): Promise<{
+      result: string;
+      stepId: string;
+    }> => {
       log("📞", "WaitForCallback requested:", {
         name,
         hasSubmitter: !!submitter,
@@ -62,19 +73,18 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       // Use runInChildContext to ensure proper ID generation and isolation
       const childFunction = async (
         childCtx: DurableContext<Logger>,
-      ): Promise<T> => {
+      ): Promise<string> => {
         // Convert WaitForCallbackConfig to CreateCallbackConfig
-        const createCallbackConfig: CreateCallbackConfig<T> | undefined = config
+        const createCallbackConfig: CreateCallbackConfig | undefined = config
           ? {
               timeout: config.timeout,
               heartbeatTimeout: config.heartbeatTimeout,
-              serdes: config.serdes,
             }
           : undefined;
 
         // Create callback and get the promise + callbackId
         const [callbackPromise, callbackId] =
-          await childCtx.createCallback<T>(createCallbackConfig);
+          await childCtx.createCallback(createCallbackConfig);
 
         log("🆔", "Callback created:", {
           callbackId,
@@ -113,9 +123,13 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
         return await callbackPromise;
       };
 
-      return await runInChildContext(name, childFunction, {
-        subType: OperationSubType.WAIT_FOR_CALLBACK,
-      });
+      const stepId = getNextStepId();
+      return {
+        result: await runInChildContext(name, childFunction, {
+          subType: OperationSubType.WAIT_FOR_CALLBACK,
+        }),
+        stepId,
+      };
     })();
 
     // Attach catch handler to prevent unhandled promise rejections
@@ -124,7 +138,17 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
     return new DurablePromise(async () => {
-      return await phase1Promise;
+      const { result, stepId } = await phase1Promise;
+
+      // Always deserialize the result since it's a string
+      return (await safeDeserialize(
+        config?.serdes ?? createPassThroughSerdes(),
+        result,
+        stepId,
+        name,
+        context.terminationManager,
+        context.durableExecutionArn,
+      ))!;
     });
   };
 };

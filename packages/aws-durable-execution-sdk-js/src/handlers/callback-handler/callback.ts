@@ -16,7 +16,7 @@ import { validateReplayConsistency } from "../../utils/replay-validation/replay-
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
 
-const createPassThroughSerdes = <T>(): Serdes<T> => ({
+export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
   deserialize: async (data: string | undefined) => data as T | undefined,
 });
