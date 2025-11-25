@@ -2,7 +2,8 @@
 # For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
 
 name: npm publish
-
+permissions:
+  contents: read
 on:
   release:
     types: [published]
