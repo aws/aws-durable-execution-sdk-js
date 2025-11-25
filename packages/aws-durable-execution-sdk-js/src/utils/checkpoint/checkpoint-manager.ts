@@ -16,6 +16,7 @@ import {
   CheckpointUnrecoverableExecutionError,
 } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { DurableLogger } from "../../types/durable-logger";
+import { Checkpoint } from "./checkpoint-helper";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -31,7 +32,7 @@ interface ActiveOperationsTracker {
   decrement(): void;
 }
 
-export class CheckpointManager {
+export class CheckpointManager implements Checkpoint {
   private queue: QueuedCheckpoint[] = [];
   private isProcessing = false;
   private currentTaskToken: string;
@@ -97,6 +98,11 @@ export class CheckpointManager {
     });
   }
 
+  // Alias for backward compatibility with Checkpoint interface
+  async force(): Promise<void> {
+    return this.forceCheckpoint();
+  }
+
   async checkpoint(
     stepId: string,
     data: Partial<OperationUpdate>,
@@ -159,7 +165,8 @@ export class CheckpointManager {
     let currentHashedId: string | undefined = hashId(parentId);
 
     while (currentHashedId) {
-      const parentOperation: Operation | undefined = this.stepData[currentHashedId];
+      const parentOperation: Operation | undefined =
+        this.stepData[currentHashedId];
 
       if (
         parentOperation?.Status === OperationStatus.SUCCEEDED ||
