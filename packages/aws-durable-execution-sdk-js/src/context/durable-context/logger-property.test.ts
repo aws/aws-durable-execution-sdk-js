@@ -1,10 +1,9 @@
-import { createDurableContext } from "./durable-context";
+import { createDurableContext, DurableExecution } from "./durable-context";
 import { ExecutionContext, DurableExecutionMode } from "../../types";
 import { Context } from "aws-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
-import { DurableExecution } from "../../durable-execution";
 
 describe("DurableContext Logger Property", () => {
   let mockExecutionContext: ExecutionContext;

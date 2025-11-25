@@ -28,8 +28,8 @@ import {
   DurableLogData,
 } from "../../types";
 import { Context } from "aws-lambda";
-import { DurableExecution } from "../../durable-execution";
 import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
+import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
 import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
 import { createRunInChildContextHandler } from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
@@ -43,7 +43,6 @@ import { createPromiseHandler } from "../../handlers/promise-handler/promise-han
 import { createConcurrentExecutionHandler } from "../../handlers/concurrent-execution-handler/concurrent-execution-handler";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { ModeManagement } from "./mode-management/mode-management";
-import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
 import {
   getActiveContext,
@@ -54,6 +53,12 @@ import {
   DurableLoggingContext,
 } from "../../types/durable-logger";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+
+export interface DurableExecution {
+  checkpointManager: CheckpointManager;
+  stepDataEmitter: EventEmitter;
+  setTerminating(): void;
+}
 
 export class DurableContextImpl<Logger extends DurableLogger>
   implements DurableContext<Logger>

@@ -1,4 +1,7 @@
-import { createDurableContext } from "../../context/durable-context/durable-context";
+import {
+  createDurableContext,
+  DurableExecution,
+} from "../../context/durable-context/durable-context";
 import {
   ExecutionContext,
   DurableContext,
@@ -13,7 +16,6 @@ import {
   CheckpointDurableExecutionRequest,
 } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
-import { DurableExecution } from "../../durable-execution";
 import { deleteCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 

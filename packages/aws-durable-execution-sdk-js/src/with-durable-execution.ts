@@ -1,7 +1,8 @@
 import { OperationType } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
+import { EventEmitter } from "events";
 import { createDurableContext } from "./context/durable-context/durable-context";
-import { DurableExecution } from "./durable-execution";
+import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
@@ -42,12 +43,24 @@ async function runHandler<
   checkpointToken: string,
   handler: DurableHandler<Input, Output, Logger>,
 ): Promise<DurableExecutionInvocationOutput> {
-  // Create DurableExecution instance with checkpoint manager
-  const durableExecution = new DurableExecution(
-    executionContext,
+  // Create checkpoint manager and step data emitter
+  const stepDataEmitter = new EventEmitter();
+  const checkpointManager = new CheckpointManager(
+    executionContext.durableExecutionArn,
+    executionContext._stepData,
+    executionContext.state,
+    executionContext.terminationManager,
+    executionContext.activeOperationsTracker,
     checkpointToken,
+    stepDataEmitter,
     createDefaultLogger(executionContext),
   );
+
+  const durableExecution = {
+    checkpointManager,
+    stepDataEmitter,
+    setTerminating: (): void => checkpointManager.setTerminating(),
+  };
 
   const durableContext = createDurableContext<Logger>(
     executionContext,

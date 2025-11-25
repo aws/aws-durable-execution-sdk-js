@@ -7,6 +7,7 @@ import {
 import {
   createDurableContext,
   DurableContextImpl,
+  DurableExecution,
 } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
@@ -16,7 +17,6 @@ import {
   DurableExecutionMode,
   DurableLogger,
 } from "../types";
-import { DurableExecution } from "../durable-execution";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../utils/logger/default-logger";
 

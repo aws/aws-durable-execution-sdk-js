@@ -1,9 +1,8 @@
-import { createDurableContext } from "./durable-context";
+import { createDurableContext, DurableExecution } from "./durable-context";
 import { DurableExecutionMode, ExecutionContext } from "../../types";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
-import { DurableExecution } from "../../durable-execution";
 
 describe("DurableContext logger modeAware configuration", () => {
   let mockDurableExecution: DurableExecution;

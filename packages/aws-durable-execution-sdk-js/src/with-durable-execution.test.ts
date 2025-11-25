@@ -12,12 +12,12 @@ import { log } from "./utils/logger/logger";
 import { DurableExecutionInvocationInput, InvocationStatus } from "./types";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
-import { DurableExecution } from "./durable-execution";
+import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 
 // Mock dependencies
 jest.mock("./context/execution-context/execution-context");
 jest.mock("./context/durable-context/durable-context");
-jest.mock("./durable-execution");
+jest.mock("./utils/checkpoint/checkpoint-manager");
 jest.mock("./utils/logger/logger", () => ({
   log: jest.fn(),
 }));
@@ -70,12 +70,9 @@ describe("withDurableExecution", () => {
     });
     (createDurableContext as jest.Mock).mockReturnValue(mockDurableContext);
 
-    // Mock DurableExecution with a mock checkpointManager
-    const mockCheckpointManager = {
+    // Mock CheckpointManager
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
-    };
-    (DurableExecution as jest.Mock).mockImplementation(() => ({
-      checkpointManager: mockCheckpointManager,
       setTerminating: jest.fn(),
     }));
 
@@ -359,12 +356,9 @@ describe("withDurableExecution", () => {
       "Checkpoint service unavailable",
     );
 
-    // Mock DurableExecution with failing checkpoint
-    const mockCheckpointManager = {
+    // Mock CheckpointManager to fail on checkpoint
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockRejectedValue(checkpointError),
-    };
-    (DurableExecution as jest.Mock).mockImplementation(() => ({
-      checkpointManager: mockCheckpointManager,
       setTerminating: jest.fn(),
     }));
 
@@ -472,7 +466,7 @@ describe("withDurableExecution", () => {
     // Execute
     const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
-    
+
     // With instance-based architecture, deleteCheckpoint is no longer called
     // The test now verifies the handler executes successfully without singleton cleanup
 
