@@ -6,7 +6,7 @@ import {
   OperationAction,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
+import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
@@ -16,7 +16,7 @@ import { DurablePromise } from "../../types/durable-promise";
 
 export const createWaitHandler = (
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,

@@ -8,7 +8,7 @@ import {
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { CheckpointFunction as _CheckpointFunction } from "../../testing/mock-checkpoint";
-import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
+import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/durable-error/durable-error";
@@ -24,7 +24,7 @@ const createPassThroughSerdes = <T>(): Serdes<T> => ({
 
 export const createCallback = (
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,

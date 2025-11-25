@@ -47,8 +47,10 @@ describe("Invoke Handler Two-Phase Execution", () => {
       durableExecutionArn: "test-arn",
     } as any;
 
-    mockCheckpoint = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.force = jest.fn().mockResolvedValue(undefined);
+    mockCheckpoint = {
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      force: jest.fn().mockResolvedValue(undefined),
+    };
 
     createStepId = (): string => `step-${++stepIdCounter}`;
     hasRunningOperations = jest.fn().mockReturnValue(false) as () => boolean;
@@ -83,7 +85,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
     expect(invokePromise).toBeInstanceOf(DurablePromise);
 
     // Phase 1 should have executed (checkpoint called)
-    expect(mockCheckpoint).toHaveBeenCalled();
+    expect(mockCheckpoint.checkpoint).toHaveBeenCalled();
     expect(mockContext.getStepData).toHaveBeenCalled();
   });
 
@@ -176,7 +178,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Should not checkpoint since stepData exists
-    expect(mockCheckpoint).not.toHaveBeenCalled();
+    expect(mockCheckpoint.checkpoint).not.toHaveBeenCalled();
 
     // Phase 2: Await the promise - should return cached result
     const result = await invokePromise;
@@ -215,12 +217,12 @@ describe("Invoke Handler Two-Phase Execution", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Checkpoint should have been called once in phase 1
-    expect(mockCheckpoint).toHaveBeenCalledTimes(1);
+    expect(mockCheckpoint.checkpoint).toHaveBeenCalledTimes(1);
 
     // Phase 2: Await the promise
     await expect(invokePromise).rejects.toThrow("TERMINATION_FOR_TEST");
 
     // Checkpoint should still only be called once (phase 1 did the checkpoint)
-    expect(mockCheckpoint).toHaveBeenCalledTimes(1);
+    expect(mockCheckpoint.checkpoint).toHaveBeenCalledTimes(1);
   });
 });

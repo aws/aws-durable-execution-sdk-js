@@ -16,7 +16,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
+import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
@@ -41,7 +41,7 @@ const waitForContinuation = async (
   stepId: string,
   name: string | undefined,
   hasRunningOperations: () => boolean,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   operationsEmitter: EventEmitter,
   onAwaitedChange?: (callback: () => void) => void,
 ): Promise<void> => {
@@ -76,7 +76,7 @@ const waitForContinuation = async (
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   createStepId: () => string,
   logger: Logger,
   addRunningOperation: (stepId: string) => void,
@@ -253,7 +253,7 @@ export const handleCompletedWaitForCondition = async <T>(
 
 export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   stepId: string,
   name: string | undefined,
   check: WaitForConditionCheckFunc<T, Logger>,

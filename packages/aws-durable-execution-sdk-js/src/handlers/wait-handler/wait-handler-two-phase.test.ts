@@ -17,12 +17,12 @@ describe("Wait Handler Two-Phase Execution", () => {
       getStepData: jest.fn().mockReturnValue(null),
     } as any;
 
-    mockCheckpoint = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.force = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.setTerminating = jest.fn();
-    mockCheckpoint.hasPendingAncestorCompletion = jest
-      .fn()
-      .mockReturnValue(false);
+    mockCheckpoint = {
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      force: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+    };
 
     createStepId = (): string => `step-${++stepIdCounter}`;
     hasRunningOperations = jest.fn().mockReturnValue(false) as () => boolean;
@@ -48,7 +48,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     expect(waitPromise).toBeInstanceOf(DurablePromise);
 
     // Phase 1 should have executed (checkpoint called)
-    expect(mockCheckpoint).toHaveBeenCalled();
+    expect(mockCheckpoint.checkpoint).toHaveBeenCalled();
     expect(mockContext.getStepData).toHaveBeenCalled();
   });
 
@@ -67,7 +67,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     // Wait for phase 1 to complete
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    const phase1Calls = mockCheckpoint.mock.calls.length;
+    const phase1Calls = mockCheckpoint.checkpoint.mock.calls.length;
 
     // Phase 2: Await the promise - this should execute phase 2 logic
     try {
@@ -78,7 +78,7 @@ describe("Wait Handler Two-Phase Execution", () => {
 
     // Phase 2 execution should have happened (more checkpoint calls)
     expect((waitPromise as DurablePromise<void>).isExecuted).toBe(true);
-    expect(mockCheckpoint.mock.calls.length).toBeGreaterThan(phase1Calls);
+    expect(mockCheckpoint.checkpoint.mock.calls.length).toBeGreaterThan(phase1Calls);
   });
 
   it("should work correctly with Promise.race", async () => {
@@ -154,7 +154,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     // Checkpoint should have been called once in phase 1
-    const phase1CheckpointCalls = mockCheckpoint.mock.calls.length;
+    const phase1CheckpointCalls = mockCheckpoint.checkpoint.mock.calls.length;
     expect(phase1CheckpointCalls).toBe(0); // stepData exists, no checkpoint
 
     // Phase 2: Await the promise
@@ -165,7 +165,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     }
 
     // Checkpoint should still only be called once (or zero if stepData existed)
-    expect(mockCheckpoint.mock.calls.length).toBe(0);
+    expect(mockCheckpoint.checkpoint.mock.calls.length).toBe(0);
   });
 
   it("should reuse same promise execution when awaited multiple times", async () => {
@@ -182,7 +182,7 @@ describe("Wait Handler Two-Phase Execution", () => {
     // Wait for phase 1 to complete
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    const phase1Calls = mockCheckpoint.mock.calls.length;
+    const phase1Calls = mockCheckpoint.checkpoint.mock.calls.length;
 
     // Await the promise multiple times
     const results = await Promise.allSettled([
@@ -196,7 +196,7 @@ describe("Wait Handler Two-Phase Execution", () => {
 
     // Checkpoint should not be called multiple times for phase 2
     // (DurablePromise should cache the execution)
-    const totalCalls = mockCheckpoint.mock.calls.length;
+    const totalCalls = mockCheckpoint.checkpoint.mock.calls.length;
     expect(totalCalls).toBeGreaterThan(phase1Calls); // Phase 2 executed
     expect(totalCalls).toBeLessThan(phase1Calls + 3); // But not 3 times
   });

@@ -1,17 +1,17 @@
-import { CheckpointManager } from "./checkpoint-manager";
-import { CheckpointFunction } from "../../testing/mock-checkpoint";
 import { OperationUpdate } from "@aws-sdk/client-lambda";
 
-export type CheckpointLike = CheckpointManager | CheckpointFunction;
+export interface Checkpoint {
+  checkpoint(stepId: string, data: Partial<OperationUpdate>): Promise<void>;
+  forceCheckpoint?(): Promise<void>;
+  force?(): Promise<void>;
+  setTerminating?(): void;
+  hasPendingAncestorCompletion?(stepId: string): boolean;
+}
 
 export const callCheckpoint = async (
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   stepId: string,
   data: Partial<OperationUpdate>
 ): Promise<void> => {
-  if (typeof checkpoint === 'function') {
-    return checkpoint(stepId, data);
-  } else {
-    return checkpoint.checkpoint(stepId, data);
-  }
+  return checkpoint.checkpoint(stepId, data);
 };

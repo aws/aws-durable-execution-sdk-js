@@ -9,6 +9,7 @@ import {
 } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
+import { DurableExecution } from "../durable-execution";
 import {
   ExecutionContext,
   DurableExecutionMode,
@@ -78,6 +79,7 @@ export function createTestDurableContext(options?: {
     },
     requestId: "mock-request-id",
     tenantId: undefined,
+    activeOperationsTracker: undefined,
   };
 
   const mockLambdaContext: Context = {
@@ -96,13 +98,20 @@ export function createTestDurableContext(options?: {
     ...options?.lambdaContext,
   };
 
+  // Create a DurableExecution instance for the test
+  const durableExecution = new DurableExecution(
+    executionContext,
+    "test-checkpoint-token",
+    createDefaultLogger(),
+  );
+
   const context = createDurableContext<DurableLogger>(
     executionContext,
     mockLambdaContext,
     options?.durableExecutionMode || DurableExecutionMode.ExecutionMode,
     createDefaultLogger(),
     options?.stepPrefix,
-    undefined, // No DurableExecution for test context
+    durableExecution, // Pass the DurableExecution instance
   );
 
   return { context, storage, executionContext };

@@ -13,7 +13,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
+import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
@@ -61,7 +61,7 @@ export const determineChildReplayMode = (
 
 export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   parentContext: Context,
   createStepId: () => string,
   getParentLogger: () => Logger,
@@ -251,7 +251,7 @@ export const handleCompletedChildContext = async <
 
 export const executeChildContext = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   parentContext: Context,
   entityId: string,
   name: string | undefined,

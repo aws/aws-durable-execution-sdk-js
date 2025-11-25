@@ -21,7 +21,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, CheckpointLike } from "../../utils/checkpoint/checkpoint-helper";
+import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
 import {
@@ -51,7 +51,7 @@ const waitForContinuation = async (
   name: string | undefined,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   onAwaitedChange?: (callback: () => void) => void,
 ): Promise<void> => {
   const stepData = context.getStepData(stepId);
@@ -88,7 +88,7 @@ const waitForContinuation = async (
  */
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   parentContext: Context,
   createStepId: () => string,
   logger: Logger,
@@ -344,7 +344,7 @@ export const handleCompletedStep = async <T>(
 
 export const executeStep = async <T, Logger extends DurableLogger>(
   context: ExecutionContext,
-  checkpoint: CheckpointLike,
+  checkpoint: Checkpoint,
   stepId: string,
   name: string | undefined,
   fn: StepFunc<T, Logger>,

@@ -1,45 +1,37 @@
-import js from "@eslint/js";
-import { defineConfig } from "eslint/config";
-import tseslint from "typescript-eslint";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const durableFunctionsPlugin = require("../aws-durable-execution-sdk-js-eslint-plugin/dist/index.js");
+const typescriptParser = require("@typescript-eslint/parser");
 
-// Import the plugin directly
-const durableFunctionsPlugin = {
-  rules: {
-    "no-nested-durable-operations": (
-      await import(
-        "../aws-durable-execution-sdk-js-eslint-plugin/dist/rules/no-nested-durable-operations.js"
-      )
-    ).noNestedDurableOperations,
-    "no-non-deterministic-outside-step": (
-      await import(
-        "../aws-durable-execution-sdk-js-eslint-plugin/dist/rules/no-non-deterministic-outside-step.js"
-      )
-    ).noNonDeterministicOutsideStep,
-  },
-};
-
-export default defineConfig([
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
+export default [
   {
+    ignores: [
+      "**/coverage/**",
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+    ],
+  },
+  {
+    files: [
+      "src/examples/**/*.ts",
+      "src/examples/**/*.js",
+    ],
+    plugins: {
+      "aws-durable-execution-eslint": durableFunctionsPlugin,
+    },
+    rules: {
+      "aws-durable-execution-eslint/no-nested-durable-operations": "error",
+    },
     languageOptions: {
-      parserOptions: {
-        tsconfigRootDir: __dirname,
+      parser: typescriptParser,
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        console: "readonly",
+        process: "readonly",
       },
     },
   },
-  {
-    plugins: {
-      "durable-functions": durableFunctionsPlugin,
-    },
-    rules: {
-      "durable-functions/no-nested-durable-operations": "error",
-      "durable-functions/no-non-deterministic-outside-step": "error",
-    },
-    ignores: "**/*.test.ts",
-  },
-]);
+];

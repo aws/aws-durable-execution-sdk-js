@@ -69,6 +69,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private durableExecutionMode: DurableExecutionMode;
   private _parentId?: string;
   private modeManagement: ModeManagement;
+  private durableExecution?: DurableExecution;
 
   constructor(
     private executionContext: ExecutionContext,
@@ -81,6 +82,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
   ) {
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
+    this.durableExecution = durableExecution;
     this.contextLogger = inheritedLogger;
     this.contextLogger.configureDurableLoggingContext?.(
       this.getDurableLoggingContext(),
@@ -88,9 +90,12 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
     this.durableExecutionMode = durableExecutionMode;
 
-    // Use the checkpoint manager from DurableExecution if provided, otherwise create a temporary one
-    this.checkpoint = durableExecution?.checkpointManager || 
-      new CheckpointManager(
+    // Use the checkpoint manager from DurableExecution if provided, otherwise create a test one
+    if (durableExecution?.checkpointManager) {
+      this.checkpoint = durableExecution.checkpointManager;
+    } else {
+      // For backward compatibility with tests - create a temporary checkpoint manager
+      this.checkpoint = new CheckpointManager(
         executionContext.durableExecutionArn,
         executionContext._stepData,
         executionContext.state,
@@ -100,6 +105,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.operationsEmitter,
         createDefaultLogger(this.executionContext),
       );
+    }
 
     this.modeManagement = new ModeManagement(
       this.captureExecutionState.bind(this),
@@ -330,7 +336,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         () => this.contextLogger,
         // Adapter function to maintain compatibility
         (executionContext, parentContext, durableExecutionMode, inheritedLogger, stepPrefix, _checkpointToken, parentId) => 
-          createDurableContext(executionContext, parentContext, durableExecutionMode, inheritedLogger, stepPrefix, undefined, parentId),
+          createDurableContext(executionContext, parentContext, durableExecutionMode, inheritedLogger, stepPrefix, this.durableExecution, parentId),
         this._parentId,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
