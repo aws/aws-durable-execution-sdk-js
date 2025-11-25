@@ -182,7 +182,7 @@ const result = await context.waitForCallback(
 
 ### Map
 
-Process arrays with concurrency control:
+Process arrays of items, applying durable operations to each with concurrency control:
 
 ```typescript
 const results = await context.map(
@@ -208,9 +208,11 @@ console.log(
 results.throwIfError(); // Throws if any failures
 ```
 
+**Note**: `map()` executes durable operations (steps, waits, etc.) within the same Lambda invocation using child contexts for isolation. It does not spawn separate Lambda functions.
+
 ### Parallel
 
-Execute multiple functions in parallel:
+Execute multiple branches with durable operations in parallel:
 
 ```typescript
 const results = await context.parallel(
@@ -226,6 +228,8 @@ const results = await context.parallel(
   },
 );
 ```
+
+**Note**: `parallel()` executes durable operations within the same Lambda invocation. Each branch runs in its own child context with isolated state tracking.
 
 ### Concurrent Execution
 

@@ -1,7 +1,7 @@
 {
   "name": "aws-durable-execution-sdk-js",
   "version": "0.0.1",
-  "description": "Lambda Durable Functions SDK, Testing SDK and fully functional examples",
+  "description": "Lambda durable functions SDK, Testing SDK and fully functional examples",
   "workspaces": [
     "packages/*"
   ],

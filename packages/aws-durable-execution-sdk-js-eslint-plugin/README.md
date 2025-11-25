@@ -1,6 +1,6 @@
 # @aws/durable-execution-sdk-js-eslint-plugin
 
-ESLint plugin for AWS Lambda Durable Functions best practices.
+ESLint plugin for AWS Lambda durable functions best practices.
 
 ## Installation
 
@@ -145,7 +145,7 @@ The plugin detects these durable operations:
 
 ### No Nested Durable Operations
 
-Nesting durable operations with the same context object can cause runtime errors and unexpected behavior in AWS Lambda Durable Functions. This rule helps catch these issues at development time.
+Nesting durable operations with the same context object can cause runtime errors and unexpected behavior in AWS Lambda durable functions. This rule helps catch these issues at development time.
 
 ### No Closure in Durable Operations
 
