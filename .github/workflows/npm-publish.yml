@@ -28,9 +28,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - name: Make script executable
-        run: chmod +x ./workflows/iterate-publish.sh
+        run: chmod +x ./workflows/iterate-publish-npm.sh
       - name: iterate and publish
-        run: ./workflows/iterate-publish.sh
+        run: ./workflows/iterate-publish-npm.sh
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
