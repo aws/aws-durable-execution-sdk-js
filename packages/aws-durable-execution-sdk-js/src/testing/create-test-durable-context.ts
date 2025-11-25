@@ -1,4 +1,5 @@
 import { Context } from "aws-lambda";
+import { EventEmitter } from "events";
 import {
   Operation,
   CheckpointDurableExecutionResponse,
@@ -9,12 +10,13 @@ import {
 } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
-import { DurableExecution } from "../durable-execution";
+import { Checkpoint } from "../utils/checkpoint/checkpoint-helper";
 import {
   ExecutionContext,
   DurableExecutionMode,
   DurableLogger,
 } from "../types";
+import { DurableExecution } from "../durable-execution";
 import { getStepData as getStepDataUtil } from "../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../utils/logger/default-logger";
 
@@ -98,12 +100,20 @@ export function createTestDurableContext(options?: {
     ...options?.lambdaContext,
   };
 
-  // Create a DurableExecution instance for the test
-  const durableExecution = new DurableExecution(
-    executionContext,
-    "test-checkpoint-token",
-    createDefaultLogger(),
-  );
+  // Create a mock DurableExecution with mock checkpoint for tests
+  const mockCheckpoint: Checkpoint = {
+    checkpoint: jest.fn().mockResolvedValue(undefined),
+    forceCheckpoint: jest.fn().mockResolvedValue(undefined),
+    force: jest.fn().mockResolvedValue(undefined),
+    setTerminating: jest.fn(),
+    hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+  };
+
+  const mockDurableExecution = {
+    checkpointManager: mockCheckpoint,
+    stepDataEmitter: new EventEmitter(),
+    setTerminating: jest.fn(),
+  };
 
   const context = createDurableContext<DurableLogger>(
     executionContext,
@@ -111,7 +121,7 @@ export function createTestDurableContext(options?: {
     options?.durableExecutionMode || DurableExecutionMode.ExecutionMode,
     createDefaultLogger(),
     options?.stepPrefix,
-    durableExecution, // Pass the DurableExecution instance
+    mockDurableExecution as unknown as DurableExecution, // Cast to avoid type issues with mock
   );
 
   return { context, storage, executionContext };

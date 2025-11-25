@@ -4,13 +4,24 @@ import { Context } from "aws-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import { DurableExecution } from "../../durable-execution";
 
 describe("DurableContext Logger Property", () => {
   let mockExecutionContext: ExecutionContext;
   let mockParentContext: Context;
   let customLogger: any;
+  let mockDurableExecution: DurableExecution;
 
   beforeEach(() => {
+    mockDurableExecution = {
+      checkpointManager: {
+        checkpoint: jest.fn(),
+        force: jest.fn(),
+        setTerminating: jest.fn(),
+        hasPendingAncestorCompletion: jest.fn(),
+      },
+    } as any;
+
     customLogger = {
       log: jest.fn(),
       info: jest.fn(),
@@ -46,6 +57,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
 
     expect(context.logger).toBeDefined();
@@ -61,6 +74,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
 
     // Set custom logger
@@ -93,6 +108,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       defaultLogger,
+      undefined,
+      mockDurableExecution,
     );
 
     // Call logger before setting custom logger
@@ -152,6 +169,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     contextExecution.configureLogger({
       customLogger: executionModeLogger as any,
@@ -177,6 +196,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ReplayMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     contextReplay.configureLogger({ customLogger: replayModeLogger as any });
 
@@ -198,6 +219,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ReplaySucceededContext,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     contextReplaySucceeded.configureLogger({
       customLogger: replaySucceededLogger as any,
@@ -240,6 +263,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
 
     // First call to configureLogger with logger1
@@ -311,6 +336,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
 
     // Set custom logger
@@ -349,6 +376,8 @@ describe("DurableContext Logger Property", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
       "1", // stepPrefix for child context
     );
     childContext.configureLogger({ customLogger: childLogger });
