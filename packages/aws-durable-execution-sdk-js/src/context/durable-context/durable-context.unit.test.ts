@@ -7,7 +7,7 @@ import { createMockExecutionContext } from "../../testing/mock-context";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { DurableLogger } from "../../types/durable-logger";
 
-jest.mock("../../utils/checkpoint/checkpoint");
+jest.mock("../../utils/checkpoint/checkpoint-manager");
 jest.mock("../../handlers/step-handler/step-handler");
 jest.mock("../../handlers/invoke-handler/invoke-handler");
 jest.mock(

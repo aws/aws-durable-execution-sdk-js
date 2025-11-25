@@ -9,7 +9,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { EventEmitter } from "events";
 
 // Mock dependencies
-jest.mock("../../utils/checkpoint/checkpoint");
+jest.mock("../../utils/checkpoint/checkpoint-manager");
 jest.mock("../../utils/termination-helper/termination-helper");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");

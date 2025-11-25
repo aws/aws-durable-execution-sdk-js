@@ -5,7 +5,7 @@ import { DurablePromise } from "../../types/durable-promise";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 
 // Mock dependencies
-jest.mock("../../utils/checkpoint/checkpoint");
+jest.mock("../../utils/checkpoint/checkpoint-manager");
 jest.mock("../../utils/termination-helper/termination-helper");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
