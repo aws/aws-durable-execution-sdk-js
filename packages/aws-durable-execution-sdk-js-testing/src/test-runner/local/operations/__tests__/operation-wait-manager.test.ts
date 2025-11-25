@@ -348,16 +348,17 @@ describe("OperationWaitManager", () => {
       // Assert - All operations cleared and proper error messages
       expect(waitManager.getWaitingOperationsCount()).toBe(0);
 
-      await expect(promise1).rejects.toThrow(
-        "Operation was not found during execution completion. Expected status: STARTED.",
-      );
-      await expect(promise2).rejects.toThrow(
-        "Operation was not found during execution completion. Expected status: COMPLETED.",
-      );
-      // Verify error message uses ID as fallback when name is missing
-      await expect(promise3).rejects.toThrow(
-        "Operation was not found during execution completion. Expected status: SUBMITTED.",
-      );
+      await Promise.all([
+        expect(promise1).rejects.toThrow(
+          "Operation was not found after execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+        ),
+        expect(promise2).rejects.toThrow(
+          "Operation was not found after execution completion. Expected status: COMPLETED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+        ),
+        expect(promise3).rejects.toThrow(
+          "Operation was not found after execution completion. Expected status: SUBMITTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+        ),
+      ]);
     });
 
     it("should not throw when clearing with no waiting operations", () => {

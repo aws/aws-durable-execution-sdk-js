@@ -880,7 +880,7 @@ describe("CloudDurableTestRunner", () => {
       expect(waitResult.status).toBe("rejected");
       expect((waitResult as PromiseRejectedResult).reason).toEqual(
         new Error(
-          "Operation was not found during execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+          "Operation was not found after execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
         ),
       );
     });
@@ -941,14 +941,14 @@ describe("CloudDurableTestRunner", () => {
       expect(waitResult1.status).toBe("rejected");
       expect((waitResult1 as PromiseRejectedResult).reason).toEqual(
         new Error(
-          "Operation was not found during execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+          "Operation was not found after execution completion. Expected status: STARTED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
         ),
       );
 
       expect(waitResult2.status).toBe("rejected");
       expect((waitResult2 as PromiseRejectedResult).reason).toEqual(
         new Error(
-          "Operation was not found during execution completion. Expected status: COMPLETED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
+          "Operation was not found after execution completion. Expected status: COMPLETED. This typically means the operation was never executed or the test is waiting for the wrong operation.",
         ),
       );
     });
