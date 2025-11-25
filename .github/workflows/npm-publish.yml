@@ -25,7 +25,10 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org/
-      - run: |
+      - run: npm ci
+      - run: npm test
+      - name: iterate and publish
+        run: |
           for package_dir in packages/*; \
           do \
           if [ -d "$package_dir" ] && [[ "$package_dir" == "packages/aws-durable-execution-sdk-js-testing" || "$package_dir" == "packages/aws-durable-execution-sdk-js" ]]; then \
@@ -36,6 +39,6 @@ jobs:
             cd ../.. \
           fi \
           done
-      - env:
+        shell: bash
+        env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          shell: bash
