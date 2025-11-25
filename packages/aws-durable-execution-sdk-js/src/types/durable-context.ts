@@ -401,7 +401,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   ): DurablePromise<T>;
 
   /**
-   * Maps over an array of items with a function, executing in parallel with optional concurrency control
+   * Processes an array of items, applying durable operations to each with optional concurrency control
    * @param name - Step name for tracking and debugging
    * @param items - Array of items to process
    * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise\<TOutput\>
@@ -427,7 +427,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   ): DurablePromise<BatchResult<TOutput>>;
 
   /**
-   * Maps over an array of items with a function, executing in parallel with optional concurrency control
+   * Processes an array of items, applying durable operations to each with optional concurrency control
    * @param items - Array of items to process
    * @param mapFunc - Function to apply to each item (context, item, index, array) =\> Promise\<TOutput\>
    * @param config - Optional configuration for concurrency and completion behavior
@@ -446,7 +446,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   ): DurablePromise<BatchResult<TOutput>>;
 
   /**
-   * Executes multiple functions in parallel with optional concurrency control
+   * Executes multiple branches with durable operations in parallel with optional concurrency control
    * @param name - Step name for tracking and debugging
    * @param branches - Array of functions or named branches to execute in parallel (all must return same type)
    * @param config - Optional configuration for concurrency and completion behavior
@@ -469,7 +469,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   ): DurablePromise<BatchResult<T>>;
 
   /**
-   * Executes multiple functions in parallel with optional concurrency control
+   * Executes multiple branches with durable operations in parallel with optional concurrency control
    * @param branches - Array of functions or named branches to execute in parallel (all must return same type)
    * @param config - Optional configuration for concurrency and completion behavior
    * @example
@@ -487,7 +487,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   ): DurablePromise<BatchResult<T>>;
 
   /**
-   * Executes multiple functions in parallel with optional concurrency control
+   * Executes multiple branches with durable operations in parallel with optional concurrency control
    *
    * @remarks
    * This overload provides automatic type inference for heterogeneous return types.
@@ -528,7 +528,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   >;
 
   /**
-   * Executes multiple functions in parallel with optional concurrency control
+   * Executes multiple branches with durable operations in parallel with optional concurrency control
    *
    * @remarks
    * This overload provides automatic type inference for heterogeneous return types.
