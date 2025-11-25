@@ -7,11 +7,3 @@ export interface Checkpoint {
   setTerminating?(): void;
   hasPendingAncestorCompletion?(stepId: string): boolean;
 }
-
-export const callCheckpoint = async (
-  checkpoint: Checkpoint,
-  stepId: string,
-  data: Partial<OperationUpdate>
-): Promise<void> => {
-  return checkpoint.checkpoint(stepId, data);
-};

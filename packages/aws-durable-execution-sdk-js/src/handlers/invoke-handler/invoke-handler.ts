@@ -12,7 +12,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
@@ -108,7 +108,7 @@ export const createInvokeHandler = (
       );
 
       // Create checkpoint for the invoke operation
-      await callCheckpoint(checkpoint, stepId, {
+      await checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.START,

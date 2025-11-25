@@ -6,7 +6,7 @@ import {
   OperationAction,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
@@ -73,7 +73,7 @@ export const createWaitHandler = (
 
         // Only checkpoint START if we haven't started this wait before
         if (!stepData) {
-          await callCheckpoint(checkpoint, stepId, {
+          await checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.START,

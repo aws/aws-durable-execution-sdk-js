@@ -16,7 +16,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { TerminationReason } from "../../termination-manager/types";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
@@ -312,7 +312,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
   // Checkpoint START for observability (fire and forget) - only if not already started
   const stepData = context.getStepData(stepId);
   if (stepData?.Status !== OperationStatus.STARTED) {
-    callCheckpoint(checkpoint, stepId, {
+    checkpoint.checkpoint(stepId, {
       Id: stepId,
       ParentId: parentId,
       Action: OperationAction.START,
@@ -383,7 +383,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
 
     if (!decision.shouldContinue) {
       // Condition is met - complete successfully
-      await callCheckpoint(checkpoint, stepId, {
+      await checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.SUCCEED,
@@ -404,7 +404,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
     } else {
       // Condition not met - schedule retry
       // Only checkpoint the state, not the attempt number (system handles that)
-      await callCheckpoint(checkpoint, stepId, {
+      await checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.RETRY,
@@ -439,7 +439,7 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
 
     // Mark as failed - waitForCondition doesn't have its own retry logic for errors
     // If the check function throws, it's considered a failure
-    await callCheckpoint(checkpoint, stepId, {
+    await checkpoint.checkpoint(stepId, {
       Id: stepId,
       ParentId: parentId,
       Action: OperationAction.FAIL,

@@ -13,7 +13,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
@@ -274,7 +274,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   // Checkpoint at start if not already started (fire-and-forget for performance)
   if (context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    callCheckpoint(checkpoint, entityId, {
+    checkpoint.checkpoint(entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.START,
@@ -342,7 +342,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     }
 
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    await callCheckpoint(checkpoint, entityId, {
+    await checkpoint.checkpoint(entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.SUCCEED,
@@ -368,7 +368,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
     // Always checkpoint failures
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    await callCheckpoint(checkpoint, entityId, {
+    await checkpoint.checkpoint(entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.FAIL,

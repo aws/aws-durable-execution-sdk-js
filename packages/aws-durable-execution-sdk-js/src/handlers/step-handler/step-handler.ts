@@ -21,7 +21,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { callCheckpoint, Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
 import {
@@ -221,7 +221,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
               if (!retryDecision.shouldRetry) {
                 // No retry, mark as failed
-                await callCheckpoint(checkpoint, stepId, {
+                await checkpoint.checkpoint(stepId, {
                   Id: stepId,
                   ParentId: parentId,
                   Action: OperationAction.FAIL,
@@ -236,7 +236,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 throw DurableOperationError.fromErrorObject(errorObject);
               } else {
                 // Retry
-                await callCheckpoint(checkpoint, stepId, {
+                await checkpoint.checkpoint(stepId, {
                   Id: stepId,
                   ParentId: parentId,
                   Action: OperationAction.RETRY,
@@ -366,7 +366,7 @@ export const executeStep = async <T, Logger extends DurableLogger>(
   if (stepData?.Status !== OperationStatus.STARTED) {
     if (semantics === StepSemantics.AtMostOncePerRetry) {
       // Wait for checkpoint to complete
-      await callCheckpoint(checkpoint, stepId, {
+      await checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.START,
@@ -376,7 +376,7 @@ export const executeStep = async <T, Logger extends DurableLogger>(
       });
     } else {
       // Fire and forget for AtLeastOncePerRetry
-      callCheckpoint(checkpoint, stepId, {
+      checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.START,
@@ -426,7 +426,7 @@ export const executeStep = async <T, Logger extends DurableLogger>(
     );
 
     // Always checkpoint on completion
-    await callCheckpoint(checkpoint, stepId, {
+    await checkpoint.checkpoint(stepId, {
       Id: stepId,
       ParentId: parentId,
       Action: OperationAction.SUCCEED,
@@ -505,7 +505,7 @@ export const executeStep = async <T, Logger extends DurableLogger>(
 
     if (!retryDecision.shouldRetry) {
       // No retry
-      await callCheckpoint(checkpoint, stepId, {
+      await checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.FAIL,
@@ -520,7 +520,7 @@ export const executeStep = async <T, Logger extends DurableLogger>(
       throw DurableOperationError.fromErrorObject(errorObject);
     } else {
       // Retry
-      await callCheckpoint(checkpoint, stepId, {
+      await checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: OperationAction.RETRY,
