@@ -145,6 +145,8 @@ describe("OperationWaitManager", () => {
           [OperationStatus.STARTED, WaitingOperationStatus.STARTED],
           [OperationStatus.READY, WaitingOperationStatus.STARTED],
           [OperationStatus.PENDING, WaitingOperationStatus.STARTED],
+          [OperationStatus.SUCCEEDED, WaitingOperationStatus.STARTED],
+          [OperationStatus.FAILED, WaitingOperationStatus.STARTED],
           [OperationStatus.SUCCEEDED, WaitingOperationStatus.COMPLETED],
           [OperationStatus.FAILED, WaitingOperationStatus.COMPLETED],
           [OperationStatus.CANCELLED, WaitingOperationStatus.COMPLETED],
