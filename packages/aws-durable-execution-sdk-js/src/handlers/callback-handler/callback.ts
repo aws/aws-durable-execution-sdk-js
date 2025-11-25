@@ -7,7 +7,6 @@ import {
 } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { CheckpointFunction as _CheckpointFunction } from "../../testing/mock-checkpoint";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
