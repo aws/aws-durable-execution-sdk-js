@@ -369,7 +369,6 @@ export class CheckpointManager implements Checkpoint {
     });
 
     const response = await this.storage.checkpoint(
-      this.currentTaskToken,
       checkpointData,
       this.logger,
     );

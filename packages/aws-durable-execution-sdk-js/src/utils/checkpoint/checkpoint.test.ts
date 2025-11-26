@@ -106,7 +106,6 @@ describe("CheckpointManager", () => {
       // Should be processed immediately
       expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
       expect(mockState.checkpoint).toHaveBeenCalledWith(
-        TEST_CONSTANTS.CHECKPOINT_TOKEN,
         {
           DurableExecutionArn: "test-durable-execution-arn",
           CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
@@ -169,14 +168,14 @@ describe("CheckpointManager", () => {
       expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
 
       // Should have all three updates in the single call
-      expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(3);
-      expect(mockState.checkpoint.mock.calls[0][1].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(3);
+      expect(mockState.checkpoint.mock.calls[0][0].Updates[0].Id).toBe(
         hashId("step-1"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[0][1].Updates[1].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates[1].Id).toBe(
         hashId("step-2"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[0][1].Updates[2].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates[2].Id).toBe(
         hashId("step-3"),
       ) as unknown as CheckpointFunction;
     });
@@ -211,7 +210,7 @@ describe("CheckpointManager", () => {
 
       // Verify all operations were processed
       const totalUpdates = mockState.checkpoint.mock.calls.reduce(
-        (sum: number, call: any) => sum + call[1].Updates.length,
+        (sum: number, call: any) => sum + call[0].Updates.length,
         0,
       ) as unknown as CheckpointFunction;
       expect(totalUpdates).toBe(10);
@@ -248,7 +247,7 @@ describe("CheckpointManager", () => {
 
       // Verify all operations were processed
       const totalUpdates = mockState.checkpoint.mock.calls.reduce(
-        (sum: number, call: any) => sum + call[1].Updates.length,
+        (sum: number, call: any) => sum + call[0].Updates.length,
         0,
       ) as unknown as CheckpointFunction;
       expect(totalUpdates).toBe(20);
@@ -335,20 +334,20 @@ describe("CheckpointManager", () => {
       expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
 
       // Verify first batch had 2 updates
-      expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(2);
-      expect(mockState.checkpoint.mock.calls[0][1].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(2);
+      expect(mockState.checkpoint.mock.calls[0][0].Updates[0].Id).toBe(
         hashId("step-1"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[0][1].Updates[1].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates[1].Id).toBe(
         hashId("step-2"),
       ) as unknown as CheckpointFunction;
 
       // Verify second batch had 2 updates
-      expect(mockState.checkpoint.mock.calls[1][1].Updates).toHaveLength(2);
-      expect(mockState.checkpoint.mock.calls[1][1].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[1][0].Updates).toHaveLength(2);
+      expect(mockState.checkpoint.mock.calls[1][0].Updates[0].Id).toBe(
         hashId("step-3"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[1][1].Updates[1].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[1][0].Updates[1].Id).toBe(
         hashId("step-4"),
       ) as unknown as CheckpointFunction;
 
@@ -405,10 +404,10 @@ describe("CheckpointManager", () => {
 
       // Should have made two separate API calls
       expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
-      expect(mockState.checkpoint.mock.calls[0][1].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates[0].Id).toBe(
         hashId("step-1"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[1][1].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[1][0].Updates[0].Id).toBe(
         hashId("step-2"),
       ) as unknown as CheckpointFunction;
     });
@@ -619,7 +618,6 @@ describe("CheckpointManager", () => {
       await checkpointHandler.checkpoint("step-1", {});
 
       expect(mockState.checkpoint).toHaveBeenCalledWith(
-        TEST_CONSTANTS.CHECKPOINT_TOKEN,
         {
           DurableExecutionArn: "test-durable-execution-arn",
           CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
@@ -676,7 +674,7 @@ describe("CheckpointManager", () => {
 
       // Should have batched all operations together in a single call
       expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
-      expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(3);
+      expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(3);
     });
   });
 });
@@ -801,8 +799,8 @@ describe("deleteCheckpointHandler", () => {
     expect(mockState1.checkpoint).toHaveBeenCalledTimes(1);
     expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
     // Each context processes its own operation
-    expect(mockState1.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
-    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState1.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
 
     // Delete the handler
 
@@ -849,8 +847,8 @@ describe("deleteCheckpointHandler", () => {
     expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
 
     // Each context processes its own operation
-    expect(mockState1.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
-    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState1.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
 
     // Clean up
   });
@@ -867,7 +865,6 @@ describe("deleteCheckpointHandler", () => {
       await checkpoint.force();
 
       expect(mockState1.checkpoint).toHaveBeenCalledWith(
-        "test-token",
         {
           DurableExecutionArn: "test-durable-execution-arn-1",
           CheckpointToken: "test-token",
@@ -926,7 +923,6 @@ describe("deleteCheckpointHandler", () => {
       // Should still only have made one API call total (the force request piggybacked)
       expect(mockState1.checkpoint).toHaveBeenCalledTimes(1);
       expect(mockState1.checkpoint).toHaveBeenCalledWith(
-        "test-token",
         {
           DurableExecutionArn: "test-durable-execution-arn-1",
           CheckpointToken: "test-token",
@@ -1030,7 +1026,6 @@ describe("createCheckpointHandler", () => {
 
     // Verify
     expect(mockState.checkpoint).toHaveBeenCalledWith(
-      TEST_CONSTANTS.CHECKPOINT_TOKEN,
       expect.objectContaining({
         CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
         Updates: expect.arrayContaining([
@@ -1176,8 +1171,8 @@ describe("createCheckpointHandler", () => {
     expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
 
     // Each context processes its own operation
-    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
-    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
   });
 
   it("should use the same handler for equivalent execution context ids, but different objects", async () => {
@@ -1219,8 +1214,8 @@ describe("createCheckpointHandler", () => {
     expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
 
     // Each context processes its own operation
-    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
-    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
   });
 
   it("should split large payloads into multiple API calls when exceeding 750KB limit", async () => {
@@ -1252,9 +1247,9 @@ describe("createCheckpointHandler", () => {
     expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
 
     // First call should have one item
-    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
     // Second call should have the remaining item
-    expect(mockState.checkpoint.mock.calls[1][1].Updates).toHaveLength(1);
+    expect(mockState.checkpoint.mock.calls[1][0].Updates).toHaveLength(1);
   });
 
   it("should split large payloads into multiple API calls when exceeding 750KB limit for large unicode characters", async () => {
@@ -1286,9 +1281,9 @@ describe("createCheckpointHandler", () => {
     expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
 
     // First call should have one item
-    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
     // Second call should have the remaining item
-    expect(mockState.checkpoint.mock.calls[1][1].Updates).toHaveLength(1);
+    expect(mockState.checkpoint.mock.calls[1][0].Updates).toHaveLength(1);
   });
 
   it("should process remaining items in queue after size limit is reached", async () => {
@@ -1326,7 +1321,7 @@ describe("createCheckpointHandler", () => {
 
     // Verify all items were processed
     const allUpdates = mockState.checkpoint.mock.calls.flatMap(
-      (call: any) => call[1].Updates,
+      (call: any) => call[0].Updates,
     );
     expect(allUpdates).toHaveLength(3);
     expect(allUpdates.map((u: any) => u.Id)).toEqual([

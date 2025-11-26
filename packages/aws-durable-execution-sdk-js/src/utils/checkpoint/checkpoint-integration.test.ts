@@ -78,7 +78,7 @@ describe("Checkpoint Integration Tests", () => {
 
     // Verify all operations were processed in one batch
     const totalUpdates = mockState.checkpoint.mock.calls.reduce(
-      (sum: number, call: any) => sum + call[1].Updates.length,
+      (sum: number, call: any) => sum + call[0].Updates.length,
       0,
     ) as unknown as CheckpointFunction;
     expect(totalUpdates).toBe(8);
@@ -132,9 +132,10 @@ describe("Checkpoint Integration Tests", () => {
 
     // Should have batched all different operation types together
     expect(mockState.checkpoint).toHaveBeenCalledWith(
-      TEST_CONSTANTS.CHECKPOINT_TOKEN,
-      expect.objectContaining({
-        Updates: expect.arrayContaining([
+      {
+        DurableExecutionArn: "test-arn",
+        CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
+        Updates: [
           expect.objectContaining({
             Id: hashId("step-1"),
             Action: OperationAction.START,
@@ -164,8 +165,8 @@ describe("Checkpoint Integration Tests", () => {
             Payload: "retry reason",
             StepOptions: { NextAttemptDelaySeconds: 10 },
           }),
-        ]),
-      }),
+        ],
+      },
       mockLogger,
     ) as unknown as CheckpointFunction;
   });
@@ -199,14 +200,13 @@ describe("Checkpoint Integration Tests", () => {
 
     expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
     expect(mockState.checkpoint).toHaveBeenCalledWith(
-      TEST_CONSTANTS.CHECKPOINT_TOKEN,
-      expect.objectContaining({
-        Updates: expect.arrayContaining(
-          Array.from({ length: 10 }, (_, i) =>
-            expect.objectContaining({ Id: hashId(`step-${i}`) }),
-          ),
+      {
+        DurableExecutionArn: "test-arn",
+        CheckpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
+        Updates: Array.from({ length: 10 }, (_, i) =>
+          expect.objectContaining({ Id: hashId(`step-${i}`) }),
         ),
-      }),
+      },
       mockLogger,
     ) as unknown as CheckpointFunction;
   });
@@ -239,10 +239,10 @@ describe("Checkpoint Integration Tests", () => {
     await Promise.all(promises);
 
     expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
-    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(15);
+    expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(15);
 
     // Verify all operations were processed
-    const processedIds = mockState.checkpoint.mock.calls[0][1].Updates.map(
+    const processedIds = mockState.checkpoint.mock.calls[0][0].Updates.map(
       (update: any) => update.Id,
     ) as unknown as CheckpointFunction;
     expect(processedIds).toEqual(
@@ -307,7 +307,7 @@ describe("Checkpoint Integration Tests", () => {
     expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
 
     // Verify each checkpoint was called with its respective operation
-    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
-    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][0].Updates).toHaveLength(1);
   });
 });
