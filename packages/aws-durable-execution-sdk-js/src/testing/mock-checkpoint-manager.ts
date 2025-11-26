@@ -6,7 +6,10 @@ import { DurableLogger } from "../types/durable-logger";
 import { EventEmitter } from "events";
 
 export class MockCheckpointManager extends CheckpointManager {
-  public checkpointCalls: Array<{ stepId: string; data: Partial<OperationUpdate> }> = [];
+  public checkpointCalls: Array<{
+    stepId: string;
+    data: Partial<OperationUpdate>;
+  }> = [];
   public forceCheckpointCalls: number = 0;
   public setTerminatingCalls: number = 0;
 
@@ -21,10 +24,14 @@ export class MockCheckpointManager extends CheckpointManager {
       "mock-token",
       {} as EventEmitter,
       {} as DurableLogger,
+      new Set<string>(),
     );
   }
 
-  async checkpoint(stepId: string, data: Partial<OperationUpdate>): Promise<void> {
+  async checkpoint(
+    stepId: string,
+    data: Partial<OperationUpdate>,
+  ): Promise<void> {
     this.checkpointCalls.push({ stepId, data });
     return Promise.resolve();
   }
@@ -47,4 +54,5 @@ export class MockCheckpointManager extends CheckpointManager {
   }
 }
 
-export const createMockCheckpointManager = (): MockCheckpointManager => new MockCheckpointManager();
+export const createMockCheckpointManager = (): MockCheckpointManager =>
+  new MockCheckpointManager();
