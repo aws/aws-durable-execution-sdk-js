@@ -24,17 +24,26 @@ export class TerminationManager extends EventEmitter {
   private terminationDetails?: TerminationDetails;
   private resolveTermination?: (result: TerminationResponse) => void;
   private terminationPromise: Promise<TerminationResponse>;
+  private setCheckpointTerminating?: () => void;
 
-  constructor() {
+  constructor(setCheckpointTerminating?: () => void) {
     super();
+    this.setCheckpointTerminating = setCheckpointTerminating;
     // Create the promise immediately during construction
     this.terminationPromise = new Promise((resolve) => {
       this.resolveTermination = resolve;
     });
   }
 
+  setCheckpointTerminatingCallback(callback: () => void): void {
+    this.setCheckpointTerminating = callback;
+  }
+
   terminate(options: TerminationOptions = {}): void {
     if (this.isTerminated) return;
+
+    // Set checkpoint termination flag before any other termination logic
+    this.setCheckpointTerminating?.();
 
     this.isTerminated = true;
 

@@ -41,6 +41,7 @@ describe("withDurableExecution", () => {
   const mockTerminationManager = {
     getTerminationPromise: jest.fn(),
     terminate: jest.fn(),
+    setCheckpointTerminatingCallback: jest.fn(),
   };
 
   const mockCustomerHandlerEvent = {};

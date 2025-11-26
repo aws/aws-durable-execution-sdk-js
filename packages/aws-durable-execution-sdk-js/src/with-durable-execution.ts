@@ -57,6 +57,11 @@ async function runHandler<
     executionContext.pendingCompletions,
   );
 
+  // Set the checkpoint terminating callback on the termination manager
+  executionContext.terminationManager.setCheckpointTerminatingCallback(() => {
+    checkpointManager.setTerminating();
+  });
+
   const durableExecution = {
     checkpointManager,
     stepDataEmitter,
