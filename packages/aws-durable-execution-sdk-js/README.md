@@ -106,7 +106,7 @@ const orderResult = await context.runInChildContext(
 
 ### Invoking Other Functions
 
-Call other durable functions:
+Call another AWS Lambda function and wait for it complete:
 
 ```typescript
 const result = await context.invoke(
