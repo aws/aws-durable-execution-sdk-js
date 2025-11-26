@@ -15,6 +15,7 @@ import { OperationSubType } from "@aws/durable-execution-sdk-js";
 interface WaitingOperation {
   operation: DurableOperation<unknown>;
   resolve: () => void;
+  reject: () => void;
   expectedStatus: WaitingOperationStatus;
 }
 
@@ -36,11 +37,18 @@ export class OperationWaitManager {
     operation: DurableOperation<unknown>,
     status: WaitingOperationStatus,
   ): Promise<DurableOperation<unknown>> {
-    return new Promise<DurableOperation<unknown>>((resolve) => {
+    // Create rejected error outside promise for better call stack
+    const error = new Error(
+      `Operation was not found after execution completion. Expected status: ${status}. This typically means the operation was never executed or the test is waiting for the wrong operation.`,
+    );
+    return new Promise<DurableOperation<unknown>>((resolve, reject) => {
       this.waitingOperations.add({
         operation,
         resolve: () => {
           resolve(operation);
+        },
+        reject: () => {
+          reject(error);
         },
         expectedStatus: status,
       });
@@ -154,9 +162,16 @@ export class OperationWaitManager {
   }
 
   /**
-   * Clears all waiting operations. Useful for cleanup.
+   * Clears all waiting operations and rejects any pending promises.
+   * This should be called when execution completes to ensure operations
+   * that were never found don't hang indefinitely.
    */
   clearWaitingOperations(): void {
+    if (this.waitingOperations.size > 0) {
+      Array.from(this.waitingOperations).forEach((waiting) => {
+        waiting.reject();
+      });
+    }
     this.waitingOperations.clear();
   }
 
