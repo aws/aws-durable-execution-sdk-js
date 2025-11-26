@@ -1,5 +1,5 @@
 export * from "./with-durable-execution";
-export { DurableExecution } from "./durable-execution";
+export { DurableExecution } from "./context/durable-context/durable-context";
 export { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 export {
   DurableContext,
