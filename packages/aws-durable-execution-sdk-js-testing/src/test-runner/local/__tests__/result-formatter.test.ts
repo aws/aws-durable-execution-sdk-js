@@ -2,10 +2,10 @@ import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import {
-  OperationStatus,
   OperationType,
   Event,
   EventType,
+  ExecutionStatus,
 } from "@aws-sdk/client-lambda";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
@@ -25,13 +25,13 @@ describe("ResultFormatter", () => {
   beforeEach(() => {
     mockOperationIndex = new IndexedOperations([]);
     mockOperationStorage = new LocalOperationStorage(
-      new OperationWaitManager(),
+      new OperationWaitManager(mockOperationIndex),
       mockOperationIndex,
       mockApiClient,
       jest.fn(),
     ) as jest.Mocked<LocalOperationStorage>;
     resultFormatter = new ResultFormatter<{ success: boolean }>();
-    mockWaitManager = new OperationWaitManager();
+    mockWaitManager = new OperationWaitManager(mockOperationIndex);
     mockApiClient = {} as DurableApiClient;
   });
 
@@ -47,7 +47,7 @@ describe("ResultFormatter", () => {
               Id: "op1",
               Name: "operation1",
               Type: OperationType.STEP,
-              Status: OperationStatus.SUCCEEDED,
+              Status: ExecutionStatus.SUCCEEDED,
               StartTimestamp: new Date(),
             },
             events: [],
@@ -58,7 +58,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue(mockOperations);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -86,7 +86,7 @@ describe("ResultFormatter", () => {
             Id: "op1",
             Name: "succeededOp",
             Type: OperationType.STEP,
-            Status: OperationStatus.SUCCEEDED,
+            Status: ExecutionStatus.SUCCEEDED,
             StartTimestamp: new Date(),
           },
           events: [],
@@ -102,7 +102,7 @@ describe("ResultFormatter", () => {
             Id: "op2",
             Name: "failedOp",
             Type: OperationType.STEP,
-            Status: OperationStatus.FAILED,
+            Status: ExecutionStatus.FAILED,
             StartTimestamp: new Date(),
           },
           events: [],
@@ -113,7 +113,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue(mockOperations);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -125,24 +125,24 @@ describe("ResultFormatter", () => {
 
       // Test filtering by SUCCEEDED status
       const succeededOps = testResult.getOperations({
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
       });
       expect(succeededOps).toHaveLength(1);
-      expect(succeededOps[0].getStatus()).toBe(OperationStatus.SUCCEEDED);
+      expect(succeededOps[0].getStatus()).toBe(ExecutionStatus.SUCCEEDED);
 
       // Test filtering by FAILED status
       const failedOps = testResult.getOperations({
-        status: OperationStatus.FAILED,
+        status: ExecutionStatus.FAILED,
       });
       expect(failedOps).toHaveLength(1);
-      expect(failedOps[0].getStatus()).toBe(OperationStatus.FAILED);
+      expect(failedOps[0].getStatus()).toBe(ExecutionStatus.FAILED);
     });
 
     it("should pass invocations from history to test result", () => {
       mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -250,7 +250,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: "",
       };
 
@@ -267,7 +267,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: "raw-string-value",
       };
 
@@ -284,7 +284,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: "{ invalid json",
       };
 
@@ -303,7 +303,7 @@ describe("ResultFormatter", () => {
           operation: {
             Id: "op1",
             Name: "operation1",
-            Status: OperationStatus.SUCCEEDED,
+            Status: ExecutionStatus.SUCCEEDED,
             Type: OperationType.STEP,
             StartTimestamp: new Date(),
           },
@@ -314,7 +314,7 @@ describe("ResultFormatter", () => {
           operation: {
             Id: "op2",
             Name: "operation2",
-            Status: OperationStatus.SUCCEEDED,
+            Status: ExecutionStatus.SUCCEEDED,
             Type: OperationType.WAIT,
             StartTimestamp: new Date(),
           },
@@ -334,7 +334,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue(mockOperations);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -362,7 +362,7 @@ describe("ResultFormatter", () => {
       };
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify(complexData),
       };
 
@@ -375,9 +375,9 @@ describe("ResultFormatter", () => {
       expect(testResult.getResult()).toEqual(complexData);
     });
 
-    it("should throw Error with 'Execution failed' when ErrorMessage is empty string", () => {
+    it("should throw Error when error object is not found for failed execution", () => {
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.FAILED,
+        status: ExecutionStatus.FAILED,
         result: JSON.stringify({ error: "" }),
       };
 
@@ -387,12 +387,14 @@ describe("ResultFormatter", () => {
         mockOperationStorage,
       );
 
-      expect(() => testResult.getResult()).toThrow("Execution failed");
+      expect(() => testResult.getResult()).toThrow(
+        "Could not find error result",
+      );
     });
 
-    it("should clean stack trace by removing ResultFormatter references", () => {
+    it("should not clean stack trace if error had no stack trace", () => {
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.FAILED,
+        status: ExecutionStatus.FAILED,
         result: JSON.stringify({ error: "Test error" }),
       };
 
@@ -408,18 +410,17 @@ describe("ResultFormatter", () => {
       } catch (error) {
         thrownError = error as Error;
       }
-      // The stack should be cleaned to remove ResultFormatter references
       expect(thrownError!.stack).toBeDefined();
-      expect(thrownError!.stack).not.toContain("ResultFormatter");
+      expect(thrownError!.stack).toContain("ResultFormatter");
     });
   });
 
   describe("getError behavior", () => {
-    it("should return ErrorObject for failed invocation", () => {
+    it("should not return ErrorObject for failed invocation if error object is missing", () => {
       const mockError = "Handler execution failed";
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.FAILED,
+        status: ExecutionStatus.FAILED,
         result: JSON.stringify({ error: mockError }),
       };
 
@@ -429,14 +430,14 @@ describe("ResultFormatter", () => {
         mockOperationStorage,
       );
 
-      expect(testResult.getError()).toEqual({
-        errorMessage: mockError,
-      });
+      expect(() => testResult.getError()).toThrow(
+        "Could not find error result",
+      );
     });
 
     it("should throw error when called on successful execution", () => {
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -453,7 +454,7 @@ describe("ResultFormatter", () => {
 
     it("should throw error when parsing fails", () => {
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.FAILED,
+        status: ExecutionStatus.FAILED,
         result: "Raw error message - not JSON",
       };
 
@@ -470,7 +471,7 @@ describe("ResultFormatter", () => {
 
     it("should throw error when error field is not a string", () => {
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.FAILED,
+        status: ExecutionStatus.FAILED,
         result: JSON.stringify({ error: { nested: "object" } }),
       };
 
@@ -487,7 +488,7 @@ describe("ResultFormatter", () => {
 
     it("should return ErrorObject when error object is specified", () => {
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.FAILED,
+        status: ExecutionStatus.FAILED,
         result: JSON.stringify({ someOtherField: "value" }),
         error: {
           ErrorData: "my-error-data",
@@ -530,7 +531,7 @@ describe("ResultFormatter", () => {
       ];
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -547,7 +548,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -566,7 +567,7 @@ describe("ResultFormatter", () => {
       mockOperationStorage.getOperations.mockReturnValue([]);
 
       const lambdaResponse: TestExecutionResult = {
-        status: OperationStatus.SUCCEEDED,
+        status: ExecutionStatus.SUCCEEDED,
         result: JSON.stringify({ success: true }),
       };
 
@@ -576,7 +577,100 @@ describe("ResultFormatter", () => {
         mockOperationStorage,
       );
 
-      expect(testResult.getStatus()).toBe(OperationStatus.SUCCEEDED);
+      expect(testResult.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+    });
+  });
+
+  describe("getResult with stackTrace", () => {
+    it("should set error stack trace when errorFromResult.stackTrace is not undefined", () => {
+      const lambdaResponse: TestExecutionResult = {
+        status: ExecutionStatus.FAILED,
+        result: JSON.stringify({ someField: "value" }),
+        error: {
+          ErrorMessage: "Test error message",
+          ErrorData: "test-data",
+          ErrorType: "TestError",
+          StackTrace: ["at line 1", "at line 2", "at line 3"],
+        },
+      };
+
+      const testResult = resultFormatter.formatTestResult(
+        lambdaResponse,
+        [],
+        mockOperationStorage,
+      );
+
+      let thrownError: Error;
+      try {
+        testResult.getResult();
+      } catch (error) {
+        thrownError = error as Error;
+      }
+
+      expect(thrownError!.message).toBe("Test error message");
+      expect(thrownError!.stack).toBe("at line 1\nat line 2\nat line 3");
+    });
+  });
+
+  describe("getResult error throwing for non-succeeded statuses", () => {
+    it.each([
+      ExecutionStatus.FAILED,
+      ExecutionStatus.RUNNING,
+      ExecutionStatus.STOPPED,
+      ExecutionStatus.TIMED_OUT,
+    ])("should throw an error when status is %s", (status) => {
+      const lambdaResponse: TestExecutionResult = {
+        status,
+        result: JSON.stringify({ someField: "value" }),
+        error: {
+          ErrorMessage: "Execution failed",
+          ErrorData: "error-data",
+          ErrorType: "ExecutionError",
+          StackTrace: ["stack trace line"],
+        },
+      };
+
+      const testResult = resultFormatter.formatTestResult(
+        lambdaResponse,
+        [],
+        mockOperationStorage,
+      );
+
+      expect(() => testResult.getResult()).toThrow("Execution failed");
+    });
+  });
+
+  describe("getError for non-succeeded statuses", () => {
+    it.each([
+      ExecutionStatus.FAILED,
+      ExecutionStatus.RUNNING,
+      ExecutionStatus.STOPPED,
+      ExecutionStatus.TIMED_OUT,
+    ])("should return error for status %s", (status) => {
+      const lambdaResponse: TestExecutionResult = {
+        status,
+        result: JSON.stringify({ someField: "value" }),
+        error: {
+          ErrorMessage: "Test error message",
+          ErrorData: "test-error-data",
+          ErrorType: "TestErrorType",
+          StackTrace: ["stack line 1", "stack line 2"],
+        },
+      };
+
+      const testResult = resultFormatter.formatTestResult(
+        lambdaResponse,
+        [],
+        mockOperationStorage,
+      );
+
+      const error = testResult.getError();
+      expect(error).toEqual({
+        errorMessage: "Test error message",
+        errorData: "test-error-data",
+        errorType: "TestErrorType",
+        stackTrace: ["stack line 1", "stack line 2"],
+      });
     });
   });
 });

@@ -1,7 +1,7 @@
 import { TestResult, TestResultError } from "../durable-test-runner";
 import { tryJsonParse } from "../common/utils";
 import { TestExecutionResult } from "../common/test-execution-state";
-import { OperationStatus, Event, EventType } from "@aws-sdk/client-lambda";
+import { Event, EventType, ExecutionStatus } from "@aws-sdk/client-lambda";
 import { OperationStorage } from "../common/operation-storage";
 import { transformErrorObjectToErrorResult } from "../../utils";
 
@@ -50,7 +50,7 @@ export class ResultFormatter<ResultType> {
         return events;
       },
       getResult: () => {
-        if (lambdaResponse.status === OperationStatus.FAILED) {
+        if (lambdaResponse.status !== ExecutionStatus.SUCCEEDED) {
           const errorFromResult = this.getErrorFromResult(lambdaResponse);
 
           const error = new Error(
@@ -61,11 +61,6 @@ export class ResultFormatter<ResultType> {
 
           if (errorFromResult.stackTrace) {
             error.stack = errorFromResult.stackTrace.join("\n");
-          } else if (error.stack) {
-            // Remove the code from ResultFormatter from the stack trace since it isn't
-            // relevant for debugging.
-            const splitStack = error.stack.split("\n");
-            error.stack = `${splitStack[0]}\n${splitStack.slice(2).join("\n")}`;
           }
 
           throw error;
@@ -73,7 +68,7 @@ export class ResultFormatter<ResultType> {
         return tryJsonParse<ResultType>(lambdaResponse.result);
       },
       getError: () => {
-        if (lambdaResponse.status !== OperationStatus.FAILED) {
+        if (lambdaResponse.status === ExecutionStatus.SUCCEEDED) {
           throw new Error("Cannot get error for succeeded execution");
         }
         return this.getErrorFromResult(lambdaResponse);
@@ -134,28 +129,6 @@ export class ResultFormatter<ResultType> {
         errorType: result.error.ErrorType,
         stackTrace: result.error.StackTrace,
       };
-    }
-
-    try {
-      // TODO: remove when TS language SDK uses the Error object
-      const parsedResult: unknown = JSON.parse(result.result ?? "");
-      if (
-        typeof parsedResult === "object" &&
-        parsedResult !== null &&
-        "error" in parsedResult &&
-        typeof parsedResult.error === "string"
-      ) {
-        const errorObject: TestResultError = {
-          errorMessage: parsedResult.error,
-          errorData: undefined,
-          errorType: undefined,
-          stackTrace: undefined,
-        };
-
-        return errorObject;
-      }
-    } catch {
-      /** ignore JSON parse errors */
     }
 
     throw new Error("Could not find error result");
