@@ -8,15 +8,6 @@ body:
       value: |
         Thanks for helping improve our documentation!
 
-  - type: input
-    id: title
-    attributes:
-      label: Title
-      description: Brief description of the documentation issue
-      placeholder: e.g., Missing information about...
-    validations:
-      required: true
-
   - type: textarea
     id: issue
     attributes:

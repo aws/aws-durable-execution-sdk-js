@@ -8,15 +8,6 @@ body:
       value: |
         Thanks for reporting a bug! Please fill out the information below.
 
-  - type: input
-    id: title
-    attributes:
-      label: Title
-      description: Brief description of the bug
-      placeholder: e.g., SDK fails when...
-    validations:
-      required: true
-
   - type: textarea
     id: expected
     attributes:
