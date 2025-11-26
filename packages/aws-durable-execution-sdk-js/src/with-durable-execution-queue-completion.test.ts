@@ -104,7 +104,7 @@ describe("withDurableExecution Queue Completion", () => {
   });
 
   it("should handle waitForQueueCompletion timeout gracefully", async () => {
-    // Mock waitForQueueCompletion to reject with timeout error after 5 seconds
+    // Mock waitForQueueCompletion to reject with timeout error after 3 seconds
     const waitSpy = jest
       .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
       .mockImplementation(
@@ -115,7 +115,7 @@ describe("withDurableExecution Queue Completion", () => {
                 reject(
                   new Error("Timeout waiting for checkpoint queue completion"),
                 ),
-              5000,
+              3000,
             ),
           ),
       );
@@ -127,8 +127,8 @@ describe("withDurableExecution Queue Completion", () => {
     await wrappedHandler(mockEvent, mockContext);
     const endTime = Date.now();
 
-    // Should complete within timeout period (5 seconds + some buffer)
-    expect(endTime - startTime).toBeLessThan(7000);
+    // Should complete within timeout period (3 seconds + some buffer)
+    expect(endTime - startTime).toBeLessThan(5000);
     expect(waitSpy).toHaveBeenCalledTimes(1);
 
     waitSpy.mockRestore();

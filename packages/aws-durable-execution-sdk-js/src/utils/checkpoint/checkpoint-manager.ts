@@ -118,7 +118,7 @@ export class CheckpointManager implements Checkpoint {
         // Clear the queue since it's taking too long
         this.clearQueue();
         reject(new Error("Timeout waiting for checkpoint queue completion"));
-      }, 5000); // 5 second timeout
+      }, 3000); // 3 second timeout
 
       // Clean up timeout if resolved normally
       const originalResolve = resolve;
