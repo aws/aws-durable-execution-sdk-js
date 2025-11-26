@@ -22,8 +22,12 @@ createTests({
 
       const operations = execution.getOperations();
 
-      // Based on actual behavior: no operations are created when validation fails immediately
-      expect(operations).toHaveLength(0);
+      // The child-context operation is now properly persisted before error occurs,
+      // thanks to waitForQueueCompletion. This ensures the checkpoint is saved
+      // regardless of the events that happens after that
+      expect(operations).toHaveLength(1);
+      expect(operations[0].getName()).toBe("child-context");
+      expect(operations[0].getStatus()).toBe("STARTED");
     });
   },
 });

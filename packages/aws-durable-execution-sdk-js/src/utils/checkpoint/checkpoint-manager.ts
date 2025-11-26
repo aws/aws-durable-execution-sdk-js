@@ -98,6 +98,29 @@ export class CheckpointManager implements Checkpoint {
     });
   }
 
+  async waitForQueueCompletion(): Promise<void> {
+    if (this.queue.length === 0 && !this.isProcessing) {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const checkCompletion = () => {
+        if (this.queue.length === 0 && !this.isProcessing) {
+          resolve();
+        } else {
+          setImmediate(checkCompletion);
+        }
+      };
+      checkCompletion();
+    });
+  }
+
+  public clearQueue(): void {
+    // Silently clear queue - we're terminating so no need to reject promises
+    this.queue = [];
+    this.forceCheckpointPromises = [];
+  }
+
   // Alias for backward compatibility with Checkpoint interface
   async force(): Promise<void> {
     return this.forceCheckpoint();
@@ -321,6 +344,9 @@ export class CheckpointManager implements Checkpoint {
 
       const checkpointError = this.classifyCheckpointError(error);
 
+      // Clear remaining queue silently - we're terminating
+      this.clearQueue();
+
       this.terminationManager.terminate({
         reason: TerminationReason.CHECKPOINT_FAILED,
         message: checkpointError.message,
@@ -368,10 +394,7 @@ export class CheckpointManager implements Checkpoint {
       })),
     });
 
-    const response = await this.storage.checkpoint(
-      checkpointData,
-      this.logger,
-    );
+    const response = await this.storage.checkpoint(checkpointData, this.logger);
 
     if (response.CheckpointToken) {
       this.currentTaskToken = response.CheckpointToken;

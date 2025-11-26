@@ -26,25 +26,22 @@ createTests({
 
       const operations = execution.getOperations();
 
-      // Note: runInChildContext doesn't await the checkpoint for STARTING the context.
-      // If termination happens very fast (like in this case where validation fails immediately),
-      // the child-context operation may not be persisted to the checkpoint at all.
-      // This is expected behavior - the validation catches the error before any operations complete.
+      // With waitForQueueCompletion, operations that start are now properly persisted
+      // even when validation fails later, which is the correct behavior
 
-      // The child-context operation may or may not exist depending on checkpoint timing
+      // The child-context operation should exist and be in STARTED state
       const childContextOp = operations.find(
         (op: any) => op.getName() === "child-context",
       );
-      // If it exists, it should be in STARTED state
-      if (childContextOp) {
-        expect(childContextOp.getStatus()).toBe(OperationStatus.STARTED);
-      }
+      expect(childContextOp).toBeDefined();
+      expect(childContextOp!.getStatus()).toBe(OperationStatus.STARTED);
 
-      // The wrong wait condition should NOT exist - validation prevented it
+      // The wrong wait condition should exist since it started before validation failed
       const wrongWaitOp = operations.find(
         (op: any) => op.getName() === "wrong-wait-condition",
       );
-      expect(wrongWaitOp).toBeUndefined();
+      expect(wrongWaitOp).toBeDefined();
+      expect(wrongWaitOp!.getStatus()).toBe(OperationStatus.STARTED);
 
       // The nested wrong step should NOT exist anywhere
       // 1. Should not exist at root level
@@ -66,8 +63,8 @@ createTests({
       );
       expect(shouldNotStartWait).toBeUndefined();
 
-      // Should have at most the child-context operation (0 or 1 operations)
-      expect(operations.length).toBeLessThanOrEqual(1);
+      // Should have exactly 2 operations: child-context and wrong-wait-condition
+      expect(operations.length).toBe(2);
     });
   },
 });
