@@ -129,16 +129,7 @@ async function runHandler<
 
     // Wait for all pending checkpoints to complete
     try {
-      const timeout = new Promise<void>((resolve) => {
-        setTimeout(() => resolve(), 3000); // 3 seconds timeout
-      });
-
-      // Race with timeout to prevent indefinite waiting in case checkpoint queue gets stuck
-      // or if there are network issues preventing checkpoint completion
-      await Promise.race([
-        durableExecution.checkpointManager.waitForQueueCompletion(),
-        timeout,
-      ]);
+      await durableExecution.checkpointManager.waitForQueueCompletion();
       log("✅", "All pending checkpoints completed");
     } catch (error) {
       log("⚠️", "Error waiting for checkpoint completion:", error);

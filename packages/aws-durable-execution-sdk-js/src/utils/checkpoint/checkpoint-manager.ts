@@ -40,6 +40,7 @@ export class CheckpointManager implements Checkpoint {
     resolve: () => void;
     reject: (error: Error) => void;
   }> = [];
+  private queueCompletionResolvers: Array<() => void> = [];
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
   private static textEncoder = new TextEncoder();
@@ -103,15 +104,27 @@ export class CheckpointManager implements Checkpoint {
       return;
     }
 
-    return new Promise<void>((resolve) => {
-      const checkCompletion = () => {
-        if (this.queue.length === 0 && !this.isProcessing) {
-          resolve();
-        } else {
-          setImmediate(checkCompletion);
+    return new Promise<void>((resolve, reject) => {
+      // Add resolver to the list
+      this.queueCompletionResolvers.push(resolve);
+
+      // Set a timeout to prevent infinite waiting
+      const timeout = setTimeout(() => {
+        // Remove this resolver from the list
+        const index = this.queueCompletionResolvers.indexOf(resolve);
+        if (index > -1) {
+          this.queueCompletionResolvers.splice(index, 1);
         }
-      };
-      checkCompletion();
+        reject(new Error("Timeout waiting for checkpoint queue completion"));
+      }, 5000); // 5 second timeout
+
+      // Clean up timeout if resolved normally
+      const originalResolve = resolve;
+      this.queueCompletionResolvers[this.queueCompletionResolvers.length - 1] =
+        () => {
+          clearTimeout(timeout);
+          originalResolve();
+        };
     });
   }
 
@@ -119,6 +132,8 @@ export class CheckpointManager implements Checkpoint {
     // Silently clear queue - we're terminating so no need to reject promises
     this.queue = [];
     this.forceCheckpointPromises = [];
+    // Resolve any waiting queue completion promises since we're clearing
+    this.notifyQueueCompletion();
   }
 
   // Alias for backward compatibility with Checkpoint interface
@@ -359,8 +374,16 @@ export class CheckpointManager implements Checkpoint {
         setImmediate(() => {
           this.processQueue();
         });
+      } else {
+        // Queue is empty and processing is done - notify all waiting promises
+        this.notifyQueueCompletion();
       }
     }
+  }
+
+  private notifyQueueCompletion(): void {
+    const resolvers = this.queueCompletionResolvers.splice(0);
+    resolvers.forEach((resolve) => resolve());
   }
 
   private async processBatch(batch: QueuedCheckpoint[]): Promise<void> {
