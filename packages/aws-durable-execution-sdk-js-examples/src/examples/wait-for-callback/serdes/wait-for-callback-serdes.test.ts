@@ -3,35 +3,8 @@ import {
   OperationStatus,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
-import { handler } from "./wait-for-callback-serdes";
+import { CustomData, handler } from "./wait-for-callback-serdes";
 import { createTests } from "../../../utils/test-helper";
-
-// Define CustomData type to match handler
-interface CustomData {
-  id: number;
-  message: string;
-  timestamp: Date;
-  metadata: {
-    version: string;
-    processed: boolean;
-  };
-}
-
-// Custom serdes from handler (needed for test)
-const customSerdes = {
-  serialize: async (
-    data: CustomData | undefined,
-  ): Promise<string | undefined> => {
-    if (data === undefined) return Promise.resolve(undefined);
-    return Promise.resolve(
-      JSON.stringify({
-        ...data,
-        timestamp: data.timestamp.toISOString(),
-        _serializedBy: "custom-serdes-v1",
-      }),
-    );
-  },
-};
 
 createTests({
   name: "wait-for-callback-serdes test",
@@ -46,20 +19,18 @@ createTests({
 
       await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
 
-      // Send data that requires custom serialization
-      const testData: CustomData = {
-        id: 42,
-        message: "Hello Custom Serdes",
-        timestamp: new Date("2025-06-15T12:30:45Z"),
-        metadata: {
-          version: "2.0.0",
-          processed: true,
-        },
-      };
-
       // Serialize the data using custom serdes for sending
-      const serializedData = await customSerdes.serialize(testData);
-      await callbackOperation.sendCallbackSuccess(serializedData!);
+      await callbackOperation.sendCallbackSuccess(
+        JSON.stringify({
+          id: 42,
+          message: "Hello Custom Serdes",
+          timestamp: "2025-06-15T12:30:45Z",
+          metadata: {
+            version: "2.0.0",
+            processed: false,
+          },
+        }),
+      );
 
       const result = await executionPromise;
 
@@ -67,8 +38,21 @@ createTests({
         JSON.parse(
           // the result will always get stringified since it's the lambda response
           JSON.stringify({
-            receivedData: testData,
-            isDateObject: true,
+            receivedData: {
+              id: 42,
+              message: "Hello Custom Serdes",
+              timestamp: new Date("2025-06-15T12:30:45Z"),
+              metadata: {
+                version: "2.0.0",
+                processed: true,
+              },
+              circular: undefined,
+            } satisfies CustomData,
+            isDateBeforeReplay: true,
+            isDateAfterReplay: true,
+            isSerdesProcessedBefore: true,
+            isSerdesProcessedAfter: true,
+            hasCircularReference: true,
           }),
         ),
       );

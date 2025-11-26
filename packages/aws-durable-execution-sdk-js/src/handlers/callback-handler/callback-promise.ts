@@ -13,7 +13,7 @@ export const createCallbackPromise = <T>(
   context: ExecutionContext,
   stepId: string,
   stepName: string | undefined,
-  serdes: Serdes<T>,
+  serdes: Omit<Serdes<T>, "serialize">,
   hasRunningOperations: () => boolean,
   operationsEmitter: EventEmitter,
   terminationMessage: string,

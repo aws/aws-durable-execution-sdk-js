@@ -438,6 +438,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
     return this.withDurableModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
         this.executionContext,
+        this.getNextStepId.bind(this),
         this.runInChildContext.bind(this),
       );
       return waitForCallbackHandler(

@@ -343,7 +343,7 @@ describe("InvokeHandler", () => {
         "test-arn",
       );
 
-      expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
+      expect(mockCheckpointFn.checkpoint).toHaveBeenCalledWith("test-step-1", {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
@@ -402,7 +402,7 @@ describe("InvokeHandler", () => {
         "test-arn",
       );
 
-      expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
+      expect(mockCheckpointFn.checkpoint).toHaveBeenCalledWith("test-step-1", {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
