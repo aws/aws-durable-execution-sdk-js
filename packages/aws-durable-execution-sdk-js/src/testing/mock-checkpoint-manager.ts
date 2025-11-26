@@ -1,6 +1,6 @@
 import { CheckpointManager } from "../utils/checkpoint/checkpoint-manager";
 import { OperationUpdate } from "@aws-sdk/client-lambda";
-import { ExecutionState } from "../storage/storage";
+import { DurableExecutionClient } from "../types/durable-execution";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { DurableLogger } from "../types/durable-logger";
 import { EventEmitter } from "events";
@@ -18,7 +18,7 @@ export class MockCheckpointManager extends CheckpointManager {
     super(
       "mock-arn",
       {},
-      {} as ExecutionState,
+      {} as DurableExecutionClient,
       {} as TerminationManager,
       undefined,
       "mock-token",

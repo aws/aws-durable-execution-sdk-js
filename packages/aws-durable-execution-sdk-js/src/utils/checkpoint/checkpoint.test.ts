@@ -1,5 +1,7 @@
 import {
+  CheckpointDurableExecutionResponse,
   OperationAction,
+  OperationStatus,
   OperationType,
   OperationUpdate,
 } from "@aws-sdk/client-lambda";
@@ -14,10 +16,11 @@ import { createMockExecutionContext } from "../../testing/mock-context";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
+import { DurableExecutionClient } from "../../types/durable-execution";
 
 // Helper function to create checkpoint function from manager
 const createCheckpoint = (
-  context: any,
+  context: ExecutionContext,
   token: string,
   emitter: any,
   logger: any,
@@ -25,7 +28,7 @@ const createCheckpoint = (
   const manager = new CheckpointManager(
     context.durableExecutionArn,
     context._stepData,
-    context.state,
+    context.durableExecutionClient,
     context.terminationManager,
     undefined,
     token,
@@ -48,7 +51,7 @@ jest.mock("../../utils/logger/logger", () => ({
 
 describe("CheckpointManager", () => {
   let mockTerminationManager: TerminationManager;
-  let mockState: any;
+  let mockState: jest.Mocked<DurableExecutionClient>;
   let mockContext: ExecutionContext;
   let checkpointHandler: CheckpointManager;
   let mockEmitter: EventEmitter;
@@ -64,6 +67,7 @@ describe("CheckpointManager", () => {
     jest.spyOn(mockTerminationManager, "terminate");
 
     mockState = {
+      getExecutionState: jest.fn(),
       checkpoint: jest.fn().mockResolvedValue({
         CheckpointToken: mockNewTaskToken,
       }),
@@ -72,7 +76,7 @@ describe("CheckpointManager", () => {
     const stepData = {};
     mockContext = {
       durableExecutionArn: "test-durable-execution-arn",
-      state: mockState,
+      durableExecutionClient: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
@@ -127,9 +131,11 @@ describe("CheckpointManager", () => {
     it("should batch concurrent checkpoints together", async () => {
       // Mock checkpoint to take some time to simulate concurrent calls
       let resolveCheckpoint: (value: any) => void;
-      const checkpointPromise = new Promise((resolve) => {
-        resolveCheckpoint = resolve;
-      });
+      const checkpointPromise = new Promise<CheckpointDurableExecutionResponse>(
+        (resolve) => {
+          resolveCheckpoint = resolve;
+        },
+      );
       mockState.checkpoint.mockReturnValueOnce(checkpointPromise);
 
       // Start multiple concurrent checkpoint requests
@@ -169,13 +175,13 @@ describe("CheckpointManager", () => {
 
       // Should have all three updates in the single call
       expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(3);
-      expect(mockState.checkpoint.mock.calls[0][0].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates![0].Id).toBe(
         hashId("step-1"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[0][0].Updates[1].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates![1].Id).toBe(
         hashId("step-2"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[0][0].Updates[2].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates![2].Id).toBe(
         hashId("step-3"),
       ) as unknown as CheckpointFunction;
     });
@@ -186,10 +192,24 @@ describe("CheckpointManager", () => {
       mockState.checkpoint.mockImplementation(() => {
         if (firstCall) {
           firstCall = false;
-          return Promise.resolve({ CheckpointToken: mockNewTaskToken });
+          return Promise.resolve({
+            CheckpointToken: mockNewTaskToken,
+            NewExecutionState: {
+              Operations: [],
+            },
+          });
         }
         return new Promise((resolve) => {
-          setTimeout(() => resolve({ CheckpointToken: mockNewTaskToken }), 10);
+          setTimeout(
+            () =>
+              resolve({
+                CheckpointToken: mockNewTaskToken,
+                NewExecutionState: {
+                  Operations: [],
+                },
+              }),
+            10,
+          );
         });
       });
 
@@ -228,7 +248,12 @@ describe("CheckpointManager", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         apiCallCount--;
-        return { CheckpointToken: mockNewTaskToken };
+        return {
+          CheckpointToken: mockNewTaskToken,
+          NewExecutionState: {
+            Operations: [],
+          },
+        };
       });
 
       // Make many concurrent calls that would expose concurrency issues
@@ -335,19 +360,19 @@ describe("CheckpointManager", () => {
 
       // Verify first batch had 2 updates
       expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(2);
-      expect(mockState.checkpoint.mock.calls[0][0].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates![0].Id).toBe(
         hashId("step-1"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[0][0].Updates[1].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates![1].Id).toBe(
         hashId("step-2"),
       ) as unknown as CheckpointFunction;
 
       // Verify second batch had 2 updates
       expect(mockState.checkpoint.mock.calls[1][0].Updates).toHaveLength(2);
-      expect(mockState.checkpoint.mock.calls[1][0].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[1][0].Updates![0].Id).toBe(
         hashId("step-3"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[1][0].Updates[1].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[1][0].Updates![1].Id).toBe(
         hashId("step-4"),
       ) as unknown as CheckpointFunction;
 
@@ -404,10 +429,10 @@ describe("CheckpointManager", () => {
 
       // Should have made two separate API calls
       expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
-      expect(mockState.checkpoint.mock.calls[0][0].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[0][0].Updates![0].Id).toBe(
         hashId("step-1"),
       ) as unknown as CheckpointFunction;
-      expect(mockState.checkpoint.mock.calls[1][0].Updates[0].Id).toBe(
+      expect(mockState.checkpoint.mock.calls[1][0].Updates![0].Id).toBe(
         hashId("step-2"),
       ) as unknown as CheckpointFunction;
     });
@@ -445,6 +470,9 @@ describe("CheckpointManager", () => {
       // Second call succeeds
       mockState.checkpoint.mockResolvedValueOnce({
         CheckpointToken: mockNewTaskToken,
+        NewExecutionState: {
+          Operations: [],
+        },
       });
 
       checkpointHandler.checkpoint("step-1", {
@@ -574,9 +602,11 @@ describe("CheckpointManager", () => {
     it("should allow ongoing checkpoints to complete before termination takes effect", async () => {
       // Mock slow checkpoint
       let resolveCheckpoint: (value: any) => void;
-      const checkpointPromise = new Promise((resolve) => {
-        resolveCheckpoint = resolve;
-      });
+      const checkpointPromise = new Promise<CheckpointDurableExecutionResponse>(
+        (resolve) => {
+          resolveCheckpoint = resolve;
+        },
+      );
       mockState.checkpoint.mockReturnValue(checkpointPromise);
 
       // Start checkpoint
@@ -638,9 +668,11 @@ describe("CheckpointManager", () => {
     it("should handle different operation types in a batch", async () => {
       // Mock to delay first checkpoint so we can batch the others
       let resolveFirst: (value: any) => void;
-      const firstPromise = new Promise((resolve) => {
-        resolveFirst = resolve;
-      });
+      const firstPromise = new Promise<CheckpointDurableExecutionResponse>(
+        (resolve) => {
+          resolveFirst = resolve;
+        },
+      );
       mockState.checkpoint.mockReturnValueOnce(firstPromise);
 
       const promises = [
@@ -714,7 +746,7 @@ describe("deleteCheckpointHandler", () => {
     const stepData1 = {};
     mockContext1 = {
       durableExecutionArn: "test-durable-execution-arn-1",
-      state: mockState1,
+      durableExecutionClient: mockState1,
       _stepData: stepData1,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
@@ -728,7 +760,7 @@ describe("deleteCheckpointHandler", () => {
     const stepData2 = {};
     mockContext2 = {
       durableExecutionArn: "test-durable-execution-arn-2",
-      state: mockState2,
+      durableExecutionClient: mockState2,
       _stepData: stepData2,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
@@ -973,8 +1005,8 @@ describe("createCheckpointHandler", () => {
   };
 
   let mockTerminationManager: TerminationManager;
-  let mockState: any;
-  let mockState2: any;
+  let mockState: jest.Mocked<DurableExecutionClient>;
+  let mockState2: jest.Mocked<DurableExecutionClient>;
   let mockContext: ExecutionContext;
   let mockLogger: DurableLogger;
   let mockEmitter: EventEmitter;
@@ -988,13 +1020,13 @@ describe("createCheckpointHandler", () => {
 
     mockState = {
       checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
-      getStepData: jest.fn(),
+      getExecutionState: jest.fn(),
     };
 
     const stepData = {};
     mockContext = {
       durableExecutionArn: "test-durable-execution-arn",
-      state: mockState,
+      durableExecutionClient: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),
@@ -1052,9 +1084,11 @@ describe("createCheckpointHandler", () => {
 
     // Mock checkpoint to delay so we can test batching
     let resolveCheckpoint: (value: any) => void;
-    const checkpointPromise = new Promise((resolve) => {
-      resolveCheckpoint = resolve;
-    });
+    const checkpointPromise = new Promise<CheckpointDurableExecutionResponse>(
+      (resolve) => {
+        resolveCheckpoint = resolve;
+      },
+    );
     mockState.checkpoint.mockReturnValueOnce(checkpointPromise);
 
     // Execute multiple checkpoints rapidly
@@ -1109,9 +1143,11 @@ describe("createCheckpointHandler", () => {
 
     // Mock to delay first checkpoint
     let resolveFirst: (value: any) => void;
-    const firstPromise = new Promise((resolve) => {
-      resolveFirst = resolve;
-    });
+    const firstPromise = new Promise<CheckpointDurableExecutionResponse>(
+      (resolve) => {
+        resolveFirst = resolve;
+      },
+    );
     mockState.checkpoint.mockReturnValueOnce(firstPromise);
 
     // Execute checkpoints from both handlers
@@ -1135,13 +1171,14 @@ describe("createCheckpointHandler", () => {
   it("should use the first context when multiple contexts are created", async () => {
     // Create second mock state
     mockState2 = {
+      ...mockState2,
       checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
     };
 
     // Setup second context
     const mockContext2 = createMockExecutionContext({
       durableExecutionArn: "test-durable-execution-arn-2",
-      state: mockState2,
+      durableExecutionClient: mockState2,
       terminationManager: mockTerminationManager,
     });
 
@@ -1178,13 +1215,14 @@ describe("createCheckpointHandler", () => {
   it("should use the same handler for equivalent execution context ids, but different objects", async () => {
     // Create second mock state
     mockState2 = {
+      ...mockState2,
       checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
     };
 
     // Setup second context
     const mockContext2 = createMockExecutionContext({
       durableExecutionArn: "test-durable-execution-arn-2",
-      state: mockState2,
+      durableExecutionClient: mockState2,
       terminationManager: mockTerminationManager,
     });
 
@@ -1346,6 +1384,8 @@ describe("createCheckpointHandler", () => {
         Type: OperationType.STEP,
         Action: OperationAction.START,
         Payload: "test-result",
+        StartTimestamp: new Date(),
+        Status: OperationStatus.STARTED,
       },
     ];
 

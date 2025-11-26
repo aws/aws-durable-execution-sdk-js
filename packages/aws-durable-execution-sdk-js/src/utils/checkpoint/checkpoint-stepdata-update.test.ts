@@ -36,7 +36,7 @@ describe("CheckpointManager - StepData Update", () => {
       },
     };
     mockContext = {
-      state: mockState,
+      durableExecutionClient: mockState,
       _stepData: stepData,
       terminationManager: new TerminationManager(),
       durableExecutionArn:

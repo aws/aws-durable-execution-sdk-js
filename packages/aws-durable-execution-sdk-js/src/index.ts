@@ -26,6 +26,8 @@ export {
   DurableContextLogger,
   DurableLogData,
   DurableLoggingContext,
+  DurableExecutionConfig,
+  DurableExecutionClient,
 } from "./types";
 export { DurablePromise } from "./types/durable-promise";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
@@ -43,8 +45,7 @@ export {
   createClassSerdesWithDates,
   Serdes,
 } from "./utils/serdes/serdes";
-export { ApiStorage } from "./storage/api-storage";
-export { ExecutionState, setCustomStorage } from "./storage/storage";
+export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
   createWaitStrategy,
   WaitStrategyConfig,
@@ -54,3 +55,4 @@ export {
   RetryStrategyConfig,
 } from "./utils/retry/retry-config";
 export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
+export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";

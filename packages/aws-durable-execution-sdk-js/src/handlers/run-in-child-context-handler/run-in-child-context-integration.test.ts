@@ -68,8 +68,8 @@ describe("Run In Child Context Integration Tests", () => {
     } as unknown as TerminationManager;
 
     mockExecutionContext = {
-      state: {
-        getStepData: jest.fn().mockResolvedValue({}),
+      durableExecutionClient: {
+        getExecutionState: jest.fn().mockResolvedValue({}),
         checkpoint: jest
           .fn()
           .mockImplementation((data: CheckpointDurableExecutionRequest) => {

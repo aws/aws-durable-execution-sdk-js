@@ -13,6 +13,7 @@ import { DurableExecutionInvocationInput, InvocationStatus } from "./types";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 
 // Mock dependencies
 jest.mock("./context/execution-context/execution-context");
@@ -524,5 +525,31 @@ describe("withDurableExecution", () => {
     );
 
     expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it("should pass client config parameter to initializeExecutionContext", async () => {
+    // Setup
+    const mockClient = new LambdaClient({});
+    const config = { client: mockClient };
+    const mockResult = { success: true };
+    const mockHandler = jest.fn().mockResolvedValue(mockResult);
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    ); // Never resolves
+
+    // Execute
+    const wrappedHandler = withDurableExecution(mockHandler, config);
+    await wrappedHandler(mockEvent, mockContext);
+
+    // Verify that initializeExecutionContext was called with the client parameter
+    expect(initializeExecutionContext).toHaveBeenCalledWith(
+      mockEvent,
+      mockContext,
+      mockClient,
+    );
+    expect(mockHandler).toHaveBeenCalledWith(
+      mockCustomerHandlerEvent,
+      mockDurableContext,
+    );
   });
 });
