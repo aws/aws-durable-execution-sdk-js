@@ -28,6 +28,7 @@ import {
 } from "../common/create-durable-api-client";
 import { getDurableExecutionsClient } from "./api-client/durable-executions-client";
 import { install, InstalledClock } from "@sinonjs/fake-timers";
+import { Handler } from "aws-lambda";
 
 export type LocalTestRunnerHandlerFunction = ReturnType<
   typeof withDurableExecution
@@ -229,6 +230,43 @@ export class LocalDurableTestRunner<ResultType>
     durableHandler: LambdaHandler<DurableExecutionInvocationInput>,
   ): this {
     this.functionStorage.registerDurableFunction(functionName, durableHandler);
+    return this;
+  }
+
+  /**
+   * Registers a function handler that can be invoked during durable execution testing.
+   *
+   * @param functionName - The name/ARN of the function that will be used in context.invoke() calls
+   * @param handler - The function handler
+   * @returns This LocalDurableTestRunner instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';
+   * import { withDurableExecution } from '@aws/durable-execution-sdk-js';
+   *
+   * const testRunner = new LocalDurableTestRunner({
+   *   handlerFunction: mainHandler
+   * });
+   *
+   * // Register a function
+   * const handler = async (input, context) => {
+   *   const response = {
+   *      status: 200
+   *   }
+   *   return response;
+   * };
+   *
+   * testRunner.registerFunction('get-response', handler);
+   *
+   * // Chain multiple registrations
+   * testRunner
+   *   .registerFunction('workflow-a', workflowAHandler)
+   *   .registerFunction('workflow-b', workflowBHandler)
+   * ```
+   */
+  registerFunction(functionName: string, handler: Handler): this {
+    this.functionStorage.registerFunction(functionName, handler);
     return this;
   }
 

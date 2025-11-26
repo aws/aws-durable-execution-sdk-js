@@ -46,12 +46,18 @@ export class Examples {
         ? config.description
         : undefined;
 
+    const durableConfig =
+      "durableConfig" in config && typeof config.durableConfig === "object"
+        ? config.durableConfig
+        : undefined;
+
     return {
       name: config.name,
       description,
       path: examplePath,
       handler: handlerName,
-      durableConfig: DEFAULT_DURABLE_CONFIG,
+      durableConfig:
+        durableConfig === undefined ? DEFAULT_DURABLE_CONFIG : durableConfig,
     };
   }
 

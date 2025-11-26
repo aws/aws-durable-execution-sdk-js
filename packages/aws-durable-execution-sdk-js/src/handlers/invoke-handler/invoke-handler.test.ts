@@ -312,6 +312,124 @@ describe("InvokeHandler", () => {
       expect(mockTerminate).toHaveBeenCalledTimes(0);
     });
 
+    it("should create checkpoint and terminate for new invoke without name and without input", async () => {
+      const mockGetStepData = jest
+        .fn()
+        .mockReturnValueOnce(undefined) // First call - no step data
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(false); // No other operations running
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpointFn,
+        mockCreateStepId,
+        mockHasRunningOperations,
+        () => new EventEmitter(),
+        "parent-123",
+      );
+
+      await expect(invokeHandler("test-function")).rejects.toThrow(
+        "Execution terminated",
+      );
+
+      expect(mockSafeSerialize).toHaveBeenCalledWith(
+        expect.anything(),
+        undefined,
+        "test-step-1",
+        undefined,
+        mockContext.terminationManager,
+        "test-arn",
+      );
+
+      expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
+        Id: "test-step-1",
+        ParentId: "parent-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
+        Name: undefined,
+        Payload: '{"serialized":"data"}',
+        ChainedInvokeOptions: {
+          FunctionName: "test-function",
+        },
+      });
+
+      expect(mockLog).toHaveBeenCalledWith(
+        "🔗",
+        "Invoke test-function (test-step-1) - phase 1",
+      );
+      expect(mockLog).toHaveBeenCalledWith(
+        "🚀",
+        "Invoke test-function started (phase 1)",
+      );
+      expect(mockLog).toHaveBeenCalledWith(
+        "✅",
+        "Invoke phase 1 complete:",
+        expect.anything(),
+      );
+    });
+
+    it("should create checkpoint and terminate for new invoke with name and without input", async () => {
+      const mockGetStepData = jest
+        .fn()
+        .mockReturnValueOnce(undefined) // First call - no step data
+        .mockReturnValueOnce({ Status: OperationStatus.STARTED }); // After checkpoint
+
+      mockContext.getStepData = mockGetStepData;
+      mockHasRunningOperations.mockReturnValue(false); // No other operations running
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpointFn,
+        mockCreateStepId,
+        mockHasRunningOperations,
+        () => new EventEmitter(),
+        "parent-123",
+      );
+
+      await expect(invokeHandler("test-name", "test-function")).rejects.toThrow(
+        "Execution terminated",
+      );
+
+      expect(mockSafeSerialize).toHaveBeenCalledWith(
+        expect.anything(),
+        undefined,
+        "test-step-1",
+        "test-name",
+        mockContext.terminationManager,
+        "test-arn",
+      );
+
+      expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
+        Id: "test-step-1",
+        ParentId: "parent-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
+        Name: "test-name",
+        Payload: '{"serialized":"data"}',
+        ChainedInvokeOptions: {
+          FunctionName: "test-function",
+        },
+      });
+
+      expect(mockLog).toHaveBeenCalledWith(
+        "🔗",
+        "Invoke test-name (test-step-1) - phase 1",
+      );
+      expect(mockLog).toHaveBeenCalledWith(
+        "🚀",
+        "Invoke test-name started (phase 1)",
+      );
+      expect(mockLog).toHaveBeenCalledWith(
+        "✅",
+        "Invoke phase 1 complete:",
+        expect.anything(),
+      );
+    });
+
     it("should create checkpoint and terminate for new invoke without name", async () => {
       const mockGetStepData = jest
         .fn()

@@ -34,25 +34,25 @@ export const createInvokeHandler = (
 ): {
   <I, O>(
     funcId: string,
-    input: I,
+    input?: I,
     config?: InvokeConfig<I, O>,
   ): DurablePromise<O>;
   <I, O>(
     name: string,
     funcId: string,
-    input: I,
+    input?: I,
     config?: InvokeConfig<I, O>,
   ): DurablePromise<O>;
 } => {
   function invokeHandler<I, O>(
     funcId: string,
-    input: I,
+    input?: I,
     config?: InvokeConfig<I, O>,
   ): DurablePromise<O>;
   function invokeHandler<I, O>(
     name: string,
     funcId: string,
-    input: I,
+    input?: I,
     config?: InvokeConfig<I, O>,
   ): DurablePromise<O>;
   function invokeHandler<I, O>(
@@ -64,7 +64,9 @@ export const createInvokeHandler = (
     const isNameFirst = typeof funcIdOrInput === "string";
     const name = isNameFirst ? nameOrFuncId : undefined;
     const funcId = isNameFirst ? (funcIdOrInput as string) : nameOrFuncId;
-    const input = isNameFirst ? (inputOrConfig as I) : (funcIdOrInput as I);
+    const input = isNameFirst
+      ? (inputOrConfig as I | undefined)
+      : (funcIdOrInput as I | undefined);
     const config = isNameFirst
       ? maybeConfig
       : (inputOrConfig as InvokeConfig<I, O>);

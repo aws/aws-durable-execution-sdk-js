@@ -16,6 +16,7 @@ import {
   ResourceNotFoundException,
   ResourceConflictException,
   UpdateFunctionConfigurationCommandInput,
+  DeleteFunctionCommand,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
 import catalog from "@aws/durable-execution-sdk-js-examples/catalog";
@@ -214,10 +215,13 @@ async function createFunction(
     Handler: exampleConfig.handler,
     Description: exampleConfig.description,
     Code: { ZipFile: zipBuffer },
-    DurableConfig: {
-      RetentionPeriodInDays: exampleConfig.durableConfig.RetentionPeriodInDays,
-      ExecutionTimeout: exampleConfig.durableConfig.ExecutionTimeout,
-    },
+    DurableConfig: exampleConfig.durableConfig
+      ? {
+          RetentionPeriodInDays:
+            exampleConfig.durableConfig.RetentionPeriodInDays,
+          ExecutionTimeout: exampleConfig.durableConfig.ExecutionTimeout,
+        }
+      : undefined,
     Timeout: 60,
     MemorySize: 128,
     Environment: {
@@ -243,12 +247,10 @@ async function updateFunction(
 ): Promise<void> {
   console.log(`Deploying function: ${functionName} (updating existing)`);
 
-  const currentRetention =
-    currentConfig.DurableConfig?.RetentionPeriodInDays || "none";
-  const currentTimeout =
-    currentConfig.DurableConfig?.ExecutionTimeout || "none";
-  const targetRetention = exampleConfig.durableConfig.RetentionPeriodInDays;
-  const targetTimeout = exampleConfig.durableConfig.ExecutionTimeout;
+  const currentRetention = currentConfig.DurableConfig?.RetentionPeriodInDays;
+  const currentTimeout = currentConfig.DurableConfig?.ExecutionTimeout;
+  const targetRetention = exampleConfig.durableConfig?.RetentionPeriodInDays;
+  const targetTimeout = exampleConfig.durableConfig?.ExecutionTimeout;
 
   console.log("Function exists with current DurableConfig:");
   console.log(`  Current Retention: ${currentRetention} days`);
@@ -330,10 +332,10 @@ async function main(): Promise<void> {
       console.log(`  Runtime: ${runtime}`);
     }
     console.log(
-      `  Retention: ${exampleConfig.durableConfig.RetentionPeriodInDays} days`,
+      `  Retention: ${exampleConfig.durableConfig?.RetentionPeriodInDays} days`,
     );
     console.log(
-      `  Timeout: ${exampleConfig.durableConfig.ExecutionTimeout} seconds`,
+      `  Timeout: ${exampleConfig.durableConfig?.ExecutionTimeout} seconds`,
     );
 
     // Validate zip file exists
@@ -346,27 +348,34 @@ async function main(): Promise<void> {
     });
 
     console.log("Checking if function exists...");
-    const functionExists = await checkFunctionExists(
-      lambdaClient,
-      functionName,
-    );
+    let functionExists = await checkFunctionExists(lambdaClient, functionName);
+    let currentConfig: GetFunctionConfigurationCommandOutput;
 
     const zipFile = `${example}.zip`;
 
     const selectedRuntime = mapRuntimeToEnum(runtime);
 
     if (functionExists) {
-      const currentConfig = await getCurrentConfiguration(
-        lambdaClient,
-        functionName,
-      );
+      currentConfig = await getCurrentConfiguration(lambdaClient, functionName);
+      if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
+        console.log("Deleting function since durable changed");
+        await lambdaClient.send(
+          new DeleteFunctionCommand({
+            FunctionName: functionName,
+          }),
+        );
+        functionExists = false;
+      }
+    }
+
+    if (functionExists) {
       await updateFunction(
         lambdaClient,
         functionName,
         exampleConfig,
         zipFile,
         env,
-        currentConfig,
+        currentConfig!,
         selectedRuntime,
       );
     } else {
