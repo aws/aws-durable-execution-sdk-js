@@ -56,6 +56,7 @@ describe("Checkpoint Integration Tests", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
+      new Set<string>(),
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -93,6 +94,7 @@ describe("Checkpoint Integration Tests", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
+      new Set<string>(),
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -178,6 +180,7 @@ describe("Checkpoint Integration Tests", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
+      new Set<string>(),
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -218,6 +221,7 @@ describe("Checkpoint Integration Tests", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
+      new Set<string>(),
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -270,6 +274,7 @@ describe("Checkpoint Integration Tests", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
+      new Set<string>(),
     );
     const checkpoint1 = (stepId: string, data: any): Promise<any> =>
       checkpointManager1.checkpoint(stepId, data);
@@ -283,6 +288,7 @@ describe("Checkpoint Integration Tests", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
+      new Set<string>(),
     );
     const checkpoint2 = (stepId: string, data: any): Promise<any> =>
       checkpointManager2.checkpoint(stepId, data);

@@ -41,6 +41,7 @@ describe("CheckpointManager - StepData Update", () => {
       terminationManager: new TerminationManager(),
       durableExecutionArn:
         "arn:aws:durable-execution:us-east-1:123456789012:execution/test-execution",
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),

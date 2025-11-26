@@ -83,6 +83,7 @@ describe("Run In Child Context Integration Tests", () => {
       _stepData: {},
       terminationManager: mockTerminationManager,
       durableExecutionArn: "mock-execution-arn",
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),

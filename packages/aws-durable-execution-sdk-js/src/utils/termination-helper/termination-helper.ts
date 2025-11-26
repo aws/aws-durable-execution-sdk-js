@@ -8,7 +8,7 @@ import { hashId } from "../step-id-utils/step-id-utils";
 
 /**
  * Checks if any ancestor operation in the parent chain has finished (SUCCEEDED or FAILED)
- * Note: This function no longer checks for pending checkpoints as that requires access to CheckpointManager
+ * or has a pending completion checkpoint
  */
 function hasFinishedAncestor(
   context: ExecutionContext,
@@ -17,6 +17,14 @@ function hasFinishedAncestor(
   if (!parentId) {
     log("🔍", "hasFinishedAncestor: No parentId provided");
     return false;
+  }
+
+  // First check if any ancestor has a pending completion checkpoint
+  if (hasPendingAncestorCompletion(context, parentId)) {
+    log("🔍", "hasFinishedAncestor: Found ancestor with pending completion!", {
+      parentId,
+    });
+    return true;
   }
 
   let currentHashedId: string | undefined = hashId(parentId);
@@ -51,6 +59,27 @@ function hasFinishedAncestor(
   }
 
   log("🔍", "hasFinishedAncestor: No finished ancestor found");
+  return false;
+}
+
+/**
+ * Checks if any ancestor has a pending completion checkpoint
+ */
+function hasPendingAncestorCompletion(
+  context: ExecutionContext,
+  stepId: string,
+): boolean {
+  let currentHashedId: string | undefined = hashId(stepId);
+
+  while (currentHashedId) {
+    if (context.pendingCompletions.has(currentHashedId)) {
+      return true;
+    }
+
+    const operation: Operation | undefined = context._stepData[currentHashedId];
+    currentHashedId = operation?.ParentId;
+  }
+
   return false;
 }
 

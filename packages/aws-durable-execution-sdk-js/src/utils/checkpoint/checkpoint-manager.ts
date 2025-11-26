@@ -42,7 +42,6 @@ export class CheckpointManager implements Checkpoint {
   }> = [];
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
-  private pendingCompletions = new Set<string>(); // Track stepIds with pending SUCCEED/FAIL
   private static textEncoder = new TextEncoder();
 
   constructor(
@@ -54,6 +53,7 @@ export class CheckpointManager implements Checkpoint {
     initialTaskToken: string,
     private stepDataEmitter: EventEmitter,
     private logger: DurableLogger,
+    private pendingCompletions: Set<string>,
   ) {
     this.currentTaskToken = initialTaskToken;
   }

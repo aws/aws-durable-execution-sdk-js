@@ -42,6 +42,7 @@ describe("CheckpointManager - Ancestor Checking", () => {
       state: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),

@@ -76,6 +76,7 @@ export function createTestDurableContext(options?: {
     terminationManager: new TerminationManager(),
     durableExecutionArn:
       "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
+    pendingCompletions: new Set<string>(),
     getStepData(stepId: string): Operation | undefined {
       return getStepDataUtil(stepData, stepId);
     },

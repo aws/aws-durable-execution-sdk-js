@@ -54,6 +54,7 @@ async function runHandler<
     checkpointToken,
     stepDataEmitter,
     createDefaultLogger(executionContext),
+    executionContext.pendingCompletions,
   );
 
   const durableExecution = {
