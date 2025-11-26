@@ -29,12 +29,12 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       },
     } as any;
 
-    mockCheckpoint = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.force = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.setTerminating = jest.fn();
-    mockCheckpoint.hasPendingAncestorCompletion = jest
-      .fn()
-      .mockReturnValue(false);
+    mockCheckpoint = {
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      force: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+    };
 
     createStepId = (): string => `step-${++stepIdCounter}`;
 
@@ -75,7 +75,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
 
     // Phase 1 should have executed the check function (before we await the promise)
     expect(checkFn).toHaveBeenCalled();
-    expect(mockCheckpoint).toHaveBeenCalled();
+    expect(mockCheckpoint.checkpoint).toHaveBeenCalled();
 
     // Now await the promise to verify it completes
     await promise;

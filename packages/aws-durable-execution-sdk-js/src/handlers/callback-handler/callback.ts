@@ -7,7 +7,7 @@ import {
 } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/durable-error/durable-error";
@@ -23,7 +23,7 @@ const createPassThroughSerdes = <T>(): Serdes<T> => ({
 
 export const createCallback = (
   context: ExecutionContext,
-  checkpoint: ReturnType<typeof createCheckpoint>,
+  checkpoint: Checkpoint,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
@@ -86,7 +86,7 @@ export const createCallback = (
 
       // Create new callback - checkpoint START operation
       log("🆕", "Creating new callback in phase 1:", { stepId, name });
-      await checkpoint(stepId, {
+      await checkpoint.checkpoint(stepId, {
         Id: stepId,
         ParentId: parentId,
         Action: "START",

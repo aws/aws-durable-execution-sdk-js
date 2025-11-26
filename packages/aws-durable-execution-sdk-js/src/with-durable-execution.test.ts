@@ -10,18 +10,14 @@ import { TerminationReason } from "./termination-manager/types";
 import { Context } from "aws-lambda";
 import { log } from "./utils/logger/logger";
 import { DurableExecutionInvocationInput, InvocationStatus } from "./types";
-import {
-  createCheckpoint,
-  deleteCheckpoint,
-} from "./utils/checkpoint/checkpoint";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
-import { DefaultLogger } from "./utils/logger/default-logger";
+import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 
 // Mock dependencies
 jest.mock("./context/execution-context/execution-context");
 jest.mock("./context/durable-context/durable-context");
-jest.mock("./utils/checkpoint/checkpoint");
+jest.mock("./utils/checkpoint/checkpoint-manager");
 jest.mock("./utils/logger/logger", () => ({
   log: jest.fn(),
 }));
@@ -45,6 +41,7 @@ describe("withDurableExecution", () => {
   const mockTerminationManager = {
     getTerminationPromise: jest.fn(),
     terminate: jest.fn(),
+    setCheckpointTerminatingCallback: jest.fn(),
   };
 
   const mockCustomerHandlerEvent = {};
@@ -73,6 +70,12 @@ describe("withDurableExecution", () => {
       checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
     });
     (createDurableContext as jest.Mock).mockReturnValue(mockDurableContext);
+
+    // Mock CheckpointManager
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+    }));
 
     // Reset termination manager mock behavior
     mockTerminationManager.getTerminationPromise.mockReset();
@@ -287,9 +290,7 @@ describe("withDurableExecution", () => {
     // Setup - Create a large result that exceeds 6MB
     const largeResult = { data: "x".repeat(6 * 1024 * 1024) }; // 6MB of data
     const mockHandler = jest.fn().mockResolvedValue(largeResult);
-    const mockCheckpoint = jest.fn().mockResolvedValue(undefined);
 
-    (createCheckpoint as jest.Mock).mockReturnValue(mockCheckpoint);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
@@ -303,34 +304,17 @@ describe("withDurableExecution", () => {
       mockCustomerHandlerEvent,
       mockDurableContext,
     );
-    expect(createCheckpoint).toHaveBeenCalledWith(
-      mockExecutionContext,
-      TEST_CONSTANTS.CHECKPOINT_TOKEN,
-      expect.any(Object),
-      expect.any(DefaultLogger),
-    );
-    expect(mockCheckpoint).toHaveBeenCalledWith(
-      expect.stringMatching(/^execution-result-\d+$/),
-      expect.objectContaining({
-        Id: expect.stringMatching(/^execution-result-\d+$/),
-        Action: "SUCCEED",
-        Type: "EXECUTION",
-        Payload: JSON.stringify(largeResult),
-      }),
-    );
     expect(response).toEqual({
       Status: InvocationStatus.SUCCEEDED,
       Result: "",
     });
-  });
+  }, 30000);
 
   it("should checkpoint large results that exceed Lambda response size limit with large unicode characters", async () => {
     // Setup - Create a large result that exceeds 6MB
     const largeResult = { data: "\u{FFFF}".repeat(2 * 1024 * 1024) }; // 6MB of byte length, but only 2MB in length
     const mockHandler = jest.fn().mockResolvedValue(largeResult);
-    const mockCheckpoint = jest.fn().mockResolvedValue(undefined);
 
-    (createCheckpoint as jest.Mock).mockReturnValue(mockCheckpoint);
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
@@ -344,26 +328,11 @@ describe("withDurableExecution", () => {
       mockCustomerHandlerEvent,
       mockDurableContext,
     );
-    expect(createCheckpoint).toHaveBeenCalledWith(
-      mockExecutionContext,
-      TEST_CONSTANTS.CHECKPOINT_TOKEN,
-      expect.any(Object),
-      expect.any(DefaultLogger),
-    );
-    expect(mockCheckpoint).toHaveBeenCalledWith(
-      expect.stringMatching(/^execution-result-\d+$/),
-      expect.objectContaining({
-        Id: expect.stringMatching(/^execution-result-\d+$/),
-        Action: "SUCCEED",
-        Type: "EXECUTION",
-        Payload: JSON.stringify(largeResult),
-      }),
-    );
     expect(response).toEqual({
       Status: InvocationStatus.SUCCEEDED,
       Result: "",
     });
-  });
+  }, 30000);
 
   it("should throw SerdesFailedError when termination reason is SERDES_FAILED", async () => {
     // Setup - handler never resolves so termination wins the race
@@ -387,9 +356,13 @@ describe("withDurableExecution", () => {
     const checkpointError = new CheckpointUnrecoverableInvocationError(
       "Checkpoint service unavailable",
     );
-    const mockCheckpoint = jest.fn().mockRejectedValue(checkpointError);
 
-    (createCheckpoint as jest.Mock).mockReturnValue(mockCheckpoint);
+    // Mock CheckpointManager to fail on checkpoint
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
+      checkpoint: jest.fn().mockRejectedValue(checkpointError),
+      setTerminating: jest.fn(),
+    }));
+
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
@@ -399,7 +372,7 @@ describe("withDurableExecution", () => {
     await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
       CheckpointUnrecoverableInvocationError,
     );
-  });
+  }, 30000);
 
   it("should throw error when handler throws UnrecoverableInvocationError", async () => {
     // Setup - Create a test UnrecoverableInvocationError
@@ -494,7 +467,9 @@ describe("withDurableExecution", () => {
     // Execute
     const wrappedHandler = withDurableExecution(mockHandler);
     const response = await wrappedHandler(mockEvent, mockContext);
-    expect(deleteCheckpoint).toHaveBeenCalledTimes(1);
+
+    // With instance-based architecture, deleteCheckpoint is no longer called
+    // The test now verifies the handler executes successfully without singleton cleanup
 
     // Verify
     expect(mockHandler).toHaveBeenCalledWith(

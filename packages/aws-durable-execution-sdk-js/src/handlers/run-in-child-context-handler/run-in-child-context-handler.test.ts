@@ -666,7 +666,7 @@ describe("runWithContext Integration", () => {
     // Setup runWithContext mock to return the function result
     (runWithContext as jest.Mock) = jest
       .fn()
-      .mockImplementation(async (stepId, parentId, fn, attempt, mode) => {
+      .mockImplementation(async (stepId, parentId, fn, _attempt, _mode) => {
         try {
           return await fn();
         } catch (error) {
@@ -764,7 +764,7 @@ describe("runWithContext Integration", () => {
 
     // Capture the function passed to runWithContext
     (runWithContext as jest.Mock).mockImplementation(
-      async (stepId, parentId, fn, attempt, mode) => {
+      async (stepId, parentId, fn, _attempt, _mode) => {
         capturedFunction = fn;
         return await fn();
       },

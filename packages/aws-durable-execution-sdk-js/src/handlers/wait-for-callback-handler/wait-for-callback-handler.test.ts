@@ -1,10 +1,10 @@
 import { createWaitForCallbackHandler } from "./wait-for-callback-handler";
 import { ExecutionContext, WaitForCallbackConfig } from "../../types";
-import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { CheckpointFunction } from "../../testing/mock-checkpoint";
 
 describe("waitForCallback handler", () => {
   let mockExecutionContext: ExecutionContext;
-  let mockCheckpoint: ReturnType<typeof createCheckpoint>;
+  let mockCheckpoint: CheckpointFunction;
   let mockRunInChildContext: jest.Mock;
 
   beforeEach(() => {
@@ -15,8 +15,8 @@ describe("waitForCallback handler", () => {
       },
     } as any;
 
-    mockCheckpoint = jest.fn() as any;
-    mockCheckpoint.force = jest.fn().mockResolvedValue(undefined);
+    mockCheckpoint = jest.fn() as unknown as CheckpointFunction;
+    (mockCheckpoint as any).force = jest.fn().mockResolvedValue(undefined);
     mockRunInChildContext = jest.fn();
   });
 

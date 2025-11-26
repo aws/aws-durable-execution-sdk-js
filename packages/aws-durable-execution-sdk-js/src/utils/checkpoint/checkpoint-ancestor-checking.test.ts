@@ -1,8 +1,9 @@
+import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
 import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { DurableLogger, ExecutionContext } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
-import { CheckpointHandler } from "./checkpoint";
+import { CheckpointManager } from "./checkpoint-manager";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
@@ -12,11 +13,11 @@ jest.mock("../../utils/logger/logger", () => ({
   log: jest.fn(),
 }));
 
-describe("CheckpointHandler - Ancestor Checking", () => {
+describe("CheckpointManager - Ancestor Checking", () => {
   let mockTerminationManager: TerminationManager;
   let mockState: any;
   let mockContext: ExecutionContext;
-  let checkpointHandler: CheckpointHandler;
+  let checkpointHandler: CheckpointManager;
   let mockEmitter: EventEmitter;
   let mockLogger: DurableLogger;
 
@@ -41,6 +42,7 @@ describe("CheckpointHandler - Ancestor Checking", () => {
       state: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
@@ -49,7 +51,7 @@ describe("CheckpointHandler - Ancestor Checking", () => {
     } satisfies ExecutionContext;
     mockLogger = createDefaultLogger(mockContext);
 
-    checkpointHandler = new CheckpointHandler(
+    checkpointHandler = createTestCheckpointManager(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,

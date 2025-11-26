@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { DurableLogData, DurableLogLevel } from "./logger";
 
 export interface DurableLoggingContext {

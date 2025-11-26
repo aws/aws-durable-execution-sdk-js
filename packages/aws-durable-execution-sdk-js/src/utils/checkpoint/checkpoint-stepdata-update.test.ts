@@ -1,4 +1,5 @@
-import { CheckpointHandler } from "./checkpoint";
+import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
+import { CheckpointManager } from "./checkpoint-manager";
 import { DurableLogger, ExecutionContext, OperationSubType } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
@@ -12,10 +13,10 @@ import { getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 
-describe("CheckpointHandler - StepData Update", () => {
+describe("CheckpointManager - StepData Update", () => {
   let mockContext: ExecutionContext;
   let mockState: any;
-  let checkpointHandler: CheckpointHandler;
+  let checkpointHandler: CheckpointManager;
   let mockEmitter: EventEmitter;
   let mockLogger: DurableLogger;
 
@@ -40,6 +41,7 @@ describe("CheckpointHandler - StepData Update", () => {
       terminationManager: new TerminationManager(),
       durableExecutionArn:
         "arn:aws:durable-execution:us-east-1:123456789012:execution/test-execution",
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
@@ -49,7 +51,7 @@ describe("CheckpointHandler - StepData Update", () => {
 
     mockLogger = createDefaultLogger(mockContext);
 
-    checkpointHandler = new CheckpointHandler(
+    checkpointHandler = createTestCheckpointManager(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,

@@ -1,13 +1,25 @@
-import { createDurableContext } from "./durable-context";
+import { createDurableContext, DurableExecution } from "./durable-context";
 import { DurableExecutionMode, ExecutionContext } from "../../types";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
-import { DurableLogger } from "../../types/durable-logger";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 describe("DurableContext logger modeAware configuration", () => {
+  let mockDurableExecution: DurableExecution;
+
+  beforeEach(() => {
+    mockDurableExecution = {
+      checkpointManager: {
+        checkpoint: jest.fn(),
+        force: jest.fn(),
+        setTerminating: jest.fn(),
+        hasPendingAncestorCompletion: jest.fn(),
+      },
+    } as any;
+  });
+
   // Helper to create a mock logger that respects shouldLog
-  const createMockLogger = () => {
+  const createMockLogger = (): any => {
     let loggingContext: any = null;
     const infoMock = jest.fn();
 
@@ -28,19 +40,20 @@ describe("DurableContext logger modeAware configuration", () => {
     };
   };
 
-  const mockExecutionContext: ExecutionContext = {
-    _stepData: {},
-    durableExecutionArn: "test-arn",
-    terminationManager: {
-      terminate: jest.fn(),
-      getTerminationPromise: jest.fn().mockResolvedValue({ reason: "test" }),
-    },
-    getStepData: jest.fn(),
-    state: {
+  const mockExecutionContext = (): ExecutionContext =>
+    ({
+      _stepData: {},
+      durableExecutionArn: "test-arn",
+      terminationManager: {
+        terminate: jest.fn(),
+        getTerminationPromise: jest.fn().mockResolvedValue({ reason: "test" }),
+      },
       getStepData: jest.fn(),
-      checkpoint: jest.fn(),
-    },
-  } as any;
+      state: {
+        getStepData: jest.fn(),
+        checkpoint: jest.fn(),
+      },
+    }) as any;
 
   const mockParentContext: Context = {
     functionName: "test-function",
@@ -61,10 +74,12 @@ describe("DurableContext logger modeAware configuration", () => {
     const customLogger = createMockLogger();
 
     const context = createDurableContext(
-      mockExecutionContext,
+      mockExecutionContext(),
       mockParentContext,
       DurableExecutionMode.ReplayMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     context.configureLogger({ customLogger: customLogger as any });
 
@@ -84,10 +99,12 @@ describe("DurableContext logger modeAware configuration", () => {
     const customLogger = createMockLogger();
 
     const context = createDurableContext(
-      mockExecutionContext,
+      mockExecutionContext(),
       mockParentContext,
       DurableExecutionMode.ReplayMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     context.configureLogger({
       customLogger: customLogger as any,
@@ -110,10 +127,12 @@ describe("DurableContext logger modeAware configuration", () => {
     const customLogger = createMockLogger();
 
     const context = createDurableContext(
-      mockExecutionContext,
+      mockExecutionContext(),
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     context.configureLogger({
       customLogger: customLogger as any,
@@ -136,10 +155,12 @@ describe("DurableContext logger modeAware configuration", () => {
     const customLogger = createMockLogger();
 
     const context = createDurableContext(
-      mockExecutionContext,
+      mockExecutionContext(),
       mockParentContext,
       DurableExecutionMode.ReplayMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     context.configureLogger({ customLogger: customLogger as any });
 
@@ -184,10 +205,12 @@ describe("DurableContext logger modeAware configuration", () => {
 
   test("should use default modeAware=true when called with empty config", () => {
     const context = createDurableContext(
-      mockExecutionContext,
+      mockExecutionContext(),
       mockParentContext,
       DurableExecutionMode.ReplayMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
     context.configureLogger({});
 
@@ -204,10 +227,12 @@ describe("DurableContext logger modeAware configuration", () => {
     const customLogger2 = createMockLogger();
 
     const context = createDurableContext(
-      mockExecutionContext,
+      mockExecutionContext(),
       mockParentContext,
       DurableExecutionMode.ReplayMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
 
     // First: set custom logger only
@@ -268,10 +293,12 @@ describe("DurableContext logger modeAware configuration", () => {
     const customLogger = createMockLogger();
 
     const context = createDurableContext(
-      mockExecutionContext,
+      mockExecutionContext(),
       mockParentContext,
       DurableExecutionMode.ReplayMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
 
     // Set custom logger and modeAware=false

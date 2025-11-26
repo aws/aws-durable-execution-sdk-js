@@ -1,4 +1,7 @@
-import { createDurableContext } from "../../context/durable-context/durable-context";
+import {
+  createDurableContext,
+  DurableExecution,
+} from "../../context/durable-context/durable-context";
 import {
   ExecutionContext,
   DurableContext,
@@ -13,7 +16,6 @@ import {
   CheckpointDurableExecutionRequest,
 } from "@aws-sdk/client-lambda";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
-import { deleteCheckpoint } from "../../utils/checkpoint/checkpoint";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 // Mock the TerminationManager class
@@ -24,6 +26,7 @@ describe("Run In Child Context Integration Tests", () => {
   let mockParentContext: any;
   let durableContext: DurableContext<DurableLogger>;
   let checkpointCalls: any[] = [];
+  let mockDurableExecution: DurableExecution;
 
   beforeEach(() => {
     // Reset all mocks before each test to ensure isolation
@@ -32,7 +35,27 @@ describe("Run In Child Context Integration Tests", () => {
     checkpointCalls = [];
 
     // Clear singleton checkpoint handler
-    deleteCheckpoint();
+
+    mockDurableExecution = {
+      checkpointManager: {
+        checkpoint: jest
+          .fn()
+          .mockImplementation((stepId: string, data: any) => {
+            const checkpointData = {
+              CheckpointToken: "mock-token",
+              Updates: [data],
+            };
+            checkpointCalls.push({
+              checkpointToken: "mock-token",
+              data: checkpointData,
+            });
+            return Promise.resolve({ CheckpointToken: "mock-token" });
+          }),
+        force: jest.fn(),
+        setTerminating: jest.fn(),
+        hasPendingAncestorCompletion: jest.fn(),
+      },
+    } as any;
 
     // Create proper mocks for TerminationManager
     const mockTerminationManager = {
@@ -60,6 +83,7 @@ describe("Run In Child Context Integration Tests", () => {
       _stepData: {},
       terminationManager: mockTerminationManager,
       durableExecutionArn: "mock-execution-arn",
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
@@ -74,6 +98,8 @@ describe("Run In Child Context Integration Tests", () => {
       mockParentContext,
       DurableExecutionMode.ExecutionMode,
       createDefaultLogger(),
+      undefined,
+      mockDurableExecution,
     );
   });
 
@@ -103,7 +129,7 @@ describe("Run In Child Context Integration Tests", () => {
     expect(checkpointCalls[0].data.Updates[0].Action).toBe(
       OperationAction.START,
     );
-    expect(checkpointCalls[0].data.Updates[0].Id).toBe(hashId("1"));
+    expect(checkpointCalls[0].data.Updates[0].Id).toBe("1");
     expect(checkpointCalls[0].data.Updates[0].Type).toBe(OperationType.CONTEXT);
     expect(checkpointCalls[0].data.Updates[0].Name).toBe("test-child-context");
   });
@@ -265,7 +291,7 @@ describe("Run In Child Context Integration Tests", () => {
     expect(checkpointCalls.length).toBeGreaterThanOrEqual(1);
 
     // First checkpoint should be START
-    expect(checkpointCalls[0].data.Updates[0].Id).toBe(hashId("1"));
+    expect(checkpointCalls[0].data.Updates[0].Id).toBe("1");
     expect(checkpointCalls[0].data.Updates[0].Action).toBe(
       OperationAction.START,
     );

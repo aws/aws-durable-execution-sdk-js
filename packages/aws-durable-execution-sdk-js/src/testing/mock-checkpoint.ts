@@ -1,11 +1,13 @@
 import { OperationUpdate } from "@aws-sdk/client-lambda";
+import { Checkpoint } from "../utils/checkpoint/checkpoint-helper";
 
-export type CheckpointFunction = {
+export interface CheckpointFunction extends Checkpoint {
   (stepId: string, data: Partial<OperationUpdate>): Promise<void>;
+  checkpoint(stepId: string, data: Partial<OperationUpdate>): Promise<void>;
   force(): Promise<void>;
   setTerminating(): void;
   hasPendingAncestorCompletion(stepId: string): boolean;
-};
+}
 
 export const createMockCheckpoint = (
   mockImplementation?: (
@@ -16,7 +18,9 @@ export const createMockCheckpoint = (
   const mockFn = jest.fn(
     mockImplementation || jest.fn().mockResolvedValue(undefined),
   );
+  
   const mockCheckpoint = Object.assign(mockFn, {
+    checkpoint: mockFn, // Same function so calls are tracked together
     force: jest.fn().mockResolvedValue(undefined),
     setTerminating: jest.fn(),
     hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
