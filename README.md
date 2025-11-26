@@ -1,4 +1,4 @@
-## @aws/durable-execution-sdk-js*
+# AWS Durable Execution SDKs for JavaScript
 
 This repository contains the code for the following 3 packages published to NPM:
 
