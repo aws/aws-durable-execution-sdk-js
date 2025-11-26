@@ -122,7 +122,8 @@ function createFunctionResource(filename, skipVerboseLogging = false) {
       Environment: {
         Variables: {
           AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
-          DURABLE_VERBOSE_MODE: skipVerboseLogging ? "false" : "true",
+          DURABLE_VERBOSE_MODE: "false",
+          DURABLE_EXAMPLES_VERBOSE: "true",
         },
       },
     },

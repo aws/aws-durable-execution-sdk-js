@@ -50,16 +50,8 @@ describe("generate-sam-template", () => {
 
       expect(resource.Properties.Environment.Variables).toEqual({
         AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
-        DURABLE_VERBOSE_MODE: "true",
-      });
-    });
-
-    test("disables verbose logging when skipVerboseLogging is true", () => {
-      const resource = createFunctionResource("hello-world", true);
-
-      expect(resource.Properties.Environment.Variables).toEqual({
-        AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
         DURABLE_VERBOSE_MODE: "false",
+        DURABLE_EXAMPLES_VERBOSE: "true",
       });
     });
   });

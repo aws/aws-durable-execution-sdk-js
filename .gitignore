@@ -28,3 +28,6 @@
 .nvmrc
 
 *.rollup.cache
+
+# Durable executions local emulator files
+**/.durable-executions-local/

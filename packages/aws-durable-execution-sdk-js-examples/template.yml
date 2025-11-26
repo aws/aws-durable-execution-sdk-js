@@ -46,7 +46,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ComprehensiveOperations:
@@ -70,7 +71,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ConcurrentOperations:
@@ -94,7 +96,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ConcurrentWait:
@@ -118,7 +121,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   CreateCallback:
@@ -142,7 +146,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   CreateCallbackConcurrent:
@@ -166,7 +171,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   CreateCallbackFailures:
@@ -190,7 +196,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   CreateCallbackHeartbeat:
@@ -214,7 +221,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   CreateCallbackMixedOps:
@@ -238,7 +246,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   CreateCallbackSerdes:
@@ -262,7 +271,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   CreateCallbackTimeout:
@@ -286,7 +296,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ErrorDeterminism:
@@ -310,7 +321,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   HandlerError:
@@ -334,7 +346,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   HelloWorld:
@@ -358,7 +371,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   InvokeSimple:
@@ -382,7 +396,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   LoggerAfterCallback:
@@ -406,7 +421,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   LoggerAfterWait:
@@ -430,7 +446,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   LoggerLogLevels:
@@ -454,7 +471,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   MapBasic:
@@ -478,7 +496,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   MapCompletionConfigIssue:
@@ -502,7 +521,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   MapLargeScale:
@@ -526,7 +546,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   MultipleWaits:
@@ -550,7 +571,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   NoReplayExecution:
@@ -574,7 +596,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   NonDurable:
@@ -598,7 +621,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ParallelBasic:
@@ -622,7 +646,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ParallelHeterogeneous:
@@ -646,7 +671,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ParallelMinSuccessfulCallback:
@@ -670,7 +696,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ParallelWait:
@@ -694,7 +721,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ParentContextInChild:
@@ -718,7 +746,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ParentContextInStep:
@@ -742,7 +771,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   ParentContextInWaitCondition:
@@ -766,7 +796,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PowertoolsLogger:
@@ -790,7 +821,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseAll:
@@ -814,7 +846,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseAllSettled:
@@ -838,7 +871,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseAllWait:
@@ -862,7 +896,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseAny:
@@ -886,7 +921,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseCombinators:
@@ -910,7 +946,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseRace:
@@ -934,7 +971,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseReplay:
@@ -958,7 +996,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   PromiseUnhandledRejection:
@@ -982,7 +1021,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   RetryExhaustion:
@@ -1006,7 +1046,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   RunInChildContext:
@@ -1030,7 +1071,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   RunInChildContextCheckpointSizeLimit:
@@ -1054,7 +1096,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   RunInChildContextFailingStep:
@@ -1078,7 +1121,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   RunInChildContextLargeData:
@@ -1102,7 +1146,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   SimpleExecution:
@@ -1126,7 +1171,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   SimplePowertoolsLogger:
@@ -1150,7 +1196,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   StepBasic:
@@ -1174,7 +1221,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   StepErrorDeterminism:
@@ -1198,7 +1246,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   StepNamed:
@@ -1222,7 +1271,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   StepWithRetry:
@@ -1246,7 +1296,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   StepsWithRetry:
@@ -1270,7 +1321,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
       Policies:
         - DynamoDBReadPolicy:
             TableName: TEST
@@ -1297,7 +1349,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   Wait:
@@ -1321,7 +1374,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallback:
@@ -1345,7 +1399,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackAnonymous:
@@ -1369,7 +1424,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackChildContext:
@@ -1393,7 +1449,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackFailingSubmitter:
@@ -1417,7 +1474,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackFailures:
@@ -1441,7 +1499,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackHeartbeatSends:
@@ -1465,7 +1524,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackMixedOps:
@@ -1489,7 +1549,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackMultipleInvocations:
@@ -1513,7 +1574,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackNested:
@@ -1537,7 +1599,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackSerdes:
@@ -1561,7 +1624,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackSubmitterFailureCatchable:
@@ -1585,7 +1649,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackSubmitterRetrySuccess:
@@ -1609,7 +1674,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCallbackTimeout:
@@ -1633,7 +1699,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitForCondition:
@@ -1657,7 +1724,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitNamed:
@@ -1681,7 +1749,8 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
   WaitUnawaited:
@@ -1705,6 +1774,7 @@ Resources:
       Environment:
         Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "true"
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
