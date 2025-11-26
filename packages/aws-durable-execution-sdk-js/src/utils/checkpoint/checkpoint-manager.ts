@@ -115,6 +115,8 @@ export class CheckpointManager implements Checkpoint {
         if (index > -1) {
           this.queueCompletionResolvers.splice(index, 1);
         }
+        // Clear the queue since it's taking too long
+        this.clearQueue();
         reject(new Error("Timeout waiting for checkpoint queue completion"));
       }, 5000); // 5 second timeout
 
