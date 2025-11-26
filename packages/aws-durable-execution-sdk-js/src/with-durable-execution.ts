@@ -128,7 +128,7 @@ async function runHandler<
     });
 
     // Wait for all pending checkpoints to complete only on successful execution
-    // On errors, clear the queue without waiting to maintain original behavior
+    // On termination, clear the queue without waiting to maintain original behavior
     if (resultType === "handler") {
       try {
         const timeout = new Promise<void>((resolve) => {
