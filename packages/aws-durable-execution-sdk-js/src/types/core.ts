@@ -30,6 +30,18 @@ export interface DurableExecutionInvocationInput {
   LocalRunner?: boolean;
 }
 
+export function isDurableExecutionInvocationInput(
+  event: unknown,
+): event is DurableExecutionInvocationInput {
+  return (
+    typeof event === "object" &&
+    event !== null &&
+    "DurableExecutionArn" in event &&
+    "CheckpointToken" in event &&
+    "InitialExecutionState" in event
+  );
+}
+
 export enum InvocationStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",

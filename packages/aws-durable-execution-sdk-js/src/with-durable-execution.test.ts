@@ -2,6 +2,7 @@ import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { CheckpointUnrecoverableInvocationError } from "./errors/checkpoint-errors/checkpoint-errors";
+import { DurableExecutionNotEnabledError } from "./errors/durable-execution-not-enabled-error/durable-execution-not-enabled-error";
 import {
   UnrecoverableInvocationError,
   UnrecoverableExecutionError,
@@ -26,6 +27,19 @@ const mockCheckpointToken = "test-checkpoint-token";
 const mockDurableExecutionArn = "test-durable-execution-arn";
 
 describe("withDurableExecution", () => {
+  it("should throw DurableExecutionNotEnabledError when event is not a DurableExecutionInvocationInput", async () => {
+    const mockHandler = jest.fn();
+    const nonDurableEvent = { foo: "bar" };
+    const mockContext = {} as Context;
+
+    const wrappedHandler = withDurableExecution(mockHandler);
+    await expect(
+      wrappedHandler(nonDurableEvent as any, mockContext),
+    ).rejects.toThrow(DurableExecutionNotEnabledError);
+
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
   // Setup common test variables
   const mockEvent: DurableExecutionInvocationInput = {
     CheckpointToken: mockCheckpointToken,

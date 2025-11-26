@@ -5,6 +5,7 @@ import { createDurableContext } from "./context/durable-context/durable-context"
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
+import { DurableExecutionNotEnabledError } from "./errors/durable-execution-not-enabled-error/durable-execution-not-enabled-error";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import { TerminationReason } from "./termination-manager/types";
@@ -17,6 +18,7 @@ import {
   DurableExecutionMode,
   ExecutionContext,
   InvocationStatus,
+  isDurableExecutionInvocationInput,
   LambdaHandler,
 } from "./types";
 import { log } from "./utils/logger/logger";
@@ -242,6 +244,10 @@ export const withDurableExecution = <
     event: DurableExecutionInvocationInput,
     context: Context,
   ): Promise<DurableExecutionInvocationOutput> => {
+    if (!isDurableExecutionInvocationInput(event)) {
+      throw new DurableExecutionNotEnabledError();
+    }
+
     const { executionContext, durableExecutionMode, checkpointToken } =
       await initializeExecutionContext(event, context);
     let response: DurableExecutionInvocationOutput | null = null;
