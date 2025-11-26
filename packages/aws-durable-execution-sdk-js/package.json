@@ -8,6 +8,9 @@
   "engines": {
     "node": ">=22"
   },
+  "main": "./dist-cjs/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist-types/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist-types/index.d.ts",
@@ -38,7 +41,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "prepublishOnly": "npm test && npm run lint && npm run build",
     "run-locally": "tsx ./src/run-durable.ts",
-    "clean": "rm -rf node_modules dist dist-cjs dist-types coverage",
+    "clean": "rm -rf node_modules dist dist-cjs dist-types coverage .tsbuildinfo .rollup.cache",
     "prepack": "npm run build"
   },
   "devDependencies": {

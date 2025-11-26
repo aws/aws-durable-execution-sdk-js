@@ -22,7 +22,7 @@
     }
   },
   "scripts": {
-    "clean": "rm -rf build/ build coverage node_modules/ dist/ *.zip",
+    "clean": "rm -rf build/ build coverage node_modules/ dist/ *.zip .tsbuildinfo .rollup.cache",
     "release": "npm run build && mkdir -p build/aws-durable-execution-sdk-js-examples && npm run copy-files",
     "prebuild": "rm -rf build/aws-durable-execution-sdk-js-examples",
     "postbuild": "npm run generate-sam-template",
@@ -38,7 +38,7 @@
     "copy-catalog": "cp examples-catalog.json build/aws-durable-execution-sdk-js-examples/",
     "generate-sam-template": "node scripts/generate-sam-template.js",
     "test": "npm run unit-test",
-    "test:integration": "NODE_ENV=integration jest --config jest.config.integration.js --testNamePattern=cloud",
+    "test:integration": "NODE_ENV=integration jest --config jest.config.integration.js",
     "pretest-with-sdk-coverage": "node scripts/copy-sdk-source.js",
     "test-with-sdk-coverage": "jest --config jest.config.sdk-coverage.js --collectCoverage",
     "coverage-to-csv": "node scripts/coverage-to-csv.js",

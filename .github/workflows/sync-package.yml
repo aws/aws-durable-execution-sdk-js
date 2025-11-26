@@ -47,7 +47,7 @@ jobs:
         uses: martinbeentjes/npm-get-version-action@v1.3.1
         with:
           path: packages/${{ inputs.package_name }}
-      - run: npm run install-all
+      - run: npm ci
       - run: npm run build
       - name: Navigate to package and pack
         working-directory: packages/${{ inputs.package_name }}

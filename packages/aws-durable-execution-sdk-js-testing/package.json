@@ -8,11 +8,14 @@
   "engines": {
     "node": ">=22"
   },
+  "main": "./dist-cjs/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist-types/index.d.ts",
   "bin": {
     "run-durable": "./dist/cli/run-durable.js"
   },
   "scripts": {
-    "clean": "rm -rf dist dist-cjs dist-types node_modules coverage",
+    "clean": "rm -rf dist dist-cjs dist-types node_modules coverage .tsbuildinfo .rollup.cache",
     "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",

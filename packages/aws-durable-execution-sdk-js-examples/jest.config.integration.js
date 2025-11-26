@@ -7,4 +7,6 @@ module.exports = {
   ...defaultPreset,
   testMatch: ["**/src/examples/**/*.test.ts"],
   testTimeout: 90000,
+  testNamePattern: "cloud",
+  bail: true,
 };

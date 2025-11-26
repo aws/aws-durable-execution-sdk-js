@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "test": "jest",
-    "clean": "rm -rf dist node_modules"
+    "clean": "rm -rf dist node_modules .tsbuildinfo"
   },
   "keywords": [
     "eslint",

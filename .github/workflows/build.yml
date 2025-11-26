@@ -40,7 +40,7 @@ jobs:
           node-version: 22.x
           cache: "npm"
       - name: Install dependencies
-        run: npm run install-all
+        run: npm ci
       - name: Build project
         run: npm run build
       - name: Upload build artifacts
@@ -113,7 +113,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm run install-all
+          npm ci
 
       - name: Get AWS Credentials
         id: credentials

@@ -31,6 +31,6 @@ jobs:
           name: built-artifacts
           path: .
       - name: Install dependencies
-        run: npm run install-all
+        run: npm ci
       - name: Run tests
         run: npm run test
