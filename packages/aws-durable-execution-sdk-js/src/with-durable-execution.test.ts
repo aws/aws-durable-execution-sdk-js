@@ -506,4 +506,35 @@ describe("withDurableExecution", () => {
       Result: JSON.stringify(mockResult),
     });
   });
+
+  it("should throw error for invalid durable execution event", async () => {
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler);
+
+    // Test missing DurableExecutionArn
+    const invalidEvent1 = { CheckpointToken: "token" };
+    await expect(
+      wrappedHandler(invalidEvent1 as any, mockContext),
+    ).rejects.toThrow(
+      "Unexpected payload provided to start the durable execution",
+    );
+
+    // Test missing CheckpointToken
+    const invalidEvent2 = { DurableExecutionArn: "arn" };
+    await expect(
+      wrappedHandler(invalidEvent2 as any, mockContext),
+    ).rejects.toThrow(
+      "Unexpected payload provided to start the durable execution",
+    );
+
+    // Test completely invalid event
+    const invalidEvent3 = {};
+    await expect(
+      wrappedHandler(invalidEvent3 as any, mockContext),
+    ).rejects.toThrow(
+      "Unexpected payload provided to start the durable execution",
+    );
+
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
 });

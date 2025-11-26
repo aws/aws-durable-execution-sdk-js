@@ -217,6 +217,22 @@ async function runHandler<
   }
 }
 
+/**
+ * Validates that the event is a proper durable execution input
+ */
+function validateDurableExecutionEvent(event: unknown): void {
+  try {
+    const eventObj = event as Record<string, unknown>;
+    if (!eventObj?.DurableExecutionArn || !eventObj?.CheckpointToken) {
+      throw new Error("Missing required durable execution fields");
+    }
+  } catch {
+    const msg = `Unexpected payload provided to start the durable execution. 
+Check your resource configurations to confirm the durability is set.`;
+    throw new Error(msg);
+  }
+}
+
 export const withDurableExecution = <
   Input,
   Output,
@@ -228,6 +244,7 @@ export const withDurableExecution = <
     event: DurableExecutionInvocationInput,
     context: Context,
   ): Promise<DurableExecutionInvocationOutput> => {
+    validateDurableExecutionEvent(event);
     const { executionContext, durableExecutionMode, checkpointToken } =
       await initializeExecutionContext(event, context);
     let response: DurableExecutionInvocationOutput | null = null;
