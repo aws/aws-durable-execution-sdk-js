@@ -75,6 +75,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
 
     // Reset termination manager mock behavior
@@ -199,6 +200,9 @@ describe("withDurableExecution", () => {
 
   // Test for the timeout logging branch
   it("should set up timeout for logging promise race status", async () => {
+    // Use real timers for this test
+    jest.useRealTimers();
+
     // Setup with verbose mode enabled
     const verboseExecutionContext = {
       ...mockExecutionContext,
@@ -215,6 +219,11 @@ describe("withDurableExecution", () => {
       new Promise(() => {}),
     );
 
+    // Mock waitForQueueCompletion to resolve immediately
+    const waitForQueueCompletionSpy = jest
+      .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
+      .mockResolvedValue(undefined);
+
     // Spy on setTimeout
     const setTimeoutSpy = jest.spyOn(global, "setTimeout");
 
@@ -230,7 +239,7 @@ describe("withDurableExecution", () => {
     const wrappedHandler = withDurableExecution(mockHandler);
     await wrappedHandler(mockEvent, mockContext);
 
-    // Verify setTimeout was called
+    // Verify setTimeout was called with 500ms for logging
     expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 500);
 
     // Verify log was called with the right parameters
@@ -245,6 +254,10 @@ describe("withDurableExecution", () => {
 
     // Clean up
     setTimeoutSpy.mockRestore();
+    waitForQueueCompletionSpy.mockRestore();
+
+    // Restore fake timers for other tests
+    jest.useFakeTimers();
   });
 
   it("should handle non-Error objects thrown by handler", async () => {

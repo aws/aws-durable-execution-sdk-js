@@ -76,14 +76,10 @@ describe("withDurableExecution Queue Completion", () => {
     clearSpy.mockRestore();
   });
 
-  it("should clear queue on termination without waiting", async () => {
-    const waitSpy = jest.spyOn(
-      CheckpointManager.prototype,
-      "waitForQueueCompletion",
-    );
-    const clearSpy = jest
-      .spyOn(CheckpointManager.prototype, "clearQueue")
-      .mockImplementation(() => {});
+  it("should wait for queue completion even on termination", async () => {
+    const waitSpy = jest
+      .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
+      .mockResolvedValue(undefined);
 
     // Mock handler to take longer so termination wins the race
     const mockHandler = jest
@@ -102,11 +98,9 @@ describe("withDurableExecution Queue Completion", () => {
 
     await wrappedHandler(mockEvent, mockContext);
 
-    expect(clearSpy).toHaveBeenCalledTimes(1);
-    expect(waitSpy).not.toHaveBeenCalled();
+    expect(waitSpy).toHaveBeenCalledTimes(1);
 
     waitSpy.mockRestore();
-    clearSpy.mockRestore();
   });
 
   it("should handle waitForQueueCompletion timeout gracefully", async () => {

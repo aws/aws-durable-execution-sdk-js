@@ -127,29 +127,21 @@ async function runHandler<
       resultType,
     });
 
-    // Wait for all pending checkpoints to complete only on successful execution
-    // On termination, clear the queue without waiting to maintain original behavior
-    if (resultType === "handler") {
-      try {
-        const timeout = new Promise<void>((resolve) => {
-          setTimeout(() => resolve(), 10000); // 10 seconds timeout
-        });
+    // Wait for all pending checkpoints to complete
+    try {
+      const timeout = new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), 3000); // 3 seconds timeout
+      });
 
-        // Race with timeout to prevent indefinite waiting in case checkpoint queue gets stuck
-        // or if there are network issues preventing checkpoint completion
-        await Promise.race([
-          durableExecution.checkpointManager.waitForQueueCompletion?.() ||
-            Promise.resolve(),
-          timeout,
-        ]);
-        log("✅", "All pending checkpoints completed");
-      } catch (error) {
-        log("⚠️", "Error waiting for checkpoint completion:", error);
-      }
-    } else {
-      // On termination/error, clear the queue without waiting
-      durableExecution.checkpointManager.clearQueue?.();
-      log("🧹", "Checkpoint queue cleared due to termination");
+      // Race with timeout to prevent indefinite waiting in case checkpoint queue gets stuck
+      // or if there are network issues preventing checkpoint completion
+      await Promise.race([
+        durableExecution.checkpointManager.waitForQueueCompletion(),
+        timeout,
+      ]);
+      log("✅", "All pending checkpoints completed");
+    } catch (error) {
+      log("⚠️", "Error waiting for checkpoint completion:", error);
     }
 
     // If termination was due to checkpoint failure, throw the appropriate error

@@ -7,6 +7,7 @@ export interface CheckpointFunction extends Checkpoint {
   force(): Promise<void>;
   setTerminating(): void;
   hasPendingAncestorCompletion(stepId: string): boolean;
+  waitForQueueCompletion(): Promise<void>;
 }
 
 export const createMockCheckpoint = (
@@ -18,12 +19,13 @@ export const createMockCheckpoint = (
   const mockFn = jest.fn(
     mockImplementation || jest.fn().mockResolvedValue(undefined),
   );
-  
+
   const mockCheckpoint = Object.assign(mockFn, {
     checkpoint: mockFn, // Same function so calls are tracked together
     force: jest.fn().mockResolvedValue(undefined),
     setTerminating: jest.fn(),
     hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+    waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
   }) as jest.MockedFunction<CheckpointFunction>;
 
   return mockCheckpoint;
