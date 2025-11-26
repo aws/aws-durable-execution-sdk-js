@@ -40,7 +40,8 @@ export class CheckpointManager implements Checkpoint {
     resolve: () => void;
     reject: (error: Error) => void;
   }> = [];
-  private queueCompletionResolvers: Array<() => void> = [];
+  private queueCompletionResolver: (() => void) | null = null;
+  private queueCompletionTimeout: NodeJS.Timeout | null = null;
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
   private static textEncoder = new TextEncoder();
@@ -105,28 +106,16 @@ export class CheckpointManager implements Checkpoint {
     }
 
     return new Promise<void>((resolve, reject) => {
-      // Add resolver to the list
-      this.queueCompletionResolvers.push(resolve);
+      this.queueCompletionResolver = resolve;
 
       // Set a timeout to prevent infinite waiting
-      const timeout = setTimeout(() => {
-        // Remove this resolver from the list
-        const index = this.queueCompletionResolvers.indexOf(resolve);
-        if (index > -1) {
-          this.queueCompletionResolvers.splice(index, 1);
-        }
+      this.queueCompletionTimeout = setTimeout(() => {
+        this.queueCompletionResolver = null;
+        this.queueCompletionTimeout = null;
         // Clear the queue since it's taking too long
         this.clearQueue();
         reject(new Error("Timeout waiting for checkpoint queue completion"));
       }, 3000); // 3 second timeout
-
-      // Clean up timeout if resolved normally
-      const originalResolve = resolve;
-      this.queueCompletionResolvers[this.queueCompletionResolvers.length - 1] =
-        () => {
-          clearTimeout(timeout);
-          originalResolve();
-        };
     });
   }
 
@@ -384,8 +373,14 @@ export class CheckpointManager implements Checkpoint {
   }
 
   private notifyQueueCompletion(): void {
-    const resolvers = this.queueCompletionResolvers.splice(0);
-    resolvers.forEach((resolve) => resolve());
+    if (this.queueCompletionResolver) {
+      if (this.queueCompletionTimeout) {
+        clearTimeout(this.queueCompletionTimeout);
+        this.queueCompletionTimeout = null;
+      }
+      this.queueCompletionResolver();
+      this.queueCompletionResolver = null;
+    }
   }
 
   private async processBatch(batch: QueuedCheckpoint[]): Promise<void> {
