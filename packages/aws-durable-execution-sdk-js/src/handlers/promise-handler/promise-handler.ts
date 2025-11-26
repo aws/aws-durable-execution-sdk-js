@@ -76,7 +76,12 @@ const stepConfig = {
 
 export const createPromiseHandler = <Logger extends DurableLogger>(
   step: DurableContext<Logger>["step"],
-) => {
+): {
+  all: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T[]>;
+  allSettled: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<PromiseSettledResult<T>[]>;
+  any: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
+  race: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
+} => {
   const parseParams = <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
     maybePromises?: DurablePromise<T>[],

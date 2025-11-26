@@ -28,7 +28,8 @@ import {
   DurableLogData,
 } from "../../types";
 import { Context } from "aws-lambda";
-import { createCheckpoint } from "../../utils/checkpoint/checkpoint";
+import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
+import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
 import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
 import { createRunInChildContextHandler } from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
@@ -42,7 +43,6 @@ import { createPromiseHandler } from "../../handlers/promise-handler/promise-han
 import { createConcurrentExecutionHandler } from "../../handlers/concurrent-execution-handler/concurrent-execution-handler";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { ModeManagement } from "./mode-management/mode-management";
-import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
 import {
   getActiveContext,
@@ -52,8 +52,13 @@ import {
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";
-import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+
+export interface DurableExecution {
+  checkpointManager: CheckpointManager;
+  stepDataEmitter: EventEmitter;
+  setTerminating(): void;
+}
 
 export class DurableContextImpl<Logger extends DurableLogger>
   implements DurableContext<Logger>
@@ -64,22 +69,24 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private modeAwareLoggingEnabled: boolean = true;
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
-  private checkpoint: ReturnType<typeof createCheckpoint>;
+  private checkpoint: CheckpointManager;
   private durableExecutionMode: DurableExecutionMode;
   private _parentId?: string;
   private modeManagement: ModeManagement;
+  private durableExecution: DurableExecution;
 
   constructor(
     private executionContext: ExecutionContext,
     public lambdaContext: Context,
     durableExecutionMode: DurableExecutionMode,
     inheritedLogger: Logger,
-    stepPrefix?: string,
-    checkpointToken?: string,
+    stepPrefix: string | undefined,
+    durableExecution: DurableExecution,
     parentId?: string,
   ) {
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
+    this.durableExecution = durableExecution;
     this.contextLogger = inheritedLogger;
     this.contextLogger.configureDurableLoggingContext?.(
       this.getDurableLoggingContext(),
@@ -87,12 +94,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
     this.durableExecutionMode = durableExecutionMode;
 
-    this.checkpoint = createCheckpoint(
-      executionContext,
-      checkpointToken || "",
-      this.operationsEmitter,
-      createDefaultLogger(this.executionContext),
-    );
+    this.checkpoint = durableExecution.checkpointManager;
 
     this.modeManagement = new ModeManagement(
       this.captureExecutionState.bind(this),
@@ -321,7 +323,25 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.lambdaContext,
         this.createStepId.bind(this),
         () => this.contextLogger,
-        createDurableContext,
+        // Adapter function to maintain compatibility
+        (
+          executionContext,
+          parentContext,
+          durableExecutionMode,
+          inheritedLogger,
+          stepPrefix,
+          _checkpointToken,
+          parentId,
+        ) =>
+          createDurableContext(
+            executionContext,
+            parentContext,
+            durableExecutionMode,
+            inheritedLogger,
+            stepPrefix,
+            this.durableExecution,
+            parentId,
+          ),
         this._parentId,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -561,8 +581,8 @@ export const createDurableContext = <Logger extends DurableLogger>(
   parentContext: Context,
   durableExecutionMode: DurableExecutionMode,
   inheritedLogger: Logger,
-  stepPrefix?: string,
-  checkpointToken?: string,
+  stepPrefix: string | undefined,
+  durableExecution: DurableExecution,
   parentId?: string,
 ): DurableContextImpl<Logger> => {
   return new DurableContextImpl<Logger>(
@@ -571,7 +591,7 @@ export const createDurableContext = <Logger extends DurableLogger>(
     durableExecutionMode,
     inheritedLogger,
     stepPrefix,
-    checkpointToken,
+    durableExecution,
     parentId,
   );
 };

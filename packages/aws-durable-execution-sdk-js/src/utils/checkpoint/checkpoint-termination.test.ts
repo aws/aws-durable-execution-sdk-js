@@ -1,12 +1,14 @@
-import { CheckpointHandler } from "./checkpoint";
+import { CheckpointManager } from "./checkpoint-manager";
+import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
 import { ExecutionContext } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { EventEmitter } from "events";
+import { createDefaultLogger } from "../logger/default-logger";
 
-describe("CheckpointHandler Termination Behavior", () => {
+describe("CheckpointManager Termination Behavior", () => {
   let mockContext: ExecutionContext;
   let stepDataEmitter: EventEmitter;
-  let checkpointHandler: CheckpointHandler;
+  let checkpointHandler: CheckpointManager;
 
   beforeEach(() => {
     stepDataEmitter = new EventEmitter();
@@ -25,10 +27,11 @@ describe("CheckpointHandler Termination Behavior", () => {
       getStepData: jest.fn(),
     } as any;
 
-    checkpointHandler = new (CheckpointHandler as any)(
+    checkpointHandler = createTestCheckpointManager(
       mockContext,
       "test-token",
       stepDataEmitter,
+      createDefaultLogger(mockContext),
     );
   });
 

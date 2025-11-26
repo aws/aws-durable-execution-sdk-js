@@ -23,9 +23,11 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
       },
     } as any;
 
-    mockCheckpoint = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.force = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.setTerminating = jest.fn();
+    mockCheckpoint = {
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      force: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+    };
 
     mockParentContext = {
       getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
@@ -66,7 +68,7 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
 
     // Phase 1 should have executed the child function (before we await the promise)
     expect(childFn).toHaveBeenCalled();
-    expect(mockCheckpoint).toHaveBeenCalled();
+    expect(mockCheckpoint.checkpoint).toHaveBeenCalled();
 
     // Now await the promise to verify it completes
     await childPromise;

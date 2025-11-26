@@ -7,7 +7,7 @@ import { createMockExecutionContext } from "../../testing/mock-context";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { DurableLogger } from "../../types/durable-logger";
 
-jest.mock("../../utils/checkpoint/checkpoint");
+jest.mock("../../utils/checkpoint/checkpoint-manager");
 jest.mock("../../handlers/step-handler/step-handler");
 jest.mock("../../handlers/invoke-handler/invoke-handler");
 jest.mock(
@@ -28,6 +28,14 @@ jest.mock(
 describe("DurableContext", () => {
   let mockContext: Context;
   let mockLogger: DurableLogger;
+  const mockDurableExecution = {
+    checkpointManager: {
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      force: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+    },
+  } as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -94,6 +102,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       expect(context.step).toBeDefined();
@@ -117,6 +127,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       expect(context.lambdaContext).toBe(mockContext);
@@ -131,6 +143,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const { createStepHandler } = jest.requireMock(
@@ -154,6 +168,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ReplayMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.step(async (): Promise<string> => "result");
@@ -173,6 +189,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ReplayMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.step(async (): Promise<string> => "result");
@@ -192,6 +210,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ReplaySucceededContext,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const promise = context.step(async (): Promise<string> => "result");
@@ -207,6 +227,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.step(async (): Promise<void> => {});
@@ -230,6 +252,7 @@ describe("DurableContext", () => {
         DurableExecutionMode.ExecutionMode,
         mockLogger,
         "child",
+        mockDurableExecution,
       );
 
       await context.step(async (): Promise<void> => {});
@@ -252,6 +275,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.step(async (): Promise<string> => "result");
@@ -269,6 +294,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.invoke("func", {});
@@ -286,6 +313,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.runInChildContext(async (): Promise<string> => "result");
@@ -308,6 +337,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.wait({ seconds: 5 });
@@ -325,6 +356,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const { createWaitHandler } = jest.requireMock(
@@ -347,6 +380,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.createCallback();
@@ -364,6 +399,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.waitForCallback(async (): Promise<void> => {});
@@ -381,6 +418,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const checkFunc = jest.fn();
@@ -410,6 +449,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const { createWaitForConditionHandler } = jest.requireMock(
@@ -446,6 +487,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const { createInvokeHandler } = jest.requireMock(
@@ -465,6 +508,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.map([1, 2], async (): Promise<string> => "result");
@@ -482,6 +527,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       await context.parallel([async (): Promise<string> => "result"]);
@@ -501,6 +548,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const customLogger = {
@@ -522,6 +571,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const customLoggerWithoutConfigure = {
@@ -546,6 +597,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const configureMock = jest.fn();
@@ -589,6 +642,8 @@ describe("DurableContext", () => {
           mockContext,
           DurableExecutionMode.ExecutionMode,
           loggerWithConfigure,
+          undefined,
+          mockDurableExecution,
         ),
       ).not.toThrow();
 
@@ -618,6 +673,8 @@ describe("DurableContext", () => {
           mockContext,
           DurableExecutionMode.ExecutionMode,
           loggerWithoutConfigure,
+          undefined,
+          mockDurableExecution,
         ),
       ).not.toThrow();
 
@@ -626,6 +683,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         loggerWithoutConfigure,
+        undefined,
+        mockDurableExecution,
       );
 
       expect(context.logger).toBe(loggerWithoutConfigure);
@@ -648,6 +707,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         loggerWithConfigure,
+        undefined,
+        mockDurableExecution,
       );
 
       // Clear any calls from constructor
@@ -668,6 +729,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       expect(context.promise.all).toBeDefined();
@@ -681,6 +744,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       expect(context.promise.allSettled).toBeDefined();
@@ -694,6 +759,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       expect(context.promise.race).toBeDefined();
@@ -707,6 +774,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       expect(context.promise.any).toBeDefined();
@@ -722,6 +791,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       const { createStepHandler } = jest.requireMock(

@@ -1,0 +1,22 @@
+import { CheckpointManager } from "../utils/checkpoint/checkpoint-manager";
+import { ExecutionContext, DurableLogger } from "../types";
+import { EventEmitter } from "events";
+
+export const createTestCheckpointManager = (
+  context: ExecutionContext,
+  checkpointToken: string,
+  emitter: EventEmitter,
+  logger: DurableLogger,
+): CheckpointManager => {
+  return new CheckpointManager(
+    context.durableExecutionArn,
+    context._stepData,
+    context.state,
+    context.terminationManager,
+    context.activeOperationsTracker,
+    checkpointToken,
+    emitter,
+    logger,
+    context.pendingCompletions,
+  );
+};

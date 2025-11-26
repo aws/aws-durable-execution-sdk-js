@@ -7,25 +7,50 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationSubType, ExecutionContext, DurableLogger } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
-import {
-  CheckpointHandler,
-  createCheckpoint,
-  deleteCheckpoint,
-} from "./checkpoint";
+import { CheckpointManager } from "./checkpoint-manager";
+import { CheckpointFunction } from "../../testing/mock-checkpoint";
+import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
+import { createMockExecutionContext } from "../../testing/mock-context";
 import { hashId, getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
+
+// Helper function to create checkpoint function from manager
+const createCheckpoint = (
+  context: any,
+  token: string,
+  emitter: any,
+  logger: any,
+): any => {
+  const manager = new CheckpointManager(
+    context.durableExecutionArn,
+    context._stepData,
+    context.state,
+    context.terminationManager,
+    undefined,
+    token,
+    emitter,
+    logger,
+    new Set<string>(),
+  );
+  const checkpoint = (stepId: string, data: any): Promise<any> =>
+    manager.checkpoint(stepId, data);
+  checkpoint.force = (): Promise<any> => manager.forceCheckpoint();
+  checkpoint.setTerminating = (): void => manager.setTerminating();
+  checkpoint.hasPendingAncestorCompletion = (): boolean => false;
+  return checkpoint;
+};
 
 // Mock dependencies
 jest.mock("../../utils/logger/logger", () => ({
   log: jest.fn(),
 }));
 
-describe("CheckpointHandler", () => {
+describe("CheckpointManager", () => {
   let mockTerminationManager: TerminationManager;
   let mockState: any;
   let mockContext: ExecutionContext;
-  let checkpointHandler: CheckpointHandler;
+  let checkpointHandler: CheckpointManager;
   let mockEmitter: EventEmitter;
   let mockLogger: DurableLogger;
 
@@ -50,6 +75,7 @@ describe("CheckpointHandler", () => {
       state: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
@@ -58,7 +84,7 @@ describe("CheckpointHandler", () => {
     } satisfies ExecutionContext;
     mockLogger = createDefaultLogger(mockContext);
 
-    checkpointHandler = new CheckpointHandler(
+    checkpointHandler = createTestCheckpointManager(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
@@ -94,7 +120,7 @@ describe("CheckpointHandler", () => {
           ],
         },
         mockLogger,
-      );
+      ) as unknown as CheckpointFunction;
     });
   });
 
@@ -146,13 +172,13 @@ describe("CheckpointHandler", () => {
       expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(3);
       expect(mockState.checkpoint.mock.calls[0][1].Updates[0].Id).toBe(
         hashId("step-1"),
-      );
+      ) as unknown as CheckpointFunction;
       expect(mockState.checkpoint.mock.calls[0][1].Updates[1].Id).toBe(
         hashId("step-2"),
-      );
+      ) as unknown as CheckpointFunction;
       expect(mockState.checkpoint.mock.calls[0][1].Updates[2].Id).toBe(
         hashId("step-3"),
-      );
+      ) as unknown as CheckpointFunction;
     });
 
     it("should handle rapid concurrent enqueues correctly", async () => {
@@ -187,7 +213,7 @@ describe("CheckpointHandler", () => {
       const totalUpdates = mockState.checkpoint.mock.calls.reduce(
         (sum: number, call: any) => sum + call[1].Updates.length,
         0,
-      );
+      ) as unknown as CheckpointFunction;
       expect(totalUpdates).toBe(10);
     });
 
@@ -224,7 +250,7 @@ describe("CheckpointHandler", () => {
       const totalUpdates = mockState.checkpoint.mock.calls.reduce(
         (sum: number, call: any) => sum + call[1].Updates.length,
         0,
-      );
+      ) as unknown as CheckpointFunction;
       expect(totalUpdates).toBe(20);
     });
 
@@ -312,19 +338,19 @@ describe("CheckpointHandler", () => {
       expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(2);
       expect(mockState.checkpoint.mock.calls[0][1].Updates[0].Id).toBe(
         hashId("step-1"),
-      );
+      ) as unknown as CheckpointFunction;
       expect(mockState.checkpoint.mock.calls[0][1].Updates[1].Id).toBe(
         hashId("step-2"),
-      );
+      ) as unknown as CheckpointFunction;
 
       // Verify second batch had 2 updates
       expect(mockState.checkpoint.mock.calls[1][1].Updates).toHaveLength(2);
       expect(mockState.checkpoint.mock.calls[1][1].Updates[0].Id).toBe(
         hashId("step-3"),
-      );
+      ) as unknown as CheckpointFunction;
       expect(mockState.checkpoint.mock.calls[1][1].Updates[1].Id).toBe(
         hashId("step-4"),
-      );
+      ) as unknown as CheckpointFunction;
 
       // Verify final state is clean
       expect(checkpointHandler.getQueueStatus().isProcessing).toBe(false);
@@ -381,10 +407,10 @@ describe("CheckpointHandler", () => {
       expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
       expect(mockState.checkpoint.mock.calls[0][1].Updates[0].Id).toBe(
         hashId("step-1"),
-      );
+      ) as unknown as CheckpointFunction;
       expect(mockState.checkpoint.mock.calls[1][1].Updates[0].Id).toBe(
         hashId("step-2"),
-      );
+      ) as unknown as CheckpointFunction;
     });
   });
 
@@ -409,14 +435,14 @@ describe("CheckpointHandler", () => {
           message: expect.stringContaining("Checkpoint failed"),
           error: expect.any(Error),
         }),
-      );
+      ) as unknown as CheckpointFunction;
     });
 
     it("should continue processing subsequent batches after an error", async () => {
       // First call fails
       mockState.checkpoint.mockRejectedValueOnce(
         new Error("First call failed"),
-      );
+      ) as unknown as CheckpointFunction;
       // Second call succeeds
       mockState.checkpoint.mockResolvedValueOnce({
         CheckpointToken: mockNewTaskToken,
@@ -465,7 +491,7 @@ describe("CheckpointHandler", () => {
           message: expect.stringContaining("Specific checkpoint error message"),
           error: expect.any(Error),
         }),
-      );
+      ) as unknown as CheckpointFunction;
     });
 
     it("should handle non-Error objects thrown during checkpoint", async () => {
@@ -489,7 +515,7 @@ describe("CheckpointHandler", () => {
           message: expect.stringContaining("String error"),
           error: expect.any(Error),
         }),
-      );
+      ) as unknown as CheckpointFunction;
     });
   });
 
@@ -606,7 +632,7 @@ describe("CheckpointHandler", () => {
           ],
         },
         mockLogger,
-      );
+      ) as unknown as CheckpointFunction;
     });
   });
 
@@ -667,7 +693,6 @@ describe("deleteCheckpointHandler", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    deleteCheckpoint(); // Clear singleton before each test
     mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
@@ -694,6 +719,7 @@ describe("deleteCheckpointHandler", () => {
       state: mockState1,
       _stepData: stepData1,
       terminationManager: mockTerminationManager,
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData1, stepId);
       }),
@@ -707,6 +733,7 @@ describe("deleteCheckpointHandler", () => {
       state: mockState2,
       _stepData: stepData2,
       terminationManager: mockTerminationManager,
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData2, stepId);
       }),
@@ -725,14 +752,13 @@ describe("deleteCheckpointHandler", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger1,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Verify handler exists by using it
     await checkpoint1("test-step", { Action: OperationAction.START });
     expect(mockState1.checkpoint).toHaveBeenCalledTimes(1);
 
     // Delete the handler
-    deleteCheckpoint();
 
     // Verify handler is removed by creating a new one
     const checkpoint1New = createCheckpoint(
@@ -740,14 +766,13 @@ describe("deleteCheckpointHandler", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger1,
-    );
+    ) as unknown as CheckpointFunction;
 
     // The new handler should be a different instance, evidenced by separate batching behavior
     await checkpoint1New("test-step-2", { Action: OperationAction.START });
     expect(mockState1.checkpoint).toHaveBeenCalledTimes(2); // New separate call
 
     // Clean up the created handler
-    deleteCheckpoint();
   });
 
   it("should clear the singleton handler", async () => {
@@ -757,13 +782,13 @@ describe("deleteCheckpointHandler", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger1,
-    );
+    ) as unknown as CheckpointFunction;
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger2,
-    ); // This replaces the first
+    ) as unknown as CheckpointFunction; // This replaces the first
 
     // Use the first handler (checkpoint1's context) - both calls will be batched
     const promises = [
@@ -772,15 +797,14 @@ describe("deleteCheckpointHandler", () => {
     ];
     await Promise.all(promises);
 
-    // With singleton, first context is used and both calls are batched together
+    // With instance-based architecture, each context gets its own manager
     expect(mockState1.checkpoint).toHaveBeenCalledTimes(1);
-    expect(mockState2.checkpoint).toHaveBeenCalledTimes(0);
-    // Verify both operations were batched together
-    const calls = mockState1.checkpoint.mock.calls;
-    expect(calls[0][1].Updates).toHaveLength(2);
+    expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
+    // Each context processes its own operation
+    expect(mockState1.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
 
     // Delete the handler
-    deleteCheckpoint(); // Context doesn't matter for singleton
 
     // Create a new handler after cleanup - should work fine
     const checkpoint3 = createCheckpoint(
@@ -788,7 +812,7 @@ describe("deleteCheckpointHandler", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger1,
-    );
+    ) as unknown as CheckpointFunction;
     await checkpoint3("step-3", { Action: OperationAction.START });
     // After cleanup, new handler is created, so this is a separate call
     expect(mockState1.checkpoint).toHaveBeenCalledTimes(2);
@@ -796,7 +820,6 @@ describe("deleteCheckpointHandler", () => {
 
   it("should handle singleton correctly - first context wins", async () => {
     // Clean up any existing handler first
-    deleteCheckpoint();
 
     // Create checkpoint with first context
     const checkpoint1 = createCheckpoint(
@@ -804,7 +827,7 @@ describe("deleteCheckpointHandler", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger1,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Try to create with second context - should return same handler (first context)
     const checkpoint2 = createCheckpoint(
@@ -812,7 +835,7 @@ describe("deleteCheckpointHandler", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger2,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Both checkpoint functions should use the first context (mockContext1)
     const promises = [
@@ -821,16 +844,15 @@ describe("deleteCheckpointHandler", () => {
     ];
     await Promise.all(promises);
 
-    // Only mockState1 should have been called (first context wins)
+    // With instance-based architecture, each context gets its own manager
     expect(mockState1.checkpoint).toHaveBeenCalledTimes(1);
-    expect(mockState2.checkpoint).toHaveBeenCalledTimes(0);
+    expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
 
-    // Verify both operations were batched together
-    const calls = mockState1.checkpoint.mock.calls;
-    expect(calls[0][1].Updates).toHaveLength(2);
+    // Each context processes its own operation
+    expect(mockState1.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
 
     // Clean up
-    deleteCheckpoint();
   });
 
   describe("forceCheckpoint", () => {
@@ -840,7 +862,7 @@ describe("deleteCheckpointHandler", () => {
         "test-token",
         mockEmitter,
         mockLogger1,
-      );
+      ) as unknown as CheckpointFunction;
 
       await checkpoint.force();
 
@@ -852,7 +874,7 @@ describe("deleteCheckpointHandler", () => {
           Updates: [],
         },
         mockLogger1,
-      );
+      ) as unknown as CheckpointFunction;
     });
 
     it("should not make additional checkpoint call when force is called during ongoing checkpoint", async () => {
@@ -861,7 +883,7 @@ describe("deleteCheckpointHandler", () => {
         "test-token",
         mockEmitter,
         mockLogger1,
-      );
+      ) as unknown as CheckpointFunction;
 
       // Make checkpoint API slow to simulate ongoing processing
       let resolveCheckpoint!: (value: any) => void;
@@ -917,7 +939,7 @@ describe("deleteCheckpointHandler", () => {
           ],
         },
         mockLogger1,
-      );
+      ) as unknown as CheckpointFunction;
     });
 
     it("should terminate execution when force checkpoint fails", async () => {
@@ -926,7 +948,7 @@ describe("deleteCheckpointHandler", () => {
         "test-token",
         mockEmitter,
         mockLogger1,
-      );
+      ) as unknown as CheckpointFunction;
       const error = new Error("Checkpoint failed");
       mockState1.checkpoint.mockRejectedValue(error);
 
@@ -941,7 +963,7 @@ describe("deleteCheckpointHandler", () => {
           message: expect.stringContaining("Checkpoint failed"),
           error: expect.any(Error),
         }),
-      );
+      ) as unknown as CheckpointFunction;
     });
   });
 });
@@ -956,13 +978,13 @@ describe("createCheckpointHandler", () => {
 
   let mockTerminationManager: TerminationManager;
   let mockState: any;
+  let mockState2: any;
   let mockContext: ExecutionContext;
   let mockLogger: DurableLogger;
   let mockEmitter: EventEmitter;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    deleteCheckpoint(); // Clear singleton before each test
     mockEmitter = new EventEmitter();
 
     mockTerminationManager = new TerminationManager();
@@ -979,6 +1001,7 @@ describe("createCheckpointHandler", () => {
       state: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
+      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
@@ -1002,7 +1025,7 @@ describe("createCheckpointHandler", () => {
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
     await checkpoint(mockStepId, checkpointData);
 
     // Verify
@@ -1020,18 +1043,17 @@ describe("createCheckpointHandler", () => {
         ]),
       }),
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
   });
 
   it("should batch multiple checkpoints together", async () => {
-    deleteCheckpoint(); // Clean up singleton
     // Setup
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Mock checkpoint to delay so we can test batching
     let resolveCheckpoint: (value: any) => void;
@@ -1076,20 +1098,19 @@ describe("createCheckpointHandler", () => {
   });
 
   it("should reuse the same handler for the same execution context", async () => {
-    deleteCheckpoint(); // Clean up singleton
     // Setup
     const checkpoint1 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
     const checkpoint2 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Mock to delay first checkpoint
     let resolveFirst: (value: any) => void;
@@ -1117,26 +1138,32 @@ describe("createCheckpointHandler", () => {
   });
 
   it("should use the first context when multiple contexts are created", async () => {
-    deleteCheckpoint(); // Clean up singleton
+    // Create second mock state
+    mockState2 = {
+      checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
+    };
+
     // Setup second context
-    const mockContext2 = {
-      ...mockContext,
-    } satisfies ExecutionContext;
+    const mockContext2 = createMockExecutionContext({
+      durableExecutionArn: "test-durable-execution-arn-2",
+      state: mockState2,
+      terminationManager: mockTerminationManager,
+    });
 
     const checkpoint1 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    ); // Should return same handler (first context)
+    ) as unknown as CheckpointFunction;
 
-    // Execute checkpoints - both should use the first context (mockContext)
+    // Execute checkpoints - each should use its own context
     const promises = [
       checkpoint1("step-1", { Action: OperationAction.START }),
       checkpoint2("step-2", { Action: OperationAction.START }),
@@ -1144,37 +1171,40 @@ describe("createCheckpointHandler", () => {
 
     await Promise.all(promises);
 
-    // Verify they were processed together using the first context
+    // With instance-based architecture, each context gets its own manager
     expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+    expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
 
-    // Verify the call used the first token (from mockContext)
-    const calls = mockState.checkpoint.mock.calls;
-    expect(calls[0][0]).toBe(TEST_CONSTANTS.CHECKPOINT_TOKEN);
-
-    // Verify both operations were included in the batch
-    const checkpointData = calls[0][1];
-    expect(checkpointData.Updates).toHaveLength(2);
+    // Each context processes its own operation
+    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
   });
 
   it("should use the same handler for equivalent execution context ids, but different objects", async () => {
-    deleteCheckpoint(); // Clean up singleton
+    // Create second mock state
+    mockState2 = {
+      checkpoint: jest.fn().mockResolvedValue(mockCheckpointResponse),
+    };
+
     // Setup second context
-    const mockContext2 = {
-      ...mockContext,
-    } satisfies ExecutionContext;
+    const mockContext2 = createMockExecutionContext({
+      durableExecutionArn: "test-durable-execution-arn-2",
+      state: mockState2,
+      terminationManager: mockTerminationManager,
+    });
 
     const checkpoint1 = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
     const checkpoint2 = createCheckpoint(
       mockContext2,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       createDefaultLogger(mockContext2),
-    );
+    ) as unknown as CheckpointFunction;
 
     // Execute checkpoints from both contexts
     const promises = [
@@ -1184,24 +1214,22 @@ describe("createCheckpointHandler", () => {
 
     await Promise.all(promises);
 
-    // Verify they were processed separately (one checkpoint calls)
+    // With instance-based architecture, each context gets its own manager
     expect(mockState.checkpoint).toHaveBeenCalledTimes(1);
+    expect(mockState2.checkpoint).toHaveBeenCalledTimes(1);
 
-    // Verify each call had the correct token
-    const calls = mockState.checkpoint.mock.calls;
-    expect(calls[0][1].Updates).toHaveLength(2);
-    expect(calls[0][1].Updates[0].Id).toBe(hashId("step-1"));
-    expect(calls[0][1].Updates[1].Id).toBe(hashId("step-2"));
+    // Each context processes its own operation
+    expect(mockState.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
+    expect(mockState2.checkpoint.mock.calls[0][1].Updates).toHaveLength(1);
   });
 
   it("should split large payloads into multiple API calls when exceeding 750KB limit", async () => {
-    deleteCheckpoint();
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Create large payload data that will exceed 750KB when combined
     const largeData = "x".repeat(400000); // 400KB per item
@@ -1230,13 +1258,12 @@ describe("createCheckpointHandler", () => {
   });
 
   it("should split large payloads into multiple API calls when exceeding 750KB limit for large unicode characters", async () => {
-    deleteCheckpoint();
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Create large payload data that will exceed 750KB when combined
     const largeData = "\u{FFFF}".repeat(200000); // Length is 200KB, but byte length is 600KB
@@ -1265,13 +1292,12 @@ describe("createCheckpointHandler", () => {
   });
 
   it("should process remaining items in queue after size limit is reached", async () => {
-    deleteCheckpoint();
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Create items where first is large enough to trigger size limit
     const largeData = "x".repeat(400000); // 400KB
@@ -1311,13 +1337,12 @@ describe("createCheckpointHandler", () => {
   });
 
   it("should update stepData from checkpoint response operations", async () => {
-    deleteCheckpoint();
     const checkpoint = createCheckpoint(
       mockContext,
       TEST_CONSTANTS.CHECKPOINT_TOKEN,
       mockEmitter,
       mockLogger,
-    );
+    ) as unknown as CheckpointFunction;
 
     // Mock checkpoint response with operations
     const mockOperations = [
@@ -1341,6 +1366,6 @@ describe("createCheckpointHandler", () => {
     // Verify stepData was updated with operations from response
     expect(mockContext._stepData[hashId("test-step")]).toEqual(
       mockOperations[0],
-    );
+    ) as unknown as CheckpointFunction;
   });
 });

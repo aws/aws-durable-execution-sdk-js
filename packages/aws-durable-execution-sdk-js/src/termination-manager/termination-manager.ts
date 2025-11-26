@@ -18,29 +18,34 @@ import {
   TerminationResponse,
   TerminationReason,
 } from "./types";
-import { setCheckpointTerminating } from "../utils/checkpoint/checkpoint";
 
 export class TerminationManager extends EventEmitter {
   private isTerminated = false;
   private terminationDetails?: TerminationDetails;
   private resolveTermination?: (result: TerminationResponse) => void;
   private terminationPromise: Promise<TerminationResponse>;
+  private setCheckpointTerminating?: () => void;
 
-  constructor() {
+  constructor(setCheckpointTerminating?: () => void) {
     super();
+    this.setCheckpointTerminating = setCheckpointTerminating;
     // Create the promise immediately during construction
     this.terminationPromise = new Promise((resolve) => {
       this.resolveTermination = resolve;
     });
   }
 
+  setCheckpointTerminatingCallback(callback: () => void): void {
+    this.setCheckpointTerminating = callback;
+  }
+
   terminate(options: TerminationOptions = {}): void {
     if (this.isTerminated) return;
 
-    this.isTerminated = true;
-
     // Set checkpoint termination flag before any other termination logic
-    setCheckpointTerminating();
+    this.setCheckpointTerminating?.();
+
+    this.isTerminated = true;
 
     this.terminationDetails = {
       reason: options.reason ?? TerminationReason.OPERATION_TERMINATED,

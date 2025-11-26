@@ -27,12 +27,12 @@ describe("Step Handler Two-Phase Execution", () => {
       },
     } as any;
 
-    mockCheckpoint = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.force = jest.fn().mockResolvedValue(undefined);
-    mockCheckpoint.setTerminating = jest.fn();
-    mockCheckpoint.hasPendingAncestorCompletion = jest
-      .fn()
-      .mockReturnValue(false);
+    mockCheckpoint = {
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      force: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+    };
 
     mockParentContext = {
       getRemainingTimeInMillis: jest.fn().mockReturnValue(30000),
@@ -71,7 +71,7 @@ describe("Step Handler Two-Phase Execution", () => {
 
     // Phase 1 should have executed the step function (before we await the promise)
     expect(stepFn).toHaveBeenCalled();
-    expect(mockCheckpoint).toHaveBeenCalled();
+    expect(mockCheckpoint.checkpoint).toHaveBeenCalled();
 
     // Now await the promise to verify it completes
     await stepPromise;

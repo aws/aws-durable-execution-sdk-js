@@ -83,5 +83,6 @@ export interface ExecutionContext {
   activeOperationsTracker?: ActiveOperationsTracker;
   requestId: string;
   tenantId: string | undefined;
+  pendingCompletions: Set<string>; // Track stepIds with pending SUCCEED/FAIL
   getStepData(stepId: string): Operation | undefined;
 }

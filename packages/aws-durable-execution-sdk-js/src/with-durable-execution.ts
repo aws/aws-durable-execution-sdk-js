@@ -1,15 +1,12 @@
 import { OperationType } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
-import { createDurableContext } from "./context/durable-context/durable-context";
 import { EventEmitter } from "events";
+import { createDurableContext } from "./context/durable-context/durable-context";
+import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
-import {
-  createCheckpoint,
-  deleteCheckpoint,
-} from "./utils/checkpoint/checkpoint";
 import { TerminationReason } from "./termination-manager/types";
 
 import {
@@ -46,8 +43,30 @@ async function runHandler<
   checkpointToken: string,
   handler: DurableHandler<Input, Output, Logger>,
 ): Promise<DurableExecutionInvocationOutput> {
-  // Clear any existing checkpoint handler from previous invocations (warm Lambda)
-  deleteCheckpoint();
+  // Create checkpoint manager and step data emitter
+  const stepDataEmitter = new EventEmitter();
+  const checkpointManager = new CheckpointManager(
+    executionContext.durableExecutionArn,
+    executionContext._stepData,
+    executionContext.state,
+    executionContext.terminationManager,
+    executionContext.activeOperationsTracker,
+    checkpointToken,
+    stepDataEmitter,
+    createDefaultLogger(executionContext),
+    executionContext.pendingCompletions,
+  );
+
+  // Set the checkpoint terminating callback on the termination manager
+  executionContext.terminationManager.setCheckpointTerminatingCallback(() => {
+    checkpointManager.setTerminating();
+  });
+
+  const durableExecution = {
+    checkpointManager,
+    stepDataEmitter,
+    setTerminating: (): void => checkpointManager.setTerminating(),
+  };
 
   const durableContext = createDurableContext<Logger>(
     executionContext,
@@ -56,7 +75,7 @@ async function runHandler<
     // Default logger may not have the same type as Logger, but we should always provide a default logger even if the user overrides it
     createDefaultLogger() as Logger,
     undefined,
-    checkpointToken,
+    durableExecution,
   );
 
   // Extract customerHandlerEvent from the original event
@@ -86,6 +105,8 @@ async function runHandler<
       .then((result) => {
         terminationPromiseResolved = true;
         log("💥", "Termination promise resolved first!");
+        // Set checkpoint manager as terminating when termination starts
+        durableExecution.setTerminating();
         return ["termination", result] as const;
       });
 
@@ -161,18 +182,11 @@ async function runHandler<
         `Response size (${serializedSize} bytes) exceeds Lambda limit (${LAMBDA_RESPONSE_SIZE_LIMIT} bytes). Checkpointing result.`,
       );
 
-      // Create a checkpoint handler to save the large result
-      const stepDataEmitter = new EventEmitter();
-      const checkpoint = createCheckpoint(
-        executionContext,
-        checkpointToken,
-        stepDataEmitter,
-        createDefaultLogger(executionContext),
-      );
+      // Create a checkpoint to save the large result
       const stepId = `execution-result-${Date.now()}`;
 
       try {
-        await checkpoint(stepId, {
+        await durableExecution.checkpointManager.checkpoint(stepId, {
           Id: stepId,
           Action: "SUCCEED",
           Type: OperationType.EXECUTION,

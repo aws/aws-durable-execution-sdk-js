@@ -1,4 +1,5 @@
 import { Context } from "aws-lambda";
+import { EventEmitter } from "events";
 import {
   Operation,
   CheckpointDurableExecutionResponse,
@@ -6,9 +7,11 @@ import {
 import {
   createDurableContext,
   DurableContextImpl,
+  DurableExecution,
 } from "../context/durable-context/durable-context";
 import { ExecutionState } from "../storage/storage";
 import { TerminationManager } from "../termination-manager/termination-manager";
+import { Checkpoint } from "../utils/checkpoint/checkpoint-helper";
 import {
   ExecutionContext,
   DurableExecutionMode,
@@ -73,11 +76,13 @@ export function createTestDurableContext(options?: {
     terminationManager: new TerminationManager(),
     durableExecutionArn:
       "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
+    pendingCompletions: new Set<string>(),
     getStepData(stepId: string): Operation | undefined {
       return getStepDataUtil(stepData, stepId);
     },
     requestId: "mock-request-id",
     tenantId: undefined,
+    activeOperationsTracker: undefined,
   };
 
   const mockLambdaContext: Context = {
@@ -96,13 +101,28 @@ export function createTestDurableContext(options?: {
     ...options?.lambdaContext,
   };
 
+  // Create a mock DurableExecution with mock checkpoint for tests
+  const mockCheckpoint: Checkpoint = {
+    checkpoint: jest.fn().mockResolvedValue(undefined),
+    forceCheckpoint: jest.fn().mockResolvedValue(undefined),
+    force: jest.fn().mockResolvedValue(undefined),
+    setTerminating: jest.fn(),
+    hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+  };
+
+  const mockDurableExecution = {
+    checkpointManager: mockCheckpoint,
+    stepDataEmitter: new EventEmitter(),
+    setTerminating: jest.fn(),
+  };
+
   const context = createDurableContext<DurableLogger>(
     executionContext,
     mockLambdaContext,
     options?.durableExecutionMode || DurableExecutionMode.ExecutionMode,
     createDefaultLogger(),
     options?.stepPrefix,
-    "test-checkpoint-token",
+    mockDurableExecution as unknown as DurableExecution, // Cast to avoid type issues with mock
   );
 
   return { context, storage, executionContext };

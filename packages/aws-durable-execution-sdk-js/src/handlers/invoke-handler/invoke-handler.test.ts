@@ -9,7 +9,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { EventEmitter } from "events";
 
 // Mock dependencies
-jest.mock("../../utils/checkpoint/checkpoint");
+jest.mock("../../utils/checkpoint/checkpoint-manager");
 jest.mock("../../utils/termination-helper/termination-helper");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -48,8 +48,10 @@ describe("InvokeHandler", () => {
     mockHasRunningOperations = jest.fn().mockReturnValue(false);
 
     // Create a proper checkpoint mock with force method
-    mockCheckpointFn = jest.fn().mockResolvedValue(undefined);
-    mockCheckpointFn.force = jest.fn().mockResolvedValue(undefined);
+    mockCheckpointFn = {
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      force: jest.fn().mockResolvedValue(undefined),
+    };
 
     mockContext = {
       state: {
@@ -101,7 +103,7 @@ describe("InvokeHandler", () => {
       const result = await invokeHandler("test-function", { test: "data" });
 
       expect(result).toEqual({ result: "success" });
-      expect(mockCheckpointFn).not.toHaveBeenCalled();
+      expect(mockCheckpointFn.checkpoint).not.toHaveBeenCalled();
       expect(mockSafeDeserialize).toHaveBeenCalledWith(
         expect.anything(),
         '{"result":"success"}',
@@ -341,7 +343,7 @@ describe("InvokeHandler", () => {
         "test-arn",
       );
 
-      expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
+      expect(mockCheckpointFn.checkpoint).toHaveBeenCalledWith("test-step-1", {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
@@ -382,7 +384,7 @@ describe("InvokeHandler", () => {
         invokeHandler("my-invoke", "test-function", { test: "data" }),
       ).rejects.toThrow("Execution terminated");
 
-      expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
+      expect(mockCheckpointFn.checkpoint).toHaveBeenCalledWith("test-step-1", {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
@@ -425,7 +427,7 @@ describe("InvokeHandler", () => {
         invokeHandler("test-function", { test: "data" }, config),
       ).rejects.toThrow("Execution terminated");
 
-      expect(mockCheckpointFn).toHaveBeenCalledWith("test-step-1", {
+      expect(mockCheckpointFn.checkpoint).toHaveBeenCalledWith("test-step-1", {
         Id: "test-step-1",
         ParentId: "parent-123",
         Action: OperationAction.START,
