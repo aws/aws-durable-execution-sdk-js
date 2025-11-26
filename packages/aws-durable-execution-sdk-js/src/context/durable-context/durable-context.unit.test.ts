@@ -590,6 +590,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         originalLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       // Mock context to allow logging
@@ -949,6 +951,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ReplayMode, // Even in replay mode
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       // Disable mode-aware logging
@@ -1011,6 +1015,8 @@ describe("DurableContext", () => {
           mockContext,
           contextMode,
           mockLogger,
+          undefined,
+          mockDurableExecution,
         );
 
         mockGetActiveContext.mockReturnValue(activeContext);
@@ -1050,6 +1056,8 @@ describe("DurableContext", () => {
           mockContext,
           contextMode,
           mockLogger,
+          undefined,
+          mockDurableExecution,
         );
 
         mockGetActiveContext.mockReturnValue(activeContext);
@@ -1083,6 +1091,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLoggerWithLog,
+        undefined,
+        mockDurableExecution,
       );
       expect(contextWithLog.logger.log).toBeDefined();
       expect(typeof contextWithLog.logger.log).toBe("function");
@@ -1093,6 +1103,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ExecutionMode,
         mockLoggerWithoutLog,
+        undefined,
+        mockDurableExecution,
       );
       expect(contextWithoutLog.logger.log).toBeUndefined();
 
@@ -1120,6 +1132,8 @@ describe("DurableContext", () => {
         mockContext,
         DurableExecutionMode.ReplayMode,
         mockLogger,
+        undefined,
+        mockDurableExecution,
       );
 
       // Mock context that would normally suppress logging
