@@ -148,7 +148,6 @@ describe("Default Logger", () => {
         };
 
         logger.configureDurableLoggingContext?.({
-          shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
 
@@ -177,7 +176,6 @@ describe("Default Logger", () => {
         };
 
         logger.configureDurableLoggingContext?.({
-          shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
 
@@ -206,7 +204,6 @@ describe("Default Logger", () => {
         };
 
         logger.configureDurableLoggingContext?.({
-          shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
 
@@ -387,7 +384,6 @@ describe("Default Logger", () => {
         };
 
         logger.configureDurableLoggingContext?.({
-          shouldLog: () => true,
           getDurableLogData: () => mockDurableLogData,
         });
 
@@ -553,23 +549,6 @@ describe("Default Logger", () => {
 
         expect(mockConsole.debug).toHaveBeenCalled();
       });
-
-      it("should respect shouldLog() from DurableLoggingContext", () => {
-        const logger = createDefaultLogger();
-        const mockDurableLogData: DurableLogData = {
-          requestId: "mock-request-id",
-          executionArn: "test-arn",
-        };
-
-        logger.configureDurableLoggingContext?.({
-          shouldLog: () => false, // Should not log
-          getDurableLogData: () => mockDurableLogData,
-        });
-
-        logger.info("test message");
-
-        expect(mockConsole.info).not.toHaveBeenCalled();
-      });
     });
 
     describe("individual logging methods output format", () => {
@@ -657,7 +636,6 @@ describe("Default Logger", () => {
         logger.configureDurableLoggingContext?.(mockContext);
         logger.info("test message");
 
-        expect(mockContext.shouldLog).toHaveBeenCalled();
         expect(mockContext.getDurableLogData).toHaveBeenCalled();
         expect(mockConsole.info).toHaveBeenCalledWith(
           JSON.stringify({

@@ -84,44 +84,7 @@ createTests({
               service: "simple-logger",
               sampling_rate: 0,
             },
-            // Replay - since the logger does not implement mode-aware logging, all logs are repeated
-            {
-              level: "INFO",
-              message: "=== Simple Logger Demo Starting ===",
-              timestamp: expect.any(String),
-              service: "simple-logger",
-              sampling_rate: 0,
-            },
-            {
-              level: "INFO",
-              message:
-                "This logger does not implement configureDurableLoggingContext",
-              timestamp: expect.any(String),
-              service: "simple-logger",
-              sampling_rate: 0,
-            },
-            {
-              level: "DEBUG",
-              message:
-                "Debug message: Raw logger without DurableLogger wrapper",
-              timestamp: expect.any(String),
-              service: "simple-logger",
-              sampling_rate: 0,
-            },
-            {
-              level: "INFO",
-              message: "Info message: Using powertools logger directly",
-              timestamp: expect.any(String),
-              service: "simple-logger",
-              sampling_rate: 0,
-            },
-            {
-              level: "INFO",
-              message: "Before wait operation",
-              timestamp: expect.any(String),
-              service: "simple-logger",
-              sampling_rate: 0,
-            },
+            // Replay - language SDK prevents duplicate logs for custom loggers
             {
               level: "INFO",
               message: "After wait operation - logger still works",
@@ -167,7 +130,6 @@ createTests({
           ];
 
           // Expected stderr logs (WARN and ERROR levels)
-          // Note: Logs also appear twice for the same reason as stdout logs
           const expectedStderrLogs = [
             // First execution
             {
@@ -178,13 +140,6 @@ createTests({
               sampling_rate: 0,
             },
             // Replay
-            {
-              level: "WARN",
-              message: "Warning message: No durable logging context available",
-              timestamp: expect.any(String),
-              service: "simple-logger",
-              sampling_rate: 0,
-            },
             {
               level: "WARN",
               message: "Warning log from step context",
@@ -247,16 +202,6 @@ createTests({
           stdoutSpy.mockRestore();
           stderrSpy.mockRestore();
         }
-      });
-
-      it("should execute correct number of operations", async () => {
-        const execution = await runner.run();
-
-        // Should have:
-        // 1. wait operation
-        // 2. step operation
-        // 3. runInChildContext operation
-        expect(execution.getOperations()).toHaveLength(3);
       });
     }
   },

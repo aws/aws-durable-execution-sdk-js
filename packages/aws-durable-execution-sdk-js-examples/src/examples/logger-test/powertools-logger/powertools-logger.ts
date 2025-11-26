@@ -26,14 +26,16 @@ const logger = new Logger({
 
 function getLogMessage(
   message: LogItemMessage,
-  obj: DurableLogData,
+  obj?: DurableLogData,
 ): LogItemMessage {
-  const durableData = {
-    execution_arn: obj.executionArn,
-    request_id: obj.requestId,
-    attempt: obj.attempt,
-    operation_id: obj.operationId,
-  };
+  const durableData = obj
+    ? {
+        execution_arn: obj.executionArn,
+        request_id: obj.requestId,
+        attempt: obj.attempt,
+        operation_id: obj.operationId,
+      }
+    : {};
   if (typeof message === "string") {
     return {
       message,
@@ -57,39 +59,31 @@ class DurablePowertoolsLogger implements DurableLogger {
   }
 
   info(input: LogItemMessage, ...extraInput: LogItemExtraInput): void {
-    if (this.durableLoggingContext?.shouldLog()) {
-      this.powertoolsLogger.info(
-        getLogMessage(input, this.durableLoggingContext.getDurableLogData()),
-        ...extraInput,
-      );
-    }
+    this.powertoolsLogger.info(
+      getLogMessage(input, this.durableLoggingContext?.getDurableLogData()),
+      ...extraInput,
+    );
   }
 
   warn(input: LogItemMessage, ...extraInput: LogItemExtraInput): void {
-    if (this.durableLoggingContext?.shouldLog()) {
-      this.powertoolsLogger.warn(
-        getLogMessage(input, this.durableLoggingContext.getDurableLogData()),
-        ...extraInput,
-      );
-    }
+    this.powertoolsLogger.warn(
+      getLogMessage(input, this.durableLoggingContext?.getDurableLogData()),
+      ...extraInput,
+    );
   }
 
   error(input: LogItemMessage, ...extraInput: LogItemExtraInput): void {
-    if (this.durableLoggingContext?.shouldLog()) {
-      this.powertoolsLogger.error(
-        getLogMessage(input, this.durableLoggingContext.getDurableLogData()),
-        ...extraInput,
-      );
-    }
+    this.powertoolsLogger.error(
+      getLogMessage(input, this.durableLoggingContext?.getDurableLogData()),
+      ...extraInput,
+    );
   }
 
   debug(input: LogItemMessage, ...extraInput: LogItemExtraInput): void {
-    if (this.durableLoggingContext?.shouldLog()) {
-      this.powertoolsLogger.debug(
-        getLogMessage(input, this.durableLoggingContext.getDurableLogData()),
-        ...extraInput,
-      );
-    }
+    this.powertoolsLogger.debug(
+      getLogMessage(input, this.durableLoggingContext?.getDurableLogData()),
+      ...extraInput,
+    );
   }
 }
 

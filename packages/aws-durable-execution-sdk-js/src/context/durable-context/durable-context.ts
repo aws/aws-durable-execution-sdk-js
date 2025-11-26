@@ -49,6 +49,7 @@ import {
   validateContextUsage,
 } from "../../utils/context-tracker/context-tracker";
 import {
+  DurableContextLogger,
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";
@@ -65,7 +66,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
 {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
-  private contextLogger: Logger;
+  private durableLogger: Logger;
   private modeAwareLoggingEnabled: boolean = true;
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
@@ -74,6 +75,8 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private _parentId?: string;
   private modeManagement: ModeManagement;
   private durableExecution: DurableExecution;
+
+  public logger: DurableContextLogger<Logger>;
 
   constructor(
     private executionContext: ExecutionContext,
@@ -87,10 +90,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
     this.durableExecution = durableExecution;
-    this.contextLogger = inheritedLogger;
-    this.contextLogger.configureDurableLoggingContext?.(
+    this.durableLogger = inheritedLogger;
+    this.durableLogger.configureDurableLoggingContext?.(
       this.getDurableLoggingContext(),
     );
+    this.logger = this.createModeAwareLogger(inheritedLogger);
 
     this.durableExecutionMode = durableExecutionMode;
 
@@ -109,24 +113,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
   getDurableLoggingContext(): DurableLoggingContext {
     return {
-      shouldLog: (): boolean => {
-        const activeContext = getActiveContext();
-
-        if (!this.modeAwareLoggingEnabled || !activeContext) {
-          return true;
-        }
-
-        if (activeContext.contextId === "root") {
-          return (
-            this.durableExecutionMode === DurableExecutionMode.ExecutionMode
-          );
-        }
-
-        return (
-          activeContext.durableExecutionMode ===
-          DurableExecutionMode.ExecutionMode
-        );
-      },
       getDurableLogData: (): DurableLogData => {
         const activeContext = getActiveContext();
 
@@ -149,8 +135,55 @@ export class DurableContextImpl<Logger extends DurableLogger>
     };
   }
 
-  get logger(): Logger {
-    return this.contextLogger;
+  private shouldLog(): boolean {
+    const activeContext = getActiveContext();
+
+    if (!this.modeAwareLoggingEnabled || !activeContext) {
+      return true;
+    }
+
+    if (activeContext.contextId === "root") {
+      return this.durableExecutionMode === DurableExecutionMode.ExecutionMode;
+    }
+
+    return (
+      activeContext.durableExecutionMode === DurableExecutionMode.ExecutionMode
+    );
+  }
+
+  private createModeAwareLogger(logger: Logger): DurableContextLogger<Logger> {
+    const durableContextLogger: DurableContextLogger<Logger> = {
+      warn: (...args) => {
+        if (this.shouldLog()) {
+          return logger.warn(...args);
+        }
+      },
+      debug: (...args) => {
+        if (this.shouldLog()) {
+          return logger.debug(...args);
+        }
+      },
+      info: (...args) => {
+        if (this.shouldLog()) {
+          return logger.info(...args);
+        }
+      },
+      error: (...args) => {
+        if (this.shouldLog()) {
+          return logger.error(...args);
+        }
+      },
+    };
+
+    if ("log" in logger) {
+      durableContextLogger.log = (level, ...args): void => {
+        if (this.shouldLog()) {
+          return logger.log?.(level, ...args);
+        }
+      };
+    }
+
+    return durableContextLogger;
   }
 
   private createStepId(): string {
@@ -262,7 +295,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.checkpoint,
         this.lambdaContext,
         this.createStepId.bind(this),
-        this.contextLogger,
+        this.durableLogger,
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
@@ -322,7 +355,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.checkpoint,
         this.lambdaContext,
         this.createStepId.bind(this),
-        () => this.contextLogger,
+        () => this.durableLogger,
         // Adapter function to maintain compatibility
         (
           executionContext,
@@ -390,10 +423,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
    */
   configureLogger(config: LoggerConfig<Logger>): void {
     if (config.customLogger !== undefined) {
-      this.contextLogger = config.customLogger;
-      this.contextLogger.configureDurableLoggingContext?.(
+      this.durableLogger = config.customLogger;
+      this.durableLogger.configureDurableLoggingContext?.(
         this.getDurableLoggingContext(),
       );
+      this.logger = this.createModeAwareLogger(this.durableLogger);
     }
     if (config.modeAware !== undefined) {
       this.modeAwareLoggingEnabled = config.modeAware;
@@ -466,7 +500,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
-        this.contextLogger,
+        this.durableLogger,
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),

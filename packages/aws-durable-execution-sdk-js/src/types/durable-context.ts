@@ -23,7 +23,7 @@ import {
   BatchResult,
 } from "./batch";
 import { DurablePromise } from "./durable-promise";
-import { DurableLogger } from "./durable-logger";
+import { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   /**
@@ -71,7 +71,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * context.configureLogger({ customLogger: powertoolsLogger });
    * ```
    */
-  logger: Logger;
+  logger: DurableContextLogger<Logger>;
 
   /**
    * Executes a function as a durable step with automatic retry and state persistence

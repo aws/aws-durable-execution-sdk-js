@@ -18,11 +18,11 @@ export class FileLogger implements DurableLogger {
     message?: unknown,
     ...optionalParams: unknown[]
   ): void {
-    if (this.durableLoggingContext && !this.durableLoggingContext.shouldLog()) {
+    if (!this.durableLoggingContext) {
       return;
     }
 
-    const logData = this.durableLoggingContext?.getDurableLogData();
+    const logData = this.durableLoggingContext.getDurableLogData();
     const params =
       message !== undefined ? [message, ...optionalParams] : optionalParams;
 

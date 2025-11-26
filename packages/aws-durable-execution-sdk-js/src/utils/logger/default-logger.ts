@@ -203,19 +203,15 @@ export class DefaultLogger implements DurableLogger {
         ...optionalParams: DurableLogField[]
       ): void => {
         const loggingContext = this.ensureDurableLoggingContext();
-        if (loggingContext.shouldLog()) {
-          const params =
-            message !== undefined
-              ? [message, ...optionalParams]
-              : optionalParams;
-          this.consoleLogger.debug(
-            formatDurableLogData(
-              DurableLogLevel.DEBUG,
-              loggingContext.getDurableLogData(),
-              ...params,
-            ),
-          );
-        }
+        const params =
+          message !== undefined ? [message, ...optionalParams] : optionalParams;
+        this.consoleLogger.debug(
+          formatDurableLogData(
+            DurableLogLevel.DEBUG,
+            loggingContext.getDurableLogData(),
+            ...params,
+          ),
+        );
       };
     }
 
@@ -225,19 +221,15 @@ export class DefaultLogger implements DurableLogger {
         ...optionalParams: DurableLogField[]
       ): void => {
         const loggingContext = this.ensureDurableLoggingContext();
-        if (loggingContext.shouldLog()) {
-          const params =
-            message !== undefined
-              ? [message, ...optionalParams]
-              : optionalParams;
-          this.consoleLogger.info(
-            formatDurableLogData(
-              DurableLogLevel.INFO,
-              loggingContext.getDurableLogData(),
-              ...params,
-            ),
-          );
-        }
+        const params =
+          message !== undefined ? [message, ...optionalParams] : optionalParams;
+        this.consoleLogger.info(
+          formatDurableLogData(
+            DurableLogLevel.INFO,
+            loggingContext.getDurableLogData(),
+            ...params,
+          ),
+        );
       };
     }
 
@@ -247,19 +239,15 @@ export class DefaultLogger implements DurableLogger {
         ...optionalParams: DurableLogField[]
       ): void => {
         const loggingContext = this.ensureDurableLoggingContext();
-        if (loggingContext.shouldLog()) {
-          const params =
-            message !== undefined
-              ? [message, ...optionalParams]
-              : optionalParams;
-          this.consoleLogger.warn(
-            formatDurableLogData(
-              DurableLogLevel.WARN,
-              loggingContext.getDurableLogData(),
-              ...params,
-            ),
-          );
-        }
+        const params =
+          message !== undefined ? [message, ...optionalParams] : optionalParams;
+        this.consoleLogger.warn(
+          formatDurableLogData(
+            DurableLogLevel.WARN,
+            loggingContext.getDurableLogData(),
+            ...params,
+          ),
+        );
       };
     }
 
@@ -269,19 +257,15 @@ export class DefaultLogger implements DurableLogger {
         ...optionalParams: DurableLogField[]
       ): void => {
         const loggingContext = this.ensureDurableLoggingContext();
-        if (loggingContext.shouldLog()) {
-          const params =
-            message !== undefined
-              ? [message, ...optionalParams]
-              : optionalParams;
-          this.consoleLogger.error(
-            formatDurableLogData(
-              DurableLogLevel.ERROR,
-              loggingContext.getDurableLogData(),
-              ...params,
-            ),
-          );
-        }
+        const params =
+          message !== undefined ? [message, ...optionalParams] : optionalParams;
+        this.consoleLogger.error(
+          formatDurableLogData(
+            DurableLogLevel.ERROR,
+            loggingContext.getDurableLogData(),
+            ...params,
+          ),
+        );
       };
     }
   }
@@ -304,7 +288,6 @@ export class DefaultLogger implements DurableLogger {
     }
 
     return {
-      shouldLog: () => true,
       getDurableLogData: (): DurableLogData => {
         return {
           requestId: context.requestId,

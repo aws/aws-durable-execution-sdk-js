@@ -1,7 +1,6 @@
 export * from "./core";
 export * from "./logger";
 export * from "./durable-logger";
-export * from "./durable-logger";
 export * from "./step";
 export * from "./child-context";
 export * from "./callback";

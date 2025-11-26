@@ -2,7 +2,6 @@
 import { DurableLogData, DurableLogLevel } from "./logger";
 
 export interface DurableLoggingContext {
-  shouldLog: () => boolean;
   getDurableLogData: () => DurableLogData;
 }
 
@@ -58,3 +57,8 @@ export interface DurableLogger {
     durableLoggingContext: DurableLoggingContext,
   ): void;
 }
+
+export type DurableContextLogger<Logger extends DurableLogger> = Pick<
+  Logger,
+  "log" | "warn" | "info" | "error" | "debug"
+>;

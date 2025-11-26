@@ -6,6 +6,7 @@ import { OperationStatus } from "@aws-sdk/client-lambda";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { DurableLogger } from "../../types/durable-logger";
+import * as contextTracker from "../../utils/context-tracker/context-tracker";
 
 jest.mock("../../utils/checkpoint/checkpoint-manager");
 jest.mock("../../handlers/step-handler/step-handler");
@@ -24,6 +25,7 @@ jest.mock("../../handlers/parallel-handler/parallel-handler");
 jest.mock(
   "../../handlers/concurrent-execution-handler/concurrent-execution-handler",
 );
+jest.mock("../../utils/context-tracker/context-tracker");
 
 describe("DurableContext", () => {
   let mockContext: Context;
@@ -564,6 +566,61 @@ describe("DurableContext", () => {
       expect(() => context.configureLogger({ customLogger })).not.toThrow();
     });
 
+    it("should reassign this.logger and use new custom logger after configureLogger", () => {
+      const originalLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+      };
+
+      const newCustomLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        configureDurableLoggingContext: jest.fn(),
+      };
+
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        originalLogger,
+      );
+
+      // Mock context to allow logging
+      const mockGetActiveContext =
+        contextTracker.getActiveContext as jest.MockedFunction<
+          typeof contextTracker.getActiveContext
+        >;
+      mockGetActiveContext.mockReturnValue(undefined);
+
+      // Initially should use original logger
+      context.logger.info("original message");
+      expect(originalLogger.info).toHaveBeenCalledWith("original message");
+      expect(newCustomLogger.info).not.toHaveBeenCalled();
+
+      // Configure with new custom logger
+      jest.clearAllMocks();
+      context.configureLogger({ customLogger: newCustomLogger });
+
+      // Now should use the new custom logger
+      context.logger.info("new message");
+      expect(newCustomLogger.info).toHaveBeenCalledWith("new message");
+      expect(originalLogger.info).not.toHaveBeenCalled();
+
+      // Verify configureDurableLoggingContext was called
+      expect(
+        newCustomLogger.configureDurableLoggingContext,
+      ).toHaveBeenCalledWith({
+        getDurableLogData: expect.any(Function),
+      });
+    });
+
     it("should work with custom logger without configureDurableLoggingContext", () => {
       const executionContext = createMockExecutionContext();
       const context = createDurableContext(
@@ -587,7 +644,26 @@ describe("DurableContext", () => {
       expect(() =>
         context.configureLogger({ customLogger: customLoggerWithoutConfigure }),
       ).not.toThrow();
-      expect(context.logger).toBe(customLoggerWithoutConfigure);
+      expect(context.logger).toStrictEqual({
+        log: expect.any(Function),
+        info: expect.any(Function),
+        warn: expect.any(Function),
+        error: expect.any(Function),
+        debug: expect.any(Function),
+      });
+
+      // Test that logger functions work and call underlying logger when modeAware is enabled (default)
+      // Mock getActiveContext to return undefined (should allow logging)
+      const mockGetActiveContext =
+        contextTracker.getActiveContext as jest.MockedFunction<
+          typeof contextTracker.getActiveContext
+        >;
+      mockGetActiveContext.mockReturnValue(undefined);
+
+      context.logger.info("test message");
+      expect(customLoggerWithoutConfigure.info).toHaveBeenCalledWith(
+        "test message",
+      );
     });
 
     it("should call configureDurableLoggingContext when available during logger configuration", () => {
@@ -613,12 +689,9 @@ describe("DurableContext", () => {
 
       context.configureLogger({ customLogger });
 
-      expect(configureMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          shouldLog: expect.any(Function),
-          getDurableLogData: expect.any(Function),
-        }),
-      );
+      expect(configureMock).toHaveBeenCalledWith({
+        getDurableLogData: expect.any(Function),
+      });
     });
   });
 
@@ -647,12 +720,9 @@ describe("DurableContext", () => {
         ),
       ).not.toThrow();
 
-      expect(configureMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          shouldLog: expect.any(Function),
-          getDurableLogData: expect.any(Function),
-        }),
-      );
+      expect(configureMock).toHaveBeenCalledWith({
+        getDurableLogData: expect.any(Function),
+      });
     });
 
     it("should create context with logger without configureDurableLoggingContext", () => {
@@ -687,7 +757,31 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      expect(context.logger).toBe(loggerWithoutConfigure);
+      expect(context.logger).toStrictEqual({
+        log: expect.any(Function),
+        info: expect.any(Function),
+        warn: expect.any(Function),
+        error: expect.any(Function),
+        debug: expect.any(Function),
+      });
+
+      // Test that all context.logger functions call the underlying logger
+      context.logger.info("test info");
+      context.logger.warn("test warn");
+      context.logger.error("test error");
+      context.logger.debug("test debug");
+      if (context.logger.log) {
+        context.logger.log("INFO", "test log");
+      }
+
+      expect(loggerWithoutConfigure.info).toHaveBeenCalledWith("test info");
+      expect(loggerWithoutConfigure.warn).toHaveBeenCalledWith("test warn");
+      expect(loggerWithoutConfigure.error).toHaveBeenCalledWith("test error");
+      expect(loggerWithoutConfigure.debug).toHaveBeenCalledWith("test debug");
+      expect(loggerWithoutConfigure.log).toHaveBeenCalledWith(
+        "INFO",
+        "test log",
+      );
     });
 
     it("should not call configureDurableLoggingContext when configuring logger with modeAware only", () => {
@@ -823,6 +917,236 @@ describe("DurableContext", () => {
       const emitter = capturedGetOperationsEmitter!();
       expect(emitter).toBeDefined();
       expect(typeof emitter.emit).toBe("function");
+    });
+  });
+
+  describe("mode-aware logging (shouldLog & createModeAwareLogger)", () => {
+    let mockGetActiveContext: jest.MockedFunction<
+      typeof contextTracker.getActiveContext
+    >;
+    let mockLogger: DurableLogger;
+
+    beforeEach(() => {
+      mockGetActiveContext =
+        contextTracker.getActiveContext as jest.MockedFunction<
+          typeof contextTracker.getActiveContext
+        >;
+      mockGetActiveContext.mockClear();
+
+      mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+      };
+    });
+
+    it("should always log when modeAware is disabled", () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ReplayMode, // Even in replay mode
+        mockLogger,
+      );
+
+      // Disable mode-aware logging
+      context.configureLogger({ modeAware: false });
+
+      // Mock active context in replay mode (normally would suppress logging)
+      mockGetActiveContext.mockReturnValue({
+        contextId: "step-1",
+        durableExecutionMode: DurableExecutionMode.ReplayMode,
+        attempt: 1,
+      });
+
+      // All logging should work regardless of mode
+      context.logger.info("test message");
+      context.logger.warn("test warning");
+      context.logger.error("test error");
+      context.logger.debug("test debug");
+      context.logger.log!("INFO", "test log");
+
+      expect(mockLogger.info).toHaveBeenCalledWith("test message");
+      expect(mockLogger.warn).toHaveBeenCalledWith("test warning");
+      expect(mockLogger.error).toHaveBeenCalledWith("test error");
+      expect(mockLogger.debug).toHaveBeenCalledWith("test debug");
+      expect(mockLogger.log).toHaveBeenCalledWith("INFO", "test log");
+    });
+
+    it.each([
+      {
+        scenario: "no active context",
+        activeContext: undefined,
+        contextMode: DurableExecutionMode.ExecutionMode,
+        message: "no context",
+      },
+      {
+        scenario: "root context with ExecutionMode",
+        activeContext: {
+          contextId: "root",
+          durableExecutionMode: DurableExecutionMode.ReplayMode,
+          attempt: 1,
+        },
+        contextMode: DurableExecutionMode.ExecutionMode,
+        message: "root execution",
+      },
+      {
+        scenario: "child context in ExecutionMode",
+        activeContext: {
+          contextId: "step-1",
+          durableExecutionMode: DurableExecutionMode.ExecutionMode,
+          attempt: 1,
+        },
+        contextMode: DurableExecutionMode.ExecutionMode,
+        message: "child execution",
+      },
+    ])(
+      "should log when $scenario",
+      ({ activeContext, contextMode, message }) => {
+        const executionContext = createMockExecutionContext();
+        const context = createDurableContext(
+          executionContext,
+          mockContext,
+          contextMode,
+          mockLogger,
+        );
+
+        mockGetActiveContext.mockReturnValue(activeContext);
+        context.logger.info(message);
+
+        expect(mockLogger.info).toHaveBeenCalledWith(message);
+      },
+    );
+
+    it.each([
+      {
+        scenario: "root context in ReplayMode",
+        activeContext: {
+          contextId: "root",
+          durableExecutionMode: DurableExecutionMode.ReplayMode,
+          attempt: 1,
+        },
+        contextMode: DurableExecutionMode.ReplayMode,
+        message: "root replay",
+      },
+      {
+        scenario: "child context in ReplayMode",
+        activeContext: {
+          contextId: "step-1",
+          durableExecutionMode: DurableExecutionMode.ReplayMode,
+          attempt: 1,
+        },
+        contextMode: DurableExecutionMode.ReplayMode,
+        message: "child replay",
+      },
+    ])(
+      "should suppress logging when $scenario",
+      ({ activeContext, contextMode, message }) => {
+        const executionContext = createMockExecutionContext();
+        const context = createDurableContext(
+          executionContext,
+          mockContext,
+          contextMode,
+          mockLogger,
+        );
+
+        mockGetActiveContext.mockReturnValue(activeContext);
+        context.logger.info(message);
+        expect(mockLogger.info).not.toHaveBeenCalled();
+      },
+    );
+
+    it("should create mode-aware logger with conditional log method based on underlying logger", () => {
+      const mockLoggerWithLog = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+      };
+
+      const mockLoggerWithoutLog = {
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        // no log method
+      };
+
+      const executionContext = createMockExecutionContext();
+
+      // Test with log method present
+      const contextWithLog = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLoggerWithLog,
+      );
+      expect(contextWithLog.logger.log).toBeDefined();
+      expect(typeof contextWithLog.logger.log).toBe("function");
+
+      // Test without log method
+      const contextWithoutLog = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLoggerWithoutLog,
+      );
+      expect(contextWithoutLog.logger.log).toBeUndefined();
+
+      // All contexts should have standard methods
+      [contextWithLog, contextWithoutLog].forEach((context) => {
+        expect(context.logger.info).toBeDefined();
+        expect(context.logger.warn).toBeDefined();
+        expect(context.logger.error).toBeDefined();
+        expect(context.logger.debug).toBeDefined();
+      });
+    });
+
+    it("should respect mode changes when reconfiguring logger", () => {
+      const mockLogger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+      };
+
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ReplayMode,
+        mockLogger,
+      );
+
+      // Mock context that would normally suppress logging
+      mockGetActiveContext.mockReturnValue({
+        contextId: "step-1",
+        durableExecutionMode: DurableExecutionMode.ReplayMode,
+        attempt: 1,
+      });
+
+      // Initially, logging should be suppressed
+      context.logger.info("suppressed message");
+      expect(mockLogger.info).not.toHaveBeenCalled();
+
+      // Disable mode-aware logging
+      context.configureLogger({ modeAware: false });
+
+      // Now logging should work
+      context.logger.info("allowed message");
+      expect(mockLogger.info).toHaveBeenCalledWith("allowed message");
+
+      // Re-enable mode-aware logging
+      jest.clearAllMocks();
+      context.configureLogger({ modeAware: true });
+
+      // Logging should be suppressed again
+      context.logger.info("suppressed again");
+      expect(mockLogger.info).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,4 +1,4 @@
-import { DurableLogger } from "./durable-logger";
+import { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
  * Log data passed to the enriched durable logger
@@ -51,9 +51,10 @@ export interface OperationContext<Logger extends DurableLogger> {
   logger: Logger; // Basic durable logger which will be parsed by the enriched durable logger
 }
 
-export type StepContext<Logger extends DurableLogger> =
-  OperationContext<Logger>;
+export type StepContext<Logger extends DurableLogger> = OperationContext<
+  DurableContextLogger<Logger>
+>;
 export type WaitForConditionContext<Logger extends DurableLogger> =
-  OperationContext<Logger>;
+  OperationContext<DurableContextLogger<Logger>>;
 export type WaitForCallbackContext<Logger extends DurableLogger> =
-  OperationContext<Logger>;
+  OperationContext<DurableContextLogger<Logger>>;

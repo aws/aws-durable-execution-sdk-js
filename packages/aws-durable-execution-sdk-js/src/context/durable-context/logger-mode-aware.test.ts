@@ -26,9 +26,7 @@ describe("DurableContext logger modeAware configuration", () => {
     return {
       log: jest.fn(),
       info: jest.fn((...args: any[]) => {
-        if (!loggingContext || loggingContext.shouldLog()) {
-          infoMock(...args);
-        }
+        infoMock(...args);
       }),
       error: jest.fn(),
       warn: jest.fn(),

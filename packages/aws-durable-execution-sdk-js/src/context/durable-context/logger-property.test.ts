@@ -89,12 +89,9 @@ describe("DurableContext Logger Property", () => {
     });
 
     // Verify configureDurableLoggingContext was called to set up the context
-    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shouldLog: expect.any(Function),
-        getDurableLogData: expect.any(Function),
-      }),
-    );
+    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith({
+      getDurableLogData: expect.any(Function),
+    });
   });
 
   test("Logger property should be a live reference (getter)", () => {
@@ -127,12 +124,9 @@ describe("DurableContext Logger Property", () => {
     expect(customLogger.info).toHaveBeenCalledWith("message2");
 
     // Verify configureDurableLoggingContext was called to set up the context
-    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shouldLog: expect.any(Function),
-        getDurableLogData: expect.any(Function),
-      }),
-    );
+    expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith({
+      getDurableLogData: expect.any(Function),
+    });
   });
 
   test("Logger should only log in ExecutionMode", () => {
@@ -144,9 +138,7 @@ describe("DurableContext Logger Property", () => {
       return {
         log: jest.fn(),
         info: jest.fn((...args: any[]) => {
-          if (!loggingContext || loggingContext.shouldLog()) {
-            infoMock(...args);
-          }
+          infoMock(...args);
         }),
         error: jest.fn(),
         warn: jest.fn(),
@@ -271,12 +263,9 @@ describe("DurableContext Logger Property", () => {
 
     // Verify configureDurableLoggingContext was called on logger1
     expect(logger1.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
-    expect(logger1.configureDurableLoggingContext).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shouldLog: expect.any(Function),
-        getDurableLogData: expect.any(Function),
-      }),
-    );
+    expect(logger1.configureDurableLoggingContext).toHaveBeenCalledWith({
+      getDurableLogData: expect.any(Function),
+    });
 
     // Capture the context passed to logger1
     const logger1Context = (logger1.configureDurableLoggingContext as jest.Mock)
@@ -287,12 +276,9 @@ describe("DurableContext Logger Property", () => {
 
     // Verify configureDurableLoggingContext was called on logger2
     expect(logger2.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
-    expect(logger2.configureDurableLoggingContext).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shouldLog: expect.any(Function),
-        getDurableLogData: expect.any(Function),
-      }),
-    );
+    expect(logger2.configureDurableLoggingContext).toHaveBeenCalledWith({
+      getDurableLogData: expect.any(Function),
+    });
 
     // Verify logger1 was not called again
     expect(logger1.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
@@ -302,9 +288,7 @@ describe("DurableContext Logger Property", () => {
       .mock.calls[0][0];
 
     // Verify both contexts have the same structure but are different instances
-    expect(logger1Context).toHaveProperty("shouldLog");
     expect(logger1Context).toHaveProperty("getDurableLogData");
-    expect(logger2Context).toHaveProperty("shouldLog");
     expect(logger2Context).toHaveProperty("getDurableLogData");
 
     // Test that the logging context functions work correctly
@@ -382,12 +366,9 @@ describe("DurableContext Logger Property", () => {
     childContext.configureLogger({ customLogger: childLogger });
 
     // The operationId should be configured through configureDurableLoggingContext
-    expect(childLogger.configureDurableLoggingContext).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shouldLog: expect.any(Function),
-        getDurableLogData: expect.any(Function),
-      }),
-    );
+    expect(childLogger.configureDurableLoggingContext).toHaveBeenCalledWith({
+      getDurableLogData: expect.any(Function),
+    });
 
     // Verify the getDurableLogData function returns the correct operationId
     // when called within a child context

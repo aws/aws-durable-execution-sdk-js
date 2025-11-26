@@ -18,11 +18,12 @@ export {
   WaitForConditionConfig,
   WaitForConditionDecision,
   WaitForConditionWaitStrategyFunc,
-  DurableLogger,
   LambdaHandler,
   InvokeConfig,
   JitterStrategy,
   Duration,
+  DurableLogger,
+  DurableContextLogger,
   DurableLogData,
   DurableLoggingContext,
 } from "./types";
