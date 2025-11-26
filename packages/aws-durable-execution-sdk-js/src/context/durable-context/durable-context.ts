@@ -94,10 +94,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
     this.durableExecutionMode = durableExecutionMode;
 
-    // Use the checkpoint manager from DurableExecution - it must always be provided
-    if (!durableExecution?.checkpointManager) {
-      throw new Error("DurableExecution with CheckpointManager is required");
-    }
     this.checkpoint = durableExecution.checkpointManager;
 
     this.modeManagement = new ModeManagement(
