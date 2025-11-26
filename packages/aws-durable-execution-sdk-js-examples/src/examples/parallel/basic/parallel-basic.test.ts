@@ -1,5 +1,6 @@
 import { handler } from "./parallel-basic";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./parallel-basic.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "parallel-basic test",
@@ -20,6 +21,8 @@ createTests({
       const result = execution.getResult();
 
       expect(execution.getResult()).toBeDefined();
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

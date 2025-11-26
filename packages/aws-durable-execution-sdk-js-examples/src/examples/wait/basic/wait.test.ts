@@ -3,7 +3,8 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./wait";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./wait.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "wait",
@@ -30,6 +31,8 @@ createTests({
       expect(
         waitOperation.getWaitDetails()?.scheduledEndTimestamp,
       ).toBeInstanceOf(Date);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

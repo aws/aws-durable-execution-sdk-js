@@ -1,5 +1,6 @@
 import { handler } from "./parallel-heterogeneous";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./parallel-heterogeneous.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "parallel-heterogeneous test",
@@ -16,6 +17,8 @@ createTests({
       expect(result[0]).toEqual({ step1: "completed" });
       expect(result[1]).toBe("task 2 completed");
       expect(result[2]).toBe(42);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

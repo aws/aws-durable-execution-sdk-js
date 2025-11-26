@@ -1,5 +1,6 @@
 import { handler } from "./comprehensive-operations";
-import { createTests } from "../../utils/test-helper";
+import historyEvents from "./comprehensive-operations.history.json";
+import { assertEventSignatures, createTests } from "../../utils/test-helper";
 
 createTests({
   name: "comprehensive-operations test",
@@ -93,6 +94,8 @@ createTests({
       // Verify execution completed successfully
       expect(execution.getResult()).toBeDefined();
       expect(execution.getOperations().length).toBeGreaterThan(0);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

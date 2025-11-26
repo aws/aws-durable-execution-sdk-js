@@ -1,27 +1,35 @@
-{
-  "expectedHistory": {
-    "events": [
-      {
-        "EventType": "ExecutionStarted",
-        "EventId": 1,
-        "Name": "hello-world-typescript-acceptance-test",
-        "ExecutionStartedDetails": {
-          "Input": {
-            "Truncated": true
-          },
-          "ExecutionTimeout": 300
-        }
-      },
-      {
-        "EventType": "ExecutionSucceeded",
-        "EventId": 2,
-        "Name": "history-generation-1757538709",
-        "ExecutionSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T18:55:16.950Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
       }
-    ]
+    },
+    "Id": "dfb66fb9-ad9a-4605-b81d-5d45e8db2d9b"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T18:55:17.082Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:17.082Z",
+      "Error": {},
+      "RequestId": "7f9f71bf-1500-4b52-9b36-809b83912b8f",
+      "StartTimestamp": "2025-11-24T18:55:16.950Z"
+    }
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T18:55:17.186Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"Hello World!\""
+      }
+    },
+    "Id": "dfb66fb9-ad9a-4605-b81d-5d45e8db2d9b"
   }
-}
+]

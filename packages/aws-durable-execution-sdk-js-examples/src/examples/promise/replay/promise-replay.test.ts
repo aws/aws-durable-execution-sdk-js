@@ -1,6 +1,7 @@
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./promise-replay";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./promise-replay.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "promise-replay",
@@ -15,6 +16,8 @@ createTests({
       expect(execution.getResult()).toStrictEqual({
         successStep: "Success",
       });
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

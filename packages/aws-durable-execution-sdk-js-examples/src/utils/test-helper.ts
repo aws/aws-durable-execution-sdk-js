@@ -28,6 +28,11 @@ export interface TestDefinition<ResultType> {
 export interface FunctionNameMap {
   getFunctionName(functionName: string): string;
 }
+export type EventSignature = {
+  EventType?: string;
+  SubType?: string;
+  Name?: string;
+};
 
 class CloudFunctionNameMap implements FunctionNameMap {
   constructor(private readonly functionNameMap: Record<string, string>) {}

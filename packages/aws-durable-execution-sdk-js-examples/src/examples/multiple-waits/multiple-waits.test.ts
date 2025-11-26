@@ -3,7 +3,8 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./multiple-waits";
-import { createTests } from "../../utils/test-helper";
+import historyEvents from "./multiple-waits.history.json";
+import { assertEventSignatures, createTests } from "../../utils/test-helper";
 
 createTests({
   name: "multiple-waits test",
@@ -40,6 +41,8 @@ createTests({
       expect(secondWait.getWaitDetails()?.scheduledEndTimestamp).toBeInstanceOf(
         Date,
       );
+
+      assertEventSignatures(result.getHistoryEvents(), historyEvents);
     });
   },
 });

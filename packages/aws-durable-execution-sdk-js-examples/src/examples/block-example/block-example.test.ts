@@ -1,6 +1,7 @@
 import { OperationType } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./block-example";
-import { createTests } from "../../utils/test-helper";
+import historyEvents from "./block-example.history.json";
+import { assertEventSignatures, createTests } from "../../utils/test-helper";
 
 createTests({
   name: "block-example test",
@@ -44,13 +45,6 @@ createTests({
       expect(nestedBlockOp.getContextDetails()?.result).toEqual(
         "nested block result",
       );
-    });
-
-    it("should execute wait operation within nested context", async () => {
-      const execution = await runner.run();
-
-      // Verify execution completed successfully
-      expect(execution.getResult()).toBeDefined();
 
       const completedOperations = execution.getOperations();
       const waitOp = completedOperations.find(
@@ -59,6 +53,8 @@ createTests({
           op.getWaitDetails()?.waitSeconds === 1,
       );
       expect(waitOp).toBeDefined();
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

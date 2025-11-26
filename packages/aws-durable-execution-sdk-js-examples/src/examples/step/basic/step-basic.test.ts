@@ -3,7 +3,8 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./step-basic";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./step-basic.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "step-basic test",
@@ -24,6 +25,8 @@ createTests({
       expect(stepOperation.getStatus()).toBe(OperationStatus.SUCCEEDED);
       expect(stepOperation.getStepDetails()).toBeDefined();
       expect(stepOperation.getStepDetails()?.result).toEqual("step completed");
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

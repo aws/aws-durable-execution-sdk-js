@@ -1,5 +1,6 @@
 import { handler } from "./parent-context-in-child";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./parent-context-in-child.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 // Set shorter timeout for context validation tests since they should fail quickly
 jest.setTimeout(5000);
@@ -28,6 +29,8 @@ createTests({
       expect(operations).toHaveLength(1);
       expect(operations[0].getName()).toBe("child-context");
       expect(operations[0].getStatus()).toBe("STARTED");
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

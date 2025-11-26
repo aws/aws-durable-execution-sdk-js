@@ -1,5 +1,6 @@
 import { handler } from "./promise-all";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./promise-all.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "promise-all test",
@@ -20,6 +21,8 @@ createTests({
         "result 2",
         "result 3",
       ]);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

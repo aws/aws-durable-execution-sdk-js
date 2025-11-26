@@ -1,5 +1,6 @@
 import { handler } from "./run-in-child-context";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./run-in-child-context.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 import {
   OperationType,
   OperationStatus,
@@ -55,6 +56,8 @@ createTests({
       expect(childOperations![0].getStepDetails()?.result).toEqual(
         "child step completed",
       );
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

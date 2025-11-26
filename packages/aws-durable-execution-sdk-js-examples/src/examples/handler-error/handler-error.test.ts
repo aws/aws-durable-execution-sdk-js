@@ -1,5 +1,6 @@
 import { handler } from "./handler-error";
-import { createTests } from "../../utils/test-helper";
+import historyEvents from "./handler-error.history.json";
+import { assertEventSignatures, createTests } from "../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
@@ -22,6 +23,8 @@ createTests({
       expect(result.getOperations()).toHaveLength(0);
 
       expect(result.getStatus()).toBe(ExecutionStatus.FAILED);
+
+      assertEventSignatures(result.getHistoryEvents(), historyEvents);
     });
   },
 });

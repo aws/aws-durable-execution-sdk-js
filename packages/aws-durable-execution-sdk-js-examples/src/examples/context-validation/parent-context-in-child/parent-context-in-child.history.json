@@ -1,0 +1,43 @@
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T22:01:36.674Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    },
+    "Id": "5b7be852-72c5-4d35-9ed7-c3858bd1644a"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T22:01:36.800Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T22:01:36.800Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "c11ab4fd-fa89-4b21-90e1-946b787c4784",
+      "StartTimestamp": "2025-11-24T22:01:36.674Z"
+    }
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T22:01:36.906Z",
+    "EventType": "ExecutionFailed",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
+          "ErrorType": "Error"
+        }
+      }
+    },
+    "Id": "5b7be852-72c5-4d35-9ed7-c3858bd1644a"
+  }
+]

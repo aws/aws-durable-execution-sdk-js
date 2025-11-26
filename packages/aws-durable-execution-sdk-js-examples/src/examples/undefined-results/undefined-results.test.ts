@@ -1,5 +1,6 @@
 import { handler } from "./undefined-results";
-import { createTests } from "../../utils/test-helper";
+import historyEvents from "./undefined-results.history.json";
+import { assertEventSignatures, createTests } from "../../utils/test-helper";
 
 createTests({
   name: "undefined-results test",
@@ -27,6 +28,8 @@ createTests({
       // Verify wait operation completed normally
       const waitOp = runner.getOperationByIndex(2);
       expect(waitOp.getWaitDetails()?.waitSeconds).toBe(1);
+
+      assertEventSignatures(result.getHistoryEvents(), historyEvents);
     });
   },
 });

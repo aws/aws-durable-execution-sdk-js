@@ -1,5 +1,6 @@
 import { handler } from "./run-in-child-context-checkpoint-size-limit";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./run-in-child-context-checkpoint-size-limit.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
 
@@ -18,6 +19,8 @@ createTests({
 
       // Verify totalIterations matches actual operations created
       expect(result.totalIterations).toBe(execution.getOperations().length);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 120000);
   },
 });

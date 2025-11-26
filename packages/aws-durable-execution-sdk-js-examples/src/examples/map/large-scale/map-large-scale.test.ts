@@ -1,5 +1,10 @@
 import { handler } from "./map-large-scale";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./map-large-scale.history.json";
+import {
+  assertEventSignatures,
+  createTests,
+  EventSignature,
+} from "../../../utils/test-helper";
 
 createTests({
   name: "map-large-scale test",
@@ -27,6 +32,11 @@ createTests({
       expect(result.summary.totalDataSizeBytes).toBeGreaterThan(5000000); // ~5MB
       expect(result.summary.averageItemSize).toBeGreaterThan(100000); // ~100KB per item
       expect(result.summary.maxConcurrency).toBe(10);
+
+      assertEventSignatures(
+        execution.getHistoryEvents(),
+        historyEvents as EventSignature[],
+      );
     });
   },
 });

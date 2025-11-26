@@ -1,0 +1,35 @@
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T18:56:10.390Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    },
+    "Id": "8213e78c-936a-446f-b99e-72471bb41ff6"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T18:56:10.513Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:56:10.513Z",
+      "Error": {},
+      "RequestId": "382d60cc-cf4e-4c73-bdd9-41aa8fc65c06",
+      "StartTimestamp": "2025-11-24T18:56:10.390Z"
+    }
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T18:56:10.617Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"received\":\"{}\",\"timestamp\":1764010585840,\"message\":\"Handler completed successfully\"}"
+      }
+    },
+    "Id": "8213e78c-936a-446f-b99e-72471bb41ff6"
+  }
+]

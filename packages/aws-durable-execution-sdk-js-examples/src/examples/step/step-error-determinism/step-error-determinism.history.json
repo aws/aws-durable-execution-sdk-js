@@ -1,0 +1,139 @@
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T18:56:11.786Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    },
+    "Id": "e7bc2a5d-2231-46a5-a8fc-915100ae610f"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T18:56:11.933Z",
+    "EventType": "StepStarted",
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-step",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T18:56:11.933Z",
+    "EventType": "StepFailed",
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-step",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Business validation failed",
+          "ErrorType": "CustomBusinessError"
+        }
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 4,
+    "EventTimestamp": "2025-11-24T18:56:11.995Z",
+    "EventType": "StepStarted",
+    "Id": "c81e728d9d4c2f63",
+    "Name": "check-before-replay",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 5,
+    "EventTimestamp": "2025-11-24T18:56:11.995Z",
+    "EventType": "StepSucceeded",
+    "Id": "c81e728d9d4c2f63",
+    "Name": "check-before-replay",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"hasError\":true,\"errorMessage\":\"Business validation failed\",\"causeMessage\":\"Business validation failed\",\"causeName\":\"CustomBusinessError\"}"
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 6,
+    "EventTimestamp": "2025-11-24T18:56:12.057Z",
+    "EventType": "WaitStarted",
+    "Id": "eccbc87e4b5ce2fe",
+    "SubType": "Wait",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-11-24T18:56:13.057Z"
+    }
+  },
+  {
+    "EventId": 7,
+    "EventTimestamp": "2025-11-24T18:56:12.098Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:56:12.098Z",
+      "Error": {},
+      "RequestId": "90aa8213-0c54-46b4-8143-f8b08237b413",
+      "StartTimestamp": "2025-11-24T18:56:11.786Z"
+    }
+  },
+  {
+    "EventId": 8,
+    "EventTimestamp": "2025-11-24T18:56:12.224Z",
+    "EventType": "WaitSucceeded",
+    "Id": "eccbc87e4b5ce2fe",
+    "SubType": "Wait",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventId": 9,
+    "EventTimestamp": "2025-11-24T18:56:12.411Z",
+    "EventType": "StepStarted",
+    "Id": "a87ff679a2f3e71d",
+    "Name": "check-after-replay",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 10,
+    "EventTimestamp": "2025-11-24T18:56:12.411Z",
+    "EventType": "StepSucceeded",
+    "Id": "a87ff679a2f3e71d",
+    "Name": "check-after-replay",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"hasError\":true,\"errorMessage\":\"Business validation failed\",\"causeMessage\":\"Business validation failed\",\"causeName\":\"CustomBusinessError\"}"
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 11,
+    "EventTimestamp": "2025-11-24T18:56:12.452Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:56:12.452Z",
+      "Error": {},
+      "RequestId": "734d1d23-71b9-490a-80cc-5388da761427",
+      "StartTimestamp": "2025-11-24T18:56:12.307Z"
+    }
+  },
+  {
+    "EventId": 12,
+    "EventTimestamp": "2025-11-24T18:56:12.535Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "true"
+      }
+    },
+    "Id": "e7bc2a5d-2231-46a5-a8fc-915100ae610f"
+  }
+]

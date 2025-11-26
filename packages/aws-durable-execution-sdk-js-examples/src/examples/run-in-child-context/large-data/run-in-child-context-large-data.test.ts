@@ -1,5 +1,6 @@
 import { handler } from "./run-in-child-context-large-data";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./run-in-child-context-large-data.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "run-in-child-context-large-data test",
@@ -26,6 +27,8 @@ createTests({
 
       // Verify data integrity across wait
       expect(result.dataIntegrityCheck).toBe(true);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

@@ -1,102 +1,140 @@
-{
-  "expectedHistory": {
-    "events": [
-      {
-        "EventType": "ExecutionStarted",
-        "EventId": 1,
-        "Name": "block-example-typescript-acceptance-test",
-        "ExecutionStartedDetails": {
-          "Input": {
-            "Truncated": true
-          },
-          "ExecutionTimeout": 300
-        }
-      },
-      {
-        "EventType": "ContextStarted",
-        "SubType": "RunInChildContext",
-        "EventId": 2,
-        "Name": "parent_block",
-        "ContextStartedDetails": {}
-      },
-      {
-        "EventType": "StepStarted",
-        "SubType": "Step",
-        "EventId": 3,
-        "Name": "nested_step",
-        "ParentId": "c4ca4238a0b92382",
-        "StepStartedDetails": {}
-      },
-      {
-        "EventType": "StepSucceeded",
-        "SubType": "Step",
-        "EventId": 4,
-        "Name": "nested_step",
-        "ParentId": "c4ca4238a0b92382",
-        "StepSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          },
-          "RetryDetails": {
-            "CurrentAttempt": 0
-          }
-        }
-      },
-      {
-        "EventType": "ContextStarted",
-        "SubType": "RunInChildContext",
-        "EventId": 5,
-        "Name": "nested_block",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextStartedDetails": {}
-      },
-      {
-        "EventType": "WaitStarted",
-        "SubType": "Wait",
-        "EventId": 6,
-        "ParentId": "98c6f2c2287f4c73",
-        "WaitStartedDetails": {
-          "Duration": 1
-        }
-      },
-      {
-        "EventType": "WaitSucceeded",
-        "EventId": 7,
-        "WaitSucceededDetails": {}
-      },
-      {
-        "EventType": "ContextSucceeded",
-        "SubType": "RunInChildContext",
-        "EventId": 8,
-        "Name": "nested_block",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
-      },
-      {
-        "EventType": "ContextSucceeded",
-        "SubType": "RunInChildContext",
-        "EventId": 9,
-        "Name": "parent_block",
-        "ContextSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
-      },
-      {
-        "EventType": "ExecutionSucceeded",
-        "EventId": 10,
-        "Name": "history-generation-1757540244",
-        "ExecutionSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T22:01:32.946Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
       }
-    ]
+    },
+    "Id": "e6f676a8-38c9-4f85-9eda-374bf899c75f"
+  },
+  {
+    "ContextStartedDetails": {},
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T22:01:33.073Z",
+    "EventType": "ContextStarted",
+    "Id": "c4ca4238a0b92382",
+    "Name": "parent_block",
+    "SubType": "RunInChildContext"
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T22:01:33.073Z",
+    "EventType": "StepStarted",
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "nested_step",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 4,
+    "EventTimestamp": "2025-11-24T22:01:33.073Z",
+    "EventType": "StepSucceeded",
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "nested_step",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"nested step result\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "ContextStartedDetails": {},
+    "EventId": 5,
+    "EventTimestamp": "2025-11-24T22:01:33.135Z",
+    "EventType": "ContextStarted",
+    "Id": "98c6f2c2287f4c73",
+    "Name": "nested_block",
+    "ParentId": "c4ca4238a0b92382",
+    "SubType": "RunInChildContext"
+  },
+  {
+    "EventId": 6,
+    "EventTimestamp": "2025-11-24T22:01:33.135Z",
+    "EventType": "WaitStarted",
+    "Id": "6151f5ab282d90e4",
+    "ParentId": "98c6f2c2287f4c73",
+    "SubType": "Wait",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-11-24T22:01:34.135Z"
+    }
+  },
+  {
+    "EventId": 7,
+    "EventTimestamp": "2025-11-24T22:01:33.197Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T22:01:33.197Z",
+      "Error": {},
+      "RequestId": "25f1b902-b520-454f-999c-61bb78ad2957",
+      "StartTimestamp": "2025-11-24T22:01:32.946Z"
+    }
+  },
+  {
+    "EventId": 8,
+    "EventTimestamp": "2025-11-24T22:01:33.240Z",
+    "EventType": "WaitSucceeded",
+    "Id": "6151f5ab282d90e4",
+    "ParentId": "98c6f2c2287f4c73",
+    "SubType": "Wait",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"nested block result\""
+      }
+    },
+    "EventId": 9,
+    "EventTimestamp": "2025-11-24T22:01:33.428Z",
+    "EventType": "ContextSucceeded",
+    "Id": "98c6f2c2287f4c73",
+    "Name": "nested_block",
+    "ParentId": "c4ca4238a0b92382",
+    "SubType": "RunInChildContext"
+  },
+  {
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"nestedStep\":\"nested step result\",\"nestedBlock\":\"nested block result\"}"
+      }
+    },
+    "EventId": 10,
+    "EventTimestamp": "2025-11-24T22:01:33.492Z",
+    "EventType": "ContextSucceeded",
+    "Id": "c4ca4238a0b92382",
+    "Name": "parent_block",
+    "SubType": "RunInChildContext"
+  },
+  {
+    "EventId": 11,
+    "EventTimestamp": "2025-11-24T22:01:33.536Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T22:01:33.536Z",
+      "Error": {},
+      "RequestId": "1f3f3cbf-2d51-4aaa-8c5e-d9f844f22cb3",
+      "StartTimestamp": "2025-11-24T22:01:33.323Z"
+    }
+  },
+  {
+    "EventId": 12,
+    "EventTimestamp": "2025-11-24T22:01:33.641Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"nestedStep\":\"nested step result\",\"nestedBlock\":\"nested block result\"}"
+      }
+    },
+    "Id": "e6f676a8-38c9-4f85-9eda-374bf899c75f"
   }
-}
+]

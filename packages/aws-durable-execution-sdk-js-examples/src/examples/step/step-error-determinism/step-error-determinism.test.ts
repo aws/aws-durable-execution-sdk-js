@@ -1,5 +1,6 @@
 import { handler } from "./step-error-determinism";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./step-error-determinism.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "step-error-determinism test",
@@ -12,6 +13,8 @@ createTests({
       const result = execution.getResult();
 
       expect(result).toBe(true);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

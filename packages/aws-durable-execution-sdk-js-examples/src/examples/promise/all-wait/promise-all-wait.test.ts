@@ -1,5 +1,6 @@
 import { handler } from "./promise-all-wait";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./promise-all-wait.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "promise-all-wait test",
@@ -22,6 +23,8 @@ createTests({
       expect(wait1Op.getWaitDetails()!.waitSeconds!).toBe(1);
       expect(wait2Op.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait3Op.getStepDetails()!.result).toBeUndefined();
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 10000);
   },
 });

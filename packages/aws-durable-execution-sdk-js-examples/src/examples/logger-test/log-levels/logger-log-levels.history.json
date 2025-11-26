@@ -1,0 +1,296 @@
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T18:55:18.109Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    },
+    "Id": "b54b8ff9-ab0e-4727-b500-0f2b81eae050"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T18:55:18.254Z",
+    "EventType": "StepStarted",
+    "Id": "c4ca4238a0b92382",
+    "Name": "log-level-step",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T18:55:18.254Z",
+    "EventType": "StepSucceeded",
+    "Id": "c4ca4238a0b92382",
+    "Name": "log-level-step",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"step completed\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 4,
+    "EventTimestamp": "2025-11-24T18:55:18.317Z",
+    "EventType": "WaitStarted",
+    "Id": "c81e728d9d4c2f63",
+    "SubType": "Wait",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-11-24T18:55:19.317Z"
+    }
+  },
+  {
+    "EventId": 5,
+    "EventTimestamp": "2025-11-24T18:55:18.357Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:18.357Z",
+      "Error": {},
+      "RequestId": "45d09791-b7ae-4522-8ff2-b282c991f590",
+      "StartTimestamp": "2025-11-24T18:55:18.109Z"
+    }
+  },
+  {
+    "EventId": 6,
+    "EventTimestamp": "2025-11-24T18:55:18.419Z",
+    "EventType": "WaitSucceeded",
+    "Id": "c81e728d9d4c2f63",
+    "SubType": "Wait",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventId": 7,
+    "EventTimestamp": "2025-11-24T18:55:18.628Z",
+    "EventType": "StepStarted",
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "debug-step",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 8,
+    "EventTimestamp": "2025-11-24T18:55:18.628Z",
+    "EventType": "StepSucceeded",
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "debug-step",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"debug step completed\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "ContextStartedDetails": {},
+    "EventId": 9,
+    "EventTimestamp": "2025-11-24T18:55:18.688Z",
+    "EventType": "ContextStarted",
+    "Id": "a87ff679a2f3e71d",
+    "Name": "child-context",
+    "SubType": "RunInChildContext"
+  },
+  {
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"child context completed\""
+      }
+    },
+    "EventId": 10,
+    "EventTimestamp": "2025-11-24T18:55:18.688Z",
+    "EventType": "ContextSucceeded",
+    "Id": "a87ff679a2f3e71d",
+    "Name": "child-context",
+    "SubType": "RunInChildContext"
+  },
+  {
+    "EventId": 11,
+    "EventTimestamp": "2025-11-24T18:55:18.752Z",
+    "EventType": "StepStarted",
+    "Id": "e4da3b7fbbce2345",
+    "Name": "direct-object-step",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 12,
+    "EventTimestamp": "2025-11-24T18:55:18.752Z",
+    "EventType": "StepSucceeded",
+    "Id": "e4da3b7fbbce2345",
+    "Name": "direct-object-step",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"direct object step completed\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 13,
+    "EventTimestamp": "2025-11-24T18:55:18.818Z",
+    "EventType": "StepStarted",
+    "Id": "1679091c5a880faf",
+    "Name": "multiple-error-step",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 14,
+    "EventTimestamp": "2025-11-24T18:55:18.818Z",
+    "EventType": "StepSucceeded",
+    "Id": "1679091c5a880faf",
+    "Name": "multiple-error-step",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"multiple error step completed\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 15,
+    "EventTimestamp": "2025-11-24T18:55:18.880Z",
+    "EventType": "StepStarted",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 16,
+    "EventTimestamp": "2025-11-24T18:55:18.880Z",
+    "EventType": "StepStarted",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 17,
+    "EventTimestamp": "2025-11-24T18:55:18.922Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:18.922Z",
+      "Error": {},
+      "RequestId": "70acf4f5-aef2-4a19-8efc-14bb140caed5",
+      "StartTimestamp": "2025-11-24T18:55:18.505Z"
+    }
+  },
+  {
+    "EventId": 18,
+    "EventTimestamp": "2025-11-24T18:55:19.132Z",
+    "EventType": "StepStarted",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 19,
+    "EventTimestamp": "2025-11-24T18:55:19.132Z",
+    "EventType": "StepStarted",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 20,
+    "EventTimestamp": "2025-11-24T18:55:19.174Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:19.174Z",
+      "Error": {},
+      "RequestId": "3ef431a9-d721-495e-9929-7158a0ae9e6a",
+      "StartTimestamp": "2025-11-24T18:55:19.027Z"
+    }
+  },
+  {
+    "EventId": 21,
+    "EventTimestamp": "2025-11-24T18:55:19.402Z",
+    "EventType": "StepStarted",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 22,
+    "EventTimestamp": "2025-11-24T18:55:19.402Z",
+    "EventType": "StepStarted",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 23,
+    "EventTimestamp": "2025-11-24T18:55:19.444Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:19.444Z",
+      "Error": {},
+      "RequestId": "287245f8-1e5f-41fa-ab63-2d97395f554a",
+      "StartTimestamp": "2025-11-24T18:55:19.300Z"
+    }
+  },
+  {
+    "EventId": 24,
+    "EventTimestamp": "2025-11-24T18:55:19.672Z",
+    "EventType": "StepStarted",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 25,
+    "EventTimestamp": "2025-11-24T18:55:19.673Z",
+    "EventType": "StepFailed",
+    "Id": "8f14e45fceea167a",
+    "Name": "retry-with-attempts",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Simulated failure for retry demonstration",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 3
+      }
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 26,
+    "EventTimestamp": "2025-11-24T18:55:19.715Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:19.715Z",
+      "Error": {},
+      "RequestId": "51652203-615a-421a-bf48-5cd7ae2dfb59",
+      "StartTimestamp": "2025-11-24T18:55:19.567Z"
+    }
+  },
+  {
+    "EventId": 27,
+    "EventTimestamp": "2025-11-24T18:55:19.798Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"\""
+      }
+    },
+    "Id": "b54b8ff9-ab0e-4727-b500-0f2b81eae050"
+  }
+]

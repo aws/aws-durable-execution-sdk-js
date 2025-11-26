@@ -3,7 +3,8 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./promise-race";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./promise-race.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "promise-race test",
@@ -26,6 +27,8 @@ createTests({
       const execution = await runner.run();
 
       expect(execution.getResult()).toStrictEqual("fast result");
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

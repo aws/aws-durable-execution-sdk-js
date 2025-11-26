@@ -1,5 +1,6 @@
 import { handler } from "./parent-context-in-step";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./parent-context-in-step.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 // Set shorter timeout for context validation tests since they should fail quickly
 jest.setTimeout(5000);
@@ -74,6 +75,8 @@ createTests({
       // May also have step-with-invalid-nested in local tests
       expect(operations.length).toBeGreaterThanOrEqual(2);
       expect(operations.length).toBeLessThanOrEqual(3);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

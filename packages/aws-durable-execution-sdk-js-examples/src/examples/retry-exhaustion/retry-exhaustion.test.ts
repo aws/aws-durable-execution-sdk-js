@@ -4,7 +4,8 @@ import {
   ExecutionStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./retry-exhaustion";
-import { createTests } from "../../utils/test-helper";
+import historyEvents from "./retry-exhaustion.history.json";
+import { assertEventSignatures, createTests } from "../../utils/test-helper";
 
 createTests({
   name: "retry-exhaustion test",
@@ -40,6 +41,8 @@ createTests({
       expect(stepDetails?.error).toBeDefined();
 
       expect(result.getStatus()).toBe(ExecutionStatus.FAILED);
+
+      assertEventSignatures(result.getHistoryEvents(), historyEvents);
     });
   },
 });

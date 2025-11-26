@@ -1,5 +1,6 @@
 import { handler } from "./promise-all-settled";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./promise-all-settled.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests<PromiseSettledResult<any>[]>({
   name: "promise-all-settled test",
@@ -32,6 +33,8 @@ createTests<PromiseSettledResult<any>[]>({
           value: "another success",
         },
       ]);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 30000);
   },
 });

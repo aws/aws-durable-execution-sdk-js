@@ -1,48 +1,58 @@
-{
-  "expectedHistory": {
-    "events": [
-      {
-        "EventType": "ExecutionStarted",
-        "EventId": 1,
-        "Name": "named-step-typescript-acceptance-test",
-        "ExecutionStartedDetails": {
-          "Input": {
-            "Truncated": true
-          },
-          "ExecutionTimeout": 300
-        }
-      },
-      {
-        "EventType": "StepStarted",
-        "SubType": "Step",
-        "EventId": 2,
-        "Name": "process-data",
-        "StepStartedDetails": {}
-      },
-      {
-        "EventType": "StepSucceeded",
-        "SubType": "Step",
-        "EventId": 3,
-        "Name": "process-data",
-        "StepSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          },
-          "RetryDetails": {
-            "CurrentAttempt": 0
-          }
-        }
-      },
-      {
-        "EventType": "ExecutionSucceeded",
-        "EventId": 4,
-        "Name": "history-generation-1757539029",
-        "ExecutionSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T18:56:11.308Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
       }
-    ]
+    },
+    "Id": "a8c6f4c6-b705-4146-b475-0dfcd1ca90b0"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T18:56:11.451Z",
+    "EventType": "StepStarted",
+    "Id": "c4ca4238a0b92382",
+    "Name": "process-data",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T18:56:11.451Z",
+    "EventType": "StepSucceeded",
+    "Id": "c4ca4238a0b92382",
+    "Name": "process-data",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"processed: default\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 4,
+    "EventTimestamp": "2025-11-24T18:56:11.493Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:56:11.493Z",
+      "Error": {},
+      "RequestId": "cff82a6b-38e9-483e-a278-e72ba4cc313d",
+      "StartTimestamp": "2025-11-24T18:56:11.308Z"
+    }
+  },
+  {
+    "EventId": 5,
+    "EventTimestamp": "2025-11-24T18:56:11.577Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"processed: default\""
+      }
+    },
+    "Id": "a8c6f4c6-b705-4146-b475-0dfcd1ca90b0"
   }
-}
+]

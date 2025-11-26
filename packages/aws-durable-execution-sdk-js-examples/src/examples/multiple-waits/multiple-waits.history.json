@@ -1,0 +1,103 @@
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T18:55:47.628Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    },
+    "Id": "69f89787-9bc8-4343-bc13-459d7b4965ae"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T18:55:47.773Z",
+    "EventType": "WaitStarted",
+    "Id": "c4ca4238a0b92382",
+    "Name": "wait-1",
+    "SubType": "Wait",
+    "WaitStartedDetails": {
+      "Duration": 5,
+      "ScheduledEndTimestamp": "2025-11-24T18:55:52.773Z"
+    }
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T18:55:47.815Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:47.815Z",
+      "Error": {},
+      "RequestId": "c019d314-9ef1-4595-bf99-9179761bd6eb",
+      "StartTimestamp": "2025-11-24T18:55:47.628Z"
+    }
+  },
+  {
+    "EventId": 4,
+    "EventTimestamp": "2025-11-24T18:55:47.857Z",
+    "EventType": "WaitSucceeded",
+    "Id": "c4ca4238a0b92382",
+    "Name": "wait-1",
+    "SubType": "Wait",
+    "WaitSucceededDetails": {
+      "Duration": 5
+    }
+  },
+  {
+    "EventId": 5,
+    "EventTimestamp": "2025-11-24T18:55:48.023Z",
+    "EventType": "WaitStarted",
+    "Id": "c81e728d9d4c2f63",
+    "Name": "wait-2",
+    "SubType": "Wait",
+    "WaitStartedDetails": {
+      "Duration": 5,
+      "ScheduledEndTimestamp": "2025-11-24T18:55:53.023Z"
+    }
+  },
+  {
+    "EventId": 6,
+    "EventTimestamp": "2025-11-24T18:55:48.064Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:48.064Z",
+      "Error": {},
+      "RequestId": "c02e59d1-045b-4281-9135-d214f9417dbb",
+      "StartTimestamp": "2025-11-24T18:55:47.919Z"
+    }
+  },
+  {
+    "EventId": 7,
+    "EventTimestamp": "2025-11-24T18:55:48.107Z",
+    "EventType": "WaitSucceeded",
+    "Id": "c81e728d9d4c2f63",
+    "Name": "wait-2",
+    "SubType": "Wait",
+    "WaitSucceededDetails": {
+      "Duration": 5
+    }
+  },
+  {
+    "EventId": 8,
+    "EventTimestamp": "2025-11-24T18:55:48.274Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:48.274Z",
+      "Error": {},
+      "RequestId": "99e5a140-c1aa-4b41-8fd0-10ab975c5668",
+      "StartTimestamp": "2025-11-24T18:55:48.190Z"
+    }
+  },
+  {
+    "EventId": 9,
+    "EventTimestamp": "2025-11-24T18:55:48.376Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"completedWaits\":2,\"finalStep\":\"done\"}"
+      }
+    },
+    "Id": "69f89787-9bc8-4343-bc13-459d7b4965ae"
+  }
+]

@@ -3,7 +3,8 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./wait-unawaited";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./wait-unawaited.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "wait-unawaited",
@@ -32,6 +33,8 @@ createTests({
       // Verify we have exactly one operation
       const completedOperations = execution.getOperations();
       expect(completedOperations.length).toEqual(1);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

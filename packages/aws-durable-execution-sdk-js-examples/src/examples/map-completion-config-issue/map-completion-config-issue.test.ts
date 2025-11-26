@@ -3,7 +3,8 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./map-completion-config-issue";
-import { createTests } from "../../utils/test-helper";
+import historyEvents from "./map-completion-config-issue.history.json";
+import { assertEventSignatures, createTests } from "../../utils/test-helper";
 
 createTests({
   name: "map-completion-config-issue test",
@@ -74,6 +75,8 @@ createTests({
       operations.forEach((op: any, index: number) => {
         console.log(`${index}: ${op.getName()} - ${op.getType()}`);
       });
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

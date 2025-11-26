@@ -1,5 +1,6 @@
 import { handler } from "./promise-unhandled-rejection";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./promise-unhandled-rejection.history.json";
+import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 interface PromiseUnhandledRejectionResult {
   successStep: string;
@@ -27,6 +28,8 @@ createTests({
           "combinator-after-wait-replay",
         ],
       });
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 30000);
   },
 });

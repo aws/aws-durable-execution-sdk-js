@@ -1,0 +1,81 @@
+[
+  {
+    "EventId": 1,
+    "EventTimestamp": "2025-11-24T18:55:48.586Z",
+    "EventType": "ExecutionStarted",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    },
+    "Id": "92a8feb5-5c06-4541-ae30-ca3a757b37bc"
+  },
+  {
+    "EventId": 2,
+    "EventTimestamp": "2025-11-24T18:55:48.730Z",
+    "EventType": "StepStarted",
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-user-1",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 3,
+    "EventTimestamp": "2025-11-24T18:55:48.730Z",
+    "EventType": "StepSucceeded",
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-user-1",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"user-1\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 4,
+    "EventTimestamp": "2025-11-24T18:55:48.793Z",
+    "EventType": "StepStarted",
+    "Id": "c81e728d9d4c2f63",
+    "Name": "fetch-user-2",
+    "StepStartedDetails": {},
+    "SubType": "Step"
+  },
+  {
+    "EventId": 5,
+    "EventTimestamp": "2025-11-24T18:55:48.793Z",
+    "EventType": "StepSucceeded",
+    "Id": "c81e728d9d4c2f63",
+    "Name": "fetch-user-2",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"user-2\""
+      },
+      "RetryDetails": {}
+    },
+    "SubType": "Step"
+  },
+  {
+    "EventId": 6,
+    "EventTimestamp": "2025-11-24T18:55:48.836Z",
+    "EventType": "InvocationCompleted",
+    "InvocationCompletedDetails": {
+      "EndTimestamp": "2025-11-24T18:55:48.836Z",
+      "Error": {},
+      "RequestId": "92b48dab-9918-4ac9-87f9-9586b53f510d",
+      "StartTimestamp": "2025-11-24T18:55:48.586Z"
+    }
+  },
+  {
+    "EventId": 7,
+    "EventTimestamp": "2025-11-24T18:55:48.940Z",
+    "EventType": "ExecutionSucceeded",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"completed\":true}"
+      }
+    },
+    "Id": "92a8feb5-5c06-4541-ae30-ca3a757b37bc"
+  }
+]
