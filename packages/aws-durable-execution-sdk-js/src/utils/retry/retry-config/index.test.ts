@@ -224,16 +224,86 @@ describe("RetryStrategy", () => {
 
       const strategy = createRetryStrategy({
         retryableErrorTypes: [TimeoutError],
-        retryableErrors: [], // Override default /.*/
       });
 
       // Error that should be retried
       const timeoutError = new TimeoutError("Operation timed out");
       expect(strategy(timeoutError, 1).shouldRetry).toBe(true);
 
-      // Error that should not be retried
+      // Error that should not be retried (different type)
       const validationError = new ValidationError("Invalid input");
       expect(strategy(validationError, 1).shouldRetry).toBe(false);
+
+      // Generic Error should not be retried (not in retryableErrorTypes)
+      const genericError = new Error("Some error");
+      expect(strategy(genericError, 1).shouldRetry).toBe(false);
+    });
+
+    it("should combine retryableErrors and retryableErrorTypes with OR logic", () => {
+      class TimeoutError extends Error {}
+
+      const strategy = createRetryStrategy({
+        retryableErrors: [/network/i],
+        retryableErrorTypes: [TimeoutError],
+      });
+
+      // Should retry: matches error type
+      const timeoutError = new TimeoutError("Operation timed out");
+      expect(strategy(timeoutError, 1).shouldRetry).toBe(true);
+
+      // Should retry: matches error message pattern
+      const networkError = new Error("Network failure");
+      expect(strategy(networkError, 1).shouldRetry).toBe(true);
+
+      // Should not retry: matches neither
+      const otherError = new Error("Invalid input");
+      expect(strategy(otherError, 1).shouldRetry).toBe(false);
+    });
+
+    it("should not apply default regex when only retryableErrorTypes is specified", () => {
+      class NetworkError extends Error {}
+
+      const strategy = createRetryStrategy({
+        retryableErrorTypes: [NetworkError],
+      });
+
+      // Should retry: matches error type
+      const networkError = new NetworkError("Connection failed");
+      expect(strategy(networkError, 1).shouldRetry).toBe(true);
+
+      // Should NOT retry: generic Error doesn't match type, and default regex not applied
+      const genericError = new Error("Some random error");
+      expect(strategy(genericError, 1).shouldRetry).toBe(false);
+    });
+
+    it("should not apply default regex when only retryableErrors is specified", () => {
+      const strategy = createRetryStrategy({
+        retryableErrors: [/timeout/i],
+      });
+
+      // Should retry: matches pattern
+      const timeoutError = new Error("Request timeout");
+      expect(strategy(timeoutError, 1).shouldRetry).toBe(true);
+
+      // Should NOT retry: doesn't match pattern
+      const otherError = new Error("Invalid input");
+      expect(strategy(otherError, 1).shouldRetry).toBe(false);
+    });
+
+    it("should apply default regex only when neither filter is specified", () => {
+      const strategy = createRetryStrategy({
+        maxAttempts: 5,
+      });
+
+      // Should retry: default regex matches all errors
+      const anyError1 = new Error("Network error");
+      expect(strategy(anyError1, 1).shouldRetry).toBe(true);
+
+      const anyError2 = new Error("Validation error");
+      expect(strategy(anyError2, 1).shouldRetry).toBe(true);
+
+      const anyError3 = new Error("Random error");
+      expect(strategy(anyError3, 1).shouldRetry).toBe(true);
     });
 
     it("should ensure minimum delay of 1 second", () => {

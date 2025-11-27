@@ -2,8 +2,34 @@ import { Serdes } from "../utils/serdes/serdes";
 import { StepContext } from "./logger";
 import { DurableLogger, Duration } from "../types";
 
+/**
+ * Decision returned by a retry strategy function
+ * 
+ * @remarks
+ * Returned by retry strategy functions to indicate whether an operation should be retried
+ * and how long to wait before the next attempt.
+ * 
+ * @example
+ * ```typescript
+ * // Don't retry
+ * { shouldRetry: false }
+ * 
+ * // Retry after 5 seconds
+ * { shouldRetry: true, delay: { seconds: 5 } }
+ * 
+ * // Retry after 2 minutes
+ * { shouldRetry: true, delay: { minutes: 2 } }
+ * ```
+ * 
+ * @see {@link createRetryStrategy} for creating retry strategies
+ */
 export interface RetryDecision {
+  /** Whether the operation should be retried */
   shouldRetry: boolean;
+  /** 
+   * Delay before the next retry attempt
+   * @remarks Only used when `shouldRetry` is true. If not specified, defaults to 1 second.
+   */
   delay?: Duration;
 }
 
