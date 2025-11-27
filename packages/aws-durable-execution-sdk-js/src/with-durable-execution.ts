@@ -11,7 +11,6 @@ import { TerminationReason } from "./termination-manager/types";
 
 import {
   DurableLogger,
-  DurableContext,
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
   DurableExecutionMode,
@@ -23,12 +22,11 @@ import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { runWithContext } from "./utils/context-tracker/context-tracker";
 import { createDefaultLogger } from "./utils/logger/default-logger";
+import {
+  DurableExecutionConfig,
+  DurableHandler,
+} from "./types/durable-execution";
 
-type DurableHandler<
-  Input,
-  Output,
-  Logger extends DurableLogger = DurableLogger,
-> = (event: Input, context: DurableContext<Logger>) => Promise<Output>;
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
 async function runHandler<
@@ -48,7 +46,7 @@ async function runHandler<
   const checkpointManager = new CheckpointManager(
     executionContext.durableExecutionArn,
     executionContext._stepData,
-    executionContext.state,
+    executionContext.durableExecutionClient,
     executionContext.terminationManager,
     executionContext.activeOperationsTracker,
     checkpointToken,
@@ -261,6 +259,7 @@ export const withDurableExecution = <
   Logger extends DurableLogger = DurableLogger,
 >(
   handler: DurableHandler<Input, Output, Logger>,
+  config?: DurableExecutionConfig,
 ): LambdaHandler<DurableExecutionInvocationInput> => {
   return async (
     event: DurableExecutionInvocationInput,
@@ -268,7 +267,7 @@ export const withDurableExecution = <
   ): Promise<DurableExecutionInvocationOutput> => {
     validateDurableExecutionEvent(event);
     const { executionContext, durableExecutionMode, checkpointToken } =
-      await initializeExecutionContext(event, context);
+      await initializeExecutionContext(event, context, config?.client);
     let response: DurableExecutionInvocationOutput | null = null;
     try {
       response = await runHandler(

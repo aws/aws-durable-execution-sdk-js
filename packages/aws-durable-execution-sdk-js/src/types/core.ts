@@ -1,6 +1,6 @@
 import { Context } from "aws-lambda";
 import { TerminationManager } from "../termination-manager/termination-manager";
-import { ExecutionState } from "../storage/storage";
+import { DurableExecutionClient } from "./durable-execution";
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 import { ActiveOperationsTracker } from "../utils/termination-helper/active-operations-tracker";
 
@@ -14,8 +14,6 @@ export interface LambdaHandler<T> {
   (event: T, context: Context): Promise<DurableExecutionInvocationOutput>;
 }
 
-// TODO - prefer to import this entire input model from the SDK,
-// but it's not part of the frontend model so it doesn't get generated.
 export interface DurableExecutionInvocationInput {
   DurableExecutionArn: string;
   CheckpointToken: string;
@@ -23,11 +21,6 @@ export interface DurableExecutionInvocationInput {
     Operations: Operation[];
     NextMarker: string;
   };
-  LoggingMode?: string;
-  /**
-   * Flag to indicate if this execution is running against local runner.
-   */
-  LocalRunner?: boolean;
 }
 
 export enum InvocationStatus {
@@ -76,7 +69,7 @@ export type Duration =
   | { seconds: number };
 
 export interface ExecutionContext {
-  state: ExecutionState;
+  durableExecutionClient: DurableExecutionClient;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
   terminationManager: TerminationManager;
   durableExecutionArn: string;

@@ -5,7 +5,7 @@ import {
   OperationStatus,
   OperationAction,
 } from "@aws-sdk/client-lambda";
-import { ExecutionState } from "../../storage/storage";
+import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
@@ -49,7 +49,7 @@ export class CheckpointManager implements Checkpoint {
   constructor(
     private durableExecutionArn: string,
     private stepData: Record<string, Operation>,
-    private storage: ExecutionState,
+    private storage: DurableExecutionClient,
     private terminationManager: TerminationManager,
     private activeOperationsTracker: ActiveOperationsTracker | undefined,
     initialTaskToken: string,

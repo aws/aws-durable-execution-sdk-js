@@ -3,8 +3,11 @@ import { Context } from "aws-lambda";
 import {
   withDurableExecution,
   DurableExecutionInvocationOutput,
+  DurableExecutionInvocationInputWithClient,
+  DurableExecutionInvocationInput,
 } from "@aws/durable-execution-sdk-js";
 import { randomUUID } from "node:crypto";
+import { LocalRunnerClient } from "./local-runner-storage";
 
 export interface HandlerParameters {
   durableExecutionArn: string;
@@ -70,8 +73,10 @@ export class InvokeHandler {
    * @param parameters Handler parameters containing execution details
    * @returns Formatted invocation event
    */
-  private buildInvocationEvent(parameters: HandlerParameters) {
-    return {
+  private buildInvocationEvent(
+    parameters: HandlerParameters,
+  ): DurableExecutionInvocationInputWithClient {
+    const invocationInput: DurableExecutionInvocationInput = {
       CheckpointToken: parameters.checkpointToken,
       DurableExecutionArn: parameters.durableExecutionArn,
       InitialExecutionState: {
@@ -79,6 +84,10 @@ export class InvokeHandler {
         NextMarker: "",
       },
     };
+    return new DurableExecutionInvocationInputWithClient(
+      invocationInput,
+      new LocalRunnerClient(),
+    );
   }
 
   /**

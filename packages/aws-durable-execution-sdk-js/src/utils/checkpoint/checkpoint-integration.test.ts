@@ -39,7 +39,7 @@ describe("Checkpoint Integration Tests", () => {
 
     mockContext = createMockExecutionContext({
       durableExecutionArn: "test-durable-execution-arn",
-      state: mockState,
+      durableExecutionClient: mockState,
       terminationManager: mockTerminationManager,
     });
 
@@ -261,7 +261,7 @@ describe("Checkpoint Integration Tests", () => {
     // Create second context
     const _mockContext2 = createMockExecutionContext({
       durableExecutionArn: "test-durable-execution-arn-2",
-      state: mockState2,
+      durableExecutionClient: mockState2,
       terminationManager: mockTerminationManager,
     });
 

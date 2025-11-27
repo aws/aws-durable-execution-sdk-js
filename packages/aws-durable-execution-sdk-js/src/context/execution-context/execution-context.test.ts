@@ -3,15 +3,17 @@ import {
   OperationStatus,
   OperationType,
 } from "@aws-sdk/client-lambda";
-import { getExecutionState } from "../../storage/storage";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { initializeExecutionContext } from "./execution-context";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Context } from "aws-lambda";
+import { DurableExecutionClient } from "../../types/durable-execution";
+import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
+import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
 
 // Mock dependencies
-jest.mock("../../storage/storage");
+jest.mock("../../durable-execution-api-client/durable-execution-api-client");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../termination-manager/termination-manager");
 jest.mock("../../utils/logger/default-logger");
@@ -89,16 +91,18 @@ describe("initializeExecutionContext", () => {
     succeed: () => {},
   };
 
-  const mockExecutionState = {
+  const mockDurableExecutionClient: jest.Mocked<DurableExecutionClient> = {
     checkpoint: jest.fn(),
-    getStepData: jest.fn(),
+    getExecutionState: jest.fn(),
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
 
     // Setup default mocks
-    (getExecutionState as jest.Mock).mockReturnValue(mockExecutionState);
+    (DurableExecutionApiClient as jest.Mock).mockImplementation(
+      () => mockDurableExecutionClient,
+    );
 
     // Mock default logger
     (createDefaultLogger as jest.Mock).mockReturnValue({
@@ -127,12 +131,11 @@ describe("initializeExecutionContext", () => {
     );
 
     // Verify
-    expect(getExecutionState).toHaveBeenCalled();
     expect(result).toStrictEqual({
       checkpointToken: mockCheckpointToken,
       durableExecutionMode: expect.any(String),
       executionContext: {
-        state: mockExecutionState,
+        durableExecutionClient: mockDurableExecutionClient,
         _stepData: {},
         terminationManager: expect.any(Object),
         activeOperationsTracker: expect.any(Object),
@@ -233,7 +236,7 @@ describe("initializeExecutionContext", () => {
       },
     };
 
-    mockExecutionState.getStepData.mockResolvedValueOnce({
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
       Operations: [mockStepStartedEvent],
       NextMarker: undefined,
     });
@@ -245,7 +248,7 @@ describe("initializeExecutionContext", () => {
     );
 
     // Verify
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -290,12 +293,12 @@ describe("initializeExecutionContext", () => {
       },
     };
 
-    mockExecutionState.getStepData.mockResolvedValueOnce({
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
       Operations: mockOperations2,
       NextMarker: "token2",
     });
 
-    mockExecutionState.getStepData.mockResolvedValueOnce({
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
       Operations: mockOperations3,
       NextMarker: undefined,
     });
@@ -307,7 +310,7 @@ describe("initializeExecutionContext", () => {
     );
 
     // Verify
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -316,7 +319,7 @@ describe("initializeExecutionContext", () => {
       },
       expectLogger,
     );
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -349,12 +352,12 @@ describe("initializeExecutionContext", () => {
         },
       };
 
-    mockExecutionState.getStepData.mockResolvedValueOnce({
-      Operations: [mockCustomerHandlerEvent],
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
+      Operations: [mockExecutionEvent],
       NextMarker: "token2",
     });
 
-    mockExecutionState.getStepData.mockResolvedValueOnce({
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
       Operations: [mockStepSucceededEvent],
       NextMarker: "",
     });
@@ -366,7 +369,7 @@ describe("initializeExecutionContext", () => {
     );
 
     // Verify
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -376,7 +379,7 @@ describe("initializeExecutionContext", () => {
       expectLogger,
     );
 
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -402,7 +405,7 @@ describe("initializeExecutionContext", () => {
     };
 
     // Mock response that returns empty string for NextMarker (should exit loop)
-    mockExecutionState.getStepData.mockResolvedValueOnce({
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
       Operations: [mockStepStartedEvent],
       NextMarker: "", // Empty string should exit the while loop
     });
@@ -414,7 +417,7 @@ describe("initializeExecutionContext", () => {
     );
 
     // Verify
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -423,7 +426,9 @@ describe("initializeExecutionContext", () => {
       },
       expectLogger,
     );
-    expect(mockExecutionState.getStepData).toHaveBeenCalledTimes(1); // Should only be called once
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledTimes(
+      1,
+    ); // Should only be called once
     expect(result.executionContext._stepData).toEqual({
       step1: mockInitialOperations[1],
       step2: mockStepStartedEvent,
@@ -442,7 +447,7 @@ describe("initializeExecutionContext", () => {
     };
 
     // Mock the first paginated response to include the execution event
-    mockExecutionState.getStepData.mockResolvedValueOnce({
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
       Operations: [mockExecutionEvent], // Provide the required execution event
       NextMarker: "",
     });
@@ -454,7 +459,7 @@ describe("initializeExecutionContext", () => {
     );
 
     // Verify - should handle undefined operations gracefully and get execution event from pagination
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -464,19 +469,6 @@ describe("initializeExecutionContext", () => {
       expectLogger,
     );
     expect(result.executionContext._stepData).toEqual({});
-  });
-
-  it("should use LocalRunner flag to create LocalRunnerStorage", async () => {
-    const eventWithLocalRunner: DurableExecutionInvocationInput = {
-      ...mockEvent,
-      LocalRunner: true,
-    };
-
-    // Execute
-    await initializeExecutionContext(eventWithLocalRunner, mockLambdaContext);
-
-    // Verify
-    expect(getExecutionState).toHaveBeenCalled();
   });
 
   it("should handle undefined operations in paginated response", async () => {
@@ -490,7 +482,7 @@ describe("initializeExecutionContext", () => {
     };
 
     // Mock response with undefined operations
-    mockExecutionState.getStepData.mockResolvedValueOnce({
+    mockDurableExecutionClient.getExecutionState.mockResolvedValueOnce({
       Operations: undefined, // This should trigger the || [] branch
       NextMarker: "",
     });
@@ -502,7 +494,7 @@ describe("initializeExecutionContext", () => {
     );
 
     // Verify
-    expect(mockExecutionState.getStepData).toHaveBeenCalledWith(
+    expect(mockDurableExecutionClient.getExecutionState).toHaveBeenCalledWith(
       {
         CheckpointToken: mockCheckpointToken,
         DurableExecutionArn: "test-durable-execution-arn",
@@ -563,5 +555,197 @@ describe("initializeExecutionContext", () => {
     // Verify getStepData returns undefined for non-existent step
     const stepData = result.executionContext.getStepData("nonExistentStep");
     expect(stepData).toBeUndefined();
+  });
+
+  it("should use event.durableExecutionClient when event is instance of DurableExecutionInvocationInputWithClient", async () => {
+    // Setup - create a custom durable execution client
+    const mockCustomDurableClient: jest.Mocked<DurableExecutionClient> = {
+      checkpoint: jest.fn(),
+      getExecutionState: jest.fn(),
+    };
+
+    // Create event with custom client
+    const eventWithCustomClient = new DurableExecutionInvocationInputWithClient(
+      mockEvent,
+      mockCustomDurableClient,
+    );
+
+    // Execute
+    const result = await initializeExecutionContext(
+      eventWithCustomClient,
+      mockLambdaContext,
+    );
+
+    // Verify that the custom client is used in the execution context
+    expect(result.executionContext.durableExecutionClient).toBe(
+      mockCustomDurableClient,
+    );
+
+    // Verify that DurableExecutionApiClient was not instantiated
+    expect(DurableExecutionApiClient).not.toHaveBeenCalled();
+  });
+
+  it("should use custom durableExecutionClient for pagination when event is DurableExecutionInvocationInputWithClient", async () => {
+    // Setup - create a custom durable execution client
+    const mockCustomDurableClient: jest.Mocked<DurableExecutionClient> = {
+      checkpoint: jest.fn(),
+      getExecutionState: jest.fn(),
+    };
+
+    // Setup event with pagination
+    const eventWithPagination = new DurableExecutionInvocationInputWithClient(
+      {
+        ...mockEvent,
+        InitialExecutionState: {
+          Operations: mockInitialOperations,
+          NextMarker: "token1",
+        },
+      },
+      mockCustomDurableClient,
+    );
+
+    // Mock the custom client's getExecutionState method
+    mockCustomDurableClient.getExecutionState.mockResolvedValueOnce({
+      Operations: [mockStepStartedEvent],
+      NextMarker: "",
+    });
+
+    // Execute
+    const result = await initializeExecutionContext(
+      eventWithPagination,
+      mockLambdaContext,
+    );
+
+    expect(result.executionContext.durableExecutionClient).toBe(
+      mockCustomDurableClient,
+    );
+    expect(result.executionContext.durableExecutionClient).not.toBe(
+      mockDurableExecutionClient,
+    );
+
+    // Verify that the custom client was used for pagination
+    expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledWith(
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: mockDurableExecutionArn,
+        Marker: "token1",
+        MaxItems: 1000,
+      },
+      expectLogger,
+    );
+
+    // Verify that the default DurableExecutionApiClient was not used
+    expect(mockDurableExecutionClient.getExecutionState).not.toHaveBeenCalled();
+    expect(DurableExecutionApiClient).not.toHaveBeenCalled();
+
+    // Verify the result uses the custom client
+    expect(result.executionContext.durableExecutionClient).toBe(
+      mockCustomDurableClient,
+    );
+  });
+
+  it("should use custom durableExecutionClient for multiple pagination calls", async () => {
+    // Setup - create a custom durable execution client
+    const mockCustomDurableClient: jest.Mocked<DurableExecutionClient> = {
+      checkpoint: jest.fn(),
+      getExecutionState: jest.fn(),
+    };
+
+    const mockOperations2: Operation[] = [
+      {
+        Id: "step2",
+        Status: OperationStatus.STARTED,
+        SubType: OperationSubType.STEP,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
+      },
+    ];
+
+    const mockOperations3: Operation[] = [
+      {
+        Id: "step3",
+        Status: OperationStatus.FAILED,
+        SubType: OperationSubType.STEP,
+        Type: OperationType.STEP,
+        StartTimestamp: new Date(),
+      },
+    ];
+
+    // Setup event with multiple pages
+    const eventWithMultiplePagination =
+      new DurableExecutionInvocationInputWithClient(
+        {
+          ...mockEvent,
+          InitialExecutionState: {
+            Operations: mockInitialOperations,
+            NextMarker: "token1",
+          },
+        },
+        mockCustomDurableClient,
+      );
+
+    // Mock multiple pagination responses
+    mockCustomDurableClient.getExecutionState
+      .mockResolvedValueOnce({
+        Operations: mockOperations2,
+        NextMarker: "token2",
+      })
+      .mockResolvedValueOnce({
+        Operations: mockOperations3,
+        NextMarker: "",
+      });
+
+    // Execute
+    const result = await initializeExecutionContext(
+      eventWithMultiplePagination,
+      mockLambdaContext,
+    );
+
+    expect(result.executionContext.durableExecutionClient).toBe(
+      mockCustomDurableClient,
+    );
+    expect(result.executionContext.durableExecutionClient).not.toBe(
+      mockDurableExecutionClient,
+    );
+
+    // Verify that the custom client was called for both pagination requests
+    expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledWith(
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: mockDurableExecutionArn,
+        Marker: "token1",
+        MaxItems: 1000,
+      },
+      expectLogger,
+    );
+
+    expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledWith(
+      {
+        CheckpointToken: mockCheckpointToken,
+        DurableExecutionArn: mockDurableExecutionArn,
+        Marker: "token2",
+        MaxItems: 1000,
+      },
+      expectLogger,
+    );
+
+    // Verify both calls were made to the custom client
+    expect(mockCustomDurableClient.getExecutionState).toHaveBeenCalledTimes(2);
+
+    // Verify that the default client was not used
+    expect(mockDurableExecutionClient.getExecutionState).not.toHaveBeenCalled();
+    expect(DurableExecutionApiClient).not.toHaveBeenCalled();
+
+    // Verify the step data includes all operations from multiple pages
+    expect(result.executionContext._stepData).toEqual({
+      step1: mockInitialOperations[1],
+      step2: mockOperations2[0],
+      step3: mockOperations3[0],
+    });
+
+    // Verify the result uses the custom client
+    expect(result.executionContext.durableExecutionClient).toBe(
+      mockCustomDurableClient,
+    );
   });
 });

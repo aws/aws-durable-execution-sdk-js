@@ -7,13 +7,13 @@ import {
   GetDurableExecutionStateResponse,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
-import { ExecutionState } from "@aws/durable-execution-sdk-js";
+import { DurableExecutionClient } from "@aws/durable-execution-sdk-js";
 
 /**
  * Local storage implementation that connects to the local checkpoint server
  * instead of real AWS Lambda API for testing purposes.
  */
-export class LocalRunnerStorage implements ExecutionState {
+export class LocalRunnerClient implements DurableExecutionClient {
   private client: LambdaClient;
 
   constructor() {
@@ -31,7 +31,7 @@ export class LocalRunnerStorage implements ExecutionState {
     });
   }
 
-  async getStepData(
+  async getExecutionState(
     params: GetDurableExecutionStateRequest,
   ): Promise<GetDurableExecutionStateResponse> {
     const response = await this.client.send(

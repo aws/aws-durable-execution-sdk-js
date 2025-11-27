@@ -9,7 +9,7 @@ import {
   DurableContextImpl,
   DurableExecution,
 } from "../context/durable-context/durable-context";
-import { ExecutionState } from "../storage/storage";
+import { DurableExecutionClient } from "../types/durable-execution";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { Checkpoint } from "../utils/checkpoint/checkpoint-helper";
 import {
@@ -23,10 +23,10 @@ import { createDefaultLogger } from "../utils/logger/default-logger";
 /**
  * In-memory storage for testing - no API calls
  */
-class InMemoryStorage implements ExecutionState {
+class InMemoryStorage implements DurableExecutionClient {
   private operations: Operation[] = [];
 
-  async getStepData(): Promise<{ Operations: Operation[] }> {
+  async getExecutionState(): Promise<{ Operations: Operation[] }> {
     return { Operations: this.operations };
   }
 
@@ -71,7 +71,7 @@ export function createTestDurableContext(options?: {
   });
 
   const executionContext: ExecutionContext = {
-    state: storage,
+    durableExecutionClient: storage,
     _stepData: stepData,
     terminationManager: new TerminationManager(),
     durableExecutionArn:

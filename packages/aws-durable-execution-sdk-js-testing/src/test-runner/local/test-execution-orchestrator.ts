@@ -6,9 +6,7 @@ import {
 import {
   withDurableExecution,
   InvocationStatus,
-  setCustomStorage,
 } from "@aws/durable-execution-sdk-js";
-import { LocalRunnerStorage } from "./local-runner-storage";
 import { InvocationResult } from "../../checkpoint-server/storage/execution-manager";
 import { ExecutionId } from "../../checkpoint-server/utils/tagged-strings";
 import { InvokeHandler } from "./invoke-handler";
@@ -56,9 +54,6 @@ export class TestExecutionOrchestrator {
     private readonly functionStorage: FunctionStorage,
     private skipTimeProps: SkipTimeProps,
   ) {
-    // Set up local storage for testing
-    setCustomStorage(new LocalRunnerStorage());
-
     this.executionState = new TestExecutionState();
     this.invocationTracker = new InvocationTracker(checkpointApi);
     this.invokeHandlerInstance = new InvokeHandler();

@@ -6,6 +6,7 @@ import {
   InvocationStatus,
 } from "@aws/durable-execution-sdk-js";
 import { HandlerParameters, InvokeHandler } from "../invoke-handler";
+import { LocalRunnerClient } from "../local-runner-storage";
 
 // Mock crypto
 jest.mock("node:crypto", () => ({
@@ -51,6 +52,7 @@ describe("invoke-handler", () => {
             Operations: params.operations,
             NextMarker: "",
           },
+          durableExecutionClient: expect.any(LocalRunnerClient),
         },
         expect.objectContaining({
           functionName: "my-function-name",

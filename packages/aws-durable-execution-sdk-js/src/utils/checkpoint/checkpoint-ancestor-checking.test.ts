@@ -39,7 +39,7 @@ describe("CheckpointManager - Ancestor Checking", () => {
     const stepData = {};
     mockContext = {
       durableExecutionArn: "test-durable-execution-arn",
-      state: mockState,
+      durableExecutionClient: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
       pendingCompletions: new Set<string>(),

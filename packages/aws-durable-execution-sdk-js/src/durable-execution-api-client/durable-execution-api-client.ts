@@ -7,25 +7,36 @@ import {
   GetDurableExecutionStateResponse,
   LambdaClient,
 } from "@aws-sdk/client-lambda";
-import { ExecutionState } from "./storage";
+import { DurableExecutionClient } from "../types/durable-execution";
 import { log } from "../utils/logger/logger";
 import { DurableLogger } from "../types/durable-logger";
 
-/**
- * Implementation of ExecutionState that uses the new \@aws-sdk/client-lambda
- */
-export class ApiStorage implements ExecutionState {
-  private client: LambdaClient;
+let defaultLambdaClient: LambdaClient | undefined;
 
-  constructor() {
-    this.client = new LambdaClient({
-      requestHandler: {
-        connectionTimeout: 5000,
-        socketTimeout: 50000,
-        requestTimeout: 55000,
-        throwOnRequestTimeout: true,
-      },
-    });
+/**
+ * Durable execution client which uses an API-based LambdaClient
+ * with built-in error logging. By default, the Lambda client will
+ * have custom timeouts set.
+ */
+export class DurableExecutionApiClient implements DurableExecutionClient {
+  private readonly client: LambdaClient;
+
+  constructor(client?: LambdaClient) {
+    if (!client) {
+      if (!defaultLambdaClient) {
+        defaultLambdaClient = new LambdaClient({
+          requestHandler: {
+            connectionTimeout: 5000,
+            socketTimeout: 50000,
+            requestTimeout: 55000,
+            throwOnRequestTimeout: true,
+          },
+        });
+      }
+      this.client = defaultLambdaClient;
+    } else {
+      this.client = client;
+    }
   }
 
   /**
@@ -34,7 +45,7 @@ export class ApiStorage implements ExecutionState {
    * @param logger - Optional developer logger for error reporting
    * @returns Response with operations data
    */
-  async getStepData(
+  async getExecutionState(
     params: GetDurableExecutionStateRequest,
     logger?: DurableLogger,
   ): Promise<GetDurableExecutionStateResponse> {

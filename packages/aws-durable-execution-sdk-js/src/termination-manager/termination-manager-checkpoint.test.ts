@@ -8,7 +8,7 @@ import { createDefaultLogger } from "../utils/logger/default-logger";
 
 // Helper function to create checkpoint function from manager
 const createCheckpoint = (
-  context: any,
+  context: ExecutionContext,
   token: string,
   emitter: any,
   logger: any,
@@ -16,7 +16,7 @@ const createCheckpoint = (
   const manager = new CheckpointManager(
     context.durableExecutionArn,
     {},
-    context.state,
+    context.durableExecutionClient,
     context.terminationManager,
     undefined,
     token,
@@ -44,7 +44,8 @@ describe("TerminationManager Checkpoint Integration", () => {
 
     mockContext = {
       durableExecutionArn: "test-arn",
-      state: {
+      durableExecutionClient: {
+        getExecutionState: jest.fn(),
         checkpoint: jest.fn().mockResolvedValue({
           CheckpointToken: "new-token",
           NewExecutionState: { Operations: [] },
@@ -52,7 +53,11 @@ describe("TerminationManager Checkpoint Integration", () => {
       },
       _stepData: {},
       terminationManager,
-    } as unknown as ExecutionContext;
+      requestId: "",
+      tenantId: "",
+      pendingCompletions: new Set(),
+      getStepData: jest.fn(),
+    } satisfies ExecutionContext;
 
     mockLogger = createDefaultLogger(mockContext);
   });
@@ -74,7 +79,9 @@ describe("TerminationManager Checkpoint Integration", () => {
     });
 
     await new Promise((resolve) => setImmediate(resolve));
-    expect(mockContext.state.checkpoint).toHaveBeenCalledTimes(1);
+    expect(mockContext.durableExecutionClient.checkpoint).toHaveBeenCalledTimes(
+      1,
+    );
 
     // Trigger termination and set checkpoint terminating flag
     terminationManager.terminate({
@@ -97,7 +104,9 @@ describe("TerminationManager Checkpoint Integration", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(resolved).toBe(false);
-    expect(mockContext.state.checkpoint).toHaveBeenCalledTimes(1);
+    expect(mockContext.durableExecutionClient.checkpoint).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   test("should prevent force checkpoint after termination", async () => {
@@ -107,7 +116,8 @@ describe("TerminationManager Checkpoint Integration", () => {
       mockEmitter,
       mockLogger,
     ) as unknown as CheckpointFunction;
-    const mockCheckpointFn = mockContext.state.checkpoint as jest.Mock;
+    const mockCheckpointFn = mockContext.durableExecutionClient
+      .checkpoint as jest.Mock;
 
     // Queue a checkpoint first
     await checkpoint("step-1", {
@@ -181,7 +191,9 @@ describe("TerminationManager Checkpoint Integration", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(resolved).toBe(false);
-    expect(mockContext.state.checkpoint).not.toHaveBeenCalled();
+    expect(
+      mockContext.durableExecutionClient.checkpoint,
+    ).not.toHaveBeenCalled();
   });
 
   test("should handle multiple terminate calls gracefully", async () => {
@@ -210,6 +222,8 @@ describe("TerminationManager Checkpoint Integration", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(resolved).toBe(false);
-    expect(mockContext.state.checkpoint).not.toHaveBeenCalled();
+    expect(
+      mockContext.durableExecutionClient.checkpoint,
+    ).not.toHaveBeenCalled();
   });
 });

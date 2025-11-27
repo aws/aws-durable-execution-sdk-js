@@ -1,5 +1,4 @@
-import { Operation } from "@aws-sdk/client-lambda";
-import { getExecutionState } from "../../storage/storage";
+import { LambdaClient, Operation } from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   DurableExecutionInvocationInput,
@@ -11,10 +10,13 @@ import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-i
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { ActiveOperationsTracker } from "../../utils/termination-helper/active-operations-tracker";
 import { Context } from "aws-lambda";
+import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
+import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
   context: Context,
+  lambdaClient?: LambdaClient,
 ): Promise<{
   executionContext: ExecutionContext;
   durableExecutionMode: DurableExecutionMode;
@@ -26,7 +28,11 @@ export const initializeExecutionContext = async (
   const checkpointToken = event.CheckpointToken;
   const durableExecutionArn = event.DurableExecutionArn;
 
-  const state = getExecutionState();
+  const durableExecutionClient =
+    // Allow passing arbitrary durable clients if the input is a custom class
+    event instanceof DurableExecutionInvocationInputWithClient
+      ? event.durableExecutionClient
+      : new DurableExecutionApiClient(lambdaClient);
 
   // Create logger for initialization errors using existing logger factory
   const initLogger = createDefaultLogger({
@@ -39,7 +45,7 @@ export const initializeExecutionContext = async (
   let nextMarker = event.InitialExecutionState.NextMarker;
 
   while (nextMarker) {
-    const response = await state.getStepData(
+    const response = await durableExecutionClient.getExecutionState(
       {
         CheckpointToken: checkpointToken,
         Marker: nextMarker,
@@ -75,7 +81,7 @@ export const initializeExecutionContext = async (
 
   return {
     executionContext: {
-      state,
+      durableExecutionClient,
       _stepData: stepData,
       terminationManager: new TerminationManager(),
       activeOperationsTracker: new ActiveOperationsTracker(),
