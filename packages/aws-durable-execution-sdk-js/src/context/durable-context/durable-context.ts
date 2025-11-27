@@ -302,6 +302,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this, // Pass DurableContext
         this._parentId,
       );
 

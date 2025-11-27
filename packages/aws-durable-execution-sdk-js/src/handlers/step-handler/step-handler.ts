@@ -95,6 +95,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  durableContext: any, // DurableContext - avoiding circular dependency
   parentId?: string,
 ) => {
   return <T>(
@@ -321,6 +322,12 @@ export const createStepHandler = <Logger extends DurableLogger>(
       }
 
       return await phase1Promise;
+    });
+
+    // Register in context and cleanup when complete
+    durableContext.childPromises.add(durablePromise);
+    durablePromise.finally(() => {
+      durableContext.childPromises.delete(durablePromise);
     });
 
     return durablePromise;
