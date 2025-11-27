@@ -76,6 +76,12 @@ async function runHandler<
     durableExecution,
   );
 
+  // Initialize root context with default terminate function
+  const { terminate } = await import(
+    "./utils/termination-helper/termination-helper"
+  );
+  durableContext.terminationMethod = terminate;
+
   // Extract customerHandlerEvent from the original event
   const initialExecutionEvent = event.InitialExecutionState.Operations?.[0];
   const customerHandlerEvent = JSON.parse(

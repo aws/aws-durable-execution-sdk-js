@@ -77,6 +77,8 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private durableExecution: DurableExecution;
 
   public logger: DurableContextLogger<Logger>;
+  public terminationMethod: any; // TerminationFunction - avoiding circular dependency
+  public childPromises: Set<any> = new Set(); // Set<DurablePromise<any>>
 
   constructor(
     private executionContext: ExecutionContext,

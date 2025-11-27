@@ -24,12 +24,25 @@ import {
 } from "./batch";
 import { DurablePromise } from "./durable-promise";
 import { DurableContextLogger, DurableLogger } from "./durable-logger";
+import { TerminationFunction } from "./termination-function";
 
 export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   /**
    * The underlying AWS Lambda context
    */
   lambdaContext: Context;
+
+  /**
+   * Termination method for this context
+   * @internal
+   */
+  terminationMethod: TerminationFunction;
+
+  /**
+   * Set of child promises created in this context
+   * @internal
+   */
+  childPromises: Set<DurablePromise<any>>;
 
   /**
    * Logger instance for this context, automatically enriched with durable execution metadata.

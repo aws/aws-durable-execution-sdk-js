@@ -1,4 +1,3 @@
-import { terminate } from "../utils/termination-helper/termination-helper";
 import { TerminationFunction } from "./termination-function";
 
 /**
@@ -48,8 +47,11 @@ export class DurablePromise<T> implements Promise<T> {
   /** Flag indicating whether the promise has been executed (awaited or chained) */
   private _isExecuted = false;
 
-  /** Optional custom termination function, defaults to the imported terminate function */
-  private _terminationMethod: TerminationFunction = terminate;
+  /** Optional custom termination function (no default - comes from context) */
+  private _terminationMethod?: TerminationFunction;
+
+  /** Reference to child context if this promise creates one */
+  private _childContext?: any; // Will be DurableContext but avoiding circular dependency
 
   /**
    * Creates a new DurablePromise
@@ -125,12 +127,30 @@ export class DurablePromise<T> implements Promise<T> {
   }
 
   /**
+   * Set child context for operations that create nested contexts
+   * @param childContext - The child DurableContext
+   * @internal
+   */
+  setChildContext(childContext: any): void {
+    this._childContext = childContext;
+  }
+
+  /**
    * Attach a custom termination method to this promise
    * @param terminationMethod - The termination function to use
    * @internal
    */
   attachTerminationMethod(terminationMethod: TerminationFunction): void {
     this._terminationMethod = terminationMethod;
+
+    // If this promise has a child context, propagate to its children
+    if (this._childContext) {
+      this._childContext.terminationMethod = terminationMethod;
+
+      for (const childPromise of this._childContext.childPromises) {
+        childPromise.attachTerminationMethod(terminationMethod);
+      }
+    }
   }
 
   /**
@@ -138,6 +158,14 @@ export class DurablePromise<T> implements Promise<T> {
    * @internal
    */
   getTerminationMethod(): TerminationFunction {
-    return this._terminationMethod;
+    // Priority: promise override, then child context default
+    const method =
+      this._terminationMethod || this._childContext?.terminationMethod;
+    if (!method) {
+      throw new Error(
+        "Termination method not available - context not properly initialized",
+      );
+    }
+    return method;
   }
 }
