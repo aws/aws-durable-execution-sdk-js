@@ -32,6 +32,7 @@ describe("Parallel Handler Two-Phase Execution", () => {
     const parallelHandler = createParallelHandler(
       mockContext,
       mockExecuteConcurrently,
+      new Set(),
     );
 
     const branch1: ParallelFunc<string, DurableLogger> = jest
@@ -62,6 +63,7 @@ describe("Parallel Handler Two-Phase Execution", () => {
     const parallelHandler = createParallelHandler(
       mockContext,
       mockExecuteConcurrently,
+      new Set(),
     );
 
     const branch1: ParallelFunc<string, DurableLogger> = jest

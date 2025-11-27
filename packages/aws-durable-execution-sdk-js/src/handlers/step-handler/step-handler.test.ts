@@ -91,6 +91,7 @@ describe("Step Handler", () => {
       jest.fn(), // removeRunningOperation
       jest.fn(() => false), // hasRunningOperations
       () => mockOperationsEmitter,
+      new Set(),
       new Set(), // childPromises
     );
 
@@ -1132,6 +1133,7 @@ describe("Step Handler", () => {
         jest.fn(), // removeRunningOperation
         jest.fn(() => false), // hasRunningOperations
         () => mockOperationsEmitter,
+        new Set(),
         new Set(), // childPromises
         "parent-step-id", // parentId
       );

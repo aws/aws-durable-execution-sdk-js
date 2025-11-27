@@ -62,6 +62,7 @@ describe("Wait Handler", () => {
       jest.fn(() => false), // hasRunningOperations
       () => mockOperationsEmitter,
       new Set(),
+      new Set(),
     );
   });
 
@@ -156,6 +157,7 @@ describe("Wait Handler", () => {
         () => mockOperationsEmitter,
         new Set(),
         new Set(),
+        new Set(),
       );
 
       await expect(waitHandler("test-wait", { seconds: 1 })).rejects.toThrow(
@@ -186,6 +188,7 @@ describe("Wait Handler", () => {
         () => mockOperationsEmitter,
         new Set(),
         new Set(),
+        new Set(),
       );
 
       waitHandler("test-wait", { seconds: 1 });
@@ -204,6 +207,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
         new Set(),
         new Set(),
       );
@@ -241,6 +245,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
         new Set(),
         new Set(),
       );
@@ -299,6 +304,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
         new Set(),
         new Set(),
       );

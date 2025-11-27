@@ -286,6 +286,7 @@ describe("callback-promise termination method", () => {
       new EventEmitter(),
       "test message",
       jest.fn(),
+      new Set(),
     );
 
     promise.attachTerminationMethod(customTerminate);
@@ -309,6 +310,7 @@ describe("callback-promise termination method", () => {
       new EventEmitter(),
       "test message",
       jest.fn(),
+      new Set(),
     );
 
     // Verify the default termination method is set

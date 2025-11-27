@@ -98,6 +98,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -131,6 +132,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
       );
 
       const result = await invokeHandler("test-invoke", "test-function", {
@@ -165,6 +167,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -203,6 +206,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
       );
 
       await expect(
@@ -230,6 +234,7 @@ describe("InvokeHandler", () => {
           mockCreateStepId,
           mockHasRunningOperations,
           () => new EventEmitter(),
+          new Set(),
         );
 
         await expect(
@@ -252,6 +257,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
       );
 
       await expect(
@@ -290,6 +296,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
       );
 
       const result = await invokeHandler("test-function", { test: "data" });
@@ -327,6 +334,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
         "parent-123",
       );
 
@@ -386,6 +394,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
         "parent-123",
       );
 
@@ -445,6 +454,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
         "parent-123",
       );
 
@@ -495,6 +505,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
         "parent-123",
       );
 
@@ -531,6 +542,7 @@ describe("InvokeHandler", () => {
         mockCreateStepId,
         mockHasRunningOperations,
         () => new EventEmitter(),
+        new Set(),
         "parent-123",
       );
 
