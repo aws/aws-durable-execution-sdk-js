@@ -29,7 +29,11 @@ describe("Map Handler Two-Phase Execution", () => {
   });
 
   it("should start execution in phase 1 immediately (before await)", async () => {
-    const mapHandler = createMapHandler(mockContext, mockExecuteConcurrently);
+    const mapHandler = createMapHandler(
+      mockContext,
+      mockExecuteConcurrently,
+      new Set(),
+    );
 
     const items = ["item1"];
     const mapFunc: MapFunc<string, string, DurableLogger> = jest
@@ -55,7 +59,11 @@ describe("Map Handler Two-Phase Execution", () => {
   });
 
   it("should mark promise as executed only when awaited", async () => {
-    const mapHandler = createMapHandler(mockContext, mockExecuteConcurrently);
+    const mapHandler = createMapHandler(
+      mockContext,
+      mockExecuteConcurrently,
+      new Set(),
+    );
 
     const items = ["item1"];
     const mapFunc: MapFunc<string, string, DurableLogger> = jest

@@ -73,6 +73,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise - this executes the logic but doesn't terminate
@@ -102,6 +103,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise
@@ -130,6 +132,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create multiple invoke promises
@@ -169,6 +172,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise
@@ -208,6 +212,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise

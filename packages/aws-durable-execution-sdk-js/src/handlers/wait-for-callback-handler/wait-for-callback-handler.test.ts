@@ -82,6 +82,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     const result = await handler(submitter);
@@ -142,6 +143,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     const result = await handler(callbackName, submitter);
@@ -165,6 +167,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     // Should throw error when no parameters are provided
@@ -179,6 +182,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     const config = { timeout: { minutes: 5 } };
@@ -236,6 +240,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     const result = await handler(submitter);
@@ -299,6 +304,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     const result = await handler(undefined, submitter);
@@ -322,6 +328,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     // Test with an invalid parameter type (number) to cover the else branch
@@ -385,6 +392,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     // Pass submitter as first parameter and config as second parameter
@@ -451,6 +459,7 @@ describe("waitForCallback handler", () => {
       mockExecutionContext,
       mockGetNextStepId,
       mockRunInChildContext,
+      new Set(),
     );
 
     await expect(handler(submitter, { retryStrategy })).rejects.toThrow(
@@ -539,6 +548,7 @@ describe("waitForCallback handler", () => {
           mockExecutionContext,
           mockGetNextStepId,
           mockRunInChildContext,
+          new Set(),
         );
 
         const result = await handler(submitter, config);

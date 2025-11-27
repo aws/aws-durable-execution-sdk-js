@@ -36,6 +36,7 @@ describe("Wait Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise - this executes the logic but doesn't terminate
@@ -59,6 +60,7 @@ describe("Wait Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise
@@ -78,7 +80,9 @@ describe("Wait Handler Two-Phase Execution", () => {
 
     // Phase 2 execution should have happened (more checkpoint calls)
     expect((waitPromise as DurablePromise<void>).isExecuted).toBe(true);
-    expect(mockCheckpoint.checkpoint.mock.calls.length).toBeGreaterThan(phase1Calls);
+    expect(mockCheckpoint.checkpoint.mock.calls.length).toBeGreaterThan(
+      phase1Calls,
+    );
   });
 
   it("should work correctly with Promise.race", async () => {
@@ -88,6 +92,7 @@ describe("Wait Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create multiple wait promises
@@ -119,6 +124,7 @@ describe("Wait Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise
@@ -145,6 +151,7 @@ describe("Wait Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     // Phase 1: Create the promise
@@ -175,6 +182,7 @@ describe("Wait Handler Two-Phase Execution", () => {
       createStepId,
       hasRunningOperations,
       getOperationsEmitter,
+      new Set(),
     );
 
     const waitPromise = waitHandler({ seconds: 5 });

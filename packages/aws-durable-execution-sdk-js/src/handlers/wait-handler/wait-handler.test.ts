@@ -357,6 +357,7 @@ describe("wait-handler termination method", () => {
       jest.fn().mockReturnValue("step-1"),
       jest.fn().mockReturnValue(false),
       jest.fn().mockReturnValue(new EventEmitter()),
+      new Set(),
     );
 
     const promise = waitHandler({ seconds: 1 });
@@ -378,6 +379,7 @@ describe("wait-handler termination method", () => {
       jest.fn().mockReturnValue("step-1"),
       jest.fn().mockReturnValue(false),
       jest.fn().mockReturnValue(new EventEmitter()),
+      new Set(),
     );
 
     const promise = waitHandler({ seconds: 1 });
