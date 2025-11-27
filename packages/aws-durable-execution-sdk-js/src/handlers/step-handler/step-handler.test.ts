@@ -91,6 +91,7 @@ describe("Step Handler", () => {
       jest.fn(), // removeRunningOperation
       jest.fn(() => false), // hasRunningOperations
       () => mockOperationsEmitter,
+      new Set(), // childPromises
     );
 
     // Reset the mock for retryPresets.default
@@ -1131,6 +1132,7 @@ describe("Step Handler", () => {
         jest.fn(), // removeRunningOperation
         jest.fn(() => false), // hasRunningOperations
         () => mockOperationsEmitter,
+        new Set(), // childPromises
         "parent-step-id", // parentId
       );
 
@@ -1141,6 +1143,7 @@ describe("Step Handler", () => {
       // Verify runWithContext was called with correct stepId and parentId
       expect(runWithContext).toHaveBeenCalledWith(
         "test-step-id",
+        new Set(), // childPromises
         "parent-step-id", // parentId should be passed through
         expect.any(Function),
         1, // currentAttempt (0) + 1 = 1

@@ -21,6 +21,7 @@ describe("Map Handler", () => {
     mapHandler = createMapHandler(
       mockExecutionContext,
       mockExecuteConcurrently,
+      new Set(),
     );
   });
 

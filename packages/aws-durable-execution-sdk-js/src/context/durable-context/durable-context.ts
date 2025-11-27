@@ -481,6 +481,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.executionContext,
         this.getNextStepId.bind(this),
         this.runInChildContext.bind(this),
+        this.childPromises,
       );
       return waitForCallbackHandler(
         nameOrSubmitter!,
@@ -547,6 +548,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const mapHandler = createMapHandler(
         this.executionContext,
         this._executeConcurrently.bind(this),
+        this.childPromises,
       );
       return mapHandler(
         nameOrItems,
@@ -576,6 +578,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const parallelHandler = createParallelHandler(
         this.executionContext,
         this._executeConcurrently.bind(this),
+        this.childPromises,
       );
       return parallelHandler(nameOrBranches, branchesOrConfig, maybeConfig);
     });

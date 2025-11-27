@@ -21,6 +21,7 @@ export const createMapHandler = <Logger extends DurableLogger>(
     executor: ConcurrentExecutor<TItem, TResult, Logger>,
     config?: ConcurrencyConfig<TResult>,
   ) => DurablePromise<BatchResult<TResult>>,
+  childPromises: Set<any>,
 ) => {
   return <TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],
@@ -105,8 +106,16 @@ export const createMapHandler = <Logger extends DurableLogger>(
     phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(async () => {
+    const durablePromise = new DurablePromise(async () => {
       return await phase1Promise;
     });
+
+    // Register and cleanup
+    childPromises.add(durablePromise);
+    durablePromise.finally(() => {
+      childPromises.delete(durablePromise);
+    });
+
+    return durablePromise;
   };
 };

@@ -153,6 +153,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
       );
 
       await expect(waitHandler("test-wait", { seconds: 1 })).rejects.toThrow(
@@ -181,6 +182,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
       );
 
       waitHandler("test-wait", { seconds: 1 });
@@ -199,6 +201,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
       );
 
       await expect(waitHandler("test-wait", { seconds: 1 })).rejects.toThrow(
@@ -234,6 +237,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
       );
 
       // Start the wait handler and trigger execution with .then()
@@ -290,6 +294,7 @@ describe("Wait Handler", () => {
         createStepId,
         mockHasRunningOperations,
         () => mockOperationsEmitter,
+        new Set(),
       );
 
       // Start wait handler - should detect running operations and wait

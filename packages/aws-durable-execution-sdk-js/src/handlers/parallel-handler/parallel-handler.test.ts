@@ -19,6 +19,7 @@ describe("Parallel Handler", () => {
     parallelHandler = createParallelHandler(
       mockExecutionContext,
       mockExecuteConcurrently,
+      new Set(),
     );
   });
 

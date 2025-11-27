@@ -18,6 +18,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   getNextStepId: () => string,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
+  childPromises: Set<any>,
 ) => {
   return <T>(
     nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc<Logger>,
@@ -137,7 +138,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
     phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(async () => {
+    const durablePromise = new DurablePromise(async () => {
       const { result, stepId } = await phase1Promise;
 
       // Always deserialize the result since it's a string
@@ -150,5 +151,13 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
         context.durableExecutionArn,
       ))!;
     });
+
+    // Register and cleanup
+    childPromises.add(durablePromise);
+    durablePromise.finally(() => {
+      childPromises.delete(durablePromise);
+    });
+
+    return durablePromise;
   };
 };
