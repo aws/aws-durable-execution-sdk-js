@@ -302,7 +302,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
-        this, // Pass DurableContext
+        this.childPromises,
         this._parentId,
       );
 
@@ -328,6 +328,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this.childPromises,
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
       );
@@ -378,6 +379,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
             this.durableExecution,
             parentId,
           ),
+        this.childPromises,
         this._parentId,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -400,6 +402,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this.childPromises,
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
       );
@@ -454,6 +457,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
         this.checkAndUpdateReplayMode.bind(this),
+        this.childPromises,
         this._parentId,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
@@ -508,6 +512,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.removeRunningOperation.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),
+        this.childPromises,
         this._parentId,
       );
 

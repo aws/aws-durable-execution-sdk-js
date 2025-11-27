@@ -84,6 +84,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   removeRunningOperation: (stepId: string) => void,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  childPromises: Set<any>,
   parentId: string | undefined,
 ) => {
   return <T>(
@@ -229,6 +230,12 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       }
 
       return await phase1Promise;
+    });
+
+    // Register and cleanup
+    childPromises.add(durablePromise);
+    durablePromise.finally(() => {
+      childPromises.delete(durablePromise);
     });
 
     return durablePromise;

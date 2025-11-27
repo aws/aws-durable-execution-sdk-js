@@ -28,6 +28,7 @@ export const createInvokeHandler = (
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  childPromises: Set<any>,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
 ): {
@@ -233,6 +234,12 @@ export const createInvokeHandler = (
       await startInvokePromise;
       // Then execute phase 2
       return await continueInvokeOperation();
+    });
+
+    // Register and cleanup
+    childPromises.add(durablePromise);
+    durablePromise.finally(() => {
+      childPromises.delete(durablePromise);
     });
 
     return durablePromise;

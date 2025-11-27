@@ -19,6 +19,7 @@ export const createWaitHandler = (
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
+  childPromises: Set<any>,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
 ): {
@@ -136,6 +137,12 @@ export const createWaitHandler = (
       await phase1Promise;
       // Then execute phase 2
       await executeWaitLogic(true);
+    });
+
+    // Register and cleanup
+    childPromises.add(durablePromise);
+    durablePromise.finally(() => {
+      childPromises.delete(durablePromise);
     });
 
     return durablePromise;

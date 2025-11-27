@@ -74,6 +74,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     checkpointToken?: string,
     parentId?: string,
   ) => DurableContext<Logger>,
+  childPromises: Set<any>,
   parentId?: string,
 ) => {
   return <T>(
@@ -120,6 +121,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     let phase1Result: T | undefined;
     let phase1Error: unknown;
+    let durablePromise: DurablePromise<T>;
 
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
@@ -139,6 +141,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           options,
           getParentLogger,
           createChildContext,
+          durablePromise,
         );
       }
 
@@ -153,6 +156,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         options,
         getParentLogger,
         createChildContext,
+        durablePromise,
         parentId,
       );
     })()
@@ -164,13 +168,21 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       });
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(async () => {
+    durablePromise = new DurablePromise(async () => {
       await phase1Promise;
       if (phase1Error !== undefined) {
         throw phase1Error;
       }
       return phase1Result!;
     });
+
+    // Register and cleanup
+    childPromises.add(durablePromise);
+    durablePromise.finally(() => {
+      childPromises.delete(durablePromise);
+    });
+
+    return durablePromise;
   };
 };
 
@@ -194,6 +206,7 @@ export const handleCompletedChildContext = async <
     checkpointToken: string | undefined,
     parentId?: string,
   ) => DurableContext<Logger>,
+  parentPromise: DurablePromise<T>,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
   const stepData = context.getStepData(entityId);
@@ -229,6 +242,9 @@ export const handleCompletedChildContext = async <
       undefined,
       entityId, // parentId
     );
+
+    // Link child context to parent promise for termination propagation
+    parentPromise.setChildContext(durableChildContext);
 
     return await runWithContext(entityId, entityId, () =>
       fn(durableChildContext),
@@ -267,6 +283,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     checkpointToken: string | undefined,
     parentId?: string,
   ) => DurableContext<Logger>,
+  parentPromise: DurablePromise<T>,
   parentId?: string,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
@@ -295,6 +312,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     undefined,
     entityId, // parentId
   );
+
+  // Link child context to parent promise for termination propagation
+  parentPromise.setChildContext(durableChildContext);
 
   try {
     // Execute the child context function with context tracking
