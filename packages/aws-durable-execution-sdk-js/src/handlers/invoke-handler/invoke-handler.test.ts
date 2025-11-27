@@ -579,6 +579,7 @@ describe("invoke-handler termination method", () => {
       jest.fn().mockReturnValue("step-1"),
       jest.fn().mockReturnValue(false),
       jest.fn().mockReturnValue(new EventEmitter()),
+      new Set(),
     );
 
     const promise = invokeHandler("test-function", {});
@@ -603,6 +604,7 @@ describe("invoke-handler termination method", () => {
       jest.fn().mockReturnValue("step-1"),
       jest.fn().mockReturnValue(false),
       jest.fn().mockReturnValue(new EventEmitter()),
+      new Set(),
     );
 
     const promise = invokeHandler("test-function", {});

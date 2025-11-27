@@ -1195,11 +1195,18 @@ describe("step-handler termination method", () => {
       jest.fn() as any,
       {} as any,
       jest.fn().mockReturnValue("step-1"),
-      jest.fn(),
-      jest.fn(),
-      jest.fn(),
+      {
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        configureDurableLoggingContext: jest.fn(),
+      } as any,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
       jest.fn().mockReturnValue(false),
       jest.fn().mockReturnValue(new EventEmitter()),
+      new Set(),
       undefined,
     );
 
@@ -1224,11 +1231,18 @@ describe("step-handler termination method", () => {
       jest.fn() as any,
       {} as any,
       jest.fn().mockReturnValue("step-1"),
-      jest.fn(),
-      jest.fn(),
-      jest.fn(),
+      {
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+        configureDurableLoggingContext: jest.fn(),
+      } as any,
+      jest.fn(), // addRunningOperation
+      jest.fn(), // removeRunningOperation
       jest.fn().mockReturnValue(false),
       jest.fn().mockReturnValue(new EventEmitter()),
+      new Set(),
       undefined,
     );
 
