@@ -14,10 +14,10 @@ import {
 } from "./core";
 
 /**
- * A handler function type for durable Lambda executions that provides automatic state persistence,
+ * A handler function type for a durable execution that provides automatic state persistence,
  * retry logic, and workflow orchestration capabilities.
  *
- * This handler type is the core interface for building stateful, long-running AWS Lambda functions
+ * This handler type is the core interface for building stateful, long-running AWS Durable Executions
  * using the Durable Execution SDK. The handler receives a durable context that enables:
  * - Step-based execution with automatic checkpointing and replay
  * - Built-in retry strategies with exponential backoff and jitter
@@ -34,17 +34,17 @@ import {
  * @typeParam TResult - The type of the return value (defaults to any)
  * @typeParam TLogger - The type of a custom logger implementation (defaults to DurableLogger)
  *
- * @param event - The parsed JSON input event data for the Lambda invocation
+ * @param event - The parsed JSON input event data for the invocation
  * @param context - The durable context providing methods for durable operations like steps,
  *                  waits, parallel execution, external callbacks, and workflow orchestration
  *
  * @returns A promise that resolves with the handler's result value or rejects with an
  *          execution error. The result will be automatically serialized and may be
- *          checkpointed if it exceeds Lambda's response size limits.
+ *          checkpointed if it exceeds response size limits.
  *
  * @example
  * ```typescript
- * const handler: DurableExecutionHandler<{ userId: string }, { status: string }> = async (event, context) => {
+ * const durableHandler: DurableExecutionHandler<{ userId: string }, { status: string }> = async (event, context) => {
  *   // Execute durable step with automatic retry and checkpointing
  *   const user = await context.step("fetch-user", async () =>
  *     fetchUserFromDB(event.userId)
@@ -64,7 +64,7 @@ import {
  *   return { status: "completed" };
  * };
  *
- * export const lambdaHandler = withDurableExecution(handler);
+ * export const handler = withDurableExecution(durableHandler);
  * ```
  *
  * @public
@@ -122,7 +122,7 @@ export interface DurableExecutionConfig {
  * Client interface for durable execution backend operations.
  *
  * This interface defines the core operations needed to manage durable execution state
- * and checkpoints. It abstracts the underlying AWS Lambda service calls and provides
+ * and checkpoints. It abstracts the underlying service calls and provides
  * a clean contract for:
  * - Retrieving execution state during replay scenarios
  * - Creating checkpoints for state persistence
@@ -169,7 +169,7 @@ export interface DurableExecutionClient {
    * can also be triggered manually for custom persistence needs.
    *
    * Checkpointing enables:
-   * - Automatic recovery from Lambda timeouts or failures
+   * - Automatic recovery from timeouts or failures
    * - Resumption of long-running workflows
    * - Replay semantics for consistent execution
    * - State persistence across execution boundaries
@@ -200,7 +200,7 @@ export interface DurableExecutionClient {
  * @example
  * ```typescript
  * // Define your durable handler
- * const myHandler: DurableHandler<MyEvent, MyResult> = async (event, context) => {
+ * const myHandler: DurableExecutionHandler<MyEvent, MyResult> = async (event, context) => {
  *   const result = await context.step("process", async () => processEvent(event));
  *   return result;
  * };

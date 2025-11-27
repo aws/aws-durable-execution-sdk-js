@@ -254,11 +254,11 @@ Check your resource configurations to confirm the durability is set.`;
 }
 
 /**
- * Wraps a durable handler function to create an AWS Lambda handler with automatic state persistence,
+ * Wraps a durable handler function to create a handler with automatic state persistence,
  * retry logic, and workflow orchestration capabilities.
  *
- * This function transforms your durable handler into a deployable Lambda function that integrates
- * with the AWS Lambda Durable Execution service. The wrapped handler automatically manages execution state
+ * This function transforms your durable handler into a function that integrates
+ * with the AWS Durable Execution service. The wrapped handler automatically manages execution state
  * and checkpointing.
  *
  * @typeParam TEvent - The type of the input event your handler expects (defaults to any)
@@ -268,7 +268,7 @@ Check your resource configurations to confirm the durability is set.`;
  * @param handler - Your durable handler function that uses the DurableContext for operations
  * @param config - Optional configuration for custom advanced settings
  *
- * @returns A Lambda handler function that automatically manages durability
+ * @returns A handler function that automatically manages durability
  *
  * @example
  * **Basic Usage:**

@@ -13,9 +13,9 @@ export enum DurableExecutionMode {
 }
 
 /**
- * Input structure for durable execution Lambda invocations.
+ * Input structure for durable execution invocations.
  *
- * This interface defines the payload structure that the AWS Lambda runtime provides
+ * This interface defines the payload structure that the durable execution service provides
  * to durable functions. It contains all the necessary information for the Durable
  * Execution Language SDK to:
  * - Manage checkpointing and state persistence
@@ -114,7 +114,7 @@ export enum InvocationStatus {
    * This status indicates:
    * - Execution was checkpointed and will resume later
    * - Common scenarios: waiting for callbacks, retries, wait operations
-   * - The Lambda function may terminate while execution continues
+   * - The function may terminate while execution continues
    * - Future invocations will resume from the checkpoint
    */
   PENDING = "PENDING",
@@ -144,7 +144,7 @@ export enum OperationSubType {
    * A wait operation (`context.wait`).
    *
    * Represents time-based delays that pause execution for a specified duration.
-   * Waits allow long-running workflows without keeping Lambda functions active.
+   * Waits allow long-running workflows without keeping invocations active.
    */
   WAIT = "Wait",
 
@@ -255,8 +255,8 @@ interface DurableExecutionInvocationOutputPending {
 /**
  * Union type representing all possible output formats for durable execution invocations.
  *
- * This type defines the complete response structure that durable Lambda handlers return
- * to the AWS durable execution service. The response format varies based on the
+ * This type defines the complete response structure that durable functions return
+ * to the AWS Durable Execution service. The response format varies based on the
  * execution outcome:
  *
  * **Successful Completion (`SUCCEEDED`):**
@@ -272,7 +272,7 @@ interface DurableExecutionInvocationOutputPending {
  * **Continued Execution (`PENDING`):**
  * - Indicates the execution is continuing asynchronously
  * - Common for operations involving waits, callbacks, or retries
- * - The execution will be resumed in a future Lambda invocation
+ * - The execution will be resumed in a future invocation
  *
  * The durable execution service uses this response to determine next steps:
  * - Schedule continuation for PENDING status
