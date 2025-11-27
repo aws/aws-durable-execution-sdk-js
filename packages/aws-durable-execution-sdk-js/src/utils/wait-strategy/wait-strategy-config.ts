@@ -5,6 +5,9 @@ import {
 } from "../../types";
 import { durationToSeconds } from "../duration/duration";
 
+/**
+ * @public
+ */
 interface WaitStrategyConfig<T> {
   maxAttempts?: number; // Maximum number of attempts
   initialDelay?: Duration; // Initial delay before first retry
@@ -37,6 +40,9 @@ const applyJitter = (delay: number, strategy: JitterStrategy): number => {
   }
 };
 
+/**
+ * @public
+ */
 export const createWaitStrategy = <T>(config: WaitStrategyConfig<T>) => {
   const finalConfig = {
     ...DEFAULT_CONFIG,

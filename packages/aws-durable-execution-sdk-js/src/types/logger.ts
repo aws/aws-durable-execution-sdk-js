@@ -1,7 +1,8 @@
 import { DurableContextLogger, DurableLogger } from "./durable-logger";
 
 /**
- * Log data passed to the enriched durable logger
+ * Log data passed to the durable logger when `getDurableLogData` is called.
+ * @public
  */
 export interface DurableLogData {
   requestId: string;
@@ -16,6 +17,7 @@ export interface DurableLogData {
 
 /**
  * Log level supported by the durable logger
+ * @public
  */
 export enum DurableLogLevel {
   INFO = "INFO",
@@ -26,13 +28,12 @@ export enum DurableLogLevel {
 
 /**
  * Configuration options for logger behavior
- *
- * This interface supports partial configuration - you can provide only the properties
- * you want to update. Omitted properties will retain their current values.
+ * @public
  */
 export interface LoggerConfig<Logger extends DurableLogger> {
   /**
    * Custom logger implementation to use instead of the default console logger
+   * @defaultValue Default console logger
    */
   customLogger?: Logger;
 
@@ -46,15 +47,30 @@ export interface LoggerConfig<Logger extends DurableLogger> {
 /**
  * Base interface for operation contexts.
  * Do not use directly - use specific context types like StepContext, WaitForConditionContext, etc.
+ * @public
  */
 export interface OperationContext<Logger extends DurableLogger> {
   logger: Logger; // Basic durable logger which will be parsed by the enriched durable logger
 }
 
+/**
+ * Context for step operations.
+ * @public
+ */
 export type StepContext<Logger extends DurableLogger> = OperationContext<
   DurableContextLogger<Logger>
 >;
+
+/**
+ * Context for waitForCondition operations.
+ * @public
+ */
 export type WaitForConditionContext<Logger extends DurableLogger> =
   OperationContext<DurableContextLogger<Logger>>;
+
+/**
+ * Context for step operations.
+ * @public
+ */
 export type WaitForCallbackContext<Logger extends DurableLogger> =
   OperationContext<DurableContextLogger<Logger>>;

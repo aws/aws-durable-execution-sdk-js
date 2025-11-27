@@ -18,7 +18,8 @@ export {
   WaitForConditionConfig,
   WaitForConditionDecision,
   WaitForConditionWaitStrategyFunc,
-  LambdaHandler,
+  DurableLambdaHandler,
+  DurableExecutionHandler,
   InvokeConfig,
   JitterStrategy,
   Duration,
@@ -28,6 +29,11 @@ export {
   DurableLoggingContext,
   DurableExecutionConfig,
   DurableExecutionClient,
+  BatchItem,
+  BatchItemStatus,
+  BatchResult,
+  CompletionConfig,
+  RetryDecision,
 } from "./types";
 export { DurablePromise } from "./types/durable-promise";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";

@@ -5,6 +5,8 @@ import { DurableExecutionInvocationInput } from "../../types";
 /**
  * Custom DurableExecutionInvocationInput which uses a custom durable
  * execution client instead of the API-based LambdaClient.
+ *
+ * @internal
  */
 export class DurableExecutionInvocationInputWithClient
   implements DurableExecutionInvocationInput

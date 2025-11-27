@@ -25,27 +25,19 @@ import {
 import { DurablePromise } from "./durable-promise";
 import { DurableContextLogger, DurableLogger } from "./durable-logger";
 
-export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
+/**
+ * @public
+ */
+export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
   /**
    * The underlying AWS Lambda context
    */
   lambdaContext: Context;
 
   /**
-   * Logger instance for this context, automatically enriched with durable execution metadata.
-   *
-   * **Automatic Enrichment:**
-   * All log entries are automatically enhanced with:
-   * - `timestamp`: ISO timestamp of the log entry
-   * - `executionArn`: Durable execution ARN for tracing
-   * - `attempt`: The operation attempt number (when logging from within a step)
-   * - `operationId`: Current step identifier (when logging from within a step)
-   * - `level`: Log level (INFO, ERROR, WARN, DEBUG)
-   * - `message`: The log message
-   * - `requestId`: The invocation request ID
-   * - `tenantId`: The invocation tenant ID if it exists
-   *
-   * **Output Format:**
+   * Logger instance for this context, optionally enriched with durable execution metadata
+   * if the logger supports it. By default the default logger will emit logs following this
+   * structure:
    * ```json
    * {
    *   "timestamp": "2025-11-21T18:39:24.743Z",
@@ -53,10 +45,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    *   "level": "INFO",
    *   "operationId": "abc123",
    *   "message": { "userId": "123", "action": "login" }
-   *   "requestId": "",
+   *   "requestId": "72171fff-70c9-4066-b819-11d3eb549de0",
    * }
    * ```
-   *
+   
    * @example
    * ```typescript
    * // Basic usage
@@ -71,7 +63,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * context.configureLogger({ customLogger: powertoolsLogger });
    * ```
    */
-  logger: DurableContextLogger<Logger>;
+  logger: DurableContextLogger<TLogger>;
 
   /**
    * Executes a function as a durable step with automatic retry and state persistence
@@ -115,11 +107,11 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  step<T>(
+  step<TOutput>(
     name: string | undefined,
-    fn: StepFunc<T, Logger>,
-    config?: StepConfig<T>,
-  ): DurablePromise<T>;
+    fn: StepFunc<TOutput, TLogger>,
+    config?: StepConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Executes a function as a durable step with automatic retry and state persistence
@@ -140,7 +132,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  step<T>(fn: StepFunc<T, Logger>, config?: StepConfig<T>): DurablePromise<T>;
+  step<TOutput>(
+    fn: StepFunc<TOutput, TLogger>,
+    config?: StepConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Invokes another durable function with the specified input
@@ -158,12 +153,12 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  invoke<I, O>(
+  invoke<TInput, TOutput>(
     name: string,
     funcId: string,
-    input?: I,
-    config?: InvokeConfig<I, O>,
-  ): DurablePromise<O>;
+    input?: TInput,
+    config?: InvokeConfig<TInput, TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Invokes another durable function with the specified input
@@ -179,11 +174,11 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  invoke<I, O>(
+  invoke<TInput, TOutput>(
     funcId: string,
-    input?: I,
-    config?: InvokeConfig<I, O>,
-  ): DurablePromise<O>;
+    input?: TInput,
+    config?: InvokeConfig<TInput, TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Runs a function in a child context with isolated state and execution tracking
@@ -205,11 +200,11 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  runInChildContext<T>(
+  runInChildContext<TOutput>(
     name: string | undefined,
-    fn: ChildFunc<T, Logger>,
-    config?: ChildConfig<T>,
-  ): DurablePromise<T>;
+    fn: ChildFunc<TOutput, TLogger>,
+    config?: ChildConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Runs a function in a child context with isolated state and execution tracking
@@ -225,10 +220,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  runInChildContext<T>(
-    fn: ChildFunc<T, Logger>,
-    config?: ChildConfig<T>,
-  ): DurablePromise<T>;
+  runInChildContext<TOutput>(
+    fn: ChildFunc<TOutput, TLogger>,
+    config?: ChildConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Pauses execution for the specified duration
@@ -284,11 +279,11 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  waitForCondition<T>(
+  waitForCondition<TOutput>(
     name: string | undefined,
-    checkFunc: WaitForConditionCheckFunc<T, Logger>,
-    config: WaitForConditionConfig<T>,
-  ): DurablePromise<T>;
+    checkFunc: WaitForConditionCheckFunc<TOutput, TLogger>,
+    config: WaitForConditionConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Waits for a condition to be met by periodically checking state
@@ -309,10 +304,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  waitForCondition<T>(
-    checkFunc: WaitForConditionCheckFunc<T, Logger>,
-    config: WaitForConditionConfig<T>,
-  ): DurablePromise<T>;
+  waitForCondition<TOutput>(
+    checkFunc: WaitForConditionCheckFunc<TOutput, TLogger>,
+    config: WaitForConditionConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Creates a callback that external systems can complete
@@ -334,10 +329,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * const approvalResult = await callbackPromise;
    * ```
    */
-  createCallback<T = string>(
+  createCallback<TOutput = string>(
     name: string | undefined,
-    config?: CreateCallbackConfig<T>,
-  ): DurablePromise<CreateCallbackResult<T>>;
+    config?: CreateCallbackConfig<TOutput>,
+  ): DurablePromise<CreateCallbackResult<TOutput>>;
 
   /**
    * Creates a callback that external systems can complete
@@ -353,9 +348,9 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * const result = await promise;
    * ```
    */
-  createCallback<T = string>(
-    config?: CreateCallbackConfig<T>,
-  ): DurablePromise<CreateCallbackResult<T>>;
+  createCallback<TOutput = string>(
+    config?: CreateCallbackConfig<TOutput>,
+  ): DurablePromise<CreateCallbackResult<TOutput>>;
 
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
@@ -375,11 +370,11 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  waitForCallback<T = string>(
+  waitForCallback<TOutput = string>(
     name: string | undefined,
-    submitter: WaitForCallbackSubmitterFunc<Logger>,
-    config?: WaitForCallbackConfig<T>,
-  ): DurablePromise<T>;
+    submitter: WaitForCallbackSubmitterFunc<TLogger>,
+    config?: WaitForCallbackConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Wait for an external system to complete a callback with the SendDurableExecutionCallbackSuccess or SendDurableExecutionCallbackFailure APIs.
@@ -395,10 +390,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  waitForCallback<T = string>(
-    submitter: WaitForCallbackSubmitterFunc<Logger>,
-    config?: WaitForCallbackConfig<T>,
-  ): DurablePromise<T>;
+  waitForCallback<TOutput = string>(
+    submitter: WaitForCallbackSubmitterFunc<TLogger>,
+    config?: WaitForCallbackConfig<TOutput>,
+  ): DurablePromise<TOutput>;
 
   /**
    * Processes an array of items, applying durable operations to each with optional concurrency control
@@ -422,7 +417,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   map<TInput, TOutput>(
     name: string | undefined,
     items: TInput[],
-    mapFunc: MapFunc<TInput, TOutput, Logger>,
+    mapFunc: MapFunc<TInput, TOutput, TLogger>,
     config?: MapConfig<TInput, TOutput>,
   ): DurablePromise<BatchResult<TOutput>>;
 
@@ -441,7 +436,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    */
   map<TInput, TOutput>(
     items: TInput[],
-    mapFunc: MapFunc<TInput, TOutput, Logger>,
+    mapFunc: MapFunc<TInput, TOutput, TLogger>,
     config?: MapConfig<TInput, TOutput>,
   ): DurablePromise<BatchResult<TOutput>>;
 
@@ -462,11 +457,14 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * );
    * ```
    */
-  parallel<T>(
+  parallel<TOutput>(
     name: string | undefined,
-    branches: (ParallelFunc<T, Logger> | NamedParallelBranch<T, Logger>)[],
-    config?: ParallelConfig<T>,
-  ): DurablePromise<BatchResult<T>>;
+    branches: (
+      | ParallelFunc<TOutput, TLogger>
+      | NamedParallelBranch<TOutput, TLogger>
+    )[],
+    config?: ParallelConfig<TOutput>,
+  ): DurablePromise<BatchResult<TOutput>>;
 
   /**
    * Executes multiple branches with durable operations in parallel with optional concurrency control
@@ -481,10 +479,13 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * ]);
    * ```
    */
-  parallel<T>(
-    branches: (ParallelFunc<T, Logger> | NamedParallelBranch<T, Logger>)[],
-    config?: ParallelConfig<T>,
-  ): DurablePromise<BatchResult<T>>;
+  parallel<TOutput>(
+    branches: (
+      | ParallelFunc<TOutput, TLogger>
+      | NamedParallelBranch<TOutput, TLogger>
+    )[],
+    config?: ParallelConfig<TOutput>,
+  ): DurablePromise<BatchResult<TOutput>>;
 
   /**
    * Executes multiple branches with durable operations in parallel with optional concurrency control
@@ -511,17 +512,23 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
     name: string | undefined,
     branches: Branches,
     config?: ParallelConfig<
-      Branches[number] extends ParallelFunc<infer ReturnType, Logger>
+      Branches[number] extends ParallelFunc<infer ReturnType, TLogger>
         ? ReturnType
-        : Branches[number] extends NamedParallelBranch<infer ReturnType, Logger>
+        : Branches[number] extends NamedParallelBranch<
+              infer ReturnType,
+              TLogger
+            >
           ? ReturnType
           : never
     >,
   ): Promise<
     BatchResult<
-      Branches[number] extends ParallelFunc<infer ReturnType, Logger>
+      Branches[number] extends ParallelFunc<infer ReturnType, TLogger>
         ? ReturnType
-        : Branches[number] extends NamedParallelBranch<infer ReturnType, Logger>
+        : Branches[number] extends NamedParallelBranch<
+              infer ReturnType,
+              TLogger
+            >
           ? ReturnType
           : never
     >
@@ -550,17 +557,23 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
   parallel<Branches extends readonly unknown[]>(
     branches: Branches,
     config?: ParallelConfig<
-      Branches[number] extends ParallelFunc<infer ReturnType, Logger>
+      Branches[number] extends ParallelFunc<infer ReturnType, TLogger>
         ? ReturnType
-        : Branches[number] extends NamedParallelBranch<infer ReturnType, Logger>
+        : Branches[number] extends NamedParallelBranch<
+              infer ReturnType,
+              TLogger
+            >
           ? ReturnType
           : never
     >,
   ): DurablePromise<
     BatchResult<
-      Branches[number] extends ParallelFunc<infer ReturnType, Logger>
+      Branches[number] extends ParallelFunc<infer ReturnType, TLogger>
         ? ReturnType
-        : Branches[number] extends NamedParallelBranch<infer ReturnType, Logger>
+        : Branches[number] extends NamedParallelBranch<
+              infer ReturnType,
+              TLogger
+            >
           ? ReturnType
           : never
     >
@@ -612,10 +625,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      * );
      * ```
      */
-    all<T>(
+    all<TOutput>(
       name: string | undefined,
-      promises: DurablePromise<T>[],
-    ): DurablePromise<T[]>;
+      promises: DurablePromise<TOutput>[],
+    ): DurablePromise<TOutput[]>;
 
     /**
      * Waits for all promises to resolve and returns an array of all results
@@ -640,7 +653,9 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      * ]);
      * ```
      */
-    all<T>(promises: DurablePromise<T>[]): DurablePromise<T[]>;
+    all<TOutput>(
+      promises: DurablePromise<TOutput>[],
+    ): DurablePromise<TOutput[]>;
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
@@ -678,10 +693,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      * );
      * ```
      */
-    allSettled<T>(
+    allSettled<TOutput>(
       name: string | undefined,
-      promises: DurablePromise<T>[],
-    ): DurablePromise<PromiseSettledResult<T>[]>;
+      promises: DurablePromise<TOutput>[],
+    ): DurablePromise<PromiseSettledResult<TOutput>[]>;
 
     /**
      * Waits for all promises to settle (resolve or reject) and returns results with status
@@ -692,9 +707,9 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      *
      * @param promises - Array of promises to wait for (already executing)
      */
-    allSettled<T>(
-      promises: DurablePromise<T>[],
-    ): DurablePromise<PromiseSettledResult<T>[]>;
+    allSettled<TOutput>(
+      promises: DurablePromise<TOutput>[],
+    ): DurablePromise<PromiseSettledResult<TOutput>[]>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -732,10 +747,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      * );
      * ```
      */
-    any<T>(
+    any<TOutput>(
       name: string | undefined,
-      promises: DurablePromise<T>[],
-    ): DurablePromise<T>;
+      promises: DurablePromise<TOutput>[],
+    ): DurablePromise<TOutput>;
 
     /**
      * Waits for the first promise to resolve successfully, ignoring rejections until all fail
@@ -746,7 +761,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      *
      * @param promises - Array of promises to race (already executing)
      */
-    any<T>(promises: DurablePromise<T>[]): DurablePromise<T>;
+    any<TOutput>(promises: DurablePromise<TOutput>[]): DurablePromise<TOutput>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
@@ -777,10 +792,10 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      * );
      * ```
      */
-    race<T>(
+    race<TOutput>(
       name: string | undefined,
-      promises: DurablePromise<T>[],
-    ): DurablePromise<T>;
+      promises: DurablePromise<TOutput>[],
+    ): DurablePromise<TOutput>;
 
     /**
      * Returns the result of the first promise to settle (resolve or reject)
@@ -791,7 +806,7 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
      *
      * @param promises - Array of promises to race (already executing)
      */
-    race<T>(promises: DurablePromise<T>[]): DurablePromise<T>;
+    race<TOutput>(promises: DurablePromise<TOutput>[]): DurablePromise<TOutput>;
   };
 
   /**
@@ -820,5 +835,5 @@ export interface DurableContext<Logger extends DurableLogger = DurableLogger> {
    * });
    * ```
    */
-  configureLogger(config: LoggerConfig<Logger>): void;
+  configureLogger(config: LoggerConfig<TLogger>): void;
 }

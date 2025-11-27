@@ -28,7 +28,7 @@
     "postbuild": "npm run generate-sam-template",
     "package": "node scripts/package.js",
     "generate-examples": "tsx ./scripts/generate-examples.ts",
-    "build": "npm run generate-examples && rollup --config rollup.config.mjs --silent",
+    "build": "npm run generate-examples && rollup --config rollup.config.mjs --silent && tsc --noEmit",
     "deploy": "tsx scripts/deploy-lambda.ts",
     "prerelease": "npm run generate-sam-template",
     "copy-files": "npm run copy-lambda && npm run copy-examples && npm run copy-source && npm run copy-catalog",

@@ -14,6 +14,8 @@ import { createRetryStrategy, JitterStrategy } from "../retry-config";
  *   return await criticalOperation();
  * }, { retryStrategy: retryPresets.noRetry });
  * ```
+ *
+ * @public
  */
 export const retryPresets = {
   /**

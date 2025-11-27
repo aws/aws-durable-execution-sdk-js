@@ -32,7 +32,7 @@ const handler = async (event: any, context: DurableContext) => {
   );
 
   // Wait for 5 seconds
-  await context.wait(5000);
+  await context.wait({ seconds: 5 });
 
   // Process data in another step
   const result = await context.step("process-user", async () =>
@@ -95,7 +95,7 @@ const orderResult = await context.runInChildContext(
     const validated = await childCtx.step("validate", async () =>
       validateOrder(order),
     );
-    await childCtx.wait(1000);
+    await childCtx.wait({ seconds: 1 });
     const charged = await childCtx.step("charge", async () =>
       chargePayment(validated),
     );
@@ -122,10 +122,10 @@ Pause execution for a specified duration:
 
 ```typescript
 // Wait 30 seconds
-await context.wait(30000);
+await context.wait({ seconds: 30 });
 
 // Named wait for tracking
-await context.wait("rate-limit-delay", 5000);
+await context.wait("rate-limit-delay", { seconds: 5 });
 ```
 
 ### Conditional Waiting
@@ -162,7 +162,7 @@ Wait for external systems to complete operations:
 // Create a callback and send ID to external system
 const [callbackPromise, callbackId] = await context.createCallback(
   "external-approval",
-  { timeout: 3600 },
+  { timeout: { minutes: 3 } },
 );
 
 await sendApprovalRequest(callbackId, requestData);
@@ -174,7 +174,7 @@ const result = await context.waitForCallback(
   async (callbackId, ctx) => {
     await submitToExternalAPI(callbackId);
   },
-  { timeout: 300 },
+  { timeout: { minutes: 5 } },
 );
 ```
 
@@ -230,29 +230,6 @@ const results = await context.parallel(
 ```
 
 **Note**: `parallel()` executes durable operations within the same Lambda invocation. Each branch runs in its own child context with isolated state tracking.
-
-### Concurrent Execution
-
-Fine-grained control over concurrent operations:
-
-```typescript
-const results = await context.executeConcurrently(
-  "process-files",
-  files.map((file) => ({ data: file })),
-  async (item, ctx) => {
-    return await ctx.step(`process-${item.data.id}`, async () => {
-      return await processFile(item.data);
-    });
-  },
-  {
-    maxConcurrency: 3,
-    completionConfig: {
-      minSuccessful: 5,
-      toleratedFailurePercentage: 20,
-    },
-  },
-);
-```
 
 ### Promise Combinators
 
@@ -412,20 +389,6 @@ context.configureLogger({
 });
 ```
 
-### Migration from setCustomLogger()
-
-If you were using the deprecated `setCustomLogger()` method, update your code:
-
-```typescript
-// Before
-context.setCustomLogger(myLogger);
-
-// After
-context.configureLogger({ customLogger: myLogger });
-```
-
-The new `configureLogger()` method provides additional control over logging behavior with the `modeAware` option.
-
 **Tip for local development:** Set `modeAware: false` to see all logs during replay, which can be helpful for debugging:
 
 ```typescript
@@ -443,40 +406,6 @@ npm run run-locally src/demo/usage-example.ts
 # With invocation ID
 npm run run-locally src/demo/retry-config.ts invocation001
 ```
-
-## API Reference
-
-### Main Export
-
-- `withDurableExecution<Input, Output>(handler)` - Wraps a Lambda handler to make it durable
-
-### Types
-
-- `DurableContext` - Main context interface for durable operations
-- `StepConfig<T>` - Configuration for step operations
-- `ChildConfig<T>` - Configuration for child contexts
-- `InvokeConfig<I, O>` - Configuration for function invocations
-- `MapConfig<TItem, TResult>` - Configuration for map operations
-- `ParallelConfig<T>` - Configuration for parallel operations
-- `ConcurrencyConfig<TResult>` - Configuration for concurrent execution
-- `WaitForConditionConfig<T>` - Configuration for conditional waiting
-- `WaitForCallbackConfig<T>` - Configuration for callback operations
-- `BatchResult<R>` - Result of batch operations with status and helpers
-
-### Enums
-
-- `StepSemantics` - Execution semantics (AtMostOncePerRetry, AtLeastOncePerRetry)
-- `JitterStrategy` - Jitter strategies (NONE, FULL, HALF)
-- `BatchItemStatus` - Status of batch items (SUCCEEDED, FAILED, STARTED)
-
-### Utilities
-
-- `createRetryStrategy(config)` - Create custom retry strategies
-- `createWaitStrategy(config)` - Create custom wait strategies
-- `retryPresets` - Built-in retry strategy presets
-- `createClassSerdes(Class)` - Create serdes for class instances
-- `createClassSerdesWithDates(Class, dateFields)` - Create serdes with date handling
-- `defaultSerdes` - Default JSON serialization
 
 ## License
 

@@ -1,8 +1,5 @@
 import { ExecutionStatus } from "@aws-sdk/client-lambda";
-import {
-  DurableExecutionInvocationInput,
-  LambdaHandler,
-} from "@aws/durable-execution-sdk-js";
+import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import { Handler } from "aws-lambda";
 import {
   FunctionStorage,
@@ -24,9 +21,7 @@ describe("FunctionStorage", () => {
     ILocalDurableTestRunnerExecutor<unknown>
   >;
   let mockInvokeHandler: jest.Mocked<InvokeHandler>;
-  let mockDurableHandler: jest.MockedFunction<
-    LambdaHandler<DurableExecutionInvocationInput>
-  >;
+  let mockDurableHandler: jest.MockedFunction<DurableLambdaHandler>;
   let mockNonDurableHandler: jest.MockedFunction<Handler>;
   let mockFactory: jest.Mocked<ILocalDurableTestRunnerFactory>;
 
@@ -100,9 +95,7 @@ describe("FunctionStorage", () => {
     });
 
     it("should overwrite previously registered durable functions", async () => {
-      const newHandler = jest.fn() as jest.MockedFunction<
-        LambdaHandler<DurableExecutionInvocationInput>
-      >;
+      const newHandler = jest.fn() as jest.MockedFunction<DurableLambdaHandler>;
 
       setupDurableFunction("test-function");
       functionStorage.registerDurableFunction("test-function", newHandler);

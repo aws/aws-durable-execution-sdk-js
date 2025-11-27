@@ -16,7 +16,6 @@ import {
   DurableExecutionMode,
   ExecutionContext,
   InvocationStatus,
-  LambdaHandler,
 } from "./types";
 import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
@@ -24,7 +23,8 @@ import { runWithContext } from "./utils/context-tracker/context-tracker";
 import { createDefaultLogger } from "./utils/logger/default-logger";
 import {
   DurableExecutionConfig,
-  DurableHandler,
+  DurableExecutionHandler,
+  DurableLambdaHandler,
 } from "./types/durable-execution";
 
 // Lambda response size limit is 6MB
@@ -39,7 +39,7 @@ async function runHandler<
   executionContext: ExecutionContext,
   durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
-  handler: DurableHandler<Input, Output, Logger>,
+  handler: DurableExecutionHandler<Input, Output, Logger>,
 ): Promise<DurableExecutionInvocationOutput> {
   // Create checkpoint manager and step data emitter
   const stepDataEmitter = new EventEmitter();
@@ -253,14 +253,87 @@ Check your resource configurations to confirm the durability is set.`;
   }
 }
 
+/**
+ * Wraps a durable handler function to create an AWS Lambda handler with automatic state persistence,
+ * retry logic, and workflow orchestration capabilities.
+ *
+ * This function transforms your durable handler into a deployable Lambda function that integrates
+ * with the AWS Lambda Durable Execution service. The wrapped handler automatically manages execution state
+ * and checkpointing.
+ *
+ * @typeParam TEvent - The type of the input event your handler expects (defaults to any)
+ * @typeParam TResult - The type of the result your handler returns (defaults to any)
+ * @typeParam TLogger - The type of custom logger implementation (defaults to DurableLogger)
+ *
+ * @param handler - Your durable handler function that uses the DurableContext for operations
+ * @param config - Optional configuration for custom advanced settings
+ *
+ * @returns A Lambda handler function that automatically manages durability
+ *
+ * @example
+ * **Basic Usage:**
+ * ```typescript
+ * import { withDurableExecution, DurableExecutionHandler } from '@aws/durable-execution-sdk-js';
+ *
+ * const durableHandler: DurableExecutionHandler<MyEvent, MyResult> = async (event, context) => {
+ *   // Execute durable operations with automatic retry and checkpointing
+ *   const userData = await context.step("fetch-user", async () =>
+ *     fetchUserFromDB(event.userId)
+ *   );
+ *
+ *   // Wait for external approval
+ *   const approval = await context.waitForCallback("user-approval", async (callbackId) => {
+ *     await sendApprovalEmail(callbackId, userData);
+ *   });
+ *
+ *   // Process in parallel
+ *   const results = await context.parallel("process-data", [
+ *     async (ctx) => ctx.step("validate", () => validateData(userData)),
+ *     async (ctx) => ctx.step("transform", () => transformData(userData))
+ *   ]);
+ *
+ *   return { success: true, results };
+ * };
+ *
+ * export const handler = withDurableExecution(durableHandler);
+ * ```
+ *
+ * @example
+ * **With Custom Configuration:**
+ * ```typescript
+ * import { LambdaClient } from '@aws-sdk/client-lambda';
+ *
+ * const customClient = new LambdaClient({
+ *   region: 'us-west-2',
+ *   maxAttempts: 5
+ * });
+ *
+ * export const handler = withDurableExecution(durableHandler, {
+ *   client: customClient
+ * });
+ * ```
+ *
+ * @example
+ * **Passed Directly to the Handler:**
+ * ```typescript
+ * export const handler = withDurableExecution(async (event, context) => {
+ *   const result = await context.step(async () => processEvent(event));
+ *   return result;
+ * });
+ * ```
+ *
+ * @public
+ */
 export const withDurableExecution = <
-  Input,
-  Output,
-  Logger extends DurableLogger = DurableLogger,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TEvent = any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TResult = any,
+  TLogger extends DurableLogger = DurableLogger,
 >(
-  handler: DurableHandler<Input, Output, Logger>,
+  handler: DurableExecutionHandler<TEvent, TResult, TLogger>,
   config?: DurableExecutionConfig,
-): LambdaHandler<DurableExecutionInvocationInput> => {
+): DurableLambdaHandler => {
   return async (
     event: DurableExecutionInvocationInput,
     context: Context,

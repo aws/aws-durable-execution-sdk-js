@@ -2,10 +2,7 @@
 import { LocalDurableTestRunner } from "../test-runner/local";
 import { pathToFileURL } from "url";
 import { resolve } from "path";
-import type {
-  LambdaHandler,
-  DurableExecutionInvocationInput,
-} from "@aws/durable-execution-sdk-js";
+import type { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 
 async function runDurable() {
   const args = process.argv.slice(2);
@@ -47,8 +44,7 @@ async function runDurable() {
       fileUrl
     );
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const handler = (module.handler ??
-      module.default) as LambdaHandler<DurableExecutionInvocationInput>;
+    const handler = (module.handler ?? module.default) as DurableLambdaHandler;
 
     await LocalDurableTestRunner.setupTestEnvironment({
       skipTime,

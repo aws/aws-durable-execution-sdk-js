@@ -3,11 +3,7 @@ import {
   InvokeRequest,
   DurableTestRunner,
 } from "../durable-test-runner";
-import {
-  DurableExecutionInvocationInput,
-  LambdaHandler,
-  withDurableExecution,
-} from "@aws/durable-execution-sdk-js";
+import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { OperationWaitManager } from "./operations/operation-wait-manager";
 import { OperationWithData } from "../common/operations/operation-with-data";
@@ -30,9 +26,7 @@ import { getDurableExecutionsClient } from "./api-client/durable-executions-clie
 import { install, InstalledClock } from "@sinonjs/fake-timers";
 import { Handler } from "aws-lambda";
 
-export type LocalTestRunnerHandlerFunction = ReturnType<
-  typeof withDurableExecution
->;
+export type LocalTestRunnerHandlerFunction = DurableLambdaHandler;
 
 export type { LocalDurableTestRunnerParameters };
 
@@ -101,7 +95,7 @@ export class LocalDurableTestRunner<ResultType>
   private operationIndex: IndexedOperations;
   static skipTime = false;
   static fakeClock: InstalledClock | undefined;
-  private readonly handlerFunction: LocalDurableTestRunnerParameters["handlerFunction"];
+  private readonly handlerFunction: DurableLambdaHandler;
   private readonly functionStorage: FunctionStorage;
   private readonly durableApi: DurableApiClient;
 
@@ -227,7 +221,7 @@ export class LocalDurableTestRunner<ResultType>
    */
   registerDurableFunction(
     functionName: string,
-    durableHandler: LambdaHandler<DurableExecutionInvocationInput>,
+    durableHandler: DurableLambdaHandler,
   ): this {
     this.functionStorage.registerDurableFunction(functionName, durableHandler);
     return this;

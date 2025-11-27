@@ -1,5 +1,7 @@
 /**
  * Context information passed to Serdes for external storage operations
+ *
+ * @public
  */
 export interface SerdesContext {
   /** Unique identifier for the step/entity being serialized */
@@ -15,6 +17,8 @@ export interface SerdesContext {
  *
  * Both methods are async to support custom implementations that need to
  * interact with external services (e.g., AWS S3, DynamoDB, etc.)
+ *
+ * @public
  */
 export interface Serdes<T> {
   /**
@@ -49,6 +53,8 @@ export interface Serdes<T> {
  * handle arbitrary JavaScript values. JSON.stringify/parse work with any type,
  * and using more restrictive types would break compatibility with the generic
  * Serdes<T> interface when T can be any type.
+ *
+ * @public
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const defaultSerdes: Serdes<any> = {
@@ -66,7 +72,10 @@ export const defaultSerdes: Serdes<any> = {
 };
 
 /**
- * Creates a Serdes for a specific class that preserves the class type
+ * Creates a Serdes for a specific class that preserves the class type. This implementation
+ * is a basic class wrapper and does not support any complex class structures. If you need
+ * custom serialization, it is recommended to create your own custom serdes.
+ *
  * @param cls - The class constructor (must have no required parameters)
  * @returns A Serdes that maintains the class type during serialization/deserialization
  *
@@ -95,15 +104,16 @@ export const defaultSerdes: Serdes<any> = {
  * ```
  *
  * Limitations:
- * - Map/Set objects become plain objects and lose their methods
- * - Date objects become ISO strings and lose Date methods
- * - Constructor must have no required parameters
+ * - Class instances becomes plain objects and loses all class information
+ * - Constructor must have no parameters
  * - Constructor side-effects will re-run during deserialization
  * - Private fields (#field) cannot be serialized
  * - Getters/setters are not preserved
  * - Nested class instances lose their prototype
  *
  * For classes with Date properties, use createClassSerdesWithDates instead.
+ *
+ * @beta
  */
 export function createClassSerdes<T extends object>(
   cls: new () => T,
@@ -125,7 +135,10 @@ export function createClassSerdes<T extends object>(
 }
 
 /**
- * Creates a custom Serdes for a class with special handling for Date properties
+ * Creates a custom Serdes for a class with special handling for Date properties. This implementation
+ * is a basic class wrapper and does not support any complex class structures. If you need
+ * custom serialization, it is recommended to create your own custom serdes.
+ *
  * @param cls - The class constructor (must have no required parameters)
  * @param dateProps - Array of property paths that should be converted to Date objects (supports nested paths like "metadata.createdAt")
  * @returns A Serdes that maintains the class type and converts specified properties to Date objects
@@ -165,12 +178,16 @@ export function createClassSerdes<T extends object>(
  * ```
  *
  * Limitations:
- * - Only handles Date objects (Map/Set are not supported)
- * - Must manually specify every Date field path
- * - Constructor must have no required parameters
+ * - Class instances becomes plain objects and loses all class information
+ * - Constructor must have no parameters
  * - Constructor side-effects will re-run during deserialization
  * - Private fields (#field) cannot be serialized
  * - Getters/setters are not preserved
+ * - Nested class instances lose their prototype
+ *
+ * For classes with Date properties, use createClassSerdesWithDates instead.
+ *
+ * @beta
  */
 export function createClassSerdesWithDates<T extends object>(
   cls: new () => T,

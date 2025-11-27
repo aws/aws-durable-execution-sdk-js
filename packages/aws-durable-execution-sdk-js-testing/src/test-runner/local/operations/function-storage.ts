@@ -1,8 +1,5 @@
 import { ErrorObject, ExecutionStatus } from "@aws-sdk/client-lambda";
-import {
-  DurableExecutionInvocationInput,
-  LambdaHandler,
-} from "@aws/durable-execution-sdk-js";
+import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import { Handler } from "aws-lambda";
 import { InvokeHandler } from "../invoke-handler";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
@@ -12,7 +9,7 @@ import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runne
  */
 interface DurableHandlerData {
   isDurable: true;
-  handler: LambdaHandler<DurableExecutionInvocationInput>;
+  handler: DurableLambdaHandler;
 }
 
 /**
@@ -59,7 +56,7 @@ export class FunctionStorage {
    */
   registerDurableFunction(
     functionName: string,
-    durableHandler: LambdaHandler<DurableExecutionInvocationInput>,
+    durableHandler: DurableLambdaHandler,
   ) {
     this.functionNameMap[functionName] = {
       isDurable: true,

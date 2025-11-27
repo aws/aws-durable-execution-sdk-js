@@ -1,7 +1,4 @@
-import {
-  LambdaHandler,
-  DurableExecutionInvocationInput,
-} from "@aws/durable-execution-sdk-js";
+import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import { InvokeRequest, TestResult } from "../../durable-test-runner";
 
 /**
@@ -9,7 +6,7 @@ import { InvokeRequest, TestResult } from "../../durable-test-runner";
  */
 export interface LocalDurableTestRunnerParameters {
   /** The handler function to run the execution on */
-  handlerFunction: LambdaHandler<DurableExecutionInvocationInput>;
+  handlerFunction: DurableLambdaHandler;
 }
 
 /**

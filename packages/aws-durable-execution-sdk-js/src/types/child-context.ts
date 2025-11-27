@@ -4,6 +4,7 @@ import { DurableContext } from "./durable-context";
 
 /**
  * Configuration options for child context operations
+ * @public
  */
 export interface ChildConfig<T> {
   /** Serialization/deserialization configuration for child context data */
@@ -18,7 +19,9 @@ export interface ChildConfig<T> {
  * Function to be executed in a child context with isolated state
  * @param context - DurableContext with isolated step counter and state tracking
  * @returns Promise resolving to the child function result
+ *
+ * @public
  */
-export type ChildFunc<T, Logger extends DurableLogger> = (
+export type ChildFunc<T, Logger extends DurableLogger = DurableLogger> = (
   context: DurableContext<Logger>,
 ) => Promise<T>;

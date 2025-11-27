@@ -1,5 +1,7 @@
 /**
  * A promise that defers execution until it's awaited or .then/.catch/.finally is called
+ *
+ * @public
  */
 export class DurablePromise<T> implements Promise<T> {
   /**

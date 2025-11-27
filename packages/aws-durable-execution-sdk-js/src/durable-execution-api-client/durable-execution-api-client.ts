@@ -17,6 +17,8 @@ let defaultLambdaClient: LambdaClient | undefined;
  * Durable execution client which uses an API-based LambdaClient
  * with built-in error logging. By default, the Lambda client will
  * have custom timeouts set.
+ *
+ * @public
  */
 export class DurableExecutionApiClient implements DurableExecutionClient {
   private readonly client: LambdaClient;

@@ -1,10 +1,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DurableLogData, DurableLogLevel } from "./logger";
 
+/**
+ * The durable logging context that can be used to provide durable execution metadata
+ * such as executionArn, operationId, and attempt.
+ * @public
+ */
 export interface DurableLoggingContext {
   getDurableLogData: () => DurableLogData;
 }
 
+/**
+ * This interface provides structured logging capabilities for durable execution contexts.
+ * A custom logger must implement this interface to be used by the Durable Execution
+ * Language SDK. The SDK will automatically parse the logger and use the appropriate
+ * logging method based on the log level.
+ *
+ * @public
+ */
 export interface DurableLogger {
   /**
    * Generic log method with configurable level
@@ -49,7 +62,7 @@ export interface DurableLogger {
 
   /**
    * This function will be called by the language SDK before logging any records. The durableLoggingContext
-   * can be stored and used by custom loggers to implement mode-aware logging, or logging of custom durable metadata
+   * should be stored and used by custom loggers to enable logging of custom durable metadata
    * such as operationId, attempt, executionArn, etc.
    * @param durableLoggingContext - The logging context provided by the Durable Execution Language SDK
    */
@@ -58,6 +71,11 @@ export interface DurableLogger {
   ): void;
 }
 
+/**
+ * The durable logger available inside a context.
+ *
+ * @public
+ */
 export type DurableContextLogger<Logger extends DurableLogger> = Pick<
   Logger,
   "log" | "warn" | "info" | "error" | "debug"

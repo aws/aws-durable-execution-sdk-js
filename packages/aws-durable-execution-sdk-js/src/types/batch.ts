@@ -3,6 +3,10 @@ import { DurableContext } from "./durable-context";
 import { ChildContextError } from "../errors/durable-error/durable-error";
 import { DurableLogger } from "./durable-logger";
 
+/**
+ * The status of a batch item
+ * @public
+ */
 export enum BatchItemStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
@@ -11,10 +15,12 @@ export enum BatchItemStatus {
 
 /**
  * Represents a single item in a batch result
+ *
+ * @public
  */
-export interface BatchItem<R> {
+export interface BatchItem<TResult> {
   /** The result value if the item succeeded */
-  result?: R;
+  result?: TResult;
   /** The error if the item failed (always ChildContextError since batch items run in child contexts) */
   error?: ChildContextError;
   /** Index of the item in the original array */
@@ -25,16 +31,18 @@ export interface BatchItem<R> {
 
 /**
  * Result of a batch operation (map, parallel, or concurrent execution)
+ *
+ * @public
  */
-export interface BatchResult<R> {
+export interface BatchResult<TResult> {
   /** All items in the batch with their results/errors */
-  all: Array<BatchItem<R>>;
+  all: Array<BatchItem<TResult>>;
   /** Returns only the items that succeeded */
-  succeeded(): Array<BatchItem<R> & { result: R }>;
+  succeeded(): Array<BatchItem<TResult> & { result: TResult }>;
   /** Returns only the items that failed */
-  failed(): Array<BatchItem<R> & { error: ChildContextError }>;
+  failed(): Array<BatchItem<TResult> & { error: ChildContextError }>;
   /** Returns only the items that are still in progress */
-  started(): Array<BatchItem<R> & { status: BatchItemStatus.STARTED }>;
+  started(): Array<BatchItem<TResult> & { status: BatchItemStatus.STARTED }>;
   /** Overall status of the batch (SUCCEEDED if no failures, FAILED otherwise) */
   status: BatchItemStatus.SUCCEEDED | BatchItemStatus.FAILED;
   /** Reason why the batch completed */
@@ -47,7 +55,7 @@ export interface BatchResult<R> {
   /** Throws the first error if any item failed */
   throwIfError(): void;
   /** Returns array of all successful results */
-  getResults(): Array<R>;
+  getResults(): Array<TResult>;
   /** Returns array of all errors */
   getErrors(): Array<ChildContextError>;
   /** Number of successful items */
@@ -60,6 +68,9 @@ export interface BatchResult<R> {
   totalCount: number;
 }
 
+/**
+ * @public
+ */
 export interface CompletionConfig {
   /** Minimum number of successful executions required */
   minSuccessful?: number;
@@ -76,6 +87,8 @@ export interface CompletionConfig {
  * @param index - Index of the current item in the array
  * @param array - The original array being mapped over
  * @returns Promise resolving to the transformed value
+ *
+ * @public
  */
 export type MapFunc<TInput, TOutput, Logger extends DurableLogger> = (
   context: DurableContext<Logger>,
@@ -86,6 +99,7 @@ export type MapFunc<TInput, TOutput, Logger extends DurableLogger> = (
 
 /**
  * Configuration options for map operations
+ * @public
  */
 export interface MapConfig<TItem, TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
@@ -104,21 +118,26 @@ export interface MapConfig<TItem, TResult> {
  * Function to be executed as a branch in a parallel operation
  * @param context - DurableContext for executing durable operations within the branch
  * @returns Promise resolving to the branch result
+ *
+ * @public
  */
-export type ParallelFunc<T, Logger extends DurableLogger> = (
-  context: DurableContext<Logger>,
-) => Promise<T>;
+export type ParallelFunc<
+  TResult,
+  Logger extends DurableLogger = DurableLogger,
+> = (context: DurableContext<Logger>) => Promise<TResult>;
 
 /**
  * Named parallel branch with optional custom name
+ * @public
  */
-export interface NamedParallelBranch<T, Logger extends DurableLogger> {
+export interface NamedParallelBranch<TResult, Logger extends DurableLogger> {
   name?: string;
-  func: ParallelFunc<T, Logger>;
+  func: ParallelFunc<TResult, Logger>;
 }
 
 /**
  * Configuration options for parallel operations
+ * @public
  */
 export interface ParallelConfig<TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
@@ -133,6 +152,7 @@ export interface ParallelConfig<TResult> {
 
 /**
  * Represents an item to be executed with metadata for deterministic replay
+ * @public
  */
 export interface ConcurrentExecutionItem<T> {
   /** Unique identifier for the item */
@@ -147,6 +167,7 @@ export interface ConcurrentExecutionItem<T> {
 
 /**
  * Executor function type for concurrent execution
+ * @public
  */
 export type ConcurrentExecutor<TItem, TResult, Logger extends DurableLogger> = (
   item: ConcurrentExecutionItem<TItem>,
@@ -155,6 +176,7 @@ export type ConcurrentExecutor<TItem, TResult, Logger extends DurableLogger> = (
 
 /**
  * Configuration options for concurrent execution operations
+ * @public
  */
 export interface ConcurrencyConfig<TResult> {
   /** Maximum number of concurrent executions (default: unlimited) */
