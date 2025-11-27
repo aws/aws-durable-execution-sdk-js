@@ -1,0 +1,7 @@
+{
+  "name": "@aws/durable-execution-sdk-js-eslint",
+  "version": "0.0.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 0"
+  }
+}
