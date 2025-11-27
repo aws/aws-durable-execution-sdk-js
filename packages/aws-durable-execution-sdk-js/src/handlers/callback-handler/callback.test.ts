@@ -78,6 +78,7 @@ describe("Callback Handler", () => {
       mockHasRunningOperations,
       () => new EventEmitter(),
       jest.fn(),
+      new Set(),
     );
   });
 
@@ -845,6 +846,7 @@ describe("Callback Handler", () => {
         jest.fn().mockReturnValue(false),
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       const result = callbackHandler(undefined, config);
@@ -884,6 +886,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       // Set up a started callback
@@ -930,6 +933,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -972,6 +976,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       // Set up a started callback that remains started
@@ -1005,6 +1010,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1040,6 +1046,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1084,6 +1091,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1130,6 +1138,7 @@ describe("Callback Handler", () => {
           mockHasRunningOperations,
           () => new EventEmitter(),
           jest.fn(),
+          new Set(),
         );
       }).not.toThrow();
 
@@ -1141,6 +1150,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       mockExecutionContext.getStepData.mockReturnValue({
@@ -1237,6 +1247,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       let callCount = 0;
@@ -1284,6 +1295,7 @@ describe("Callback Handler", () => {
         mockHasRunningOperations,
         () => new EventEmitter(),
         jest.fn(),
+        new Set(),
       );
 
       let callCount = 0;

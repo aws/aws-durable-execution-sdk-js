@@ -121,7 +121,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     let phase1Result: T | undefined;
     let phase1Error: unknown;
-    let durablePromise: DurablePromise<T>;
+    let durablePromise: DurablePromise<T> | undefined;
 
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
@@ -141,7 +141,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           options,
           getParentLogger,
           createChildContext,
-          durablePromise,
+          durablePromise!,
         );
       }
 
@@ -156,7 +156,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         options,
         getParentLogger,
         createChildContext,
-        durablePromise,
+        durablePromise!,
         parentId,
       );
     })()
