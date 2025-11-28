@@ -26,11 +26,11 @@ import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
 import { defaultLogger } from "../../logger";
-import { setTimeout } from "node:timers";
 import { InstalledClock } from "@sinonjs/fake-timers";
 import { QueueScheduler } from "./orchestration/queue-scheduler";
 import { TimerScheduler } from "./orchestration/timer-scheduler";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
+import { realSetTimeout } from "./real-timers/real-timers";
 
 export interface SkipTimeProps {
   enabled: boolean;
@@ -162,7 +162,7 @@ export class TestExecutionOrchestrator {
       // Stop polling
       await new Promise<void>((resolve) => {
         // TODO: improve the polling mechanism so that we don't need an arbitrary timer
-        setTimeout(() => {
+        realSetTimeout(() => {
           abortController.abort();
           resolve();
         }, 100);

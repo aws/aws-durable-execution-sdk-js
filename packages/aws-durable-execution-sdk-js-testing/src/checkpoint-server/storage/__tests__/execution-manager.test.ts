@@ -182,12 +182,12 @@ describe("execution-manager", () => {
     });
 
     describe("startInvocation", () => {
-      it("should return undefined if execution ID doesn't exist", () => {
+      it("should throw error if execution ID doesn't exist", () => {
         const nonExistentId = createExecutionId("non-existent");
 
-        const result = executionManager.startInvocation(nonExistentId);
-
-        expect(result).toBeUndefined();
+        expect(() => executionManager.startInvocation(nonExistentId)).toThrow(
+          "Could not start invocation for invalid execution non-existent",
+        );
       });
 
       it("should start a new invocation for an existing execution", () => {
@@ -203,9 +203,9 @@ describe("execution-manager", () => {
         const result = executionManager.startInvocation(executionId);
 
         expect(result).toBeDefined();
-        expect(result?.executionId).toBe(executionId);
-        expect(result?.invocationId).toBe("new-invocation-uuid");
-        expect(result?.operationEvents).toBeInstanceOf(Array);
+        expect(result.executionId).toBe(executionId);
+        expect(result.invocationId).toBe("new-invocation-uuid");
+        expect(result.operationEvents).toBeInstanceOf(Array);
         expect(encodeCheckpointToken).toHaveBeenCalledWith({
           executionId,
           token: "new-invocation-uuid",
@@ -250,12 +250,12 @@ describe("execution-manager", () => {
         const result = executionManager.startInvocation(executionId);
 
         // Check that we got all operations
-        expect(result?.operationEvents).toHaveLength(2);
-        expect(result?.operationEvents[0]).toEqual({
+        expect(result.operationEvents).toHaveLength(2);
+        expect(result.operationEvents[0]).toEqual({
           operation: mockOps[0],
           update: {},
         });
-        expect(result?.operationEvents[1]).toEqual({
+        expect(result.operationEvents[1]).toEqual({
           operation: mockOps[1],
           update: {},
         });

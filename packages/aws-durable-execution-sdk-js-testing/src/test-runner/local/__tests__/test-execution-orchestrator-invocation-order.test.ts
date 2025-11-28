@@ -17,12 +17,12 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import { CheckpointServerApiClient } from "../api-client/checkpoint-server-api-client";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
+import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -67,7 +67,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
 
   let orchestrator: TestExecutionOrchestrator;
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
-  let checkpointApi: CheckpointServerApiClient;
+  let checkpointApi: CheckpointApiClient;
   let mockFunctionStorage: FunctionStorage;
   let mockDurableApiClient: DurableApiClient;
 
@@ -119,7 +119,26 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         callOrder.push("addHistoryEvent");
       });
 
-    checkpointApi = new CheckpointServerApiClient("http://127.0.0.1:1234");
+    checkpointApi = {
+      startDurableExecution: jest.fn().mockResolvedValue({
+        executionId: mockExecutionId,
+        checkpointToken: mockCheckpointToken,
+        operationEvents: mockOperationEvents,
+        invocationId: mockInvocationId,
+      }),
+      pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
+      updateCheckpointData: jest.fn().mockResolvedValue(undefined),
+      startInvocation: jest.fn().mockResolvedValue({
+        checkpointToken: mockCheckpointToken,
+        executionId: mockExecutionId,
+        invocationId: mockInvocationId,
+        operationEvents: [],
+      }),
+      completeInvocation: jest.fn().mockImplementation(() => {
+        callOrder.push("completeInvocation");
+        return Promise.resolve(mockInvocationCompletedEvent);
+      }),
+    };
 
     // Create a mock factory for FunctionStorage
     const mockFactory: ILocalDurableTestRunnerFactory = {
@@ -133,35 +152,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
 
     mockFunctionStorage = new FunctionStorage(mockFactory);
 
-    jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
-      executionId: mockExecutionId,
-      checkpointToken: mockCheckpointToken,
-      operationEvents: mockOperationEvents,
-      invocationId: mockInvocationId,
-    });
-
-    jest
-      .spyOn(checkpointApi, "pollCheckpointData")
-      .mockReturnValue(nonResolvingPromise);
-
-    jest
-      .spyOn(checkpointApi, "updateCheckpointData")
-      .mockResolvedValue(undefined);
-
-    jest.spyOn(checkpointApi, "startInvocation").mockResolvedValue({
-      checkpointToken: createCheckpointToken("new-token"),
-      executionId: createExecutionId(),
-      invocationId: createInvocationId(),
-      operationEvents: [],
-    });
-
-    // Spy on completeInvocation to track when it's called
-    completeInvocationSpy = jest
-      .spyOn(checkpointApi, "completeInvocation")
-      .mockImplementation(() => {
-        callOrder.push("completeInvocation");
-        return Promise.resolve(mockInvocationCompletedEvent);
-      });
+    completeInvocationSpy = jest.spyOn(checkpointApi, "completeInvocation");
 
     orchestrator = new TestExecutionOrchestrator(
       mockHandlerFunction,

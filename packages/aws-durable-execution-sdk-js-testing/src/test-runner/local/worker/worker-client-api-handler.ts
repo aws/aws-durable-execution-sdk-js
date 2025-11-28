@@ -38,8 +38,6 @@ export class WorkerClientApiHandler {
     [ApiType.SendDurableExecutionCallbackHeartbeat]: new Map(),
   };
 
-  private static readonly DEFAULT_REQUEST_TIMEOUT_MS = 60000;
-
   handleApiCallResponse(apiResponse: WorkerApiResponse<ApiType>) {
     const apiMap = this.workerApiMap[apiResponse.type];
     const handler = apiMap.get(apiResponse.requestId);
@@ -53,10 +51,7 @@ export class WorkerClientApiHandler {
     apiMap.delete(apiResponse.requestId);
 
     if ("error" in apiResponse) {
-      const error = new Error();
-      Object.assign(error, apiResponse.error);
-
-      handler.reject(error);
+      handler.reject(apiResponse.error);
       return;
     }
 
@@ -88,15 +83,6 @@ export class WorkerClientApiHandler {
           reject,
           resolve,
         });
-        setTimeout(() => {
-          this.handleApiCallResponse({
-            type: apiType,
-            requestId,
-            error: {
-              message: `Request timed out after ${WorkerClientApiHandler.DEFAULT_REQUEST_TIMEOUT_MS}ms.`,
-            },
-          });
-        }, WorkerClientApiHandler.DEFAULT_REQUEST_TIMEOUT_MS);
       },
     );
 

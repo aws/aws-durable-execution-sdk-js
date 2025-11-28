@@ -1377,7 +1377,7 @@ describe("OperationWithData", () => {
         const result = await operation.sendCallbackSuccess("test-result");
 
         expect(mockApiClient.sendCallbackSuccess).toHaveBeenCalledWith({
-          Result: "test-result",
+          Result: Buffer.from("test-result"),
           CallbackId: "callback-123",
         });
         expect(result).toEqual({
@@ -1597,11 +1597,11 @@ describe("OperationWithData", () => {
 
         expect(mockApiClient.sendCallbackSuccess).toHaveBeenCalledTimes(2);
         expect(mockApiClient.sendCallbackSuccess).toHaveBeenNthCalledWith(1, {
-          Result: "result-1",
+          Result: Buffer.from("result-1"),
           CallbackId: "callback-id-1",
         });
         expect(mockApiClient.sendCallbackSuccess).toHaveBeenNthCalledWith(2, {
-          Result: "result-2",
+          Result: Buffer.from("result-2"),
           CallbackId: "callback-id-2",
         });
       });

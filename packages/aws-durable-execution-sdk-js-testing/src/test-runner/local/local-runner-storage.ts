@@ -5,7 +5,7 @@ import {
   GetDurableExecutionStateResponse,
 } from "@aws-sdk/client-lambda";
 import { DurableExecutionClient } from "@aws/durable-execution-sdk-js";
-import { CheckpointWorkerManager } from "./checkpoint-server-worker-manager";
+import { CheckpointWorkerManager } from "./worker/checkpoint-worker-manager";
 import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
 
 /**

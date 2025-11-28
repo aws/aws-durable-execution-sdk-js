@@ -22,7 +22,8 @@ function mapValuesDeep(
   if (
     obj !== null &&
     typeof obj === "object" &&
-    Object.getPrototypeOf(obj) === Object.prototype
+    // Handle cross-realm objects
+    Object.prototype.toString.call(obj) === "[object Object]"
   ) {
     const result: Record<string, unknown> = {};
 
@@ -64,6 +65,23 @@ export function convertDatesToTimestamps<T>(obj: T): ConvertDatesToNumbers<T> {
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return result as ConvertDatesToNumbers<T>;
+}
+
+export function reparseDates<T>(obj: T, dateConstructor: DateConstructor): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  const result = mapValuesDeep(obj, (value) => {
+    if (Object.prototype.toString.call(value) === "[object Date]") {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+      return new dateConstructor((value as Date).getTime());
+    }
+    return value;
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+  return result as T;
 }
 
 export function transformErrorObjectToErrorResult(

@@ -5,13 +5,15 @@
 
 import { Worker } from "worker_threads";
 import path from "path";
-import { WorkerResponse } from "../../checkpoint-server/worker/worker-message-types";
+import { WorkerResponse } from "../../../checkpoint-server/worker/worker-message-types";
 import { access, constants } from "fs/promises";
-import { defaultLogger } from "../../logger";
-import { WorkerClientApiHandler } from "./worker/worker-client-api-handler";
-import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
-import { WorkerApiRequestMapping } from "../../checkpoint-server/worker-api/worker-api-request";
-import { WorkerApiResponseMapping } from "../../checkpoint-server/worker-api/worker-api-response";
+import { defaultLogger } from "../../../logger";
+import { WorkerClientApiHandler } from "./worker-client-api-handler";
+import { ApiType } from "../../../checkpoint-server/worker-api/worker-api-types";
+import { WorkerApiRequestMapping } from "../../../checkpoint-server/worker-api/worker-api-request";
+import { WorkerApiResponseMapping } from "../../../checkpoint-server/worker-api/worker-api-response";
+import { reparseDates } from "../../../utils";
+import { RealDate } from "../real-timers/real-timers";
 
 /**
  *  TODO: handle worker errors after they are started
@@ -39,7 +41,7 @@ export class CheckpointWorkerManager {
   private async getWorkerPath(): Promise<string> {
     const devWorkerPath = path.resolve(
       __dirname,
-      "../../checkpoint-server/index.ts",
+      "../../../checkpoint-server/index.ts",
     );
     const prodWorkerPath = path.resolve(
       __dirname,
@@ -80,7 +82,9 @@ export class CheckpointWorkerManager {
     });
 
     this.worker.on("message", (response: WorkerResponse) => {
-      this.workerApiHandler.handleApiCallResponse(response.data);
+      this.workerApiHandler.handleApiCallResponse(
+        reparseDates(response.data, RealDate),
+      );
     });
   }
 

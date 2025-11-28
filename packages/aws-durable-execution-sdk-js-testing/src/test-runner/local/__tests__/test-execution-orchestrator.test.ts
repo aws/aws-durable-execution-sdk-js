@@ -18,7 +18,6 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import { CheckpointServerApiClient } from "../api-client/checkpoint-server-api-client";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
@@ -26,6 +25,7 @@ import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { InstalledClock } from "@sinonjs/fake-timers";
+import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -63,7 +63,7 @@ describe("TestExecutionOrchestrator", () => {
 
   let orchestrator: TestExecutionOrchestrator;
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
-  let checkpointApi: CheckpointServerApiClient;
+  let checkpointApi: CheckpointApiClient;
   let mockFunctionStorage: FunctionStorage;
   let mockDurableApiClient: DurableApiClient;
 
@@ -155,7 +155,30 @@ describe("TestExecutionOrchestrator", () => {
     ) as jest.Mocked<LocalOperationStorage>;
     mockOperationStorage.populateOperations = jest.fn();
 
-    checkpointApi = new CheckpointServerApiClient("http://127.0.0.1:1234");
+    checkpointApi = {
+      startDurableExecution: jest.fn().mockResolvedValue({
+        executionId: mockExecutionId,
+        checkpointToken: mockCheckpointToken,
+        operationEvents: mockOperationEvents,
+        invocationId: createInvocationId(),
+      }),
+      pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
+      updateCheckpointData: jest.fn().mockResolvedValue(undefined),
+      startInvocation: jest.fn().mockResolvedValue({
+        checkpointToken: createCheckpointToken("new-token"),
+        executionId: createExecutionId(),
+        invocationId: createInvocationId(),
+        operationEvents: [],
+      }),
+      completeInvocation: jest.fn().mockResolvedValue({
+        EventType: "InvocationCompleted",
+        InvocationCompletedDetails: {
+          RequestId: "invocation-request-id",
+          StartTimestamp: new Date(),
+          EndTimestamp: new Date(),
+        },
+      }),
+    };
 
     // Create a mock factory for FunctionStorage
     const mockFactory: ILocalDurableTestRunnerFactory = {
@@ -168,37 +191,6 @@ describe("TestExecutionOrchestrator", () => {
     };
 
     mockFunctionStorage = new FunctionStorage(mockFactory);
-
-    jest.spyOn(checkpointApi, "startDurableExecution").mockResolvedValue({
-      executionId: mockExecutionId,
-      checkpointToken: mockCheckpointToken,
-      operationEvents: mockOperationEvents,
-      invocationId: createInvocationId(),
-    });
-
-    jest
-      .spyOn(checkpointApi, "pollCheckpointData")
-      .mockReturnValue(nonResolvingPromise);
-
-    jest
-      .spyOn(checkpointApi, "updateCheckpointData")
-      .mockResolvedValue(undefined);
-
-    jest.spyOn(checkpointApi, "startInvocation").mockResolvedValue({
-      checkpointToken: createCheckpointToken("new-token"),
-      executionId: createExecutionId(),
-      invocationId: createInvocationId(),
-      operationEvents: [],
-    });
-
-    jest.spyOn(checkpointApi, "completeInvocation").mockResolvedValue({
-      EventType: "InvocationCompleted",
-      InvocationCompletedDetails: {
-        RequestId: "invocation-request-id",
-        StartTimestamp: new Date(),
-        EndTimestamp: new Date(),
-      },
-    });
 
     const mockInvocationResult = {
       Status: InvocationStatus.SUCCEEDED,

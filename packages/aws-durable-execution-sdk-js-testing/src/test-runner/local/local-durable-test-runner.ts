@@ -9,7 +9,7 @@ import { OperationWaitManager } from "./operations/operation-wait-manager";
 import { OperationWithData } from "../common/operations/operation-with-data";
 import { TestExecutionOrchestrator } from "./test-execution-orchestrator";
 import { ResultFormatter } from "./result-formatter";
-import { CheckpointWorkerManager } from "./checkpoint-server-worker-manager";
+import { CheckpointWorkerManager } from "./worker/checkpoint-worker-manager";
 import { IndexedOperations } from "../common/indexed-operations";
 import { FunctionStorage } from "./operations/function-storage";
 import {
@@ -395,7 +395,7 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
    */
   static async setupTestEnvironment(
     params?: LocalDurableTestRunnerSetupParameters,
-  ) {
+  ): Promise<void> {
     this.skipTime = params?.skipTime ?? false;
     if (this.skipTime) {
       this.fakeClock = install({

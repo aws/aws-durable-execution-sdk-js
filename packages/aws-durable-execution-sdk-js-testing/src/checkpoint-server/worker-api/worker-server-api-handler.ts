@@ -1,14 +1,5 @@
-import { defaultLogger } from "../../logger";
 import { WorkerApiRequestMessage } from "./worker-api-request";
-import {
-  WorkerApiResponseMapping,
-  WorkerApiResponse,
-} from "./worker-api-response";
 import { ApiType } from "./worker-api-types";
-import {
-  WorkerApiMap,
-  ApiCallHandler,
-} from "../../test-runner/local/worker/worker-client-api-handler";
 import {
   processCompleteInvocation,
   processStartDurableExecution,
@@ -28,46 +19,7 @@ import {
 } from "../handlers/callbacks";
 
 export class WorkerServerApiHandler {
-  private readonly workerApiMap: WorkerApiMap = {
-    [ApiType.StartDurableExecution]: new Map(),
-    [ApiType.StartInvocation]: new Map(),
-    [ApiType.CompleteInvocation]: new Map(),
-    [ApiType.UpdateCheckpointData]: new Map(),
-    [ApiType.PollCheckpointData]: new Map(),
-    [ApiType.GetDurableExecutionState]: new Map(),
-    [ApiType.CheckpointDurableExecutionState]: new Map(),
-    [ApiType.SendDurableExecutionCallbackSuccess]: new Map(),
-    [ApiType.SendDurableExecutionCallbackFailure]: new Map(),
-    [ApiType.SendDurableExecutionCallbackHeartbeat]: new Map(),
-  };
-
   private readonly executionManager = new ExecutionManager();
-
-  handleApiCallResponse(apiResponse: WorkerApiResponse<ApiType>) {
-    const apiMap = this.workerApiMap[apiResponse.type];
-    const handler = apiMap.get(apiResponse.requestId);
-    if (!handler) {
-      defaultLogger.warn(
-        `Could not find API handler for ${apiResponse.type} request with ID ${apiResponse.requestId}`,
-      );
-      return;
-    }
-
-    apiMap.delete(apiResponse.requestId);
-
-    if ("error" in apiResponse) {
-      const error = new Error();
-      Object.assign(error, apiResponse.error);
-
-      handler.reject(error);
-      return;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    (handler as ApiCallHandler<WorkerApiResponseMapping[ApiType]>).resolve(
-      apiResponse.response,
-    );
-  }
 
   performApiCall(data: WorkerApiRequestMessage) {
     switch (data.type) {
@@ -118,8 +70,9 @@ export class WorkerServerApiHandler {
           // todo: handle undefined instead of disabling eslint rule
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           data.params.CallbackId!,
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          Buffer.from(data.params.Result!),
+          data.params.Result === undefined
+            ? Buffer.of()
+            : Buffer.from(data.params.Result),
           this.executionManager,
         );
       case ApiType.SendDurableExecutionCallbackFailure:

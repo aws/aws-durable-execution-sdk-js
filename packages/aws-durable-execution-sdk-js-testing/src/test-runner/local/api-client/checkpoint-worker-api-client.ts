@@ -5,7 +5,7 @@ import {
   ExecutionId,
   InvocationId,
 } from "../../../checkpoint-server/utils/tagged-strings";
-import { CheckpointWorkerManager } from "../checkpoint-server-worker-manager";
+import { CheckpointWorkerManager } from "../worker/checkpoint-worker-manager";
 import { CheckpointApiClient } from "./checkpoint-api-client";
 import { ApiType } from "../../../checkpoint-server/worker-api/worker-api-types";
 
