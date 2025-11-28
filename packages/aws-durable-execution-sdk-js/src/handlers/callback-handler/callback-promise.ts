@@ -33,26 +33,25 @@ export const createCallbackPromise = <T>(
         log("⚠️", "Step data not found, waiting for callback creation:", {
           stepId,
         });
-        if (hasRunningOperations()) {
-          await waitBeforeContinue({
-            checkHasRunningOperations: true,
-            checkStepStatus: true,
-            checkTimer: false,
-            stepId,
-            context,
-            hasRunningOperations,
-            operationsEmitter,
-          });
-          continue; // Re-evaluate after waiting
-        }
-
-        // No other operations and no step data - terminate gracefully
-        log("⏳", "No step data found and no running operations, terminating");
-        return terminate(
+        const result = await waitBeforeContinue({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: false,
+          stepId,
           context,
-          TerminationReason.CALLBACK_PENDING,
-          terminationMessage,
-        );
+          hasRunningOperations,
+          operationsEmitter,
+        });
+
+        if (result.canTerminate) {
+          log("⏳", "No step data found and can terminate, terminating");
+          return terminate(
+            context,
+            TerminationReason.CALLBACK_PENDING,
+            terminationMessage,
+          );
+        }
+        continue; // Re-evaluate after waiting
       }
 
       if (stepData.Status === OperationStatus.SUCCEEDED) {
@@ -101,28 +100,27 @@ export const createCallbackPromise = <T>(
 
       if (stepData.Status === OperationStatus.STARTED) {
         // Callback is still pending
-        if (hasRunningOperations()) {
-          // Wait for other operations or callback completion
-          log("⏳", "Callback still pending, waiting for other operations");
-          await waitBeforeContinue({
-            checkHasRunningOperations: true,
-            checkStepStatus: true,
-            checkTimer: false,
-            stepId,
-            context,
-            hasRunningOperations,
-            operationsEmitter,
-          });
-          continue; // Re-evaluate status after waiting
-        }
-
-        // No other operations running - terminate
-        log("⏳", "Callback still pending, terminating");
-        return terminate(
+        // Wait for other operations or callback completion
+        log("⏳", "Callback still pending, waiting for other operations");
+        const result = await waitBeforeContinue({
+          checkHasRunningOperations: true,
+          checkStepStatus: true,
+          checkTimer: false,
+          stepId,
           context,
-          TerminationReason.CALLBACK_PENDING,
-          terminationMessage,
-        );
+          hasRunningOperations,
+          operationsEmitter,
+        });
+
+        if (result.canTerminate) {
+          log("⏳", "Callback still pending, terminating");
+          return terminate(
+            context,
+            TerminationReason.CALLBACK_PENDING,
+            terminationMessage,
+          );
+        }
+        continue; // Re-evaluate status after waiting
       }
 
       // Should not reach here, but handle unexpected status

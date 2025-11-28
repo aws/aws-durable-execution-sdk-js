@@ -44,6 +44,12 @@ describe("InvokeHandler", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // Set up default mock for waitBeforeContinue
+    mockWaitBeforeContinue.mockResolvedValue({
+      reason: "operations",
+      canTerminate: true,
+    });
+
     mockCreateStepId = jest.fn().mockReturnValue("test-step-1");
     mockHasRunningOperations = jest.fn().mockReturnValue(false);
 
@@ -279,7 +285,10 @@ describe("InvokeHandler", () => {
 
       mockContext.getStepData = mockGetStepData;
       mockHasRunningOperations.mockReturnValue(true); // Other operations running
-      mockWaitBeforeContinue.mockResolvedValue({ reason: "status" });
+      mockWaitBeforeContinue.mockResolvedValue({
+        reason: "status",
+        canTerminate: false,
+      });
       mockSafeDeserialize.mockResolvedValue({ result: "success" });
 
       const invokeHandler = createInvokeHandler(

@@ -11,8 +11,12 @@ jest.mock("../../utils/wait-before-continue/wait-before-continue");
 jest.mock("../../errors/serdes-errors/serdes-errors");
 jest.mock("../../utils/logger/logger");
 
-const mockWaitBeforeContinue = waitBeforeContinue as jest.MockedFunction<typeof waitBeforeContinue>;
-const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<typeof safeDeserialize>;
+const mockWaitBeforeContinue = waitBeforeContinue as jest.MockedFunction<
+  typeof waitBeforeContinue
+>;
+const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
+  typeof safeDeserialize
+>;
 
 describe("createCallbackPromise", () => {
   let mockContext: ExecutionContext;
@@ -21,7 +25,7 @@ describe("createCallbackPromise", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockContext = {
       getStepData: jest.fn(),
       terminationManager: {
@@ -36,12 +40,13 @@ describe("createCallbackPromise", () => {
 
   describe("uncovered scenarios", () => {
     it("should handle no step data with running operations", async () => {
-      const hasRunningOperations = jest.fn()
-        .mockReturnValueOnce(true)  // First check: has running operations
+      const hasRunningOperations = jest
+        .fn()
+        .mockReturnValueOnce(true) // First check: has running operations
         .mockReturnValueOnce(false); // After wait: no running operations
 
       (mockContext.getStepData as jest.Mock)
-        .mockReturnValueOnce(null)  // First call: no step data
+        .mockReturnValueOnce(null) // First call: no step data
         .mockReturnValueOnce(null); // Second call: still no step data
 
       // Mock termination manager to actually terminate
@@ -50,7 +55,10 @@ describe("createCallbackPromise", () => {
       });
       mockContext.terminationManager.terminate = mockTerminate;
 
-      mockWaitBeforeContinue.mockResolvedValue({} as any);
+      mockWaitBeforeContinue.mockResolvedValue({
+        reason: "operations",
+        canTerminate: true,
+      } as any);
 
       const promise = createCallbackPromise(
         mockContext,
@@ -67,7 +75,7 @@ describe("createCallbackPromise", () => {
       expect(mockWaitBeforeContinue).toHaveBeenCalled();
       expect(mockTerminate).toHaveBeenCalledWith({
         message: "test termination message",
-        reason: "CALLBACK_PENDING"
+        reason: "CALLBACK_PENDING",
       });
     });
 
@@ -96,7 +104,9 @@ describe("createCallbackPromise", () => {
       );
 
       await expect(promise).rejects.toThrow(CallbackError);
-      await expect(promise).rejects.toThrow("No callback ID found for completed callback: test-step-id");
+      await expect(promise).rejects.toThrow(
+        "No callback ID found for completed callback: test-step-id",
+      );
     });
 
     it("should handle succeeded callback with deserialization", async () => {
@@ -169,7 +179,7 @@ describe("createCallbackPromise", () => {
       );
 
       await expect(promise).rejects.toThrow(CallbackError);
-      
+
       try {
         await promise;
       } catch (error) {
@@ -254,7 +264,9 @@ describe("createCallbackPromise", () => {
       );
 
       await expect(promise).rejects.toThrow(CallbackError);
-      await expect(promise).rejects.toThrow("Unexpected callback status: UNKNOWN_STATUS");
+      await expect(promise).rejects.toThrow(
+        "Unexpected callback status: UNKNOWN_STATUS",
+      );
     });
   });
 });

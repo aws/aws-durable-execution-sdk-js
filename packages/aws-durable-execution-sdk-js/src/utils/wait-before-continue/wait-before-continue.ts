@@ -33,6 +33,7 @@ export interface WaitBeforeContinueOptions {
 export interface WaitBeforeContinueResult {
   reason: "timer" | "operations" | "status" | "timeout";
   timerExpired?: boolean;
+  canTerminate: boolean;
 }
 
 /**
@@ -55,6 +56,17 @@ export async function waitBeforeContinue(
     onAwaitedChange,
   } = options;
 
+  // Early return if no running operations and we're checking for them
+  if (checkHasRunningOperations && !hasRunningOperations()) {
+    // Can terminate if no other conditions are actively waiting
+    const hasActiveTimer =
+      checkTimer &&
+      scheduledEndTimestamp &&
+      Number(scheduledEndTimestamp) > Date.now();
+    const canTerminate = !hasActiveTimer && !onAwaitedChange;
+    return { reason: "operations", canTerminate };
+  }
+
   const promises: Promise<WaitBeforeContinueResult>[] = [];
   const timers: NodeJS.Timeout[] = [];
   const cleanupFns: (() => void)[] = [];
@@ -71,12 +83,17 @@ export async function waitBeforeContinue(
       const timeLeft = Number(scheduledEndTimestamp) - Date.now();
       if (timeLeft > 0) {
         const timer = setTimeout(
-          () => resolve({ reason: "timer", timerExpired: true }),
+          () =>
+            resolve({
+              reason: "timer",
+              timerExpired: true,
+              canTerminate: true,
+            }),
           timeLeft,
         );
         timers.push(timer);
       } else {
-        resolve({ reason: "timer", timerExpired: true });
+        resolve({ reason: "timer", timerExpired: true, canTerminate: true });
       }
     });
     promises.push(timerPromise);
@@ -87,11 +104,21 @@ export async function waitBeforeContinue(
     const operationsPromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
         if (!hasRunningOperations()) {
-          resolve({ reason: "operations" });
+          const hasActiveTimer =
+            checkTimer &&
+            scheduledEndTimestamp &&
+            Number(scheduledEndTimestamp) > Date.now();
+          const canTerminate = !hasActiveTimer && !onAwaitedChange;
+          resolve({ reason: "operations", canTerminate });
         } else {
           // Event-driven: listen for completion event
           const handler = (): void => {
-            resolve({ reason: "operations" });
+            const hasActiveTimer =
+              checkTimer &&
+              scheduledEndTimestamp &&
+              Number(scheduledEndTimestamp) > Date.now();
+            const canTerminate = !hasActiveTimer && !onAwaitedChange;
+            resolve({ reason: "operations", canTerminate });
           };
           operationsEmitter.once(OPERATIONS_COMPLETE_EVENT, handler);
           cleanupFns.push(() =>
@@ -112,14 +139,14 @@ export async function waitBeforeContinue(
         // Check if status already changed
         const currentStatus = context.getStepData(stepId)?.Status;
         if (originalStatus !== currentStatus) {
-          resolve({ reason: "status" });
+          resolve({ reason: "status", canTerminate: false });
         } else {
           // Event-driven: listen for step data updates
           const handler = (updatedStepId: string): void => {
             if (updatedStepId === hashedStepId) {
               const newStatus = context.getStepData(stepId)?.Status;
               if (originalStatus !== newStatus) {
-                resolve({ reason: "status" });
+                resolve({ reason: "status", canTerminate: false });
               }
             }
           };
@@ -142,7 +169,7 @@ export async function waitBeforeContinue(
       (resolve) => {
         // Register a callback that will be invoked when the promise is awaited
         onAwaitedChange(() => {
-          resolve({ reason: "status" });
+          resolve({ reason: "status", canTerminate: false });
         });
       },
     );
@@ -151,7 +178,7 @@ export async function waitBeforeContinue(
 
   // If no conditions provided, return immediately
   if (promises.length === 0) {
-    return { reason: "timeout" };
+    return { reason: "timeout", canTerminate: true };
   }
 
   // Wait for any condition to be met, then cleanup timers and listeners

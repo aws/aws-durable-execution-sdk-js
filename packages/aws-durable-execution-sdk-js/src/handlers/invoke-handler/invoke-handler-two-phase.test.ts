@@ -17,6 +17,7 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
+import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 
 const mockTerminate = terminate as jest.MockedFunction<typeof terminate>;
 const _mockLog = log as jest.MockedFunction<typeof log>;
@@ -25,6 +26,9 @@ const mockSafeSerialize = safeSerialize as jest.MockedFunction<
 >;
 const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
   typeof safeDeserialize
+>;
+const mockWaitBeforeContinue = waitBeforeContinue as jest.MockedFunction<
+  typeof waitBeforeContinue
 >;
 
 describe("Invoke Handler Two-Phase Execution", () => {
@@ -53,6 +57,12 @@ describe("Invoke Handler Two-Phase Execution", () => {
     createStepId = (): string => `step-${++stepIdCounter}`;
     hasRunningOperations = jest.fn().mockReturnValue(false) as () => boolean;
     getOperationsEmitter = (): EventEmitter => new EventEmitter();
+
+    // Set up default mock for waitBeforeContinue
+    mockWaitBeforeContinue.mockResolvedValue({
+      reason: "operations",
+      canTerminate: true,
+    });
 
     // Mock serdes functions
     mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
