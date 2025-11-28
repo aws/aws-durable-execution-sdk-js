@@ -5,10 +5,7 @@
 
 import { Worker } from "worker_threads";
 import path from "path";
-import {
-  WorkerResponse,
-  WorkerResponseType,
-} from "../../checkpoint-server/worker/worker-message-types";
+import { WorkerResponse } from "../../checkpoint-server/worker/worker-message-types";
 import { access, constants } from "fs/promises";
 import { defaultLogger } from "../../logger";
 import { WorkerClientApiHandler } from "./worker/worker-client-api-handler";
@@ -19,16 +16,15 @@ import { WorkerApiResponseMapping } from "../../checkpoint-server/worker-api/wor
 /**
  *  TODO: handle worker errors after they are started
  */
-export class CheckpointServerWorkerManager {
+export class CheckpointWorkerManager {
   private worker: Worker | null = null;
 
-  private static instance: CheckpointServerWorkerManager | undefined =
-    undefined;
+  private static instance: CheckpointWorkerManager | undefined = undefined;
 
   private readonly workerApiHandler = new WorkerClientApiHandler();
 
   static getInstance() {
-    this.instance ??= new CheckpointServerWorkerManager();
+    this.instance ??= new CheckpointWorkerManager();
     return this.instance;
   }
 
@@ -84,13 +80,6 @@ export class CheckpointServerWorkerManager {
     });
 
     this.worker.on("message", (response: WorkerResponse) => {
-      if (response.type !== WorkerResponseType.API_RESPONSE) {
-        defaultLogger.warn(
-          `Found unexpected worker response: ${response.type}. Only ${WorkerResponseType.API_RESPONSE} is expected after initialization.`,
-        );
-        return;
-      }
-
       this.workerApiHandler.handleApiCallResponse(response.data);
     });
   }

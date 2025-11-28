@@ -5,12 +5,12 @@ import {
   ExecutionId,
   InvocationId,
 } from "../../../checkpoint-server/utils/tagged-strings";
-import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manager";
+import { CheckpointWorkerManager } from "../checkpoint-server-worker-manager";
 import { CheckpointApiClient } from "./checkpoint-api-client";
 import { ApiType } from "../../../checkpoint-server/worker-api/worker-api-types";
 
 export class CheckpointWorkerApiClient implements CheckpointApiClient {
-  constructor(private readonly workerManager: CheckpointServerWorkerManager) {}
+  constructor(private readonly workerManager: CheckpointWorkerManager) {}
 
   /**
    * Start a new durable invocation

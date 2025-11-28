@@ -6,7 +6,7 @@ import { ExecutionManager } from "../storage/execution-manager";
  * The API for GetDurableExecutionState used by the Language SDK and DEX service model.
  */
 export function processGetDurableExecutionState(
-  durableExecutionArn: string,
+  durableExecutionArn: string | undefined,
   executionManager: ExecutionManager,
 ): GetDurableExecutionStateResponse {
   const executionData = executionManager.getCheckpointsByExecution(

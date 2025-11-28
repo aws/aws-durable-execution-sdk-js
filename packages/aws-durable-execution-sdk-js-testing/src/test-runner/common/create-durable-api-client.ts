@@ -8,20 +8,18 @@ import {
   SendDurableExecutionCallbackFailureResponse,
   SendDurableExecutionCallbackHeartbeatResponse,
   SendDurableExecutionCallbackHeartbeatRequest,
-  SendDurableExecutionCallbackSuccessCommandInput,
-  SendDurableExecutionCallbackFailureCommandInput,
-  SendDurableExecutionCallbackHeartbeatCommandInput,
+  SendDurableExecutionCallbackSuccessRequest,
 } from "@aws-sdk/client-lambda";
 
 export interface DurableApiClient {
   sendCallbackSuccess: (
-    request: SendDurableExecutionCallbackSuccessCommandInput,
+    request: SendDurableExecutionCallbackSuccessRequest,
   ) => Promise<SendDurableExecutionCallbackSuccessResponse>;
   sendCallbackFailure: (
-    request: SendDurableExecutionCallbackFailureCommandInput,
+    request: SendDurableExecutionCallbackFailureRequest,
   ) => Promise<SendDurableExecutionCallbackFailureResponse>;
   sendCallbackHeartbeat: (
-    request: SendDurableExecutionCallbackHeartbeatCommandInput,
+    request: SendDurableExecutionCallbackHeartbeatRequest,
   ) => Promise<SendDurableExecutionCallbackHeartbeatResponse>;
 }
 

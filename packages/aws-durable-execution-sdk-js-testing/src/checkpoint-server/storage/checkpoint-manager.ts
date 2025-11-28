@@ -161,6 +161,10 @@ export class CheckpointManager {
     this.resolvePendingUpdatePromise?.();
   }
 
+  flushUpdate() {
+    this.resolvePendingUpdatePromise?.();
+  }
+
   hasOperation(id?: string): boolean {
     return id ? this.operationDataMap.has(id) : false;
   }

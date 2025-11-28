@@ -69,12 +69,14 @@ export class ExecutionManager {
    *
    * @returns The list of operations for this execution and other data for the invocation event.
    */
-  startInvocation(executionId: ExecutionId): InvocationResult | undefined {
+  startInvocation(executionId: ExecutionId): InvocationResult {
     const invocationId = createInvocationId();
     const checkpointStorage = this.executions.get(executionId);
 
     if (!checkpointStorage) {
-      return undefined;
+      throw new Error(
+        `Could not start invocation for invalid execution ${executionId}`,
+      );
     }
 
     if (checkpointStorage.isExecutionCompleted()) {

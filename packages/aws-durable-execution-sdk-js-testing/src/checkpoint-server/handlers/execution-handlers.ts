@@ -13,7 +13,7 @@ import {
  * Starts a durable execution. Returns the data needed for the handler invocation event.
  */
 export function processStartDurableExecution(
-  payload: string,
+  payload: string | undefined,
   executionManager: ExecutionManager,
 ): InvocationResult {
   return executionManager.startExecution({
@@ -29,7 +29,7 @@ export function processStartDurableExecution(
 export function processStartInvocation(
   executionIdParam: string,
   executionManager: ExecutionManager,
-): InvocationResult | undefined {
+): InvocationResult {
   return executionManager.startInvocation(createExecutionId(executionIdParam));
 }
 

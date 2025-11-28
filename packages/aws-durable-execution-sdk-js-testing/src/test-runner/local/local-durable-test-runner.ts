@@ -9,7 +9,7 @@ import { OperationWaitManager } from "./operations/operation-wait-manager";
 import { OperationWithData } from "../common/operations/operation-with-data";
 import { TestExecutionOrchestrator } from "./test-execution-orchestrator";
 import { ResultFormatter } from "./result-formatter";
-import { CheckpointServerWorkerManager } from "./checkpoint-server-worker-manager";
+import { CheckpointWorkerManager } from "./checkpoint-server-worker-manager";
 import { IndexedOperations } from "../common/indexed-operations";
 import { FunctionStorage } from "./operations/function-storage";
 import {
@@ -127,7 +127,7 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
   }
 
   private static createDurableApi(): DurableApiClient {
-    const workerManager = CheckpointServerWorkerManager.getInstance();
+    const workerManager = CheckpointWorkerManager.getInstance();
     return {
       sendCallbackSuccess: (request) =>
         workerManager.sendApiRequest(
@@ -152,7 +152,7 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
   }
 
   private static createCheckpointApiClient() {
-    const workerManager = CheckpointServerWorkerManager.getInstance();
+    const workerManager = CheckpointWorkerManager.getInstance();
     return new CheckpointWorkerApiClient(workerManager);
   }
 
@@ -404,7 +404,7 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
         now: Date.now(),
       });
     }
-    return CheckpointServerWorkerManager.getInstance().setup();
+    return CheckpointWorkerManager.getInstance().setup();
   }
 
   /**
@@ -456,6 +456,6 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
   static async teardownTestEnvironment() {
     this.fakeClock?.uninstall();
     this.fakeClock = undefined;
-    return CheckpointServerWorkerManager.getInstance().teardown();
+    return CheckpointWorkerManager.getInstance().teardown();
   }
 }

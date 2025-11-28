@@ -1,15 +1,15 @@
 import { Worker } from "node:worker_threads";
 import { ApiType } from "../../../checkpoint-server/worker-api/worker-api-types";
-import { WorkerApiRequestMapping } from "../../../checkpoint-server/worker-api/worker-api-request";
+import {
+  WorkerApiRequest,
+  WorkerApiRequestMapping,
+} from "../../../checkpoint-server/worker-api/worker-api-request";
 import {
   WorkerApiResponse,
   WorkerApiResponseMapping,
 } from "../../../checkpoint-server/worker-api/worker-api-response";
 import { randomUUID } from "node:crypto";
-import {
-  WorkerCommand,
-  WorkerCommandType,
-} from "../../../checkpoint-server/worker/worker-message-types";
+import { WorkerCommandType } from "../../../checkpoint-server/worker/worker-message-types";
 import { defaultLogger } from "../../../logger";
 
 export interface ApiCallHandler<TResult> {
@@ -77,10 +77,10 @@ export class WorkerClientApiHandler {
       type: WorkerCommandType.API_REQUEST,
       data: {
         requestId,
-        params,
         type: apiType,
-      },
-    } satisfies WorkerCommand);
+        params,
+      } satisfies WorkerApiRequest<TApiType>,
+    });
 
     const promise = new Promise<WorkerApiResponseMapping[TApiType]>(
       (resolve, reject) => {

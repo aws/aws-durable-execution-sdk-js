@@ -1,4 +1,4 @@
-import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manager";
+import { CheckpointWorkerManager } from "../checkpoint-server-worker-manager";
 import { Worker } from "worker_threads";
 import {
   WorkerResponseType,
@@ -25,7 +25,7 @@ function flushPromises() {
 
 describe("CheckpointServerWorkerManager", () => {
   let mockWorker: jest.Mocked<Worker>;
-  let manager: CheckpointServerWorkerManager;
+  let manager: CheckpointWorkerManager;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -49,15 +49,15 @@ describe("CheckpointServerWorkerManager", () => {
     MockWorker.mockImplementation(() => mockWorker);
 
     // Reset singleton instance before each test
-    CheckpointServerWorkerManager.resetInstanceForTesting();
-    manager = CheckpointServerWorkerManager.getInstance();
+    CheckpointWorkerManager.resetInstanceForTesting();
+    manager = CheckpointWorkerManager.getInstance();
   });
 
   describe("Singleton Pattern", () => {
     it("should return the same instance across multiple calls", () => {
-      const instance1 = CheckpointServerWorkerManager.getInstance();
-      const instance2 = CheckpointServerWorkerManager.getInstance();
-      const instance3 = CheckpointServerWorkerManager.getInstance();
+      const instance1 = CheckpointWorkerManager.getInstance();
+      const instance2 = CheckpointWorkerManager.getInstance();
+      const instance3 = CheckpointWorkerManager.getInstance();
 
       expect(instance1).toBe(instance2);
       expect(instance2).toBe(instance3);
@@ -66,10 +66,10 @@ describe("CheckpointServerWorkerManager", () => {
 
     it("should maintain singleton across different imports", () => {
       // Reset the instance using the proper test utility
-      CheckpointServerWorkerManager.resetInstanceForTesting();
+      CheckpointWorkerManager.resetInstanceForTesting();
 
-      const instance1 = CheckpointServerWorkerManager.getInstance();
-      const instance2 = CheckpointServerWorkerManager.getInstance();
+      const instance1 = CheckpointWorkerManager.getInstance();
+      const instance2 = CheckpointWorkerManager.getInstance();
 
       expect(instance1).toBe(instance2);
     });
@@ -309,8 +309,8 @@ describe("CheckpointServerWorkerManager", () => {
 
     it("should handle no worker gracefully", async () => {
       // Create a fresh manager instance for this test
-      CheckpointServerWorkerManager.resetInstanceForTesting();
-      const freshManager = CheckpointServerWorkerManager.getInstance();
+      CheckpointWorkerManager.resetInstanceForTesting();
+      const freshManager = CheckpointWorkerManager.getInstance();
 
       // Should not throw when called without setup
       await expect(freshManager.teardown()).resolves.toBeUndefined();

@@ -21,7 +21,7 @@ export interface WorkerApiResponseMapping {
   [ApiType.StartInvocation]: InvocationResult;
   [ApiType.CompleteInvocation]: Event;
   [ApiType.UpdateCheckpointData]: Record<string, never>;
-  [ApiType.PollCheckpointData]: PollCheckpointDataResponse;
+  [ApiType.PollCheckpointData]: Promise<PollCheckpointDataResponse>;
   [ApiType.GetDurableExecutionState]: GetDurableExecutionStateResponse;
   [ApiType.CheckpointDurableExecutionState]: CheckpointDurableExecutionResponse;
   [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessResponse;

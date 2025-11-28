@@ -326,7 +326,7 @@ export class OperationWithData<
     }
 
     return this.apiClient.sendCallbackSuccess({
-      Result: result,
+      Result: result !== undefined ? Buffer.from(result) : result,
       CallbackId: callbackDetails.callbackId,
     });
   }

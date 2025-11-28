@@ -81,7 +81,7 @@ export function processUpdateCheckpointData(
  * The API for CheckpointDurableExecution used by the Language SDK and DEX service model.
  */
 export function processCheckpointDurableExecution(
-  durableExecutionArn: string,
+  durableExecutionArn: string | undefined,
   input: CheckpointDurableExecutionRequest,
   executionManager: ExecutionManager,
 ): CheckpointDurableExecutionResponse {

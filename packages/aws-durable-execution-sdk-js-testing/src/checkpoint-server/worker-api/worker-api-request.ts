@@ -3,9 +3,9 @@ import {
   ErrorObject,
   GetDurableExecutionCommandInput,
   Operation,
-  SendDurableExecutionCallbackFailureCommandInput,
-  SendDurableExecutionCallbackHeartbeatCommandInput,
-  SendDurableExecutionCallbackSuccessCommandInput,
+  SendDurableExecutionCallbackFailureRequest,
+  SendDurableExecutionCallbackHeartbeatRequest,
+  SendDurableExecutionCallbackSuccessRequest,
 } from "@aws-sdk/client-lambda";
 import { ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { ApiType } from "./worker-api-types";
@@ -44,9 +44,9 @@ export interface WorkerApiRequestMapping {
   [ApiType.PollCheckpointData]: PollCheckpointDataRequest;
   [ApiType.GetDurableExecutionState]: GetDurableExecutionCommandInput;
   [ApiType.CheckpointDurableExecutionState]: CheckpointDurableExecutionCommandInput;
-  [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessCommandInput;
-  [ApiType.SendDurableExecutionCallbackFailure]: SendDurableExecutionCallbackFailureCommandInput;
-  [ApiType.SendDurableExecutionCallbackHeartbeat]: SendDurableExecutionCallbackHeartbeatCommandInput;
+  [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessRequest;
+  [ApiType.SendDurableExecutionCallbackFailure]: SendDurableExecutionCallbackFailureRequest;
+  [ApiType.SendDurableExecutionCallbackHeartbeat]: SendDurableExecutionCallbackHeartbeatRequest;
 }
 
 export interface WorkerApiRequest<TApiType extends ApiType> {
@@ -54,3 +54,15 @@ export interface WorkerApiRequest<TApiType extends ApiType> {
   params: WorkerApiRequestMapping[TApiType];
   requestId: string;
 }
+
+export type WorkerApiRequestMessage =
+  | WorkerApiRequest<ApiType.StartDurableExecution>
+  | WorkerApiRequest<ApiType.StartInvocation>
+  | WorkerApiRequest<ApiType.CompleteInvocation>
+  | WorkerApiRequest<ApiType.UpdateCheckpointData>
+  | WorkerApiRequest<ApiType.GetDurableExecutionState>
+  | WorkerApiRequest<ApiType.PollCheckpointData>
+  | WorkerApiRequest<ApiType.CheckpointDurableExecutionState>
+  | WorkerApiRequest<ApiType.SendDurableExecutionCallbackSuccess>
+  | WorkerApiRequest<ApiType.SendDurableExecutionCallbackFailure>
+  | WorkerApiRequest<ApiType.SendDurableExecutionCallbackHeartbeat>;
