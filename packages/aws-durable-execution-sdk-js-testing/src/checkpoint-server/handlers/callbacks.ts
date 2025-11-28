@@ -1,127 +1,72 @@
-import {
-  InvalidParameterValueException,
-  ErrorObject,
-} from "@aws-sdk/client-lambda";
-import { RequestHandler } from "express";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 import { createCallbackId } from "../utils/tagged-strings";
 import { CompleteCallbackStatus } from "../storage/callback-manager";
+import { ExecutionManager } from "../storage/execution-manager";
 
-export const handleCallbackFailure: RequestHandler<
-  { callbackId: string },
-  unknown,
-  ErrorObject
-> = (req, res) => {
-  const callbackId = createCallbackId(req.params.callbackId);
-  const input = req.body;
-
-  const storage = req.executionManager.getCheckpointsByCallbackId(callbackId);
-
-  if (!storage) {
-    res.status(404).json({
-      message: "Execution not found",
-    });
-    return;
-  }
-
-  try {
-    storage.completeCallback(
-      {
-        CallbackId: callbackId,
-        Error: input,
-      },
-      CompleteCallbackStatus.FAILED,
-    );
-  } catch (err) {
-    if (err instanceof InvalidParameterValueException) {
-      // TODO: use the correct aws-sdk serialization for InvalidParameterValueException
-      res.status(400).json({
-        message: err.message,
-      });
-      return;
-    } else {
-      throw err;
-    }
-  }
-
-  res.json({});
-};
-
-export const handleCallbackSuccess: RequestHandler<
-  {
-    callbackId: string;
-  },
-  unknown,
-  Buffer
-> = (req, res) => {
-  const callbackId = createCallbackId(req.params.callbackId);
-  const input = req.body;
-
-  const storage = req.executionManager.getCheckpointsByCallbackId(callbackId);
+export function processCallbackFailure(
+  callbackIdParam: string,
+  input: ErrorObject | undefined,
+  executionManager: ExecutionManager,
+): Record<string, never> {
+  const callbackId = createCallbackId(callbackIdParam);
+  const storage = executionManager.getCheckpointsByCallbackId(callbackId);
 
   if (!storage) {
-    res.status(404).json({
-      message: "Execution not found",
-    });
-    return;
+    throw new Error("Execution not found");
+  }
+
+  storage.completeCallback(
+    {
+      CallbackId: callbackId,
+      Error: input ?? {},
+    },
+    CompleteCallbackStatus.FAILED,
+  );
+
+  return {};
+}
+
+export function processCallbackSuccess(
+  callbackIdParam: string,
+  input: Buffer,
+  executionManager: ExecutionManager,
+): Record<string, never> {
+  const callbackId = createCallbackId(callbackIdParam);
+  const storage = executionManager.getCheckpointsByCallbackId(callbackId);
+
+  if (!storage) {
+    throw new Error("Execution not found");
   }
 
   if (!Buffer.isBuffer(input)) {
-    res.status(400).json({
-      message: "Invalid buffer input",
-    });
-    return;
+    throw new Error("Invalid buffer input");
   }
 
   const result = input.byteLength !== 0 ? input.toString("utf-8") : undefined;
 
-  try {
-    storage.completeCallback(
-      {
-        CallbackId: callbackId,
-        Result: result,
-      },
-      CompleteCallbackStatus.SUCCEEDED,
-    );
-  } catch (err) {
-    if (err instanceof InvalidParameterValueException) {
-      res.status(400).json({
-        message: err.message,
-      });
-      return;
-    } else {
-      throw err;
-    }
-  }
+  storage.completeCallback(
+    {
+      CallbackId: callbackId,
+      Result: result,
+    },
+    CompleteCallbackStatus.SUCCEEDED,
+  );
 
-  res.json({});
-};
+  return {};
+}
 
-export const handleCallbackHeartbeat: RequestHandler<{
-  callbackId: string;
-}> = (req, res) => {
-  const callbackId = createCallbackId(req.params.callbackId);
-
-  const storage = req.executionManager.getCheckpointsByCallbackId(callbackId);
+export function processCallbackHeartbeat(
+  callbackIdParam: string,
+  executionManager: ExecutionManager,
+): Record<string, never> {
+  const callbackId = createCallbackId(callbackIdParam);
+  const storage = executionManager.getCheckpointsByCallbackId(callbackId);
 
   if (!storage) {
-    res.status(404).json({
-      message: "Execution not found",
-    });
-    return;
+    throw new Error("Execution not found");
   }
 
-  try {
-    storage.heartbeatCallback(callbackId);
-  } catch (err) {
-    if (err instanceof InvalidParameterValueException) {
-      res.status(400).json({
-        message: err.message,
-      });
-      return;
-    } else {
-      throw err;
-    }
-  }
+  storage.heartbeatCallback(callbackId);
 
-  res.json({});
-};
+  return {};
+}
