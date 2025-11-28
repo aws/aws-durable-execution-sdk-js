@@ -1,7 +1,7 @@
 import {
-  CheckpointApiClient,
+  CheckpointServerApiClient,
   SerializedPollCheckpointResponse,
-} from "../checkpoint-api-client";
+} from "../checkpoint-server-api-client";
 import { OperationAction, OperationStatus } from "@aws-sdk/client-lambda";
 import {
   API_PATHS,
@@ -22,7 +22,7 @@ global.fetch = mockFetch;
 
 describe("CheckpointApiClient", () => {
   const mockBaseUrl = `http://127.0.0.1:1234`;
-  const apiClient = new CheckpointApiClient(mockBaseUrl);
+  const apiClient = new CheckpointServerApiClient(mockBaseUrl);
   const mockExecutionId = createExecutionId("mock-execution-id");
   const mockOperationId = "mock-operation-id";
   const mockInvocationResultSerialized: SerializedInvocationResult = {

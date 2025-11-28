@@ -4,11 +4,11 @@
 import {
   ErrorObject,
   OperationStatus,
-  SendDurableExecutionCallbackFailureCommandOutput,
-  SendDurableExecutionCallbackHeartbeatCommandOutput,
-  SendDurableExecutionCallbackSuccessCommandOutput,
   Event,
   ExecutionStatus,
+  SendDurableExecutionCallbackHeartbeatResponse,
+  SendDurableExecutionCallbackFailureResponse,
+  SendDurableExecutionCallbackSuccessResponse,
 } from "@aws-sdk/client-lambda";
 import { OperationWithData } from "./common/operations/operation-with-data";
 
@@ -66,11 +66,11 @@ export interface DurableOperation<Value> extends OperationWithData<Value> {
   // Callback APIs
   sendCallbackSuccess(
     result?: string,
-  ): Promise<SendDurableExecutionCallbackSuccessCommandOutput>;
+  ): Promise<SendDurableExecutionCallbackSuccessResponse>;
   sendCallbackFailure(
     error?: ErrorObject,
-  ): Promise<SendDurableExecutionCallbackFailureCommandOutput>;
-  sendCallbackHeartbeat(): Promise<SendDurableExecutionCallbackHeartbeatCommandOutput>;
+  ): Promise<SendDurableExecutionCallbackFailureResponse>;
+  sendCallbackHeartbeat(): Promise<SendDurableExecutionCallbackHeartbeatResponse>;
 }
 
 // Interfaces available after the completion of the execution from the `run` method

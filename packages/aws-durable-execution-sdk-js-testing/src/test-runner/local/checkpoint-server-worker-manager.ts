@@ -8,29 +8,24 @@ import path from "path";
 import {
   WorkerResponse,
   WorkerResponseType,
-  WorkerCommandType,
-  ServerStartedData,
 } from "../../checkpoint-server/worker/worker-message-types";
 import { access, constants } from "fs/promises";
 import { defaultLogger } from "../../logger";
-
-interface ServerInfo {
-  url: string;
-  port: number;
-}
+import { WorkerClientApiHandler } from "./worker/worker-client-api-handler";
+import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
+import { WorkerApiRequestMapping } from "../../checkpoint-server/worker-api/worker-api-request";
+import { WorkerApiResponseMapping } from "../../checkpoint-server/worker-api/worker-api-response";
 
 /**
  *  TODO: handle worker errors after they are started
  */
 export class CheckpointServerWorkerManager {
   private worker: Worker | null = null;
-  private readonly SHUTDOWN_TIMEOUT = 3000; // 3 seconds
-  private readonly COMMAND_TIMEOUT = 4000; // 4 seconds
-
-  private serverInfo: ServerInfo | null = null;
 
   private static instance: CheckpointServerWorkerManager | undefined =
     undefined;
+
+  private readonly workerApiHandler = new WorkerClientApiHandler();
 
   static getInstance() {
     this.instance ??= new CheckpointServerWorkerManager();
@@ -43,93 +38,6 @@ export class CheckpointServerWorkerManager {
    */
   static resetInstanceForTesting(): void {
     this.instance = undefined;
-  }
-
-  /**
-   * Gets the current server URL and port if available
-   */
-  getServerInfo(): ServerInfo | null {
-    return this.serverInfo;
-  }
-
-  private async waitForServerStart(): Promise<ServerStartedData> {
-    const worker = this.worker;
-    if (!worker) {
-      throw new Error("Could not start server: worker not initialized");
-    }
-
-    return new Promise<ServerStartedData>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Starting the server timed out"));
-      }, this.COMMAND_TIMEOUT);
-
-      const errorListener = (err: Error): void => {
-        clearTimeout(timeout);
-        reject(err);
-      };
-
-      worker.addListener("error", errorListener);
-
-      worker.once("message", (response: WorkerResponse) => {
-        worker.removeListener("error", errorListener);
-
-        clearTimeout(timeout);
-
-        if (response.type === WorkerResponseType.SERVER_STARTED) {
-          resolve(response.data);
-          return;
-        }
-
-        reject(
-          new Error(
-            response.type === WorkerResponseType.ERROR
-              ? response.error
-              : "Unknown start response received",
-          ),
-        );
-      });
-    });
-  }
-
-  private async waitForServerShutdown(): Promise<void> {
-    const worker = this.worker;
-    if (!worker) {
-      throw new Error("Could not stop server: worker not initialized");
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Stopping the server timed out"));
-      }, this.SHUTDOWN_TIMEOUT);
-
-      const errorListener = (err: Error): void => {
-        clearTimeout(timeout);
-        reject(err);
-      };
-
-      worker.addListener("error", errorListener);
-
-      // Wait for graceful shutdown response
-      worker.once("message", (response: WorkerResponse) => {
-        worker.removeListener("error", errorListener);
-
-        clearTimeout(timeout);
-        if (response.type === WorkerResponseType.SERVER_SHUTDOWN) {
-          resolve();
-          return;
-        }
-
-        reject(
-          new Error(
-            response.type === WorkerResponseType.ERROR
-              ? response.error
-              : "Unknown stop response received",
-          ),
-        );
-      });
-
-      worker.postMessage({ type: WorkerCommandType.SHUTDOWN_SERVER });
-    });
   }
 
   private async getWorkerPath(): Promise<string> {
@@ -152,7 +60,7 @@ export class CheckpointServerWorkerManager {
   /**
    * Starts the checkpoint server in the worker thread
    */
-  async setup(): Promise<ServerStartedData> {
+  async setup(): Promise<void> {
     const workerPath = await this.getWorkerPath();
     if (this.worker) {
       throw new Error("Worker thread is already running");
@@ -167,20 +75,35 @@ export class CheckpointServerWorkerManager {
     worker.on("error", (err) => {
       defaultLogger.warn("There was a worker error: ", err);
       this.worker = null;
-      this.serverInfo = null;
     });
     worker.on("exit", (code) => {
       if (code !== 0) {
         defaultLogger.warn(`Worker exited with code: ${code}`);
       }
       this.worker = null;
-      this.serverInfo = null;
     });
 
-    const serverInfo = await this.waitForServerStart();
-    this.serverInfo = serverInfo;
+    this.worker.on("message", (response: WorkerResponse) => {
+      if (response.type !== WorkerResponseType.API_RESPONSE) {
+        defaultLogger.warn(
+          `Found unexpected worker response: ${response.type}. Only ${WorkerResponseType.API_RESPONSE} is expected after initialization.`,
+        );
+        return;
+      }
 
-    return serverInfo;
+      this.workerApiHandler.handleApiCallResponse(response.data);
+    });
+  }
+
+  async sendApiRequest<TApiType extends ApiType>(
+    apiType: TApiType,
+    params: WorkerApiRequestMapping[TApiType],
+  ): Promise<WorkerApiResponseMapping[TApiType]> {
+    if (!this.worker) {
+      throw new Error("Worker not initialized");
+    }
+
+    return this.workerApiHandler.callWorkerApi(apiType, params, this.worker);
   }
 
   /**
@@ -194,7 +117,6 @@ export class CheckpointServerWorkerManager {
     }
 
     try {
-      await this.waitForServerShutdown();
       worker.unref();
     } catch {
       // If there was any error or timeout, force shutdown the worker
@@ -206,7 +128,6 @@ export class CheckpointServerWorkerManager {
     } finally {
       // Always clear worker and server info after teardown
       this.worker = null;
-      this.serverInfo = null;
     }
   }
 }

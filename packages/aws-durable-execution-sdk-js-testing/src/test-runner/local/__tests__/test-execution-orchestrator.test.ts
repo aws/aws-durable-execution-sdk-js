@@ -18,7 +18,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { CheckpointServerApiClient } from "../api-client/checkpoint-server-api-client";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
@@ -63,7 +63,7 @@ describe("TestExecutionOrchestrator", () => {
 
   let orchestrator: TestExecutionOrchestrator;
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
-  let checkpointApi: CheckpointApiClient;
+  let checkpointApi: CheckpointServerApiClient;
   let mockFunctionStorage: FunctionStorage;
   let mockDurableApiClient: DurableApiClient;
 
@@ -155,7 +155,7 @@ describe("TestExecutionOrchestrator", () => {
     ) as jest.Mocked<LocalOperationStorage>;
     mockOperationStorage.populateOperations = jest.fn();
 
-    checkpointApi = new CheckpointApiClient("http://127.0.0.1:1234");
+    checkpointApi = new CheckpointServerApiClient("http://127.0.0.1:1234");
 
     // Create a mock factory for FunctionStorage
     const mockFactory: ILocalDurableTestRunnerFactory = {

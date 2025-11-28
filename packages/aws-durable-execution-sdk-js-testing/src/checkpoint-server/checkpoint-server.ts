@@ -2,7 +2,6 @@ import express, { Request } from "express";
 import {
   CheckpointDurableExecutionRequest,
   ErrorObject,
-  Operation,
 } from "@aws-sdk/client-lambda";
 import { convertDatesToTimestamps } from "../utils";
 import { API_PATHS } from "./constants";
@@ -28,13 +27,7 @@ import type { Server } from "http";
 import { createRequestLogger } from "./middleware/request-logger";
 import { defaultLogger } from "../logger";
 import { ExecutionId, InvocationId } from "./utils/tagged-strings";
-interface UpdateCheckpointDataRequest {
-  executionId: ExecutionId;
-  operationId: string;
-  operationData: Partial<Operation>;
-  payload?: string;
-  error?: ErrorObject;
-}
+import { UpdateCheckpointDataRequest } from "./worker-api/worker-api-request";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace

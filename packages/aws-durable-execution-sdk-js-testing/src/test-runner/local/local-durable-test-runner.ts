@@ -9,7 +9,6 @@ import { OperationWaitManager } from "./operations/operation-wait-manager";
 import { OperationWithData } from "../common/operations/operation-with-data";
 import { TestExecutionOrchestrator } from "./test-execution-orchestrator";
 import { ResultFormatter } from "./result-formatter";
-import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
 import { CheckpointServerWorkerManager } from "./checkpoint-server-worker-manager";
 import { IndexedOperations } from "../common/indexed-operations";
 import { FunctionStorage } from "./operations/function-storage";
@@ -18,21 +17,21 @@ import {
   ILocalDurableTestRunnerFactory,
   LocalDurableTestRunnerParameters,
 } from "./interfaces/durable-test-runner-factory";
-import {
-  createDurableApiClient,
-  DurableApiClient,
-} from "../common/create-durable-api-client";
-import { getDurableExecutionsClient } from "./api-client/durable-executions-client";
+import { DurableApiClient } from "../common/create-durable-api-client";
 import { install, InstalledClock } from "@sinonjs/fake-timers";
 import { Handler } from "aws-lambda";
+import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
+import {
+  SendDurableExecutionCallbackFailureRequest,
+  SendDurableExecutionCallbackHeartbeatRequest,
+} from "@aws-sdk/client-lambda";
+import { CheckpointWorkerApiClient } from "./api-client/checkpoint-worker-api-client";
 
 export type LocalTestRunnerHandlerFunction = DurableLambdaHandler;
 
 export type { LocalDurableTestRunnerParameters };
 
-export class LocalDurableTestRunnerFactory
-  implements ILocalDurableTestRunnerFactory
-{
+export class LocalDurableTestRunnerFactory implements ILocalDurableTestRunnerFactory {
   /**
    * Creates new runner instances for nested function execution
    */
@@ -86,9 +85,10 @@ export interface LocalDurableTestRunnerSetupParameters {
  * Local test runner for durable executions that runs handlers in-process
  * with a local checkpoint server for development and testing scenarios.
  */
-export class LocalDurableTestRunner<ResultType>
-  implements DurableTestRunner<OperationWithData, ResultType>
-{
+export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
+  OperationWithData,
+  ResultType
+> {
   private operationStorage: LocalOperationStorage;
   private waitManager: OperationWaitManager;
   private readonly resultFormatter: ResultFormatter<ResultType>;
@@ -116,10 +116,7 @@ export class LocalDurableTestRunner<ResultType>
       new LocalDurableTestRunnerFactory(),
     );
 
-    this.durableApi = createDurableApiClient(() => {
-      const serverInfo = LocalDurableTestRunner.getCheckpointServerInfo();
-      return getDurableExecutionsClient(serverInfo.url);
-    });
+    this.durableApi = LocalDurableTestRunner.createDurableApi();
 
     this.operationStorage = new LocalOperationStorage(
       this.waitManager,
@@ -129,15 +126,34 @@ export class LocalDurableTestRunner<ResultType>
     );
   }
 
-  private static getCheckpointServerInfo() {
-    const serverInfo =
-      CheckpointServerWorkerManager.getInstance().getServerInfo();
-    if (!serverInfo) {
-      throw new Error(
-        "Could not find checkpoint server info. Did you call LocalDurableTestRunner.setupTestEnvironment()?",
-      );
-    }
-    return serverInfo;
+  private static createDurableApi(): DurableApiClient {
+    const workerManager = CheckpointServerWorkerManager.getInstance();
+    return {
+      sendCallbackSuccess: (request) =>
+        workerManager.sendApiRequest(
+          ApiType.SendDurableExecutionCallbackSuccess,
+          request,
+        ),
+      sendCallbackFailure: (
+        request: SendDurableExecutionCallbackFailureRequest,
+      ) =>
+        workerManager.sendApiRequest(
+          ApiType.SendDurableExecutionCallbackFailure,
+          request,
+        ),
+      sendCallbackHeartbeat: (
+        request: SendDurableExecutionCallbackHeartbeatRequest,
+      ) =>
+        workerManager.sendApiRequest(
+          ApiType.SendDurableExecutionCallbackHeartbeat,
+          request,
+        ),
+    };
+  }
+
+  private static createCheckpointApiClient() {
+    const workerManager = CheckpointServerWorkerManager.getInstance();
+    return new CheckpointWorkerApiClient(workerManager);
   }
 
   /**
@@ -150,20 +166,10 @@ export class LocalDurableTestRunner<ResultType>
    */
   async run(params?: InvokeRequest): Promise<TestResult<ResultType>> {
     try {
-      const serverInfo = LocalDurableTestRunner.getCheckpointServerInfo();
-
-      process.env.DURABLE_LOCAL_RUNNER_REGION = "us-west-2";
-      process.env.DURABLE_LOCAL_RUNNER_ENDPOINT = serverInfo.url;
-      process.env.DURABLE_LOCAL_RUNNER_CREDENTIALS = JSON.stringify({
-        accessKeyId: "placeholder-accessKeyId",
-        secretAccessKey: "placeholder-secretAccessKey",
-        sessionToken: "placeholder-sessionToken",
-      });
-
       const orchestrator = new TestExecutionOrchestrator(
         this.handlerFunction,
         this.operationStorage,
-        new CheckpointApiClient(serverInfo.url),
+        LocalDurableTestRunner.createCheckpointApiClient(),
         this.functionStorage,
         {
           enabled: LocalDurableTestRunner.skipTime,

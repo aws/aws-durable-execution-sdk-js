@@ -1,11 +1,13 @@
 import {
   LambdaClient,
   SendDurableExecutionCallbackFailureCommand,
-  SendDurableExecutionCallbackFailureCommandOutput,
   SendDurableExecutionCallbackHeartbeatCommand,
-  SendDurableExecutionCallbackHeartbeatCommandOutput,
   SendDurableExecutionCallbackSuccessCommand,
-  SendDurableExecutionCallbackSuccessCommandOutput,
+  SendDurableExecutionCallbackSuccessResponse,
+  SendDurableExecutionCallbackFailureRequest,
+  SendDurableExecutionCallbackFailureResponse,
+  SendDurableExecutionCallbackHeartbeatResponse,
+  SendDurableExecutionCallbackHeartbeatRequest,
   SendDurableExecutionCallbackSuccessCommandInput,
   SendDurableExecutionCallbackFailureCommandInput,
   SendDurableExecutionCallbackHeartbeatCommandInput,
@@ -14,13 +16,13 @@ import {
 export interface DurableApiClient {
   sendCallbackSuccess: (
     request: SendDurableExecutionCallbackSuccessCommandInput,
-  ) => Promise<SendDurableExecutionCallbackSuccessCommandOutput>;
+  ) => Promise<SendDurableExecutionCallbackSuccessResponse>;
   sendCallbackFailure: (
     request: SendDurableExecutionCallbackFailureCommandInput,
-  ) => Promise<SendDurableExecutionCallbackFailureCommandOutput>;
+  ) => Promise<SendDurableExecutionCallbackFailureResponse>;
   sendCallbackHeartbeat: (
     request: SendDurableExecutionCallbackHeartbeatCommandInput,
-  ) => Promise<SendDurableExecutionCallbackHeartbeatCommandOutput>;
+  ) => Promise<SendDurableExecutionCallbackHeartbeatResponse>;
 }
 
 export function createDurableApiClient(

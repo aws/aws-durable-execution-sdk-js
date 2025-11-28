@@ -6,7 +6,7 @@ import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { InvocationStatus } from "@aws/durable-execution-sdk-js";
 import { CheckpointServerWorkerManager } from "../checkpoint-server-worker-manager";
-import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { CheckpointServerApiClient } from "../api-client/checkpoint-server-api-client";
 import { FunctionStorage } from "../operations/function-storage";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { install } from "@sinonjs/fake-timers";
@@ -222,7 +222,7 @@ describe("LocalDurableTestRunner", () => {
       expect(TestExecutionOrchestrator).toHaveBeenCalledWith(
         mockHandlerFunction,
         mockOperationStorage,
-        expect.any(CheckpointApiClient), // CheckpointApiClient created with server URL
+        expect.any(CheckpointServerApiClient), // CheckpointApiClient created with server URL
         mockFunctionStorage,
         {
           enabled: false,
@@ -244,7 +244,7 @@ describe("LocalDurableTestRunner", () => {
       expect(TestExecutionOrchestrator).toHaveBeenCalledWith(
         mockHandlerFunction,
         mockOperationStorage,
-        expect.any(CheckpointApiClient), // CheckpointApiClient created with server URL
+        expect.any(CheckpointServerApiClient), // CheckpointApiClient created with server URL
         mockFunctionStorage,
         {
           enabled: true,
@@ -678,7 +678,7 @@ describe("LocalDurableTestRunner", () => {
         expect(TestExecutionOrchestrator).toHaveBeenCalledWith(
           mockHandlerFunction,
           mockOperationStorage,
-          expect.any(CheckpointApiClient),
+          expect.any(CheckpointServerApiClient),
           mockFunctionStorage,
           {
             enabled: true,

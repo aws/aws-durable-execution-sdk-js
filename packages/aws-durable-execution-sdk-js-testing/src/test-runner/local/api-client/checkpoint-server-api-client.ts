@@ -1,0 +1,173 @@
+import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
+import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
+import { ErrorObject, Operation, Event } from "@aws-sdk/client-lambda";
+import {
+  API_PATHS,
+  HTTP_METHODS,
+  getStartInvocationPath,
+  getPollCheckpointDataPath,
+  getUpdateCheckpointDataPath,
+  getCompleteInvocationPath,
+} from "../../../checkpoint-server/constants";
+import {
+  ExecutionId,
+  InvocationId,
+} from "../../../checkpoint-server/utils/tagged-strings";
+import {
+  SerializedCheckpointOperation,
+  SerializedEvent,
+} from "../../../checkpoint-server/types/operation-event";
+import { SerializedInvocationResult } from "../../../checkpoint-server/types/serialized-invocation-result";
+import {
+  deserializeCheckpointOperation,
+  deserializeOperationEvents,
+} from "./deserialize/deserialize-operation-events";
+import { deserializeEvent } from "./deserialize/deserialize-event";
+import { CheckpointApiClient } from "./checkpoint-api-client";
+
+export interface SerializedPollCheckpointResponse {
+  operations: SerializedCheckpointOperation[];
+}
+
+/**
+ * Client for interacting with the checkpoint server API
+ */
+export class CheckpointServerApiClient implements CheckpointApiClient {
+  constructor(private readonly baseUrl: string) {}
+
+  getServerUrl() {
+    return this.baseUrl;
+  }
+
+  /**
+   * Start a new durable invocation
+   */
+  async startDurableExecution(payload?: string): Promise<InvocationResult> {
+    const result = await this.makeRequest<SerializedInvocationResult>({
+      path: API_PATHS.START_DURABLE_EXECUTION,
+      method: HTTP_METHODS.POST,
+      body: JSON.stringify({ payload }),
+    });
+
+    return {
+      ...result,
+      operationEvents: deserializeOperationEvents(result.operationEvents),
+    };
+  }
+
+  /**
+   * Poll for checkpoint data
+   */
+  async pollCheckpointData(
+    executionId: ExecutionId,
+    signal?: AbortSignal,
+  ): Promise<{
+    operations: CheckpointOperation[];
+  }> {
+    const result = await this.makeRequest<SerializedPollCheckpointResponse>({
+      path: getPollCheckpointDataPath(executionId),
+      method: HTTP_METHODS.GET,
+      signal,
+    });
+
+    return {
+      operations: result.operations.map((operationEvents) =>
+        deserializeCheckpointOperation(operationEvents),
+      ),
+    };
+  }
+
+  /**
+   * Update checkpoint data for a specific operation with the intended status.
+   *
+   * @param params Object containing update parameters
+   * @param params.executionId The execution ID containing the operation
+   * @param params.operationId The specific operation ID to update
+   * @param params.status Optional operation status to set
+   * @throws {Error} When the API request fails or returns a non-success status
+   */
+  async updateCheckpointData(params: {
+    executionId: ExecutionId;
+    operationId: string;
+    operationData: Partial<Operation>;
+    payload?: string;
+    error?: ErrorObject;
+  }): Promise<void> {
+    return this.makeRequest({
+      path: getUpdateCheckpointDataPath(params.executionId, params.operationId),
+      method: HTTP_METHODS.POST,
+      body: JSON.stringify({
+        operationData: params.operationData,
+        payload: params.payload,
+        error: params.error,
+      }),
+    });
+  }
+
+  /**
+   * Start a new invocation for an existing execution
+   */
+  async startInvocation(executionId: ExecutionId): Promise<InvocationResult> {
+    const result = await this.makeRequest<SerializedInvocationResult>({
+      path: getStartInvocationPath(executionId),
+      method: HTTP_METHODS.POST,
+    });
+
+    return {
+      ...result,
+      operationEvents: deserializeOperationEvents(result.operationEvents),
+    };
+  }
+
+  async completeInvocation(
+    executionId: ExecutionId,
+    invocationId: InvocationId,
+    error: ErrorObject | undefined,
+  ): Promise<Event> {
+    const result = await this.makeRequest<SerializedEvent>({
+      path: getCompleteInvocationPath(executionId),
+      method: HTTP_METHODS.POST,
+      body: JSON.stringify({
+        invocationId,
+        error,
+      }),
+    });
+
+    return deserializeEvent(result);
+  }
+
+  /**
+   * Make an HTTP request to the checkpoint server with retry logic
+   */
+  private async makeRequest<T>({
+    path,
+    method,
+    body,
+    signal,
+  }: {
+    path: string;
+    method: string;
+    body?: string;
+    signal?: AbortSignal;
+  }): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      body,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      const error = new Error(
+        `Error making HTTP request to ${path}: status: ${response.status}, ${errorText}`,
+      );
+      throw error;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    return response.json() as T;
+  }
+}

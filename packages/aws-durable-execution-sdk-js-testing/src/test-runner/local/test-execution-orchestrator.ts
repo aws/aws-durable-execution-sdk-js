@@ -22,7 +22,6 @@ import {
   OperationType,
   OperationUpdate,
 } from "@aws-sdk/client-lambda";
-import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
 import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-manager";
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
@@ -31,6 +30,7 @@ import { setTimeout } from "node:timers";
 import { InstalledClock } from "@sinonjs/fake-timers";
 import { QueueScheduler } from "./orchestration/queue-scheduler";
 import { TimerScheduler } from "./orchestration/timer-scheduler";
+import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
 
 export interface SkipTimeProps {
   enabled: boolean;

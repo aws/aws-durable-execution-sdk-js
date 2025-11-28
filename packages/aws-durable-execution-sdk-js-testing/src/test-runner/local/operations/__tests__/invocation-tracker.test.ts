@@ -3,16 +3,16 @@ import {
   createExecutionId,
   createInvocationId,
 } from "../../../../checkpoint-server/utils/tagged-strings";
-import { CheckpointApiClient } from "../../api-client/checkpoint-api-client";
+import { CheckpointServerApiClient } from "../../api-client/checkpoint-server-api-client";
 
 describe("InvocationTracker", () => {
   let invocationTracker: InvocationTracker;
-  let mockCheckpointApi: CheckpointApiClient;
+  let mockCheckpointApi: CheckpointServerApiClient;
 
   const mockExecutionId = createExecutionId();
 
   beforeEach(() => {
-    mockCheckpointApi = new CheckpointApiClient("mockUrl");
+    mockCheckpointApi = new CheckpointServerApiClient("mockUrl");
     invocationTracker = new InvocationTracker(mockCheckpointApi);
     jest
       .spyOn(mockCheckpointApi, "completeInvocation")
