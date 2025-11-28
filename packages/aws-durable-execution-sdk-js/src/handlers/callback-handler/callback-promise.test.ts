@@ -55,7 +55,10 @@ describe("createCallbackPromise", () => {
       });
       mockContext.terminationManager.terminate = mockTerminate;
 
-      mockWaitBeforeContinue.mockResolvedValue({} as any);
+      mockWaitBeforeContinue.mockResolvedValue({
+        reason: "operations",
+        canTerminate: true,
+      } as any);
 
       const promise = createCallbackPromise(
         mockContext,

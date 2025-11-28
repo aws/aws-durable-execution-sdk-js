@@ -173,31 +173,33 @@ export const createInvokeHandler = (
 
         if (stepData?.Status === OperationStatus.STARTED) {
           // Operation is still running
-          if (hasRunningOperations()) {
-            // Phase 2: Wait for other operations
+          // Phase 2: Wait for other operations
+          log(
+            "⏳",
+            `Invoke ${name || funcId} still in progress, waiting for other operations`,
+          );
+          const result = await waitBeforeContinue({
+            checkHasRunningOperations: true,
+            checkStepStatus: true,
+            checkTimer: false,
+            stepId,
+            context,
+            hasRunningOperations,
+            operationsEmitter: getOperationsEmitter(),
+          });
+
+          if (result.canTerminate) {
             log(
               "⏳",
-              `Invoke ${name || funcId} still in progress, waiting for other operations`,
+              `Invoke ${name || funcId} still in progress, terminating`,
             );
-            await waitBeforeContinue({
-              checkHasRunningOperations: true,
-              checkStepStatus: true,
-              checkTimer: false,
-              stepId,
+            return terminate(
               context,
-              hasRunningOperations,
-              operationsEmitter: getOperationsEmitter(),
-            });
-            continue; // Re-evaluate status after waiting
+              TerminationReason.OPERATION_TERMINATED,
+              stepId,
+            );
           }
-
-          // No other operations running - terminate
-          log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
-          return terminate(
-            context,
-            TerminationReason.OPERATION_TERMINATED,
-            stepId,
-          );
+          continue; // Re-evaluate status after waiting
         }
 
         // If stepData exists but has an unexpected status, break to avoid infinite loop
