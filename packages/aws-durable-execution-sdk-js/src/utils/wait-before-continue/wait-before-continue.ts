@@ -56,15 +56,40 @@ export async function waitBeforeContinue(
     onAwaitedChange,
   } = options;
 
+  // Store original status for comparison
+  const originalStatus = checkStepStatus
+    ? context.getStepData(stepId)?.Status
+    : undefined;
+
+  // Helper function to calculate canTerminate based on all three conditions at resolution time
+  const calculateCanTerminate = (): boolean => {
+    // Condition 1: Status didn't change (if we're monitoring status)
+    if (checkStepStatus && stepId) {
+      const currentStatus = context.getStepData(stepId)?.Status;
+      if (originalStatus !== currentStatus) {
+        return false; // Status changed, continue handler
+      }
+    }
+
+    // Condition 2: No running operations (if we're monitoring operations)
+    if (checkHasRunningOperations && hasRunningOperations()) {
+      return false; // Operations running, can't terminate
+    }
+
+    // Condition 3: Timer not reached (if we're monitoring timer)
+    if (checkTimer && scheduledEndTimestamp) {
+      const timerReached = Number(scheduledEndTimestamp) <= Date.now();
+      if (timerReached) {
+        return false; // Timer reached, should checkpoint.force and continue
+      }
+    }
+
+    return true; // All conditions met, can terminate
+  };
+
   // Early return if no running operations and we're checking for them
   if (checkHasRunningOperations && !hasRunningOperations()) {
-    // Can terminate if no other conditions are actively waiting
-    const hasActiveTimer =
-      checkTimer &&
-      scheduledEndTimestamp &&
-      Number(scheduledEndTimestamp) > Date.now();
-    const canTerminate = !hasActiveTimer && !onAwaitedChange;
-    return { reason: "operations", canTerminate };
+    return { reason: "operations", canTerminate: calculateCanTerminate() };
   }
 
   const promises: Promise<WaitBeforeContinueResult>[] = [];
@@ -87,13 +112,17 @@ export async function waitBeforeContinue(
             resolve({
               reason: "timer",
               timerExpired: true,
-              canTerminate: true,
+              canTerminate: calculateCanTerminate(),
             }),
           timeLeft,
         );
         timers.push(timer);
       } else {
-        resolve({ reason: "timer", timerExpired: true, canTerminate: true });
+        resolve({
+          reason: "timer",
+          timerExpired: true,
+          canTerminate: calculateCanTerminate(),
+        });
       }
     });
     promises.push(timerPromise);
@@ -104,21 +133,17 @@ export async function waitBeforeContinue(
     const operationsPromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
         if (!hasRunningOperations()) {
-          const hasActiveTimer =
-            checkTimer &&
-            scheduledEndTimestamp &&
-            Number(scheduledEndTimestamp) > Date.now();
-          const canTerminate = !hasActiveTimer && !onAwaitedChange;
-          resolve({ reason: "operations", canTerminate });
+          resolve({
+            reason: "operations",
+            canTerminate: calculateCanTerminate(),
+          });
         } else {
           // Event-driven: listen for completion event
           const handler = (): void => {
-            const hasActiveTimer =
-              checkTimer &&
-              scheduledEndTimestamp &&
-              Number(scheduledEndTimestamp) > Date.now();
-            const canTerminate = !hasActiveTimer && !onAwaitedChange;
-            resolve({ reason: "operations", canTerminate });
+            resolve({
+              reason: "operations",
+              canTerminate: calculateCanTerminate(),
+            });
           };
           operationsEmitter.once(OPERATIONS_COMPLETE_EVENT, handler);
           cleanupFns.push(() =>
@@ -132,21 +157,23 @@ export async function waitBeforeContinue(
 
   // Step status promise - event-driven approach
   if (checkStepStatus) {
-    const originalStatus = context.getStepData(stepId)?.Status;
     const hashedStepId = hashId(stepId);
     const stepStatusPromise = new Promise<WaitBeforeContinueResult>(
       (resolve) => {
         // Check if status already changed
         const currentStatus = context.getStepData(stepId)?.Status;
         if (originalStatus !== currentStatus) {
-          resolve({ reason: "status", canTerminate: false });
+          resolve({ reason: "status", canTerminate: calculateCanTerminate() });
         } else {
           // Event-driven: listen for step data updates
           const handler = (updatedStepId: string): void => {
             if (updatedStepId === hashedStepId) {
               const newStatus = context.getStepData(stepId)?.Status;
               if (originalStatus !== newStatus) {
-                resolve({ reason: "status", canTerminate: false });
+                resolve({
+                  reason: "status",
+                  canTerminate: calculateCanTerminate(),
+                });
               }
             }
           };
@@ -169,7 +196,7 @@ export async function waitBeforeContinue(
       (resolve) => {
         // Register a callback that will be invoked when the promise is awaited
         onAwaitedChange(() => {
-          resolve({ reason: "status", canTerminate: false });
+          resolve({ reason: "status", canTerminate: calculateCanTerminate() });
         });
       },
     );
