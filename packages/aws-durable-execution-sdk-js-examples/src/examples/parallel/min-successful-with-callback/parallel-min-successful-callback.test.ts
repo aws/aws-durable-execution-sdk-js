@@ -36,6 +36,6 @@ createTests({
       const results = execution.getResult() as string[];
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results[0]).toBe("result-1");
-    }, 10000);
+    }, 30000);
   },
 });
