@@ -551,6 +551,7 @@ describe("CheckpointManager", () => {
       expect(checkpointHandler.getQueueStatus()).toEqual({
         queueLength: 0,
         isProcessing: false,
+        forceCheckpointPromises: 0,
       });
     });
   });
