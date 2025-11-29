@@ -46,7 +46,6 @@ describe("InvokeHandler", () => {
 
     // Set up default mock for waitBeforeContinue
     mockWaitBeforeContinue.mockResolvedValue({
-      reason: "operations",
       canTerminate: true,
     });
 
@@ -288,7 +287,6 @@ describe("InvokeHandler", () => {
       mockContext.getStepData = mockGetStepData;
       mockHasRunningOperations.mockReturnValue(true); // Other operations running
       mockWaitBeforeContinue.mockResolvedValue({
-        reason: "status",
         canTerminate: false,
       });
       mockSafeDeserialize.mockResolvedValue({ result: "success" });

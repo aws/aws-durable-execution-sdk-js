@@ -31,7 +31,6 @@ export interface WaitBeforeContinueOptions {
 }
 
 export interface WaitBeforeContinueResult {
-  reason: "timer" | "operations" | "status" | "timeout";
   timerExpired?: boolean;
   canTerminate: boolean;
 }
@@ -66,6 +65,9 @@ export async function waitBeforeContinue(
 
   // Track if awaited change has been triggered
   let awaitedChangeTriggered = false;
+
+  // Track if timer expired (for internal checkpoint logic)
+  let timerExpired = false;
 
   // Helper function to calculate canTerminate based on all conditions at resolution time
   const calculateCanTerminate = (): boolean => {
@@ -117,7 +119,7 @@ export async function waitBeforeContinue(
 
   // Early return if no running operations and we're checking for them
   if (checkHasRunningOperations && !hasRunningOperations()) {
-    return { reason: "operations", canTerminate: calculateCanTerminate() };
+    return { canTerminate: calculateCanTerminate() };
   }
 
   const promises: Promise<WaitBeforeContinueResult>[] = [];
@@ -135,19 +137,17 @@ export async function waitBeforeContinue(
     const timerPromise = new Promise<WaitBeforeContinueResult>((resolve) => {
       const timeLeft = Number(scheduledEndTimestamp) - Date.now();
       if (timeLeft > 0) {
-        const timer = setTimeout(
-          () =>
-            resolve({
-              reason: "timer",
-              timerExpired: true,
-              canTerminate: calculateCanTerminate(),
-            }),
-          timeLeft,
-        );
+        const timer = setTimeout(() => {
+          timerExpired = true;
+          resolve({
+            timerExpired: true,
+            canTerminate: calculateCanTerminate(),
+          });
+        }, timeLeft);
         timers.push(timer);
       } else {
+        timerExpired = true;
         resolve({
-          reason: "timer",
           timerExpired: true,
           canTerminate: calculateCanTerminate(),
         });
@@ -162,14 +162,12 @@ export async function waitBeforeContinue(
       (resolve) => {
         if (!hasRunningOperations()) {
           resolve({
-            reason: "operations",
             canTerminate: calculateCanTerminate(),
           });
         } else {
           // Event-driven: listen for completion event
           const handler = (): void => {
             resolve({
-              reason: "operations",
               canTerminate: calculateCanTerminate(),
             });
           };
@@ -191,7 +189,7 @@ export async function waitBeforeContinue(
         // Check if status already changed
         const currentStatus = context.getStepData(stepId)?.Status;
         if (originalStatus !== currentStatus) {
-          resolve({ reason: "status", canTerminate: calculateCanTerminate() });
+          resolve({ canTerminate: calculateCanTerminate() });
         } else {
           // Event-driven: listen for step data updates
           const handler = (updatedStepId: string): void => {
@@ -199,7 +197,6 @@ export async function waitBeforeContinue(
               const newStatus = context.getStepData(stepId)?.Status;
               if (originalStatus !== newStatus) {
                 resolve({
-                  reason: "status",
                   canTerminate: calculateCanTerminate(),
                 });
               }
@@ -225,7 +222,7 @@ export async function waitBeforeContinue(
         // Register a callback that will be invoked when the promise is awaited
         onAwaitedChange(() => {
           awaitedChangeTriggered = true;
-          resolve({ reason: "status", canTerminate: calculateCanTerminate() });
+          resolve({ canTerminate: calculateCanTerminate() });
         });
       },
     );
@@ -234,7 +231,7 @@ export async function waitBeforeContinue(
 
   // If no conditions provided, return immediately
   if (promises.length === 0) {
-    return { reason: "timeout", canTerminate: true };
+    return { canTerminate: true };
   }
 
   // Wait for any condition to be met, then cleanup timers and listeners
@@ -242,7 +239,7 @@ export async function waitBeforeContinue(
   cleanup();
 
   // If timer expired, force checkpoint to get fresh data from API
-  if (result.reason === "timer" && result.timerExpired && checkpoint) {
+  if (timerExpired && result.timerExpired && checkpoint) {
     if (checkpoint.force) {
       await checkpoint.force();
     } else if (checkpoint.forceCheckpoint) {

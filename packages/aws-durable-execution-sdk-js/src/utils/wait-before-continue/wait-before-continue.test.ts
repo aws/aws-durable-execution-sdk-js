@@ -53,7 +53,7 @@ describe("waitBeforeContinue", () => {
     timers.push(timer);
 
     const result = await resultPromise;
-    expect(result.reason).toBe("operations");
+    expect(result.canTerminate).toBe(true);
   });
 
   test("should resolve when timer expires immediately", async () => {
@@ -71,7 +71,6 @@ describe("waitBeforeContinue", () => {
       checkpoint: mockCheckpoint,
     });
 
-    expect(result.reason).toBe("timer");
     expect(result.timerExpired).toBe(true);
   });
 
@@ -90,7 +89,6 @@ describe("waitBeforeContinue", () => {
       checkpoint: mockCheckpoint,
     });
 
-    expect(result.reason).toBe("timer");
     expect(result.timerExpired).toBe(true);
   });
 
@@ -119,7 +117,6 @@ describe("waitBeforeContinue", () => {
     timers.push(timer);
 
     const result = await resultPromise;
-    expect(result.reason).toBe("status");
   });
 
   test("should resolve immediately when step status already changed", async () => {
@@ -139,8 +136,6 @@ describe("waitBeforeContinue", () => {
       operationsEmitter: mockOperationsEmitter,
       checkpoint: mockCheckpoint,
     });
-
-    expect(result.reason).toBe("status");
   });
 
   test("should return timeout when no conditions are enabled", async () => {
@@ -154,8 +149,6 @@ describe("waitBeforeContinue", () => {
       operationsEmitter: mockOperationsEmitter,
       checkpoint: mockCheckpoint,
     });
-
-    expect(result.reason).toBe("timeout");
   });
 
   test("should call checkpoint.force when timer expires", async () => {
@@ -176,7 +169,6 @@ describe("waitBeforeContinue", () => {
       checkpoint: mockCheckpoint,
     });
 
-    expect(result.reason).toBe("timer");
     expect(result.timerExpired).toBe(true);
     expect(mockCheckpoint.forceCheckpoint).toHaveBeenCalled();
   });
@@ -205,6 +197,5 @@ describe("waitBeforeContinue", () => {
     timers.push(timer);
 
     const result = await resultPromise;
-    expect(result.reason).toBe("status");
   });
 });

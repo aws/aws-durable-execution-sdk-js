@@ -62,7 +62,6 @@ describe("Invoke Handler Two-Phase Execution", () => {
 
     // Set up default mock for waitBeforeContinue
     mockWaitBeforeContinue.mockResolvedValue({
-      reason: "operations",
       canTerminate: true,
     });
 
