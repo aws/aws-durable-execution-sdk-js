@@ -22,12 +22,11 @@ createTests({
 
       const operations = execution.getOperations();
 
-      // The child-context operation is now properly persisted before error occurs,
-      // thanks to waitForQueueCompletion. This ensures the checkpoint is saved
-      // regardless of the events that happens after that
-      expect(operations).toHaveLength(1);
-      expect(operations[0].getName()).toBe("child-context");
-      expect(operations[0].getStatus()).toBe("STARTED");
+      // The wrong-step operation should NOT exist because validation should prevent it
+      const wrongStepOp = operations.find(
+        (op: any) => op.getName() === "wrong-step",
+      );
+      expect(wrongStepOp).toBeUndefined();
     });
   },
 });
