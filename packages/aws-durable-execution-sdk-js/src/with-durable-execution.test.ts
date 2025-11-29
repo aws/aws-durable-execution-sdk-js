@@ -220,11 +220,6 @@ describe("withDurableExecution", () => {
       new Promise(() => {}),
     );
 
-    // Mock waitForQueueCompletion to resolve immediately
-    const waitForQueueCompletionSpy = jest
-      .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
-      .mockResolvedValue(undefined);
-
     // Spy on setTimeout
     const setTimeoutSpy = jest.spyOn(global, "setTimeout");
 
@@ -255,7 +250,6 @@ describe("withDurableExecution", () => {
 
     // Clean up
     setTimeoutSpy.mockRestore();
-    waitForQueueCompletionSpy.mockRestore();
 
     // Restore fake timers for other tests
     jest.useFakeTimers();

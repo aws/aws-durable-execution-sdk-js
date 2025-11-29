@@ -8,6 +8,11 @@ export interface CheckpointFunction extends Checkpoint {
   setTerminating(): void;
   hasPendingAncestorCompletion(stepId: string): boolean;
   waitForQueueCompletion(): Promise<void>;
+  getQueueStatus(): {
+    queueLength: number;
+    isProcessing: boolean;
+    forceCheckpointPromises: number;
+  };
 }
 
 export const createMockCheckpoint = (
@@ -26,6 +31,13 @@ export const createMockCheckpoint = (
     setTerminating: jest.fn(),
     hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    getQueueStatus: jest
+      .fn()
+      .mockReturnValue({
+        queueLength: 0,
+        isProcessing: false,
+        forceCheckpointPromises: 0,
+      }),
   }) as jest.MockedFunction<CheckpointFunction>;
 
   return mockCheckpoint;

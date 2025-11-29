@@ -451,10 +451,12 @@ export class CheckpointManager implements Checkpoint {
   getQueueStatus(): {
     queueLength: number;
     isProcessing: boolean;
+    forceCheckpointPromises: number;
   } {
     return {
       queueLength: this.queue.length,
       isProcessing: this.isProcessing,
+      forceCheckpointPromises: this.forceCheckpointPromises.length,
     };
   }
 }

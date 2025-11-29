@@ -125,14 +125,6 @@ async function runHandler<
       resultType,
     });
 
-    // Wait for all pending checkpoints to complete
-    try {
-      await durableExecution.checkpointManager.waitForQueueCompletion();
-      log("✅", "All pending checkpoints completed");
-    } catch (error) {
-      log("⚠️", "Error waiting for checkpoint completion:", error);
-    }
-
     // If termination was due to checkpoint failure, throw the appropriate error
     if (
       resultType === "termination" &&

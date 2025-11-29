@@ -49,8 +49,12 @@ export class MockCheckpointManager extends CheckpointManager {
     return false;
   }
 
-  getQueueStatus(): { queueLength: number; isProcessing: boolean } {
-    return { queueLength: 0, isProcessing: false };
+  getQueueStatus(): {
+    queueLength: number;
+    isProcessing: boolean;
+    forceCheckpointPromises: number;
+  } {
+    return { queueLength: 0, isProcessing: false, forceCheckpointPromises: 0 };
   }
 }
 

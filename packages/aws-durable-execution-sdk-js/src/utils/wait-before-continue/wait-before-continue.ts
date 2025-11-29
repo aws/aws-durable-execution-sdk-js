@@ -67,7 +67,7 @@ export async function waitBeforeContinue(
     ? context.getStepData(stepId)?.Status
     : undefined;
 
-  // Helper function to calculate canTerminate based on all three conditions at resolution time
+  // Helper function to calculate canTerminate based on all conditions at resolution time
   const calculateCanTerminate = (): boolean => {
     // Condition 1: Status didn't change (if we're monitoring status)
     if (checkStepStatus && stepId) {
@@ -87,6 +87,18 @@ export async function waitBeforeContinue(
       const timerReached = Number(scheduledEndTimestamp) <= Date.now();
       if (timerReached) {
         return false; // Timer reached, should checkpoint.force and continue
+      }
+    }
+
+    // Condition 4: No pending checkpoints (if we have checkpoint manager)
+    if (checkpoint) {
+      const queueStatus = checkpoint.getQueueStatus();
+      if (
+        queueStatus.queueLength > 0 ||
+        queueStatus.isProcessing ||
+        queueStatus.forceCheckpointPromises > 0
+      ) {
+        return false; // Checkpoints pending, can't terminate
       }
     }
 

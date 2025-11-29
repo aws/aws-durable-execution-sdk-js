@@ -97,12 +97,9 @@ export function terminate<T>(
 ): Promise<T> {
   const activeContext = getActiveContext();
 
-  // If we have a parent context, add delay to let checkpoints process
+  // If we have a parent context, check ancestors before terminating
   if (activeContext?.parentId) {
-    return new Promise<T>(async (_resolve, _reject) => {
-      // Wait a tick to let any pending checkpoints start processing
-      await new Promise((resolve) => setImmediate(resolve));
-
+    return new Promise<T>((_resolve, _reject) => {
       log("🔍", "Terminate called - checking context:", {
         hasActiveContext: !!activeContext,
         contextId: activeContext?.contextId,
@@ -131,7 +128,7 @@ export function terminate<T>(
         return;
       }
 
-      // Terminate immediately - active operations check handled in waitBeforeContinue
+      // Terminate - checkpoint coordination handled in waitBeforeContinue
       context.terminationManager.terminate({
         reason,
         message,
@@ -139,7 +136,7 @@ export function terminate<T>(
     });
   }
 
-  // No parent context - terminate immediately, active operations check handled in waitBeforeContinue
+  // No parent context - terminate, checkpoint coordination handled in waitBeforeContinue
   context.terminationManager.terminate({
     reason,
     message,

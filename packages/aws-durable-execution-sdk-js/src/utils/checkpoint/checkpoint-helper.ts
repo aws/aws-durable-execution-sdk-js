@@ -7,4 +7,9 @@ export interface Checkpoint {
   setTerminating?(): void;
   hasPendingAncestorCompletion?(stepId: string): boolean;
   waitForQueueCompletion(): Promise<void>;
+  getQueueStatus(): {
+    queueLength: number;
+    isProcessing: boolean;
+    forceCheckpointPromises: number;
+  };
 }

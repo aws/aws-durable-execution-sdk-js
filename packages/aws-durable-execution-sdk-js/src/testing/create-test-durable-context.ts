@@ -109,6 +109,13 @@ export function createTestDurableContext(options?: {
     setTerminating: jest.fn(),
     hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    getQueueStatus: jest
+      .fn()
+      .mockReturnValue({
+        queueLength: 0,
+        isProcessing: false,
+        forceCheckpointPromises: 0,
+      }),
   };
 
   const mockDurableExecution = {
