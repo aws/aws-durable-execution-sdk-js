@@ -131,38 +131,7 @@ export function terminate<T>(
         return;
       }
 
-      // Check if there are active operations before terminating
-      const tracker = context.activeOperationsTracker;
-      if (tracker && tracker.hasActive()) {
-        log("⏳", "Deferring termination - active operations in progress:", {
-          activeCount: tracker.getCount(),
-          reason,
-          message,
-        });
-
-        // Wait for operations to complete, then terminate
-        const checkInterval = setInterval(() => {
-          if (!tracker.hasActive()) {
-            clearInterval(checkInterval);
-            log(
-              "✅",
-              "Active operations completed, proceeding with termination:",
-              {
-                reason,
-                message,
-              },
-            );
-
-            context.terminationManager.terminate({
-              reason,
-              message,
-            });
-          }
-        }, 10);
-        return;
-      }
-
-      // No active operations, terminate immediately
+      // Terminate immediately - active operations check handled in waitBeforeContinue
       context.terminationManager.terminate({
         reason,
         message,
@@ -170,38 +139,7 @@ export function terminate<T>(
     });
   }
 
-  // No parent context - check active operations and terminate
-  const tracker = context.activeOperationsTracker;
-  if (tracker && tracker.hasActive()) {
-    log("⏳", "Deferring termination - active operations in progress:", {
-      activeCount: tracker.getCount(),
-      reason,
-      message,
-    });
-
-    return new Promise<T>((_resolve, _reject) => {
-      const checkInterval = setInterval(() => {
-        if (!tracker.hasActive()) {
-          clearInterval(checkInterval);
-          log(
-            "✅",
-            "Active operations completed, proceeding with termination:",
-            {
-              reason,
-              message,
-            },
-          );
-
-          context.terminationManager.terminate({
-            reason,
-            message,
-          });
-        }
-      }, 10);
-    });
-  }
-
-  // No parent, no active operations - terminate immediately
+  // No parent context - terminate immediately, active operations check handled in waitBeforeContinue
   context.terminationManager.terminate({
     reason,
     message,
