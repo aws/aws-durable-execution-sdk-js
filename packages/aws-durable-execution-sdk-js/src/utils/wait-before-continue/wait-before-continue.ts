@@ -41,8 +41,8 @@ export interface WaitBeforeContinueResult {
 export async function waitBeforeContinue(
   options: WaitBeforeContinueOptions,
 ): Promise<WaitBeforeContinueResult> {
-  // Add 50ms delay to allow checkpoint coordination without blocking events
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // Add setImmediate to allow checkpoint coordination without blocking events
+  await new Promise((resolve) => setImmediate(resolve));
 
   const {
     checkHasRunningOperations,
