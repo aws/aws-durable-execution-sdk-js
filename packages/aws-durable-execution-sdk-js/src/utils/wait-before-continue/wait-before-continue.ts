@@ -4,6 +4,8 @@ import { Checkpoint } from "../checkpoint/checkpoint-helper";
 import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../constants/constants";
 import { hashId } from "../step-id-utils/step-id-utils";
+import { getActiveContext } from "../context-tracker/context-tracker";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 
 export interface WaitBeforeContinueOptions {
   /** Check if operations are still running */
@@ -91,6 +93,23 @@ export async function waitBeforeContinue(
     // Condition 4: Awaited change triggered (if we're monitoring awaited changes)
     if (onAwaitedChange && awaitedChangeTriggered) {
       return false; // Promise was awaited, continue handler
+    }
+
+    // Condition 5: Check if ancestor has finished (similar to terminate() logic)
+    const activeContext = getActiveContext();
+    if (activeContext?.parentId) {
+      let currentHashedId: string | undefined = hashId(activeContext.parentId);
+
+      while (currentHashedId) {
+        const operation = context.getStepData(currentHashedId);
+        if (
+          operation?.Status === OperationStatus.SUCCEEDED ||
+          operation?.Status === OperationStatus.FAILED
+        ) {
+          return false; // Ancestor finished, continue handler to let ancestor checking handle it
+        }
+        currentHashedId = operation?.ParentId;
+      }
     }
 
     return true; // All conditions met, can terminate
