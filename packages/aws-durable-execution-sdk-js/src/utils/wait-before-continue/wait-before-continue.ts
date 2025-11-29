@@ -41,6 +41,14 @@ export interface WaitBeforeContinueResult {
 export async function waitBeforeContinue(
   options: WaitBeforeContinueOptions,
 ): Promise<WaitBeforeContinueResult> {
+  // Add small interval to allow parent operations to start checkpointing
+  await new Promise((resolve) => {
+    const interval = setInterval(() => {
+      clearInterval(interval);
+      resolve(undefined);
+    }, 100);
+  });
+
   const {
     checkHasRunningOperations,
     checkStepStatus,
