@@ -1,39 +1,40 @@
+import express, { Request } from "express";
 import {
   CheckpointDurableExecutionRequest,
-  GetDurableExecutionStateResponse,
-  CheckpointDurableExecutionResponse,
-  InvalidParameterValueException,
-  Operation,
   ErrorObject,
+  Operation,
 } from "@aws-sdk/client-lambda";
-import { ParamsDictionary } from "express-serve-static-core";
-import express from "express";
-import type { Request } from "express";
 import { convertDatesToTimestamps } from "../utils";
-import {
-  createCheckpointToken,
-  ExecutionId,
-  InvocationId,
-} from "./utils/tagged-strings";
-import {
-  decodeCheckpointToken,
-  encodeCheckpointToken,
-} from "./utils/checkpoint-token";
 import { API_PATHS } from "./constants";
 import { handleCheckpointServerError } from "./middleware/handle-checkpoint-server-error";
 import { ExecutionManager } from "./storage/execution-manager";
-import { createExecutionId } from "./utils/tagged-strings";
 import {
-  handleCallbackFailure,
-  handleCallbackHeartbeat,
-  handleCallbackSuccess,
+  processCallbackFailure,
+  processCallbackHeartbeat,
+  processCallbackSuccess,
 } from "./handlers/callbacks";
+import {
+  processStartDurableExecution,
+  processStartInvocation,
+  processCompleteInvocation,
+} from "./handlers/execution-handlers";
+import {
+  processPollCheckpointData,
+  processUpdateCheckpointData,
+  processCheckpointDurableExecution,
+} from "./handlers/checkpoint-handlers";
+import { processGetDurableExecutionState } from "./handlers/state-handlers";
 import type { Server } from "http";
-import { validateCheckpointUpdates } from "./validators/checkpoint-durable-execution-input-validator";
-import { randomUUID } from "crypto";
 import { createRequestLogger } from "./middleware/request-logger";
 import { defaultLogger } from "../logger";
-import { SerializedEvent } from "./types/operation-event";
+import { ExecutionId, InvocationId } from "./utils/tagged-strings";
+interface UpdateCheckpointDataRequest {
+  executionId: ExecutionId;
+  operationId: string;
+  operationData: Partial<Operation>;
+  payload?: string;
+  error?: ErrorObject;
+}
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -64,24 +65,12 @@ export async function startCheckpointServer(port: number) {
    */
   app.post(
     API_PATHS.START_DURABLE_EXECUTION,
-    (
-      req: Request<
-        ParamsDictionary,
-        object,
-        {
-          payload: string;
-        }
-      >,
-      res,
-    ) => {
-      res.json(
-        convertDatesToTimestamps(
-          executionManager.startExecution({
-            payload: req.body.payload,
-            executionId: createExecutionId(),
-          }),
-        ),
+    (req: Request<object, unknown, { payload: string }>, res) => {
+      const result = processStartDurableExecution(
+        req.body.payload,
+        req.executionManager,
       );
+      res.json(convertDatesToTimestamps(result));
     },
   );
 
@@ -90,13 +79,11 @@ export async function startCheckpointServer(port: number) {
    * in-progress execution.
    */
   app.post(`${API_PATHS.START_INVOCATION}/:executionId`, (req, res) => {
-    res.json(
-      convertDatesToTimestamps(
-        executionManager.startInvocation(
-          createExecutionId(req.params.executionId),
-        ),
-      ),
+    const result = processStartInvocation(
+      req.params.executionId,
+      req.executionManager,
     );
+    res.json(convertDatesToTimestamps(result));
   });
 
   app.post(
@@ -104,23 +91,18 @@ export async function startCheckpointServer(port: number) {
     (
       req: Request<
         { executionId: ExecutionId },
-        SerializedEvent,
-        {
-          invocationId: InvocationId;
-          error: ErrorObject | undefined;
-        }
+        unknown,
+        { invocationId: InvocationId; error?: ErrorObject }
       >,
       res,
     ) => {
-      const executionId = req.params.executionId;
-      const invocationId = req.body.invocationId;
-      const error = req.body.error;
-
-      res.json(
-        convertDatesToTimestamps(
-          executionManager.completeInvocation(executionId, invocationId, error),
-        ),
+      const result = processCompleteInvocation(
+        req.params.executionId,
+        req.body.invocationId,
+        req.body.error,
+        req.executionManager,
       );
+      res.json(convertDatesToTimestamps(result));
     },
   );
 
@@ -131,22 +113,12 @@ export async function startCheckpointServer(port: number) {
   app.get(
     `${API_PATHS.POLL_CHECKPOINT_DATA}/:executionId`,
     async (req, res) => {
-      const executionId = createExecutionId(req.params.executionId);
-
-      const checkpointStorage =
-        executionManager.getCheckpointsByExecution(executionId);
-
-      if (!checkpointStorage) {
-        res.status(404).json({
-          message: "Execution not found",
-        });
-        return;
-      }
-
-      const operations = await checkpointStorage.getPendingCheckpointUpdates();
-
+      const result = await processPollCheckpointData(
+        req.params.executionId,
+        req.executionManager,
+      );
       res.json({
-        operations: convertDatesToTimestamps(operations),
+        operations: convertDatesToTimestamps(result.operations),
       });
     },
   );
@@ -160,47 +132,24 @@ export async function startCheckpointServer(port: number) {
     `${API_PATHS.UPDATE_CHECKPOINT_DATA}/:executionId/:operationId`,
     (
       req: Request<
-        ParamsDictionary,
-        object,
         {
-          operationData: Operation;
-          payload?: string;
-          error?: ErrorObject;
-        }
+          executionId: ExecutionId;
+          operationId: string;
+        },
+        unknown,
+        Pick<UpdateCheckpointDataRequest, "operationData" | "payload" | "error">
       >,
       res,
     ) => {
-      const executionId = createExecutionId(req.params.executionId);
-
-      const checkpointStorage =
-        executionManager.getCheckpointsByExecution(executionId);
-
-      if (!checkpointStorage) {
-        res.status(404).json({
-          message: "Execution not found",
-        });
-        return;
-      }
-
-      if (!checkpointStorage.hasOperation(req.params.operationId)) {
-        res.status(404).json({
-          message: "Operation not found",
-        });
-        return;
-      }
-
-      const operation = checkpointStorage.updateOperation(
+      const result = processUpdateCheckpointData(
+        req.params.executionId,
         req.params.operationId,
         req.body.operationData,
         req.body.payload,
         req.body.error,
+        req.executionManager,
       );
-
-      res.json(
-        convertDatesToTimestamps({
-          operation,
-        }),
-      );
+      res.json(convertDatesToTimestamps({ operation: result }));
     },
   );
 
@@ -208,23 +157,11 @@ export async function startCheckpointServer(port: number) {
    * The API for GetDurableExecutionState used by the Language SDK and DEX service model.
    */
   app.get(`${API_PATHS.GET_STATE}/:durableExecutionArn/state`, (req, res) => {
-    const executionData = executionManager.getCheckpointsByExecution(
-      createExecutionId(req.params.durableExecutionArn),
+    const result = processGetDurableExecutionState(
+      req.params.durableExecutionArn,
+      req.executionManager,
     );
-
-    if (!executionData) {
-      res.status(404).json({
-        message: "Execution not found",
-      });
-      return;
-    }
-
-    const output: GetDurableExecutionStateResponse = {
-      Operations: executionData.getState(),
-      NextMarker: undefined,
-    };
-
-    res.json(convertDatesToTimestamps(output));
+    res.json(convertDatesToTimestamps(result));
   });
 
   /**
@@ -232,83 +169,74 @@ export async function startCheckpointServer(port: number) {
    */
   app.post(
     `${API_PATHS.CHECKPOINT}/:durableExecutionArn/checkpoint`,
-    (req, res) => {
-      const storage = executionManager.getCheckpointsByExecution(
-        createExecutionId(req.params.durableExecutionArn),
-      );
-      if (!storage) {
-        res.status(404).json({
-          message: "Execution not found",
-        });
-        return;
-      }
-
-      // TODO: validate the body instead of casting
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      const input = req.body as CheckpointDurableExecutionRequest;
-      const updates = input.Updates ?? [];
-
-      if (!input.CheckpointToken) {
-        throw new InvalidParameterValueException({
-          message: "Checkpoint token is required",
-          $metadata: {},
-        });
-      }
-
-      const data = decodeCheckpointToken(
-        createCheckpointToken(input.CheckpointToken),
-      );
-
-      try {
-        validateCheckpointUpdates(updates, storage.operationDataMap);
-        storage.registerUpdates(updates);
-      } catch (err: unknown) {
-        if (err instanceof InvalidParameterValueException) {
-          res.setHeaders(
-            new Headers({
-              "x-amzn-errortype": err.name,
-            }),
-          );
-          res.status(400).json({
-            Type: err.name,
-            message: err.message,
-          });
-          return;
-        }
-        throw err;
-      }
-
-      const output: CheckpointDurableExecutionResponse = {
-        CheckpointToken: encodeCheckpointToken({
-          executionId: data.executionId,
-          invocationId: data.invocationId,
-          token: randomUUID(),
-        }),
-        NewExecutionState: {
-          // TODO: implement pagination
-          Operations: Array.from(storage.operationDataMap.values()).map(
-            (data) => data.operation,
-          ),
-          NextMarker: undefined,
+    (
+      req: Request<
+        {
+          durableExecutionArn: string;
         },
-      };
-
-      res.json(convertDatesToTimestamps(output));
+        unknown,
+        CheckpointDurableExecutionRequest
+      >,
+      res,
+    ) => {
+      const result = processCheckpointDurableExecution(
+        req.params.durableExecutionArn,
+        req.body,
+        req.executionManager,
+      );
+      res.json(convertDatesToTimestamps(result));
     },
   );
 
   app.post(
     `${API_PATHS.CALLBACKS}/:callbackId/succeed`,
-    express.raw({ limit: "1mb" }),
-    handleCallbackSuccess,
+    (
+      req: Request<
+        {
+          callbackId: string;
+        },
+        unknown,
+        Buffer
+      >,
+      res,
+    ) => {
+      const result = processCallbackSuccess(
+        req.params.callbackId,
+        req.body,
+        req.executionManager,
+      );
+      res.json(result);
+    },
   );
-
-  app.post(`${API_PATHS.CALLBACKS}/:callbackId/fail`, handleCallbackFailure);
 
   app.post(
-    `${API_PATHS.CALLBACKS}/:callbackId/heartbeat`,
-    handleCallbackHeartbeat,
+    `${API_PATHS.CALLBACKS}/:callbackId/fail`,
+    (
+      req: Request<
+        {
+          callbackId: string;
+        },
+        unknown,
+        ErrorObject
+      >,
+      res,
+    ) => {
+      const result = processCallbackFailure(
+        req.params.callbackId,
+        req.body,
+        req.executionManager,
+      );
+      res.json(result);
+    },
   );
+
+  app.post(`${API_PATHS.CALLBACKS}/:callbackId/heartbeat`, (req, res) => {
+    const result = processCallbackHeartbeat(
+      req.params.callbackId,
+      req.executionManager,
+    );
+    res.json(result);
+  });
 
   app.use((_req, res) => {
     res.status(404).json({

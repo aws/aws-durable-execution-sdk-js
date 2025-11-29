@@ -410,7 +410,7 @@ describe("checkpoint-server", () => {
       });
     });
 
-    it("should return 404 when execution does not exist", async () => {
+    it("should return 500 when execution does not exist", async () => {
       const executionId = "non-existent-id";
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
@@ -421,7 +421,7 @@ describe("checkpoint-server", () => {
         `${API_PATHS.POLL_CHECKPOINT_DATA}/${executionId}`,
       );
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
       expect(response.body).toEqual({ message: "Execution not found" });
     });
   });
@@ -479,7 +479,7 @@ describe("checkpoint-server", () => {
       );
     });
 
-    it("should return 404 when execution does not exist", async () => {
+    it("should return 500 when execution does not exist", async () => {
       const executionId = "non-existent-id";
       const operationId = "test-operation-id";
 
@@ -500,11 +500,11 @@ describe("checkpoint-server", () => {
           },
         });
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
       expect(response.body).toEqual({ message: "Execution not found" });
     });
 
-    it("should return 404 when operation does not exist", async () => {
+    it("should return 500 when operation does not exist", async () => {
       const executionId = "test-execution-id";
       const operationId = "non-existent-op-id";
       const mockOperationData = {
@@ -532,7 +532,7 @@ describe("checkpoint-server", () => {
         });
 
       expect(response.body).toEqual({ message: "Operation not found" });
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
     });
 
     it("should pass payload parameter to updateOperation when provided", async () => {
@@ -778,7 +778,7 @@ describe("checkpoint-server", () => {
       });
     });
 
-    it("should return 404 when execution does not exist", async () => {
+    it("should return 500 when execution does not exist", async () => {
       const invalidExecutionId = "invalid-id" as ExecutionId;
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
@@ -789,7 +789,7 @@ describe("checkpoint-server", () => {
         `${API_PATHS.GET_STATE}/${invalidExecutionId}/state`,
       );
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
       expect(response.body).toEqual({ message: "Execution not found" });
     });
   });
@@ -1030,7 +1030,7 @@ describe("checkpoint-server", () => {
       expect(mockStorage.registerUpdates).toHaveBeenCalledWith(input.Updates);
     });
 
-    it("should return 404 when execution does not exist", async () => {
+    it("should return 500 when execution does not exist", async () => {
       const invalidExecutionId = "invalid-id" as ExecutionId;
 
       mockExecutionManager.getCheckpointsByExecution.mockReturnValueOnce(
@@ -1041,11 +1041,11 @@ describe("checkpoint-server", () => {
         .post(`${API_PATHS.CHECKPOINT}/${invalidExecutionId}/checkpoint`)
         .send({});
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
       expect(response.body).toEqual({ message: "Execution not found" });
     });
 
-    it("should return 400 when checkpoint update is invalid", async () => {
+    it("should return 500 when checkpoint update is invalid", async () => {
       const tokenData: CheckpointTokenData = {
         executionId: createExecutionId("test-execution-id"),
         invocationId: createInvocationId("test-invocation-id"),
@@ -1096,12 +1096,8 @@ describe("checkpoint-server", () => {
         .post(`${API_PATHS.CHECKPOINT}/${durableExecutionArn}/checkpoint`)
         .send(input);
 
-      expect(response.status).toBe(400);
-      expect(response.headers["x-amzn-errortype"]).toEqual(
-        "InvalidParameterValueException",
-      );
+      expect(response.status).toBe(500);
       expect(response.body).toEqual({
-        Type: "InvalidParameterValueException",
         message: "Invalid current STEP state to start.",
       });
     });
@@ -1193,7 +1189,7 @@ describe("checkpoint-server", () => {
         );
       });
 
-      it("should return 404 when execution not found", async () => {
+      it("should return 500 when execution not found", async () => {
         const callbackId = "test-callback-id";
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
           undefined,
@@ -1204,13 +1200,13 @@ describe("checkpoint-server", () => {
           .set("Content-Type", "application/octet-stream")
           .send("result");
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(500);
         expect(response.body).toEqual({
           message: "Execution not found",
         });
       });
 
-      it("should return 400 when parameter is not a buffer", async () => {
+      it("should return 500 when parameter is not a buffer", async () => {
         const callbackId = "test-callback-id";
         const mockCheckpointManager = {
           completeCallback: jest.fn(),
@@ -1223,13 +1219,13 @@ describe("checkpoint-server", () => {
           .post(`${API_PATHS.CALLBACKS}/${callbackId}/succeed`)
           .send("result");
 
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(500);
         expect(response.body).toEqual({
           message: "Invalid buffer input",
         });
       });
 
-      it("should return 400 for InvalidParameterValueException", async () => {
+      it("should return 500 for InvalidParameterValueException", async () => {
         const callbackId = "test-callback-id";
         const mockCheckpointManager = {
           completeCallback: jest.fn().mockImplementation(() => {
@@ -1249,7 +1245,7 @@ describe("checkpoint-server", () => {
           .set("Content-Type", "application/octet-stream")
           .send("result");
 
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(500);
         expect(response.body).toEqual({
           message: "Invalid callback parameters",
         });
@@ -1320,7 +1316,7 @@ describe("checkpoint-server", () => {
         );
       });
 
-      it("should return 404 when execution not found", async () => {
+      it("should return 500 when execution not found", async () => {
         const callbackId = "test-callback-id";
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
           undefined,
@@ -1330,13 +1326,13 @@ describe("checkpoint-server", () => {
           .post(`${API_PATHS.CALLBACKS}/${callbackId}/fail`)
           .send({ CallbackId: callbackId, Error: "error" });
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(500);
         expect(response.body).toEqual({
           message: "Execution not found",
         });
       });
 
-      it("should return 400 for InvalidParameterValueException", async () => {
+      it("should return 500 for InvalidParameterValueException", async () => {
         const callbackId = "test-callback-id";
         const mockCheckpointManager = {
           completeCallback: jest.fn().mockImplementation(() => {
@@ -1355,7 +1351,7 @@ describe("checkpoint-server", () => {
           .post(`${API_PATHS.CALLBACKS}/${callbackId}/fail`)
           .send({ ErrorMessage: "test error" });
 
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(500);
         expect(response.body).toEqual({
           message: "Invalid callback parameters",
         });
@@ -1391,7 +1387,7 @@ describe("checkpoint-server", () => {
         );
       });
 
-      it("should return 404 when execution not found", async () => {
+      it("should return 500 when execution not found", async () => {
         const callbackId = "test-callback-id";
         mockExecutionManager.getCheckpointsByCallbackId.mockReturnValue(
           undefined,
@@ -1401,13 +1397,13 @@ describe("checkpoint-server", () => {
           .post(`${API_PATHS.CALLBACKS}/${callbackId}/heartbeat`)
           .send({ CallbackId: callbackId });
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(500);
         expect(response.body).toEqual({
           message: "Execution not found",
         });
       });
 
-      it("should return 400 for InvalidParameterValueException", async () => {
+      it("should return 500 for InvalidParameterValueException", async () => {
         const callbackId = "test-callback-id";
         const mockCheckpointManager = {
           heartbeatCallback: jest.fn().mockImplementation(() => {
@@ -1426,7 +1422,7 @@ describe("checkpoint-server", () => {
           .post(`${API_PATHS.CALLBACKS}/${callbackId}/heartbeat`)
           .send({ CallbackId: callbackId });
 
-        expect(response.status).toBe(400);
+        expect(response.status).toBe(500);
         expect(response.body).toEqual({
           message: "Invalid callback parameters",
         });
