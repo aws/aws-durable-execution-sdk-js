@@ -203,6 +203,7 @@ export const createCallback = (
         serdes,
         hasRunningOperations,
         getOperationsEmitter(),
+        checkpoint,
         terminationMessage,
         checkAndUpdateReplayMode,
       );

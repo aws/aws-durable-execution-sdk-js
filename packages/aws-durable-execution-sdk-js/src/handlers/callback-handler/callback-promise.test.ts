@@ -5,6 +5,7 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { EventEmitter } from "events";
 import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
+import { createMockCheckpoint } from "../../testing/mock-checkpoint";
 
 // Mock dependencies
 jest.mock("../../utils/wait-before-continue/wait-before-continue");
@@ -22,10 +23,12 @@ describe("createCallbackPromise", () => {
   let mockContext: ExecutionContext;
   let mockOperationsEmitter: EventEmitter;
   let mockCheckAndUpdateReplayMode: jest.Mock;
+  let mockCheckpoint: ReturnType<typeof createMockCheckpoint>;
 
   beforeEach(() => {
     jest.clearAllMocks();
 
+    mockCheckpoint = createMockCheckpoint();
     mockContext = {
       getStepData: jest.fn(),
       terminationManager: {
@@ -67,6 +70,7 @@ describe("createCallbackPromise", () => {
         { deserialize: jest.fn() },
         hasRunningOperations,
         mockOperationsEmitter,
+        mockCheckpoint,
         "test termination message",
         mockCheckAndUpdateReplayMode,
       );
@@ -99,6 +103,7 @@ describe("createCallbackPromise", () => {
         { deserialize: jest.fn() },
         hasRunningOperations,
         mockOperationsEmitter,
+        mockCheckpoint,
         "test termination message",
         mockCheckAndUpdateReplayMode,
       );
@@ -132,6 +137,7 @@ describe("createCallbackPromise", () => {
         mockSerdes,
         hasRunningOperations,
         mockOperationsEmitter,
+        mockCheckpoint,
         "test termination message",
         mockCheckAndUpdateReplayMode,
       );
@@ -174,6 +180,7 @@ describe("createCallbackPromise", () => {
         { deserialize: jest.fn() },
         hasRunningOperations,
         mockOperationsEmitter,
+        mockCheckpoint,
         "test termination message",
         mockCheckAndUpdateReplayMode,
       );
@@ -209,6 +216,7 @@ describe("createCallbackPromise", () => {
         { deserialize: jest.fn() },
         hasRunningOperations,
         mockOperationsEmitter,
+        mockCheckpoint,
         "test termination message",
         mockCheckAndUpdateReplayMode,
       );
@@ -234,6 +242,7 @@ describe("createCallbackPromise", () => {
         { deserialize: jest.fn() },
         hasRunningOperations,
         mockOperationsEmitter,
+        mockCheckpoint,
         "test termination message",
         mockCheckAndUpdateReplayMode,
       );
@@ -259,6 +268,7 @@ describe("createCallbackPromise", () => {
         { deserialize: jest.fn() },
         hasRunningOperations,
         mockOperationsEmitter,
+        mockCheckpoint,
         "test termination message",
         mockCheckAndUpdateReplayMode,
       );

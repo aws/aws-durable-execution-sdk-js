@@ -8,6 +8,7 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Serdes } from "../../utils/serdes/serdes";
 import { EventEmitter } from "events";
 import { log } from "../../utils/logger/logger";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
 export const createCallbackPromise = <T>(
   context: ExecutionContext,
@@ -16,6 +17,7 @@ export const createCallbackPromise = <T>(
   serdes: Omit<Serdes<T>, "serialize">,
   hasRunningOperations: () => boolean,
   operationsEmitter: EventEmitter,
+  checkpoint: Checkpoint,
   terminationMessage: string,
   checkAndUpdateReplayMode: () => void,
 ): DurablePromise<T> => {
@@ -41,6 +43,7 @@ export const createCallbackPromise = <T>(
           context,
           hasRunningOperations,
           operationsEmitter,
+          checkpoint,
         });
 
         if (result.canTerminate) {
@@ -110,6 +113,7 @@ export const createCallbackPromise = <T>(
           context,
           hasRunningOperations,
           operationsEmitter,
+          checkpoint,
         });
 
         if (result.canTerminate) {

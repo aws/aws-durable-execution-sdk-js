@@ -5,11 +5,13 @@ import { EventEmitter } from "events";
 import { OPERATIONS_COMPLETE_EVENT } from "../constants/constants";
 import { STEP_DATA_UPDATED_EVENT } from "../checkpoint/checkpoint-manager";
 import { hashId } from "../step-id-utils/step-id-utils";
+import { createMockCheckpoint } from "../../testing/mock-checkpoint";
 
 describe("waitBeforeContinue", () => {
   let mockContext: jest.Mocked<ExecutionContext>;
   let mockHasRunningOperations: jest.Mock;
   let mockOperationsEmitter: EventEmitter;
+  let mockCheckpoint: ReturnType<typeof createMockCheckpoint>;
   let timers: NodeJS.Timeout[] = [];
 
   beforeEach(() => {
@@ -18,6 +20,7 @@ describe("waitBeforeContinue", () => {
     } as any;
     mockHasRunningOperations = jest.fn();
     mockOperationsEmitter = new EventEmitter();
+    mockCheckpoint = createMockCheckpoint();
     timers = [];
   });
 
@@ -39,6 +42,7 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
+      checkpoint: mockCheckpoint,
     });
 
     // Complete operations after 50ms
@@ -64,6 +68,7 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
+      checkpoint: mockCheckpoint,
     });
 
     expect(result.reason).toBe("timer");
@@ -82,6 +87,7 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
+      checkpoint: mockCheckpoint,
     });
 
     expect(result.reason).toBe("timer");
@@ -102,6 +108,7 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
+      checkpoint: mockCheckpoint,
     });
 
     // Change status after 50ms
@@ -130,6 +137,7 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
+      checkpoint: mockCheckpoint,
     });
 
     expect(result.reason).toBe("status");
@@ -144,6 +152,7 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
+      checkpoint: mockCheckpoint,
     });
 
     expect(result.reason).toBe("timeout");
@@ -183,6 +192,7 @@ describe("waitBeforeContinue", () => {
       context: mockContext,
       hasRunningOperations: mockHasRunningOperations,
       operationsEmitter: mockOperationsEmitter,
+      checkpoint: mockCheckpoint,
       onAwaitedChange: (callback) => {
         awaitedCallback = callback;
       },

@@ -22,8 +22,8 @@ export interface WaitBeforeContinueOptions {
   hasRunningOperations: () => boolean;
   /** EventEmitter for operations completion events */
   operationsEmitter: EventEmitter;
-  /** Checkpoint manager to force refresh when timer expires */
-  checkpoint?: Checkpoint;
+  /** Checkpoint manager for queue status and force refresh */
+  checkpoint: Checkpoint;
   /** Function to set callback that will be invoked when promise is awaited */
   onAwaitedChange?: (callback: () => void) => void;
 }
@@ -90,16 +90,14 @@ export async function waitBeforeContinue(
       }
     }
 
-    // Condition 4: No pending checkpoints (if we have checkpoint manager)
-    if (checkpoint) {
-      const queueStatus = checkpoint.getQueueStatus();
-      if (
-        queueStatus.queueLength > 0 ||
-        queueStatus.isProcessing ||
-        queueStatus.forceCheckpointPromises > 0
-      ) {
-        return false; // Checkpoints pending, can't terminate
-      }
+    // Condition 4: No pending checkpoints
+    const queueStatus = checkpoint.getQueueStatus();
+    if (
+      queueStatus.queueLength > 0 ||
+      queueStatus.isProcessing ||
+      queueStatus.forceCheckpointPromises > 0
+    ) {
+      return false; // Checkpoints pending, can't terminate
     }
 
     return true; // All conditions met, can terminate

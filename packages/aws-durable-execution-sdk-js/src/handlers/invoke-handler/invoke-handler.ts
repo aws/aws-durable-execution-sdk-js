@@ -186,6 +186,7 @@ export const createInvokeHandler = (
             context,
             hasRunningOperations,
             operationsEmitter: getOperationsEmitter(),
+            checkpoint,
           });
 
           if (result.canTerminate) {
