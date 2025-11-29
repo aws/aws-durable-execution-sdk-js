@@ -26,7 +26,7 @@ describe("termination deferral with active operations", () => {
     });
   });
 
-  it("should defer termination when operations are active", async () => {
+  it("should terminate immediately - active operations check moved to waitBeforeContinue", async () => {
     // Simulate an active operation
     tracker.increment();
 
@@ -36,25 +36,14 @@ describe("termination deferral with active operations", () => {
       "Callback pending",
     );
 
-    // Should not terminate immediately
-    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
-
-    // Complete the operation after a delay
-    setTimeout(() => {
-      tracker.decrement();
-    }, 50);
-
-    // Wait a bit longer for the check interval to detect completion
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    // Now termination should have been called
+    // Should terminate immediately - active operations check is now in waitBeforeContinue
     expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
       reason: TerminationReason.CALLBACK_PENDING,
       message: "Callback pending",
     });
   });
 
-  it("should handle parallel scenario with minSuccessful", async () => {
+  it("should terminate immediately in parallel scenario - active operations check moved to waitBeforeContinue", async () => {
     // Simulate parallel with 2 branches
     // Branch 1: completes successfully (checkpoint in progress)
     // Branch 2: tries to terminate (callback pending)
@@ -69,19 +58,11 @@ describe("termination deferral with active operations", () => {
       "Branch 2 callback pending",
     );
 
-    // Termination should be deferred
-    expect(mockContext.terminationManager.terminate).not.toHaveBeenCalled();
-
-    // Branch 1 completes checkpoint
-    setTimeout(() => {
-      tracker.decrement();
-    }, 30);
-
-    // Wait for termination to proceed
-    await new Promise((resolve) => setTimeout(resolve, 80));
-
-    // Now termination should proceed
-    expect(mockContext.terminationManager.terminate).toHaveBeenCalled();
+    // Should terminate immediately - active operations check is now in waitBeforeContinue
+    expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
+      reason: TerminationReason.CALLBACK_PENDING,
+      message: "Branch 2 callback pending",
+    });
   });
 
   it("should work without tracker (backward compatibility)", () => {
