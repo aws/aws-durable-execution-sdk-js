@@ -62,6 +62,9 @@ export async function waitBeforeContinue(
     ? context.getStepData(stepId)?.Status
     : undefined;
 
+  // Track if awaited change has been triggered
+  let awaitedChangeTriggered = false;
+
   // Helper function to calculate canTerminate based on all conditions at resolution time
   const calculateCanTerminate = (): boolean => {
     // Condition 1: Status didn't change (if we're monitoring status)
@@ -83,6 +86,11 @@ export async function waitBeforeContinue(
       if (timerReached) {
         return false; // Timer reached, should checkpoint.force and continue
       }
+    }
+
+    // Condition 4: Awaited change triggered (if we're monitoring awaited changes)
+    if (onAwaitedChange && awaitedChangeTriggered) {
+      return false; // Promise was awaited, continue handler
     }
 
     return true; // All conditions met, can terminate
@@ -197,6 +205,7 @@ export async function waitBeforeContinue(
       (resolve) => {
         // Register a callback that will be invoked when the promise is awaited
         onAwaitedChange(() => {
+          awaitedChangeTriggered = true;
           resolve({ reason: "status", canTerminate: calculateCanTerminate() });
         });
       },
