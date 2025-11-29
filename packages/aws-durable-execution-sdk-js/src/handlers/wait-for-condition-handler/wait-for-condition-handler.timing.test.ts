@@ -15,6 +15,7 @@ import { OperationStatus } from "@aws-sdk/client-lambda";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
+import { OPERATIONS_COMPLETE_EVENT } from "../../utils/constants/constants";
 
 describe("WaitForCondition Handler Timing Tests", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -320,39 +321,33 @@ describe("WaitForCondition Handler Timing Tests", () => {
         }),
       };
 
-      // Simulate multiple loop iterations with different states
+      // Simulate step not existing initially, then pending to trigger retry scheduling
       const mockGetStepData = jest
         .fn()
-        .mockReturnValueOnce(undefined) // First execution - will retry
+        .mockReturnValueOnce(undefined) // First call - no existing step
         .mockReturnValueOnce({
           Id: hashedStepId,
           Status: OperationStatus.PENDING,
           StepDetails: { Attempt: 1 },
-        })
-        .mockReturnValueOnce({
-          Id: hashedStepId,
-          Status: OperationStatus.READY,
-          StepDetails: {
-            Attempt: 2,
-            Result: JSON.stringify({ attempts: 1 }),
-          },
-        })
-        .mockReturnValueOnce({
-          Id: hashedStepId,
-          Status: OperationStatus.PENDING,
-          StepDetails: { Attempt: 2 },
-        })
-        .mockReturnValue(undefined); // Final execution
+        });
 
       mockExecutionContext.getStepData = mockGetStepData;
 
-      // Mock concurrent operations scenario
-      const mockHasRunningOperations = jest
-        .fn()
-        .mockReturnValueOnce(true) // First retry - has operations
-        .mockReturnValueOnce(false) // Allow continuation
-        .mockReturnValueOnce(true) // Second retry - has operations
-        .mockReturnValue(false); // Allow final execution
+      // Create shared EventEmitter for operations coordination
+      const operationsEmitter = new EventEmitter();
+
+      // Mock concurrent operations scenario with event emissions
+      const mockHasRunningOperations = jest.fn();
+      let callCount = 0;
+      mockHasRunningOperations.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // First call - has operations, emit completion immediately
+          setImmediate(() => operationsEmitter.emit(OPERATIONS_COMPLETE_EVENT));
+          return true;
+        }
+        return false; // Allow continuation after first call
+      });
 
       const waitForConditionHandlerWithMocks = createWaitForConditionHandler(
         mockExecutionContext,
@@ -362,19 +357,22 @@ describe("WaitForCondition Handler Timing Tests", () => {
         jest.fn(),
         jest.fn(),
         mockHasRunningOperations,
-        () => new EventEmitter(),
+        () => operationsEmitter,
         undefined, // parentId
       );
 
-      const result = await waitForConditionHandlerWithMocks(
-        "test-wait",
-        checkFn,
-        config,
-      );
+      // Don't await - the handler should terminate execution
+      waitForConditionHandlerWithMocks("test-wait", checkFn, config);
 
-      expect(result).toEqual({ attempts: 3 });
+      // Wait for async operations to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify that the handler coordinated with concurrent operations
       expect(mockHasRunningOperations).toHaveBeenCalled();
-      expect(checkFn).toHaveBeenCalledTimes(3); // Check function called 3 times
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.RETRY_SCHEDULED,
+        message: expect.stringContaining("test-wait"),
+      });
     });
   });
 });
