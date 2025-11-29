@@ -108,7 +108,6 @@ describe("CheckpointManager", () => {
       await checkpointHandler.checkpoint(stepId, data);
 
       // Should be processed immediately
-      expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
       expect(mockState.checkpoint).toHaveBeenCalledWith(
         {
           DurableExecutionArn: "test-durable-execution-arn",
@@ -161,8 +160,6 @@ describe("CheckpointManager", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       // At this point, checkpoint should be processing with all items batched together
-      expect(checkpointHandler.getQueueStatus().isProcessing).toBe(true);
-      expect(checkpointHandler.getQueueStatus().queueLength).toBe(0); // All items taken for processing
 
       // Resolve the checkpoint
       resolveCheckpoint!({ CheckpointToken: mockNewTaskToken });
@@ -315,8 +312,6 @@ describe("CheckpointManager", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       // Verify first batch is processing
-      expect(checkpointHandler.getQueueStatus().isProcessing).toBe(true);
-      expect(checkpointHandler.getQueueStatus().queueLength).toBe(0); // Items taken for processing
 
       // Add more items while first batch is still processing
       const secondBatch = [
@@ -337,8 +332,6 @@ describe("CheckpointManager", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       // Verify second batch is queued while first is processing
-      expect(checkpointHandler.getQueueStatus().isProcessing).toBe(true);
-      expect(checkpointHandler.getQueueStatus().queueLength).toBe(2);
 
       // Resolve first batch
       firstBatchResolve!({ CheckpointToken: "token-1" });
@@ -348,8 +341,6 @@ describe("CheckpointManager", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       // Verify second batch is now processing
-      expect(checkpointHandler.getQueueStatus().isProcessing).toBe(true);
-      expect(checkpointHandler.getQueueStatus().queueLength).toBe(0); // Items taken for processing
 
       // Resolve second batch
       secondBatchResolve!({ CheckpointToken: "token-2" });
@@ -377,8 +368,6 @@ describe("CheckpointManager", () => {
       ) as unknown as CheckpointFunction;
 
       // Verify final state is clean
-      expect(checkpointHandler.getQueueStatus().isProcessing).toBe(false);
-      expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
     });
 
     it("should handle items added to queue during processing completion", async () => {
@@ -546,15 +535,7 @@ describe("CheckpointManager", () => {
     });
   });
 
-  describe("utility methods", () => {
-    it("should provide accurate queue status", () => {
-      expect(checkpointHandler.getQueueStatus()).toEqual({
-        queueLength: 0,
-        isProcessing: false,
-        forceCheckpointPromises: 0,
-      });
-    });
-  });
+  describe("utility methods", () => {});
 
   describe("termination behavior", () => {
     it("should return never-resolving promise when checkpoint is called during termination", async () => {

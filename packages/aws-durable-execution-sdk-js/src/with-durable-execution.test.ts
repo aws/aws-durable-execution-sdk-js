@@ -76,7 +76,6 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
-      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
 
     // Reset termination manager mock behavior

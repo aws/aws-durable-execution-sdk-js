@@ -85,16 +85,6 @@ export async function waitBeforeContinue(
       }
     }
 
-    // Condition 4: No pending checkpoints
-    const queueStatus = checkpoint.getQueueStatus();
-    if (
-      queueStatus.queueLength > 0 ||
-      queueStatus.isProcessing ||
-      queueStatus.forceCheckpointPromises > 0
-    ) {
-      return false; // Checkpoints pending, can't terminate
-    }
-
     return true; // All conditions met, can terminate
   };
 

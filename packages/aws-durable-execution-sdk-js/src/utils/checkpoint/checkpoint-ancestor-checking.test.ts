@@ -82,7 +82,6 @@ describe("CheckpointManager - Ancestor Checking", () => {
 
     // Checkpoint should not be called
     expect(mockState.checkpoint).not.toHaveBeenCalled();
-    expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
   });
 
   it("should skip checkpoint when direct parent is FAILED", async () => {
@@ -108,7 +107,6 @@ describe("CheckpointManager - Ancestor Checking", () => {
 
     // Checkpoint should not be called
     expect(mockState.checkpoint).not.toHaveBeenCalled();
-    expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
   });
 
   it("should skip checkpoint when ancestor (grandparent) is SUCCEEDED", async () => {
@@ -144,7 +142,6 @@ describe("CheckpointManager - Ancestor Checking", () => {
 
     // Checkpoint should not be called
     expect(mockState.checkpoint).not.toHaveBeenCalled();
-    expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
   });
 
   it("should process checkpoint when parent is STARTED", async () => {
@@ -236,6 +233,5 @@ describe("CheckpointManager - Ancestor Checking", () => {
 
     // Checkpoint should not be called (root ancestor is SUCCEEDED)
     expect(mockState.checkpoint).not.toHaveBeenCalled();
-    expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
   });
 });
