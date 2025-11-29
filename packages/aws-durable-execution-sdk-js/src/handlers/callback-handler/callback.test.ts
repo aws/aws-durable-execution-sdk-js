@@ -440,7 +440,7 @@ describe("Callback Handler", () => {
   });
 
   describe("Started Callback Scenarios", () => {
-    test.skip("should return never-resolving promise for started callback and terminate when awaited", async () => {
+    test("should return never-resolving promise for started callback and terminate when awaited", async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
       mockExecutionContext._stepData = {
@@ -471,6 +471,9 @@ describe("Callback Handler", () => {
 
       // Now await the promise, which should trigger termination
       const promiseResult = promise.then(() => "should-never-resolve");
+
+      // Wait for async termination to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify terminate was called when the promise was awaited
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
@@ -514,7 +517,7 @@ describe("Callback Handler", () => {
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
-    test.skip("should use stepId in message when name is not provided for started callback", async () => {
+    test("should use stepId in message when name is not provided for started callback", async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
       mockExecutionContext._stepData = {
@@ -539,6 +542,9 @@ describe("Callback Handler", () => {
       // Await the promise to trigger termination
       promise.then(() => "should-never-resolve");
 
+      // Wait for async termination to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       // Verify terminate was called with stepId in message
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.CALLBACK_PENDING,
@@ -562,7 +568,7 @@ describe("Callback Handler", () => {
       );
     });
 
-    test.skip("should terminate when catch is called on started callback promise", async () => {
+    test("should terminate when catch is called on started callback promise", async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
       mockExecutionContext._stepData = {
@@ -587,13 +593,16 @@ describe("Callback Handler", () => {
       // Call catch on the promise - this should trigger termination
       promise.catch(() => {});
 
+      // Wait for async termination to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.CALLBACK_PENDING,
         message: "Callback catch-test is pending external completion",
       });
     });
 
-    test.skip("should terminate when finally is called on started callback promise", async () => {
+    test("should terminate when finally is called on started callback promise", async () => {
       const stepId = TEST_CONSTANTS.CALLBACK_ID;
       const hashedStepId = hashId(stepId);
       mockExecutionContext._stepData = {
@@ -618,6 +627,9 @@ describe("Callback Handler", () => {
       // Call finally on the promise - this should trigger termination
       promise.finally(() => {});
 
+      // Wait for async termination to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.CALLBACK_PENDING,
         message: "Callback finally-test is pending external completion",
@@ -626,7 +638,7 @@ describe("Callback Handler", () => {
   });
 
   describe("New Callback Creation Scenarios", () => {
-    test.skip("should create new callback and return never-resolving promise", async () => {
+    test("should create new callback and return never-resolving promise", async () => {
       // Mock waitBeforeContinue to allow termination
       const mockWaitBeforeContinue = waitBeforeContinue as jest.Mock;
       mockWaitBeforeContinue.mockResolvedValue({
@@ -671,6 +683,9 @@ describe("Callback Handler", () => {
 
       // Now await the promise, which should trigger termination
       promise.then(() => "should-never-resolve");
+
+      // Wait for async termination to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify terminate was called when the promise was awaited
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
@@ -717,7 +732,7 @@ describe("Callback Handler", () => {
       expect(callbackId).toBe("timeout-callback-123");
     });
 
-    test.skip("should create new callback without name", async () => {
+    test("should create new callback without name", async () => {
       // Mock waitBeforeContinue to allow termination
       const mockWaitBeforeContinue = waitBeforeContinue as jest.Mock;
       mockWaitBeforeContinue.mockResolvedValue({
@@ -757,6 +772,9 @@ describe("Callback Handler", () => {
 
       // Now await the promise, which should trigger termination
       promise.then(() => "should-never-resolve");
+
+      // Wait for async termination to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify termination message uses stepId when name is undefined
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
@@ -1013,7 +1031,7 @@ describe("Callback Handler", () => {
       );
     });
 
-    test.skip("should terminate if no running operations and status unchanged", async () => {
+    test("should terminate if no running operations and status unchanged", async () => {
       const mockHasRunningOperations = jest.fn().mockReturnValue(false);
 
       // Mock waitBeforeContinue to indicate no running operations and can terminate
@@ -1046,7 +1064,10 @@ describe("Callback Handler", () => {
       const [promise] = await callbackHandler<string>("test-callback");
 
       // Trigger the promise to call waitBeforeContinue and terminate
-      await expect(promise).rejects.toThrow("TERMINATION_FOR_TEST");
+      promise.catch(() => {}); // Don't await, just trigger
+
+      // Wait for async termination to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Verify waitBeforeContinue was called with correct parameters
       expect(mockWaitBeforeContinue).toHaveBeenCalledWith(
