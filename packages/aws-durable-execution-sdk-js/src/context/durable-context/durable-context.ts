@@ -33,7 +33,7 @@ import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
 import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
 import { createRunInChildContextHandler } from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
-import { createWaitHandler } from "../../handlers/wait-handler/wait-handler";
+import { createWaitHandlerV2 } from "../../handlers/wait-handler/wait-handler-v2";
 import { createWaitForConditionHandler } from "../../handlers/wait-for-condition-handler/wait-for-condition-handler";
 import { createCallback as createCallbackFactory } from "../../handlers/callback-handler/callback";
 import { createWaitForCallbackHandler } from "../../handlers/wait-for-callback-handler/wait-for-callback-handler";
@@ -391,12 +391,10 @@ export class DurableContextImpl<Logger extends DurableLogger>
       this.executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
-      const waitHandler = createWaitHandler(
+      const waitHandler = createWaitHandlerV2(
         this.executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
-        this.hasRunningOperations.bind(this),
-        this.getOperationsEmitter.bind(this),
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
       );

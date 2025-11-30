@@ -14,7 +14,7 @@ jest.mock("../../handlers/invoke-handler/invoke-handler");
 jest.mock(
   "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
 );
-jest.mock("../../handlers/wait-handler/wait-handler");
+jest.mock("../../handlers/wait-handler/wait-handler-v2");
 jest.mock("../../handlers/callback-handler/callback");
 jest.mock("../../handlers/wait-for-callback-handler/wait-for-callback-handler");
 jest.mock(
@@ -52,8 +52,8 @@ describe("DurableContext", () => {
     const { createRunInChildContextHandler } = jest.requireMock(
       "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
     );
-    const { createWaitHandler } = jest.requireMock(
-      "../../handlers/wait-handler/wait-handler",
+    const { createWaitHandlerV2 } = jest.requireMock(
+      "../../handlers/wait-handler/wait-handler-v2",
     );
     const { createCallback } = jest.requireMock(
       "../../handlers/callback-handler/callback",
@@ -77,7 +77,7 @@ describe("DurableContext", () => {
     createStepHandler.mockReturnValue(jest.fn().mockResolvedValue(undefined));
     createInvokeHandler.mockReturnValue(jest.fn());
     createRunInChildContextHandler.mockReturnValue(jest.fn());
-    createWaitHandler.mockReturnValue(
+    createWaitHandlerV2.mockReturnValue(
       () => new DurablePromise(() => Promise.resolve()),
     );
     createCallback.mockReturnValue(jest.fn());
@@ -345,10 +345,10 @@ describe("DurableContext", () => {
 
       await context.wait({ seconds: 5 });
 
-      const { createWaitHandler } = jest.requireMock(
-        "../../handlers/wait-handler/wait-handler",
+      const { createWaitHandlerV2 } = jest.requireMock(
+        "../../handlers/wait-handler/wait-handler-v2",
       );
-      expect(createWaitHandler).toHaveBeenCalled();
+      expect(createWaitHandlerV2).toHaveBeenCalled();
     });
 
     it("should call wait handler with name", async () => {
@@ -362,13 +362,13 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const { createWaitHandler } = jest.requireMock(
-        "../../handlers/wait-handler/wait-handler",
+      const { createWaitHandlerV2 } = jest.requireMock(
+        "../../handlers/wait-handler/wait-handler-v2",
       );
       const mockHandler = jest.fn(
         () => new DurablePromise(() => Promise.resolve()),
       );
-      createWaitHandler.mockReturnValue(mockHandler);
+      createWaitHandlerV2.mockReturnValue(mockHandler);
 
       await context.wait("wait-name", { seconds: 5 });
 
