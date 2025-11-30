@@ -25,7 +25,6 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
-import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import {
   DurableOperationError,
@@ -58,18 +57,9 @@ const waitForContinuation = async (
   }
 
   // There are ongoing operations - wait before continuing
-  await waitBeforeContinue({
-    checkHasRunningOperations: true,
-    checkStepStatus: true,
-    checkTimer: true,
-    scheduledEndTimestamp: stepData?.StepDetails?.NextAttemptTimestamp,
-    stepId,
-    context,
-    hasRunningOperations,
-    operationsEmitter,
-    checkpoint,
-    onAwaitedChange,
-  });
+  // TODO: Convert to centralized termination management
+  // For now, use a simple delay to re-evaluate
+  await new Promise((resolve) => setTimeout(resolve, 100));
 
   // Return to let the main loop re-evaluate step status
 };
@@ -108,7 +98,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
       // Parse overloaded parameters - validation errors thrown here are async
       if (typeof nameOrCheck === "string" || nameOrCheck === undefined) {
-        name = nameOrCheck;
+        name = nameOrCheck as string | undefined;
         check = checkOrConfig as WaitForConditionCheckFunc<T, Logger>;
         config = maybeConfig as WaitForConditionConfig<T>;
       } else {

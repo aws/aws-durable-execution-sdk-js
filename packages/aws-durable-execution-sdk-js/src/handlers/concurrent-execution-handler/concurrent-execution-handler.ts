@@ -444,7 +444,7 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
       let config: ConcurrencyConfig<TResult> | undefined;
 
       if (typeof nameOrItems === "string" || nameOrItems === undefined) {
-        name = nameOrItems;
+        name = nameOrItems as string | undefined;
         items = itemsOrExecutor as ConcurrentExecutionItem<TItem>[];
         executor = executorOrConfig as ConcurrentExecutor<
           TItem,

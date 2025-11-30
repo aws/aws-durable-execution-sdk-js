@@ -1,5 +1,6 @@
 /**
  * A promise that defers execution until it's awaited or .then/.catch/.finally is called
+ * Enhanced with handler ID tracking for centralized termination management
  *
  * @public
  */
@@ -47,12 +48,47 @@ export class DurablePromise<T> implements Promise<T> {
   /** Flag indicating whether the promise has been executed (awaited or chained) */
   private _isExecuted = false;
 
+  /** Unique identifier for this handler */
+  private _handlerId: string;
+
   /**
    * Creates a new DurablePromise
    * @param executor - Function containing the deferred execution logic
+   * @param handlerId - Unique identifier for this handler (optional, auto-generated if not provided)
    */
-  constructor(executor: () => Promise<T>) {
-    this._executor = executor;
+  constructor(executor: () => Promise<T>, handlerId?: string);
+  /**
+   * Creates a new DurablePromise with resolver pattern for centralized handlers
+   * @param executor - Function that takes resolve/reject callbacks and returns a promise
+   * @param handlerId - Unique identifier for this handler (optional, auto-generated if not provided)
+   */
+  constructor(
+    executor: (
+      resolve: (value: T) => void,
+      reject: (reason?: any) => void,
+    ) => Promise<T>,
+    handlerId?: string,
+  );
+  constructor(
+    executor:
+      | (() => Promise<T>)
+      | ((
+          resolve: (value: T) => void,
+          reject: (reason?: any) => void,
+        ) => Promise<T>),
+    handlerId?: string,
+  ) {
+    this._executor = executor as () => Promise<T>;
+    this._handlerId =
+      handlerId ||
+      `handler-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Get handler ID for tracking purposes
+   */
+  get handlerId(): string {
+    return this._handlerId;
   }
 
   /**
@@ -62,8 +98,6 @@ export class DurablePromise<T> implements Promise<T> {
   private ensureExecution(): Promise<T> {
     if (!this._promise) {
       this._isExecuted = true;
-
-      // Execute the promise
       this._promise = this._executor();
     }
     return this._promise;

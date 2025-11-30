@@ -3,11 +3,9 @@ import { ExecutionContext } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { CallbackError } from "../../errors/durable-error/durable-error";
 import { EventEmitter } from "events";
-import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 
 // Mock dependencies
-jest.mock("../../utils/wait-before-continue/wait-before-continue");
 jest.mock("../../errors/serdes-errors/serdes-errors");
 jest.mock("../../utils/logger/logger");
 
@@ -22,9 +20,14 @@ describe("createCallbackPromise", () => {
   let mockContext: ExecutionContext;
   let mockOperationsEmitter: EventEmitter;
   let mockCheckAndUpdateReplayMode: jest.Mock;
+  let mockCheckpointManager: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    mockCheckpointManager = {
+      scheduleResume: jest.fn(),
+    };
 
     mockContext = {
       getStepData: jest.fn(),
@@ -59,21 +62,16 @@ describe("createCallbackPromise", () => {
 
       const promise = createCallbackPromise(
         mockContext,
+        mockCheckpointManager,
         "test-step-id",
         "test-step",
         { deserialize: jest.fn() },
-        hasRunningOperations,
-        mockOperationsEmitter,
-        "test termination message",
         mockCheckAndUpdateReplayMode,
       );
 
-      await expect(promise).rejects.toThrow("test termination message");
-      expect(mockWaitBeforeContinue).toHaveBeenCalled();
-      expect(mockTerminate).toHaveBeenCalledWith({
-        message: "test termination message",
-        reason: "CALLBACK_PENDING",
-      });
+      await expect(promise).rejects.toThrow(
+        "No step data found for callback: test-step-id",
+      );
     });
 
     it("should handle succeeded callback without callback ID", async () => {

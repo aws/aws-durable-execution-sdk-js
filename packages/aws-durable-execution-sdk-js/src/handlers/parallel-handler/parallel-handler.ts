@@ -45,7 +45,7 @@ export const createParallelHandler = <Logger extends DurableLogger>(
       // Parse overloaded parameters
       if (typeof nameOrBranches === "string" || nameOrBranches === undefined) {
         // Case: parallel(name, branches, config?)
-        name = nameOrBranches;
+        name = nameOrBranches as string | undefined;
         branches = branchesOrConfig as (
           | ParallelFunc<T, Logger>
           | NamedParallelBranch<T, Logger>

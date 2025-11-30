@@ -19,10 +19,6 @@ import { defaultSerdes } from "../../utils/serdes/serdes";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createMockExecutionContext } from "../../testing/mock-context";
 
-// Mock waitBeforeContinue
-jest.mock("../../utils/wait-before-continue/wait-before-continue", () => ({
-  waitBeforeContinue: jest.fn().mockResolvedValue({ reason: "operations" }),
-}));
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { EventEmitter } from "events";
 
@@ -1017,11 +1013,12 @@ describe("Callback Handler", () => {
 
       const [promise] = await callbackHandler<string>("test-callback");
 
+      // TODO: Update for centralized termination management
       // Mock waitBeforeContinue
-      const mockWaitBeforeContinue = (
-        await import("../../utils/wait-before-continue/wait-before-continue")
-      ).waitBeforeContinue as jest.Mock;
-      mockWaitBeforeContinue.mockClear();
+      // const mockWaitBeforeContinue = (
+      //   await import("../../utils/wait-before-continue/wait-before-continue")
+      // ).waitBeforeContinue as jest.Mock;
+      // mockWaitBeforeContinue.mockClear();
 
       // Trigger the promise
       promise.then(() => {}).catch(() => {});

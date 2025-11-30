@@ -33,7 +33,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
     // Parse the overloaded parameters - validation errors thrown here are async
     if (typeof nameOrSubmitter === "string" || nameOrSubmitter === undefined) {
       // Case: waitForCallback("name", submitterFunc, config?) or waitForCallback(undefined, submitterFunc, config?)
-      name = nameOrSubmitter;
+      name = nameOrSubmitter as string | undefined;
       if (typeof submitterOrConfig === "function") {
         submitter = submitterOrConfig;
         config = maybeConfig;

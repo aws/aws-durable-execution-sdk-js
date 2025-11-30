@@ -77,17 +77,32 @@ const stepConfig = {
 export const createPromiseHandler = <Logger extends DurableLogger>(
   step: DurableContext<Logger>["step"],
 ): {
-  all: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T[]>;
-  allSettled: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<PromiseSettledResult<T>[]>;
-  any: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
-  race: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
+  all: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T[]>;
+  allSettled: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<PromiseSettledResult<T>[]>;
+  any: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T>;
+  race: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T>;
 } => {
   const parseParams = <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
     maybePromises?: DurablePromise<T>[],
   ): { name: string | undefined; promises: DurablePromise<T>[] } => {
     if (typeof nameOrPromises === "string" || nameOrPromises === undefined) {
-      return { name: nameOrPromises, promises: maybePromises! };
+      return {
+        name: nameOrPromises as string | undefined,
+        promises: maybePromises!,
+      };
     }
     return { name: undefined, promises: nameOrPromises };
   };
@@ -127,7 +142,7 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
       // Wrap Promise.any execution in a step for persistence
-      return await step(name, () => Promise.any(promises), stepConfig);
+      return await step(name, () => (Promise as any).any(promises), stepConfig);
     });
   };
 

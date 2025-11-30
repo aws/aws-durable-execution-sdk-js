@@ -2,7 +2,7 @@ import { OperationType } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
 import { EventEmitter } from "events";
 import { createDurableContext } from "./context/durable-context/durable-context";
-import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
+import { CentralizedCheckpointManager } from "./utils/checkpoint/centralized-checkpoint-manager";
 
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
@@ -43,7 +43,7 @@ async function runHandler<
 ): Promise<DurableExecutionInvocationOutput> {
   // Create checkpoint manager and step data emitter
   const stepDataEmitter = new EventEmitter();
-  const checkpointManager = new CheckpointManager(
+  const checkpointManager = new CentralizedCheckpointManager(
     executionContext.durableExecutionArn,
     executionContext._stepData,
     executionContext.durableExecutionClient,

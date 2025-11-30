@@ -40,7 +40,7 @@ export const createMapHandler = <Logger extends DurableLogger>(
       // Parse overloaded parameters
       if (typeof nameOrItems === "string" || nameOrItems === undefined) {
         // Case: map(name, items, mapFunc, config?)
-        name = nameOrItems;
+        name = nameOrItems as string | undefined;
         items = itemsOrMapFunc as TInput[];
         mapFunc = mapFuncOrConfig as MapFunc<TInput, TOutput, Logger>;
         config = maybeConfig;

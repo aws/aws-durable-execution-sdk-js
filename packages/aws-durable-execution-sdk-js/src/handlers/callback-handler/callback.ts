@@ -15,6 +15,7 @@ import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
+import { CentralizedCheckpointManager } from "../../utils/checkpoint/centralized-checkpoint-manager";
 
 export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -24,6 +25,7 @@ export const createPassThroughSerdes = <T>(): Serdes<T> => ({
 export const createCallback = (
   context: ExecutionContext,
   checkpoint: Checkpoint,
+  centralizedCheckpointManager: CentralizedCheckpointManager,
   createStepId: () => string,
   hasRunningOperations: () => boolean,
   getOperationsEmitter: () => EventEmitter,
@@ -38,7 +40,7 @@ export const createCallback = (
     let config: CreateCallbackConfig<T> | undefined;
 
     if (typeof nameOrConfig === "string" || nameOrConfig === undefined) {
-      name = nameOrConfig;
+      name = nameOrConfig as string | undefined;
       config = maybeConfig;
     } else {
       config = nameOrConfig;
@@ -198,12 +200,10 @@ export const createCallback = (
 
       const callbackPromise = createCallbackPromise<T>(
         context,
+        centralizedCheckpointManager,
         stepId,
         name,
         serdes,
-        hasRunningOperations,
-        getOperationsEmitter(),
-        terminationMessage,
         checkAndUpdateReplayMode,
       );
 

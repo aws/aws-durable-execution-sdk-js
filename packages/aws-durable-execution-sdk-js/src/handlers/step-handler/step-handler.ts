@@ -1,551 +1,203 @@
+import { ExecutionContext, OperationSubType, StepConfig } from "../../types";
 import {
-  ExecutionContext,
-  StepFunc,
-  StepConfig,
-  RetryDecision,
-  StepSemantics,
-  OperationSubType,
-  StepContext,
-  DurablePromise,
-  DurableExecutionMode,
-} from "../../types";
-import { durationToSeconds } from "../../utils/duration/duration";
-import {
-  terminate,
-  terminateForUnrecoverableError,
-} from "../../utils/termination-helper/termination-helper";
-import { Context } from "aws-lambda";
-import {
-  OperationAction,
   OperationStatus,
   OperationType,
+  OperationAction,
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
-import { StepInterruptedError } from "../../errors/step-errors/step-errors";
-import {
-  DurableOperationError,
-  StepError,
-} from "../../errors/durable-error/durable-error";
-import { TerminationReason } from "../../termination-manager/types";
-import { defaultSerdes } from "../../utils/serdes/serdes";
-import {
-  safeSerialize,
-  safeDeserialize,
-} from "../../errors/serdes-errors/serdes-errors";
-import { EventEmitter } from "events";
-import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
-import { runWithContext } from "../../utils/context-tracker/context-tracker";
-import { createErrorObjectFromError } from "../../utils/error-object/error-object";
-import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { DurableLogger } from "../../types/durable-logger";
+import { DurablePromise } from "../../types/durable-promise";
+import { CentralizedCheckpointManager } from "../../utils/checkpoint/centralized-checkpoint-manager";
+import { Serdes } from "../../utils/serdes/serdes";
+import { durationToSeconds } from "../../utils/duration/duration";
 
-// Special symbol to indicate that the main loop should continue
-const CONTINUE_MAIN_LOOP = Symbol("CONTINUE_MAIN_LOOP");
-
-const waitForContinuation = async (
-  context: ExecutionContext,
-  stepId: string,
-  name: string | undefined,
-  hasRunningOperations: () => boolean,
-  getOperationsEmitter: () => EventEmitter,
-  checkpoint: Checkpoint,
-  onAwaitedChange?: (callback: () => void) => void,
-): Promise<void> => {
-  const stepData = context.getStepData(stepId);
-
-  // Check if there are any ongoing operations
-  if (!hasRunningOperations()) {
-    // No ongoing operations - safe to terminate
-    return terminate(
-      context,
-      TerminationReason.RETRY_SCHEDULED,
-      `Retry scheduled for ${name || stepId}`,
-    );
-  }
-
-  // There are ongoing operations - wait before continuing
-  await waitBeforeContinue({
-    checkHasRunningOperations: true,
-    checkStepStatus: true,
-    checkTimer: true,
-    scheduledEndTimestamp: stepData?.StepDetails?.NextAttemptTimestamp,
-    stepId,
-    context,
-    hasRunningOperations,
-    operationsEmitter: getOperationsEmitter(),
-    checkpoint,
-    onAwaitedChange,
-  });
-
-  // Return to let the main loop re-evaluate step status
-};
-
-/**
- * Creates a step handler for executing durable steps with two-phase execution.
- */
-export const createStepHandler = <Logger extends DurableLogger>(
+export const createCentralizedStepHandler = <T>(
   context: ExecutionContext,
   checkpoint: Checkpoint,
-  parentContext: Context,
+  checkpointManager: CentralizedCheckpointManager,
   createStepId: () => string,
-  logger: Logger,
-  addRunningOperation: (stepId: string) => void,
-  removeRunningOperation: (stepId: string) => void,
-  hasRunningOperations: () => boolean,
-  getOperationsEmitter: () => EventEmitter,
+  serdes: Serdes<T>,
   parentId?: string,
-) => {
-  return <T>(
-    nameOrFn: string | undefined | StepFunc<T, Logger>,
-    fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
-    maybeOptions?: StepConfig<T>,
-  ): DurablePromise<T> => {
-    let name: string | undefined;
-    let fn: StepFunc<T, Logger>;
-    let options: StepConfig<T> | undefined;
-
-    if (typeof nameOrFn === "string" || nameOrFn === undefined) {
-      name = nameOrFn;
-      fn = fnOrOptions as StepFunc<T, Logger>;
-      options = maybeOptions;
-    } else {
-      fn = nameOrFn;
-      options = fnOrOptions as StepConfig<T>;
-    }
-
+  checkAndUpdateReplayMode?: () => void,
+): {
+  <R>(
+    name: string,
+    fn: () => Promise<R>,
+    options?: StepConfig<R>,
+  ): DurablePromise<R>;
+  <R>(fn: () => Promise<R>, options?: StepConfig<R>): DurablePromise<R>;
+} => {
+  function stepHandler<R>(
+    name: string,
+    fn: () => Promise<R>,
+    options?: StepConfig<R>,
+  ): DurablePromise<R>;
+  function stepHandler<R>(
+    fn: () => Promise<R>,
+    options?: StepConfig<R>,
+  ): DurablePromise<R>;
+  function stepHandler<R>(
+    nameOrFn: string | (() => Promise<R>),
+    fnOrOptions?: (() => Promise<R>) | StepConfig<R>,
+    options?: StepConfig<R>,
+  ): DurablePromise<R> {
+    const actualName = typeof nameOrFn === "string" ? nameOrFn : undefined;
+    const actualFn =
+      typeof nameOrFn === "string"
+        ? (fnOrOptions as () => Promise<R>)
+        : nameOrFn;
+    const actualOptions =
+      typeof nameOrFn === "string" ? options : (fnOrOptions as StepConfig<R>);
     const stepId = createStepId();
+    const handlerId = `step-${stepId}`;
 
-    log("▶️", "Running step:", { stepId, name, options });
+    return new DurablePromise(async (): Promise<R> => {
+      log("🔄", "Centralized step handler executing:", {
+        stepId,
+        actualName,
+        handlerId,
+      });
 
-    // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
-    let isAwaited = false;
-    let waitingCallback: (() => void) | undefined;
+      const stepData = context.getStepData(stepId);
 
-    const setWaitingCallback = (cb: () => void): void => {
-      waitingCallback = cb;
-    };
+      if (stepData?.Status === OperationStatus.SUCCEEDED) {
+        log("✅", "Step already completed:", { stepId });
+        const result = await serdes.deserialize(
+          (stepData as any).StepDetails?.Result,
+          {
+            entityId: stepId,
+            durableExecutionArn: context.durableExecutionArn,
+          },
+        );
+        checkAndUpdateReplayMode?.();
+        return result as R;
+      }
 
-    // Phase 1: Start execution immediately and capture result/error
-    const phase1Promise = (async (): Promise<T> => {
-      // Main step logic - can be re-executed if step status changes
-      while (true) {
-        try {
-          const stepData = context.getStepData(stepId);
+      if (!stepData) {
+        // Checkpoint START for new step
+        await checkpoint.checkpoint(stepId, {
+          Type: OperationType.STEP,
+          SubType: OperationSubType.STEP,
+          Action: OperationAction.START,
+          Name: actualName,
+          ParentId: parentId,
+        });
+        log("📝", "Step checkpointed as STARTED:", { stepId });
+      } else {
+        // Validate replay consistency
+        validateReplayConsistency(
+          stepId,
+          {
+            type: OperationType.STEP,
+            name: actualName,
+            subType: OperationSubType.STEP,
+          },
+          stepData,
+          context,
+        );
 
-          // Validate replay consistency
-          validateReplayConsistency(
-            stepId,
-            {
-              type: OperationType.STEP,
-              name,
-              subType: OperationSubType.STEP,
-            },
-            stepData,
-            context,
-          );
-
-          if (stepData?.Status === OperationStatus.SUCCEEDED) {
-            return await handleCompletedStep<T>(
-              context,
+        // Handle retry logic
+        if (stepData.Status === OperationStatus.FAILED) {
+          const nextAttemptTime = (stepData as any).StepDetails
+            ?.NextAttemptTimestamp;
+          if (
+            nextAttemptTime &&
+            Date.now() < new Date(nextAttemptTime).getTime()
+          ) {
+            log("⏳", "Step retry scheduled, waiting:", {
               stepId,
-              name,
-              options?.serdes,
-            );
+              nextAttemptTime,
+            });
+            // Schedule with checkpoint manager and return promise
+            return new Promise<R>((resolve, reject) => {
+              checkpointManager.scheduleResume(
+                handlerId,
+                resolve,
+                reject,
+                new Date(nextAttemptTime).getTime(),
+              );
+            });
           }
-
-          if (stepData?.Status === OperationStatus.FAILED) {
-            // Return an async rejected promise to ensure it's handled asynchronously
-            return (async (): Promise<T> => {
-              // Reconstruct the original error from stored ErrorObject
-              if (stepData.StepDetails?.Error) {
-                throw DurableOperationError.fromErrorObject(
-                  stepData.StepDetails.Error,
-                );
-              } else {
-                // Fallback for legacy data without Error field
-                const errorMessage = stepData?.StepDetails?.Result;
-                throw new StepError(errorMessage || "Unknown error");
-              }
-            })();
-          }
-
-          // If PENDING, wait for timer to complete
-          if (stepData?.Status === OperationStatus.PENDING) {
-            await waitForContinuation(
-              context,
-              stepId,
-              name,
-              hasRunningOperations,
-              getOperationsEmitter,
-              checkpoint,
-              isAwaited ? undefined : setWaitingCallback,
-            );
-            continue; // Re-evaluate step status after waiting
-          }
-
-          // Check for interrupted step with AT_MOST_ONCE_PER_RETRY semantics
-          if (stepData?.Status === OperationStatus.STARTED) {
-            const semantics =
-              options?.semantics || StepSemantics.AtLeastOncePerRetry;
-            if (semantics === StepSemantics.AtMostOncePerRetry) {
-              log("⚠️", "Step was interrupted during execution:", {
-                stepId,
-                name,
-              });
-              const error = new StepInterruptedError(stepId, name);
-
-              // Handle the interrupted step as a failure
-              const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
-              let retryDecision: RetryDecision;
-
-              if (options?.retryStrategy !== undefined) {
-                retryDecision = options.retryStrategy(error, currentAttempt);
-              } else {
-                retryDecision = retryPresets.default(error, currentAttempt);
-              }
-
-              log("⚠️", "Should Retry Interrupted Step:", {
-                stepId,
-                name,
-                currentAttempt,
-                shouldRetry: retryDecision.shouldRetry,
-                delayInSeconds: retryDecision.shouldRetry
-                  ? retryDecision.delay
-                    ? durationToSeconds(retryDecision.delay)
-                    : undefined
-                  : undefined,
-              });
-
-              if (!retryDecision.shouldRetry) {
-                // No retry, mark as failed
-                await checkpoint.checkpoint(stepId, {
-                  Id: stepId,
-                  ParentId: parentId,
-                  Action: OperationAction.FAIL,
-                  SubType: OperationSubType.STEP,
-                  Type: OperationType.STEP,
-                  Error: createErrorObjectFromError(error),
-                  Name: name,
-                });
-
-                // Reconstruct error from ErrorObject for deterministic behavior
-                const errorObject = createErrorObjectFromError(error);
-                throw DurableOperationError.fromErrorObject(errorObject);
-              } else {
-                // Retry
-                await checkpoint.checkpoint(stepId, {
-                  Id: stepId,
-                  ParentId: parentId,
-                  Action: OperationAction.RETRY,
-                  SubType: OperationSubType.STEP,
-                  Type: OperationType.STEP,
-                  Error: createErrorObjectFromError(error),
-                  Name: name,
-                  StepOptions: {
-                    NextAttemptDelaySeconds: retryDecision.delay
-                      ? durationToSeconds(retryDecision.delay)
-                      : 1,
-                  },
-                });
-
-                await waitForContinuation(
-                  context,
-                  stepId,
-                  name,
-                  hasRunningOperations,
-                  getOperationsEmitter,
-                  checkpoint,
-                  isAwaited ? undefined : setWaitingCallback,
-                );
-                continue; // Re-evaluate step status after waiting
-              }
-            }
-          }
-
-          // Execute step function for READY, STARTED (AtLeastOncePerRetry), or first time (undefined)
-          const result = await executeStep(
-            context,
-            checkpoint,
-            stepId,
-            name,
-            fn,
-            logger,
-            addRunningOperation,
-            removeRunningOperation,
-            hasRunningOperations,
-            getOperationsEmitter,
-            parentId,
-            options,
-            isAwaited ? undefined : setWaitingCallback,
-          );
-
-          // If executeStep signals to continue the main loop, do so
-          if (result === CONTINUE_MAIN_LOOP) {
-            continue;
-          }
-
-          return result;
-        } catch (error) {
-          // Preserve DurableOperationError instances (StepInterruptedError is handled specifically where it's thrown)
-          if (error instanceof DurableOperationError) {
-            throw error;
-          }
-
-          // For any other error from executeStep, wrap it in StepError for consistency
-          throw new StepError(
-            error instanceof Error ? error.message : "Step failed",
-            error instanceof Error ? error : undefined,
-          );
         }
       }
-    })();
 
-    // Attach catch handler to prevent unhandled promise rejections
-    // The error will still be thrown when the DurablePromise is awaited
-    phase1Promise.catch(() => {});
+      // Execute the step function
+      try {
+        log("▶️", "Executing step function:", { stepId });
+        const result = await actualFn();
 
-    // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
-    return new DurablePromise(async () => {
-      // When promise is awaited, mark as awaited and invoke waiting callback
-      isAwaited = true;
-      if (waitingCallback) {
-        waitingCallback();
+        // Serialize and checkpoint the result
+        const serializedResult = await serdes.serialize(result as T, {
+          entityId: stepId,
+          durableExecutionArn: context.durableExecutionArn,
+        });
+        await checkpoint.checkpoint(stepId, {
+          Type: OperationType.STEP,
+          SubType: OperationSubType.STEP,
+          Action: OperationAction.SUCCEED,
+          Payload: await serializedResult,
+        });
+
+        log("✅", "Step completed successfully:", { stepId });
+        checkAndUpdateReplayMode?.();
+        return result;
+      } catch (error) {
+        log("❌", "Step failed:", { stepId, error: (error as Error).message });
+
+        // Handle retry logic
+        const retryStrategy = actualOptions?.retryStrategy;
+        const currentAttempt =
+          ((stepData as any)?.StepDetails?.Attempt || 0) + 1;
+
+        const retryDecision = retryStrategy
+          ? retryStrategy(error as Error, currentAttempt)
+          : { shouldRetry: false };
+
+        if (retryDecision.shouldRetry && currentAttempt < 3) {
+          const retryDelay = retryDecision.delay
+            ? durationToSeconds(retryDecision.delay) * 1000
+            : 1000;
+          const scheduledTime = Date.now() + retryDelay;
+
+          await checkpoint.checkpoint(stepId, {
+            Type: OperationType.STEP,
+            SubType: OperationSubType.STEP,
+            Action: OperationAction.RETRY,
+            StepOptions: {
+              NextAttemptDelaySeconds: Math.ceil(retryDelay / 1000),
+            },
+          });
+
+          log("🔄", "Step retry scheduled:", {
+            stepId,
+            scheduledTime,
+            attempt: currentAttempt,
+          });
+          return new Promise<R>((resolve, reject) => {
+            checkpointManager.scheduleResume(
+              handlerId,
+              resolve,
+              reject,
+              scheduledTime,
+            );
+          });
+        } else {
+          // Max retries exceeded
+          await checkpoint.checkpoint(stepId, {
+            Type: OperationType.STEP,
+            SubType: OperationSubType.STEP,
+            Action: OperationAction.FAIL,
+          });
+
+          throw error;
+        }
       }
-
-      return await phase1Promise;
     });
-  };
-};
-
-export const handleCompletedStep = async <T>(
-  context: ExecutionContext,
-  stepId: string,
-  stepName: string | undefined,
-  serdes = defaultSerdes,
-): Promise<T> => {
-  log("⏭️", "Step already finished, returning cached result:", { stepId });
-
-  const stepData = context.getStepData(stepId);
-  const result = stepData?.StepDetails?.Result;
-
-  return await safeDeserialize(
-    serdes,
-    result,
-    stepId,
-    stepName,
-    context.terminationManager,
-
-    context.durableExecutionArn,
-  );
-};
-
-export const executeStep = async <T, Logger extends DurableLogger>(
-  context: ExecutionContext,
-  checkpoint: Checkpoint,
-  stepId: string,
-  name: string | undefined,
-  fn: StepFunc<T, Logger>,
-  logger: Logger,
-  addRunningOperation: (stepId: string) => void,
-  removeRunningOperation: (stepId: string) => void,
-  hasRunningOperations: () => boolean,
-  getOperationsEmitter: () => EventEmitter,
-  parentId: string | undefined,
-  options?: StepConfig<T>,
-  onAwaitedChange?: ((callback: () => void) => void) | undefined,
-): Promise<T | typeof CONTINUE_MAIN_LOOP> => {
-  // Determine step semantics (default to AT_LEAST_ONCE_PER_RETRY if not specified)
-  const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
-  const serdes = options?.serdes || defaultSerdes;
-
-  // Checkpoint at start for both semantics (only if not already started)
-  const stepData = context.getStepData(stepId);
-  if (stepData?.Status !== OperationStatus.STARTED) {
-    if (semantics === StepSemantics.AtMostOncePerRetry) {
-      // Wait for checkpoint to complete
-      await checkpoint.checkpoint(stepId, {
-        Id: stepId,
-        ParentId: parentId,
-        Action: OperationAction.START,
-        SubType: OperationSubType.STEP,
-        Type: OperationType.STEP,
-        Name: name,
-      });
-    } else {
-      // Fire and forget for AtLeastOncePerRetry
-      checkpoint.checkpoint(stepId, {
-        Id: stepId,
-        ParentId: parentId,
-        Action: OperationAction.START,
-        SubType: OperationSubType.STEP,
-        Type: OperationType.STEP,
-        Name: name,
-      });
-    }
   }
 
-  try {
-    // Get current attempt number for logger enrichment
-    const stepData = context.getStepData(stepId);
-    const currentAttempt = stepData?.StepDetails?.Attempt || 0;
-
-    // Create step context with enriched logger
-    const stepContext: StepContext<Logger> = {
-      logger,
-    };
-
-    // Execute the step function with stepContext
-    addRunningOperation(stepId);
-    let result: T;
-    try {
-      result = await runWithContext(
-        stepId,
-        parentId,
-        () => fn(stepContext),
-        // The attempt that is running is the attempt from the step data (previous step attempt) + 1
-        currentAttempt + 1,
-        // Alwasy in execution mode when running step operations
-        DurableExecutionMode.ExecutionMode,
-      );
-    } finally {
-      removeRunningOperation(stepId);
-    }
-
-    // Serialize the result for consistency
-    const serializedResult = await safeSerialize(
-      serdes,
-      result,
-      stepId,
-      name,
-      context.terminationManager,
-
-      context.durableExecutionArn,
-    );
-
-    // Always checkpoint on completion
-    await checkpoint.checkpoint(stepId, {
-      Id: stepId,
-      ParentId: parentId,
-      Action: OperationAction.SUCCEED,
-      SubType: OperationSubType.STEP,
-      Type: OperationType.STEP,
-      Payload: serializedResult,
-      Name: name,
-    });
-
-    log("✅", "Step completed successfully:", {
-      stepId,
-      name,
-      result,
-      semantics,
-    });
-
-    // Deserialize the result for consistency with replay behavior
-    return await safeDeserialize(
-      serdes,
-      serializedResult,
-      stepId,
-      name,
-      context.terminationManager,
-
-      context.durableExecutionArn,
-    );
-  } catch (error) {
-    log("❌", "Step failed:", {
-      stepId,
-      name,
-      error,
-      semantics,
-    });
-
-    // Handle unrecoverable errors - these should not go through retry logic
-    if (isUnrecoverableError(error)) {
-      log("💥", "Unrecoverable error detected:", {
-        stepId,
-        name,
-        error: error.message,
-      });
-
-      return terminateForUnrecoverableError(context, error, name || stepId);
-    }
-
-    const stepData = context.getStepData(stepId);
-    const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
-    let retryDecision: RetryDecision;
-
-    if (options?.retryStrategy !== undefined) {
-      // Use provided retry configuration
-      retryDecision = options.retryStrategy(
-        error instanceof Error ? error : new Error("Unknown Error"),
-        currentAttempt,
-      );
-    } else {
-      // Use default retry preset if no config provided
-      retryDecision = retryPresets.default(
-        error instanceof Error ? error : new Error("Unknown Error"),
-        currentAttempt,
-      );
-    }
-
-    log("⚠️", "Should Retry:", {
-      stepId,
-      name,
-      currentAttempt,
-      shouldRetry: retryDecision.shouldRetry,
-      delayInSeconds: retryDecision.shouldRetry
-        ? retryDecision.delay
-          ? durationToSeconds(retryDecision.delay)
-          : undefined
-        : undefined,
-      semantics,
-    });
-
-    if (!retryDecision.shouldRetry) {
-      // No retry
-      await checkpoint.checkpoint(stepId, {
-        Id: stepId,
-        ParentId: parentId,
-        Action: OperationAction.FAIL,
-        SubType: OperationSubType.STEP,
-        Type: OperationType.STEP,
-        Error: createErrorObjectFromError(error),
-        Name: name,
-      });
-
-      // Reconstruct error from ErrorObject for deterministic behavior
-      const errorObject = createErrorObjectFromError(error);
-      throw DurableOperationError.fromErrorObject(errorObject);
-    } else {
-      // Retry
-      await checkpoint.checkpoint(stepId, {
-        Id: stepId,
-        ParentId: parentId,
-        Action: OperationAction.RETRY,
-        SubType: OperationSubType.STEP,
-        Type: OperationType.STEP,
-        Error: createErrorObjectFromError(error),
-        Name: name,
-        StepOptions: {
-          NextAttemptDelaySeconds: retryDecision.delay
-            ? durationToSeconds(retryDecision.delay)
-            : 1,
-        },
-      });
-
-      // Wait for continuation and signal main loop to continue
-      await waitForContinuation(
-        context,
-        stepId,
-        name,
-        hasRunningOperations,
-        getOperationsEmitter,
-        checkpoint,
-        onAwaitedChange,
-      );
-      return CONTINUE_MAIN_LOOP;
-    }
-  }
+  return stepHandler;
 };
+
+// Legacy export for backward compatibility
+export const createStepHandler = createCentralizedStepHandler;

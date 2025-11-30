@@ -86,7 +86,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     let options: ChildConfig<T> | undefined;
 
     if (typeof nameOrFn === "string" || nameOrFn === undefined) {
-      name = nameOrFn;
+      name = nameOrFn as string | undefined;
       fn = fnOrOptions as ChildFunc<T, Logger>;
       options = maybeOptions;
     } else {

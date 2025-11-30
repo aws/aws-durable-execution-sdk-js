@@ -19,7 +19,6 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
-import { waitBeforeContinue } from "../../utils/wait-before-continue/wait-before-continue";
 import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 
@@ -179,15 +178,9 @@ export const createInvokeHandler = (
               "⏳",
               `Invoke ${name || funcId} still in progress, waiting for other operations`,
             );
-            await waitBeforeContinue({
-              checkHasRunningOperations: true,
-              checkStepStatus: true,
-              checkTimer: false,
-              stepId,
-              context,
-              hasRunningOperations,
-              operationsEmitter: getOperationsEmitter(),
-            });
+            // TODO: Convert to centralized termination management
+            // For now, continue the loop to re-evaluate
+            await new Promise((resolve) => setTimeout(resolve, 100));
             continue; // Re-evaluate status after waiting
           }
 

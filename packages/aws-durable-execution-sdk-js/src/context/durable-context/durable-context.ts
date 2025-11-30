@@ -29,6 +29,8 @@ import {
 } from "../../types";
 import { Context } from "aws-lambda";
 import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
+import { CentralizedCheckpointManager } from "../../utils/checkpoint/centralized-checkpoint-manager";
+import { defaultSerdes } from "../../utils/serdes/serdes";
 import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
 import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
@@ -71,6 +73,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private runningOperations = new Set<string>();
   private operationsEmitter = new EventEmitter();
   private checkpoint: CheckpointManager;
+  private centralizedCheckpointManager: CentralizedCheckpointManager;
   private durableExecutionMode: DurableExecutionMode;
   private _parentId?: string;
   private modeManagement: ModeManagement;
@@ -99,6 +102,8 @@ export class DurableContextImpl<Logger extends DurableLogger>
     this.durableExecutionMode = durableExecutionMode;
 
     this.checkpoint = durableExecution.checkpointManager;
+    // TODO: Replace with proper CentralizedCheckpointManager initialization
+    this.centralizedCheckpointManager = this.checkpoint as any;
 
     this.modeManagement = new ModeManagement(
       this.captureExecutionState.bind(this),
@@ -293,17 +298,36 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const stepHandler = createStepHandler(
         this.executionContext,
         this.checkpoint,
-        this.lambdaContext,
+        this.centralizedCheckpointManager,
         this.createStepId.bind(this),
-        this.durableLogger,
-        this.addRunningOperation.bind(this),
-        this.removeRunningOperation.bind(this),
-        this.hasRunningOperations.bind(this),
-        this.getOperationsEmitter.bind(this),
+        defaultSerdes,
         this._parentId,
+        this.checkAndUpdateReplayMode.bind(this),
       );
 
-      return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
+      // Adapter to convert StepFunc to expected signature
+      const adaptedStepHandler = <R>(
+        nameOrFn: string | (() => Promise<R>),
+        fnOrOptions?: (() => Promise<R>) | StepConfig<R>,
+        options?: StepConfig<R>,
+      ) => {
+        if (typeof nameOrFn === "string") {
+          // Named step: stepHandler(name, fn, options)
+          const fn = fnOrOptions as () => Promise<R>;
+          return stepHandler(nameOrFn, fn, options);
+        } else {
+          // Unnamed step: stepHandler(fn, options)
+          const fn = nameOrFn;
+          const opts = fnOrOptions as StepConfig<R>;
+          return stepHandler(fn, opts);
+        }
+      };
+
+      return adaptedStepHandler(
+        nameOrFn as any,
+        fnOrOptions as any,
+        maybeOptions,
+      );
     });
   }
 
@@ -394,9 +418,8 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const waitHandler = createWaitHandler(
         this.executionContext,
         this.checkpoint,
+        this.centralizedCheckpointManager,
         this.createStepId.bind(this),
-        this.hasRunningOperations.bind(this),
-        this.getOperationsEmitter.bind(this),
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
       );
@@ -447,6 +470,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const callbackFactory = createCallbackFactory(
         this.executionContext,
         this.checkpoint,
+        this.centralizedCheckpointManager,
         this.createStepId.bind(this),
         this.hasRunningOperations.bind(this),
         this.getOperationsEmitter.bind(this),

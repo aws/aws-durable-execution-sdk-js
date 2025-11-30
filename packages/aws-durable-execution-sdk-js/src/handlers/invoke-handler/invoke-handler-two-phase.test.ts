@@ -9,7 +9,6 @@ jest.mock("../../utils/checkpoint/checkpoint-manager");
 jest.mock("../../utils/termination-helper/termination-helper");
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
-jest.mock("../../utils/wait-before-continue/wait-before-continue");
 
 import { terminate } from "../../utils/termination-helper/termination-helper";
 import { log } from "../../utils/logger/logger";

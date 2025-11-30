@@ -84,17 +84,22 @@ function hasPendingAncestorCompletion(
 }
 
 /**
- * Terminates execution and returns a never-resolving promise to prevent code progression
- * @param context - The execution context containing the termination manager
- * @param reason - The termination reason
- * @param message - The termination message
- * @returns A never-resolving promise
+ * DEPRECATED: Terminates execution and returns a never-resolving promise to prevent code progression
+ * This function has been replaced by centralized termination management.
+ * Use CentralizedCheckpointManager.scheduleResume() instead.
+ *
+ * @deprecated Use centralized termination management instead
  */
 export function terminate<T>(
   context: ExecutionContext,
   reason: TerminationReason,
   message: string,
 ): Promise<T> {
+  console.warn(
+    "terminate() function is deprecated. Use centralized termination management instead.",
+  );
+
+  // For now, fall back to original implementation to maintain compatibility
   const activeContext = getActiveContext();
 
   // If we have a parent context, add delay to let checkpoints process
