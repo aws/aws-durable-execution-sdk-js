@@ -6,7 +6,11 @@ import {
   Operation,
   ErrorObject,
 } from "@aws-sdk/client-lambda";
-import { getHistoryEventDetail } from "../history-event-details";
+import {
+  getHistoryEventDetail,
+  getRetryHistoryEventDetail,
+  OperationActionWithoutRetry,
+} from "../history-event-details";
 
 describe("history-event-details", () => {
   const mockMetadata = {
@@ -63,7 +67,7 @@ describe("history-event-details", () => {
   describe("getHistoryEventDetail", () => {
     it("should return undefined for unknown action-type combinations", () => {
       const result = getHistoryEventDetail(
-        "UNKNOWN" as OperationAction,
+        "UNKNOWN" as OperationActionWithoutRetry,
         "UNKNOWN" as OperationType,
       );
       expect(result).toBeUndefined();
@@ -312,20 +316,12 @@ describe("history-event-details", () => {
         expect(details).toEqual({});
       });
 
-      it("should return correct details for RETRY-STEP", () => {
+      it("should return undefined for RETRY-STEP", () => {
         const detail = getHistoryEventDetail(
-          OperationAction.RETRY,
+          OperationAction.RETRY as OperationActionWithoutRetry,
           OperationType.STEP,
         );
-        expect(detail).toBeDefined();
-        expect(detail!.eventType).toBe(EventType.StepStarted);
-        expect(detail!.detailPlace).toBe("StepStartedDetails");
-
-        const update = createMockUpdate();
-        const operation = createMockOperation();
-        const details = detail!.getDetails(update, operation, mockMetadata);
-
-        expect(details).toEqual({});
+        expect(detail).toBeUndefined();
       });
 
       it("should return correct details for FAIL-STEP", () => {
@@ -367,7 +363,7 @@ describe("history-event-details", () => {
           },
           RetryDetails: {
             NextAttemptDelaySeconds: 5,
-            CurrentAttempt: undefined,
+            CurrentAttempt: 1,
           },
         });
       });
@@ -526,6 +522,28 @@ describe("history-event-details", () => {
           ScheduledEndTimestamp: expectedEndTime,
         });
       });
+    });
+  });
+
+  describe("getRetryHistoryEventDetail", () => {
+    it("should return FAIL-STEP handler when isError is true", () => {
+      const retryFailDetail = getRetryHistoryEventDetail(true);
+      const directFailDetail = getHistoryEventDetail(
+        OperationAction.FAIL,
+        OperationType.STEP,
+      );
+
+      expect(retryFailDetail).toBe(directFailDetail);
+    });
+
+    it("should return SUCCEED-STEP handler when isError is false", () => {
+      const retrySucceedDetail = getRetryHistoryEventDetail(false);
+      const directSucceedDetail = getHistoryEventDetail(
+        OperationAction.SUCCEED,
+        OperationType.STEP,
+      );
+
+      expect(retrySucceedDetail).toBe(directSucceedDetail);
     });
   });
 

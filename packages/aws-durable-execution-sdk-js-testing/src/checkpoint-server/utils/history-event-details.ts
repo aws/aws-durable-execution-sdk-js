@@ -7,6 +7,11 @@ import {
   Operation,
 } from "@aws-sdk/client-lambda";
 
+export type OperationActionWithoutRetry = Exclude<
+  OperationAction,
+  typeof OperationAction.RETRY
+>;
+
 /**
  * Metadata required for generating event details.
  */
@@ -57,11 +62,11 @@ function createEventDetails<T extends keyof Event>(
 /**
  * Type alias for retrieving the correct HistoryEventDetails type based on operation action and type.
  *
- * @template Action - The operation action (START, FAIL, SUCCEED, RETRY)
+ * @template Action - The operation action (START, FAIL, SUCCEED)
  * @template Type - The operation type (EXECUTION, CALLBACK, CONTEXT, INVOKE, STEP, WAIT)
  */
 export type HistoryEventDetail<
-  Action extends OperationAction,
+  Action extends OperationActionWithoutRetry,
   Type extends OperationType,
 > = (typeof historyEventDetailMap)[`${Action}-${Type}`];
 
@@ -76,7 +81,7 @@ export type HistoryEventDetail<
  * - Callback: START
  * - Context: START, FAIL, SUCCEED
  * - Invoke: START
- * - Step: START, RETRY, FAIL, SUCCEED
+ * - Step: START, FAIL, SUCCEED
  * - Wait: START
  */
 const historyEventDetailMap = {
@@ -170,11 +175,6 @@ const historyEventDetailMap = {
     "StepStartedDetails",
     () => ({}),
   ),
-  [`${OperationAction.RETRY}-${OperationType.STEP}`]: createEventDetails(
-    EventType.StepStarted,
-    "StepStartedDetails",
-    () => ({}),
-  ),
   [`${OperationAction.FAIL}-${OperationType.STEP}`]: createEventDetails(
     EventType.StepFailed,
     "StepFailedDetails",
@@ -184,7 +184,7 @@ const historyEventDetailMap = {
       },
       RetryDetails: {
         NextAttemptDelaySeconds: update.StepOptions?.NextAttemptDelaySeconds,
-        CurrentAttempt: operation.StepDetails?.Attempt,
+        CurrentAttempt: operation.StepDetails?.Attempt ?? 1,
       },
     }),
   ),
@@ -223,7 +223,7 @@ const historyEventDetailMap = {
 /**
  * Retrieves the appropriate history event detail handler for a given operation action and type.
  *
- * @template Action - The operation action (START, FAIL, SUCCEED, RETRY)
+ * @template Action - The operation action (START, FAIL, SUCCEED)
  * @template Type - The operation type (EXECUTION, CALLBACK, CONTEXT, INVOKE, STEP, WAIT)
  * @param action - The action being performed on the operation
  * @param type - The type of operation being performed
@@ -238,8 +238,27 @@ const historyEventDetailMap = {
  * ```
  */
 export function getHistoryEventDetail<
-  Action extends OperationAction,
+  Action extends OperationActionWithoutRetry,
   Type extends OperationType,
 >(action: Action, type: Type): HistoryEventDetail<Action, Type> | undefined {
   return historyEventDetailMap[`${action}-${type}`];
+}
+
+/**
+ * Retry updates can create either a FAIL or SUCCEED event depending on the outcome of the retry.
+ * This function returns the appropriate HistoryEventDetail handler based on the payload of the retry.
+ *
+ * @param isError
+ * @returns
+ */
+export function getRetryHistoryEventDetail(isError: boolean) {
+  if (isError) {
+    return historyEventDetailMap[
+      `${OperationAction.FAIL}-${OperationType.STEP}`
+    ];
+  }
+
+  return historyEventDetailMap[
+    `${OperationAction.SUCCEED}-${OperationType.STEP}`
+  ];
 }

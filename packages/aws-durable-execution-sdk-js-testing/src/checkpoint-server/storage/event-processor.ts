@@ -8,7 +8,9 @@ import {
 } from "@aws-sdk/client-lambda";
 import {
   getHistoryEventDetail,
+  getRetryHistoryEventDetail,
   HistoryEventDetail,
+  OperationActionWithoutRetry,
 } from "../utils/history-event-details";
 
 /**
@@ -102,10 +104,13 @@ export class EventProcessor {
       );
     }
 
-    const historyDetails = EventProcessor.getHistoryDetailsFromUpdate(
-      update.Action,
-      operation.Type,
-    );
+    const historyDetails =
+      update.Action === OperationAction.RETRY
+        ? getRetryHistoryEventDetail(!!update.Error)
+        : EventProcessor.getHistoryDetailsFromUpdate(
+            update.Action,
+            operation.Type,
+          );
 
     return {
       EventType: historyDetails.eventType,
@@ -131,7 +136,7 @@ export class EventProcessor {
    * This static method provides a way to validate that a specific operation action and type
    * combination is supported and to retrieve the corresponding event detail handler.
    *
-   * @template Action - The operation action (START, FAIL, SUCCEED, RETRY)
+   * @template Action - The operation action (START, FAIL, SUCCEED)
    * @template Type - The operation type (EXECUTION, CALLBACK, CONTEXT, INVOKE, STEP, WAIT)
    * @param action - The action being performed on the operation
    * @param type - The type of operation being performed
@@ -149,7 +154,7 @@ export class EventProcessor {
    * ```
    */
   static getHistoryDetailsFromUpdate<
-    Action extends OperationAction,
+    Action extends OperationActionWithoutRetry,
     Type extends OperationType,
   >(action: Action, type: Type): HistoryEventDetail<Action, Type> {
     const historyDetails = getHistoryEventDetail(action, type);

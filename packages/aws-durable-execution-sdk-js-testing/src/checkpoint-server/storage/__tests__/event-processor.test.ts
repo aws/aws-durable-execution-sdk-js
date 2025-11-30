@@ -16,6 +16,9 @@ describe("EventProcessor", () => {
   const mockGetHistoryEventDetail = jest.mocked(
     historyEventDetails.getHistoryEventDetail,
   );
+  const mockGetRetryHistoryEventDetail = jest.mocked(
+    historyEventDetails.getRetryHistoryEventDetail,
+  );
 
   beforeEach(() => {
     eventProcessor = new EventProcessor();
@@ -345,6 +348,133 @@ describe("EventProcessor", () => {
         OperationType.EXECUTION,
       );
     });
+
+    it("should handle RETRY action with error using getRetryHistoryEventDetail", () => {
+      const mockRetryHistoryDetails = {
+        eventType: EventType.StepFailed,
+        detailPlace: "StepFailedDetails" as const,
+        getDetails: jest.fn().mockReturnValue({
+          Error: {
+            Payload: { ErrorType: "TestError", ErrorMessage: "Test error" },
+          },
+          RetryDetails: {
+            NextAttemptDelaySeconds: 5,
+            CurrentAttempt: 2,
+          },
+        }),
+      };
+
+      mockGetRetryHistoryEventDetail.mockReturnValue(mockRetryHistoryDetails);
+
+      const update: OperationUpdate = {
+        Id: "update-id",
+        Name: "update-name",
+        Action: OperationAction.RETRY,
+        SubType: "update-subtype",
+        Error: { ErrorType: "TestError", ErrorMessage: "Test error" },
+        Type: undefined,
+      };
+
+      const operation: Operation = {
+        Id: "operation-id",
+        Name: "operation-name",
+        Type: OperationType.STEP,
+        SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
+      };
+
+      const result = eventProcessor.processUpdate(update, operation);
+
+      expect(mockGetRetryHistoryEventDetail).toHaveBeenCalledWith(true);
+      expect(mockGetHistoryEventDetail).not.toHaveBeenCalled();
+      expect(result.EventType).toBe(EventType.StepFailed);
+      expect(result.EventId).toBe(1);
+    });
+
+    it("should handle RETRY action without error using getRetryHistoryEventDetail", () => {
+      const mockSuccessRetryDetails = {
+        eventType: EventType.StepSucceeded,
+        detailPlace: "StepSucceededDetails" as const,
+        getDetails: jest.fn().mockReturnValue({
+          Result: { Payload: "test-result" },
+          RetryDetails: {
+            NextAttemptDelaySeconds: 5,
+            CurrentAttempt: 2,
+          },
+        }),
+      };
+
+      mockGetRetryHistoryEventDetail.mockReturnValue(mockSuccessRetryDetails);
+
+      const update: OperationUpdate = {
+        Id: "update-id",
+        Name: "update-name",
+        Action: OperationAction.RETRY,
+        SubType: "update-subtype",
+        Payload: "test-result",
+        Error: undefined,
+        Type: undefined,
+      };
+
+      const operation: Operation = {
+        Id: "operation-id",
+        Name: "operation-name",
+        Type: OperationType.STEP,
+        SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
+      };
+
+      const result = eventProcessor.processUpdate(update, operation);
+
+      expect(mockGetRetryHistoryEventDetail).toHaveBeenCalledWith(false);
+      expect(mockGetHistoryEventDetail).not.toHaveBeenCalled();
+      expect(result.EventType).toBe(EventType.StepSucceeded);
+      expect(result.EventId).toBe(1);
+    });
+
+    it("should handle RETRY action without payload and without error using getRetryHistoryEventDetail", () => {
+      const mockSuccessRetryDetails = {
+        eventType: EventType.StepSucceeded,
+        detailPlace: "StepSucceededDetails" as const,
+        getDetails: jest.fn().mockReturnValue({
+          Result: { Payload: "test-result" },
+          RetryDetails: {
+            NextAttemptDelaySeconds: 5,
+            CurrentAttempt: 2,
+          },
+        }),
+      };
+
+      mockGetRetryHistoryEventDetail.mockReturnValue(mockSuccessRetryDetails);
+
+      const update: OperationUpdate = {
+        Id: "update-id",
+        Name: "update-name",
+        Action: OperationAction.RETRY,
+        SubType: "update-subtype",
+        Payload: undefined,
+        Error: undefined,
+        Type: undefined,
+      };
+
+      const operation: Operation = {
+        Id: "operation-id",
+        Name: "operation-name",
+        Type: OperationType.STEP,
+        SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
+      };
+
+      const result = eventProcessor.processUpdate(update, operation);
+
+      expect(mockGetRetryHistoryEventDetail).toHaveBeenCalledWith(false);
+      expect(mockGetHistoryEventDetail).not.toHaveBeenCalled();
+      expect(result.EventType).toBe(EventType.StepSucceeded);
+      expect(result.EventId).toBe(1);
+    });
   });
 
   describe("getHistoryDetailsFromUpdate", () => {
@@ -405,18 +535,6 @@ describe("EventProcessor", () => {
       expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
         OperationAction.FAIL,
         OperationType.CONTEXT,
-      );
-    });
-
-    it("should handle RETRY action with STEP type", () => {
-      EventProcessor.getHistoryDetailsFromUpdate(
-        OperationAction.RETRY,
-        OperationType.STEP,
-      );
-
-      expect(mockGetHistoryEventDetail).toHaveBeenCalledWith(
-        OperationAction.RETRY,
-        OperationType.STEP,
       );
     });
   });
