@@ -96,7 +96,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
 
     const entityId = createStepId();
 
-    console.log("[RUN-IN-CHILD-CONTEXT] Starting:", { entityId, name });
     log("🔄", "Running child context:", {
       entityId,
       name,
@@ -124,21 +123,13 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
 
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
-      console.log("[RUN-IN-CHILD-CONTEXT] Phase 1 starting:", { entityId });
       const currentStepData = context.getStepData(entityId);
-      console.log("[RUN-IN-CHILD-CONTEXT] Current step data:", {
-        entityId,
-        status: currentStepData?.Status,
-      });
 
       // If already completed, return cached result
       if (
         currentStepData?.Status === OperationStatus.SUCCEEDED ||
         currentStepData?.Status === OperationStatus.FAILED
       ) {
-        console.log(
-          "[RUN-IN-CHILD-CONTEXT] Already completed, returning cached result",
-        );
         return handleCompletedChildContext(
           context,
           parentContext,
@@ -152,9 +143,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       }
 
       // Execute if not completed
-      console.log("[RUN-IN-CHILD-CONTEXT] Executing child context:", {
-        entityId,
-      });
       return executeChildContext(
         context,
         checkpoint,
@@ -169,10 +157,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       );
     })()
       .then((result) => {
-        console.log("[RUN-IN-CHILD-CONTEXT] Phase 1 completed successfully:", {
-          entityId,
-          result,
-        });
         phase1Result = result;
       })
       .catch((error) => {
