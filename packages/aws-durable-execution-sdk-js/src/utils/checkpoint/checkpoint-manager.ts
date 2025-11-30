@@ -504,7 +504,10 @@ export class CheckpointManager implements Checkpoint {
     }
 
     // Check if we should terminate
-    this.checkAndTerminate();
+    // Don't check for IDLE_NOT_AWAITED - operation might be awaited later or intentionally not awaited
+    if (state !== OperationLifecycleState.IDLE_NOT_AWAITED) {
+      this.checkAndTerminate();
+    }
   }
 
   waitForRetryTimer(stepId: string): Promise<void> {
@@ -560,6 +563,8 @@ export class CheckpointManager implements Checkpoint {
     if (op.state === OperationLifecycleState.IDLE_NOT_AWAITED) {
       op.state = OperationLifecycleState.IDLE_AWAITED;
       log("📍", `Operation marked as awaited: ${stepId}`);
+      // Check if we should terminate now that operation is awaited
+      this.checkAndTerminate();
     }
   }
 
