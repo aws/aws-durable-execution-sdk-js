@@ -753,8 +753,11 @@ export class CheckpointManager implements Checkpoint {
     let delay: number;
 
     if (endTimestamp) {
+      // Ensure endTimestamp is a Date object
+      const timestamp =
+        endTimestamp instanceof Date ? endTimestamp : new Date(endTimestamp);
       // Wait until endTimestamp
-      delay = Math.max(0, endTimestamp.getTime() - Date.now());
+      delay = Math.max(0, timestamp.getTime() - Date.now());
     } else {
       // No timestamp, start polling immediately (1 second delay)
       delay = 1000;
