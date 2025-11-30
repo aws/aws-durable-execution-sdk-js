@@ -780,13 +780,8 @@ export class CheckpointManager implements Checkpoint {
     // Get old status before refresh
     const oldStatus = this.stepData[hashId(stepId)]?.Status;
 
-    try {
-      // Force checkpoint to refresh state from backend
-      await this.forceCheckpoint();
-    } catch (error) {
-      log("❌", "Force checkpoint failed during polling:", error);
-      // Continue polling even if force checkpoint fails
-    }
+    // Force checkpoint to refresh state from backend
+    await this.forceCheckpoint();
 
     // Get new status after refresh
     const newStatus = this.stepData[hashId(stepId)]?.Status;
