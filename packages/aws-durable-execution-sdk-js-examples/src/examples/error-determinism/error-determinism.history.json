@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "69b7e0a9-ea4c-4eaf-92bb-87c69cd32429",
-    "EventTimestamp": "2025-11-30T08:50:34.083Z",
+    "Id": "d80f9068-2a67-45de-a4e1-b8b68433a8a2",
+    "EventTimestamp": "2025-11-30T22:35:21.674Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -16,27 +16,37 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.105Z",
+    "EventTimestamp": "2025-11-30T22:35:21.717Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.105Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:21.717Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Business validation failed",
+          "ErrorType": "CustomBusinessError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 2
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 4,
-    "EventTimestamp": "2025-11-30T08:50:34.105Z",
+    "EventTimestamp": "2025-11-30T22:35:21.719Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:34.083Z",
-      "EndTimestamp": "2025-11-30T08:50:34.105Z",
+      "StartTimestamp": "2025-11-30T22:35:21.674Z",
+      "EndTimestamp": "2025-11-30T22:35:21.719Z",
       "Error": {},
-      "RequestId": "c367acd9-af78-45bb-89bf-f7da8608375d"
+      "RequestId": "b7aa85f5-7a8e-4229-90fd-55e207ddd52d"
     }
   },
   {
@@ -45,27 +55,38 @@
     "EventId": 5,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.147Z",
+    "EventTimestamp": "2025-11-30T22:35:21.759Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 6,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.147Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:21.759Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Business validation failed",
+          "ErrorType": "CustomBusinessError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 9,
+        "CurrentAttempt": 1
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 7,
-    "EventTimestamp": "2025-11-30T08:50:34.147Z",
+    "EventTimestamp": "2025-11-30T22:35:21.760Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:34.126Z",
-      "EndTimestamp": "2025-11-30T08:50:34.147Z",
+      "StartTimestamp": "2025-11-30T22:35:21.738Z",
+      "EndTimestamp": "2025-11-30T22:35:21.760Z",
       "Error": {},
-      "RequestId": "6f6b2283-cff7-4582-83a2-d004533e8d78"
+      "RequestId": "b1deb420-bcce-4369-9e9b-b22d4e3ce4ff"
     }
   },
   {
@@ -74,27 +95,38 @@
     "EventId": 8,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.168Z",
+    "EventTimestamp": "2025-11-30T22:35:21.779Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 9,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.168Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:21.779Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Business validation failed",
+          "ErrorType": "CustomBusinessError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 8,
+        "CurrentAttempt": 2
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 10,
-    "EventTimestamp": "2025-11-30T08:50:34.168Z",
+    "EventTimestamp": "2025-11-30T22:35:21.780Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:34.148Z",
-      "EndTimestamp": "2025-11-30T08:50:34.168Z",
+      "StartTimestamp": "2025-11-30T22:35:21.760Z",
+      "EndTimestamp": "2025-11-30T22:35:21.780Z",
       "Error": {},
-      "RequestId": "f4014c31-02fd-4a19-bca9-184dab025156"
+      "RequestId": "8f3358c6-4951-4498-b478-0b46cc1f4cab"
     }
   },
   {
@@ -103,27 +135,38 @@
     "EventId": 11,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.189Z",
+    "EventTimestamp": "2025-11-30T22:35:21.820Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 12,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.189Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:21.820Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Business validation failed",
+          "ErrorType": "CustomBusinessError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 31,
+        "CurrentAttempt": 3
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 13,
-    "EventTimestamp": "2025-11-30T08:50:34.190Z",
+    "EventTimestamp": "2025-11-30T22:35:21.820Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:34.169Z",
-      "EndTimestamp": "2025-11-30T08:50:34.190Z",
+      "StartTimestamp": "2025-11-30T22:35:21.799Z",
+      "EndTimestamp": "2025-11-30T22:35:21.820Z",
       "Error": {},
-      "RequestId": "a5811b81-d4a9-43ff-b907-e3fcf1fbb852"
+      "RequestId": "358affe8-f72e-4ae6-b710-82d725e34b41"
     }
   },
   {
@@ -132,27 +175,38 @@
     "EventId": 14,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.210Z",
+    "EventTimestamp": "2025-11-30T22:35:21.841Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 15,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.210Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:21.841Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Business validation failed",
+          "ErrorType": "CustomBusinessError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 27,
+        "CurrentAttempt": 4
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 16,
-    "EventTimestamp": "2025-11-30T08:50:34.211Z",
+    "EventTimestamp": "2025-11-30T22:35:21.841Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:34.190Z",
-      "EndTimestamp": "2025-11-30T08:50:34.211Z",
+      "StartTimestamp": "2025-11-30T22:35:21.821Z",
+      "EndTimestamp": "2025-11-30T22:35:21.841Z",
       "Error": {},
-      "RequestId": "7ca00d59-00a8-421f-92f1-94b1d16887c6"
+      "RequestId": "28455f0f-bdaa-4e00-b50f-46a873906fc3"
     }
   },
   {
@@ -161,7 +215,7 @@
     "EventId": 17,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.231Z",
+    "EventTimestamp": "2025-11-30T22:35:21.884Z",
     "StepStartedDetails": {}
   },
   {
@@ -170,7 +224,7 @@
     "EventId": 18,
     "Id": "c4ca4238a0b92382",
     "Name": "failing-step",
-    "EventTimestamp": "2025-11-30T08:50:34.231Z",
+    "EventTimestamp": "2025-11-30T22:35:21.884Z",
     "StepFailedDetails": {
       "Error": {
         "Payload": {
@@ -189,7 +243,7 @@
     "EventId": 19,
     "Id": "c81e728d9d4c2f63",
     "Name": "check-before-replay",
-    "EventTimestamp": "2025-11-30T08:50:34.253Z",
+    "EventTimestamp": "2025-11-30T22:35:21.904Z",
     "StepStartedDetails": {}
   },
   {
@@ -198,7 +252,7 @@
     "EventId": 20,
     "Id": "c81e728d9d4c2f63",
     "Name": "check-before-replay",
-    "EventTimestamp": "2025-11-30T08:50:34.253Z",
+    "EventTimestamp": "2025-11-30T22:35:21.904Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"isStepError\":true,\"message\":\"Business validation failed\",\"causeName\":\"CustomBusinessError\",\"causeMessage\":\"Business validation failed\"}"
@@ -211,21 +265,21 @@
     "SubType": "Wait",
     "EventId": 21,
     "Id": "eccbc87e4b5ce2fe",
-    "EventTimestamp": "2025-11-30T08:50:34.273Z",
+    "EventTimestamp": "2025-11-30T22:35:21.927Z",
     "WaitStartedDetails": {
       "Duration": 1,
-      "ScheduledEndTimestamp": "2025-11-30T08:50:35.273Z"
+      "ScheduledEndTimestamp": "2025-11-30T22:35:22.927Z"
     }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 22,
-    "EventTimestamp": "2025-11-30T08:50:34.273Z",
+    "EventTimestamp": "2025-11-30T22:35:21.927Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:34.211Z",
-      "EndTimestamp": "2025-11-30T08:50:34.273Z",
+      "StartTimestamp": "2025-11-30T22:35:21.861Z",
+      "EndTimestamp": "2025-11-30T22:35:21.927Z",
       "Error": {},
-      "RequestId": "d10fbf60-d905-43a0-a576-0f69a076f177"
+      "RequestId": "642c8e23-9d3b-4453-b7fd-a2b0b97dbc9e"
     }
   },
   {
@@ -233,7 +287,7 @@
     "SubType": "Wait",
     "EventId": 23,
     "Id": "eccbc87e4b5ce2fe",
-    "EventTimestamp": "2025-11-30T08:50:34.273Z",
+    "EventTimestamp": "2025-11-30T22:35:21.928Z",
     "WaitSucceededDetails": {
       "Duration": 1
     }
@@ -244,7 +298,7 @@
     "EventId": 24,
     "Id": "a87ff679a2f3e71d",
     "Name": "check-after-replay",
-    "EventTimestamp": "2025-11-30T08:50:34.315Z",
+    "EventTimestamp": "2025-11-30T22:35:21.965Z",
     "StepStartedDetails": {}
   },
   {
@@ -253,7 +307,7 @@
     "EventId": 25,
     "Id": "a87ff679a2f3e71d",
     "Name": "check-after-replay",
-    "EventTimestamp": "2025-11-30T08:50:34.315Z",
+    "EventTimestamp": "2025-11-30T22:35:21.965Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"isStepError\":true,\"message\":\"Business validation failed\",\"causeName\":\"CustomBusinessError\",\"causeMessage\":\"Business validation failed\"}"
@@ -267,7 +321,7 @@
     "EventId": 26,
     "Id": "e4da3b7fbbce2345",
     "Name": "verify-determinism",
-    "EventTimestamp": "2025-11-30T08:50:34.336Z",
+    "EventTimestamp": "2025-11-30T22:35:21.986Z",
     "StepStartedDetails": {}
   },
   {
@@ -276,7 +330,7 @@
     "EventId": 27,
     "Id": "e4da3b7fbbce2345",
     "Name": "verify-determinism",
-    "EventTimestamp": "2025-11-30T08:50:34.336Z",
+    "EventTimestamp": "2025-11-30T22:35:21.986Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "true"
@@ -287,19 +341,19 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 28,
-    "EventTimestamp": "2025-11-30T08:50:34.336Z",
+    "EventTimestamp": "2025-11-30T22:35:21.986Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:34.295Z",
-      "EndTimestamp": "2025-11-30T08:50:34.336Z",
+      "StartTimestamp": "2025-11-30T22:35:21.945Z",
+      "EndTimestamp": "2025-11-30T22:35:21.986Z",
       "Error": {},
-      "RequestId": "dffc8035-1bde-4ed1-b4ec-086680b796e1"
+      "RequestId": "2e1d03ec-523e-495a-a9b4-d9a27e585626"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 29,
-    "Id": "69b7e0a9-ea4c-4eaf-92bb-87c69cd32429",
-    "EventTimestamp": "2025-11-30T08:50:34.336Z",
+    "Id": "d80f9068-2a67-45de-a4e1-b8b68433a8a2",
+    "EventTimestamp": "2025-11-30T22:35:21.987Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"isDeterministic\":true,\"errorPropsBeforeReplay\":{\"isStepError\":true,\"message\":\"Business validation failed\",\"causeName\":\"CustomBusinessError\",\"causeMessage\":\"Business validation failed\"},\"errorPropsAfterReplay\":{\"isStepError\":true,\"message\":\"Business validation failed\",\"causeName\":\"CustomBusinessError\",\"causeMessage\":\"Business validation failed\"}}"

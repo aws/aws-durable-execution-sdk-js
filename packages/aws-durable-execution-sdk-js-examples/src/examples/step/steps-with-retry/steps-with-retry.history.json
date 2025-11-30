@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "1e5cc361-365e-4f11-83a4-2f1170004f9d",
-    "EventTimestamp": "2025-11-30T08:50:46.231Z",
+    "Id": "48c6eb89-2fa1-46f7-a183-a0dbe11506b0",
+    "EventTimestamp": "2025-11-30T22:35:34.087Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -15,26 +15,36 @@
     "SubType": "Step",
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.254Z",
+    "EventTimestamp": "2025-11-30T22:35:34.127Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.254Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:34.127Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Random failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 4,
-    "EventTimestamp": "2025-11-30T08:50:46.254Z",
+    "EventTimestamp": "2025-11-30T22:35:34.127Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:46.231Z",
-      "EndTimestamp": "2025-11-30T08:50:46.254Z",
+      "StartTimestamp": "2025-11-30T22:35:34.087Z",
+      "EndTimestamp": "2025-11-30T22:35:34.127Z",
       "Error": {},
-      "RequestId": "cbc552a9-f3ec-4a7a-ba00-db7d296e5579"
+      "RequestId": "948ddf56-4443-41d5-bec5-8faa9424588a"
     }
   },
   {
@@ -42,26 +52,37 @@
     "SubType": "Step",
     "EventId": 5,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.295Z",
+    "EventTimestamp": "2025-11-30T22:35:34.168Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 6,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.295Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:34.168Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Random failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 7,
-    "EventTimestamp": "2025-11-30T08:50:46.295Z",
+    "EventTimestamp": "2025-11-30T22:35:34.169Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:46.275Z",
-      "EndTimestamp": "2025-11-30T08:50:46.295Z",
+      "StartTimestamp": "2025-11-30T22:35:34.148Z",
+      "EndTimestamp": "2025-11-30T22:35:34.169Z",
       "Error": {},
-      "RequestId": "113750d7-a872-44dd-9618-80ca1534284d"
+      "RequestId": "cec02378-2ebb-45d7-b903-bb46c105982a"
     }
   },
   {
@@ -69,26 +90,37 @@
     "SubType": "Step",
     "EventId": 8,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.337Z",
+    "EventTimestamp": "2025-11-30T22:35:34.209Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 9,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.337Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:34.209Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Cannot read properties of undefined (reading '0')",
+          "ErrorType": "TypeError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 2
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 10,
-    "EventTimestamp": "2025-11-30T08:50:46.337Z",
+    "EventTimestamp": "2025-11-30T22:35:34.210Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:46.316Z",
-      "EndTimestamp": "2025-11-30T08:50:46.337Z",
+      "StartTimestamp": "2025-11-30T22:35:34.189Z",
+      "EndTimestamp": "2025-11-30T22:35:34.210Z",
       "Error": {},
-      "RequestId": "9b907c3c-18d9-4ab1-9ea3-a8b0f3deef2d"
+      "RequestId": "c7f177d6-f2b1-4b44-8ed9-f8f585912136"
     }
   },
   {
@@ -96,26 +128,37 @@
     "SubType": "Step",
     "EventId": 11,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.377Z",
+    "EventTimestamp": "2025-11-30T22:35:34.251Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 12,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.377Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:34.251Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Random failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 3
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 13,
-    "EventTimestamp": "2025-11-30T08:50:46.377Z",
+    "EventTimestamp": "2025-11-30T22:35:34.251Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:46.356Z",
-      "EndTimestamp": "2025-11-30T08:50:46.377Z",
+      "StartTimestamp": "2025-11-30T22:35:34.230Z",
+      "EndTimestamp": "2025-11-30T22:35:34.251Z",
       "Error": {},
-      "RequestId": "ef44c44a-150b-41f2-bb6c-82756ba28e48"
+      "RequestId": "593aed2e-c21e-4229-bee4-cca3d09451f3"
     }
   },
   {
@@ -123,26 +166,37 @@
     "SubType": "Step",
     "EventId": 14,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.418Z",
+    "EventTimestamp": "2025-11-30T22:35:34.295Z",
     "StepStartedDetails": {}
   },
   {
-    "EventType": "StepStarted",
+    "EventType": "StepFailed",
     "SubType": "Step",
     "EventId": 15,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.418Z",
-    "StepStartedDetails": {}
+    "EventTimestamp": "2025-11-30T22:35:34.295Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Random failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 4
+      }
+    }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 16,
-    "EventTimestamp": "2025-11-30T08:50:46.418Z",
+    "EventTimestamp": "2025-11-30T22:35:34.296Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:46.397Z",
-      "EndTimestamp": "2025-11-30T08:50:46.418Z",
+      "StartTimestamp": "2025-11-30T22:35:34.275Z",
+      "EndTimestamp": "2025-11-30T22:35:34.296Z",
       "Error": {},
-      "RequestId": "cfd7b576-08bb-44bf-9420-f270d2949d5e"
+      "RequestId": "c3f2c563-ca65-4b72-9341-f62f0edead7a"
     }
   },
   {
@@ -150,7 +204,7 @@
     "SubType": "Step",
     "EventId": 17,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.460Z",
+    "EventTimestamp": "2025-11-30T22:35:34.336Z",
     "StepStartedDetails": {}
   },
   {
@@ -158,12 +212,12 @@
     "SubType": "Step",
     "EventId": 18,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2025-11-30T08:50:46.460Z",
+    "EventTimestamp": "2025-11-30T22:35:34.336Z",
     "StepFailedDetails": {
       "Error": {
         "Payload": {
-          "ErrorMessage": "Cannot read properties of undefined (reading '0')",
-          "ErrorType": "TypeError"
+          "ErrorMessage": "Random failure",
+          "ErrorType": "Error"
         }
       },
       "RetryDetails": {
@@ -174,29 +228,29 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 19,
-    "EventTimestamp": "2025-11-30T08:50:46.460Z",
+    "EventTimestamp": "2025-11-30T22:35:34.339Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:46.439Z",
-      "EndTimestamp": "2025-11-30T08:50:46.460Z",
+      "StartTimestamp": "2025-11-30T22:35:34.315Z",
+      "EndTimestamp": "2025-11-30T22:35:34.339Z",
       "Error": {
         "Payload": {
           "ErrorType": "StepError",
-          "ErrorMessage": "Cannot read properties of undefined (reading '0')"
+          "ErrorMessage": "Random failure"
         }
       },
-      "RequestId": "d2d91aa3-8050-409c-a3f3-d36a93fa8e58"
+      "RequestId": "4a56040b-5011-4751-b501-3dd4212ceb4d"
     }
   },
   {
     "EventType": "ExecutionFailed",
     "EventId": 20,
-    "Id": "1e5cc361-365e-4f11-83a4-2f1170004f9d",
-    "EventTimestamp": "2025-11-30T08:50:46.460Z",
+    "Id": "48c6eb89-2fa1-46f7-a183-a0dbe11506b0",
+    "EventTimestamp": "2025-11-30T22:35:34.340Z",
     "ExecutionFailedDetails": {
       "Error": {
         "Payload": {
           "ErrorType": "StepError",
-          "ErrorMessage": "Cannot read properties of undefined (reading '0')"
+          "ErrorMessage": "Random failure"
         }
       }
     }

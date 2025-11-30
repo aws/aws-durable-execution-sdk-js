@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "6dc03c51-0afb-4796-9b4d-6bd2eca65fd9",
-    "EventTimestamp": "2025-11-30T08:50:42.559Z",
+    "Id": "c5743a2d-f271-4337-a214-e1e277177831",
+    "EventTimestamp": "2025-11-30T22:35:30.391Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "failure-step",
-    "EventTimestamp": "2025-11-30T08:50:42.601Z",
+    "EventTimestamp": "2025-11-30T22:35:30.412Z",
     "StepStartedDetails": {}
   },
   {
@@ -25,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "failure-step",
-    "EventTimestamp": "2025-11-30T08:50:42.601Z",
+    "EventTimestamp": "2025-11-30T22:35:30.412Z",
     "StepFailedDetails": {
       "Error": {
         "Payload": {
@@ -41,7 +41,7 @@
     "SubType": "Step",
     "EventId": 4,
     "Id": "c81e728d9d4c2f63",
-    "EventTimestamp": "2025-11-30T08:50:42.601Z",
+    "EventTimestamp": "2025-11-30T22:35:30.412Z",
     "StepStartedDetails": {}
   },
   {
@@ -49,7 +49,7 @@
     "SubType": "Step",
     "EventId": 5,
     "Id": "c81e728d9d4c2f63",
-    "EventTimestamp": "2025-11-30T08:50:42.622Z",
+    "EventTimestamp": "2025-11-30T22:35:30.433Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "[{\"status\":\"rejected\",\"reason\":{\"message\":\"This step failed\",\"name\":\"StepError\",\"stack\":\"StepError: This step failed\\n    at DurableOperationError.fromErrorObject (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/errors/durable-error/durable-error.ts:66:16)\\n    at executeStep (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:520:35)\\n    at async <anonymous> (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:269:26)\"}}]"
@@ -62,21 +62,21 @@
     "SubType": "Wait",
     "EventId": 6,
     "Id": "eccbc87e4b5ce2fe",
-    "EventTimestamp": "2025-11-30T08:50:42.643Z",
+    "EventTimestamp": "2025-11-30T22:35:30.454Z",
     "WaitStartedDetails": {
       "Duration": 1,
-      "ScheduledEndTimestamp": "2025-11-30T08:50:43.643Z"
+      "ScheduledEndTimestamp": "2025-11-30T22:35:31.454Z"
     }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 7,
-    "EventTimestamp": "2025-11-30T08:50:42.643Z",
+    "EventTimestamp": "2025-11-30T22:35:30.454Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:42.559Z",
-      "EndTimestamp": "2025-11-30T08:50:42.643Z",
+      "StartTimestamp": "2025-11-30T22:35:30.390Z",
+      "EndTimestamp": "2025-11-30T22:35:30.454Z",
       "Error": {},
-      "RequestId": "fc99e728-fa36-4050-9d0f-8aacf34f2b80"
+      "RequestId": "2dfe7365-d150-4209-8c6b-3da7f950a674"
     }
   },
   {
@@ -84,7 +84,7 @@
     "SubType": "Wait",
     "EventId": 8,
     "Id": "eccbc87e4b5ce2fe",
-    "EventTimestamp": "2025-11-30T08:50:42.643Z",
+    "EventTimestamp": "2025-11-30T22:35:30.454Z",
     "WaitSucceededDetails": {
       "Duration": 1
     }
@@ -94,7 +94,7 @@
     "SubType": "Step",
     "EventId": 9,
     "Id": "a87ff679a2f3e71d",
-    "EventTimestamp": "2025-11-30T08:50:42.685Z",
+    "EventTimestamp": "2025-11-30T22:35:30.496Z",
     "StepStartedDetails": {}
   },
   {
@@ -102,7 +102,7 @@
     "SubType": "Step",
     "EventId": 10,
     "Id": "a87ff679a2f3e71d",
-    "EventTimestamp": "2025-11-30T08:50:43.204Z",
+    "EventTimestamp": "2025-11-30T22:35:31.027Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"Success\""
@@ -113,19 +113,19 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 11,
-    "EventTimestamp": "2025-11-30T08:50:43.207Z",
+    "EventTimestamp": "2025-11-30T22:35:31.028Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T08:50:42.664Z",
-      "EndTimestamp": "2025-11-30T08:50:43.206Z",
+      "StartTimestamp": "2025-11-30T22:35:30.475Z",
+      "EndTimestamp": "2025-11-30T22:35:31.028Z",
       "Error": {},
-      "RequestId": "95ef402f-859b-4871-b239-21c83b98f8b9"
+      "RequestId": "e3324d07-891d-458a-82aa-ab05137c17ce"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 12,
-    "Id": "6dc03c51-0afb-4796-9b4d-6bd2eca65fd9",
-    "EventTimestamp": "2025-11-30T08:50:43.209Z",
+    "Id": "c5743a2d-f271-4337-a214-e1e277177831",
+    "EventTimestamp": "2025-11-30T22:35:31.028Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"successStep\":\"Success\"}"
