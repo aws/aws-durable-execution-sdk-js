@@ -10,3 +10,5 @@ export * from "./batch";
 export * from "./durable-context";
 export * from "./durable-promise";
 export * from "./durable-execution";
+export * from "./operation-lifecycle-state";
+export * from "./operation-lifecycle";
