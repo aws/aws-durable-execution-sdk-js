@@ -902,7 +902,8 @@ describe("DurableContext", () => {
         "../../handlers/step-handler/step-handler",
       );
 
-      let capturedGetOperationsEmitter: (() => any) | undefined;
+      // New step handler uses centralized termination, no getOperationsEmitter parameter
+      // Verify it was called with the new signature (8 params instead of 10)
       createStepHandler.mockImplementation(
         (
           _ctx: any,
@@ -912,20 +913,16 @@ describe("DurableContext", () => {
           _createLogger: any,
           _addOp: any,
           _removeOp: any,
-          _hasOp: any,
-          getOperationsEmitter: () => any,
+          _parentId: any,
         ): (() => Promise<string>) => {
-          capturedGetOperationsEmitter = getOperationsEmitter;
           return async () => "result";
         },
       );
 
       await context.step("test", async () => "value");
 
-      expect(capturedGetOperationsEmitter).toBeDefined();
-      const emitter = capturedGetOperationsEmitter!();
-      expect(emitter).toBeDefined();
-      expect(typeof emitter.emit).toBe("function");
+      // Verify the new signature has 8 parameters
+      expect(createStepHandler.mock.calls[0].length).toBe(8);
     });
   });
 

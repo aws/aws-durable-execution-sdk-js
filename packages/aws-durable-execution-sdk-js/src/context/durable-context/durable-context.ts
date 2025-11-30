@@ -298,8 +298,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.durableLogger,
         this.addRunningOperation.bind(this),
         this.removeRunningOperation.bind(this),
-        this.hasRunningOperations.bind(this),
-        this.getOperationsEmitter.bind(this),
         this._parentId,
       );
 
