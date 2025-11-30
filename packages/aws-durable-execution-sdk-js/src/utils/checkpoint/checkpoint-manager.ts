@@ -457,4 +457,36 @@ export class CheckpointManager implements Checkpoint {
       isProcessing: this.isProcessing,
     };
   }
+
+  // ===== New Lifecycle & Termination Methods (Stubs for now) =====
+
+  markOperationState(): void {
+    // TODO: Implement in Phase 2
+    throw new Error("Not implemented yet");
+  }
+
+  waitForRetryTimer(): Promise<void> {
+    // TODO: Implement in Phase 2
+    throw new Error("Not implemented yet");
+  }
+
+  waitForStatusChange(): Promise<void> {
+    // TODO: Implement in Phase 2
+    throw new Error("Not implemented yet");
+  }
+
+  markOperationAwaited(): void {
+    // TODO: Implement in Phase 2
+    throw new Error("Not implemented yet");
+  }
+
+  getOperationState(): undefined {
+    // TODO: Implement in Phase 2
+    return undefined;
+  }
+
+  getAllOperations(): Map<string, any> {
+    // TODO: Implement in Phase 2
+    return new Map();
+  }
 }
