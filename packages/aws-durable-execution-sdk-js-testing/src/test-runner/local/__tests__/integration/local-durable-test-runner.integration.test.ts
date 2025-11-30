@@ -89,9 +89,10 @@ describe("LocalDurableTestRunner Integration", () => {
     // Verify that operations were tracked
     const operations = result.getOperations();
 
-    // Verify the invocations were tracked - should be exactly 3 invocations
+    // Verify the invocations were tracked - should be exactly 2 invocations
+    // With ancestor completion check, operations are cleaned up more efficiently
     const invocations = result.getInvocations();
-    expect(invocations).toHaveLength(3);
+    expect(invocations).toHaveLength(2);
 
     // We should have 3 operations in total
     expect(operations).toHaveLength(3);
@@ -124,11 +125,6 @@ describe("LocalDurableTestRunner Integration", () => {
       endTimestamp: expect.any(Date),
       requestId: expect.any(String),
     });
-    expect(invocations[2]).toEqual({
-      startTimestamp: expect.any(Date),
-      endTimestamp: expect.any(Date),
-      requestId: expect.any(String),
-    });
 
     // Assert history events
     expect(result.getHistoryEvents()).toEqual([
@@ -156,8 +152,17 @@ describe("LocalDurableTestRunner Integration", () => {
         },
       },
       {
-        EventType: "InvocationCompleted",
+        EventType: "WaitSucceeded",
+        SubType: "Wait",
         EventId: 3,
+        Id: "c4ca4238a0b92382",
+        Name: "wait-invocation-1",
+        EventTimestamp: expect.any(Date),
+        WaitSucceededDetails: { Duration: 1 },
+      },
+      {
+        EventType: "InvocationCompleted",
+        EventId: 4,
         EventTimestamp: expect.any(Date),
         InvocationCompletedDetails: {
           StartTimestamp: expect.any(Date),
@@ -165,15 +170,6 @@ describe("LocalDurableTestRunner Integration", () => {
           Error: {},
           RequestId: expect.any(String),
         },
-      },
-      {
-        EventType: "WaitSucceeded",
-        SubType: "Wait",
-        EventId: 4,
-        Id: "c4ca4238a0b92382",
-        Name: "wait-invocation-1",
-        EventTimestamp: expect.any(Date),
-        WaitSucceededDetails: { Duration: 1 },
       },
       {
         EventType: "StepStarted",
@@ -211,20 +207,9 @@ describe("LocalDurableTestRunner Integration", () => {
         },
       },
       {
-        EventId: 8,
-        EventTimestamp: expect.any(Date),
-        EventType: "InvocationCompleted",
-        InvocationCompletedDetails: {
-          EndTimestamp: expect.any(Date),
-          Error: {},
-          RequestId: expect.any(String),
-          StartTimestamp: expect.any(Date),
-        },
-      },
-      {
         EventType: "WaitSucceeded",
         SubType: "Wait",
-        EventId: 9,
+        EventId: 8,
         Id: "eccbc87e4b5ce2fe",
         Name: "wait-invocation-2",
         EventTimestamp: expect.any(Date),
@@ -232,7 +217,7 @@ describe("LocalDurableTestRunner Integration", () => {
       },
       {
         EventType: "InvocationCompleted",
-        EventId: 10,
+        EventId: 9,
         EventTimestamp: expect.any(Date),
         InvocationCompletedDetails: {
           StartTimestamp: expect.any(Date),
@@ -243,7 +228,7 @@ describe("LocalDurableTestRunner Integration", () => {
       },
       {
         EventType: "ExecutionSucceeded",
-        EventId: 11,
+        EventId: 10,
         Id: expect.any(String),
         EventTimestamp: expect.any(Date),
         ExecutionSucceededDetails: {
