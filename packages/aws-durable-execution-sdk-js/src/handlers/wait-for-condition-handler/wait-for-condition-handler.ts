@@ -35,8 +35,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   checkpoint: Checkpoint,
   createStepId: () => string,
   logger: Logger,
-  addRunningOperation: (stepId: string) => void,
-  removeRunningOperation: (stepId: string) => void,
   parentId: string | undefined,
 ) => {
   return <T>(
@@ -209,19 +207,13 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
 
-          addRunningOperation(stepId);
-          let newState: T;
-          try {
-            newState = await runWithContext(
-              stepId,
-              parentId,
-              () => check(currentState, waitForConditionContext),
-              currentAttempt + 1,
-              DurableExecutionMode.ExecutionMode,
-            );
-          } finally {
-            removeRunningOperation(stepId);
-          }
+          const newState: T = await runWithContext(
+            stepId,
+            parentId,
+            () => check(currentState, waitForConditionContext),
+            currentAttempt + 1,
+            DurableExecutionMode.ExecutionMode,
+          );
 
           const serializedState = await safeSerialize(
             serdes,

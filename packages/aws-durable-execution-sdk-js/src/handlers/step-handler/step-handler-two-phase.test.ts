@@ -25,8 +25,6 @@ describe("Step Handler Two-Phase Execution", () => {
   let mockCheckpoint: Checkpoint;
   let mockParentContext: Context;
   let createStepId: () => string;
-  let addRunningOperation: jest.Mock;
-  let removeRunningOperation: jest.Mock;
   let stepIdCounter = 0;
 
   beforeEach(() => {
@@ -52,8 +50,6 @@ describe("Step Handler Two-Phase Execution", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-    addRunningOperation = jest.fn();
-    removeRunningOperation = jest.fn();
 
     mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
     mockSafeDeserialize.mockResolvedValue("deserialized-result");
@@ -66,8 +62,6 @@ describe("Step Handler Two-Phase Execution", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("result");
@@ -98,8 +92,6 @@ describe("Step Handler Two-Phase Execution", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("test-result");
@@ -125,8 +117,6 @@ describe("Step Handler Two-Phase Execution", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("result");
@@ -156,8 +146,6 @@ describe("Step Handler Two-Phase Execution", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("named-result");
@@ -179,8 +167,6 @@ describe("Step Handler Two-Phase Execution", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("result");
@@ -189,10 +175,6 @@ describe("Step Handler Two-Phase Execution", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(addRunningOperation).toHaveBeenCalledWith("step-1");
-
     await stepPromise;
-
-    expect(removeRunningOperation).toHaveBeenCalledWith("step-1");
   });
 });

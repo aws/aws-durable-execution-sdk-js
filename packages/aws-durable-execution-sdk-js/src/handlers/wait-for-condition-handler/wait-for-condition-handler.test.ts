@@ -31,8 +31,6 @@ describe("WaitForCondition Handler", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
   let createStepId: jest.Mock;
-  let addRunningOperation: jest.Mock;
-  let removeRunningOperation: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -54,8 +52,6 @@ describe("WaitForCondition Handler", () => {
     } as any;
 
     createStepId = jest.fn().mockReturnValue("step-1");
-    addRunningOperation = jest.fn();
-    removeRunningOperation = jest.fn();
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
       JSON.stringify(value),
@@ -72,8 +68,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         "parent-123",
       );
 
@@ -104,8 +98,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         undefined,
       );
 
@@ -136,8 +128,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         undefined,
       );
 
@@ -177,8 +167,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         undefined,
       );
 
@@ -225,8 +213,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         undefined,
       );
 
@@ -248,8 +234,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         undefined,
       );
 
@@ -274,8 +258,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         undefined,
       );
 
@@ -317,8 +299,6 @@ describe("WaitForCondition Handler", () => {
         mockCheckpoint,
         createStepId,
         createDefaultLogger(),
-        addRunningOperation,
-        removeRunningOperation,
         undefined,
       );
 
@@ -331,9 +311,6 @@ describe("WaitForCondition Handler", () => {
       };
 
       await handler(checkFunc, config);
-
-      expect(addRunningOperation).toHaveBeenCalledWith("step-1");
-      expect(removeRunningOperation).toHaveBeenCalledWith("step-1");
     });
   });
 });

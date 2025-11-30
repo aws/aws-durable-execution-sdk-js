@@ -30,8 +30,6 @@ describe("Step Handler Timing Tests", () => {
   let mockCheckpoint: Checkpoint;
   let mockParentContext: Context;
   let createStepId: () => string;
-  let addRunningOperation: jest.Mock;
-  let removeRunningOperation: jest.Mock;
   let stepIdCounter = 0;
 
   beforeEach(() => {
@@ -59,8 +57,6 @@ describe("Step Handler Timing Tests", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-    addRunningOperation = jest.fn();
-    removeRunningOperation = jest.fn();
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
       JSON.stringify(value),
@@ -98,8 +94,6 @@ describe("Step Handler Timing Tests", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("retry-result");
@@ -143,8 +137,6 @@ describe("Step Handler Timing Tests", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("executed-result");
@@ -181,8 +173,6 @@ describe("Step Handler Timing Tests", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("executed-after-retry");
