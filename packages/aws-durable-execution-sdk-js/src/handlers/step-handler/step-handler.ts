@@ -133,7 +133,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
       if (stepData?.Status === OperationStatus.PENDING) {
         checkpoint.markOperationState(
           stepId,
-          OperationLifecycleState.IDLE_NOT_AWAITED,
+          OperationLifecycleState.RETRY_WAITING,
           {
             metadata: {
               stepId,
@@ -199,7 +199,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
         checkpoint.markOperationState(
           stepId,
-          OperationLifecycleState.IDLE_NOT_AWAITED,
+          OperationLifecycleState.RETRY_WAITING,
           {
             metadata: {
               stepId,
@@ -250,6 +250,21 @@ export const createStepHandler = <Logger extends DurableLogger>(
           stepData = context.getStepData(stepId);
           const currentAttempt = stepData?.StepDetails?.Attempt || 0;
           const stepContext: StepContext<Logger> = { logger };
+
+          // Mark operation as EXECUTING
+          checkpoint.markOperationState(
+            stepId,
+            OperationLifecycleState.EXECUTING,
+            {
+              metadata: {
+                stepId,
+                name,
+                type: OperationType.STEP,
+                subType: OperationSubType.STEP,
+                parentId,
+              },
+            },
+          );
 
           addRunningOperation(stepId);
           let result: T;
@@ -354,7 +369,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
           checkpoint.markOperationState(
             stepId,
-            OperationLifecycleState.IDLE_NOT_AWAITED,
+            OperationLifecycleState.RETRY_WAITING,
             {
               metadata: {
                 stepId,
