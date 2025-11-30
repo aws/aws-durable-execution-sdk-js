@@ -763,9 +763,10 @@ export class CheckpointManager implements Checkpoint {
       delay = 1000;
     }
 
-    // Initialize poll count for this operation
+    // Initialize poll count and start time for this operation
     if (!op.pollCount) {
       op.pollCount = 0;
+      op.pollStartTime = Date.now();
     }
 
     op.timer = setTimeout(() => {
@@ -776,6 +777,25 @@ export class CheckpointManager implements Checkpoint {
   private async forceRefreshAndCheckStatus(stepId: string): Promise<void> {
     const op = this.operations.get(stepId);
     if (!op) return;
+
+    // Check if we've exceeded max polling duration (15 minutes)
+    const MAX_POLL_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+    if (
+      op.pollStartTime &&
+      Date.now() - op.pollStartTime > MAX_POLL_DURATION_MS
+    ) {
+      log(
+        "⏱️",
+        `Max polling duration (15 min) exceeded for ${stepId}, stopping poll`,
+      );
+      op.resolver?.();
+      op.resolver = undefined;
+      if (op.timer) {
+        clearTimeout(op.timer);
+        op.timer = undefined;
+      }
+      return;
+    }
 
     // Get old status before refresh
     const oldStatus = this.stepData[hashId(stepId)]?.Status;
