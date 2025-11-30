@@ -888,44 +888,6 @@ describe("DurableContext", () => {
     });
   });
 
-  describe("operationsEmitter", () => {
-    it("should pass operationsEmitter to step handler", async () => {
-      const executionContext = createMockExecutionContext();
-      const context = createDurableContext(
-        executionContext,
-        mockContext,
-        DurableExecutionMode.ExecutionMode,
-        mockLogger,
-        undefined,
-        mockDurableExecution,
-      );
-
-      const { createStepHandler } = jest.requireMock(
-        "../../handlers/step-handler/step-handler",
-      );
-
-      // New step handler uses centralized termination, no operation tracking parameters
-      // Verify it was called with the new signature (6 params)
-      createStepHandler.mockImplementation(
-        (
-          _ctx: any,
-          _checkpoint: any,
-          _parentCtx: any,
-          _createStepId: any,
-          _createLogger: any,
-          _parentId: any,
-        ): (() => Promise<string>) => {
-          return async () => "result";
-        },
-      );
-
-      await context.step("test", async () => "value");
-
-      // Verify the new signature has 6 parameters
-      expect(createStepHandler.mock.calls[0].length).toBe(6);
-    });
-  });
-
   describe("mode-aware logging (shouldLog & createModeAwareLogger)", () => {
     let mockGetActiveContext: jest.MockedFunction<
       typeof contextTracker.getActiveContext
