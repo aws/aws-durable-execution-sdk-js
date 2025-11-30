@@ -1,11 +1,10 @@
 import { createWaitHandler } from "./wait-handler";
-import { createWaitHandlerV2 } from "./wait-handler-v2";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { EventEmitter } from "events";
 
-describe("Wait Handler V1 vs V2 Comparison", () => {
+describe("Wait Handler Tests", () => {
   let context: ExecutionContext;
   let checkpoint: Checkpoint;
   let stepCounter: number;
@@ -37,8 +36,8 @@ describe("Wait Handler V1 vs V2 Comparison", () => {
   const createStepId = () => `${++stepCounter}`;
 
   describe("Basic wait operation", () => {
-    it("V2: should mark operation states correctly", async () => {
-      const waitHandler = createWaitHandlerV2(
+    it("should mark operation states correctly", async () => {
+      const waitHandler = createWaitHandler(
         context,
         checkpoint,
         createStepId,
@@ -86,14 +85,14 @@ describe("Wait Handler V1 vs V2 Comparison", () => {
       );
     });
 
-    it("V2: should handle already completed wait", async () => {
+    it("should handle already completed wait", async () => {
       // Set up already completed wait
       context._stepData["1"] = {
         Id: "1",
         Status: OperationStatus.SUCCEEDED,
       } as any;
 
-      const waitHandler = createWaitHandlerV2(
+      const waitHandler = createWaitHandler(
         context,
         checkpoint,
         createStepId,
@@ -117,8 +116,8 @@ describe("Wait Handler V1 vs V2 Comparison", () => {
   });
 
   describe("Checkpoint calls", () => {
-    it("V2: should checkpoint START action for new wait", async () => {
-      const waitHandler = createWaitHandlerV2(
+    it("should checkpoint START action for new wait", async () => {
+      const waitHandler = createWaitHandler(
         context,
         checkpoint,
         createStepId,

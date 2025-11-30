@@ -14,7 +14,7 @@ jest.mock("../../handlers/invoke-handler/invoke-handler");
 jest.mock(
   "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
 );
-jest.mock("../../handlers/wait-handler/wait-handler-v2");
+jest.mock("../../handlers/wait-handler/wait-handler");
 jest.mock("../../handlers/callback-handler/callback");
 jest.mock("../../handlers/wait-for-callback-handler/wait-for-callback-handler");
 jest.mock(
@@ -36,6 +36,12 @@ describe("DurableContext", () => {
       force: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
       hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
+      markOperationState: jest.fn(),
+      markOperationAwaited: jest.fn(),
+      waitForStatusChange: jest.fn().mockResolvedValue(undefined),
+      waitForRetryTimer: jest.fn().mockResolvedValue(undefined),
+      getOperationState: jest.fn(),
+      getAllOperations: jest.fn().mockReturnValue([]),
     },
   } as any;
 
@@ -52,8 +58,8 @@ describe("DurableContext", () => {
     const { createRunInChildContextHandler } = jest.requireMock(
       "../../handlers/run-in-child-context-handler/run-in-child-context-handler",
     );
-    const { createWaitHandlerV2 } = jest.requireMock(
-      "../../handlers/wait-handler/wait-handler-v2",
+    const { createWaitHandler } = jest.requireMock(
+      "../../handlers/wait-handler/wait-handler",
     );
     const { createCallback } = jest.requireMock(
       "../../handlers/callback-handler/callback",
@@ -77,7 +83,7 @@ describe("DurableContext", () => {
     createStepHandler.mockReturnValue(jest.fn().mockResolvedValue(undefined));
     createInvokeHandler.mockReturnValue(jest.fn());
     createRunInChildContextHandler.mockReturnValue(jest.fn());
-    createWaitHandlerV2.mockReturnValue(
+    createWaitHandler.mockReturnValue(
       () => new DurablePromise(() => Promise.resolve()),
     );
     createCallback.mockReturnValue(jest.fn());
@@ -345,10 +351,10 @@ describe("DurableContext", () => {
 
       await context.wait({ seconds: 5 });
 
-      const { createWaitHandlerV2 } = jest.requireMock(
-        "../../handlers/wait-handler/wait-handler-v2",
+      const { createWaitHandler } = jest.requireMock(
+        "../../handlers/wait-handler/wait-handler",
       );
-      expect(createWaitHandlerV2).toHaveBeenCalled();
+      expect(createWaitHandler).toHaveBeenCalled();
     });
 
     it("should call wait handler with name", async () => {
@@ -362,13 +368,13 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      const { createWaitHandlerV2 } = jest.requireMock(
-        "../../handlers/wait-handler/wait-handler-v2",
+      const { createWaitHandler } = jest.requireMock(
+        "../../handlers/wait-handler/wait-handler",
       );
       const mockHandler = jest.fn(
         () => new DurablePromise(() => Promise.resolve()),
       );
-      createWaitHandlerV2.mockReturnValue(mockHandler);
+      createWaitHandler.mockReturnValue(mockHandler);
 
       await context.wait("wait-name", { seconds: 5 });
 
@@ -498,9 +504,10 @@ describe("DurableContext", () => {
       );
 
       await context.invoke("func", {});
-      const hasRunningOperationsFn = createInvokeHandler.mock.calls[0][3];
 
-      expect(hasRunningOperationsFn()).toBe(false);
+      // New invoke handler uses centralized termination, no hasRunningOperations parameter
+      // Verify it was called with the new signature (context, checkpoint, createStepId, parentId, checkAndUpdateReplayMode)
+      expect(createInvokeHandler.mock.calls[0].length).toBe(5);
     });
 
     it("should call map handler", async () => {
