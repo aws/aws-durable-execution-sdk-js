@@ -59,6 +59,7 @@ function createEventSignature(event: EventSignature) {
   if (
     event.EventType !== "ExecutionStarted" &&
     event.EventType !== "ExecutionSucceeded" &&
+    event.EventType !== "ExecutionFailed" &&
     event.Name
   ) {
     signature.Name = event.Name;
