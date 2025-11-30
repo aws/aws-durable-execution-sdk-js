@@ -17,6 +17,11 @@ import {
 } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
+import {
+  OperationLifecycleState,
+  OperationInfo,
+  OperationMetadata,
+} from "../../types";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -45,6 +50,9 @@ export class CheckpointManager implements Checkpoint {
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
   private static textEncoder = new TextEncoder();
+
+  // Operation lifecycle tracking
+  private operations = new Map<string, OperationInfo>();
 
   constructor(
     private durableExecutionArn: string,
@@ -458,35 +466,269 @@ export class CheckpointManager implements Checkpoint {
     };
   }
 
-  // ===== New Lifecycle & Termination Methods (Stubs for now) =====
+  // ===== New Lifecycle & Termination Methods =====
 
-  markOperationState(): void {
-    // TODO: Implement in Phase 2
-    throw new Error("Not implemented yet");
+  markOperationState(
+    stepId: string,
+    state: OperationLifecycleState,
+    options?: {
+      metadata?: OperationMetadata;
+      endTimestamp?: Date;
+    },
+  ): void {
+    let op = this.operations.get(stepId);
+
+    if (!op) {
+      // First call - create operation
+      if (!options?.metadata) {
+        throw new Error(`metadata required on first call for ${stepId}`);
+      }
+      op = {
+        stepId,
+        state,
+        metadata: options.metadata,
+        endTimestamp: options.endTimestamp,
+      };
+      this.operations.set(stepId, op);
+    } else {
+      // Update existing operation
+      op.state = state;
+      if (options?.endTimestamp !== undefined) {
+        op.endTimestamp = options.endTimestamp;
+      }
+    }
+
+    // Cleanup if transitioning to COMPLETED
+    if (state === OperationLifecycleState.COMPLETED) {
+      this.cleanupOperation(stepId);
+    }
+
+    // Check if we should terminate
+    this.checkAndTerminate();
   }
 
-  waitForRetryTimer(): Promise<void> {
-    // TODO: Implement in Phase 2
-    throw new Error("Not implemented yet");
+  waitForRetryTimer(stepId: string): Promise<void> {
+    const op = this.operations.get(stepId);
+    if (!op) {
+      throw new Error(`Operation ${stepId} not found`);
+    }
+
+    if (op.state !== OperationLifecycleState.RETRY_WAITING) {
+      throw new Error(
+        `Operation ${stepId} must be in RETRY_WAITING state, got ${op.state}`,
+      );
+    }
+
+    // Start timer with polling
+    this.startTimerWithPolling(stepId, op.endTimestamp);
+
+    // Return promise that resolves when status changes
+    return new Promise((resolve) => {
+      op.resolver = resolve;
+    });
   }
 
-  waitForStatusChange(): Promise<void> {
-    // TODO: Implement in Phase 2
-    throw new Error("Not implemented yet");
+  waitForStatusChange(stepId: string): Promise<void> {
+    const op = this.operations.get(stepId);
+    if (!op) {
+      throw new Error(`Operation ${stepId} not found`);
+    }
+
+    if (op.state !== OperationLifecycleState.IDLE_AWAITED) {
+      throw new Error(
+        `Operation ${stepId} must be in IDLE_AWAITED state, got ${op.state}`,
+      );
+    }
+
+    // Start timer with polling
+    this.startTimerWithPolling(stepId, op.endTimestamp);
+
+    // Return promise that resolves when status changes
+    return new Promise((resolve) => {
+      op.resolver = resolve;
+    });
   }
 
-  markOperationAwaited(): void {
-    // TODO: Implement in Phase 2
-    throw new Error("Not implemented yet");
+  markOperationAwaited(stepId: string): void {
+    const op = this.operations.get(stepId);
+    if (!op) {
+      log("⚠️", `Cannot mark operation as awaited: ${stepId} not found`);
+      return;
+    }
+
+    // Transition IDLE_NOT_AWAITED → IDLE_AWAITED
+    if (op.state === OperationLifecycleState.IDLE_NOT_AWAITED) {
+      op.state = OperationLifecycleState.IDLE_AWAITED;
+      log("📍", `Operation marked as awaited: ${stepId}`);
+    }
   }
 
-  getOperationState(): undefined {
-    // TODO: Implement in Phase 2
-    return undefined;
+  getOperationState(stepId: string): OperationLifecycleState | undefined {
+    return this.operations.get(stepId)?.state;
   }
 
-  getAllOperations(): Map<string, any> {
-    // TODO: Implement in Phase 2
-    return new Map();
+  getAllOperations(): Map<string, OperationInfo> {
+    return new Map(this.operations);
+  }
+
+  // ===== Private Helper Methods =====
+
+  private cleanupOperation(stepId: string): void {
+    const op = this.operations.get(stepId);
+    if (!op) return;
+
+    // Clear timer
+    if (op.timer) {
+      clearTimeout(op.timer);
+      op.timer = undefined;
+    }
+
+    // Clear resolver
+    op.resolver = undefined;
+  }
+
+  private cleanupAllOperations(): void {
+    for (const op of this.operations.values()) {
+      if (op.timer) {
+        clearTimeout(op.timer);
+        op.timer = undefined;
+      }
+      op.resolver = undefined;
+    }
+  }
+
+  private checkAndTerminate(): void {
+    // Rule 1: Can't terminate if checkpoint queue is not empty
+    if (this.queue.length > 0) {
+      return;
+    }
+
+    // Rule 2: Can't terminate if checkpoint is currently processing
+    if (this.isProcessing) {
+      return;
+    }
+
+    // Rule 3: Can't terminate if there are pending force checkpoint promises
+    if (this.forceCheckpointPromises.length > 0) {
+      return;
+    }
+
+    const allOps = Array.from(this.operations.values());
+
+    // Rule 4: Can't terminate if any operation is EXECUTING
+    const hasExecuting = allOps.some(
+      (op) => op.state === OperationLifecycleState.EXECUTING,
+    );
+
+    if (hasExecuting) {
+      return;
+    }
+
+    // Determine if we should terminate
+    const hasWaiting = allOps.some(
+      (op) =>
+        op.state === OperationLifecycleState.RETRY_WAITING ||
+        op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
+        op.state === OperationLifecycleState.IDLE_AWAITED,
+    );
+
+    if (hasWaiting) {
+      const reason = this.determineTerminationReason(allOps);
+      this.terminate(reason);
+    }
+  }
+
+  private determineTerminationReason(ops: OperationInfo[]): TerminationReason {
+    // Priority: RETRY_SCHEDULED > WAIT_SCHEDULED > CALLBACK_PENDING
+
+    if (
+      ops.some(
+        (op) =>
+          op.state === OperationLifecycleState.RETRY_WAITING &&
+          op.metadata.subType === "Step",
+      )
+    ) {
+      return TerminationReason.RETRY_SCHEDULED;
+    }
+
+    if (
+      ops.some(
+        (op) =>
+          (op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
+            op.state === OperationLifecycleState.IDLE_AWAITED) &&
+          op.metadata.subType === "Wait",
+      )
+    ) {
+      return TerminationReason.WAIT_SCHEDULED;
+    }
+
+    return TerminationReason.CALLBACK_PENDING;
+  }
+
+  private terminate(reason: TerminationReason): void {
+    log("🛑", "Terminating execution", { reason });
+
+    // Cleanup all operations before terminating
+    this.cleanupAllOperations();
+
+    // Call termination manager
+    this.terminationManager.terminate({ reason });
+  }
+
+  private startTimerWithPolling(stepId: string, endTimestamp?: Date): void {
+    const op = this.operations.get(stepId);
+    if (!op) return;
+
+    let delay: number;
+
+    if (endTimestamp) {
+      // Wait until endTimestamp
+      delay = Math.max(0, endTimestamp.getTime() - Date.now());
+    } else {
+      // No timestamp, start polling immediately (1 second delay)
+      delay = 1000;
+    }
+
+    op.timer = setTimeout(() => {
+      this.forceRefreshAndCheckStatus(stepId);
+    }, delay);
+  }
+
+  private async forceRefreshAndCheckStatus(stepId: string): Promise<void> {
+    const op = this.operations.get(stepId);
+    if (!op) return;
+
+    // Get old status before refresh
+    const oldStatus = this.stepData[hashId(stepId)]?.Status;
+
+    try {
+      // Force checkpoint to refresh state from backend
+      await this.forceCheckpoint();
+    } catch (error) {
+      log("❌", "Force checkpoint failed during polling:", error);
+      // Continue polling even if force checkpoint fails
+    }
+
+    // Get new status after refresh
+    const newStatus = this.stepData[hashId(stepId)]?.Status;
+
+    // Check if status changed
+    if (newStatus !== oldStatus) {
+      // Status changed, resolve the waiting promise
+      log("✅", `Status changed for ${stepId}: ${oldStatus} → ${newStatus}`);
+      op.resolver?.();
+      op.resolver = undefined;
+
+      // Clear timer
+      if (op.timer) {
+        clearTimeout(op.timer);
+        op.timer = undefined;
+      }
+    } else {
+      // Status not changed yet, poll again in 5 seconds
+      op.timer = setTimeout(() => {
+        this.forceRefreshAndCheckStatus(stepId);
+      }, 5000);
+    }
   }
 }
