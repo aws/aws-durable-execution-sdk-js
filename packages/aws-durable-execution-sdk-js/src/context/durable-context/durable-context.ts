@@ -444,8 +444,6 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
-        this.hasRunningOperations.bind(this),
-        this.getOperationsEmitter.bind(this),
         this.checkAndUpdateReplayMode.bind(this),
         this._parentId,
       );

@@ -4,6 +4,7 @@ import {
   CreateCallbackResult,
   OperationSubType,
   DurablePromise,
+  OperationLifecycleState,
 } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
@@ -11,7 +12,6 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/durable-error/durable-error";
-import { EventEmitter } from "events";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
@@ -25,8 +25,6 @@ export const createCallback = (
   context: ExecutionContext,
   checkpoint: Checkpoint,
   createStepId: () => string,
-  hasRunningOperations: () => boolean,
-  getOperationsEmitter: () => EventEmitter,
   checkAndUpdateReplayMode: () => void,
   parentId?: string,
 ) => {
@@ -47,120 +45,150 @@ export const createCallback = (
     const stepId = createStepId();
     const serdes = config?.serdes || createPassThroughSerdes<T>();
 
-    // Validate replay consistency first
-    const stepData = context.getStepData(stepId);
-    validateReplayConsistency(
-      stepId,
-      {
-        type: OperationType.CALLBACK,
-        name,
-        subType: OperationSubType.CALLBACK,
-      },
-      stepData,
-      context,
-    );
+    // Phase 1: Setup and checkpoint
+    let isCompleted = false;
 
-    // Phase 1: Setup and checkpoint (immediate execution)
-    const setupPromise = (async (): Promise<{ wasNewCallback: boolean }> => {
-      log("📞", "Creating callback phase 1:", { stepId, name, config });
+    const phase1Promise = (async (): Promise<void> => {
+      log("📞", "Callback phase 1:", { stepId, name });
 
-      // Handle already completed callbacks
-      if (stepData?.Status === OperationStatus.SUCCEEDED) {
-        log("⏭️", "Callback already completed in phase 1:", { stepId });
-        return { wasNewCallback: false };
-      }
+      let stepData = context.getStepData(stepId);
 
-      if (
-        stepData?.Status === OperationStatus.FAILED ||
-        stepData?.Status === OperationStatus.TIMED_OUT
-      ) {
-        log("❌", "Callback already failed in phase 1:", { stepId });
-        return { wasNewCallback: false };
-      }
-
-      // Handle already started callbacks
-      if (stepData?.Status === OperationStatus.STARTED) {
-        log("⏳", "Callback already started in phase 1:", { stepId });
-        return { wasNewCallback: false };
-      }
-
-      // Create new callback - checkpoint START operation
-      log("🆕", "Creating new callback in phase 1:", { stepId, name });
-      await checkpoint.checkpoint(stepId, {
-        Id: stepId,
-        ParentId: parentId,
-        Action: "START",
-        SubType: OperationSubType.CALLBACK,
-        Type: OperationType.CALLBACK,
-        Name: name,
-        CallbackOptions: {
-          TimeoutSeconds: config?.timeout
-            ? durationToSeconds(config.timeout)
-            : undefined,
-          HeartbeatTimeoutSeconds: config?.heartbeatTimeout
-            ? durationToSeconds(config.heartbeatTimeout)
-            : undefined,
-        },
-      });
-
-      log("✅", "Callback checkpoint completed in phase 1:", { stepId });
-      return { wasNewCallback: true };
-    })().catch((error) => {
-      log("❌", "Callback phase 1 error:", { stepId, error: error.message });
-      throw error;
-    });
-
-    // Return DurablePromise that executes phase 2 when awaited
-    return new DurablePromise(async (): Promise<CreateCallbackResult<T>> => {
-      // Wait for phase 1 to complete
-      const { wasNewCallback } = await setupPromise;
-
-      // Phase 2: Handle results and create callback promise
-      log("🔄", "Callback phase 2 executing:", { stepId, name });
-
-      const stepData = context.getStepData(stepId);
-
-      // Handle completed callbacks
-      if (stepData?.Status === OperationStatus.SUCCEEDED) {
-        const callbackData = stepData.CallbackDetails;
-        if (!callbackData?.CallbackId) {
-          throw new CallbackError(
-            `No callback ID found for completed callback: ${stepId}`,
-          );
-        }
-
-        const deserializedResult = await safeDeserialize(
-          serdes,
-          callbackData.Result,
-          stepId,
+      // Validate replay consistency
+      validateReplayConsistency(
+        stepId,
+        {
+          type: OperationType.CALLBACK,
           name,
-          context.terminationManager,
-          context.durableExecutionArn,
-        );
+          subType: OperationSubType.CALLBACK,
+        },
+        stepData,
+        context,
+      );
 
-        const resolvedPromise = new DurablePromise(
-          async (): Promise<T> => deserializedResult as T,
-        );
-
-        // Check and update replay mode after callback completion
+      // Check if already completed
+      if (stepData?.Status === OperationStatus.SUCCEEDED) {
+        log("⏭️", "Callback already completed:", { stepId });
         checkAndUpdateReplayMode();
 
-        return [resolvedPromise, callbackData.CallbackId];
+        checkpoint.markOperationState(
+          stepId,
+          OperationLifecycleState.COMPLETED,
+          {
+            metadata: {
+              stepId,
+              name,
+              type: OperationType.CALLBACK,
+              subType: OperationSubType.CALLBACK,
+              parentId,
+            },
+          },
+        );
+
+        isCompleted = true;
+        return;
       }
 
-      // Handle failed callbacks
+      // Check if already failed
       if (
         stepData?.Status === OperationStatus.FAILED ||
         stepData?.Status === OperationStatus.TIMED_OUT
       ) {
-        const callbackData = stepData.CallbackDetails;
+        log("❌", "Callback already failed:", { stepId });
+
+        checkpoint.markOperationState(
+          stepId,
+          OperationLifecycleState.COMPLETED,
+          {
+            metadata: {
+              stepId,
+              name,
+              type: OperationType.CALLBACK,
+              subType: OperationSubType.CALLBACK,
+              parentId,
+            },
+          },
+        );
+
+        isCompleted = true;
+        return;
+      }
+
+      // Start callback if not already started
+      if (!stepData) {
+        await checkpoint.checkpoint(stepId, {
+          Id: stepId,
+          ParentId: parentId,
+          Action: "START",
+          SubType: OperationSubType.CALLBACK,
+          Type: OperationType.CALLBACK,
+          Name: name,
+          CallbackOptions: {
+            TimeoutSeconds: config?.timeout
+              ? durationToSeconds(config.timeout)
+              : undefined,
+            HeartbeatTimeoutSeconds: config?.heartbeatTimeout
+              ? durationToSeconds(config.heartbeatTimeout)
+              : undefined,
+          },
+        });
+
+        // Refresh stepData after checkpoint
+        stepData = context.getStepData(stepId);
+      }
+
+      // Mark as IDLE_NOT_AWAITED
+      checkpoint.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_NOT_AWAITED,
+        {
+          metadata: {
+            stepId,
+            name,
+            type: OperationType.CALLBACK,
+            subType: OperationSubType.CALLBACK,
+            parentId,
+          },
+        },
+      );
+
+      log("✅", "Callback phase 1 complete:", { stepId });
+    })();
+
+    phase1Promise.catch(() => {});
+
+    // Phase 2: Handle results and create callback promise
+    return new DurablePromise(async (): Promise<CreateCallbackResult<T>> => {
+      await phase1Promise;
+
+      if (isCompleted) {
+        const stepData = context.getStepData(stepId);
+
+        const callbackData = stepData?.CallbackDetails;
         if (!callbackData?.CallbackId) {
           throw new CallbackError(
-            `No callback ID found for failed callback: ${stepId}`,
+            `No callback ID found for callback: ${stepId}`,
           );
         }
 
-        const error = stepData.CallbackDetails?.Error;
+        if (stepData?.Status === OperationStatus.SUCCEEDED) {
+          const deserializedResult = await safeDeserialize(
+            serdes,
+            callbackData.Result,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
+
+          const resolvedPromise = new DurablePromise(
+            async (): Promise<T> => deserializedResult as T,
+          );
+
+          return [resolvedPromise, callbackData.CallbackId];
+        }
+
+        // Handle failure
+        const error = stepData?.CallbackDetails?.Error;
         const callbackError = error
           ? ((): CallbackError => {
               const cause = new Error(error.ErrorMessage);
@@ -180,38 +208,28 @@ export const createCallback = (
         return [rejectedPromise, callbackData.CallbackId];
       }
 
-      // Handle started or new callbacks
+      log("📞", "Callback phase 2:", { stepId });
+
+      const stepData = context.getStepData(stepId);
       const callbackData = stepData?.CallbackDetails;
       if (!callbackData?.CallbackId) {
-        const errorMessage = wasNewCallback
-          ? `Callback ID not found in stepData after checkpoint: ${stepId}`
-          : `No callback ID found for started callback: ${stepId}`;
-        throw new CallbackError(errorMessage);
+        throw new CallbackError(
+          `No callback ID found for started callback: ${stepId}`,
+        );
       }
 
       const callbackId = callbackData.CallbackId;
 
-      // Create callback promise that handles completion
-      const terminationMessage = wasNewCallback
-        ? `Callback ${name || stepId} created and pending external completion`
-        : `Callback ${name || stepId} is pending external completion`;
-
       const callbackPromise = createCallbackPromise<T>(
         context,
+        checkpoint,
         stepId,
         name,
         serdes,
-        hasRunningOperations,
-        getOperationsEmitter(),
-        terminationMessage,
         checkAndUpdateReplayMode,
       );
 
-      log("✅", "Callback created successfully in phase 2:", {
-        stepId,
-        name,
-        callbackId,
-      });
+      log("✅", "Callback created:", { stepId, name, callbackId });
 
       return [callbackPromise, callbackId];
     });
