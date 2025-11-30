@@ -158,15 +158,9 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
           // If PENDING, wait for timer to complete
           if (stepData?.Status === OperationStatus.PENDING) {
-            await waitForContinuation(
-              context,
-              stepId,
-              name,
-              hasRunningOperations,
-              checkpoint,
-              getOperationsEmitter(),
-              isAwaited ? undefined : setWaitingCallback,
-            );
+            // TODO: Convert to centralized termination management
+            // For now, use a simple delay to re-evaluate
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             continue; // Re-evaluate step status after waiting
           }
 
@@ -408,15 +402,13 @@ export const executeWaitForCondition = async <T, Logger extends DurableLogger>(
       });
 
       // Wait for continuation and signal main loop to continue
-      await waitForContinuation(
-        context,
-        stepId,
-        name,
-        hasRunningOperations,
-        checkpoint,
-        getOperationsEmitter(),
-        onAwaitedChange,
-      );
+      // TODO: Convert to centralized termination management with scheduled time
+      // Calculate scheduled time from NextAttemptDelaySeconds
+      const retryDelayMs = durationToSeconds(decision.delay) * 1000;
+
+      // For now, use a delay to simulate scheduled retry
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+
       return CONTINUE_MAIN_LOOP;
     }
   } catch (error) {

@@ -73,18 +73,24 @@ export const createCentralizedCallbackPromise = <T>(
     }
 
     if (stepData.Status === OperationStatus.STARTED) {
-      // Callback is pending - schedule with checkpoint manager
-      log("⏳", "Callback pending, scheduling with checkpoint manager:", {
+      // Callback is pending - use periodic polling since we don't know when it will complete
+      log("⏳", "Callback pending, scheduling periodic polling:", {
         handlerId,
       });
 
       return new Promise<T>((resolve, reject) => {
-        checkpointManager.scheduleResume(
+        // Use periodic polling for indefinite operations
+        (checkpointManager as any).schedulePeriodicPolling?.(
           handlerId,
           resolve,
           reject,
-          Date.now(), // Immediate scheduling for callback checks
-        );
+        ) ||
+          checkpointManager.scheduleResume(
+            handlerId,
+            resolve,
+            reject,
+            Date.now(),
+          );
       });
     }
 

@@ -19,8 +19,10 @@ interface ActiveOperationsTracker {
 export class CentralizedCheckpointManager extends CheckpointManager {
   private promiseResolvers = new Map<string, PromiseResolver<any>>();
   private timers = new Map<string, NodeJS.Timeout>();
+  private periodicPollers = new Map<string, NodeJS.Timeout>();
   private terminationWarmupTimer?: NodeJS.Timeout;
   private readonly WARMUP_DURATION = 2000; // 2 seconds
+  private readonly POLLING_INTERVAL = 5000; // 5 seconds for indefinite operations
 
   constructor(
     durableExecutionArn: string,
@@ -47,8 +49,65 @@ export class CentralizedCheckpointManager extends CheckpointManager {
   }
 
   /**
-   * Schedule a promise to be resolved later by the checkpoint manager
+   * Schedule periodic polling for indefinite operations (invoke, callback)
+   * Use this for operations that don't have a known completion time.
+   *
+   * For operations with scheduled times (wait, step retry, wait-for-condition retry),
+   * use scheduleResume() instead.
    */
+  schedulePeriodicPolling<T>(
+    handlerId: string,
+    resolve: (value: T) => void,
+    reject: (reason?: any) => void,
+  ): void {
+    log("🔄", "Scheduling periodic polling for indefinite operation:", {
+      handlerId,
+    });
+
+    const resolver: PromiseResolver<T> = {
+      handlerId,
+      resolve,
+      reject,
+      scheduledTime: Date.now(), // Not used for polling
+    };
+
+    this.promiseResolvers.set(handlerId, resolver);
+
+    // Cancel termination warmup since we have active work
+    this.cancelTerminationWarmup();
+
+    // Start periodic polling
+    const pollerId = setInterval(() => {
+      log("🔍", "Periodic poll check for handler:", { handlerId });
+      // Force checkpoint to check for status updates
+      this.forceCheckpoint?.()
+        .then(() => {
+          // Check if operation completed and resolve if needed
+          // This will be handled by the specific handler logic
+        })
+        .catch((error) => {
+          log("❌", "Periodic poll error:", { handlerId, error });
+        });
+    }, this.POLLING_INTERVAL);
+
+    this.periodicPollers.set(handlerId, pollerId);
+    log("🔄", "Periodic poller started:", {
+      handlerId,
+      interval: this.POLLING_INTERVAL,
+    });
+  }
+
+  /**
+   * Cancel periodic polling for a handler
+   */
+  private cancelPeriodicPolling(handlerId: string): void {
+    const pollerId = this.periodicPollers.get(handlerId);
+    if (pollerId) {
+      clearInterval(pollerId);
+      this.periodicPollers.delete(handlerId);
+      log("🛑", "Periodic poller cancelled:", { handlerId });
+    }
+  }
   scheduleResume<T>(resolver: PromiseResolver<T>): void;
   /**
    * Schedule a promise to be resolved later by the checkpoint manager (direct parameters)
@@ -118,6 +177,7 @@ export class CentralizedCheckpointManager extends CheckpointManager {
       resolver.resolve(value);
       this.promiseResolvers.delete(handlerId);
       this.cancelTimer(handlerId);
+      this.cancelPeriodicPolling(handlerId);
       this.checkTermination();
     }
   }
@@ -132,6 +192,7 @@ export class CentralizedCheckpointManager extends CheckpointManager {
       resolver.reject(error);
       this.promiseResolvers.delete(handlerId);
       this.cancelTimer(handlerId);
+      this.cancelPeriodicPolling(handlerId);
       this.checkTermination();
     }
   }
@@ -256,6 +317,11 @@ export class CentralizedCheckpointManager extends CheckpointManager {
     // Cancel all timers
     for (const [handlerId] of Array.from(this.timers.entries())) {
       this.cancelTimer(handlerId);
+    }
+
+    // Cancel all periodic pollers
+    for (const [handlerId] of Array.from(this.periodicPollers.entries())) {
+      this.cancelPeriodicPolling(handlerId);
     }
 
     // Cancel warmup

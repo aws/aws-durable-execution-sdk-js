@@ -184,13 +184,16 @@ export const createInvokeHandler = (
             continue; // Re-evaluate status after waiting
           }
 
-          // No other operations running - terminate
-          log("⏳", `Invoke ${name || funcId} still in progress, terminating`);
-          return terminate(
-            context,
-            TerminationReason.OPERATION_TERMINATED,
-            stepId,
+          // No other operations running - use periodic polling for invoke status
+          log(
+            "⏳",
+            `Invoke ${name || funcId} still in progress, scheduling periodic polling`,
           );
+
+          // TODO: Convert to centralized termination management with periodic polling
+          // For now, use a longer delay to simulate periodic checking
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          continue; // Re-evaluate status after delay
         }
 
         // If stepData exists but has an unexpected status, break to avoid infinite loop
