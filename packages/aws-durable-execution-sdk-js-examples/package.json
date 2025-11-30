@@ -2,8 +2,8 @@
   "name": "@aws/durable-execution-sdk-js-examples",
   "version": "0.1.0",
   "license": "Apache-2.0",
-  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-examples",
-  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/development/packages/aws-durable-execution-sdk-js-examples",
+  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-examples",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-examples",
   "engines": {
     "node": ">=22"
   },

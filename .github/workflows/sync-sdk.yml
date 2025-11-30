@@ -1,7 +1,7 @@
 name: Sync SDK
 on:
   push:
-    branches: ["development"]
+    branches: ["main"]
     paths:
       - "packages/aws-durable-execution-sdk-js/**"
 
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   sync-aws-durable-execution-sdk-js:
-    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@development
+    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@main
     with:
       package_name: aws-durable-execution-sdk-js
     secrets:

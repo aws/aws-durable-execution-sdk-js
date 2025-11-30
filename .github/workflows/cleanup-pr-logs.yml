@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches:
-      - development
+      - main
 
 permissions:
   contents: read # This is required for actions/checkout
