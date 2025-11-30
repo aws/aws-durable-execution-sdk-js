@@ -64,6 +64,10 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       result: string;
       stepId: string;
     }> => {
+      console.log("[WAIT-FOR-CALLBACK] Phase 1 starting:", {
+        name,
+        hasSubmitter: !!submitter,
+      });
       log("📞", "WaitForCallback requested:", {
         name,
         hasSubmitter: !!submitter,
@@ -124,6 +128,10 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       };
 
       const stepId = getNextStepId();
+      console.log("[WAIT-FOR-CALLBACK] About to call runInChildContext:", {
+        stepId,
+        name,
+      });
       return {
         result: await runInChildContext(name, childFunction, {
           subType: OperationSubType.WAIT_FOR_CALLBACK,
@@ -132,13 +140,19 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       };
     })();
 
+    console.log("[WAIT-FOR-CALLBACK] Phase 1 promise created");
     // Attach catch handler to prevent unhandled promise rejections
     // The error will still be thrown when the DurablePromise is awaited
     phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
     return new DurablePromise(async () => {
+      console.log("[WAIT-FOR-CALLBACK] Phase 2 starting, awaiting phase 1");
       const { result, stepId } = await phase1Promise;
+      console.log("[WAIT-FOR-CALLBACK] Phase 2 got result:", {
+        result,
+        stepId,
+      });
 
       // Always deserialize the result since it's a string
       return (await safeDeserialize(
