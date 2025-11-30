@@ -88,7 +88,9 @@ describe("DurableContext", () => {
     );
     createCallback.mockReturnValue(jest.fn());
     createWaitForCallbackHandler.mockReturnValue(jest.fn());
-    createWaitForConditionHandler.mockReturnValue(jest.fn());
+    createWaitForConditionHandler.mockReturnValue(
+      () => new DurablePromise(() => Promise.resolve({})),
+    );
     createMapHandler.mockReturnValue(jest.fn());
     createParallelHandler.mockReturnValue(jest.fn());
     createConcurrentExecutionHandler.mockReturnValue(jest.fn());
