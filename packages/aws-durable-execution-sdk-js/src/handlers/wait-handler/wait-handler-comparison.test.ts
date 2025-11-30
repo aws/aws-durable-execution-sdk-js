@@ -2,17 +2,14 @@ import { createWaitHandler } from "./wait-handler";
 import { ExecutionContext, OperationSubType } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { EventEmitter } from "events";
 
 describe("Wait Handler Tests", () => {
   let context: ExecutionContext;
   let checkpoint: Checkpoint;
   let stepCounter: number;
-  let operationsEmitter: EventEmitter;
 
   beforeEach(() => {
     stepCounter = 0;
-    operationsEmitter = new EventEmitter();
 
     context = {
       _stepData: {},
