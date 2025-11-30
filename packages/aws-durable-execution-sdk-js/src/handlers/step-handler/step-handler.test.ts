@@ -31,8 +31,6 @@ describe("Step Handler", () => {
   let mockCheckpoint: Checkpoint;
   let mockParentContext: Context;
   let createStepId: () => string;
-  let addRunningOperation: jest.Mock;
-  let removeRunningOperation: jest.Mock;
   let stepIdCounter = 0;
 
   beforeEach(() => {
@@ -60,8 +58,6 @@ describe("Step Handler", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-    addRunningOperation = jest.fn();
-    removeRunningOperation = jest.fn();
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
       JSON.stringify(value),
@@ -78,8 +74,6 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("step-result");
@@ -98,8 +92,6 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("step-result");
@@ -132,8 +124,6 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("step-result");
@@ -166,8 +156,6 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("new-result");
@@ -208,8 +196,6 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("result");
@@ -253,8 +239,6 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("retry-result");
@@ -279,16 +263,11 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("result");
 
     await stepHandler("test-step", stepFn);
-
-    expect(addRunningOperation).toHaveBeenCalledWith("step-1");
-    expect(removeRunningOperation).toHaveBeenCalledWith("step-1");
   });
 
   it("should handle step without name", async () => {
@@ -298,8 +277,6 @@ describe("Step Handler", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
     );
 
     const stepFn = jest.fn().mockResolvedValue("result");

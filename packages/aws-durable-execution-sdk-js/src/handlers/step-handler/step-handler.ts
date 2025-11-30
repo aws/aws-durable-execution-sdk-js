@@ -42,8 +42,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
   parentContext: Context,
   createStepId: () => string,
   logger: Logger,
-  addRunningOperation: (stepId: string) => void,
-  removeRunningOperation: (stepId: string) => void,
   parentId?: string,
 ) => {
   return <T>(
@@ -265,19 +263,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
 
-          addRunningOperation(stepId);
           let result: T;
-          try {
-            result = await runWithContext(
-              stepId,
-              parentId,
-              () => fn(stepContext),
-              currentAttempt + 1,
-              DurableExecutionMode.ExecutionMode,
-            );
-          } finally {
-            removeRunningOperation(stepId);
-          }
+          result = await runWithContext(
+            stepId,
+            parentId,
+            () => fn(stepContext),
+            currentAttempt + 1,
+            DurableExecutionMode.ExecutionMode,
+          );
 
           const serializedResult = await safeSerialize(
             serdes,

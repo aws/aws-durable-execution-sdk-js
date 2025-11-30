@@ -2,7 +2,6 @@ import { ExecutionContext } from "../../types";
 import { STEP_DATA_UPDATED_EVENT } from "../checkpoint/checkpoint-manager";
 import { Checkpoint } from "../checkpoint/checkpoint-helper";
 import { EventEmitter } from "events";
-import { OPERATIONS_COMPLETE_EVENT } from "../constants/constants";
 import { hashId } from "../step-id-utils/step-id-utils";
 
 export interface WaitBeforeContinueOptions {
@@ -91,9 +90,9 @@ export async function waitBeforeContinue(
           const handler = (): void => {
             resolve({ reason: "operations" });
           };
-          operationsEmitter.once(OPERATIONS_COMPLETE_EVENT, handler);
+          operationsEmitter.once("allOperationsComplete", handler);
           cleanupFns.push(() =>
-            operationsEmitter.off(OPERATIONS_COMPLETE_EVENT, handler),
+            operationsEmitter.off("allOperationsComplete", handler),
           );
         }
       },

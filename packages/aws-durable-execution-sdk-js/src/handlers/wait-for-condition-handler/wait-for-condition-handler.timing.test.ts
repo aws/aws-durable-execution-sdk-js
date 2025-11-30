@@ -30,8 +30,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
   let createStepId: jest.Mock;
-  let addRunningOperation: jest.Mock;
-  let removeRunningOperation: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -53,8 +51,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
     } as any;
 
     createStepId = jest.fn().mockReturnValue("test-step-id");
-    addRunningOperation = jest.fn();
-    removeRunningOperation = jest.fn();
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
       JSON.stringify(value),
@@ -90,8 +86,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
       undefined,
     );
 
@@ -140,8 +134,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
       undefined,
     );
 
@@ -186,8 +178,6 @@ describe("WaitForCondition Handler Timing Tests", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
       undefined,
     );
 

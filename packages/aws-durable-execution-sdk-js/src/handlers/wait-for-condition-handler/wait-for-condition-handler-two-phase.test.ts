@@ -27,8 +27,6 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
   let createStepId: () => string;
-  let addRunningOperation: jest.Mock;
-  let removeRunningOperation: jest.Mock;
   let stepIdCounter = 0;
 
   beforeEach(() => {
@@ -50,8 +48,6 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
     } as any;
 
     createStepId = (): string => `step-${++stepIdCounter}`;
-    addRunningOperation = jest.fn();
-    removeRunningOperation = jest.fn();
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
       JSON.stringify(value),
@@ -67,8 +63,6 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
       undefined,
     );
 
@@ -97,8 +91,6 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
       undefined,
     );
 
@@ -127,8 +119,6 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
-      addRunningOperation,
-      removeRunningOperation,
       undefined,
     );
 
