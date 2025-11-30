@@ -638,8 +638,29 @@ export class CheckpointManager implements Checkpoint {
       return;
     }
 
+    // Rule 5: Clean up operations whose ancestors are complete or pending completion
+    for (const op of allOps) {
+      if (
+        op.state === OperationLifecycleState.RETRY_WAITING ||
+        op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
+        op.state === OperationLifecycleState.IDLE_AWAITED
+      ) {
+        if (this.hasPendingAncestorCompletion(op.stepId)) {
+          log(
+            "🧹",
+            `Cleaning up operation with completed ancestor: ${op.stepId}`,
+          );
+          this.cleanupOperation(op.stepId);
+          this.operations.delete(op.stepId);
+        }
+      }
+    }
+
+    // Re-check operations after cleanup
+    const remainingOps = Array.from(this.operations.values());
+
     // Determine if we should terminate
-    const hasWaiting = allOps.some(
+    const hasWaiting = remainingOps.some(
       (op) =>
         op.state === OperationLifecycleState.RETRY_WAITING ||
         op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
@@ -647,7 +668,7 @@ export class CheckpointManager implements Checkpoint {
     );
 
     if (hasWaiting) {
-      const reason = this.determineTerminationReason(allOps);
+      const reason = this.determineTerminationReason(remainingOps);
       this.scheduleTermination(reason);
     } else {
       this.abortTermination();

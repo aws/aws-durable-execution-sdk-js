@@ -41,9 +41,10 @@ createTests({
         invocationCount: "multiple",
       });
 
-      // Verify invocations were tracked - should be exactly 5 invocations
+      // Verify invocations were tracked - should be exactly 4 invocations
+      // With ancestor completion check, operations are cleaned up more efficiently
       const invocations = result.getInvocations();
-      expect(invocations).toHaveLength(5);
+      expect(invocations).toHaveLength(4);
 
       // Verify operations were executed
       const operations = result.getOperations();
