@@ -124,7 +124,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       if (stepData?.Status === OperationStatus.PENDING) {
         checkpoint.markOperationState(
           stepId,
-          OperationLifecycleState.IDLE_NOT_AWAITED,
+          OperationLifecycleState.RETRY_WAITING,
           {
             metadata: {
               stepId,
@@ -194,6 +194,21 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             logger,
           };
 
+          // Mark operation as EXECUTING
+          checkpoint.markOperationState(
+            stepId,
+            OperationLifecycleState.EXECUTING,
+            {
+              metadata: {
+                stepId,
+                name,
+                type: OperationType.STEP,
+                subType: OperationSubType.WAIT_FOR_CONDITION,
+                parentId,
+              },
+            },
+          );
+
           addRunningOperation(stepId);
           let newState: T;
           try {
@@ -262,7 +277,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
           checkpoint.markOperationState(
             stepId,
-            OperationLifecycleState.IDLE_NOT_AWAITED,
+            OperationLifecycleState.RETRY_WAITING,
             {
               metadata: {
                 stepId,
