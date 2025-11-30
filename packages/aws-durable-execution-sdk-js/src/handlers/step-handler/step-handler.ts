@@ -2,7 +2,6 @@ import {
   ExecutionContext,
   StepFunc,
   StepConfig,
-  RetryDecision,
   StepSemantics,
   OperationSubType,
   StepContext,
