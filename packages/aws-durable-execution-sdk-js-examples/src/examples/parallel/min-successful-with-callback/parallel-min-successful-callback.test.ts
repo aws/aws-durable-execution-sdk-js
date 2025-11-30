@@ -12,6 +12,8 @@ createTests({
   invocationType: InvocationType.Event,
   tests: (runner) => {
     it("should succeed when only one of three callbacks completes (minSuccessful:1)", async () => {
+      process.env.DURABLE_VERBOSE_MODE = "true";
+
       const callback1Op = runner.getOperation("branch-1-callback");
       const callback2Op = runner.getOperation("branch-2-callback");
       const callback3Op = runner.getOperation("branch-3-callback");
@@ -28,6 +30,10 @@ createTests({
       await callback1Op.sendCallbackSuccess("result-1");
 
       const execution = await executionPromise;
+
+      // Print history for debugging
+      console.log("=== EXECUTION HISTORY ===");
+      console.log(JSON.stringify(execution.getHistoryEvents(), null, 2));
 
       // Verify callback 1 succeeded
       expect(callback1Op.getCallbackDetails()?.result).toBe("result-1");

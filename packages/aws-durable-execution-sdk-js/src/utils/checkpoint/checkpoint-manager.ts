@@ -54,6 +54,11 @@ export class CheckpointManager implements Checkpoint {
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
 
+  // Termination cooldown
+  private terminationTimer: NodeJS.Timeout | null = null;
+  private terminationReason: TerminationReason | null = null;
+  private readonly TERMINATION_COOLDOWN_MS = 100;
+
   constructor(
     private durableExecutionArn: string,
     private stepData: Record<string, Operation>,
@@ -605,16 +610,19 @@ export class CheckpointManager implements Checkpoint {
   private checkAndTerminate(): void {
     // Rule 1: Can't terminate if checkpoint queue is not empty
     if (this.queue.length > 0) {
+      this.abortTermination();
       return;
     }
 
     // Rule 2: Can't terminate if checkpoint is currently processing
     if (this.isProcessing) {
+      this.abortTermination();
       return;
     }
 
     // Rule 3: Can't terminate if there are pending force checkpoint promises
     if (this.forceCheckpointPromises.length > 0) {
+      this.abortTermination();
       return;
     }
 
@@ -626,6 +634,7 @@ export class CheckpointManager implements Checkpoint {
     );
 
     if (hasExecuting) {
+      this.abortTermination();
       return;
     }
 
@@ -639,8 +648,54 @@ export class CheckpointManager implements Checkpoint {
 
     if (hasWaiting) {
       const reason = this.determineTerminationReason(allOps);
-      this.terminate(reason);
+      this.scheduleTermination(reason);
+    } else {
+      this.abortTermination();
     }
+  }
+
+  private abortTermination(): void {
+    if (this.terminationTimer) {
+      clearTimeout(this.terminationTimer);
+      this.terminationTimer = null;
+      this.terminationReason = null;
+      log("🔄", "Termination aborted - conditions changed");
+    }
+  }
+
+  private scheduleTermination(reason: TerminationReason): void {
+    // If already scheduled with same reason, don't reschedule
+    if (this.terminationTimer && this.terminationReason === reason) {
+      return;
+    }
+
+    // Clear any existing timer
+    this.abortTermination();
+
+    // Schedule new termination
+    this.terminationReason = reason;
+    log("⏱️", "Scheduling termination", {
+      reason,
+      cooldownMs: this.TERMINATION_COOLDOWN_MS,
+    });
+
+    this.terminationTimer = setTimeout(() => {
+      this.executeTermination(reason);
+    }, this.TERMINATION_COOLDOWN_MS);
+  }
+
+  private executeTermination(reason: TerminationReason): void {
+    log("🛑", "Executing termination after cooldown", { reason });
+
+    // Clear timer
+    this.terminationTimer = null;
+    this.terminationReason = null;
+
+    // Cleanup all operations before terminating
+    this.cleanupAllOperations();
+
+    // Call termination manager directly
+    this.terminationManager.terminate({ reason });
   }
 
   private determineTerminationReason(ops: OperationInfo[]): TerminationReason {
@@ -668,16 +723,6 @@ export class CheckpointManager implements Checkpoint {
     }
 
     return TerminationReason.CALLBACK_PENDING;
-  }
-
-  private terminate(reason: TerminationReason): void {
-    log("🛑", "Terminating execution", { reason });
-
-    // Cleanup all operations before terminating
-    this.cleanupAllOperations();
-
-    // Call termination manager
-    this.terminationManager.terminate({ reason });
   }
 
   private startTimerWithPolling(stepId: string, endTimestamp?: Date): void {
