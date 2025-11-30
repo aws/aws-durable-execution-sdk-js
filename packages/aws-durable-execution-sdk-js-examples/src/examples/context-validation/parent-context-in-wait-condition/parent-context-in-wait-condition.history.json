@@ -1,35 +1,55 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T22:01:37.601Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "ef1d8ce4-6f7d-407b-becb-230a81652ab9",
+    "EventTimestamp": "2025-11-30T08:50:33.957Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "9a5c27c3-f415-4c80-9fad-b1219c48c3c2"
+    }
   },
   {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
     "EventId": 2,
-    "EventTimestamp": "2025-11-24T22:01:37.728Z",
+    "Id": "c4ca4238a0b92382",
+    "Name": "child-context",
+    "EventTimestamp": "2025-11-30T08:50:33.980Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "wrong-wait-condition",
+    "EventTimestamp": "2025-11-30T08:50:33.980Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
     "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-11-30T08:50:33.980Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T22:01:37.728Z",
+      "StartTimestamp": "2025-11-30T08:50:33.957Z",
+      "EndTimestamp": "2025-11-30T08:50:33.980Z",
       "Error": {
         "Payload": {
           "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1-1\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
           "ErrorType": "Error"
         }
       },
-      "RequestId": "dd051e21-5f50-4b72-9491-7fa1657a2601",
-      "StartTimestamp": "2025-11-24T22:01:37.601Z"
+      "RequestId": "075d081a-9fe0-4481-98d5-4468b58d27a8"
     }
   },
   {
-    "EventId": 3,
-    "EventTimestamp": "2025-11-24T22:01:37.845Z",
     "EventType": "ExecutionFailed",
+    "EventId": 5,
+    "Id": "ef1d8ce4-6f7d-407b-becb-230a81652ab9",
+    "EventTimestamp": "2025-11-30T08:50:33.980Z",
     "ExecutionFailedDetails": {
       "Error": {
         "Payload": {
@@ -37,7 +57,6 @@
           "ErrorType": "Error"
         }
       }
-    },
-    "Id": "9a5c27c3-f415-4c80-9fad-b1219c48c3c2"
+    }
   }
 ]

@@ -8,6 +8,24 @@ import {
   InvocationType,
 } from "@aws/durable-execution-sdk-js-testing";
 
+export interface FunctionNameMap {
+  getFunctionName(functionName: string): string;
+}
+
+class CloudFunctionNameMap implements FunctionNameMap {
+  constructor(private readonly functionNameMap: Record<string, string>) {}
+
+  getFunctionName(functionName: string): string {
+    return this.functionNameMap[functionName];
+  }
+}
+
+class LocalFunctionNameMap implements FunctionNameMap {
+  getFunctionName(functionName: string): string {
+    return functionName;
+  }
+}
+
 type TestCallback<ResultType> = (
   runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
   isCloud: boolean,
@@ -25,27 +43,48 @@ export interface TestDefinition<ResultType> {
   };
 }
 
-export interface FunctionNameMap {
-  getFunctionName(functionName: string): string;
-}
 export type EventSignature = {
   EventType?: string;
   SubType?: string;
   Name?: string;
 };
 
-class CloudFunctionNameMap implements FunctionNameMap {
-  constructor(private readonly functionNameMap: Record<string, string>) {}
+function createEventSignature(event: EventSignature) {
+  const signature: EventSignature = {
+    EventType: event.EventType,
+    SubType: event.SubType,
+  };
 
-  getFunctionName(functionName: string): string {
-    return this.functionNameMap[functionName];
+  // Only include Name for events that have stable names (not ExecutionStarted/ExecutionSucceeded)
+  if (
+    event.EventType !== "ExecutionStarted" &&
+    event.EventType !== "ExecutionSucceeded" &&
+    event.Name
+  ) {
+    signature.Name = event.Name;
   }
+
+  return signature;
 }
 
-class LocalFunctionNameMap implements FunctionNameMap {
-  getFunctionName(functionName: string): string {
-    return functionName;
-  }
+// Count occurrences of each event signature
+function countEventSignatures(events: EventSignature[]) {
+  const counts = new Map();
+  events.forEach((event) => {
+    const signature = JSON.stringify(createEventSignature(event));
+    counts.set(signature, (counts.get(signature) || 0) + 1);
+  });
+  return counts;
+}
+
+export function assertEventSignatures(
+  actualEvents: Event[],
+  expectedEvents: EventSignature[],
+) {
+  const actualCounts = countEventSignatures(actualEvents);
+  const expectedCounts = countEventSignatures(expectedEvents);
+
+  expect(actualCounts).toEqual(expectedCounts);
 }
 
 /**

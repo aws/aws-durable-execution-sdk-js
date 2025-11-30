@@ -1,5 +1,6 @@
 import { handler } from "./promise-any";
-import historyEvents from "./promise-any.history.json";
+import historyEventsSuccess from "./promise-any-success.history.json";
+import historyEventsFail from "./promise-any-failure.history.json";
 import { assertEventSignatures, createTests } from "../../../utils/test-helper";
 
 createTests<string>({
@@ -15,7 +16,7 @@ createTests<string>({
       const result = execution.getResult();
       expect(result).toBe("first success");
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution.getHistoryEvents(), historyEventsSuccess);
     });
 
     it("should fail if all promises fail - failure case", async () => {
@@ -33,7 +34,7 @@ createTests<string>({
       });
       expect(execution.getOperations()).toHaveLength(4);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution.getHistoryEvents(), historyEventsFail);
     });
   },
 });

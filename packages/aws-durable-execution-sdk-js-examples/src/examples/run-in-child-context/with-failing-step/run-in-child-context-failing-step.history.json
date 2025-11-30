@@ -1,102 +1,103 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T18:56:08.973Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "823f6456-6fe0-48ab-b1da-8366f8b835c2",
+    "EventTimestamp": "2025-11-30T08:50:45.355Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "7917e78b-336c-4eb9-b0c1-85d8e4efd303"
+    }
   },
   {
-    "ContextStartedDetails": {},
-    "EventId": 2,
-    "EventTimestamp": "2025-11-24T18:56:09.098Z",
     "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "child-with-failure",
-    "SubType": "RunInChildContext"
+    "EventTimestamp": "2025-11-30T08:50:45.397Z",
+    "ContextStartedDetails": {}
   },
   {
+    "EventType": "StepStarted",
+    "SubType": "Step",
     "EventId": 3,
-    "EventTimestamp": "2025-11-24T18:56:09.098Z",
-    "EventType": "StepStarted",
     "Id": "ea66c06c1e1c05fa",
     "Name": "failing-step",
+    "EventTimestamp": "2025-11-30T08:50:45.397Z",
     "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {},
-    "SubType": "Step"
+    "StepStartedDetails": {}
   },
   {
+    "EventType": "StepStarted",
+    "SubType": "Step",
     "EventId": 4,
-    "EventTimestamp": "2025-11-24T18:56:09.098Z",
-    "EventType": "StepStarted",
     "Id": "ea66c06c1e1c05fa",
     "Name": "failing-step",
+    "EventTimestamp": "2025-11-30T08:50:45.397Z",
     "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {},
-    "SubType": "Step"
+    "StepStartedDetails": {}
   },
   {
+    "EventType": "InvocationCompleted",
     "EventId": 5,
-    "EventTimestamp": "2025-11-24T18:56:09.139Z",
-    "EventType": "InvocationCompleted",
+    "EventTimestamp": "2025-11-30T08:50:45.397Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:56:09.139Z",
+      "StartTimestamp": "2025-11-30T08:50:45.355Z",
+      "EndTimestamp": "2025-11-30T08:50:45.397Z",
       "Error": {},
-      "RequestId": "9ba754cd-9584-4614-a191-43137187e84c",
-      "StartTimestamp": "2025-11-24T18:56:08.973Z"
+      "RequestId": "918c976d-1133-409f-a4c6-b8116ff3be26"
     }
   },
   {
+    "EventType": "StepStarted",
+    "SubType": "Step",
     "EventId": 6,
-    "EventTimestamp": "2025-11-24T18:56:09.369Z",
-    "EventType": "StepStarted",
     "Id": "ea66c06c1e1c05fa",
     "Name": "failing-step",
+    "EventTimestamp": "2025-11-30T08:50:45.439Z",
     "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {},
-    "SubType": "Step"
+    "StepStartedDetails": {}
   },
   {
+    "EventType": "StepStarted",
+    "SubType": "Step",
     "EventId": 7,
-    "EventTimestamp": "2025-11-24T18:56:09.369Z",
-    "EventType": "StepStarted",
     "Id": "ea66c06c1e1c05fa",
     "Name": "failing-step",
+    "EventTimestamp": "2025-11-30T08:50:45.439Z",
     "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {},
-    "SubType": "Step"
+    "StepStartedDetails": {}
   },
   {
-    "EventId": 8,
-    "EventTimestamp": "2025-11-24T18:56:09.410Z",
     "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2025-11-30T08:50:45.440Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:56:09.410Z",
+      "StartTimestamp": "2025-11-30T08:50:45.419Z",
+      "EndTimestamp": "2025-11-30T08:50:45.440Z",
       "Error": {},
-      "RequestId": "bb15187b-f9ec-4038-9fcd-f8b427a1a845",
-      "StartTimestamp": "2025-11-24T18:56:09.265Z"
+      "RequestId": "4608e391-8992-469c-9bf4-61439cf6092e"
     }
   },
   {
-    "EventId": 9,
-    "EventTimestamp": "2025-11-24T18:56:09.643Z",
     "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
     "Id": "ea66c06c1e1c05fa",
     "Name": "failing-step",
+    "EventTimestamp": "2025-11-30T08:50:45.482Z",
     "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {},
-    "SubType": "Step"
+    "StepStartedDetails": {}
   },
   {
-    "EventId": 10,
-    "EventTimestamp": "2025-11-24T18:56:09.643Z",
     "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 10,
     "Id": "ea66c06c1e1c05fa",
     "Name": "failing-step",
+    "EventTimestamp": "2025-11-30T08:50:45.482Z",
     "ParentId": "c4ca4238a0b92382",
     "StepFailedDetails": {
       "Error": {
@@ -108,10 +109,15 @@
       "RetryDetails": {
         "CurrentAttempt": 2
       }
-    },
-    "SubType": "Step"
+    }
   },
   {
+    "EventType": "ContextFailed",
+    "SubType": "RunInChildContext",
+    "EventId": 11,
+    "Id": "c4ca4238a0b92382",
+    "Name": "child-with-failure",
+    "EventTimestamp": "2025-11-30T08:50:45.502Z",
     "ContextFailedDetails": {
       "Error": {
         "Payload": {
@@ -119,68 +125,62 @@
           "ErrorMessage": "Step failed in child context"
         }
       }
-    },
-    "EventId": 11,
-    "EventTimestamp": "2025-11-24T18:56:09.703Z",
-    "EventType": "ContextFailed",
-    "Id": "c4ca4238a0b92382",
-    "Name": "child-with-failure",
-    "SubType": "RunInChildContext"
+    }
   },
   {
-    "EventId": 12,
-    "EventTimestamp": "2025-11-24T18:56:09.765Z",
     "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 12,
     "Id": "c81e728d9d4c2f63",
     "Name": "wait-after-failure",
-    "SubType": "Wait",
+    "EventTimestamp": "2025-11-30T08:50:45.523Z",
     "WaitStartedDetails": {
       "Duration": 1,
-      "ScheduledEndTimestamp": "2025-11-24T18:56:10.765Z"
+      "ScheduledEndTimestamp": "2025-11-30T08:50:46.523Z"
     }
   },
   {
-    "EventId": 13,
-    "EventTimestamp": "2025-11-24T18:56:09.807Z",
     "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2025-11-30T08:50:45.523Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:56:09.807Z",
+      "StartTimestamp": "2025-11-30T08:50:45.460Z",
+      "EndTimestamp": "2025-11-30T08:50:45.523Z",
       "Error": {},
-      "RequestId": "bf74ae53-148a-4aa2-8a60-9300149e2e09",
-      "StartTimestamp": "2025-11-24T18:56:09.538Z"
+      "RequestId": "a1c8b829-1649-45a3-8be4-28f122d54dd2"
     }
   },
   {
-    "EventId": 14,
-    "EventTimestamp": "2025-11-24T18:56:09.932Z",
     "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 14,
     "Id": "c81e728d9d4c2f63",
     "Name": "wait-after-failure",
-    "SubType": "Wait",
+    "EventTimestamp": "2025-11-30T08:50:45.524Z",
     "WaitSucceededDetails": {
       "Duration": 1
     }
   },
   {
-    "EventId": 15,
-    "EventTimestamp": "2025-11-24T18:56:10.099Z",
     "EventType": "InvocationCompleted",
+    "EventId": 15,
+    "EventTimestamp": "2025-11-30T08:50:45.544Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:56:10.099Z",
+      "StartTimestamp": "2025-11-30T08:50:45.543Z",
+      "EndTimestamp": "2025-11-30T08:50:45.544Z",
       "Error": {},
-      "RequestId": "221ee096-00b3-42f7-a7e1-7a9bf8b427d2",
-      "StartTimestamp": "2025-11-24T18:56:10.015Z"
+      "RequestId": "81cacb0c-e16e-4119-a2a3-870a8da506bc"
     }
   },
   {
-    "EventId": 16,
-    "EventTimestamp": "2025-11-24T18:56:10.182Z",
     "EventType": "ExecutionSucceeded",
+    "EventId": 16,
+    "Id": "823f6456-6fe0-48ab-b1da-8366f8b835c2",
+    "EventTimestamp": "2025-11-30T08:50:45.544Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"success\":true}"
       }
-    },
-    "Id": "7917e78b-336c-4eb9-b0c1-85d8e4efd303"
+    }
   }
 ]

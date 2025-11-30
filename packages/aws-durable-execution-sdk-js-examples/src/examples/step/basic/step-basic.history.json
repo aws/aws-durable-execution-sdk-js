@@ -1,56 +1,56 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T18:56:10.827Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "6a3ceb9c-80b9-432e-a691-7b7497ed2a4c",
+    "EventTimestamp": "2025-11-30T08:50:45.751Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "68204e25-d4c5-4ef3-bb6b-bf0bffda4479"
+    }
   },
   {
-    "EventId": 2,
-    "EventTimestamp": "2025-11-24T18:56:10.973Z",
     "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
     "Id": "c4ca4238a0b92382",
-    "StepStartedDetails": {},
-    "SubType": "Step"
+    "EventTimestamp": "2025-11-30T08:50:45.774Z",
+    "StepStartedDetails": {}
   },
   {
-    "EventId": 3,
-    "EventTimestamp": "2025-11-24T18:56:10.973Z",
     "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
     "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-11-30T08:50:45.774Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"step completed\""
       },
       "RetryDetails": {}
-    },
-    "SubType": "Step"
-  },
-  {
-    "EventId": 4,
-    "EventTimestamp": "2025-11-24T18:56:11.016Z",
-    "EventType": "InvocationCompleted",
-    "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:56:11.016Z",
-      "Error": {},
-      "RequestId": "94599868-8201-4f5b-9982-1c9836bbb075",
-      "StartTimestamp": "2025-11-24T18:56:10.827Z"
     }
   },
   {
-    "EventId": 5,
-    "EventTimestamp": "2025-11-24T18:56:11.101Z",
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-11-30T08:50:45.774Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-11-30T08:50:45.751Z",
+      "EndTimestamp": "2025-11-30T08:50:45.774Z",
+      "Error": {},
+      "RequestId": "663a52fe-cfcc-4ed1-a5da-650085cc2d70"
+    }
+  },
+  {
     "EventType": "ExecutionSucceeded",
+    "EventId": 5,
+    "Id": "6a3ceb9c-80b9-432e-a691-7b7497ed2a4c",
+    "EventTimestamp": "2025-11-30T08:50:45.774Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "\"step completed\""
       }
-    },
-    "Id": "68204e25-d4c5-4ef3-bb6b-bf0bffda4479"
+    }
   }
 ]

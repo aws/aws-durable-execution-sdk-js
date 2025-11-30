@@ -1,103 +1,103 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T18:55:47.628Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "20bd0ca0-9d73-44f8-9f68-595c2a31ff06",
+    "EventTimestamp": "2025-11-30T08:50:36.813Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "69f89787-9bc8-4343-bc13-459d7b4965ae"
+    }
   },
   {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
     "EventId": 2,
-    "EventTimestamp": "2025-11-24T18:55:47.773Z",
-    "EventType": "WaitStarted",
     "Id": "c4ca4238a0b92382",
     "Name": "wait-1",
-    "SubType": "Wait",
+    "EventTimestamp": "2025-11-30T08:50:36.855Z",
     "WaitStartedDetails": {
       "Duration": 5,
-      "ScheduledEndTimestamp": "2025-11-24T18:55:52.773Z"
+      "ScheduledEndTimestamp": "2025-11-30T08:50:41.855Z"
     }
   },
   {
+    "EventType": "InvocationCompleted",
     "EventId": 3,
-    "EventTimestamp": "2025-11-24T18:55:47.815Z",
-    "EventType": "InvocationCompleted",
+    "EventTimestamp": "2025-11-30T08:50:36.855Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:55:47.815Z",
+      "StartTimestamp": "2025-11-30T08:50:36.813Z",
+      "EndTimestamp": "2025-11-30T08:50:36.855Z",
       "Error": {},
-      "RequestId": "c019d314-9ef1-4595-bf99-9179761bd6eb",
-      "StartTimestamp": "2025-11-24T18:55:47.628Z"
+      "RequestId": "8d26dcfb-f2ee-40f0-8a82-71431a85fe04"
     }
   },
   {
-    "EventId": 4,
-    "EventTimestamp": "2025-11-24T18:55:47.857Z",
     "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 4,
     "Id": "c4ca4238a0b92382",
     "Name": "wait-1",
-    "SubType": "Wait",
+    "EventTimestamp": "2025-11-30T08:50:36.855Z",
     "WaitSucceededDetails": {
       "Duration": 5
     }
   },
   {
-    "EventId": 5,
-    "EventTimestamp": "2025-11-24T18:55:48.023Z",
     "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 5,
     "Id": "c81e728d9d4c2f63",
     "Name": "wait-2",
-    "SubType": "Wait",
+    "EventTimestamp": "2025-11-30T08:50:36.897Z",
     "WaitStartedDetails": {
       "Duration": 5,
-      "ScheduledEndTimestamp": "2025-11-24T18:55:53.023Z"
+      "ScheduledEndTimestamp": "2025-11-30T08:50:41.897Z"
     }
   },
   {
-    "EventId": 6,
-    "EventTimestamp": "2025-11-24T18:55:48.064Z",
     "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2025-11-30T08:50:36.897Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:55:48.064Z",
+      "StartTimestamp": "2025-11-30T08:50:36.876Z",
+      "EndTimestamp": "2025-11-30T08:50:36.897Z",
       "Error": {},
-      "RequestId": "c02e59d1-045b-4281-9135-d214f9417dbb",
-      "StartTimestamp": "2025-11-24T18:55:47.919Z"
+      "RequestId": "02cdb30e-4ffc-4637-9c40-d9df483aeedf"
     }
   },
   {
-    "EventId": 7,
-    "EventTimestamp": "2025-11-24T18:55:48.107Z",
     "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 7,
     "Id": "c81e728d9d4c2f63",
     "Name": "wait-2",
-    "SubType": "Wait",
+    "EventTimestamp": "2025-11-30T08:50:36.897Z",
     "WaitSucceededDetails": {
       "Duration": 5
     }
   },
   {
-    "EventId": 8,
-    "EventTimestamp": "2025-11-24T18:55:48.274Z",
     "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2025-11-30T08:50:36.919Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:55:48.274Z",
+      "StartTimestamp": "2025-11-30T08:50:36.918Z",
+      "EndTimestamp": "2025-11-30T08:50:36.919Z",
       "Error": {},
-      "RequestId": "99e5a140-c1aa-4b41-8fd0-10ab975c5668",
-      "StartTimestamp": "2025-11-24T18:55:48.190Z"
+      "RequestId": "094985af-c7ce-4369-b927-3be15e35d953"
     }
   },
   {
-    "EventId": 9,
-    "EventTimestamp": "2025-11-24T18:55:48.376Z",
     "EventType": "ExecutionSucceeded",
+    "EventId": 9,
+    "Id": "20bd0ca0-9d73-44f8-9f68-595c2a31ff06",
+    "EventTimestamp": "2025-11-30T08:50:36.919Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"completedWaits\":2,\"finalStep\":\"done\"}"
       }
-    },
-    "Id": "69f89787-9bc8-4343-bc13-459d7b4965ae"
+    }
   }
 ]

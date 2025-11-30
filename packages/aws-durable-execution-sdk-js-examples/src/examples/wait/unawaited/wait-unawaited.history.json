@@ -1,56 +1,46 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T18:56:17.483Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "2af57dbe-1e31-4521-93cc-835e8bd1d5e2",
+    "EventTimestamp": "2025-11-30T08:52:24.389Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "06dd823f-7976-4382-8e7b-036d318463ea"
+    }
   },
   {
-    "EventId": 2,
-    "EventTimestamp": "2025-11-24T18:56:17.631Z",
     "EventType": "WaitStarted",
-    "Id": "c4ca4238a0b92382",
     "SubType": "Wait",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-11-30T08:52:24.395Z",
     "WaitStartedDetails": {
       "Duration": 86400,
-      "ScheduledEndTimestamp": "2025-11-25T18:56:17.631Z"
+      "ScheduledEndTimestamp": "2025-12-01T08:52:24.395Z"
     }
   },
   {
-    "EventId": 3,
-    "EventTimestamp": "2025-11-24T18:56:17.714Z",
-    "EventType": "WaitSucceeded",
-    "Id": "c4ca4238a0b92382",
-    "SubType": "Wait",
-    "WaitSucceededDetails": {
-      "Duration": 86400
-    }
-  },
-  {
-    "EventId": 4,
-    "EventTimestamp": "2025-11-24T18:56:17.797Z",
     "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-11-30T08:52:25.394Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:56:17.797Z",
+      "StartTimestamp": "2025-11-30T08:52:24.389Z",
+      "EndTimestamp": "2025-11-30T08:52:25.394Z",
       "Error": {},
-      "RequestId": "86054fc6-2b97-47fe-a905-118ab0adc141",
-      "StartTimestamp": "2025-11-24T18:56:17.483Z"
+      "RequestId": "ce15a394-aff0-4d03-b719-3c3ed4641186"
     }
   },
   {
-    "EventId": 5,
-    "EventTimestamp": "2025-11-24T18:56:17.899Z",
     "EventType": "ExecutionSucceeded",
+    "EventId": 4,
+    "Id": "2af57dbe-1e31-4521-93cc-835e8bd1d5e2",
+    "EventTimestamp": "2025-11-30T08:52:25.394Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "\"result\""
       }
-    },
-    "Id": "06dd823f-7976-4382-8e7b-036d318463ea"
+    }
   }
 ]

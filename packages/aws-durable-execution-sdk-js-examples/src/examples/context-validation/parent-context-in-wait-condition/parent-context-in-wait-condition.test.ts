@@ -66,8 +66,6 @@ createTests({
 
       // Should have exactly 2 operations: child-context and wrong-wait-condition
       expect(operations.length).toBe(2);
-      // Should have at most the child-context operation (0 or 1 operations)
-      expect(operations.length).toBeLessThanOrEqual(1);
 
       assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });

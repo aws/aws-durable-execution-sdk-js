@@ -11,6 +11,7 @@ async function main() {
 
   parser.add_argument("--pattern", {
     type: "str",
+    required: true,
     help: "String pattern to generate history for a specific example that matches the pattern (default: generate all examples)",
   });
 
@@ -24,11 +25,22 @@ async function main() {
     help: "Do not skip time in test environment (default: skip time)",
   });
 
+  parser.add_argument("--suffix", {
+    help: "Optional suffix for test case",
+    type: "str",
+  });
+
+  parser.add_argument("--payload", {
+    help: "Optional payload for test case",
+    type: "str",
+  });
+
   const args = parser.parse_args();
 
   const pattern = args.pattern;
   const logEvents = args.log;
   const skipTime = !args.no_skip_time;
+  const suffix = args.suffix;
 
   const examples = await exampleStorage.getExamples();
 
@@ -57,8 +69,8 @@ async function main() {
       skipTime: skipTime,
     });
     for (const example of filteredExamples) {
-      if (example.path.includes("callback")) {
-        console.log("Skipping callback example", example.name);
+      if (example.path.includes("callback") || !example.durableConfig) {
+        console.log("Skipping example", example.name);
         continue;
       }
       console.log(`Generating history for ${example.name}`);
@@ -66,20 +78,21 @@ async function main() {
         const runner = new LocalDurableTestRunner({
           handlerFunction: (await import(example.path)).handler,
         });
-        const result = await runner.run();
+        const result = await runner.run({
+          payload: args.payload ? JSON.parse(args.payload) : undefined,
+        });
 
         const exampleDir = path.dirname(example.path);
-        const exampleBaseName = path.basename(
-          example.path,
-          path.extname(example.path),
-        );
+        const exampleBaseName =
+          path.basename(example.path, path.extname(example.path)) +
+          (suffix ? `-${suffix}` : ``);
 
         const historyEvents = result.getHistoryEvents();
 
-        fs.writeFileSync(
-          `${exampleDir}/${exampleBaseName}.history.json`,
-          JSON.stringify(historyEvents, null, 2),
-        );
+        const outputPath = `${exampleDir}/${exampleBaseName}.history.json`;
+
+        console.log(`Output: ${outputPath}`);
+        fs.writeFileSync(outputPath, JSON.stringify(historyEvents, null, 2));
 
         if (logEvents) {
           console.log(

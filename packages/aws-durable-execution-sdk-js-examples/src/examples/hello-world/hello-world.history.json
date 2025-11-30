@@ -1,35 +1,35 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T18:55:16.950Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "00a75c04-ba6e-4cf4-9118-3b7242f83e58",
+    "EventTimestamp": "2025-11-30T08:50:34.563Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "dfb66fb9-ad9a-4605-b81d-5d45e8db2d9b"
-  },
-  {
-    "EventId": 2,
-    "EventTimestamp": "2025-11-24T18:55:17.082Z",
-    "EventType": "InvocationCompleted",
-    "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:55:17.082Z",
-      "Error": {},
-      "RequestId": "7f9f71bf-1500-4b52-9b36-809b83912b8f",
-      "StartTimestamp": "2025-11-24T18:55:16.950Z"
     }
   },
   {
-    "EventId": 3,
-    "EventTimestamp": "2025-11-24T18:55:17.186Z",
+    "EventType": "InvocationCompleted",
+    "EventId": 2,
+    "EventTimestamp": "2025-11-30T08:50:34.564Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-11-30T08:50:34.563Z",
+      "EndTimestamp": "2025-11-30T08:50:34.564Z",
+      "Error": {},
+      "RequestId": "5ef2603c-c651-4550-b081-ba8f73a936aa"
+    }
+  },
+  {
     "EventType": "ExecutionSucceeded",
+    "EventId": 3,
+    "Id": "00a75c04-ba6e-4cf4-9118-3b7242f83e58",
+    "EventTimestamp": "2025-11-30T08:50:34.564Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "\"Hello World!\""
       }
-    },
-    "Id": "dfb66fb9-ad9a-4605-b81d-5d45e8db2d9b"
+    }
   }
 ]

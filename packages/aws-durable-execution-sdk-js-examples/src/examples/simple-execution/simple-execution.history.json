@@ -1,35 +1,35 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T18:56:10.390Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "34941dca-4a49-4fbd-bb82-0a1207520aaa",
+    "EventTimestamp": "2025-11-30T08:50:45.646Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "8213e78c-936a-446f-b99e-72471bb41ff6"
-  },
-  {
-    "EventId": 2,
-    "EventTimestamp": "2025-11-24T18:56:10.513Z",
-    "EventType": "InvocationCompleted",
-    "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:56:10.513Z",
-      "Error": {},
-      "RequestId": "382d60cc-cf4e-4c73-bdd9-41aa8fc65c06",
-      "StartTimestamp": "2025-11-24T18:56:10.390Z"
     }
   },
   {
-    "EventId": 3,
-    "EventTimestamp": "2025-11-24T18:56:10.617Z",
+    "EventType": "InvocationCompleted",
+    "EventId": 2,
+    "EventTimestamp": "2025-11-30T08:50:45.648Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-11-30T08:50:45.646Z",
+      "EndTimestamp": "2025-11-30T08:50:45.648Z",
+      "Error": {},
+      "RequestId": "fc360d5c-6431-47f6-be66-fdbc09f06006"
+    }
+  },
+  {
     "EventType": "ExecutionSucceeded",
+    "EventId": 3,
+    "Id": "34941dca-4a49-4fbd-bb82-0a1207520aaa",
+    "EventTimestamp": "2025-11-30T08:50:45.648Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"received\":\"{}\",\"timestamp\":1764010585840,\"message\":\"Handler completed successfully\"}"
+        "Payload": "{\"received\":\"{}\",\"timestamp\":1764492694150,\"message\":\"Handler completed successfully\"}"
       }
-    },
-    "Id": "8213e78c-936a-446f-b99e-72471bb41ff6"
+    }
   }
 ]

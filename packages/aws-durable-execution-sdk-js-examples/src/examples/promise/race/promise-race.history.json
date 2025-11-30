@@ -1,108 +1,95 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T18:55:59.456Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "7981de87-2960-4e79-a36e-19779fe71295",
+    "EventTimestamp": "2025-11-30T08:50:42.392Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "7cfc9950-2869-41cc-8d53-0cd62437b926"
-  },
-  {
-    "EventId": 2,
-    "EventTimestamp": "2025-11-24T18:55:59.604Z",
-    "EventType": "StepStarted",
-    "Id": "c4ca4238a0b92382",
-    "StepStartedDetails": {},
-    "SubType": "Step"
-  },
-  {
-    "EventId": 3,
-    "EventTimestamp": "2025-11-24T18:55:59.604Z",
-    "EventType": "StepStarted",
-    "Id": "c81e728d9d4c2f63",
-    "StepStartedDetails": {},
-    "SubType": "Step"
-  },
-  {
-    "EventId": 4,
-    "EventTimestamp": "2025-11-24T18:55:59.604Z",
-    "EventType": "StepStarted",
-    "Id": "eccbc87e4b5ce2fe",
-    "StepStartedDetails": {},
-    "SubType": "Step"
-  },
-  {
-    "EventId": 5,
-    "EventTimestamp": "2025-11-24T18:55:59.604Z",
-    "EventType": "StepStarted",
-    "Id": "a87ff679a2f3e71d",
-    "Name": "promise-race",
-    "StepStartedDetails": {},
-    "SubType": "Step"
-  },
-  {
-    "EventId": 6,
-    "EventTimestamp": "2025-11-24T18:55:59.604Z",
-    "EventType": "StepSucceeded",
-    "Id": "c81e728d9d4c2f63",
-    "StepSucceededDetails": {
-      "Result": {
-        "Payload": "\"fast result\""
-      },
-      "RetryDetails": {}
-    },
-    "SubType": "Step"
-  },
-  {
-    "EventId": 7,
-    "EventTimestamp": "2025-11-24T18:55:59.665Z",
-    "EventType": "StepSucceeded",
-    "Id": "a87ff679a2f3e71d",
-    "Name": "promise-race",
-    "StepSucceededDetails": {
-      "Result": {
-        "Payload": "\"fast result\""
-      },
-      "RetryDetails": {}
-    },
-    "SubType": "Step"
-  },
-  {
-    "EventId": 8,
-    "EventTimestamp": "2025-11-24T18:55:59.709Z",
-    "EventType": "InvocationCompleted",
-    "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T18:55:59.709Z",
-      "Error": {},
-      "RequestId": "582fe265-44e5-4219-8bfd-9d3db4b571d9",
-      "StartTimestamp": "2025-11-24T18:55:59.456Z"
     }
   },
   {
-    "EventId": 9,
-    "EventTimestamp": "2025-11-24T18:55:59.729Z",
-    "EventType": "StepSucceeded",
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
     "Id": "c4ca4238a0b92382",
-    "StepSucceededDetails": {
-      "Result": {
-        "Payload": "\"slow result\""
-      },
-      "RetryDetails": {}
-    },
-    "SubType": "Step"
+    "EventTimestamp": "2025-11-30T08:50:42.434Z",
+    "StepStartedDetails": {}
   },
   {
-    "EventId": 10,
-    "EventTimestamp": "2025-11-24T18:55:59.796Z",
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-11-30T08:50:42.434Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-11-30T08:50:42.434Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "promise-race",
+    "EventTimestamp": "2025-11-30T08:50:42.434Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-11-30T08:50:42.434Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"fast result\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "promise-race",
+    "EventTimestamp": "2025-11-30T08:50:42.456Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"fast result\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2025-11-30T08:50:42.456Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-11-30T08:50:42.392Z",
+      "EndTimestamp": "2025-11-30T08:50:42.456Z",
+      "Error": {},
+      "RequestId": "58dc2d00-08f6-44ac-be30-13812829706c"
+    }
+  },
+  {
     "EventType": "ExecutionSucceeded",
+    "EventId": 9,
+    "Id": "7981de87-2960-4e79-a36e-19779fe71295",
+    "EventTimestamp": "2025-11-30T08:50:42.456Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "\"fast result\""
       }
-    },
-    "Id": "7cfc9950-2869-41cc-8d53-0cd62437b926"
+    }
   }
 ]

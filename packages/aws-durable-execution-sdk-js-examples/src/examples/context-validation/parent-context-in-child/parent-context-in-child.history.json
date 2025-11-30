@@ -1,35 +1,45 @@
 [
   {
-    "EventId": 1,
-    "EventTimestamp": "2025-11-24T22:01:36.674Z",
     "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "3df071be-8861-4358-a090-87a3a1e0376b",
+    "EventTimestamp": "2025-11-30T08:50:33.668Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
       }
-    },
-    "Id": "5b7be852-72c5-4d35-9ed7-c3858bd1644a"
+    }
   },
   {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
     "EventId": 2,
-    "EventTimestamp": "2025-11-24T22:01:36.800Z",
+    "Id": "c4ca4238a0b92382",
+    "Name": "child-context",
+    "EventTimestamp": "2025-11-30T08:50:33.691Z",
+    "ContextStartedDetails": {}
+  },
+  {
     "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-11-30T08:50:33.692Z",
     "InvocationCompletedDetails": {
-      "EndTimestamp": "2025-11-24T22:01:36.800Z",
+      "StartTimestamp": "2025-11-30T08:50:33.668Z",
+      "EndTimestamp": "2025-11-30T08:50:33.692Z",
       "Error": {
         "Payload": {
           "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
           "ErrorType": "Error"
         }
       },
-      "RequestId": "c11ab4fd-fa89-4b21-90e1-946b787c4784",
-      "StartTimestamp": "2025-11-24T22:01:36.674Z"
+      "RequestId": "7dd9b846-597f-4940-8e1f-4d008fa8c5a0"
     }
   },
   {
-    "EventId": 3,
-    "EventTimestamp": "2025-11-24T22:01:36.906Z",
     "EventType": "ExecutionFailed",
+    "EventId": 4,
+    "Id": "3df071be-8861-4358-a090-87a3a1e0376b",
+    "EventTimestamp": "2025-11-30T08:50:33.692Z",
     "ExecutionFailedDetails": {
       "Error": {
         "Payload": {
@@ -37,7 +47,6 @@
           "ErrorType": "Error"
         }
       }
-    },
-    "Id": "5b7be852-72c5-4d35-9ed7-c3858bd1644a"
+    }
   }
 ]
