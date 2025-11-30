@@ -694,6 +694,11 @@ export class CheckpointManager implements Checkpoint {
       delay = 1000;
     }
 
+    // Initialize poll count for this operation
+    if (!op.pollCount) {
+      op.pollCount = 0;
+    }
+
     op.timer = setTimeout(() => {
       this.forceRefreshAndCheckStatus(stepId);
     }, delay);
@@ -730,10 +735,14 @@ export class CheckpointManager implements Checkpoint {
         op.timer = undefined;
       }
     } else {
-      // Status not changed yet, poll again in 5 seconds
+      // Status not changed yet, poll again with incremental backoff
+      // Start at 1s, increase by 1s each poll, max 10s
+      op.pollCount = (op.pollCount || 0) + 1;
+      const nextDelay = Math.min(op.pollCount * 1000, 10000);
+
       op.timer = setTimeout(() => {
         this.forceRefreshAndCheckStatus(stepId);
-      }, 5000);
+      }, nextDelay);
     }
   }
 }
