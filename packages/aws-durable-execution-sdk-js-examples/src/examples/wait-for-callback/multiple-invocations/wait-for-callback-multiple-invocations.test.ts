@@ -41,10 +41,12 @@ createTests({
         invocationCount: "multiple",
       });
 
-      // Verify invocations were tracked - should be exactly 4 invocations
-      // With ancestor completion check, operations are cleaned up more efficiently
+      // Verify invocations were tracked - should be 4-5 invocations
+      // Local (low latency): 4 invocations with early completion
+      // Cloud (network latency): 5 invocations with full execution
       const invocations = result.getInvocations();
-      expect(invocations).toHaveLength(4);
+      expect(invocations.length).toBeGreaterThanOrEqual(4);
+      expect(invocations.length).toBeLessThanOrEqual(5);
 
       // Verify operations were executed
       const operations = result.getOperations();
