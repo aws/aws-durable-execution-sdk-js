@@ -84,13 +84,11 @@ describe("createCallbackPromise", () => {
     expect(mockCheckAndUpdateReplayMode).toHaveBeenCalled();
   });
 
-  it("should throw error when callback ID is missing", async () => {
+  it("should throw error when callback data is missing", async () => {
     (mockContext.getStepData as jest.Mock).mockReturnValue({
       Id: "test-id",
       Status: OperationStatus.SUCCEEDED,
-      CallbackDetails: {
-        Result: "test-result",
-      },
+      CallbackDetails: undefined,
     });
 
     const promise = createCallbackPromise(
@@ -104,7 +102,7 @@ describe("createCallbackPromise", () => {
 
     await expect(promise).rejects.toThrow(CallbackError);
     await expect(promise).rejects.toThrow(
-      "No callback ID found for completed callback: test-step-id",
+      "No callback data found for completed callback: test-step-id",
     );
   });
 

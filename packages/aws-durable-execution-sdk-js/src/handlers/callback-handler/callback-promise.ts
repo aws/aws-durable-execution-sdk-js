@@ -34,9 +34,9 @@ export const createCallbackPromise = <T>(
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
 
       const callbackData = stepData.CallbackDetails;
-      if (!callbackData?.CallbackId) {
+      if (!callbackData) {
         throw new CallbackError(
-          `No callback ID found for completed callback: ${stepId}`,
+          `No callback data found for completed callback: ${stepId}`,
         );
       }
 
