@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: ["main", "development"]
+    branches: ["main", "development", "nodejs-runtime-release"]
   pull_request:
-    branches: ["main", "development"]
+    branches: ["main", "development", "nodejs-runtime-release"]
 
 permissions:
   contents: read # This is required for actions/checkout
