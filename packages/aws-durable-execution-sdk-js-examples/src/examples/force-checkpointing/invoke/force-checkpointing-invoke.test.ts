@@ -1,0 +1,56 @@
+import { handler } from "./force-checkpointing-invoke";
+import { createTests } from "../../../utils/test-helper";
+import {
+  ExecutionStatus,
+  LocalDurableTestRunner,
+} from "@aws/durable-execution-sdk-js-testing";
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+
+// Simple handlers for invoked functions
+const invoke1Handler = withDurableExecution(async () => "invoke-1-result");
+const invoke2Handler = withDurableExecution(async () => "invoke-2-result");
+const invoke3Handler = withDurableExecution(async () => "invoke-3-result");
+
+createTests({
+  name: "force-checkpointing-invoke",
+  functionName: "force-checkpointing-invoke",
+  handler,
+  tests: (runner) => {
+    it("should complete with force checkpointing when one branch blocks termination with multiple invokes", async () => {
+      // Register the invoked functions
+      if (runner instanceof LocalDurableTestRunner) {
+        runner.registerDurableFunction("invoke-1", invoke1Handler);
+        runner.registerDurableFunction("invoke-2", invoke2Handler);
+        runner.registerDurableFunction("invoke-3", invoke3Handler);
+      }
+
+      const startTime = Date.now();
+
+      const execution = await runner.run();
+
+      const duration = Date.now() - startTime;
+
+      // Verify the result
+      expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+      const result = JSON.parse(execution.getResult() as string);
+      expect(result.completionReason).toBe("ALL_COMPLETED");
+      expect(result.all).toHaveLength(2);
+      expect(result.all[0].result).toBe("long-complete");
+      expect(result.all[1].result).toBe("invokes-complete");
+
+      // Should complete in less than 15 seconds
+      // (10s for long-running step + time for invokes)
+      expect(duration).toBeLessThan(15000);
+
+      // Should complete in a single invocation
+      // The long-running step prevents termination, so the invoke operations
+      // use force checkpoint to get status updates without terminating
+      const invocations = execution.getInvocations();
+      expect(invocations).toHaveLength(1);
+
+      // Verify operations were tracked
+      const operations = execution.getOperations();
+      expect(operations.length).toBeGreaterThan(0);
+    }, 20000); // 20 second timeout
+  },
+});
