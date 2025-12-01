@@ -1,9 +1,5 @@
 import { createStepHandler } from "./step-handler";
-import {
-  ExecutionContext,
-  StepSemantics,
-  OperationLifecycleState,
-} from "../../types";
+import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";

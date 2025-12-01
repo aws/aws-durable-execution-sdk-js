@@ -52,7 +52,7 @@ describe("withDurableExecution Queue Completion", () => {
     });
 
     (createDurableContext as jest.Mock).mockImplementation(
-      (ctx, lambdaCtx, mode, logger, opts, durableExecution) => {
+      (_ctx, _lambdaCtx, _mode, _logger, _opts, _durableExecution) => {
         return {};
       },
     );

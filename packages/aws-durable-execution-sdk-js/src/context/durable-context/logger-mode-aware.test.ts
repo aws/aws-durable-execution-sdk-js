@@ -20,7 +20,7 @@ describe("DurableContext logger modeAware configuration", () => {
 
   // Helper to create a mock logger that respects shouldLog
   const createMockLogger = (): any => {
-    let loggingContext: any = null;
+    let _loggingContext: any = null;
     const infoMock = jest.fn();
 
     return {
@@ -32,7 +32,7 @@ describe("DurableContext logger modeAware configuration", () => {
       warn: jest.fn(),
       debug: jest.fn(),
       configureDurableLoggingContext: jest.fn((ctx: any) => {
-        loggingContext = ctx;
+        _loggingContext = ctx;
       }),
       _getInfoMock: () => infoMock,
     };

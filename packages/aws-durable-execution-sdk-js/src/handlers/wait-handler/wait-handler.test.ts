@@ -67,7 +67,7 @@ describe("Wait Handler", () => {
       createStepId,
     );
 
-    const promise = handler("test-wait", { seconds: 1 });
+    const _promise = handler("test-wait", { seconds: 1 });
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -81,7 +81,7 @@ describe("Wait Handler", () => {
       createStepId,
     );
 
-    const promise = handler({ seconds: 1 });
+    const _promise = handler({ seconds: 1 });
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 

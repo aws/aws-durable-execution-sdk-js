@@ -142,7 +142,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             endTimestamp: stepData.StepDetails?.NextAttemptTimestamp,
           },
         );
-        return (async () => {
+        return (async (): Promise<T> => {
           await checkpoint.waitForRetryTimer(stepId);
           stepData = context.getStepData(stepId);
           return await executeStepLogic();
@@ -210,7 +210,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           },
         );
 
-        return (async () => {
+        return (async (): Promise<T> => {
           await checkpoint.waitForRetryTimer(stepId);
           stepData = context.getStepData(stepId);
           return await executeStepLogic();
