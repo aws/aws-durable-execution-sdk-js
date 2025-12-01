@@ -42,8 +42,7 @@ createTests({
       });
 
       // Verify invocations were tracked - should be 4-5 invocations
-      // Local (low latency): 4 invocations with early completion
-      // Cloud (network latency): 5 invocations with full execution
+      // Due to update/termination timing, this execution may require 4-5 invocations to complete
       const invocations = result.getInvocations();
       expect(invocations.length).toBeGreaterThanOrEqual(4);
       expect(invocations.length).toBeLessThanOrEqual(5);
