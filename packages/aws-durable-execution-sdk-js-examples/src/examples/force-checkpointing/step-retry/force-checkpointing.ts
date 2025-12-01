@@ -2,6 +2,13 @@ import {
   withDurableExecution,
   DurableContext,
 } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../../../types";
+
+export const config: ExampleConfig = {
+  name: "Force Checkpointing - Step Retry",
+  description:
+    "Demonstrates force checkpoint polling when a long-running operation blocks termination while another branch retries",
+};
 
 export const handler = withDurableExecution(
   async (_event, ctx: DurableContext): Promise<string> => {
