@@ -123,7 +123,7 @@ describe("CloudDurableTestRunner", () => {
       });
 
       expect(runner).toBeDefined();
-      expect(LambdaClient).toHaveBeenCalledWith({});
+      expect(LambdaClient).toHaveBeenCalledWith();
     });
 
     it("should initialize with custom Lambda client", () => {

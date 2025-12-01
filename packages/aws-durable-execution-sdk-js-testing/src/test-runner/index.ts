@@ -4,7 +4,7 @@ export type {
   LocalDurableTestRunnerSetupParameters,
 } from "./local";
 
-export { CloudDurableTestRunner, InvocationType } from "./cloud";
+export { CloudDurableTestRunner } from "./cloud";
 export type {
   CloudDurableTestRunnerConfig,
   CloudDurableTestRunnerParameters,
@@ -20,9 +20,11 @@ export type {
 
 export type {
   DurableOperation,
-  ContextDetails as OperationResultContextDetails,
-  StepDetails as OperationResultStepDetails,
-  CallbackDetails as OperationResultCallbackDetails,
-  ChainedInvokeDetails as OperationResultChainedInvokeDetails,
+  ContextDetails,
+  StepDetails,
+  CallbackDetails,
+  ChainedInvokeDetails,
   WaitResultDetails,
 } from "./types/durable-operation";
+
+export { WaitingOperationStatus } from "./types/durable-operation";

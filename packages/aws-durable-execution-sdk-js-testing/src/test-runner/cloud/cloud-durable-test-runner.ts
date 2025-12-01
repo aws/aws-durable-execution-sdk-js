@@ -24,8 +24,6 @@ import {
 } from "../common/create-durable-api-client";
 import { CloudOperation } from "./operations/cloud-operation";
 
-export { InvocationType };
-
 /**
  * Options for the cloud durable test runner.
  * @public

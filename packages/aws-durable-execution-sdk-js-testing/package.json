@@ -1,6 +1,6 @@
 {
   "name": "@aws/durable-execution-sdk-js-testing",
-  "description": "Durable Executions Testing SDK for TypeScript",
+  "description": "AWS Durable Execution Testing SDK for TypeScript",
   "version": "1.0.0",
   "license": "Apache-2.0",
   "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-testing",

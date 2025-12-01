@@ -2,11 +2,11 @@
 
 This repository contains the code for the following 3 packages published to NPM:
 
-* [@aws/durable-execution-sdk-js](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js)
-* [@aws/durable-execution-sdk-js-testing](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-testing)
-* [@aws/durable-execution-sdk-js-eslint-plugin](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-eslint-plugin)
+- [@aws/durable-execution-sdk-js](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js)
+- [@aws/durable-execution-sdk-js-testing](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-testing)
+- [@aws/durable-execution-sdk-js-eslint-plugin](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-eslint-plugin)
 
-The repository also contains example durable execution located [here](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-examples).
+The repository also contains example durable functions located [here](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-examples).
 
 ## Security
 
