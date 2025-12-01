@@ -8,11 +8,15 @@ import {
   SendDurableExecutionCallbackHeartbeatResponse,
   SendDurableExecutionCallbackSuccessResponse,
 } from "@aws-sdk/client-lambda";
+import { WaitingOperationStatus } from "../../types/durable-operation";
 import {
   DurableOperation,
-  TestResultError,
-  WaitingOperationStatus,
-} from "../../durable-test-runner";
+  CallbackDetails,
+  ChainedInvokeDetails,
+  ContextDetails,
+  StepDetails,
+  WaitResultDetails,
+} from "../../types/durable-operation";
 import { OperationWaitManager } from "../../local/operations/operation-wait-manager";
 import { doesStatusMatch } from "../../local/operations/status-matcher";
 import { tryJsonParse } from "../utils";
@@ -21,42 +25,32 @@ import { transformErrorObjectToErrorResult } from "../../../utils";
 import { OperationSubType } from "@aws/durable-execution-sdk-js";
 import { DurableApiClient } from "../create-durable-api-client";
 
-export interface OperationResultContextDetails<ResultValue = unknown> {
-  readonly result: ResultValue | undefined;
-  readonly error: TestResultError | undefined;
-}
-
-export interface OperationResultStepDetails<ResultValue = unknown> {
-  readonly attempt: number | undefined;
-  readonly nextAttemptTimestamp: Date | undefined;
-  readonly result: ResultValue | undefined;
-  readonly error: TestResultError | undefined;
-}
-
-export interface OperationResultCallbackDetails<ResultValue = unknown> {
-  readonly callbackId: string;
-  readonly error?: TestResultError;
-  readonly result?: ResultValue;
-}
-
-export interface OperationResultChainedInvokeDetails<ResultValue = unknown> {
-  readonly error?: TestResultError;
-  readonly result?: ResultValue;
-}
-
-export interface WaitResultDetails {
-  readonly waitSeconds?: number;
-  readonly scheduledEndTimestamp?: Date;
-}
-
+/**
+ * Container for operation data and associated events.
+ * @public
+ */
 export interface OperationEvents {
+  /** The operation data */
   operation: Operation;
+  /** The list of events associated with the operation */
   events: Event[];
 }
 
-export class OperationWithData<
-  OperationResultValue = unknown,
-> implements DurableOperation<OperationResultValue> {
+/**
+ * An instance of an operation. This operation may or may not have data available, depending on
+ * the current state of the execution.
+ * @internal
+ */
+export class OperationWithData<OperationResultValue = unknown>
+  implements DurableOperation<OperationResultValue>
+{
+  /**
+   * Creates a new OperationWithData instance.
+   * @param waitManager - Manager for waiting on operation status changes
+   * @param operationIndex - Index of operations for finding related operations
+   * @param apiClient - Client for making API calls to the durable execution service
+   * @param checkpointOperationData - Optional operation data from checkpoint
+   */
   constructor(
     private readonly waitManager: OperationWaitManager,
     private readonly operationIndex: IndexedOperations,
@@ -81,9 +75,7 @@ export class OperationWithData<
     return this;
   }
 
-  getContextDetails():
-    | OperationResultContextDetails<OperationResultValue>
-    | undefined {
+  getContextDetails(): ContextDetails<OperationResultValue> | undefined {
     const operationData = this.getOperationData();
 
     if (!operationData) {
@@ -102,9 +94,7 @@ export class OperationWithData<
     };
   }
 
-  getStepDetails():
-    | OperationResultStepDetails<OperationResultValue>
-    | undefined {
+  getStepDetails(): StepDetails<OperationResultValue> | undefined {
     const operationData = this.getOperationData();
 
     if (!operationData) {
@@ -126,7 +116,7 @@ export class OperationWithData<
   }
 
   private getWaitForCallbackDetails():
-    | OperationResultCallbackDetails<OperationResultValue>
+    | CallbackDetails<OperationResultValue>
     | undefined {
     const createCallbackOperation = this.getChildOperations()
       ?.find((operation) => operation.getType() === OperationType.CALLBACK)
@@ -143,7 +133,7 @@ export class OperationWithData<
 
   private getCreateCallbackDetails(
     operationData: Operation,
-  ): OperationResultCallbackDetails<OperationResultValue> | undefined {
+  ): CallbackDetails<OperationResultValue> | undefined {
     const callbackDetails = operationData.CallbackDetails;
     if (callbackDetails?.CallbackId === undefined) {
       throw new Error("Could not find callback ID in callback details");
@@ -157,7 +147,7 @@ export class OperationWithData<
   }
 
   getChainedInvokeDetails():
-    | OperationResultChainedInvokeDetails<OperationResultValue>
+    | ChainedInvokeDetails<OperationResultValue>
     | undefined {
     const operationData = this.getOperationData();
 
@@ -189,9 +179,7 @@ export class OperationWithData<
     };
   }
 
-  getCallbackDetails():
-    | OperationResultCallbackDetails<OperationResultValue>
-    | undefined {
+  getCallbackDetails(): CallbackDetails<OperationResultValue> | undefined {
     const operationData = this.getOperationData();
 
     if (!operationData) {
@@ -260,9 +248,6 @@ export class OperationWithData<
         ),
     );
   }
-
-  // TODO: need subtypes to properly get operations by path for map/parallel
-  // getChildOperationByPath(path: (string | number)[]): EnhancedOperationData;
 
   getOperationData(): Operation | undefined {
     return this.checkpointOperationData?.operation;

@@ -3,10 +3,8 @@ import {
   OperationStatus,
   OperationType,
 } from "@aws-sdk/client-lambda";
-import {
-  DurableOperation,
-  WaitingOperationStatus,
-} from "../../durable-test-runner";
+import { WaitingOperationStatus } from "../../types/durable-operation";
+import { DurableOperation } from "../../types/durable-operation";
 import { doesStatusMatch } from "./status-matcher";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
@@ -21,6 +19,7 @@ interface WaitingOperation {
 
 /**
  * Manages waiting operations and promise resolution for mock operations.
+ * @internal
  */
 export class OperationWaitManager {
   private readonly waitingOperations = new Set<WaitingOperation>();
@@ -29,8 +28,8 @@ export class OperationWaitManager {
 
   /**
    * Creates a promise that resolves when the specified operation reaches the expected status.
-   * @param operation The mock operation to wait for
-   * @param status The expected status (defaults to STARTED)
+   * @param operation - The mock operation to wait for
+   * @param status - The expected status (defaults to STARTED)
    * @returns Promise that resolves with the mock operation when the status is reached
    */
   waitForOperation(
@@ -80,8 +79,8 @@ export class OperationWaitManager {
 
   /**
    * Handles checkpoint operations and resolves waiting operations.
-   * @param checkpointOperationsReceived All checkpoint operations received
-   * @param trackedDurableOperations Operations that just got populated with data
+   * @param checkpointOperationsReceived - All checkpoint operations received
+   * @param trackedDurableOperations - Operations that just got populated with data
    */
   handleCheckpointReceived(
     checkpointOperationsReceived: OperationEvents[],

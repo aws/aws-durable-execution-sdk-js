@@ -16,7 +16,7 @@ import {
   TestExecutionResult,
   TestExecutionState,
 } from "../common/test-execution-state";
-import { InvokeRequest } from "../durable-test-runner";
+import { InvokeRequest } from "../types/durable-test-runner";
 import {
   OperationAction,
   OperationType,

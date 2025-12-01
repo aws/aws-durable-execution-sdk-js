@@ -1,6 +1,6 @@
 import { OperationWaitManager } from "../operation-wait-manager";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
-import { WaitingOperationStatus } from "../../../durable-test-runner";
+import { WaitingOperationStatus } from "../../../types/durable-operation";
 import { IndexedOperations } from "../../../common/indexed-operations";
 import {
   OperationEvents,

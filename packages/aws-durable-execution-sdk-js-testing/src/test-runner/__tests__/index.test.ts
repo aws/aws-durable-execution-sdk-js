@@ -1,7 +1,7 @@
 import * as indexExports from "../index";
 import * as localExports from "../local";
 import * as cloudExports from "../cloud";
-import * as durableTestRunnerExports from "../durable-test-runner";
+import * as durableTestRunnerExports from "../types/durable-test-runner";
 
 describe("test-runner/index.ts exports", () => {
   it("should correctly re-export all exports from local", () => {

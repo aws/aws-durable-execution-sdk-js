@@ -13,7 +13,8 @@ import {
   InvocationType,
 } from "@aws-sdk/client-lambda";
 import { CloudDurableTestRunner } from "../cloud-durable-test-runner";
-import { TestResult, WaitingOperationStatus } from "../../durable-test-runner";
+import { TestResult } from "../../types/durable-test-runner";
+import { WaitingOperationStatus } from "../../types/durable-operation";
 
 jest.mock("@aws-sdk/client-lambda");
 
@@ -125,7 +126,7 @@ describe("CloudDurableTestRunner", () => {
       expect(LambdaClient).toHaveBeenCalledWith({});
     });
 
-    it("should initialize with custom Lambda client configuration", () => {
+    it("should initialize with custom Lambda client", () => {
       const customConfig = {
         region: "us-west-2",
         credentials: {
@@ -136,11 +137,11 @@ describe("CloudDurableTestRunner", () => {
 
       const runner = new CloudDurableTestRunner<{ success: boolean }>({
         functionName: mockFunctionArn,
-        clientConfig: customConfig,
+        client: new LambdaClient(customConfig),
       });
 
       expect(runner).toBeDefined();
-      expect(LambdaClient).toHaveBeenCalledWith(customConfig);
+      expect(LambdaClient).toHaveBeenCalledTimes(1);
     });
 
     it("should use custom poll interval", async () => {

@@ -5,9 +5,12 @@ import {
   OperationEvents,
   OperationWithData,
 } from "../../common/operations/operation-with-data";
-import { WaitingOperationStatus } from "../../durable-test-runner";
+import { WaitingOperationStatus } from "../../types/durable-operation";
 import { OperationWaitManager } from "../../local/operations/operation-wait-manager";
 
+/**
+ * @internal
+ */
 export class CloudOperation<
   OperationResultValue = unknown,
 > extends OperationWithData<OperationResultValue> {

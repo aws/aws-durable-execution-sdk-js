@@ -5,6 +5,8 @@ import { Event, OperationType } from "@aws-sdk/client-lambda";
  * Optimized way of retrieving operations by id and name/index.
  *
  * Avoids re-iterating over the operations list every time an operation needs to be fetched.
+ *
+ * @internal
  */
 export class IndexedOperations {
   private executionOperation: OperationEvents | undefined = undefined;
@@ -101,7 +103,7 @@ export class IndexedOperations {
 
   /**
    * Get an operation by its ID
-   * @param id The operation ID
+   * @param id - The operation ID
    * @returns The operation with the matching ID
    */
   getById(id: string): OperationEvents | undefined {
@@ -115,8 +117,8 @@ export class IndexedOperations {
 
   /**
    * Get an operation by name and index
-   * @param name The operation name
-   * @param index The index of the operation among operations with the same name. Defaults to 0
+   * @param name - The operation name
+   * @param index - The index of the operation among operations with the same name. Defaults to 0
    * @returns The operation at the specified name and index
    */
   getByNameAndIndex(name: string, index = 0): OperationEvents | undefined {

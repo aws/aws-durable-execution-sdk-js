@@ -1,8 +1,9 @@
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
-import { InvokeRequest, TestResult } from "../../durable-test-runner";
+import { InvokeRequest, TestResult } from "../../types/durable-test-runner";
 
 /**
  * Configuration parameters for LocalDurableTestRunner.
+ * @public
  */
 export interface LocalDurableTestRunnerParameters {
   /** The handler function to run the execution on */
@@ -11,6 +12,7 @@ export interface LocalDurableTestRunnerParameters {
 
 /**
  * Factory interface for creating local durable test runner instances.
+ * @internal
  */
 export interface ILocalDurableTestRunnerFactory {
   /**
@@ -25,6 +27,9 @@ export interface ILocalDurableTestRunnerFactory {
   ): ILocalDurableTestRunnerExecutor<ResultType>;
 }
 
+/**
+ * @internal
+ */
 export interface ILocalDurableTestRunnerExecutor<ResultType> {
   /**
    * Executes the durable function and returns the result.

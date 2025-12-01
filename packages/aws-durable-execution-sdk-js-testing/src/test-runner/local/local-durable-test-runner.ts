@@ -2,7 +2,8 @@ import {
   TestResult,
   InvokeRequest,
   DurableTestRunner,
-} from "../durable-test-runner";
+} from "../types/durable-test-runner";
+import { DurableOperation } from "../types/durable-operation";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { OperationWaitManager } from "./operations/operation-wait-manager";
@@ -27,13 +28,22 @@ import {
 } from "@aws-sdk/client-lambda";
 import { CheckpointWorkerApiClient } from "./api-client/checkpoint-worker-api-client";
 
-export type LocalTestRunnerHandlerFunction = DurableLambdaHandler;
-
 export type { LocalDurableTestRunnerParameters };
 
-export class LocalDurableTestRunnerFactory implements ILocalDurableTestRunnerFactory {
+/**
+ * Factory for creating LocalDurableTestRunner instances.
+ * Used internally to support nested function execution during testing.
+ * @internal
+ */
+export class LocalDurableTestRunnerFactory
+  implements ILocalDurableTestRunnerFactory
+{
   /**
-   * Creates new runner instances for nested function execution
+   * Creates new runner instances for nested function execution.
+   *
+   * @typeParam T - The expected result type of the durable function
+   * @param params - Configuration parameters for the test runner
+   * @returns A new LocalDurableTestRunner instance
    */
   createRunner<T>(
     params: LocalDurableTestRunnerParameters,
@@ -84,14 +94,37 @@ export interface LocalDurableTestRunnerSetupParameters {
 /**
  * Local test runner for durable executions that runs handlers in-process
  * with a local checkpoint server for development and testing scenarios.
+ *
+ * This test runner executes durable functions locally without requiring
+ * AWS Lambda infrastructure, making it ideal for unit testing and local
+ * development workflows.
+ *
+ * @typeParam ResultType - The expected result type of the durable function
+ *
+ * @example
+ * ```typescript
+ * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';
+ * import { withDurableExecution } from '@aws/durable-execution-sdk-js';
+ *
+ * const handler = withDurableExecution(async (input, context) => {
+ *   const result = await context.step('process', () => processData(input));
+ *   return result;
+ * });
+ *
+ * const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+ *
+ * const execution = await runner.run({ payload: { data: 'test' } });
+ * const result = execution.getResult();
+ * ```
+ *
+ * @public
  */
-export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
-  OperationWithData,
-  ResultType
-> {
+export class LocalDurableTestRunner<TResult>
+  implements DurableTestRunner<DurableOperation, TResult>
+{
   private operationStorage: LocalOperationStorage;
   private waitManager: OperationWaitManager;
-  private readonly resultFormatter: ResultFormatter<ResultType>;
+  private readonly resultFormatter: ResultFormatter<TResult>;
   private operationIndex: IndexedOperations;
   static skipTime = false;
   static fakeClock: InstalledClock | undefined;
@@ -102,13 +135,12 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
   /**
    * Creates a new LocalDurableTestRunner instance and starts the checkpoint server.
    *
-   * @param params Configuration parameters
-   * @param params.handlerFunction The durable function handler to execute
+   * @param params - Configuration parameters
    */
   constructor({ handlerFunction }: LocalDurableTestRunnerParameters) {
     this.operationIndex = new IndexedOperations([]);
     this.waitManager = new OperationWaitManager(this.operationIndex);
-    this.resultFormatter = new ResultFormatter<ResultType>();
+    this.resultFormatter = new ResultFormatter<TResult>();
 
     this.handlerFunction = handlerFunction;
 
@@ -161,10 +193,10 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
    * The method will not resolve until the handler function completes successfully
    * or throws an error.
    *
-   * @param params Optional parameters for the execution
+   * @param params - Optional parameters for the execution
    * @returns Promise that resolves with the execution result
    */
-  async run(params?: InvokeRequest): Promise<TestResult<ResultType>> {
+  async run(params?: InvokeRequest): Promise<TestResult<TResult>> {
     try {
       const orchestrator = new TestExecutionOrchestrator(
         this.handlerFunction,
@@ -270,12 +302,19 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
     return this;
   }
 
-  // Inherited methods from DurableTestRunner
-  getOperation<OperationResult>(
-    name: string,
-    index?: number,
-  ): OperationWithData<OperationResult> {
-    const operation = new OperationWithData<OperationResult>(
+  /**
+   * Gets the first operation with the specified name.
+   *
+   * @typeParam TOperationResult - The expected result type of the operation
+   * @param name - The name of the operation to retrieve
+   * @param index - Optional index for operations with the same name (defaults to 0)
+   * @returns An operation instance that can be used to inspect operation details
+   */
+  getOperation<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TOperationResult = any,
+  >(name: string, index?: number): DurableOperation<TOperationResult> {
+    const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
@@ -290,10 +329,18 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
     return operation;
   }
 
-  getOperationByIndex<OperationResult>(
-    index: number,
-  ): OperationWithData<OperationResult> {
-    const operation = new OperationWithData<OperationResult>(
+  /**
+   * Gets an operation by its execution order index.
+   *
+   * @typeParam TOperationResult - The expected result type of the operation
+   * @param index - The zero-based index of the operation in execution order
+   * @returns An operation instance for the operation at the specified index
+   */
+  getOperationByIndex<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TOperationResult = any,
+  >(index: number): DurableOperation<TOperationResult> {
+    const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
@@ -307,11 +354,19 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
     return operation;
   }
 
-  getOperationByNameAndIndex<OperationResult>(
-    name: string,
-    index: number,
-  ): OperationWithData<OperationResult> {
-    const operation = new OperationWithData<OperationResult>(
+  /**
+   * Gets an operation by name and index when multiple operations have the same name.
+   *
+   * @typeParam TOperationResult - The expected result type of the operation
+   * @param name - The name of the operation
+   * @param index - The zero-based index among operations with the same name
+   * @returns An operation instance for the specified named operation occurrence
+   */
+  getOperationByNameAndIndex<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TOperationResult = any,
+  >(name: string, index: number): DurableOperation<TOperationResult> {
+    const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
@@ -326,10 +381,18 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
     return operation;
   }
 
-  getOperationById<OperationResult>(
-    id: string,
-  ): OperationWithData<OperationResult> {
-    const operation = new OperationWithData<OperationResult>(
+  /**
+   * Gets an operation by its unique identifier.
+   *
+   * @typeParam TOperationResult - The expected result type of the operation
+   * @param id - The unique identifier of the operation
+   * @returns An operation instance for the operation with the specified ID
+   */
+  getOperationById<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TOperationResult = any,
+  >(id: string): DurableOperation<TOperationResult> {
+    const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
       this.durableApi,
@@ -343,6 +406,20 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
     return operation;
   }
 
+  /**
+   * Resets the test runner state, clearing all cached operations and history.
+   *
+   * This method should be called between test runs to ensure a clean state.
+   * It clears the operation index, wait manager, and operation storage,
+   * allowing the runner to be reused for multiple test executions.
+   *
+   * @example
+   * ```typescript
+   * beforeEach(() => {
+   *   runner.reset();
+   * });
+   * ```
+   */
   reset() {
     this.operationIndex = new IndexedOperations([]);
     this.waitManager = new OperationWaitManager(this.operationIndex);
@@ -362,9 +439,6 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
    * once before running any tests, typically in a test setup hook like `beforeAll`.
    *
    * @param params - Optional configuration parameters for the test environment
-   * @param params.skipTime - Whether to enable time skipping using fake timers. When true,
-   * allows tests to skip over time-based operations like `setTimeout`, `setInterval`, `context.wait`,
-   * and `context.step` retries without actually waiting for the specified duration.
    *
    * @returns Promise that resolves when the test environment setup is complete
    *
@@ -388,9 +462,9 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
    * @remarks
    * - If fake timers are already installed (for example, if `jest.useFakeTimers()` was called previously),
    *   this function will throw an error and setup will not succeed.
-   * - Must be paired with {@link teardownTestEnvironment} to properly clean up resources
+   * - Must be paired with {@link LocalDurableTestRunner.teardownTestEnvironment} to properly clean up resources
    *
-   * @see {@link teardownTestEnvironment} for cleaning up the test environment
+   * @see {@link LocalDurableTestRunner.teardownTestEnvironment} for cleaning up the test environment
    * @see {@link LocalDurableTestRunnerSetupParameters} for configuration options
    */
   static async setupTestEnvironment(
@@ -447,11 +521,11 @@ export class LocalDurableTestRunner<ResultType> implements DurableTestRunner<
    * @remarks
    * - This method safely uninstalls fake timers that were installed during setup if
    *    skipTime was enabled.
-   * - Must be called after {@link setupTestEnvironment} to prevent resource leaks
+   * - Must be called after {@link LocalDurableTestRunner.setupTestEnvironment} to prevent resource leaks
    * - Failure to call this method may leave the checkpoint server running and
    *   consume system resources
    *
-   * @see {@link setupTestEnvironment} for initializing the test environment
+   * @see {@link LocalDurableTestRunner.setupTestEnvironment} for initializing the test environment
    */
   static async teardownTestEnvironment() {
     this.fakeClock?.uninstall();

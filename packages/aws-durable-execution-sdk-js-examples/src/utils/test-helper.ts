@@ -1,3 +1,4 @@
+import { LambdaClient } from "@aws-sdk/client-lambda";
 import {
   LocalDurableTestRunner,
   CloudDurableTestRunner,
@@ -66,9 +67,9 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
 
     const runner = new CloudDurableTestRunner<ResultType>({
       functionName,
-      clientConfig: {
+      client: new LambdaClient({
         endpoint: process.env.LAMBDA_ENDPOINT,
-      },
+      }),
       config: {
         invocationType: testDef.invocationType,
       },

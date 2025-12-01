@@ -1,4 +1,4 @@
-import { TestResult, TestResultError } from "../durable-test-runner";
+import { TestResult, TestResultError } from "../types/durable-test-runner";
 import { tryJsonParse } from "../common/utils";
 import { TestExecutionResult } from "../common/test-execution-state";
 import { Event, EventType, ExecutionStatus } from "@aws-sdk/client-lambda";

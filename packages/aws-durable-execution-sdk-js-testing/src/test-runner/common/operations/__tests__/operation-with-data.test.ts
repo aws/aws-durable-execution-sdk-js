@@ -5,7 +5,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { OperationSubType } from "@aws/durable-execution-sdk-js";
 
-import { WaitingOperationStatus } from "../../../durable-test-runner";
+import { WaitingOperationStatus } from "../../../types/durable-operation";
 import { OperationWaitManager } from "../../../local/operations/operation-wait-manager";
 import { OperationWithData } from "../operation-with-data";
 import { IndexedOperations } from "../../indexed-operations";

@@ -3,7 +3,7 @@ import { CloudOperation } from "../cloud-operation";
 import { OperationWaitManager } from "../../../local/operations/operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";
 import { DurableApiClient } from "../../../common/create-durable-api-client";
-import { WaitingOperationStatus } from "../../../durable-test-runner";
+import { WaitingOperationStatus } from "../../../types/durable-operation";
 
 describe("CloudOperation", () => {
   const waitManager = new OperationWaitManager();

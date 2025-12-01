@@ -1,5 +1,5 @@
 import { OperationStatus } from "@aws-sdk/client-lambda";
-import { WaitingOperationStatus } from "../../../durable-test-runner";
+import { WaitingOperationStatus } from "../../../types/durable-operation";
 import { doesStatusMatch } from "../status-matcher";
 
 describe("doesStatusMatch", () => {

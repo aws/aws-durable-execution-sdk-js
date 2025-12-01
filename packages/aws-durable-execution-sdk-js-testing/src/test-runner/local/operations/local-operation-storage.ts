@@ -1,6 +1,6 @@
 import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";
-import { DurableOperation } from "../../durable-test-runner";
+import { DurableOperation } from "../../types/durable-operation";
 import { OperationWaitManager } from "./operation-wait-manager";
 import { OperationStorage } from "../../common/operation-storage";
 import { Event } from "@aws-sdk/client-lambda";

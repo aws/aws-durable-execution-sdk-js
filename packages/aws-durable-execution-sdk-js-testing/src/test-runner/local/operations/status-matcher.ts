@@ -1,5 +1,5 @@
 import { OperationStatus } from "@aws-sdk/client-lambda";
-import { WaitingOperationStatus } from "../../durable-test-runner";
+import { WaitingOperationStatus } from "../../types/durable-operation";
 
 const STARTED_STATUSES: OperationStatus[] = Object.values(OperationStatus);
 const COMPLETED_STATUSES: OperationStatus[] = [

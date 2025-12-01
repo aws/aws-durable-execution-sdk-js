@@ -1,5 +1,5 @@
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
-import { WaitingOperationStatus } from "../../../durable-test-runner";
+import { WaitingOperationStatus } from "../../../types/durable-operation";
 import {
   DurableContext,
   withDurableExecution,
