@@ -1,7 +1,4 @@
-import {
-  LocalDurableTestRunner,
-  OperationStatus,
-} from "@aws/durable-execution-sdk-js-testing";
+import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./promise-race";
 import historyEvents from "./promise-race.history.json";
 import { assertEventSignatures, createTests } from "../../../utils/test-helper";
@@ -10,9 +7,13 @@ createTests({
   name: "promise-race test",
   functionName: "promise-race",
   handler,
-  tests: (runner) => {
+  tests: (runner, isCloud) => {
     it("should complete all promises", async () => {
-      await runner.run();
+      const execution = await runner.run({
+        payload: {
+          isCloud,
+        },
+      });
 
       // we can't expect all promises to complete here as promise race will resolve
       // as soon as one of the promises resolves
@@ -21,10 +22,6 @@ createTests({
         OperationStatus.SUCCEEDED,
       );
       expect(promiseRaceOp.getStepDetails()?.result).toBeDefined();
-    });
-
-    it("should return expected result", async () => {
-      const execution = await runner.run();
 
       expect(execution.getResult()).toStrictEqual("fast result");
 

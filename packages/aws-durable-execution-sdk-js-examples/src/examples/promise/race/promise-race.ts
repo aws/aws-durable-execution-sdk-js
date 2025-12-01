@@ -10,14 +10,18 @@ export const config: ExampleConfig = {
 };
 
 export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
+  async (event: { isCloud: boolean }, context: DurableContext) => {
     const promise1 = context.step(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) =>
+        setTimeout(resolve, event.isCloud ? 2000 : 200),
+      );
       return "slow result";
     });
     const promise2 = context.step(async () => "fast result");
     const promise3 = context.step(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) =>
+        setTimeout(resolve, event.isCloud ? 3000 : 300),
+      );
       return "slower result";
     });
 
