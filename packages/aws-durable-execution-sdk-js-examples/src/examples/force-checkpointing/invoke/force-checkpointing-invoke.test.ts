@@ -4,29 +4,38 @@ import {
   ExecutionStatus,
   LocalDurableTestRunner,
 } from "@aws/durable-execution-sdk-js-testing";
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-
-// Simple handlers for invoked functions
-const invoke1Handler = withDurableExecution(async () => "invoke-1-result");
-const invoke2Handler = withDurableExecution(async () => "invoke-2-result");
-const invoke3Handler = withDurableExecution(async () => "invoke-3-result");
+import { handler as waitHandler } from "../../wait/basic/wait";
+import { handler as stepHandler } from "../../step/basic/step-basic";
 
 createTests({
   name: "force-checkpointing-invoke",
   functionName: "force-checkpointing-invoke",
   handler,
-  tests: (runner) => {
+  tests: (runner, _, functionNameMap) => {
     it("should complete with force checkpointing when one branch blocks termination with multiple invokes", async () => {
-      // Register the invoked functions
+      // Register the invoked functions for local testing
       if (runner instanceof LocalDurableTestRunner) {
-        runner.registerDurableFunction("invoke-1", invoke1Handler);
-        runner.registerDurableFunction("invoke-2", invoke2Handler);
-        runner.registerDurableFunction("invoke-3", invoke3Handler);
+        runner.registerDurableFunction(
+          functionNameMap.getFunctionName("wait"),
+          waitHandler,
+        );
+        runner.registerDurableFunction(
+          functionNameMap.getFunctionName("step-basic"),
+          stepHandler,
+        );
       }
 
       const startTime = Date.now();
 
-      const execution = await runner.run();
+      const execution = await runner.run({
+        payload: {
+          functionNames: [
+            functionNameMap.getFunctionName("wait"),
+            functionNameMap.getFunctionName("step-basic"),
+            functionNameMap.getFunctionName("wait"),
+          ],
+        },
+      });
 
       const duration = Date.now() - startTime;
 
