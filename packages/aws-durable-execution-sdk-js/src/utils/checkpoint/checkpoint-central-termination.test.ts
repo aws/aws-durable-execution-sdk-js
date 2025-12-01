@@ -381,4 +381,139 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(ops.has("step-2")).toBe(true);
     });
   });
+
+  describe("polling mechanism", () => {
+    beforeEach(() => {
+      // Mock stepData for status checking
+      (checkpointManager as any).stepData = {};
+      // Clear any pending timers from previous tests
+      jest.clearAllTimers();
+    });
+
+    it("should initialize polling with timer", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      jest.clearAllTimers();
+
+      checkpointManager.waitForStatusChange("step-1");
+
+      // Should schedule a timer
+      expect(jest.getTimerCount()).toBeGreaterThanOrEqual(1);
+
+      // Check operation has timer set
+      const ops = checkpointManager.getAllOperations();
+      const op = ops.get("step-1");
+      expect(op?.timer).toBeDefined();
+    });
+
+    it("should initialize poll count and start time", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      jest.clearAllTimers();
+
+      checkpointManager.waitForStatusChange("step-1");
+
+      const ops = checkpointManager.getAllOperations();
+      const op = ops.get("step-1");
+      expect(op?.pollCount).toBe(0);
+      expect(op?.pollStartTime).toBeDefined();
+    });
+
+    it("should use endTimestamp for initial delay calculation", () => {
+      const stepId = "step-1";
+      const futureTime = new Date(Date.now() + 5000);
+
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.RETRY_WAITING,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+          endTimestamp: futureTime,
+        },
+      );
+
+      jest.clearAllTimers();
+
+      checkpointManager.waitForRetryTimer(stepId);
+
+      // Should have a timer scheduled
+      const ops = checkpointManager.getAllOperations();
+      const op = ops.get(stepId);
+      expect(op?.timer).toBeDefined();
+      expect(op?.endTimestamp).toEqual(futureTime);
+    });
+
+    it("should handle Date object endTimestamp", () => {
+      const stepId = "step-1";
+      const futureTime = new Date(Date.now() + 3000);
+
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.RETRY_WAITING,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+          endTimestamp: futureTime,
+        },
+      );
+
+      jest.clearAllTimers();
+
+      checkpointManager.waitForRetryTimer(stepId);
+
+      const ops = checkpointManager.getAllOperations();
+      const op = ops.get(stepId);
+      expect(op?.timer).toBeDefined();
+    });
+
+    it("should set resolver function for promise", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      jest.clearAllTimers();
+
+      checkpointManager.waitForStatusChange("step-1");
+
+      const ops = checkpointManager.getAllOperations();
+      const op = ops.get("step-1");
+      expect(op?.resolver).toBeDefined();
+      expect(typeof op?.resolver).toBe("function");
+    });
+  });
 });
