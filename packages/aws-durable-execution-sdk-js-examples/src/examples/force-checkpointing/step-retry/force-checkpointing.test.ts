@@ -1,5 +1,5 @@
 import { handler } from "./force-checkpointing";
-import { createTests } from "../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
