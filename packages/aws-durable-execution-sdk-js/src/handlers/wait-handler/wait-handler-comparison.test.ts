@@ -30,7 +30,7 @@ describe("Wait Handler Tests", () => {
     } as any;
   });
 
-  const createStepId = () => `${++stepCounter}`;
+  const createStepId = (): string => `${++stepCounter}`;
 
   describe("Basic wait operation", () => {
     it("should mark operation states correctly", async () => {

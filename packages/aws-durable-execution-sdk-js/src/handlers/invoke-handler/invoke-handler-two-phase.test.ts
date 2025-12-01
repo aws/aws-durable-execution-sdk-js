@@ -252,7 +252,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
       createStepId,
     );
 
-    const invokePromise = invokeHandler("test-function", { input: "data" });
+    const _invokePromise = invokeHandler("test-function", { input: "data" });
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 

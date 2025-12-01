@@ -506,7 +506,7 @@ describe("Callback Handler", () => {
       );
 
       const result = await handler<string>("new-callback");
-      const [promise, callbackId] = await result;
+      const [_promise, callbackId] = await result;
 
       expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith(
         "test-callback-id",

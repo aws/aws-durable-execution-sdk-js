@@ -9,7 +9,6 @@ import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-import { StepInterruptedError } from "../../errors/step-errors/step-errors";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
