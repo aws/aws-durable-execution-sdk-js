@@ -516,4 +516,256 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(typeof op?.resolver).toBe("function");
     });
   });
+
+  describe("cleanup methods", () => {
+    it("should clear timer and resolver in cleanupOperation", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      jest.clearAllTimers();
+      checkpointManager.waitForStatusChange("step-1");
+
+      // Verify timer and resolver are set
+      let ops = checkpointManager.getAllOperations();
+      let op = ops.get("step-1");
+      expect(op?.timer).toBeDefined();
+      expect(op?.resolver).toBeDefined();
+
+      // Call private cleanupOperation method
+      (checkpointManager as any).cleanupOperation("step-1");
+
+      // Verify timer and resolver are cleared
+      ops = checkpointManager.getAllOperations();
+      op = ops.get("step-1");
+      expect(op?.timer).toBeUndefined();
+      expect(op?.resolver).toBeUndefined();
+    });
+
+    it("should handle missing operation in cleanupOperation", () => {
+      expect(() => {
+        (checkpointManager as any).cleanupOperation("nonexistent");
+      }).not.toThrow();
+    });
+
+    it("should clear all timers and resolvers in cleanupAllOperations", () => {
+      // Create multiple operations with timers
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      checkpointManager.markOperationState(
+        "step-2",
+        OperationLifecycleState.RETRY_WAITING,
+        {
+          metadata: {
+            stepId: "step-2",
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+        },
+      );
+
+      jest.clearAllTimers();
+      checkpointManager.waitForStatusChange("step-1");
+      checkpointManager.waitForRetryTimer("step-2");
+
+      // Verify timers and resolvers are set
+      let ops = checkpointManager.getAllOperations();
+      expect(ops.get("step-1")?.timer).toBeDefined();
+      expect(ops.get("step-1")?.resolver).toBeDefined();
+      expect(ops.get("step-2")?.timer).toBeDefined();
+      expect(ops.get("step-2")?.resolver).toBeDefined();
+
+      // Call cleanupAllOperations
+      (checkpointManager as any).cleanupAllOperations();
+
+      // Verify all timers and resolvers are cleared
+      ops = checkpointManager.getAllOperations();
+      expect(ops.get("step-1")?.timer).toBeUndefined();
+      expect(ops.get("step-1")?.resolver).toBeUndefined();
+      expect(ops.get("step-2")?.timer).toBeUndefined();
+      expect(ops.get("step-2")?.resolver).toBeUndefined();
+    });
+  });
+
+  describe("checkAndTerminate rules", () => {
+    it("should not terminate if checkpoint queue is not empty", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      // Add item to queue
+      (checkpointManager as any).queue.push({});
+
+      // Trigger checkAndTerminate
+      (checkpointManager as any).checkAndTerminate();
+
+      // Should not terminate
+      jest.advanceTimersByTime(300);
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+    });
+
+    it("should not terminate if checkpoint is processing", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      // Set processing flag
+      (checkpointManager as any).isProcessing = true;
+
+      // Trigger checkAndTerminate
+      (checkpointManager as any).checkAndTerminate();
+
+      // Should not terminate
+      jest.advanceTimersByTime(300);
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+    });
+
+    it("should not terminate if there are pending force checkpoint promises", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      // Add pending promise
+      (checkpointManager as any).forceCheckpointPromises.push({});
+
+      // Trigger checkAndTerminate
+      (checkpointManager as any).checkAndTerminate();
+
+      // Should not terminate
+      jest.advanceTimersByTime(300);
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+    });
+
+    it("should not terminate if any operation is EXECUTING", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+        },
+      );
+
+      checkpointManager.markOperationState(
+        "step-2",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-2",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      // Trigger checkAndTerminate
+      (checkpointManager as any).checkAndTerminate();
+
+      // Should not terminate
+      jest.advanceTimersByTime(300);
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+    });
+
+    it("should clean up operations with completed ancestors", () => {
+      const parentId = "parent-1";
+      const childId = "child-1";
+      const hashedParentId = require("../step-id-utils/step-id-utils").hashId(
+        parentId,
+      );
+
+      // Set up stepData with parent-child relationship
+      (checkpointManager as any).stepData[hashedParentId] = {
+        Id: hashedParentId,
+      };
+
+      const hashedChildId = require("../step-id-utils/step-id-utils").hashId(
+        childId,
+      );
+      (checkpointManager as any).stepData[hashedChildId] = {
+        Id: hashedChildId,
+        ParentId: hashedParentId,
+      };
+
+      // Create operations
+      checkpointManager.markOperationState(
+        parentId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: parentId,
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      checkpointManager.markOperationState(
+        childId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: childId,
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+            parentId: parentId,
+          },
+        },
+      );
+
+      // Mark parent as pending completion
+      (checkpointManager as any).pendingCompletions.add(hashedParentId);
+
+      // Trigger checkAndTerminate
+      (checkpointManager as any).checkAndTerminate();
+
+      // Child should be cleaned up
+      const ops = checkpointManager.getAllOperations();
+      expect(ops.has(childId)).toBe(false);
+    });
+  });
 });
