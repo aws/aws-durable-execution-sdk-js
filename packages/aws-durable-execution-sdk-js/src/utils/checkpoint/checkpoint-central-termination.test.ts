@@ -4,6 +4,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { OperationLifecycleState, OperationSubType } from "../../types";
 import { OperationType } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
+import { hashId } from "../step-id-utils/step-id-utils";
 
 jest.mock("../logger/logger");
 
@@ -765,18 +766,14 @@ describe("CheckpointManager - Centralized Termination", () => {
     it("should clean up operations with completed ancestors", () => {
       const parentId = "parent-1";
       const childId = "child-1";
-      const hashedParentId = require("../step-id-utils/step-id-utils").hashId(
-        parentId,
-      );
+      const hashedParentId = hashId(parentId);
 
       // Set up stepData with parent-child relationship
       (checkpointManager as any).stepData[hashedParentId] = {
         Id: hashedParentId,
       };
 
-      const hashedChildId = require("../step-id-utils/step-id-utils").hashId(
-        childId,
-      );
+      const hashedChildId = hashId(childId);
       (checkpointManager as any).stepData[hashedChildId] = {
         Id: hashedChildId,
         ParentId: hashedParentId,
