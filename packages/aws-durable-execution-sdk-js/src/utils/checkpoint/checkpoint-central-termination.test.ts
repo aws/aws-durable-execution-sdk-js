@@ -174,6 +174,32 @@ describe("CheckpointManager - Centralized Termination", () => {
         "Operation step-1 must be in RETRY_WAITING state, got IDLE_NOT_AWAITED",
       );
     });
+
+    it("should return promise that resolves when resolver is called", async () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.RETRY_WAITING,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+          endTimestamp: new Date(Date.now() + 5000),
+        },
+      );
+
+      const promise = checkpointManager.waitForRetryTimer("step-1");
+
+      // Get the resolver and call it
+      const ops = checkpointManager.getAllOperations();
+      const op = ops.get("step-1");
+      expect(op?.resolver).toBeDefined();
+
+      op!.resolver!();
+
+      await expect(promise).resolves.toBeUndefined();
+    });
   });
 
   describe("waitForStatusChange", () => {
@@ -201,6 +227,31 @@ describe("CheckpointManager - Centralized Termination", () => {
       }).toThrow(
         "Operation step-1 must be in IDLE_AWAITED state, got IDLE_NOT_AWAITED",
       );
+    });
+
+    it("should return promise that resolves when resolver is called", async () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      const promise = checkpointManager.waitForStatusChange("step-1");
+
+      // Get the resolver and call it
+      const ops = checkpointManager.getAllOperations();
+      const op = ops.get("step-1");
+      expect(op?.resolver).toBeDefined();
+
+      op!.resolver!();
+
+      await expect(promise).resolves.toBeUndefined();
     });
   });
 
