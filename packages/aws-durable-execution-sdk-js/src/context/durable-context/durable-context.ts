@@ -78,6 +78,10 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
   public logger: DurableContextLogger<Logger>;
 
+  get durableExecutionArn(): string {
+    return this.executionContext.durableExecutionArn;
+  }
+
   constructor(
     private executionContext: ExecutionContext,
     public lambdaContext: Context,

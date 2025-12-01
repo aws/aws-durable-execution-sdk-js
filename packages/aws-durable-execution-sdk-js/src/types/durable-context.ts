@@ -35,6 +35,11 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
   lambdaContext: Context;
 
   /**
+   * The unique identifier for the durable execution running in this context.
+   */
+  durableExecutionArn: string;
+
+  /**
    * Logger instance for this context, optionally enriched with durable execution metadata
    * if the logger supports it. By default the default logger will emit logs following this
    * structure:

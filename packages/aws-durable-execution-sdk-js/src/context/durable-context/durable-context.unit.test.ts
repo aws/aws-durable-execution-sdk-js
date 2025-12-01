@@ -135,6 +135,20 @@ describe("DurableContext", () => {
 
       expect(context.lambdaContext).toBe(mockContext);
     });
+
+    it("should expose durableExecutionArn", () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLogger,
+        undefined,
+        mockDurableExecution,
+      );
+
+      expect(context.durableExecutionArn).toBe("test-arn");
+    });
   });
 
   describe("withModeManagement", () => {
