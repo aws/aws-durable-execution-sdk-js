@@ -784,12 +784,14 @@ export class CheckpointManager implements Checkpoint {
       op.pollStartTime &&
       Date.now() - op.pollStartTime > MAX_POLL_DURATION_MS
     ) {
+      // Stop polling after 15 minutes to prevent indefinite resource consumption.
+      // We don't resolve or reject the promise because the handler cannot continue
+      // without a status change. The execution will remain suspended until the
+      // operation completes or the Lambda times out.
       log(
         "⏱️",
         `Max polling duration (15 min) exceeded for ${stepId}, stopping poll`,
       );
-      op.resolver?.();
-      op.resolver = undefined;
       if (op.timer) {
         clearTimeout(op.timer);
         op.timer = undefined;
