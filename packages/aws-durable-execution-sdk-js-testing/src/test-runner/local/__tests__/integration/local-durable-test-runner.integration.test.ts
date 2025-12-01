@@ -90,7 +90,9 @@ describe("LocalDurableTestRunner Integration", () => {
     const operations = result.getOperations();
 
     // Verify the invocations were tracked - should be exactly 2 invocations
-    // With ancestor completion check, operations are cleaned up more efficiently
+    // Centralized termination implements a cool-down period prior to termination.
+    // This cool-down phase reduces the total number of invocations needed while increasing
+    // the number of operations performed in each invocation.
     const invocations = result.getInvocations();
     expect(invocations).toHaveLength(2);
 
