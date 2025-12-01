@@ -1,32 +1,177 @@
-# Durable Execution Testing SDK
+# AWS Durable Execution Testing SDK for JavaScript
 
-Testing utilities for AWS Durable Execution SDK for JavaScript/TypeScript.
+Testing utilities for the AWS Durable Execution SDK for JavaScript and TypeScript.
 
-## Overview
+## Features
 
-This package provides tools for testing durable functions both locally and in the cloud:
+This package provides testing tools for durable functions both locally and in the cloud:
 
 - **LocalDurableTestRunner** - Execute and test durable functions locally without AWS deployment
-- **CloudDurableTestRunner** - Test against deployed Lambda functions in AWS
-- **run-durable CLI** - Command-line tool for quick local testing
-- **Test helpers** - Utilities for assertions and test setup
+  - **Time-skipping support** - Skip wait operations and delays for faster test execution
+  - **Function registration** - Register additional functions for chained invoke testing
+  - **Full operation inspection** - Access detailed information about steps, waits, callbacks, and more
+  - **Mock-friendly** - Works seamlessly with Jest and other mocking frameworks
+
+- **CloudDurableTestRunner** - Test against deployed AWS Lambda functions
+  - **Real environment testing** - Validate behavior against actual your actual deployed AWS Lambda function
+  - **Configurable invocation** - Support for different invocation types and polling intervals
+
+- **Testing Capabilities**
+  - **Operation assertions** - Inspect individual operations by name, index, or ID
+  - **Status and result validation** - Verify execution status, results, and error conditions
+  - **Callback testing** - Send callback responses and verify callback behavior
+  - **Retry validation** - Test step retry logic and failure scenarios
+
+## Installation
+
+```bash
+npm install --save-dev @aws/durable-execution-sdk-js-testing
+```
+
+## Quick Start
+
+### Handler Code
+
+```typescript
+import {
+  withDurableExecution,
+  DurableContext,
+} from "@aws/durable-execution-sdk-js";
+
+const handler = async (event: any, context: DurableContext) => {
+  // Execute a durable step with automatic retry
+  const userData = await context.step("fetch-user", async () =>
+    fetchUserFromDB(event.userId),
+  );
+
+  // Wait for 5 seconds
+  await context.wait({ seconds: 5 });
+
+  // Process data in another step
+  const result = await context.step("process-user", async () =>
+    processUser(userData),
+  );
+
+  return result;
+};
+
+export const lambdaHandler = withDurableExecution(handler);
+```
+
+### Test Code
+
+#### Local Testing
+
+```typescript
+import {
+  LocalDurableTestRunner,
+  WaitingOperationStatus,
+} from "@aws/durable-execution-sdk-js-testing";
+import { lambdaHandler } from "./lambdaHandler";
+
+beforeAll(() =>
+  LocalDurableTestRunner.setupTestEnvironment({
+    skipTime: true,
+  }),
+);
+
+afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+
+describe("LocalDurableTestRunner", () => {
+  let runner;
+
+  beforeEach(() => {
+    runner = new LocalDurableTestRunner({
+      handlerFunction: lambdaHandler,
+    });
+  });
+
+  it("should wait for 5 seconds and return result", async () => {
+    const execution = await runner.run({ payload: { userId: "123" } });
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getOperations()).toHaveLength(3); // fetch-user, wait, process-user
+
+    // Check the fetch-user step
+    const fetchStep = runner.getOperation("fetch-user");
+    await fetchStep.waitForData(WaitingOperationStatus.COMPLETED);
+    const fetchDetails = fetchStep.getStepDetails();
+    expect(fetchDetails?.result).toBeDefined();
+
+    // Check the wait operation
+    const waitOp = runner.getOperationByIndex(1);
+    const waitDetails = waitOp.getWaitDetails();
+    expect(waitDetails?.waitSeconds).toBe(5);
+
+    // Check the process-user step
+    const processStep = runner.getOperation("process-user");
+    await processStep.waitForData(WaitingOperationStatus.COMPLETED);
+    const processDetails = processStep.getStepDetails();
+    expect(processDetails?.result).toBeDefined();
+  });
+});
+```
+
+#### Cloud Testing
+
+```typescript
+import {
+  CloudDurableTestRunner,
+  WaitingOperationStatus,
+} from "@aws/durable-execution-sdk-js-testing";
+
+describe("CloudDurableTestRunner", () => {
+  let runner;
+
+  beforeEach(() => {
+    runner = new CloudDurableTestRunner({
+      functionName: "my-durable-function", // Your deployed function name
+    });
+  });
+
+  it("should wait for 5 seconds and return result", async () => {
+    const execution = await runner.run({ payload: { userId: "123" } });
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getOperations()).toHaveLength(3); // fetch-user, wait, process-user
+
+    // Check the fetch-user step
+    const fetchStep = runner.getOperation("fetch-user");
+    const fetchDetails = fetchStep.getStepDetails();
+    expect(fetchDetails?.result).toBeDefined();
+    expect(fetchDetails?.attempt).toBe(1);
+
+    // Check the wait operation
+    const waitOp = runner.getOperationByIndex(1);
+    const waitDetails = waitOp.getWaitDetails();
+    expect(waitDetails?.waitSeconds).toBe(5);
+
+    // Check the process-user step
+    const processStep = runner.getOperation("process-user");
+    const processDetails = processStep.getStepDetails();
+    expect(processDetails?.result).toBeDefined();
+  });
+});
+```
 
 ## LocalDurableTestRunner
 
-Run durable functions locally with a simulated checkpoint server.
+Run durable functions locally with a simulated durable execution backend.
 
 ```typescript
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./my-durable-function";
 
-await LocalDurableTestRunner.setupTestEnvironment();
-
-const runner = new LocalDurableTestRunner({
-  handlerFunction: handler,
+// Set up test environment with optional time skipping
+await LocalDurableTestRunner.setupTestEnvironment({
   skipTime: true, // Skip wait delays for faster tests
 });
 
-const execution = await runner.run();
+const runner = new LocalDurableTestRunner({
+  handlerFunction: handler,
+});
+
+const execution = await runner.run({ payload: { test: "data" } });
 
 // Assert on results
 expect(execution.getStatus()).toBe("SUCCEEDED");
@@ -36,7 +181,105 @@ expect(execution.getResult()).toEqual(expectedValue);
 const operations = execution.getOperations();
 expect(operations).toHaveLength(3);
 
+// Clean up test environment
 await LocalDurableTestRunner.teardownTestEnvironment();
+```
+
+### Mocking
+
+Mock external dependencies using Jest or your preferred testing framework:
+
+```typescript
+import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
+
+// Mock external functions
+jest.mock("../services/userService", () => ({
+  fetchUserFromDB: jest.fn(),
+  processUser: jest.fn(),
+}));
+
+import { fetchUserFromDB, processUser } from "../services/userService";
+import { lambdaHandler } from "./lambdaHandler";
+
+const mockFetchUser = fetchUserFromDB as jest.MockedFunction<
+  typeof fetchUserFromDB
+>;
+const mockProcessUser = processUser as jest.MockedFunction<typeof processUser>;
+
+describe("Mocked Dependencies", () => {
+  let runner: LocalDurableTestRunner;
+
+  beforeAll(() =>
+    LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
+  );
+  afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+
+  beforeEach(() => {
+    runner = new LocalDurableTestRunner({ handlerFunction: lambdaHandler });
+
+    // Reset mocks
+    mockFetchUser.mockClear();
+    mockProcessUser.mockClear();
+  });
+
+  it("should call mocked functions and return expected results", async () => {
+    // Setup mocks
+    const userData = { id: "123", name: "John Doe" };
+    const processedResult = { id: "123", processed: true };
+
+    mockFetchUser.mockResolvedValue(userData);
+    mockProcessUser.mockResolvedValue(processedResult);
+
+    // Run test
+    const execution = await runner.run({ payload: { userId: "123" } });
+
+    // Verify results
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getResult()).toEqual(processedResult);
+
+    // Verify mock calls
+    expect(mockFetchUser).toHaveBeenCalledWith("123");
+    expect(mockProcessUser).toHaveBeenCalledWith(userData);
+
+    // Verify operations
+    const fetchStep = runner.getOperation("fetch-user");
+    const fetchDetails = fetchStep.getStepDetails();
+    expect(fetchDetails?.result).toEqual(userData);
+  });
+});
+```
+
+### Function Registration
+
+Register additional functions that can be invoked during local testing of chained invocations:
+
+#### Handler Code
+
+```typescript
+const mainHandler = withDurableExecution(async (event, context) => {
+  await context.invoke("workflow-a:$LATEST");
+  await context.invoke("workflow-b:$LATEST");
+
+  await context.invoke("utility-function");
+  await context.invoke("utility-helper");
+});
+```
+
+#### Test code
+
+```typescript
+const runner = new LocalDurableTestRunner({ handlerFunction: mainHandler });
+
+// Register durable functions
+runner.registerDurableFunction("workflow-a:$LATEST", durableWorkflowA);
+
+// Register regular functions
+runner.registerFunction("utility-function", utilityHandler);
+
+// Method chaining is supported
+runner
+  .registerDurableFunction("workflow-b:$LATEST", durableWorkflowB)
+  .registerFunction("helper", helperHandler);
 ```
 
 ## CloudDurableTestRunner
@@ -44,30 +287,24 @@ await LocalDurableTestRunner.teardownTestEnvironment();
 Test against deployed Lambda functions in AWS.
 
 ```typescript
-import { CloudDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
+import {
+  CloudDurableTestRunner,
+  InvocationType,
+} from "@aws/durable-execution-sdk-js-testing";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 
 const runner = new CloudDurableTestRunner({
   functionName: "MyDurableFunction",
-  region: "us-east-1",
+  client: new LambdaClient({ region: "us-east-1" }), // optional
+  config: {
+    pollInterval: 1000, // optional, default 1000ms
+    invocationType: InvocationType.RequestResponse, // optional
+  },
 });
 
 const execution = await runner.run({ payload: { userId: "123" } });
 
 expect(execution.getStatus()).toBe("SUCCEEDED");
-```
-
-## run-durable CLI
-
-Quick command-line tool for testing durable functions locally without writing test code.
-
-**See [RUN_DURABLE_CLI.md](./RUN_DURABLE_CLI.md) for complete CLI documentation.**
-
-```bash
-# Basic usage
-npm run run-durable -- <path-to-handler-file>
-
-# With options
-npm run run-durable -- <path-to-handler-file> [no-skip-time] [verbose] [show-history]
 ```
 
 ## Test Result API
@@ -77,10 +314,8 @@ Both runners return a `TestResult` object with methods for assertions:
 ```typescript
 const execution = await runner.run();
 
-// Get execution status
+// Get execution status and results
 execution.getStatus(); // "SUCCEEDED" | "FAILED" | "RUNNING" | etc.
-
-// Get result or error
 execution.getResult(); // Returns the function result
 execution.getError(); // Returns error details if failed
 
@@ -88,14 +323,13 @@ execution.getError(); // Returns error details if failed
 execution.getOperations(); // All operations
 execution.getOperations({ status: "SUCCEEDED" }); // Filter by status
 
-// Get history events
+// Get execution history and invocations
 execution.getHistoryEvents(); // Detailed event history
+execution.getInvocations(); // Handler invocation details
 
-// Get invocations
-execution.getInvocations(); // All handler invocations
-
-// Print operations table
-execution.print(); // Console table of operations
+// Print operations table to console
+execution.print(); // Default columns
+execution.print({ name: true, status: true, duration: true }); // Custom columns
 ```
 
 ## Operation Assertions
@@ -103,67 +337,91 @@ execution.print(); // Console table of operations
 Access specific operations for detailed assertions:
 
 ```typescript
-// By name
-const operation = runner.getOperation("my-step");
+// Get operations by different methods
+const operation = runner.getOperation("my-step"); // By name
+const firstOp = runner.getOperationByIndex(0); // By execution order
+const secondNamedOp = runner.getOperationByNameAndIndex("my-step", 1); // By name + index
+const opById = runner.getOperationById("abc123"); // By unique ID
 
-// By index
-const firstOp = runner.getOperationByIndex(0);
+// Wait for operation data to be available
+await operation.waitForData(); // Default to STARTED status
+await operation.waitForData(WaitingOperationStatus.COMPLETED);
 
-// By name and index
-const secondNamedOp = runner.getOperationByNameAndIndex("my-step", 1);
+// Get operation details based on type
+const stepDetails = operation.getStepDetails(); // For step operations
+const contextDetails = operation.getContextDetails(); // For context operations
+const callbackDetails = operation.getCallbackDetails(); // For callback operations
+const waitDetails = operation.getWaitDetails(); // For wait operations
 
-// By ID
-const opById = runner.getOperationById("abc123");
+// Get basic operation information
+operation.getName();
+operation.getStatus();
+operation.getStartTimestamp();
+operation.getEndTimestamp();
+```
+
+### Callback Operations
+
+For callback operations, you can send responses:
+
+```typescript
+const callback = runner.getOperation("my-callback");
+await callback.waitForData(WaitingOperationStatus.SUBMITTED);
+
+// Send callback responses
+await callback.sendCallbackSuccess("result data");
+await callback.sendCallbackFailure({ errorMessage: "Failed" });
+await callback.sendCallbackHeartbeat();
 ```
 
 ## Configuration Options
 
-### LocalDurableTestRunner Options
+### LocalDurableTestRunner
 
 ```typescript
-{
-  handlerFunction: LambdaHandler;  // Required: The durable function handler
-  skipTime?: boolean;              // Optional: Skip wait delays (default: false)
-}
+// Constructor
+new LocalDurableTestRunner({ handlerFunction: handler });
+
+// Environment setup
+await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });
+
+// Environment teardown
+await LocalDurableTestRunner.teardownTestEnvironment();
 ```
 
-### CloudDurableTestRunner Options
+### CloudDurableTestRunner
 
 ```typescript
-{
-  functionName: string;     // Required: Lambda function name or ARN
-  region?: string;          // Optional: AWS region
-  invocationType?: string;  // Optional: 'RequestResponse' | 'Event'
-}
+// Basic configuration
+new CloudDurableTestRunner({ functionName: "MyFunction:$LATEST" });
+
+// Advanced configuration
+new CloudDurableTestRunner({
+  functionName: "MyFunction:$LATEST",
+  client: new LambdaClient({ region: "us-east-1" }),
+  config: { pollInterval: 500, invocationType: InvocationType.Event },
+});
 ```
 
-## Example Test
+## Reset Runner State
+
+The `reset()` method is required if you reuse the same runner instance between tests. Data about an individual execution is cleared from the runner instance when `reset()` is called.
 
 ```typescript
-import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
-import { handler } from "../my-function";
+describe("Reusing Runner Instance", () => {
+  let runner: LocalDurableTestRunner;
 
-describe("My Durable Function", () => {
-  beforeAll(async () => {
-    await LocalDurableTestRunner.setupTestEnvironment();
+  beforeAll(() => {
+    // Create runner once
+    runner = new LocalDurableTestRunner({ handlerFunction: handler });
   });
 
-  afterAll(async () => {
-    await LocalDurableTestRunner.teardownTestEnvironment();
+  beforeEach(() => {
+    // Reset state when reusing the same instance
+    runner.reset();
   });
 
-  it("should complete successfully", async () => {
-    const runner = new LocalDurableTestRunner({
-      handlerFunction: handler,
-      skipTime: true,
-    });
-
-    const execution = await runner.run({ payload: { test: "data" } });
-
-    expect(execution.getStatus()).toBe("SUCCEEDED");
-    expect(execution.getResult()).toEqual({ success: true });
-    expect(execution.getOperations()).toHaveLength(2);
-  });
+  // ... tests
 });
 ```
 

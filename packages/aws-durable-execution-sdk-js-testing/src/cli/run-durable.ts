@@ -72,7 +72,7 @@ async function runDurable() {
     }
 
     try {
-      const result = execution.getResult();
+      const result = execution.getResult() as unknown;
       console.log("\nResult:");
       console.log(JSON.stringify(result, null, 2));
     } catch {

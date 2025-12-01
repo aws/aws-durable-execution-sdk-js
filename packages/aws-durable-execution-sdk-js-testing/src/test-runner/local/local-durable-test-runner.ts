@@ -119,8 +119,10 @@ export interface LocalDurableTestRunnerSetupParameters {
  *
  * @public
  */
-export class LocalDurableTestRunner<TResult>
-  implements DurableTestRunner<DurableOperation, TResult>
+export class LocalDurableTestRunner<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  TResult = any,
+> implements DurableTestRunner<DurableOperation, TResult>
 {
   private operationStorage: LocalOperationStorage;
   private waitManager: OperationWaitManager;
