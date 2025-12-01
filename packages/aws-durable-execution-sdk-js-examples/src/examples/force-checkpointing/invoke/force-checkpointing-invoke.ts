@@ -11,7 +11,10 @@ export const config: ExampleConfig = {
 };
 
 export const handler = withDurableExecution(
-  async (_event, ctx: DurableContext): Promise<string> => {
+  async (
+    event: { functionNames: string[] },
+    ctx: DurableContext,
+  ): Promise<string> => {
     const results = await ctx.parallel([
       // Branch 1: Long-running operation that blocks termination
       async (branchCtx: DurableContext) => {
@@ -22,9 +25,9 @@ export const handler = withDurableExecution(
       },
       // Branch 2: Multiple sequential invokes that need force checkpoint
       async (branchCtx: DurableContext) => {
-        await branchCtx.invoke("invoke-1", { input: "data-1" });
-        await branchCtx.invoke("invoke-2", { input: "data-2" });
-        await branchCtx.invoke("invoke-3", { input: "data-3" });
+        await branchCtx.invoke(event.functionNames[0], { input: "data-1" });
+        await branchCtx.invoke(event.functionNames[1], { input: "data-2" });
+        await branchCtx.invoke(event.functionNames[2], { input: "data-3" });
         return "invokes-complete";
       },
     ]);
