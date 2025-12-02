@@ -448,17 +448,42 @@ export class CheckpointManager implements Checkpoint {
 
     operations.forEach((operation) => {
       if (operation.Id) {
+        // Check if status changed
+        const oldStatus = this.stepData[operation.Id]?.Status;
+        const newStatus = operation.Status;
+
         this.stepData[operation.Id] = operation;
 
         log("📝", "Updated stepData entry:", operation);
 
         this.stepDataEmitter.emit(STEP_DATA_UPDATED_EVENT, operation.Id);
+
+        // If status changed and we have a waiting promise, resolve it
+        if (oldStatus !== newStatus) {
+          this.resolveWaitingOperation(operation.Id);
+        }
       }
     });
 
     log("✅", "StepData update completed:", {
       totalStepDataEntries: Object.keys(this.stepData).length,
     });
+  }
+
+  private resolveWaitingOperation(hashedStepId: string): void {
+    // Find operation by hashed ID in our operations map
+    for (const [stepId, op] of this.operations.entries()) {
+      if (hashId(stepId) === hashedStepId && op.resolver) {
+        log("✅", `Resolving waiting operation ${stepId} due to status change`);
+        op.resolver();
+        op.resolver = undefined;
+        if (op.timer) {
+          clearTimeout(op.timer);
+          op.timer = undefined;
+        }
+        break;
+      }
+    }
   }
 
   getQueueStatus(): {
