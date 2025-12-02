@@ -1763,7 +1763,7 @@ Resources:
       Architectures:
         - x86_64
       MemorySize: 128
-      Timeout: 60
+      Timeout: 120
       Role:
         Fn::GetAtt:
           - DurableFunctionRole

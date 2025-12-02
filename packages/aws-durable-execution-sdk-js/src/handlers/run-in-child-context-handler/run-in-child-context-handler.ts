@@ -342,7 +342,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     }
 
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint.checkpoint(entityId, {
+    await checkpoint.checkpoint(entityId, {
       Id: entityId,
       ParentId: parentId,
       Action: OperationAction.SUCCEED,

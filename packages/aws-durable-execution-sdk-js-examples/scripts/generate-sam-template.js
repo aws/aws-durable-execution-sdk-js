@@ -17,6 +17,11 @@ const EXAMPLE_CONFIGS = {
       },
     ],
   },
+  "wait-for-callback-submitter-retry-success": {
+    memorySize: 128,
+    timeout: 120,
+    policies: [],
+  },
 };
 
 // Default configuration for Lambda functions
