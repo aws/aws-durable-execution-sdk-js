@@ -1,13 +1,10 @@
 import {
   LambdaClient,
-  ExecutionStatus,
   Event,
   EventType,
   InvokeCommand,
-  GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
   GetDurableExecutionHistoryCommandOutput,
-  GetDurableExecutionCommandOutput,
   OperationStatus,
   OperationType,
   InvocationType,
@@ -20,9 +17,7 @@ jest.mock("@aws-sdk/client-lambda");
 
 interface MockApiResponses {
   historyResponse?: GetDurableExecutionHistoryCommandOutput;
-  executionResponse?: GetDurableExecutionCommandOutput;
   historySequence?: GetDurableExecutionHistoryCommandOutput[];
-  executionSequence?: GetDurableExecutionCommandOutput[];
 }
 
 describe("CloudDurableTestRunner", () => {
@@ -49,12 +44,23 @@ describe("CloudDurableTestRunner", () => {
     },
   };
 
+  const mockSuccessEvent: Event = {
+    Id: "execution-id",
+    EventTimestamp: new Date(),
+    EventType: EventType.ExecutionSucceeded,
+    EventId: 1,
+    ExecutionSucceededDetails: {
+      Result: {
+        Payload: '{"success": true}',
+      },
+    },
+  };
+
   const setupMockApiResponses = (
     mockSend: jest.Mock,
     responses: MockApiResponses = {},
   ): void => {
     let historyCallCount = 0;
-    let executionCallCount = 0;
 
     mockSend.mockImplementation((command) => {
       if (command instanceof InvokeCommand) {
@@ -71,24 +77,7 @@ describe("CloudDurableTestRunner", () => {
         }
         return Promise.resolve(
           responses.historyResponse ?? {
-            Events: [mockEvent],
-            $metadata: {},
-          },
-        );
-      }
-
-      if (command instanceof GetDurableExecutionCommand) {
-        if (responses.executionSequence) {
-          const response =
-            responses.executionSequence[executionCallCount] ??
-            responses.executionSequence[responses.executionSequence.length - 1];
-          executionCallCount++;
-          return Promise.resolve(response);
-        }
-        return Promise.resolve(
-          responses.executionResponse ?? {
-            Status: ExecutionStatus.SUCCEEDED,
-            Result: '{"success": true}',
+            Events: [mockEvent, mockSuccessEvent],
             $metadata: {},
           },
         );
@@ -158,7 +147,7 @@ describe("CloudDurableTestRunner", () => {
       expect(mockLambdaClient.send).toHaveBeenCalledTimes(1);
 
       await jest.advanceTimersByTimeAsync(1000);
-      expect(mockLambdaClient.send).toHaveBeenCalledTimes(3);
+      expect(mockLambdaClient.send).toHaveBeenCalledTimes(2);
 
       await runPromise;
     });
@@ -167,14 +156,22 @@ describe("CloudDurableTestRunner", () => {
   describe("run() method", () => {
     it("should execute with payload", async () => {
       setupMockApiResponses(mockSend, {
-        executionResponse: {
-          Status: ExecutionStatus.SUCCEEDED,
-          Result: '{"result": "success"}',
+        historyResponse: {
+          Events: [
+            mockEvent,
+            {
+              Id: "execution-id",
+              EventId: 2,
+              EventTimestamp: new Date(),
+              EventType: EventType.ExecutionSucceeded,
+              ExecutionSucceededDetails: {
+                Result: {
+                  Payload: '{"result": "success"}',
+                },
+              },
+            },
+          ],
           $metadata: {},
-          DurableExecutionArn: undefined,
-          DurableExecutionName: undefined,
-          FunctionArn: undefined,
-          StartTimestamp: undefined,
         },
       });
 
@@ -224,20 +221,24 @@ describe("CloudDurableTestRunner", () => {
     it("should handle failed executions", async () => {
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [mockEvent],
+          Events: [
+            mockEvent,
+            {
+              Id: "execution-id",
+              EventId: 2,
+              EventTimestamp: new Date(),
+              EventType: EventType.ExecutionFailed,
+              ExecutionFailedDetails: {
+                Error: {
+                  Payload: {
+                    ErrorMessage: "ExecutionFailed",
+                    ErrorType: "TestError",
+                  },
+                },
+              },
+            },
+          ],
           $metadata: {},
-        },
-        executionResponse: {
-          Status: ExecutionStatus.FAILED,
-          Error: {
-            ErrorMessage: "ExecutionFailed",
-            ErrorType: "TestError",
-          },
-          $metadata: {},
-          DurableExecutionArn: undefined,
-          DurableExecutionName: undefined,
-          FunctionArn: undefined,
-          StartTimestamp: undefined,
         },
       });
 
@@ -270,7 +271,7 @@ describe("CloudDurableTestRunner", () => {
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [stepEvent],
+          Events: [stepEvent, mockSuccessEvent],
           $metadata: {},
         },
       });
@@ -310,7 +311,7 @@ describe("CloudDurableTestRunner", () => {
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [executionEvent, stepEvent],
+          Events: [executionEvent, stepEvent, mockSuccessEvent],
           $metadata: {},
         },
       });
@@ -343,7 +344,7 @@ describe("CloudDurableTestRunner", () => {
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [stepEvent],
+          Events: [stepEvent, mockSuccessEvent],
           $metadata: {},
         },
       });
@@ -375,7 +376,7 @@ describe("CloudDurableTestRunner", () => {
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [stepEvent],
+          Events: [stepEvent, mockSuccessEvent],
           $metadata: {},
         },
       });
@@ -419,7 +420,7 @@ describe("CloudDurableTestRunner", () => {
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [stepEvent1, stepEvent2],
+          Events: [stepEvent1, stepEvent2, mockSuccessEvent],
           $metadata: {},
         },
       });
@@ -465,27 +466,8 @@ describe("CloudDurableTestRunner", () => {
             $metadata: {},
           },
           {
-            Events: [mockEvent, secondEvent],
+            Events: [mockEvent, secondEvent, mockSuccessEvent],
             $metadata: {},
-          },
-        ],
-        executionSequence: [
-          {
-            Status: ExecutionStatus.RUNNING,
-            $metadata: {},
-            DurableExecutionArn: undefined,
-            DurableExecutionName: undefined,
-            FunctionArn: undefined,
-            StartTimestamp: undefined,
-          },
-          {
-            Status: ExecutionStatus.SUCCEEDED,
-            Result: '{"success": true}',
-            $metadata: {},
-            DurableExecutionArn: undefined,
-            DurableExecutionName: undefined,
-            FunctionArn: undefined,
-            StartTimestamp: undefined,
           },
         ],
       });
@@ -505,7 +487,7 @@ describe("CloudDurableTestRunner", () => {
 
       expect(result).toBeDefined();
       expect(result.getResult()).toBeDefined();
-      expect(result.getHistoryEvents()).toHaveLength(2);
+      expect(result.getHistoryEvents()).toHaveLength(3);
     });
 
     it("should process events across multiple cycles", async () => {
@@ -530,36 +512,9 @@ describe("CloudDurableTestRunner", () => {
             $metadata: {},
           },
           {
-            Events: [],
+            Events: [mockSuccessEvent],
             NextMarker: undefined,
             $metadata: {},
-          },
-        ],
-        executionSequence: [
-          {
-            Status: ExecutionStatus.RUNNING,
-            $metadata: {},
-            DurableExecutionArn: undefined,
-            DurableExecutionName: undefined,
-            FunctionArn: undefined,
-            StartTimestamp: undefined,
-          },
-          {
-            Status: ExecutionStatus.RUNNING,
-            $metadata: {},
-            DurableExecutionArn: undefined,
-            DurableExecutionName: undefined,
-            FunctionArn: undefined,
-            StartTimestamp: undefined,
-          },
-          {
-            Status: ExecutionStatus.SUCCEEDED,
-            Result: '{"success": true}',
-            $metadata: {},
-            DurableExecutionArn: undefined,
-            DurableExecutionName: undefined,
-            FunctionArn: undefined,
-            StartTimestamp: undefined,
           },
         ],
       });
@@ -586,54 +541,14 @@ describe("CloudDurableTestRunner", () => {
 
       expect(result).toBeDefined();
       expect(result.getResult()).toBeDefined();
-      expect(result.getHistoryEvents()).toHaveLength(2);
+      expect(result.getHistoryEvents()).toHaveLength(3);
     });
 
     it("should handle empty events", async () => {
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [],
+          Events: [mockSuccessEvent],
           $metadata: {},
-        },
-        executionResponse: {
-          Status: ExecutionStatus.SUCCEEDED,
-          Result: '{"success": true}',
-          $metadata: {},
-          DurableExecutionArn: undefined,
-          DurableExecutionName: undefined,
-          FunctionArn: undefined,
-          StartTimestamp: undefined,
-        },
-      });
-
-      const runner = new CloudDurableTestRunner<{ success: boolean }>({
-        functionName: mockFunctionArn,
-      });
-
-      const runPromise = runner.run();
-
-      await jest.advanceTimersByTimeAsync(1000);
-
-      const result = await runPromise;
-
-      expect(result).toBeDefined();
-      expect(result.getResult()).toBeDefined();
-    });
-
-    it("should handle undefined events", async () => {
-      setupMockApiResponses(mockSend, {
-        historyResponse: {
-          Events: undefined,
-          $metadata: {},
-        },
-        executionResponse: {
-          Status: ExecutionStatus.SUCCEEDED,
-          Result: '{"success": true}',
-          $metadata: {},
-          DurableExecutionArn: undefined,
-          DurableExecutionName: undefined,
-          FunctionArn: undefined,
-          StartTimestamp: undefined,
         },
       });
 
@@ -680,17 +595,22 @@ describe("CloudDurableTestRunner", () => {
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [stepEvent, stepCompletedEvent],
+          Events: [
+            stepEvent,
+            stepCompletedEvent,
+            {
+              Id: "execution-id",
+              EventId: 3,
+              EventTimestamp: new Date(),
+              EventType: EventType.ExecutionSucceeded,
+              ExecutionSucceededDetails: {
+                Result: {
+                  Payload: '{"result": "processed"}',
+                },
+              },
+            },
+          ],
           $metadata: {},
-        },
-        executionResponse: {
-          Status: ExecutionStatus.SUCCEEDED,
-          Result: '{"result": "processed"}',
-          $metadata: {},
-          StartTimestamp: new Date(),
-          DurableExecutionArn: "",
-          DurableExecutionName: "",
-          FunctionArn: "",
         },
       });
 
@@ -763,17 +683,23 @@ describe("CloudDurableTestRunner", () => {
 
       setupMockApiResponses(mockSend, {
         historyResponse: {
-          Events: [stepEvent, stepCompletedEvent, invocationCompletedEvent],
+          Events: [
+            stepEvent,
+            stepCompletedEvent,
+            invocationCompletedEvent,
+            {
+              Id: "execution-id",
+              EventId: 4,
+              EventTimestamp: new Date(),
+              EventType: EventType.ExecutionSucceeded,
+              ExecutionSucceededDetails: {
+                Result: {
+                  Payload: '{"result": "processed"}',
+                },
+              },
+            },
+          ],
           $metadata: {},
-        },
-        executionResponse: {
-          Status: ExecutionStatus.SUCCEEDED,
-          Result: '{"result": "processed"}',
-          $metadata: {},
-          StartTimestamp: new Date(),
-          DurableExecutionArn: "",
-          DurableExecutionName: "",
-          FunctionArn: "",
         },
       });
 
@@ -839,14 +765,9 @@ describe("CloudDurableTestRunner", () => {
   describe("Operation rejection scenarios", () => {
     it("should reject pending operation promises when execution completes successfully", async () => {
       setupMockApiResponses(mockSend, {
-        executionResponse: {
-          Status: ExecutionStatus.SUCCEEDED,
-          Result: '{"success": true}',
+        historyResponse: {
+          Events: [mockSuccessEvent],
           $metadata: {},
-          DurableExecutionArn: undefined,
-          DurableExecutionName: undefined,
-          FunctionArn: undefined,
-          StartTimestamp: undefined,
         },
       });
 
@@ -888,17 +809,24 @@ describe("CloudDurableTestRunner", () => {
 
     it("should reject pending operation promises when execution fails", async () => {
       setupMockApiResponses(mockSend, {
-        executionResponse: {
-          Status: ExecutionStatus.FAILED,
-          Error: {
-            ErrorMessage: "ExecutionFailed",
-            ErrorType: "TestError",
-          },
+        historyResponse: {
+          Events: [
+            {
+              Id: "execution-id",
+              EventId: 1,
+              EventTimestamp: new Date(),
+              EventType: EventType.ExecutionFailed,
+              ExecutionFailedDetails: {
+                Error: {
+                  Payload: {
+                    ErrorType: "TestError",
+                    ErrorMessage: "ExecutionFailed",
+                  },
+                },
+              },
+            },
+          ],
           $metadata: {},
-          DurableExecutionArn: undefined,
-          DurableExecutionName: undefined,
-          FunctionArn: undefined,
-          StartTimestamp: undefined,
         },
       });
 

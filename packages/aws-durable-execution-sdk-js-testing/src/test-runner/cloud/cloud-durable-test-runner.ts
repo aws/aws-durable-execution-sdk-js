@@ -1,7 +1,6 @@
 import {
   InvokeCommand,
   LambdaClient,
-  GetDurableExecutionCommand,
   GetDurableExecutionHistoryCommand,
   InvocationType,
 } from "@aws-sdk/client-lambda";
@@ -181,8 +180,6 @@ export class CloudDurableTestRunner<
       apiClient: {
         getHistory: (request) =>
           this.client.send(new GetDurableExecutionHistoryCommand(request)),
-        getExecution: (request) =>
-          this.client.send(new GetDurableExecutionCommand(request)),
       },
       onOperationEventsReceived: (operationEvents: OperationEvents[]) => {
         this.waitManager.handleCheckpointReceived(
