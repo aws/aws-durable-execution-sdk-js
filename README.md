@@ -8,6 +8,10 @@ This repository contains the code for the following 3 packages published to NPM:
 
 The repository also contains example durable functions located [here](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-examples).
 
+## Documentation
+
+- **[API Specification](./api-docs/index.md)** - Complete technical reference with detailed type definitions and operation specifications
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
