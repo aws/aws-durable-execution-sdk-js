@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "paths": {
-      "@aws-sdk/client-lambda": ["./packages/client-lambda"],
       "@aws/durable-execution-sdk-js": [
         "./packages/aws-durable-execution-sdk-js"
       ],
