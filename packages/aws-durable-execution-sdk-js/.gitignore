@@ -11,4 +11,4 @@
 .DS_Store
 *.tgz
 *.tsbuildinfo
-api-extractor/temp
+api-extractor

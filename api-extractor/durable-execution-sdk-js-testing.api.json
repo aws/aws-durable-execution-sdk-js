@@ -1,0 +1,4410 @@
+{
+  "metadata": {
+    "toolPackage": "@microsoft/api-extractor",
+    "toolVersion": "7.55.1",
+    "schemaVersion": 1011,
+    "oldestForwardsCompatibleVersion": 1001,
+    "tsdocConfig": {
+      "$schema": "https://developer.microsoft.com/json-schemas/tsdoc/v0/tsdoc.schema.json",
+      "noStandardTags": true,
+      "tagDefinitions": [
+        {
+          "tagName": "@alpha",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@beta",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@defaultValue",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@decorator",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@deprecated",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@eventProperty",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@example",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@experimental",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@inheritDoc",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@internal",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@label",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@link",
+          "syntaxKind": "inline",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@override",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@packageDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@param",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@privateRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@public",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@readonly",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@remarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@returns",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@sealed",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@see",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@throws",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@typeParam",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@virtual",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@jsx",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxRuntime",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxFrag",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxImportSource",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@betaDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@internalRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@preapproved",
+          "syntaxKind": "modifier"
+        }
+      ],
+      "supportForTags": {
+        "@alpha": true,
+        "@beta": true,
+        "@defaultValue": true,
+        "@decorator": true,
+        "@deprecated": true,
+        "@eventProperty": true,
+        "@example": true,
+        "@experimental": true,
+        "@inheritDoc": true,
+        "@internal": true,
+        "@label": true,
+        "@link": true,
+        "@override": true,
+        "@packageDocumentation": true,
+        "@param": true,
+        "@privateRemarks": true,
+        "@public": true,
+        "@readonly": true,
+        "@remarks": true,
+        "@returns": true,
+        "@sealed": true,
+        "@see": true,
+        "@throws": true,
+        "@typeParam": true,
+        "@virtual": true,
+        "@betaDocumentation": true,
+        "@internalRemarks": true,
+        "@preapproved": true
+      },
+      "reportUnsupportedHtmlElements": false
+    }
+  },
+  "kind": "Package",
+  "canonicalReference": "@aws/durable-execution-sdk-js-testing!",
+  "docComment": "",
+  "name": "@aws/durable-execution-sdk-js-testing",
+  "preserveMemberOrder": false,
+  "members": [
+    {
+      "kind": "EntryPoint",
+      "canonicalReference": "@aws/durable-execution-sdk-js-testing!",
+      "name": "",
+      "preserveMemberOrder": false,
+      "members": [
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!CallbackDetails:interface",
+          "docComment": "/**\n * Details for a callback operation result, including the callback identifier and outcome.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface CallbackDetails<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-operation.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "name": "CallbackDetails",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CallbackDetails#callbackId:member",
+              "docComment": "/**\n * The unique identifier for the callback operation\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly callbackId: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "callbackId",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CallbackDetails#error:member",
+              "docComment": "/**\n * The error that occurred during the callback operation, if any\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly error?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResultError",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "error",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CallbackDetails#result:member",
+              "docComment": "/**\n * The successful result of the callback operation, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly result?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TResult"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "result",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!ChainedInvokeDetails:interface",
+          "docComment": "/**\n * Details for a chained invoke operation result.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface ChainedInvokeDetails<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-operation.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "name": "ChainedInvokeDetails",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ChainedInvokeDetails#error:member",
+              "docComment": "/**\n * The error that occurred during the chained invoke operation, if any\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly error?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResultError",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "error",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ChainedInvokeDetails#result:member",
+              "docComment": "/**\n * The successful result of the chained invoke operation, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly result?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TResult"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "result",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Class",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner:class",
+          "docComment": "/**\n * A test runner for durable execution functions running in the AWS cloud. This runner invokes Lambda functions and polls for execution history to provide testing capabilities for durable operations.\n *\n * @example\n * ```typescript\n * const runner = new CloudDurableTestRunner({\n *   functionName: 'my-durable-function',\n * });\n *\n * const execution = await runner.run({ payload: { input: 'test' } });\n * const result = execution.getResult();\n * const stepOperation = runner.getOperation('myStep');\n * ```\n *\n * @example\n * ```typescript\n * const runner = new CloudDurableTestRunner({\n *   functionName: 'my-durable-function',\n *   client: new LambdaClient({ region: 'us-east-1' }),\n *   config: { pollInterval: 500 }\n * });\n *\n * const execution = await runner.run({ payload: { input: 'test' } });\n * const result = execution.getResult();\n * const stepOperation = runner.getOperation('myStep');\n * ```\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare class CloudDurableTestRunner<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "any"
+            },
+            {
+              "kind": "Content",
+              "text": "> implements "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableTestRunner",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableOperation",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", TResult>"
+            },
+            {
+              "kind": "Content",
+              "text": " "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/cloud/cloud-durable-test-runner.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "isAbstract": false,
+          "name": "CloudDurableTestRunner",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "Constructor",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner:constructor(1)",
+              "docComment": "/**\n * Creates a new CloudDurableTestRunner instance.\n *\n * @param params - Configuration parameters for the test runner\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "constructor({ functionName, client, config, }: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "CloudDurableTestRunnerParameters",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerParameters:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ");"
+                }
+              ],
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "{ functionName, client, config, }",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ]
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner#getOperation:member(1)",
+              "docComment": "/**\n * Gets an operation by name, defaulting to the first occurrence (index 0).\n *\n * This is a convenience method equivalent to calling `getOperationByNameAndIndex(name, 0)`.\n *\n * @param name - The name of the operation to retrieve\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance that can be used to inspect operation details\n *\n * @example\n * ```typescript\n * const stepOp = runner.getOperation<string>('processData');\n * await stepOp.waitForData();\n * const details = stepOp.getStepDetails();\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperation<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperation"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner#getOperationById:member(1)",
+              "docComment": "/**\n * Gets an operation by its unique identifier.\n *\n * Each operation in a durable execution has a unique ID. This method allows you to retrieve an operation when you know its specific ID.\n *\n * @param id - The unique identifier of the operation\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance for the operation with the specified ID\n *\n * @example\n * ```typescript\n * const operation = runner.getOperationById<string>('op-abc123');\n * await operation.waitForData();\n * const result = operation.getContextDetails()?.result;\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationById<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(id: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "id",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperationById"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner#getOperationByIndex:member(1)",
+              "docComment": "/**\n * Gets an operation by its execution order index.\n *\n * Operations are indexed in the order they were executed, starting from 0. This method is useful when you know the execution order of operations.\n *\n * @param index - The zero-based index of the operation in execution order\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance for the operation at the specified index\n *\n * @example\n * ```typescript\n * // Get the first operation that was executed\n * const firstOp = runner.getOperationByIndex<number>(0);\n * await firstOp.waitForData();\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationByIndex<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(index: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "index",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperationByIndex"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner#getOperationByNameAndIndex:member(1)",
+              "docComment": "/**\n * Gets an operation by name and index when multiple operations have the same name.\n *\n * When a durable function executes the same named operation multiple times, this method allows you to access a specific occurrence by its index.\n *\n * @param name - The name of the operation\n *\n * @param index - The zero-based index among operations with the same name\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance for the specified named operation occurrence\n *\n * @example\n * ```typescript\n * // Get the second occurrence of an operation named 'validateInput'\n * const secondValidation = runner.getOperationByNameAndIndex<boolean>('validateInput', 1);\n * await secondValidation.waitForData();\n * const isValid = secondValidation.getStepDetails()?.result;\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationByNameAndIndex<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", index: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 7,
+                "endIndex": 9
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "index",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 5,
+                    "endIndex": 6
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperationByNameAndIndex"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner#reset:member(1)",
+              "docComment": "/**\n * Resets the test runner state, clearing all cached operations and history.\n *\n * This method should be called between test runs to ensure a clean state. It clears the operation index, wait manager, and operation storage, allowing the runner to be reused for multiple test executions.\n *\n * @example\n * ```typescript\n * beforeEach(() => {\n *   runner.reset();\n * });\n * ```\n *\n * @beta\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "reset(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "void"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Beta",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "reset"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunner#run:member(1)",
+              "docComment": "/**\n * Runs the durable function and returns the test result.\n *\n * This method invokes the Lambda function, polls for execution history, and returns a comprehensive test result containing the function output and all operation details.\n *\n * @param params - Optional parameters for the function invocation\n *\n * @returns A promise that resolves to the test result containing function output and operation history\n *\n * @throws\n *\n * Will throw an error if no execution ARN is returned from the Lambda invocation which can occur if the function is not a durable function.\n *\n * @example\n * ```typescript\n * const result = await runner.run({\n *   payload: { userId: '123', action: 'process' }\n * });\n * console.log('Function result:', result.getResult());\n * console.log('Operations count:', result.getOperations().length);\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "run(params?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "InvokeRequest",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvokeRequest:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResult",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TResult>>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "params",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "run"
+            }
+          ],
+          "implementsTokenRanges": [
+            {
+              "startIndex": 3,
+              "endIndex": 7
+            }
+          ]
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerConfig:interface",
+          "docComment": "/**\n * Options for the cloud durable test runner.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface CloudDurableTestRunnerConfig "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/cloud/cloud-durable-test-runner.ts",
+          "releaseTag": "Public",
+          "name": "CloudDurableTestRunnerConfig",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerConfig#invocationType:member",
+              "docComment": "/**\n * Invocation type for the Lambda invocation.\n *\n * @defaultValue {@link InvocationType.RequestResponse}\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "invocationType?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "InvocationType",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "invocationType",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerConfig#pollInterval:member",
+              "docComment": "/**\n * Interval with wich the APIs for GetDurableExecutionHistory and GetDurableExecution are fetched from the API.\n *\n * @defaultValue 1000ms\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "pollInterval?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "pollInterval",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerParameters:interface",
+          "docComment": "/**\n * Parameters for creating a CloudDurableTestRunner instance.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface CloudDurableTestRunnerParameters "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/cloud/cloud-durable-test-runner.ts",
+          "releaseTag": "Public",
+          "name": "CloudDurableTestRunnerParameters",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerParameters#client:member",
+              "docComment": "/**\n * Optional AWS Lambda client\n *\n * @defaultValue new LambdaClient()\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "client?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "LambdaClient",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~LambdaClient:class"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "client",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerParameters#config:member",
+              "docComment": "/**\n * Optional configuration for the test runner\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "config?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "CloudDurableTestRunnerConfig",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "config",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!CloudDurableTestRunnerParameters#functionName:member",
+              "docComment": "/**\n * The name or ARN of the Lambda function to invoke for testing\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "functionName: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "functionName",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!ContextDetails:interface",
+          "docComment": "/**\n * Details for a context operation result, containing either a successful result or an error.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface ContextDetails<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-operation.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "name": "ContextDetails",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ContextDetails#error:member",
+              "docComment": "/**\n * The error that occurred during the context operation, if any\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly error: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResultError",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "error",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ContextDetails#result:member",
+              "docComment": "/**\n * The successful result of the context operation, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly result: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TResult | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "result",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface",
+          "docComment": "/**\n * Interface for individual operation level interactions in durable executions. Provides methods to inspect operation details, wait for data, and send callback responses.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface DurableOperation<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "any"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-operation.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "name": "DurableOperation",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getCallbackDetails:member(1)",
+              "docComment": "/**\n * Gets the details for a callback operation.\n *\n * @returns The callback operation details, or undefined if no operation data is available\n *\n * @throws\n *\n * Will throw an error if the operation is not a valid callback type\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getCallbackDetails(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "CallbackDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!CallbackDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TResult> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getCallbackDetails"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getChainedInvokeDetails:member(1)",
+              "docComment": "/**\n * Gets the details for a chained invoke operation.\n *\n * @returns The chained invoke operation details, or undefined if no operation data is available\n *\n * @throws\n *\n * Will throw an error if the operation type is not CHAINED_INVOKE\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getChainedInvokeDetails(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ChainedInvokeDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!ChainedInvokeDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TResult> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getChainedInvokeDetails"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getChildOperations:member(1)",
+              "docComment": "/**\n * Gets all child operations of this operation.\n *\n * @returns An array of child operations, or undefined if no operation data is available\n *\n * @throws\n *\n * Will throw an error if the operation ID is not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getChildOperations(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getChildOperations"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getContextDetails:member(1)",
+              "docComment": "/**\n * Gets the details for a context operation.\n *\n * @returns The context operation details, or undefined if no operation data is available\n *\n * @throws\n *\n * Will throw an error if the operation type is not CONTEXT\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getContextDetails(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ContextDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!ContextDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TResult> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getContextDetails"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getEndTimestamp:member(1)",
+              "docComment": "/**\n * Gets the timestamp when this operation ended.\n *\n * @returns The end timestamp, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getEndTimestamp(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getEndTimestamp"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getEvents:member(1)",
+              "docComment": "/**\n * Gets the events associated with this operation.\n *\n * @returns An array of events, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getEvents(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Event",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~Event_2:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getEvents"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getId:member(1)",
+              "docComment": "/**\n * Gets the unique identifier of this operation.\n *\n * @returns The operation ID, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getId(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getId"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getName:member(1)",
+              "docComment": "/**\n * Gets the name of this operation.\n *\n * @returns The operation name, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getName(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getName"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getOperationData:member(1)",
+              "docComment": "/**\n * Gets the raw operation data.\n *\n * @returns The operation data, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationData(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Operation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~Operation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getOperationData"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getParentId:member(1)",
+              "docComment": "/**\n * Gets the unique identifier of the parent operation.\n *\n * @returns The parent operation ID, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getParentId(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getParentId"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getStartTimestamp:member(1)",
+              "docComment": "/**\n * Gets the timestamp when this operation started.\n *\n * @returns The start timestamp, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getStartTimestamp(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getStartTimestamp"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getStatus:member(1)",
+              "docComment": "/**\n * Gets the current status of this operation.\n *\n * @returns The operation status, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getStatus(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "OperationStatus",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getStatus"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getStepDetails:member(1)",
+              "docComment": "/**\n * Gets the details for a step operation.\n *\n * @returns The step operation details, or undefined if no operation data is available\n *\n * @throws\n *\n * Will throw an error if the operation type is not STEP\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getStepDetails(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "StepDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!StepDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TResult> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getStepDetails"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getSubType:member(1)",
+              "docComment": "/**\n * Gets the subtype of this operation.\n *\n * @returns The operation subtype, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getSubType(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "OperationSubType",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~OperationSubType:enum"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getSubType"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getType:member(1)",
+              "docComment": "/**\n * Gets the type of this operation.\n *\n * @returns The operation type, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getType(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "OperationType",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getType"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#getWaitDetails:member(1)",
+              "docComment": "/**\n * Gets the details for a wait operation.\n *\n * @returns The wait operation details, or undefined if no operation data is available\n *\n * @throws\n *\n * Will throw an error if the operation type is not WAIT or if wait event details are missing\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getWaitDetails(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "WaitResultDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitResultDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getWaitDetails"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#isCallback:member(1)",
+              "docComment": "/**\n * Checks if this operation is a callback operation.\n *\n * @returns True if this is a callback operation, false otherwise\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "isCallback(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "isCallback"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#isWaitForCallback:member(1)",
+              "docComment": "/**\n * Checks if this operation is a wait-for-callback operation.\n *\n * @returns True if this is a wait-for-callback operation, false otherwise\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "isWaitForCallback(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "isWaitForCallback"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#sendCallbackFailure:member(1)",
+              "docComment": "/**\n * Sends a callback failure to the durable execution service.\n *\n * @param error - Optional error object to send with the callback failure\n *\n * @returns A promise that resolves to the callback failure response\n *\n * @throws\n *\n * Will throw an error if callback details are not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "sendCallbackFailure(error?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ErrorObject",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~ErrorObject:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "SendDurableExecutionCallbackFailureResponse",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~SendDurableExecutionCallbackFailureResponse:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "error",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "sendCallbackFailure"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#sendCallbackHeartbeat:member(1)",
+              "docComment": "/**\n * Sends a callback heartbeat to the durable execution service to keep the callback active.\n *\n * @returns A promise that resolves to the callback heartbeat response\n *\n * @throws\n *\n * Will throw an error if callback details are not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "sendCallbackHeartbeat(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "SendDurableExecutionCallbackHeartbeatResponse",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~SendDurableExecutionCallbackHeartbeatResponse:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 5
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "sendCallbackHeartbeat"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#sendCallbackSuccess:member(1)",
+              "docComment": "/**\n * Sends a successful callback result to the durable execution service.\n *\n * @param result - Optional result data to send with the callback\n *\n * @returns A promise that resolves to the callback success response\n *\n * @throws\n *\n * Will throw an error if callback details are not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "sendCallbackSuccess(result?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "SendDurableExecutionCallbackSuccessResponse",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~SendDurableExecutionCallbackSuccessResponse:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "result",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "sendCallbackSuccess"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation#waitForData:member(1)",
+              "docComment": "/**\n * Wait for data for the current operation. If data is not found by the time the execution completes, this function will throw an error.\n *\n * @param status - The operation status to wait for. Default value is STARTED\n *\n * @returns A promise that resolves to this OperationWithData instance once the specified status is reached\n *\n * @example\n * ```typescript\n * const wait = runner.getOperation(\"my-wait\")\n * const myWait = await wait.waitForData()\n * assert(myWait.getWaitDetails()?.waitSeconds === 10)\n * ```\n *\n * @example\n * ```typescript\n * const callback = runner.getOperation(\"my-callback\")\n * const myCallback = await callback.waitForData(WaitingOperationStatus.SUBMITTED)\n * myCallback.sendCallbackSuccess(\"Hello World\")\n * ```\n *\n * @throws\n *\n * Will throw an error if data is not available when the execution completes\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "waitForData(status?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "WaitingOperationStatus",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitingOperationStatus:enum"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TResult>>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "status",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "waitForData"
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner:interface",
+          "docComment": "/**\n * Main interface for durable function test runners. Provides methods to run durable executions and retrieve operations for testing.\n *\n * @typeParam TDurableOperation - The type of operations returned by this test runner\n *\n * @typeParam ResultType - The expected result type of the durable function\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface DurableTestRunner<TDurableOperation extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableOperation",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", ResultType> "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-test-runner.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TDurableOperation",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            },
+            {
+              "typeParameterName": "ResultType",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "DurableTestRunner",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner#getOperation:member(1)",
+              "docComment": "/**\n * Gets the first operation with the specified name.\n *\n * @param name - The name of the operation to retrieve\n *\n * @returns An operation instance that can be used to inspect operation details\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperation(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TDurableOperation"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "getOperation"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner#getOperationById:member(1)",
+              "docComment": "/**\n * Gets an operation by its unique identifier.\n *\n * @param id - The unique identifier of the operation\n *\n * @returns An operation instance for the operation with the specified ID\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationById(id: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TDurableOperation"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "id",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "getOperationById"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner#getOperationByIndex:member(1)",
+              "docComment": "/**\n * Gets an operation by its execution order index.\n *\n * @param index - The zero-based index of the operation in execution order\n *\n * @returns An operation instance for the operation at the specified index\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationByIndex(index: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TDurableOperation"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "index",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "getOperationByIndex"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner#getOperationByNameAndIndex:member(1)",
+              "docComment": "/**\n * Gets an operation by name and index when multiple operations have the same name.\n *\n * @param name - The name of the operation\n *\n * @param index - The zero-based index among operations with the same name\n *\n * @returns An operation instance for the specified named operation occurrence\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationByNameAndIndex(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", index: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TDurableOperation"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 6
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "index",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "getOperationByNameAndIndex"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner#run:member(1)",
+              "docComment": "/**\n * Runs the durable execution and returns the test result.\n *\n * @param params - Optional parameters for the function invocation\n *\n * @returns A promise that resolves to the test result containing function output and operation history\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "run(params?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "InvokeRequest",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvokeRequest:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResult",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<ResultType>>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "params",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "run"
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:type",
+          "docComment": "/**\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type ExecutionStatus =\n  "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "ExecutionStatus",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "ExecutionStatus",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "releaseTag": "Public",
+          "name": "ExecutionStatus",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:var",
+          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "ExecutionStatus: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n  readonly FAILED: \"FAILED\";\n  readonly RUNNING: \"RUNNING\";\n  readonly STOPPED: \"STOPPED\";\n  readonly SUCCEEDED: \"SUCCEEDED\";\n  readonly TIMED_OUT: \"TIMED_OUT\";\n}"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "ExecutionStatus",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!Invocation:interface",
+          "docComment": "/**\n * Tracks a single invocation of the durable function handler. Contains timing information, request ID, and any errors that occurred.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface Invocation "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-test-runner.ts",
+          "releaseTag": "Public",
+          "name": "Invocation",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Invocation#endTimestamp:member",
+              "docComment": "/**\n * The timestamp when the handler invocation ended\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "endTimestamp: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "endTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Invocation#error:member",
+              "docComment": "/**\n * Error information if the invocation failed\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "error: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResultError",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "error",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Invocation#requestId:member",
+              "docComment": "/**\n * The AWS request ID for this invocation\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "requestId: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "requestId",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Invocation#startTimestamp:member",
+              "docComment": "/**\n * The timestamp when the handler invocation started\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "startTimestamp: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "startTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:type",
+          "docComment": "/**\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type InvocationType =\n  "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "InvocationType",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "InvocationType",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "releaseTag": "Public",
+          "name": "InvocationType",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:var",
+          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "InvocationType: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n  readonly DryRun: \"DryRun\";\n  readonly Event: \"Event\";\n  readonly RequestResponse: \"RequestResponse\";\n}"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "InvocationType",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvokeRequest:interface",
+          "docComment": "/**\n * Request parameters for invoking a durable function.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface InvokeRequest "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-test-runner.ts",
+          "releaseTag": "Public",
+          "name": "InvokeRequest",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvokeRequest#payload:member",
+              "docComment": "/**\n * Optional payload to send to the durable function\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "payload?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "payload",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Class",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner:class",
+          "docComment": "/**\n * Local test runner for durable executions that runs handlers in-process with a local checkpoint server for development and testing scenarios.\n *\n * This test runner executes durable functions locally without requiring AWS Lambda infrastructure, making it ideal for unit testing and local development workflows.\n *\n * @typeParam ResultType - The expected result type of the durable function\n *\n * @example\n * ```typescript\n * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';\n * import { withDurableExecution } from '@aws/durable-execution-sdk-js';\n *\n * const handler = withDurableExecution(async (input, context) => {\n *   const result = await context.step('process', () => processData(input));\n *   return result;\n * });\n *\n * const runner = new LocalDurableTestRunner({ handlerFunction: handler });\n *\n * const execution = await runner.run({ payload: { data: 'test' } });\n * const result = execution.getResult();\n * ```\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare class LocalDurableTestRunner<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "any"
+            },
+            {
+              "kind": "Content",
+              "text": "> implements "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableTestRunner",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableTestRunner:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableOperation",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", TResult>"
+            },
+            {
+              "kind": "Content",
+              "text": " "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/local/local-durable-test-runner.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "isAbstract": false,
+          "name": "LocalDurableTestRunner",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "Constructor",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner:constructor(1)",
+              "docComment": "/**\n * Creates a new LocalDurableTestRunner instance and starts the checkpoint server.\n *\n * @param params - Configuration parameters\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "constructor({ handlerFunction }: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "LocalDurableTestRunnerParameters",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerParameters:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ");"
+                }
+              ],
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "{ handlerFunction }",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ]
+            },
+            {
+              "kind": "Property",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner.fakeClock:member",
+              "docComment": "",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "static fakeClock: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "InstalledClock",
+                  "canonicalReference": "@types/sinonjs__fake-timers!InstalledClock:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "fakeClock",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "isStatic": true,
+              "isProtected": false,
+              "isAbstract": false
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#getOperation:member(1)",
+              "docComment": "/**\n * Gets the first operation with the specified name.\n *\n * @param name - The name of the operation to retrieve\n *\n * @param index - Optional index for operations with the same name (defaults to 0)\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance that can be used to inspect operation details\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperation<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", index?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 7,
+                "endIndex": 9
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "index",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 5,
+                    "endIndex": 6
+                  },
+                  "isOptional": true
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperation"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#getOperationById:member(1)",
+              "docComment": "/**\n * Gets an operation by its unique identifier.\n *\n * @param id - The unique identifier of the operation\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance for the operation with the specified ID\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationById<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(id: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "id",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperationById"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#getOperationByIndex:member(1)",
+              "docComment": "/**\n * Gets an operation by its execution order index.\n *\n * @param index - The zero-based index of the operation in execution order\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance for the operation at the specified index\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationByIndex<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(index: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "index",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperationByIndex"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#getOperationByNameAndIndex:member(1)",
+              "docComment": "/**\n * Gets an operation by name and index when multiple operations have the same name.\n *\n * @param name - The name of the operation\n *\n * @param index - The zero-based index among operations with the same name\n *\n * @typeParam TOperationResult - The expected result type of the operation\n *\n * @returns An operation instance for the specified named operation occurrence\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperationByNameAndIndex<TOperationResult = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "any"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", index: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TOperationResult>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "typeParameters": [
+                {
+                  "typeParameterName": "TOperationResult",
+                  "constraintTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "defaultTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  }
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 7,
+                "endIndex": 9
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "index",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 5,
+                    "endIndex": 6
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "getOperationByNameAndIndex"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#registerDurableFunction:member(1)",
+              "docComment": "/**\n * Registers a durable function handler that can be invoked during durable execution testing.\n *\n * @param functionName - The name/ARN of the function that will be used in context.invoke() calls\n *\n * @param durableHandler - The durable function handler created with withDurableExecution\n *\n * @returns This LocalDurableTestRunner instance for method chaining\n *\n * @example\n * ```typescript\n * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';\n * import { withDurableExecution } from '@aws/durable-execution-sdk-js';\n *\n * const testRunner = new LocalDurableTestRunner({\n *   handlerFunction: mainHandler\n * });\n *\n * // Register a durable function\n * const processWorkflow = withDurableExecution(async (input, context) => {\n *   const step1 = await context.step('validate', () => validate(input));\n *   const step2 = await context.step('process', () => process(step1));\n *   return step2;\n * });\n *\n * testRunner.registerDurableFunction('process-workflow', processWorkflow);\n *\n * // Chain multiple registrations\n * testRunner\n *   .registerDurableFunction('workflow-a', workflowAHandler)\n *   .registerDurableFunction('workflow-b', workflowBHandler)\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "registerDurableFunction(functionName: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", durableHandler: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableLambdaHandler",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~DurableLambdaHandler:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "this"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 6
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "functionName",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "durableHandler",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "registerDurableFunction"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#registerFunction:member(1)",
+              "docComment": "/**\n * Registers a function handler that can be invoked during durable execution testing.\n *\n * @param functionName - The name/ARN of the function that will be used in context.invoke() calls\n *\n * @param handler - The function handler\n *\n * @returns This LocalDurableTestRunner instance for method chaining\n *\n * @example\n * ```typescript\n * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';\n * import { withDurableExecution } from '@aws/durable-execution-sdk-js';\n *\n * const testRunner = new LocalDurableTestRunner({\n *   handlerFunction: mainHandler\n * });\n *\n * // Register a function\n * const handler = async (input, context) => {\n *   const response = {\n *      status: 200\n *   }\n *   return response;\n * };\n *\n * testRunner.registerFunction('get-response', handler);\n *\n * // Chain multiple registrations\n * testRunner\n *   .registerFunction('workflow-a', workflowAHandler)\n *   .registerFunction('workflow-b', workflowBHandler)\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "registerFunction(functionName: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", handler: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Handler",
+                  "canonicalReference": "@types/aws-lambda!Handler:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "this"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 6
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "functionName",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "handler",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "registerFunction"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#reset:member(1)",
+              "docComment": "/**\n * Resets the test runner state, clearing all cached operations and history.\n *\n * This method should be called between test runs to ensure a clean state. It clears the operation index, wait manager, and operation storage, allowing the runner to be reused for multiple test executions.\n *\n * @example\n * ```typescript\n * beforeEach(() => {\n *   runner.reset();\n * });\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "reset(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "void"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "reset"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner#run:member(1)",
+              "docComment": "/**\n * Executes the durable function and returns the result. The method will not resolve until the handler function completes successfully or throws an error.\n *\n * @param params - Optional parameters for the execution\n *\n * @returns Promise that resolves with the execution result\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "run(params?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "InvokeRequest",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvokeRequest:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResult",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<TResult>>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "params",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "run"
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner.setupTestEnvironment:member(1)",
+              "docComment": "/**\n * Sets up the test environment for local durable execution testing.\n *\n * This method initializes the checkpoint server, configures fake timers for time manipulation, and prepares the environment for running durable function tests. This should be called once before running any tests, typically in a test setup hook like `beforeAll`.\n *\n * @remarks\n *\n * - If fake timers are already installed (for example, if `jest.useFakeTimers()` was called previously), this function will throw an error and setup will not succeed. - Must be paired with {@link LocalDurableTestRunner.teardownTestEnvironment} to properly clean up resources\n *\n * @param params - Optional configuration parameters for the test environment\n *\n * @returns Promise that resolves when the test environment setup is complete\n *\n * @throws\n *\n * Will throw an error if the checkpoint server fails to start\n *\n * @example\n * ```typescript\n * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';\n *\n * // Basic setup\n * beforeAll(async () => {\n *   await LocalDurableTestRunner.setupTestEnvironment();\n * });\n *\n * // Setup with time skipping enabled\n * beforeAll(async () => {\n *   await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });\n * });\n * ```\n *\n * @see\n *\n * {@link LocalDurableTestRunner.teardownTestEnvironment} for cleaning up the test environment\n *\n * @see\n *\n * {@link LocalDurableTestRunnerSetupParameters} for configuration options\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "static setupTestEnvironment(params?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "LocalDurableTestRunnerSetupParameters",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerSetupParameters:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<void>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": true,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 5
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "params",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "setupTestEnvironment"
+            },
+            {
+              "kind": "Property",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner.skipTime:member",
+              "docComment": "",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "static skipTime: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "skipTime",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isStatic": true,
+              "isProtected": false,
+              "isAbstract": false
+            },
+            {
+              "kind": "Method",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner.teardownTestEnvironment:member(1)",
+              "docComment": "/**\n * Cleans up and tears down the test environment after durable execution testing.\n *\n * This method stops the checkpoint server, uninstalls fake timers, and performs cleanup of resources that were initialized during test environment setup. This should be called once after all tests have completed, typically in a test cleanup hook like `afterAll`.\n *\n * @remarks\n *\n * - This method safely uninstalls fake timers that were installed during setup if skipTime was enabled. - Must be called after {@link LocalDurableTestRunner.setupTestEnvironment} to prevent resource leaks - Failure to call this method may leave the checkpoint server running and consume system resources\n *\n * @returns Promise that resolves when the test environment teardown is complete\n *\n * @throws\n *\n * Will throw an error if the checkpoint server fails to stop gracefully\n *\n * @example\n * ```typescript\n * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';\n *\n * // Basic teardown\n * afterAll(async () => {\n *   await LocalDurableTestRunner.teardownTestEnvironment();\n * });\n *\n * // Complete test lifecycle\n * describe('Durable Function Tests', () => {\n *   beforeAll(async () => {\n *     await LocalDurableTestRunner.setupTestEnvironment();\n *   });\n *\n *   afterAll(async () => {\n *     await LocalDurableTestRunner.teardownTestEnvironment();\n *   });\n *\n *   it('should execute durable function', async () => {\n *     // test implementation\n *   });\n * });\n * ```\n *\n * @see\n *\n * {@link LocalDurableTestRunner.setupTestEnvironment} for initializing the test environment\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "static teardownTestEnvironment(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<void>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isStatic": true,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [],
+              "isOptional": false,
+              "isAbstract": false,
+              "name": "teardownTestEnvironment"
+            }
+          ],
+          "implementsTokenRanges": [
+            {
+              "startIndex": 3,
+              "endIndex": 7
+            }
+          ]
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerParameters:interface",
+          "docComment": "/**\n * Configuration parameters for LocalDurableTestRunner.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface LocalDurableTestRunnerParameters "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/local/interfaces/durable-test-runner-factory.ts",
+          "releaseTag": "Public",
+          "name": "LocalDurableTestRunnerParameters",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerParameters#handlerFunction:member",
+              "docComment": "/**\n * The handler function to run the execution on\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "handlerFunction: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableLambdaHandler",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~DurableLambdaHandler:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "handlerFunction",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerSetupParameters:interface",
+          "docComment": "/**\n * Configuration parameters for setting up the LocalDurableTestRunner test environment.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface LocalDurableTestRunnerSetupParameters "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/local/local-durable-test-runner.ts",
+          "releaseTag": "Public",
+          "name": "LocalDurableTestRunnerSetupParameters",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerSetupParameters#skipTime:member",
+              "docComment": "/**\n * Whether to enable time skipping using fake timers during test execution.\n *\n * When set to `true`, the test runner will install fake timers that allow tests to skip over time-based operations like `setTimeout`, `setInterval`, `context.wait`, and `context.step` retries without actually waiting for the specified duration. This significantly speeds up test execution for workflows that involve delays or timeouts.\n *\n * When set to `false` or undefined, real timers will be used and any time-based operations will execute with their actual delays.\n *\n * @remarks\n *\n * - The fake timers installation may fail in some environments, but this won't prevent the test setup from completing successfully - All test runners created after setup will inherit this time skipping behavior\n *\n * @defaultValue false\n *\n * @example\n * ```typescript\n * // Enable time skipping for faster test execution\n * await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });\n *\n * // Use real timers (default behavior)\n * await LocalDurableTestRunner.setupTestEnvironment({ skipTime: false });\n * // or simply:\n * await LocalDurableTestRunner.setupTestEnvironment();\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "skipTime?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "skipTime",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type",
+          "docComment": "/**\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type OperationStatus =\n  "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationStatus",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationStatus",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "releaseTag": "Public",
+          "name": "OperationStatus",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var",
+          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "OperationStatus: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n  readonly CANCELLED: \"CANCELLED\";\n  readonly FAILED: \"FAILED\";\n  readonly PENDING: \"PENDING\";\n  readonly READY: \"READY\";\n  readonly STARTED: \"STARTED\";\n  readonly STOPPED: \"STOPPED\";\n  readonly SUCCEEDED: \"SUCCEEDED\";\n  readonly TIMED_OUT: \"TIMED_OUT\";\n}"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "OperationStatus",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:type",
+          "docComment": "/**\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type OperationType = "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationType",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationType",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "releaseTag": "Public",
+          "name": "OperationType",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var",
+          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "OperationType: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n  readonly CALLBACK: \"CALLBACK\";\n  readonly CHAINED_INVOKE: \"CHAINED_INVOKE\";\n  readonly CONTEXT: \"CONTEXT\";\n  readonly EXECUTION: \"EXECUTION\";\n  readonly STEP: \"STEP\";\n  readonly WAIT: \"WAIT\";\n}"
+            }
+          ],
+          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "OperationType",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!StepDetails:interface",
+          "docComment": "/**\n * Details for a step operation result, including retry information and outcome.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface StepDetails<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-operation.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "name": "StepDetails",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!StepDetails#attempt:member",
+              "docComment": "/**\n * The current attempt number for this step operation\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly attempt: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "attempt",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!StepDetails#error:member",
+              "docComment": "/**\n * The error that occurred during the step operation, if any\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly error: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResultError",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "error",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!StepDetails#nextAttemptTimestamp:member",
+              "docComment": "/**\n * The timestamp when the next attempt will be made, if retries are scheduled\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly nextAttemptTimestamp: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "nextAttemptTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!StepDetails#result:member",
+              "docComment": "/**\n * The successful result of the step operation, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly result: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TResult | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "result",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult:interface",
+          "docComment": "/**\n * Result of a durable function test execution. Contains the function result, operation history, and methods to inspect the execution.\n *\n * @typeParam TResult - The expected result type of the durable function\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface TestResult<TResult = "
+            },
+            {
+              "kind": "Content",
+              "text": "any"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-test-runner.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "TResult",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "name": "TestResult",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult#getError:member(1)",
+              "docComment": "/**\n * Gets the error from a failed durable execution.\n *\n * @returns The execution error details\n *\n * @throws\n *\n * Will throw an error if the execution succeeded\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getError(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TestResultError",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getError"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult#getHistoryEvents:member(1)",
+              "docComment": "/**\n * Gets the complete history of events for the durable execution.\n *\n * @returns An array of all events that occurred during the execution\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getHistoryEvents(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Event",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~Event_2:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "[]"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getHistoryEvents"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult#getInvocations:member(1)",
+              "docComment": "/**\n * Gets informatiAn about individual Lambda handler invocations.\n *\n * Can be used to assert on the data for a specific invocation and validate the number of invocations that were run during the durable execution.\n *\n * @returns An array of invocation details\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getInvocations(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Invocation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!Invocation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "[]"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getInvocations"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult#getOperations:member(1)",
+              "docComment": "/**\n * Gets a list of all operations from the execution.\n *\n * @param params - Optional filter parameters\n *\n * @returns An array of operations that occurred during the execution\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getOperations(params?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "{\n        status: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "OperationStatus",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";\n    }"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableOperation",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!DurableOperation:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "[]"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "params",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 4
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "getOperations"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult#getResult:member(1)",
+              "docComment": "/**\n * Gets the final result of the durable execution.\n *\n * @returns The execution result, or undefined if not available\n *\n * @throws\n *\n * Will throw the execution error if the execution failed\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getResult(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "TResult | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getResult"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult#getStatus:member(1)",
+              "docComment": "/**\n * Gets the status of the durable execution.\n *\n * @returns The execution status, or undefined if not available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "getStatus(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ExecutionStatus",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "getStatus"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResult#print:member(1)",
+              "docComment": "/**\n * Prints a formatted table of all operations to the console with their details.\n *\n * @param config - Optional configuration to control which columns to display\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "print(config?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "{\n        parentId?: boolean;\n        name?: boolean;\n        type?: boolean;\n        subType?: boolean;\n        status?: boolean;\n        startTime?: boolean;\n        endTime?: boolean;\n        duration?: boolean;\n    }"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "void"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "config",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "print"
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError:interface",
+          "docComment": "/**\n * Error information from a test execution or operation.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface TestResultError "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-test-runner.ts",
+          "releaseTag": "Public",
+          "name": "TestResultError",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError#errorData:member",
+              "docComment": "/**\n * Additional error data in string format, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "errorData: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "errorData",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError#errorMessage:member",
+              "docComment": "/**\n * The error message, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "errorMessage: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "errorMessage",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError#errorType:member",
+              "docComment": "/**\n * The type/category of the error, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "errorType: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "errorType",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!TestResultError#stackTrace:member",
+              "docComment": "/**\n * Stack trace lines from the error, if available\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "stackTrace: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "stackTrace",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Enum",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitingOperationStatus:enum",
+          "docComment": "/**\n * An enum for different available waiting operation statuses.\n *\n * @example\n * ```typescript\n * const wait = runner.getOperation(\"my-wait\")\n * const myWait = await wait.waitForData()\n * assert(myWait.getWaitDetails()?.waitSeconds === 10)\n * ```\n *\n * @example\n * ```typescript\n * const callback = runner.getOperation(\"my-callback\")\n * const myCallback = await callback.waitForData(WaitingOperationStatus.SUBMITTED)\n * myCallback.sendCallbackSuccess(\"Hello World\")\n * ```\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare enum WaitingOperationStatus "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-operation.ts",
+          "releaseTag": "Public",
+          "name": "WaitingOperationStatus",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "EnumMember",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitingOperationStatus.COMPLETED:member",
+              "docComment": "/**\n * Fires when the operation is completed. This includes a status of CANCELLED, FAILED, STOPPED, SUCCEEDED, or TIMED_OUT.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "COMPLETED = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"COMPLETED\""
+                }
+              ],
+              "initializerTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "name": "COMPLETED"
+            },
+            {
+              "kind": "EnumMember",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitingOperationStatus.STARTED:member",
+              "docComment": "/**\n * Fires when the operation starts.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "STARTED = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"STARTED\""
+                }
+              ],
+              "initializerTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "name": "STARTED"
+            },
+            {
+              "kind": "EnumMember",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitingOperationStatus.SUBMITTED:member",
+              "docComment": "/**\n * Submitted is the same as COMPLETED, except for the case where the operation is waitForCallback. In that case, SUBMITTED will fire when the waitForCallback submitter is completed.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "SUBMITTED = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"SUBMITTED\""
+                }
+              ],
+              "initializerTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "name": "SUBMITTED"
+            }
+          ]
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitResultDetails:interface",
+          "docComment": "/**\n * Details for a wait operation, including duration and scheduling information.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface WaitResultDetails "
+            }
+          ],
+          "fileUrlPath": "src/test-runner/types/durable-operation.ts",
+          "releaseTag": "Public",
+          "name": "WaitResultDetails",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitResultDetails#scheduledEndTimestamp:member",
+              "docComment": "/**\n * The timestamp when the wait operation is scheduled to complete\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly scheduledEndTimestamp?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "scheduledEndTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WaitResultDetails#waitSeconds:member",
+              "docComment": "/**\n * The duration of the wait operation in seconds\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly waitSeconds?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "waitSeconds",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        }
+      ]
+    }
+  ]
+}

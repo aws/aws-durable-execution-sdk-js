@@ -22,4 +22,11 @@ Description
 </td><td>
 
 </td></tr>
+<tr><td>
+
+[@aws/durable-execution-sdk-js-testing](./durable-execution-sdk-js-testing.md)
+
+</td><td>
+
+</td></tr>
 </tbody></table>

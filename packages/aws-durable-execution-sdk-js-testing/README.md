@@ -154,6 +154,13 @@ describe("CloudDurableTestRunner", () => {
 });
 ```
 
+## Documentation
+
+This README provides a quick reference for the Testing SDK's main features. For more detailed information:
+
+- **[API Specification](../../api-docs/durable-execution-sdk-js-testing.md)** - Complete technical reference with detailed type definitions and operation specifications
+- **[Contributing](../../CONTRIBUTING.md)** - Learn about contributing to the AWS Durable Execution Testing SDK for JavaScript
+
 ## LocalDurableTestRunner
 
 Run durable functions locally with a simulated durable execution backend.

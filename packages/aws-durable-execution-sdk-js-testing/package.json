@@ -45,6 +45,7 @@
     "@types/morgan": "^1.9.10",
     "@types/sinonjs__fake-timers": "^15.0.1",
     "@types/supertest": "^6.0.3",
+    "api-extractor": "^99.99.99",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-jest": "^29.0.1",
