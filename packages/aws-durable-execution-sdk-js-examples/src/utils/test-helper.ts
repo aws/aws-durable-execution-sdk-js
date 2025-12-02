@@ -1,4 +1,4 @@
-import { LambdaClient } from "@aws-sdk/client-lambda";
+import { LambdaClient, Event } from "@aws-sdk/client-lambda";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
