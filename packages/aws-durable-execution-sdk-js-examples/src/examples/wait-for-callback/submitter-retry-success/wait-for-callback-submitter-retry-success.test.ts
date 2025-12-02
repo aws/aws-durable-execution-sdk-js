@@ -31,6 +31,10 @@ createTests({
     it("should fail after exhausting retries when submitter always fails", async () => {
       const execution = await runner.run({ payload: { shouldFail: true } });
 
+      // Log history events for debugging
+      const historyEvents = execution.getHistoryEvents();
+      console.log("History events:", JSON.stringify(historyEvents, null, 2));
+
       const error = execution.getError();
       expect(error).toBeDefined();
       expect(error?.errorMessage).toContain("Simulated submitter failure");
