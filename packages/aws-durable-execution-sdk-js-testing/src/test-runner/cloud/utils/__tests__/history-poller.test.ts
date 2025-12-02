@@ -2,7 +2,6 @@ import {
   Event,
   EventType,
   ExecutionStatus,
-  GetDurableExecutionCommandOutput,
   GetDurableExecutionHistoryCommandOutput,
 } from "@aws-sdk/client-lambda";
 import {
@@ -57,7 +56,7 @@ function createMockEvent(overrides: Partial<Event> = {}): Event {
 
 function createMockHistoryResponse(
   overrides: Partial<GetDurableExecutionHistoryCommandOutput> = {},
-  includeSuccessEvent: boolean = true,
+  includeSuccessEvent = true,
 ): GetDurableExecutionHistoryCommandOutput {
   const successEvent = createMockEvent({
     EventType: EventType.ExecutionSucceeded,
@@ -86,7 +85,7 @@ function createHistoryPoller(options: CreateHistoryPollerOptions = {}): {
   const testExecutionState = new TestExecutionState();
 
   // Create an unhandled promise by default which may create an unhandled rejection if something breaks
-  testExecutionState.createExecutionPromise();
+  void testExecutionState.createExecutionPromise();
 
   const onOperationEventsReceived = jest.fn();
 
@@ -640,7 +639,6 @@ describe("HistoryPoller", () => {
 
     it("should not overlap polling cycles when API calls are slow", async () => {
       const getHistoryCallTimes: number[] = [];
-      const getExecutionCallTimes: number[] = [];
 
       const { poller, mockApiClient } = createHistoryPoller({
         pollInterval: 100, // Short poll interval

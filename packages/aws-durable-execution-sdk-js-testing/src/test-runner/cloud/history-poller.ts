@@ -1,9 +1,7 @@
 import {
   Event,
-  GetDurableExecutionCommandOutput,
   GetDurableExecutionHistoryCommandOutput,
   GetDurableExecutionHistoryRequest,
-  GetDurableExecutionRequest,
   OperationStatus,
 } from "@aws-sdk/client-lambda";
 import { OperationEvents } from "../common/operations/operation-with-data";
@@ -133,6 +131,7 @@ export class HistoryPoller {
     const lastPage = pages.at(-1);
     this.events.push(...(lastPage ?? []));
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const historyEventType = historyEventTypes[
       lastEvent.EventType
     ] as (typeof executionHistoryEventTypes)[keyof typeof executionHistoryEventTypes];
