@@ -3,8 +3,9 @@ import {
   ExecutionContext,
   StepSemantics,
   OperationLifecycleState,
+  OperationSubType,
 } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
@@ -167,7 +168,15 @@ describe("Step Handler", () => {
     expect(mockCheckpoint.markOperationState).toHaveBeenCalledWith(
       stepId,
       OperationLifecycleState.COMPLETED,
-      expect.any(Object),
+      {
+        metadata: {
+          stepId,
+          type: OperationType.STEP,
+          subType: OperationSubType.STEP,
+          name: "test-step",
+          parentId: undefined,
+        },
+      },
     );
   });
 
