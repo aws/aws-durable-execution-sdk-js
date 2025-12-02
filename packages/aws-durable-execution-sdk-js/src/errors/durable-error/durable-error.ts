@@ -3,6 +3,7 @@ import { STORE_STACK_TRACES } from "../../utils/constants/constants";
 
 /**
  * Base class for all durable operation errors
+ * @public
  */
 export abstract class DurableOperationError extends Error {
   abstract readonly errorType: string;
@@ -88,6 +89,7 @@ export abstract class DurableOperationError extends Error {
 
 /**
  * Error thrown when a step operation fails
+ * @public
  */
 export class StepError extends DurableOperationError {
   readonly errorType = "StepError";
@@ -99,6 +101,7 @@ export class StepError extends DurableOperationError {
 
 /**
  * Error thrown when a callback operation fails
+ * @public
  */
 export class CallbackError extends DurableOperationError {
   readonly errorType = "CallbackError";
@@ -110,6 +113,7 @@ export class CallbackError extends DurableOperationError {
 
 /**
  * Error thrown when an invoke operation fails
+ * @public
  */
 export class InvokeError extends DurableOperationError {
   readonly errorType = "InvokeError";
@@ -121,6 +125,7 @@ export class InvokeError extends DurableOperationError {
 
 /**
  * Error thrown when a child context operation fails
+ * @public
  */
 export class ChildContextError extends DurableOperationError {
   readonly errorType = "ChildContextError";
@@ -132,6 +137,7 @@ export class ChildContextError extends DurableOperationError {
 
 /**
  * Error thrown when a wait for condition operation fails
+ * @public
  */
 export class WaitForConditionError extends DurableOperationError {
   readonly errorType = "WaitForConditionError";
