@@ -19,7 +19,7 @@ export const handler = withDurableExecution(
       // Branch 1: Long-running operation that blocks termination
       async (branchCtx: DurableContext) => {
         return await branchCtx.step("long-running-step", async () => {
-          await new Promise((resolve) => setTimeout(resolve, 10000));
+          await new Promise((resolve) => setTimeout(resolve, 20000));
           return "long-complete";
         });
       },
