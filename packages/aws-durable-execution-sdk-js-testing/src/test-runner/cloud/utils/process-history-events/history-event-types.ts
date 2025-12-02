@@ -6,12 +6,7 @@ import {
   Operation,
 } from "@aws-sdk/client-lambda";
 
-/**
- * Mapping of event types to their corresponding history event type configurations.
- * This constant defines how each event type should be processed
- * and what properties it contains.
- */
-export const historyEventTypes = {
+export const executionHistoryEventTypes = {
   ExecutionStarted: {
     operationType: OperationType.EXECUTION,
     operationStatus: OperationStatus.STARTED,
@@ -57,6 +52,15 @@ export const historyEventTypes = {
     operationDetailPlace: undefined,
     hasResult: false,
   },
+} as const satisfies Record<string, HistoryEventType>;
+
+/**
+ * Mapping of event types to their corresponding history event type configurations.
+ * This constant defines how each event type should be processed
+ * and what properties it contains.
+ */
+export const historyEventTypes = {
+  ...executionHistoryEventTypes,
   CallbackStarted: {
     operationType: OperationType.CALLBACK,
     operationStatus: OperationStatus.STARTED,
@@ -219,7 +223,6 @@ export const historyEventTypes = {
     operationDetailPlace: undefined,
     hasResult: true,
   },
-  // TODO: add support for populating invocation information from the InvocationCompleted event
   InvocationCompleted: {
     operationType: undefined,
     operationStatus: undefined,

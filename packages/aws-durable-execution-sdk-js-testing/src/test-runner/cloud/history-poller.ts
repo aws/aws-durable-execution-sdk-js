@@ -4,11 +4,20 @@ import {
   GetDurableExecutionHistoryCommandOutput,
   GetDurableExecutionHistoryRequest,
   GetDurableExecutionRequest,
+  OperationStatus,
 } from "@aws-sdk/client-lambda";
 import { OperationEvents } from "../common/operations/operation-with-data";
 import { historyEventsToOperationEvents } from "./utils/process-history-events/process-history-events";
 import { TestExecutionState } from "../common/test-execution-state";
-import { isClosedExecution } from "../common/utils";
+import { isClosedExecution } from "./utils/process-terminal-event/process-terminal-event";
+import {
+  executionHistoryEventTypes,
+  historyEventTypes,
+} from "./utils/process-history-events/history-event-types";
+import {
+  getErrorFromEvent,
+  getPayloadFromEvent,
+} from "./utils/process-history-events/event-data-extractors";
 
 export type ReceivedOperationEventsCallback = (
   operationEvents: OperationEvents[],
@@ -28,9 +37,6 @@ export interface HistoryApiClient {
   getHistory: (
     request: GetDurableExecutionHistoryRequest,
   ) => Promise<GetDurableExecutionHistoryCommandOutput>;
-  getExecution: (
-    request: GetDurableExecutionRequest,
-  ) => Promise<GetDurableExecutionCommandOutput>;
 }
 
 export class HistoryPoller {
@@ -112,18 +118,13 @@ export class HistoryPoller {
 
     this.lastHistoryMarker = previousHistoryMarker;
 
-    const executionResult = await this.callWithRetries(() =>
-      this.apiClient.getExecution({
-        DurableExecutionArn: this.durableExecutionArn,
-      }),
-    );
-
     this.processEvents(pages.flat());
 
+    const lastEvent = pages.at(-1)?.at(-1);
     const eventsExceptLastPage = pages.slice(0, -1).flat();
     this.events.push(...eventsExceptLastPage);
 
-    if (!isClosedExecution(executionResult.Status)) {
+    if (!isClosedExecution(lastEvent)) {
       // If the execution has not completed, do not add the last page
       // since we will be reading the same page again.
       return;
@@ -131,10 +132,19 @@ export class HistoryPoller {
 
     const lastPage = pages.at(-1);
     this.events.push(...(lastPage ?? []));
+
+    const historyEventType = historyEventTypes[
+      lastEvent.EventType
+    ] as (typeof executionHistoryEventTypes)[keyof typeof executionHistoryEventTypes];
+
+    if (historyEventType.operationStatus === OperationStatus.STARTED) {
+      throw new Error("Completed execution cannot have STARTED status");
+    }
+
     this.testExecutionState.resolveWith({
-      status: executionResult.Status,
-      result: executionResult.Result,
-      error: executionResult.Error,
+      status: historyEventType.operationStatus,
+      result: getPayloadFromEvent(lastEvent, historyEventType.detailPlace),
+      error: getErrorFromEvent(lastEvent, historyEventType.detailPlace),
     });
 
     this.stopPolling();

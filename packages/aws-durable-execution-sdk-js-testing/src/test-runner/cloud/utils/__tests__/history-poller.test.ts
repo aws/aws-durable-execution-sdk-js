@@ -18,9 +18,7 @@ interface CreateHistoryPollerOptions {
   pollInterval?: number;
   durableExecutionArn?: string;
   historyResponses?: GetDurableExecutionHistoryCommandOutput[];
-  executionResponses?: GetDurableExecutionCommandOutput[];
   historyError?: Error;
-  executionError?: Error;
   onOperationEventsReceived?: ReceivedOperationEventsCallback;
 }
 
@@ -36,7 +34,10 @@ function createMockEvent(overrides: Partial<Event> = {}): Event {
 
   // Add required detail fields based on event type
   if (eventType === EventType.ExecutionStarted) {
-    baseEvent.ExecutionStartedDetails = {};
+    baseEvent.ExecutionStartedDetails = {
+      Input: {},
+      ExecutionTimeout: undefined,
+    };
   } else if (eventType === EventType.StepStarted) {
     baseEvent.StepStartedDetails = {
       Name: "test-step",
@@ -46,6 +47,7 @@ function createMockEvent(overrides: Partial<Event> = {}): Event {
   } else if (eventType === EventType.StepSucceeded) {
     baseEvent.StepSucceededDetails = {
       Result: { Payload: '{"success": true}' },
+      RetryDetails: {},
       ...(overrides.StepSucceededDetails ?? {}),
     };
   }
@@ -55,28 +57,22 @@ function createMockEvent(overrides: Partial<Event> = {}): Event {
 
 function createMockHistoryResponse(
   overrides: Partial<GetDurableExecutionHistoryCommandOutput> = {},
+  includeSuccessEvent: boolean = true,
 ): GetDurableExecutionHistoryCommandOutput {
-  return {
-    Events: [createMockEvent()],
-    $metadata: {},
-    ...overrides,
-  };
-}
-
-function createMockExecutionResponse(
-  overrides: Partial<GetDurableExecutionCommandOutput> = {},
-): GetDurableExecutionCommandOutput {
-  const defaultResponse: GetDurableExecutionCommandOutput = {
-    Status: ExecutionStatus.SUCCEEDED,
-    $metadata: {},
-  };
-
-  if (overrides.Status !== ExecutionStatus.FAILED) {
-    defaultResponse.Result = '{"success": true}';
+  const successEvent = createMockEvent({
+    EventType: EventType.ExecutionSucceeded,
+    ExecutionSucceededDetails: {
+      Result: {
+        Payload: "",
+      },
+    },
+  });
+  if (includeSuccessEvent) {
+    overrides.Events?.push(successEvent);
   }
-
   return {
-    ...defaultResponse,
+    Events: [createMockEvent()].concat(includeSuccessEvent ? successEvent : []),
+    $metadata: {},
     ...overrides,
   };
 }
@@ -88,11 +84,14 @@ function createHistoryPoller(options: CreateHistoryPollerOptions = {}): {
   onOperationEventsReceived: jest.MockedFunction<ReceivedOperationEventsCallback>;
 } {
   const testExecutionState = new TestExecutionState();
+
+  // Create an unhandled promise by default which may create an unhandled rejection if something breaks
+  testExecutionState.createExecutionPromise();
+
   const onOperationEventsReceived = jest.fn();
 
   // Create simple Jest mocks for the API client
   let historyCallCount = 0;
-  let executionCallCount = 0;
 
   const mockApiClient: jest.Mocked<HistoryApiClient> = {
     getHistory: jest.fn().mockImplementation(() => {
@@ -105,18 +104,6 @@ function createHistoryPoller(options: CreateHistoryPollerOptions = {}): {
       const response =
         responses[historyCallCount] ?? responses[responses.length - 1];
       historyCallCount++;
-      return Promise.resolve(response);
-    }),
-    getExecution: jest.fn().mockImplementation(() => {
-      if (options.executionError) {
-        return Promise.reject(options.executionError);
-      }
-      const responses = options.executionResponses ?? [
-        createMockExecutionResponse(),
-      ];
-      const response =
-        responses[executionCallCount] ?? responses[responses.length - 1];
-      executionCallCount++;
       return Promise.resolve(response);
     }),
   };
@@ -186,12 +173,10 @@ describe("HistoryPoller", () => {
       poller.startPolling();
 
       expect(mockApiClient.getHistory).not.toHaveBeenCalled();
-      expect(mockApiClient.getExecution).not.toHaveBeenCalled();
 
       await waitForPollerCycles(1, 200);
 
       expect(mockApiClient.getHistory).toHaveBeenCalled();
-      expect(mockApiClient.getExecution).toHaveBeenCalled();
     });
   });
 
@@ -237,9 +222,6 @@ describe("HistoryPoller", () => {
       const testEvent = createMockEvent({ Id: "test-event" });
       const { poller } = createHistoryPoller({
         historyResponses: [createMockHistoryResponse({ Events: [testEvent] })],
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
-        ],
       });
 
       poller.startPolling();
@@ -251,9 +233,8 @@ describe("HistoryPoller", () => {
     it("should not add events for running executions", async () => {
       const testEvent = createMockEvent({ Id: "test-event" });
       const { poller } = createHistoryPoller({
-        historyResponses: [createMockHistoryResponse({ Events: [testEvent] })],
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
+        historyResponses: [
+          createMockHistoryResponse({ Events: [testEvent] }, false),
         ],
       });
 
@@ -269,12 +250,8 @@ describe("HistoryPoller", () => {
 
       const { poller } = createHistoryPoller({
         historyResponses: [
-          createMockHistoryResponse({ Events: [event1] }),
+          createMockHistoryResponse({ Events: [event1] }, false),
           createMockHistoryResponse({ Events: [event2] }),
-        ],
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
         ],
       });
 
@@ -283,7 +260,7 @@ describe("HistoryPoller", () => {
 
       const events = poller.getEvents();
       expect(events).toContainEqual(event2);
-      expect(events).toHaveLength(1); // Only the last batch when execution completes
+      expect(events).toHaveLength(2); // Only the last batch when execution completes
     });
   });
 
@@ -374,9 +351,6 @@ describe("HistoryPoller", () => {
             NextMarker: undefined,
           }),
         ],
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
-        ],
       });
 
       poller.startPolling();
@@ -394,11 +368,22 @@ describe("HistoryPoller", () => {
   describe("Execution completion handling", () => {
     it("should resolve test execution state on successful completion", async () => {
       const { poller, testExecutionState } = createHistoryPoller({
-        executionResponses: [
-          createMockExecutionResponse({
-            Status: ExecutionStatus.SUCCEEDED,
-            Result: '{"result": "success"}',
-          }),
+        historyResponses: [
+          createMockHistoryResponse(
+            {
+              Events: [
+                createMockEvent({
+                  EventType: EventType.ExecutionSucceeded,
+                  ExecutionSucceededDetails: {
+                    Result: {
+                      Payload: '{"result": "success"}',
+                    },
+                  },
+                }),
+              ],
+            },
+            false,
+          ),
         ],
       });
 
@@ -421,11 +406,25 @@ describe("HistoryPoller", () => {
       };
 
       const { poller, testExecutionState } = createHistoryPoller({
-        executionResponses: [
-          createMockExecutionResponse({
-            Status: ExecutionStatus.FAILED,
-            Error: mockError,
-          }),
+        historyResponses: [
+          createMockHistoryResponse(
+            {
+              Events: [
+                createMockEvent({
+                  EventType: EventType.ExecutionFailed,
+                  ExecutionFailedDetails: {
+                    Error: {
+                      Payload: {
+                        ErrorMessage: "Execution failed",
+                        ErrorType: "TestError",
+                      },
+                    },
+                  },
+                }),
+              ],
+            },
+            false,
+          ),
         ],
       });
 
@@ -442,11 +441,7 @@ describe("HistoryPoller", () => {
     });
 
     it("should stop polling after execution completion", async () => {
-      const { poller, mockApiClient } = createHistoryPoller({
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
-        ],
-      });
+      const { poller, mockApiClient } = createHistoryPoller({});
 
       poller.startPolling();
       await waitForPollerCycles(1);
@@ -462,17 +457,17 @@ describe("HistoryPoller", () => {
 
     it("should continue polling for running executions", async () => {
       const { poller, mockApiClient } = createHistoryPoller({
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
+        historyResponses: [
+          createMockHistoryResponse(undefined, false),
+          createMockHistoryResponse(undefined, false),
+          createMockHistoryResponse(undefined, true),
         ],
       });
 
       poller.startPolling();
       await waitForPollerCycles(3);
 
-      expect(mockApiClient.getExecution).toHaveBeenCalledTimes(3);
+      expect(mockApiClient.getHistory).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -482,6 +477,7 @@ describe("HistoryPoller", () => {
       const { poller, testExecutionState, mockApiClient } = createHistoryPoller(
         {
           historyError: testError,
+          historyResponses: [],
         },
       );
 
@@ -504,7 +500,7 @@ describe("HistoryPoller", () => {
       const testError = new Error("Execution API failed");
       const { poller, testExecutionState, mockApiClient } = createHistoryPoller(
         {
-          executionError: testError,
+          historyError: testError,
         },
       );
 
@@ -518,7 +514,7 @@ describe("HistoryPoller", () => {
         jest.advanceTimersByTimeAsync(30000),
         expect(executionPromise).rejects.toThrow("Execution API failed"),
       ]);
-      expect(mockApiClient.getExecution).toHaveBeenCalledTimes(
+      expect(mockApiClient.getHistory).toHaveBeenCalledTimes(
         HistoryPoller.getMaxRetryAttempts(),
       );
     });
@@ -538,19 +534,6 @@ describe("HistoryPoller", () => {
         IncludeExecutionData: true,
         MaxItems: 1000,
         Marker: undefined,
-      });
-    });
-
-    it("should pass correct parameters to getExecution", async () => {
-      const { poller, mockApiClient } = createHistoryPoller({
-        durableExecutionArn: "test-execution-arn",
-      });
-
-      poller.startPolling();
-      await waitForPollerCycles(1);
-
-      expect(mockApiClient.getExecution).toHaveBeenCalledWith({
-        DurableExecutionArn: "test-execution-arn",
       });
     });
 
@@ -592,21 +575,18 @@ describe("HistoryPoller", () => {
         pollInterval: 100,
         historyResponses: [
           // First poll: return history with NextMarker but no pagination
-          createMockHistoryResponse({
-            Events: [createMockEvent({ Id: "event-1" })],
-            NextMarker: undefined, // No pagination in this poll
-          }),
+          createMockHistoryResponse(
+            {
+              Events: [createMockEvent({ Id: "event-1" })],
+              NextMarker: undefined, // No pagination in this poll
+            },
+            false,
+          ),
           // Second poll: should use marker from first poll
           createMockHistoryResponse({
             Events: [createMockEvent({ Id: "event-2" })],
             NextMarker: undefined,
           }),
-        ],
-        executionResponses: [
-          // First poll: execution still running
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          // Second poll: execution completes
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
         ],
       });
 
@@ -617,10 +597,13 @@ describe("HistoryPoller", () => {
         if (firstCall) {
           firstCall = false;
           return Promise.resolve(
-            createMockHistoryResponse({
-              Events: [createMockEvent({ Id: "event-1" })],
-              NextMarker: "persistent-marker", // This should persist to next polling cycle
-            }),
+            createMockHistoryResponse(
+              {
+                Events: [createMockEvent({ Id: "event-1" })],
+                NextMarker: "persistent-marker", // This should persist to next polling cycle
+              },
+              false,
+            ),
           );
         } else {
           return Promise.resolve(
@@ -661,11 +644,6 @@ describe("HistoryPoller", () => {
 
       const { poller, mockApiClient } = createHistoryPoller({
         pollInterval: 100, // Short poll interval
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
-        ],
       });
 
       // Mock API calls to have delays longer than poll interval
@@ -674,22 +652,14 @@ describe("HistoryPoller", () => {
         // Simulate slow API call (300ms > 100ms poll interval)
         return new Promise((resolve) => {
           setTimeout(() => {
-            resolve(createMockHistoryResponse());
+            resolve(
+              createMockHistoryResponse(
+                undefined,
+                getHistoryCallTimes.length >= 3,
+              ),
+            );
           }, 300);
         });
-      });
-
-      mockApiClient.getExecution.mockImplementation(() => {
-        getExecutionCallTimes.push(Date.now());
-        const responses = [
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
-        ];
-        const response =
-          responses[getExecutionCallTimes.length - 1] ??
-          responses[responses.length - 1];
-        return Promise.resolve(response);
       });
 
       poller.startPolling();
@@ -708,7 +678,6 @@ describe("HistoryPoller", () => {
       // Verify calls happened sequentially, not overlapping
       // Should be 2 calls since execution completes after second check
       expect(mockApiClient.getHistory).toHaveBeenCalledTimes(2);
-      expect(mockApiClient.getExecution).toHaveBeenCalledTimes(2);
 
       // Verify timing: second call should start after the first completes
       // (300ms API delay + poll interval between calls)
@@ -747,24 +716,29 @@ describe("HistoryPoller", () => {
         pollInterval: 100,
         historyResponses: [
           // First page
-          createMockHistoryResponse({
-            Events: page1Events,
-            NextMarker: "marker-page2",
-          }),
+          createMockHistoryResponse(
+            {
+              Events: page1Events,
+              NextMarker: "marker-page2",
+            },
+            false,
+          ),
           // Second page
-          createMockHistoryResponse({
-            Events: page2Events,
-            NextMarker: "marker-page3",
-          }),
+          createMockHistoryResponse(
+            {
+              Events: page2Events,
+              NextMarker: "marker-page3",
+            },
+            false,
+          ),
           // Last page
-          createMockHistoryResponse({
-            Events: page3Events,
-            NextMarker: undefined,
-          }),
-        ],
-        executionResponses: [
-          // Execution still running during first poll
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
+          createMockHistoryResponse(
+            {
+              Events: page3Events,
+              NextMarker: undefined,
+            },
+            false,
+          ),
         ],
       });
 
@@ -818,29 +792,32 @@ describe("HistoryPoller", () => {
         pollInterval: 100,
         historyResponses: [
           // First polling cycle - 3 pages, execution running
-          createMockHistoryResponse({
-            Events: page1Events,
-            NextMarker: "marker-page2",
-          }),
-          createMockHistoryResponse({
-            Events: page2Events,
-            NextMarker: "marker-page3",
-          }),
-          createMockHistoryResponse({
-            Events: page3OriginalEvents,
-            NextMarker: undefined,
-          }),
+          createMockHistoryResponse(
+            {
+              Events: page1Events,
+              NextMarker: "marker-page2",
+            },
+            false,
+          ),
+          createMockHistoryResponse(
+            {
+              Events: page2Events,
+              NextMarker: "marker-page3",
+            },
+            false,
+          ),
+          createMockHistoryResponse(
+            {
+              Events: page3OriginalEvents,
+              NextMarker: undefined,
+            },
+            false,
+          ),
           // Second polling cycle - re-fetch from marker-page3, now with additional events
           createMockHistoryResponse({
             Events: page3WithNewEvents,
             NextMarker: undefined,
           }),
-        ],
-        executionResponses: [
-          // First cycle: still running
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
-          // Second cycle: execution completes
-          createMockExecutionResponse({ Status: ExecutionStatus.SUCCEEDED }),
         ],
       });
 
@@ -881,8 +858,8 @@ describe("HistoryPoller", () => {
         expect.objectContaining({ Id: "page3-event3" }),
       ); // New
 
-      // Total: 2 from early pages + 3 from re-fetched last page = 5 events
-      expect(finalEvents).toHaveLength(5);
+      // Total: 2 from early pages + 3 from re-fetched last page = 5 events + 1 from succeeded event
+      expect(finalEvents).toHaveLength(6);
     });
 
     it("should handle single page correctly during running execution", async () => {
@@ -895,13 +872,13 @@ describe("HistoryPoller", () => {
 
       const { poller } = createHistoryPoller({
         historyResponses: [
-          createMockHistoryResponse({
-            Events: singlePageEvents,
-            NextMarker: undefined,
-          }),
-        ],
-        executionResponses: [
-          createMockExecutionResponse({ Status: ExecutionStatus.RUNNING }),
+          createMockHistoryResponse(
+            {
+              Events: singlePageEvents,
+              NextMarker: undefined,
+            },
+            false,
+          ),
         ],
       });
 
@@ -923,17 +900,22 @@ describe("HistoryPoller", () => {
         }),
         createMockEvent({ Id: "event-2", EventType: EventType.StepStarted }),
         createMockEvent({ Id: "event-3", EventType: EventType.StepSucceeded }),
+        createMockEvent({
+          Id: "event-4",
+          EventType: EventType.ExecutionSucceeded,
+          ExecutionSucceededDetails: {
+            Result: {
+              Payload: '{"completed": true}',
+            },
+          },
+        }),
       ];
 
       const { poller, testExecutionState, onOperationEventsReceived } =
         createHistoryPoller({
           pollInterval: 50,
-          historyResponses: [createMockHistoryResponse({ Events: events })],
-          executionResponses: [
-            createMockExecutionResponse({
-              Status: ExecutionStatus.SUCCEEDED,
-              Result: '{"completed": true}',
-            }),
+          historyResponses: [
+            createMockHistoryResponse({ Events: events }, false),
           ],
         });
 
