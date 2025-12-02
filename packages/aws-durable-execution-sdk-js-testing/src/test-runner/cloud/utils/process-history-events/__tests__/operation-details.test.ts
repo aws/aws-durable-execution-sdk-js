@@ -6,6 +6,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "StepDetails", {
@@ -32,6 +35,9 @@ describe("addOperationDetails", () => {
       StepDetails: {
         Attempt: 1,
       },
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "StepDetails", {
@@ -54,6 +60,9 @@ describe("addOperationDetails", () => {
         Result: "old result",
         Attempt: 1,
       },
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "StepDetails", {
@@ -73,6 +82,9 @@ describe("addOperationDetails", () => {
       StepDetails: {
         Attempt: 1,
       },
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "StepDetails", {
@@ -92,6 +104,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     const originalOperation = { ...operation };
@@ -111,6 +126,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "CallbackDetails", {
@@ -128,6 +146,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     const scheduledEndTimestamp = new Date("2023-01-01T12:00:00Z");
@@ -145,6 +166,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "ChainedInvokeDetails", {
@@ -168,6 +192,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "ContextDetails", {
@@ -191,6 +218,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     // Since ExecutionDetails doesn't have any properties we can add,
@@ -208,6 +238,9 @@ describe("addOperationDetails", () => {
       StepDetails: {
         Attempt: 1,
       },
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "StepDetails", {});
@@ -221,6 +254,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     addOperationDetails(operation, "StepDetails", {
@@ -238,6 +274,9 @@ describe("addOperationDetails", () => {
     const operation: Operation = {
       Id: "test-id",
       Name: "test-operation",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
     };
 
     const complexError = {

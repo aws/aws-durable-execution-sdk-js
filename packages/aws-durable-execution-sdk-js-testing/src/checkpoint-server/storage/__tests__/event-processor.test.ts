@@ -36,6 +36,8 @@ describe("EventProcessor", () => {
         Type: OperationType.EXECUTION,
         SubType: "test-subtype",
         ParentId: "parent-id",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
       const detailPlace = "ExecutionStartedDetails" as const;
       const details = {
@@ -69,6 +71,8 @@ describe("EventProcessor", () => {
         Name: "test-operation",
         Type: OperationType.EXECUTION,
         SubType: "test-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
       const detailPlace = "ExecutionStartedDetails" as const;
       const details = {
@@ -100,6 +104,8 @@ describe("EventProcessor", () => {
         Name: "test-operation",
         Type: OperationType.EXECUTION,
         SubType: "test-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
       const detailPlace = "ExecutionFailedDetails" as const;
       const details = {
@@ -145,6 +151,7 @@ describe("EventProcessor", () => {
         SubType: "update-subtype",
         ParentId: "parent-id",
         Payload: "test-payload",
+        Type: undefined,
       };
 
       const operation: Operation = {
@@ -152,6 +159,8 @@ describe("EventProcessor", () => {
         Name: "operation-name",
         Type: OperationType.EXECUTION,
         SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       const result = eventProcessor.processUpdate(update, operation);
@@ -188,6 +197,7 @@ describe("EventProcessor", () => {
         Action: OperationAction.START,
         SubType: "update-subtype",
         Payload: "test-payload",
+        Type: undefined,
       };
 
       const operation: Operation = {
@@ -195,6 +205,8 @@ describe("EventProcessor", () => {
         Name: "operation-name",
         Type: OperationType.EXECUTION,
         SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       processorWithTimeout.processUpdate(update, operation);
@@ -212,6 +224,8 @@ describe("EventProcessor", () => {
         Name: "update-name",
         SubType: "update-subtype",
         Payload: "test-payload",
+        Type: undefined,
+        Action: undefined,
       };
 
       const operation: Operation = {
@@ -219,6 +233,8 @@ describe("EventProcessor", () => {
         Name: "operation-name",
         Type: OperationType.EXECUTION,
         SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       expect(() => eventProcessor.processUpdate(update, operation)).toThrow(
@@ -233,12 +249,16 @@ describe("EventProcessor", () => {
         Action: OperationAction.START,
         SubType: "update-subtype",
         Payload: "test-payload",
+        Type: undefined,
       };
 
       const operation: Operation = {
         Id: "operation-id",
         Name: "operation-name",
         SubType: "operation-subtype",
+        Type: undefined,
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       expect(() => eventProcessor.processUpdate(update, operation)).toThrow(
@@ -253,6 +273,7 @@ describe("EventProcessor", () => {
         Action: OperationAction.START,
         SubType: "update-subtype",
         Payload: "test-payload",
+        Type: undefined,
       };
 
       const operation: Operation = {
@@ -260,6 +281,8 @@ describe("EventProcessor", () => {
         Name: "operation-name",
         Type: OperationType.EXECUTION,
         SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       const firstResult = eventProcessor.processUpdate(update, operation);
@@ -276,6 +299,7 @@ describe("EventProcessor", () => {
         Action: OperationAction.START,
         SubType: "update-subtype",
         Payload: "test-payload",
+        Type: undefined,
       };
 
       const operation: Operation = {
@@ -283,6 +307,8 @@ describe("EventProcessor", () => {
         Name: "operation-name",
         Type: OperationType.STEP,
         SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       eventProcessor.processUpdate(update, operation);
@@ -300,6 +326,7 @@ describe("EventProcessor", () => {
         Action: OperationAction.FAIL,
         SubType: "update-subtype",
         Error: { ErrorType: "TestError", ErrorMessage: "Test error" },
+        Type: undefined,
       };
 
       const operation: Operation = {
@@ -307,6 +334,8 @@ describe("EventProcessor", () => {
         Name: "operation-name",
         Type: OperationType.EXECUTION,
         SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       eventProcessor.processUpdate(update, operation);
@@ -402,20 +431,28 @@ describe("EventProcessor", () => {
         Name: "test-operation",
         Type: OperationType.EXECUTION,
         SubType: "test-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       const event1 = processor1.createHistoryEvent(
         EventType.ExecutionStarted,
         operation,
         "ExecutionStartedDetails",
-        { Input: { Payload: "test" } },
+        {
+          Input: { Payload: "test" },
+          ExecutionTimeout: undefined,
+        },
       );
 
       const event2 = processor2.createHistoryEvent(
         EventType.ExecutionStarted,
         operation,
         "ExecutionStartedDetails",
-        { Input: { Payload: "test" } },
+        {
+          Input: { Payload: "test" },
+          ExecutionTimeout: undefined,
+        },
       );
 
       expect(event1.EventId).toBe(1);
@@ -428,6 +465,8 @@ describe("EventProcessor", () => {
         Name: "test-operation",
         Type: OperationType.EXECUTION,
         SubType: "test-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       const update: OperationUpdate = {
@@ -436,6 +475,7 @@ describe("EventProcessor", () => {
         Action: OperationAction.START,
         SubType: "update-subtype",
         Payload: "test-payload",
+        Type: undefined,
       };
 
       mockGetHistoryEventDetail.mockReturnValue({
@@ -451,7 +491,10 @@ describe("EventProcessor", () => {
         EventType.ExecutionStarted,
         operation,
         "ExecutionStartedDetails",
-        { Input: { Payload: "test" } },
+        {
+          Input: { Payload: "test" },
+          ExecutionTimeout: undefined,
+        },
       );
 
       // Create event using processUpdate
@@ -479,6 +522,7 @@ describe("EventProcessor", () => {
         Action: OperationAction.START,
         SubType: "",
         Payload: "",
+        Type: undefined,
       };
 
       const operation: Operation = {
@@ -486,6 +530,8 @@ describe("EventProcessor", () => {
         Name: "",
         Type: OperationType.EXECUTION,
         SubType: "",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       mockGetHistoryEventDetail.mockReturnValue({
@@ -509,6 +555,7 @@ describe("EventProcessor", () => {
         Name: "update-name",
         Action: OperationAction.START,
         SubType: "update-subtype",
+        Type: undefined,
       };
 
       const operation: Operation = {
@@ -516,6 +563,8 @@ describe("EventProcessor", () => {
         Name: "operation-name",
         Type: OperationType.EXECUTION,
         SubType: "operation-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       mockGetHistoryEventDetail.mockReturnValue({
@@ -538,6 +587,8 @@ describe("EventProcessor", () => {
         Name: "test-operation",
         Type: OperationType.EXECUTION,
         SubType: "test-subtype",
+        StartTimestamp: undefined,
+        Status: undefined,
       };
 
       const details = {

@@ -146,10 +146,11 @@ describe("TestExecutionOrchestrator", () => {
       sendCallbackSuccess: jest.fn(),
       sendCallbackHeartbeat: jest.fn(),
     };
+    const indexedOperations = new IndexedOperations([]);
     // Mock OperationStorage
     mockOperationStorage = new LocalOperationStorage(
-      new OperationWaitManager(),
-      new IndexedOperations([]),
+      new OperationWaitManager(indexedOperations),
+      indexedOperations,
       mockDurableApiClient,
       jest.fn(),
     ) as jest.Mocked<LocalOperationStorage>;

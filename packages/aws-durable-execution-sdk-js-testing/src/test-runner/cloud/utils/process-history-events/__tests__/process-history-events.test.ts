@@ -62,6 +62,7 @@ describe("historyEventsToOperationEvents", () => {
           Input: {
             Payload: '{"input": "data"}',
           },
+          ExecutionTimeout: undefined,
         },
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
       },
@@ -116,6 +117,7 @@ describe("historyEventsToOperationEvents", () => {
           Result: {
             Payload: '{"result": "success"}',
           },
+          RetryDetails: undefined,
         },
       },
     ];
@@ -243,6 +245,7 @@ describe("historyEventsToOperationEvents", () => {
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
         WaitStartedDetails: {
           ScheduledEndTimestamp: scheduledEndTimestamp,
+          Duration: undefined,
         },
       },
       {
@@ -281,6 +284,7 @@ describe("historyEventsToOperationEvents", () => {
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
         ChainedInvokeStartedDetails: {
           DurableExecutionArn: "my-durable-execution-arn",
+          FunctionName: undefined,
         },
       },
       {
@@ -374,6 +378,7 @@ describe("historyEventsToOperationEvents", () => {
           Result: {
             Payload: '{"step": "result"}',
           },
+          RetryDetails: undefined,
         },
       },
       {
@@ -426,7 +431,10 @@ describe("historyEventsToOperationEvents", () => {
         Id: "execution-id",
         EventType: EventType.ExecutionStarted,
         EventTimestamp: new Date("2023-01-01T12:00:00Z"),
-        ExecutionStartedDetails: {},
+        ExecutionStartedDetails: {
+          Input: undefined,
+          ExecutionTimeout: undefined,
+        },
       },
       {
         Id: "step-id",
@@ -439,7 +447,9 @@ describe("historyEventsToOperationEvents", () => {
         Id: "execution-id",
         EventType: EventType.ExecutionSucceeded,
         EventTimestamp: new Date("2023-01-01T12:02:00Z"),
-        ExecutionSucceededDetails: {},
+        ExecutionSucceededDetails: {
+          Result: undefined,
+        },
       },
       {
         Id: "step-id",
@@ -449,6 +459,7 @@ describe("historyEventsToOperationEvents", () => {
           Result: {
             Payload: '{"step": "result"}',
           },
+          RetryDetails: undefined,
         },
       },
     ];
@@ -480,6 +491,7 @@ describe("historyEventsToOperationEvents", () => {
             CurrentAttempt: 1,
             NextAttemptDelaySeconds: 10,
           },
+          Error: undefined,
         },
       },
       {
@@ -496,6 +508,7 @@ describe("historyEventsToOperationEvents", () => {
           Result: {
             Payload: '{"final": "result"}',
           },
+          RetryDetails: undefined,
         },
       },
     ];
@@ -608,6 +621,7 @@ describe("historyEventsToOperationEvents", () => {
       ChainedInvokeStartedDetails: {
         DurableExecutionArn:
           "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
+        FunctionName: undefined,
       },
     };
 
@@ -643,6 +657,7 @@ describe("historyEventsToOperationEvents", () => {
         Result: {
           Payload: '{"step": "result"}',
         },
+        RetryDetails: undefined,
       },
     };
 
@@ -675,6 +690,7 @@ describe("historyEventsToOperationEvents", () => {
         Input: {
           Payload: '{"test": "data"}',
         },
+        ExecutionTimeout: undefined,
       },
     };
 

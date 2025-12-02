@@ -23,6 +23,9 @@ describe("history-event-details", () => {
   const createMockUpdate = (
     overrides: Partial<OperationUpdate> = {},
   ): OperationUpdate => ({
+    Id: undefined,
+    Type: undefined,
+    Action: undefined,
     Payload: "test-payload",
     Error: createMockErrorObject(),
     CallbackOptions: {
@@ -44,6 +47,10 @@ describe("history-event-details", () => {
   const createMockOperation = (
     overrides: Partial<Operation> = {},
   ): Operation => ({
+    Id: undefined,
+    Type: undefined,
+    StartTimestamp: undefined,
+    Status: undefined,
     CallbackDetails: {
       CallbackId: "test-callback-id",
     },

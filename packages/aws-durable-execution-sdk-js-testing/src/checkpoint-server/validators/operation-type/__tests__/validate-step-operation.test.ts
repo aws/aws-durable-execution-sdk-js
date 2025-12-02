@@ -29,6 +29,7 @@ describe("validateStepOperation", () => {
     Status: status,
     Type: OperationType.STEP,
     Id: "test-id",
+    StartTimestamp: undefined,
   });
 
   describe("START action", () => {

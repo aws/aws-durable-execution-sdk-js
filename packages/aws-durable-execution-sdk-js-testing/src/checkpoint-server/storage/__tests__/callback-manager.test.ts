@@ -5,7 +5,7 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { CallbackManager, CompleteCallbackStatus } from "../callback-manager";
-import { CheckpointManager } from "../checkpoint-manager";
+import { CheckpointManager, CheckpointOperation } from "../checkpoint-manager";
 import {
   createExecutionId,
   createCallbackId,
@@ -143,15 +143,17 @@ describe("CallbackManager", () => {
       const timeoutSeconds = 30;
 
       // Setup operation data
-      const mockOperationData = {
+      const mockOperationData: CheckpointOperation = {
         operation: {
           Id: operationId,
           Type: OperationType.CALLBACK,
           Status: OperationStatus.STARTED,
+          StartTimestamp: undefined,
         },
         update: {
           Id: operationId,
           Type: OperationType.CALLBACK,
+          Action: undefined,
         },
         events: [],
       };
@@ -188,15 +190,17 @@ describe("CallbackManager", () => {
   describe("completeCallback", () => {
     beforeEach(() => {
       // Setup mock operation data
-      const mockOperationData = {
+      const mockOperationData: CheckpointOperation = {
         operation: {
           Id: "test-operation-id",
           Type: OperationType.CALLBACK,
           Status: OperationStatus.STARTED,
+          StartTimestamp: undefined,
         },
         update: {
           Id: "test-operation-id",
           Type: OperationType.CALLBACK,
+          Action: undefined,
         },
         events: [],
       };
@@ -343,11 +347,13 @@ describe("CallbackManager", () => {
           Id: "test-operation-id",
           Type: OperationType.CALLBACK,
           Status: OperationStatus.STARTED,
+          StartTimestamp: undefined,
         },
         events: [
           {
             CallbackStartedDetails: {
               HeartbeatTimeout: 60,
+              CallbackId: undefined,
             },
           },
         ],
@@ -373,15 +379,18 @@ describe("CallbackManager", () => {
       const callbackId = createCallbackId("test-callback-id");
 
       // Update operation to not have heartbeat timeout
-      const mockOperationData = {
+      const mockOperationData: CheckpointOperation = {
         operation: {
           Id: "test-operation-id",
           Type: OperationType.CALLBACK,
+          StartTimestamp: undefined,
+          Status: undefined,
         },
         update: {
           Id: "test-operation-id",
           Type: OperationType.CALLBACK,
           CallbackOptions: {},
+          Action: undefined,
         },
         events: [],
       };
@@ -443,27 +452,31 @@ describe("CallbackManager", () => {
       const operationId2 = "operation-2";
 
       // Setup operation data first
-      const mockOperationData1 = {
+      const mockOperationData1: CheckpointOperation = {
         operation: {
           Id: operationId1,
           Type: OperationType.CALLBACK,
           Status: OperationStatus.STARTED,
+          StartTimestamp: undefined,
         },
         update: {
           Id: operationId1,
           Type: OperationType.CALLBACK,
+          Action: undefined,
         },
         events: [],
       };
-      const mockOperationData2 = {
+      const mockOperationData2: CheckpointOperation = {
         operation: {
           Id: operationId2,
           Type: OperationType.CALLBACK,
           Status: OperationStatus.STARTED,
+          StartTimestamp: undefined,
         },
         update: {
           Id: operationId2,
           Type: OperationType.CALLBACK,
+          Action: undefined,
         },
         events: [],
       };
@@ -527,15 +540,17 @@ describe("CallbackManager", () => {
       const operationId = "integration-test-id";
 
       // Setup operation data
-      const mockOperationData = {
+      const mockOperationData: CheckpointOperation = {
         operation: {
           Id: operationId,
           Type: OperationType.CALLBACK,
           Status: OperationStatus.STARTED,
+          StartTimestamp: undefined,
         },
         update: {
           Id: operationId,
           Type: OperationType.CALLBACK,
+          Action: undefined,
         },
         events: [],
       };
@@ -579,15 +594,17 @@ describe("CallbackManager", () => {
 
       // Setup operation data for all
       operationIds.forEach((id) => {
-        const mockOperationData = {
+        const mockOperationData: CheckpointOperation = {
           operation: {
             Id: id,
             Type: OperationType.CALLBACK,
             Status: OperationStatus.STARTED,
+            StartTimestamp: undefined,
           },
           update: {
             Id: id,
             Type: OperationType.CALLBACK,
+            Action: undefined,
           },
           events: [],
         };

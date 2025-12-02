@@ -4,10 +4,11 @@ import { OperationWaitManager } from "../../../local/operations/operation-wait-m
 import { IndexedOperations } from "../../../common/indexed-operations";
 import { DurableApiClient } from "../../../common/create-durable-api-client";
 import { WaitingOperationStatus } from "../../../types/durable-operation";
+import { OperationEvents } from "../../../common/operations/operation-with-data";
 
 describe("CloudOperation", () => {
-  const waitManager = new OperationWaitManager();
   const mockIndexedOperations = new IndexedOperations([]);
+  const waitManager = new OperationWaitManager(mockIndexedOperations);
   const mockApiClient: jest.Mocked<DurableApiClient> = {
     sendCallbackSuccess: jest.fn(),
     sendCallbackFailure: jest.fn(),
@@ -23,10 +24,12 @@ describe("CloudOperation", () => {
         InvocationType.Event,
       );
 
-      const checkpointData = {
+      const checkpointData: OperationEvents = {
         operation: {
           Id: "test-id",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };

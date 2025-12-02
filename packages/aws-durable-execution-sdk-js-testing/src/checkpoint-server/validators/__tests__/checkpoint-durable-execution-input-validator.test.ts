@@ -24,6 +24,7 @@ describe("validateCheckpointUpdates", () => {
       Type: type,
       Status: status,
       Id: "test-id",
+      StartTimestamp: undefined,
     },
     update: {
       Id: "test-id",
@@ -442,9 +443,10 @@ describe("validateCheckpointUpdates", () => {
 
   describe("operation id validation", () => {
     it("should throw exception when operation update has no id", () => {
-      const update = {
+      const update: OperationUpdate = {
         Type: OperationType.STEP,
         Action: OperationAction.START,
+        Id: undefined,
       };
 
       expect(() => {

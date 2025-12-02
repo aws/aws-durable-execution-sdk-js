@@ -52,8 +52,8 @@ describe("OperationStorage", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockWaitManager = new OperationWaitManager();
     mockIndexedOperations = new IndexedOperations([]);
+    mockWaitManager = new OperationWaitManager(mockIndexedOperations);
     mockApiClient = {} as DurableApiClient;
   });
 

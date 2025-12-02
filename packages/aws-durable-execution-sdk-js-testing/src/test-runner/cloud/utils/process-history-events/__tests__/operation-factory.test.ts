@@ -189,6 +189,7 @@ describe("createOperation", () => {
         Name: "test-operation",
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
+        StartTimestamp: undefined,
       },
       events: [],
     };
@@ -225,7 +226,12 @@ describe("populateOperationDetails", () => {
     };
 
     const historyEventType = historyEventTypes.StepStarted;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     expect(() => {
       populateOperationDetails(
@@ -243,11 +249,17 @@ describe("populateOperationDetails", () => {
         Result: {
           Payload: '{"success": true}',
         },
+        RetryDetails: undefined,
       },
     };
 
     const historyEventType = historyEventTypes.StepSucceeded;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     populateOperationDetails(event, historyEventType, operation);
 
@@ -266,7 +278,12 @@ describe("populateOperationDetails", () => {
     };
 
     const historyEventType = historyEventTypes.CallbackStarted;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     populateOperationDetails(event, historyEventType, operation);
 
@@ -283,11 +300,17 @@ describe("populateOperationDetails", () => {
           CurrentAttempt: 2,
           NextAttemptDelaySeconds: 30,
         },
+        Error: undefined,
       },
     };
 
     const historyEventType = historyEventTypes.StepFailed;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     populateOperationDetails(event, historyEventType, operation);
 
@@ -306,11 +329,17 @@ describe("populateOperationDetails", () => {
         RetryDetails: {
           CurrentAttempt: 3,
         },
+        Error: undefined,
       },
     };
 
     const historyEventType = historyEventTypes.StepFailed;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     populateOperationDetails(event, historyEventType, operation);
 
@@ -328,11 +357,17 @@ describe("populateOperationDetails", () => {
       ...baseEvent,
       WaitStartedDetails: {
         ScheduledEndTimestamp: scheduledEndTimestamp,
+        Duration: undefined,
       },
     };
 
     const historyEventType = historyEventTypes.WaitStarted;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     populateOperationDetails(event, historyEventType, operation);
 
@@ -345,7 +380,12 @@ describe("populateOperationDetails", () => {
 
   it("should populate EXECUTION operation type", () => {
     const historyEventType = historyEventTypes.ExecutionStarted;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     populateOperationDetails(baseEvent, historyEventType, operation);
 
@@ -362,11 +402,17 @@ describe("populateOperationDetails", () => {
             ErrorMessage: "Test failed",
           },
         },
+        RetryDetails: undefined,
       },
     };
 
     const historyEventType = historyEventTypes.StepFailed;
-    const operation: Operation = { Id: "test-id" };
+    const operation: Operation = {
+      Id: "test-id",
+      Type: undefined,
+      StartTimestamp: undefined,
+      Status: undefined,
+    };
 
     populateOperationDetails(event, historyEventType, operation);
 

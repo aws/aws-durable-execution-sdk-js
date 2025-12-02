@@ -3,10 +3,7 @@ import {
   OperationType,
   OperationStatus,
 } from "@aws-sdk/client-lambda";
-import {
-  createInvocationId,
-  createExecutionId,
-} from "../../utils/tagged-strings";
+import { createExecutionId } from "../../utils/tagged-strings";
 import { CheckpointManager } from "../checkpoint-manager";
 
 jest.mock("node:crypto", () => ({
@@ -15,8 +12,6 @@ jest.mock("node:crypto", () => ({
 
 describe("checkpoint-manager completeOperation", () => {
   let storage: CheckpointManager;
-
-  const mockInvocationId = createInvocationId();
 
   beforeEach(() => {
     storage = new CheckpointManager(createExecutionId("test-execution-id"));
@@ -48,14 +43,11 @@ describe("checkpoint-manager completeOperation", () => {
     storage.initialize();
 
     // Register a step operation
-    storage.registerUpdate(
-      {
-        Id: "new-id",
-        Action: OperationAction.START,
-        Type: OperationType.STEP,
-      },
-      mockInvocationId,
-    );
+    storage.registerUpdate({
+      Id: "new-id",
+      Action: OperationAction.START,
+      Type: OperationType.STEP,
+    });
 
     // Complete the operation
     const { operation } = storage.completeOperation({
@@ -101,17 +93,14 @@ describe("checkpoint-manager completeOperation", () => {
     storage.initialize();
 
     // Register a step operation
-    storage.registerUpdate(
-      {
-        Id: "new-id",
-        Action: OperationAction.START,
-        Type: OperationType.CONTEXT,
-        ContextOptions: {
-          ReplayChildren: true,
-        },
+    storage.registerUpdate({
+      Id: "new-id",
+      Action: OperationAction.START,
+      Type: OperationType.CONTEXT,
+      ContextOptions: {
+        ReplayChildren: true,
       },
-      mockInvocationId,
-    );
+    });
 
     // Complete the operation
     const { operation } = storage.completeOperation({
@@ -143,15 +132,12 @@ describe("checkpoint-manager completeOperation", () => {
       storage.initialize();
 
       // Register a step operation
-      storage.registerUpdate(
-        {
-          Id: "retry-step-id",
-          Action: OperationAction.START,
-          Type: OperationType.STEP,
-          Name: "test-step",
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "retry-step-id",
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+        Name: "test-step",
+      });
 
       // Complete the operation with RETRY action
       const { operation } = storage.completeOperation({
@@ -183,15 +169,12 @@ describe("checkpoint-manager completeOperation", () => {
       storage.initialize();
 
       // Register a step operation with initial attempt
-      storage.registerUpdate(
-        {
-          Id: "retry-step-id",
-          Action: OperationAction.START,
-          Type: OperationType.STEP,
-          Name: "test-step",
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "retry-step-id",
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+        Name: "test-step",
+      });
 
       // Set initial attempt to 2
       const operationData = storage.operationDataMap.get("retry-step-id");
@@ -218,15 +201,12 @@ describe("checkpoint-manager completeOperation", () => {
       storage.initialize();
 
       // Register a step operation
-      storage.registerUpdate(
-        {
-          Id: "retry-step-id",
-          Action: OperationAction.START,
-          Type: OperationType.STEP,
-          Name: "test-step",
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "retry-step-id",
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+        Name: "test-step",
+      });
 
       // Add some existing step details
       const operationData = storage.operationDataMap.get("retry-step-id");
@@ -270,15 +250,12 @@ describe("checkpoint-manager completeOperation", () => {
       storage.initialize();
 
       // Register a step operation
-      storage.registerUpdate(
-        {
-          Id: "retry-step-id",
-          Action: OperationAction.START,
-          Type: OperationType.STEP,
-          Name: "test-step",
-        },
-        mockInvocationId,
-      );
+      storage.registerUpdate({
+        Id: "retry-step-id",
+        Action: OperationAction.START,
+        Type: OperationType.STEP,
+        Name: "test-step",
+      });
 
       // Ensure no existing StepDetails
       const operationData = storage.operationDataMap.get("retry-step-id");

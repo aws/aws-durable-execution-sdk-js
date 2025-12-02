@@ -2,18 +2,19 @@ import {
   OperationStatus,
   OperationType,
   ErrorObject,
+  Operation,
 } from "@aws-sdk/client-lambda";
 import { OperationSubType } from "@aws/durable-execution-sdk-js";
 
 import { WaitingOperationStatus } from "../../../types/durable-operation";
 import { OperationWaitManager } from "../../../local/operations/operation-wait-manager";
-import { OperationWithData } from "../operation-with-data";
+import { OperationEvents, OperationWithData } from "../operation-with-data";
 import { IndexedOperations } from "../../indexed-operations";
 import { DurableApiClient } from "../../create-durable-api-client";
 
 describe("OperationWithData", () => {
-  const waitManager = new OperationWaitManager();
   const mockIndexedOperations = new IndexedOperations([]);
+  const waitManager = new OperationWaitManager(mockIndexedOperations);
   const mockApiClient: jest.Mocked<DurableApiClient> = {
     sendCallbackSuccess: jest.fn(),
     sendCallbackFailure: jest.fn(),
@@ -42,10 +43,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -64,11 +67,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.STEP, // Not CONTEXT
+        Type: OperationType.STEP,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -87,7 +91,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-context",
         Status: OperationStatus.SUCCEEDED,
@@ -99,6 +103,7 @@ describe("OperationWithData", () => {
             ErrorType: "ContextWarning",
           },
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -122,7 +127,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-context",
         Status: OperationStatus.SUCCEEDED,
@@ -131,6 +136,7 @@ describe("OperationWithData", () => {
           Result: '{"userId": 123, "name": "John Doe"}',
           Error: undefined,
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -151,7 +157,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-context",
         Status: OperationStatus.FAILED,
@@ -163,6 +169,7 @@ describe("OperationWithData", () => {
             ErrorType: "ContextExecutionError",
           },
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -186,7 +193,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-context",
         Status: OperationStatus.SUCCEEDED,
@@ -195,6 +202,7 @@ describe("OperationWithData", () => {
           Result: "invalid-json{",
           Error: undefined,
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -225,12 +233,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-context",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CONTEXT,
-        // ContextDetails is missing
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -253,11 +261,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.CALLBACK, // Not STEP
+        Type: OperationType.CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -276,7 +285,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-step",
         Status: OperationStatus.SUCCEEDED,
@@ -287,6 +296,7 @@ describe("OperationWithData", () => {
           Result: '{"success": true}',
           Error: undefined,
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -319,7 +329,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "step-op-error",
         Type: OperationType.STEP,
         Status: OperationStatus.FAILED,
@@ -331,6 +341,7 @@ describe("OperationWithData", () => {
             ErrorType: "StepError",
           },
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -357,7 +368,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "step-op-partial",
         Type: OperationType.STEP,
         Status: OperationStatus.FAILED,
@@ -369,6 +380,7 @@ describe("OperationWithData", () => {
             ErrorType: "PartialFailure",
           },
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -395,7 +407,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "step-op-bad-json",
         Type: OperationType.STEP,
         Status: OperationStatus.FAILED,
@@ -407,6 +419,7 @@ describe("OperationWithData", () => {
             ErrorType: "ParseError",
           },
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -433,11 +446,11 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "step-op-no-details",
         Type: OperationType.STEP,
         Status: OperationStatus.STARTED,
-        // StepDetails is missing
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -463,11 +476,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.STEP, // Not CALLBACK
+        Type: OperationType.STEP,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -486,7 +500,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-callback",
         Status: OperationStatus.SUCCEEDED,
@@ -494,6 +508,7 @@ describe("OperationWithData", () => {
         CallbackDetails: {
           CallbackId: undefined,
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -512,7 +527,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-callback",
         Status: OperationStatus.SUCCEEDED,
@@ -522,6 +537,7 @@ describe("OperationWithData", () => {
           Result: '{"data": "test"}',
           Error: { ErrorMessage: "Test error" },
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -548,7 +564,7 @@ describe("OperationWithData", () => {
     });
 
     it("should return callback details for WAIT_FOR_CALLBACK context operation with child CALLBACK", () => {
-      const mockChildOperations = [
+      const mockChildOperations: OperationEvents[] = [
         {
           operation: {
             Id: "child-callback",
@@ -559,6 +575,8 @@ describe("OperationWithData", () => {
               Result: '{"waitResult": "success"}',
               Error: { ErrorMessage: "Wait callback error" },
             },
+            StartTimestamp: undefined,
+            Status: undefined,
           },
           events: [],
         },
@@ -574,12 +592,13 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "wait-for-callback-op",
         Name: "wait-for-callback",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CONTEXT,
         SubType: OperationSubType.WAIT_FOR_CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -596,12 +615,14 @@ describe("OperationWithData", () => {
     });
 
     it("should throw error when WAIT_FOR_CALLBACK context has no child CALLBACK operation", () => {
-      const mockChildOperations = [
+      const mockChildOperations: OperationEvents[] = [
         {
           operation: {
             Id: "child-step",
             Name: "child-step-op",
-            Type: OperationType.STEP, // Not CALLBACK
+            Type: OperationType.STEP,
+            StartTimestamp: undefined,
+            Status: undefined,
           },
           events: [],
         },
@@ -617,12 +638,13 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "wait-for-callback-op",
         Name: "wait-for-callback",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CONTEXT,
         SubType: OperationSubType.WAIT_FOR_CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -646,12 +668,13 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "wait-for-callback-op",
         Name: "wait-for-callback",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CONTEXT,
         SubType: OperationSubType.WAIT_FOR_CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -665,7 +688,7 @@ describe("OperationWithData", () => {
     });
 
     it("should throw error when WAIT_FOR_CALLBACK child CALLBACK operation has undefined CallbackId", () => {
-      const mockChildOperations = [
+      const mockChildOperations: OperationEvents[] = [
         {
           operation: {
             Id: "child-callback",
@@ -674,6 +697,8 @@ describe("OperationWithData", () => {
             CallbackDetails: {
               CallbackId: undefined, // Missing CallbackId
             },
+            StartTimestamp: undefined,
+            Status: undefined,
           },
           events: [],
         },
@@ -689,12 +714,13 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "wait-for-callback-op",
         Name: "wait-for-callback",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CONTEXT,
         SubType: OperationSubType.WAIT_FOR_CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -715,11 +741,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.STEP, // Not INVOKE
+        Type: OperationType.STEP,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -738,7 +765,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.SUCCEEDED,
@@ -747,6 +774,7 @@ describe("OperationWithData", () => {
           Result: '{"functionResult": "success", "executionTime": 250}',
           Error: undefined,
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -767,7 +795,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.FAILED,
@@ -780,6 +808,7 @@ describe("OperationWithData", () => {
             StackTrace: ["Error at line 1", "Error at line 2"],
           },
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -804,7 +833,7 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.SUCCEEDED,
@@ -813,6 +842,7 @@ describe("OperationWithData", () => {
           Result: "invalid-json{",
           Error: undefined,
         },
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -841,12 +871,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-invoke",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CHAINED_INVOKE,
-        // ChainedInvokeDetails is missing
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -869,11 +899,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
-        Type: OperationType.STEP, // Not WAIT
+        Type: OperationType.STEP,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -892,11 +923,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-wait",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.WAIT,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -941,10 +973,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-operation-id",
         Name: "test-operation-name",
         Status: OperationStatus.SUCCEEDED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -970,10 +1004,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation-name",
         Status: OperationStatus.SUCCEEDED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -999,11 +1035,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.STEP,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1029,10 +1066,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1059,11 +1098,12 @@ describe("OperationWithData", () => {
         mockApiClient,
       );
       const startTime = new Date("2023-01-01T10:00:00Z");
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         StartTimestamp: startTime,
+        Type: undefined,
       };
 
       operation.populateData({
@@ -1090,11 +1130,13 @@ describe("OperationWithData", () => {
         mockApiClient,
       );
       const endTime = new Date("2023-01-01T11:00:00Z");
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         EndTimestamp: endTime,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1120,11 +1162,13 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         ParentId: "parent-123",
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1150,12 +1194,13 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CONTEXT,
         SubType: OperationSubType.WAIT_FOR_CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1181,12 +1226,13 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CONTEXT,
         SubType: OperationSubType.WAIT_FOR_CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1203,11 +1249,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.STEP,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1224,11 +1271,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1245,11 +1293,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "test-id",
         Name: "test-operation",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.STEP,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1281,11 +1330,12 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
-          Type: OperationType.STEP, // Not CALLBACK
+          Type: OperationType.STEP,
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1304,12 +1354,12 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
           Type: OperationType.CALLBACK,
-          // CallbackDetails is missing
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1328,7 +1378,7 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
@@ -1336,6 +1386,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             // CallbackId is undefined
           },
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1356,7 +1407,7 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
@@ -1364,6 +1415,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-123",
           },
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1391,7 +1443,7 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
@@ -1399,6 +1451,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-123",
           },
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1421,7 +1474,7 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
@@ -1429,6 +1482,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-456",
           },
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1459,7 +1513,7 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
@@ -1467,6 +1521,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-123",
           },
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1493,7 +1548,7 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
@@ -1501,6 +1556,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-heartbeat-123",
           },
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1525,7 +1581,7 @@ describe("OperationWithData", () => {
           mockIndexedOperations,
           mockApiClient,
         );
-        const operationData = {
+        const operationData: Operation = {
           Id: "test-id",
           Name: "callback-op",
           Status: OperationStatus.SUCCEEDED,
@@ -1533,6 +1589,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-123",
           },
+          StartTimestamp: undefined,
         };
 
         operation.populateData({
@@ -1561,7 +1618,7 @@ describe("OperationWithData", () => {
           mockApiClient,
         );
 
-        const operationData1 = {
+        const operationData1: Operation = {
           Id: "test-id-1",
           Name: "callback-1",
           Status: OperationStatus.SUCCEEDED,
@@ -1569,9 +1626,10 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-id-1",
           },
+          StartTimestamp: undefined,
         };
 
-        const operationData2 = {
+        const operationData2: Operation = {
           Id: "test-id-2",
           Name: "callback-2",
           Status: OperationStatus.SUCCEEDED,
@@ -1579,6 +1637,7 @@ describe("OperationWithData", () => {
           CallbackDetails: {
             CallbackId: "callback-id-2",
           },
+          StartTimestamp: undefined,
         };
 
         operation1.populateData({
@@ -1619,9 +1678,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const expectedResult = {
+      const expectedResult: OperationEvents = {
         operation: {
           Status: OperationStatus.STARTED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1644,9 +1706,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const expectedResult = {
+      const expectedResult: OperationEvents = {
         operation: {
           Status: OperationStatus.SUCCEEDED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1669,15 +1734,21 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const initialData = {
+      const initialData: OperationEvents = {
         operation: {
-          Status: OperationStatus.STARTED, // Data exists but has STARTED status
+          Status: OperationStatus.STARTED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
-      const finalData = {
+      const finalData: OperationEvents = {
         operation: {
-          Status: OperationStatus.SUCCEEDED, // Final status is SUCCEEDED (COMPLETED)
+          Status: OperationStatus.SUCCEEDED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1709,19 +1780,23 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const initialData = {
+      const initialData: OperationEvents = {
         operation: {
           Id: "test-id",
           Name: "test-operation",
-          // No Status field - should always wait
+          Type: undefined,
+          StartTimestamp: undefined,
+          Status: undefined,
         },
         events: [],
       };
-      const finalData = {
+      const finalData: OperationEvents = {
         operation: {
           Id: "test-id",
           Name: "test-operation",
           Status: OperationStatus.STARTED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1757,9 +1832,12 @@ describe("OperationWithData", () => {
         mockOperation,
       );
 
-      const expectedResult = {
+      const expectedResult: OperationEvents = {
         operation: {
           Status: OperationStatus.SUCCEEDED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1789,9 +1867,12 @@ describe("OperationWithData", () => {
       (waitManager.waitForOperation as jest.Mock).mockResolvedValue(
         mockOperation,
       );
-      const expectedResult = {
+      const expectedResult: OperationEvents = {
         operation: {
           Status: OperationStatus.SUCCEEDED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1832,9 +1913,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const expectedResult = {
+      const expectedResult: OperationEvents = {
         operation: {
           Status: OperationStatus.SUCCEEDED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1879,9 +1963,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const expectedResult = {
+      const expectedResult: OperationEvents = {
         operation: {
           Status: OperationStatus.SUCCEEDED,
+          Id: undefined,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -1912,13 +1999,25 @@ describe("OperationWithData", () => {
     });
 
     it("should return OperationWithData instances for child operations when data is populated", () => {
-      const mockChildOperations = [
+      const mockChildOperations: OperationEvents[] = [
         {
-          operation: { Id: "child-1", Name: "child-op-1" },
+          operation: {
+            Id: "child-1",
+            Name: "child-op-1",
+            Type: undefined,
+            StartTimestamp: undefined,
+            Status: undefined,
+          },
           events: [],
         },
         {
-          operation: { Id: "child-2", Name: "child-op-2" },
+          operation: {
+            Id: "child-2",
+            Name: "child-op-2",
+            Type: undefined,
+            StartTimestamp: undefined,
+            Status: undefined,
+          },
           events: [],
         },
       ];
@@ -1933,10 +2032,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "parent-id",
         Name: "parent-operation",
         Status: OperationStatus.SUCCEEDED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -1985,10 +2086,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "parent-with-no-children",
         Name: "parent-operation",
         Status: OperationStatus.SUCCEEDED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({
@@ -2005,12 +2108,14 @@ describe("OperationWithData", () => {
     });
 
     it("should work with different operation types", () => {
-      const mockChildOperations = [
+      const mockChildOperations: OperationEvents[] = [
         {
           operation: {
             Id: "step-child",
             Name: "step-child",
             Type: OperationType.STEP,
+            StartTimestamp: undefined,
+            Status: undefined,
           },
           events: [],
         },
@@ -2025,11 +2130,12 @@ describe("OperationWithData", () => {
         mockIndexedOperations,
         mockApiClient,
       );
-      const operationData = {
+      const operationData: Operation = {
         Id: "callback-parent",
         Name: "callback-operation",
         Status: OperationStatus.SUCCEEDED,
         Type: OperationType.CALLBACK,
+        StartTimestamp: undefined,
       };
 
       operation.populateData({

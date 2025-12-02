@@ -21,7 +21,6 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
 
     const runner = new LocalDurableTestRunner({
       handlerFunction: handler,
-      skipTime: true,
     });
 
     const durableOperation = runner.getOperation("durableOperation");
@@ -151,7 +150,6 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
 
     const runner = new LocalDurableTestRunner({
       handlerFunction: handler,
-      skipTime: true,
     });
 
     runner.registerDurableFunction(

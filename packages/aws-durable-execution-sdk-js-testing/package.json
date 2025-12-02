@@ -23,7 +23,7 @@
     "prepublishOnly": "npm run build && npm run test",
     "lint": "eslint --fix",
     "prebuild": "npm run lint",
-    "test": "jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
+    "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
     "run-durable": "tsx src/cli/run-durable.ts"
   },
   "exports": {

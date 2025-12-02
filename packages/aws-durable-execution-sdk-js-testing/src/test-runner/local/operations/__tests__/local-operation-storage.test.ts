@@ -29,6 +29,7 @@ describe("LocalOperationStorage", () => {
         Name: "operation1",
         Type: OperationType.STEP,
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: undefined,
       },
       events: [
         {
@@ -47,6 +48,7 @@ describe("LocalOperationStorage", () => {
             Result: {
               Payload: "",
             },
+            RetryDetails: undefined,
           },
           Name: "operation1",
           Id: "op1",
@@ -59,6 +61,7 @@ describe("LocalOperationStorage", () => {
         Name: "operation2",
         Type: OperationType.WAIT,
         Status: OperationStatus.SUCCEEDED,
+        StartTimestamp: undefined,
       },
       events: [
         {
@@ -67,6 +70,7 @@ describe("LocalOperationStorage", () => {
           EventTimestamp: new Date("2026-01-01"),
           WaitStartedDetails: {
             Duration: 10,
+            ScheduledEndTimestamp: undefined,
           },
           Name: "operation2",
           Id: "op2",
@@ -87,13 +91,17 @@ describe("LocalOperationStorage", () => {
         Name: "operation1", // Same name as first operation
         Type: OperationType.CALLBACK,
         Status: OperationStatus.FAILED,
+        StartTimestamp: undefined,
       },
       events: [
         {
           EventId: 5,
           EventType: EventType.CallbackStarted,
           EventTimestamp: new Date("2026-01-02"),
-          StepSucceededDetails: {},
+          StepSucceededDetails: {
+            Result: undefined,
+            RetryDetails: undefined,
+          },
           Name: "operation1",
           Id: "op3",
         },
@@ -101,7 +109,10 @@ describe("LocalOperationStorage", () => {
           EventId: 6,
           EventType: EventType.CallbackSucceeded,
           EventTimestamp: new Date("2026-01-03"),
-          StepSucceededDetails: {},
+          StepSucceededDetails: {
+            Result: undefined,
+            RetryDetails: undefined,
+          },
           Name: "operation1",
           Id: "op3",
         },
@@ -111,8 +122,8 @@ describe("LocalOperationStorage", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockWaitManager = new OperationWaitManager();
     mockIndexedOperations = new IndexedOperations([]);
+    mockWaitManager = new OperationWaitManager(mockIndexedOperations);
     mockCallback = jest.fn();
     mockDurableApiClient = {
       sendCallbackSuccess: jest.fn(),
@@ -354,6 +365,7 @@ describe("LocalOperationStorage", () => {
             Name: "test-op",
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -426,6 +438,7 @@ describe("LocalOperationStorage", () => {
             Name: "test-op",
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -468,6 +481,7 @@ describe("LocalOperationStorage", () => {
             Type: OperationType.STEP,
             Name: "", // Empty string name
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -510,6 +524,7 @@ describe("LocalOperationStorage", () => {
             Name: "operation-at-index-0",
             Type: OperationType.STEP,
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -519,6 +534,7 @@ describe("LocalOperationStorage", () => {
             Name: "operation-at-index-1",
             Type: OperationType.WAIT,
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -748,6 +764,7 @@ describe("LocalOperationStorage", () => {
             Id: "op4",
             Status: "STARTED",
             Type: "CALLBACK",
+            StartTimestamp: undefined,
           },
           events: [
             {
@@ -755,7 +772,7 @@ describe("LocalOperationStorage", () => {
               EventType: EventType.CallbackStarted,
             },
           ],
-        },
+        } satisfies OperationEvents,
       ]);
 
       storage.populateOperations(populatedOperations);

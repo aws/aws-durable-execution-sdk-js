@@ -4,10 +4,7 @@ import {
   OperationUpdate,
   OperationAction,
 } from "@aws-sdk/client-lambda";
-import {
-  createInvocationId,
-  createExecutionId,
-} from "../../utils/tagged-strings";
+import { createExecutionId } from "../../utils/tagged-strings";
 import { CheckpointManager } from "../checkpoint-manager";
 
 jest.mock("node:crypto", () => ({
@@ -16,8 +13,6 @@ jest.mock("node:crypto", () => ({
 
 describe("checkpoint-manager updateOperation", () => {
   let storage: CheckpointManager;
-
-  const mockInvocationId = createInvocationId();
 
   beforeEach(() => {
     storage = new CheckpointManager(createExecutionId("test-execution-id"));
@@ -92,7 +87,7 @@ describe("checkpoint-manager updateOperation", () => {
           Action: OperationAction.START,
           Name: "test-invoke",
         };
-        storage.registerUpdate(invokeUpdate, mockInvocationId);
+        storage.registerUpdate(invokeUpdate);
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
@@ -142,7 +137,7 @@ describe("checkpoint-manager updateOperation", () => {
           Action: OperationAction.START,
           Name: "test-invoke-fail",
         };
-        storage.registerUpdate(invokeUpdate, mockInvocationId);
+        storage.registerUpdate(invokeUpdate);
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
@@ -199,7 +194,7 @@ describe("checkpoint-manager updateOperation", () => {
           Action: OperationAction.START,
           Name: "test-invoke-cancel",
         };
-        storage.registerUpdate(invokeUpdate, mockInvocationId);
+        storage.registerUpdate(invokeUpdate);
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
@@ -241,7 +236,7 @@ describe("checkpoint-manager updateOperation", () => {
           Action: OperationAction.START,
           Name: "test-invoke-timeout",
         };
-        storage.registerUpdate(invokeUpdate, mockInvocationId);
+        storage.registerUpdate(invokeUpdate);
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
@@ -283,7 +278,7 @@ describe("checkpoint-manager updateOperation", () => {
           Action: OperationAction.START,
           Name: "test-invoke-no-details",
         };
-        storage.registerUpdate(invokeUpdate, mockInvocationId);
+        storage.registerUpdate(invokeUpdate);
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
@@ -323,7 +318,7 @@ describe("checkpoint-manager updateOperation", () => {
           Action: OperationAction.START,
           Name: "test-invoke-empty",
         };
-        storage.registerUpdate(invokeUpdate, mockInvocationId);
+        storage.registerUpdate(invokeUpdate);
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
@@ -383,7 +378,7 @@ describe("checkpoint-manager updateOperation", () => {
           Action: OperationAction.START,
           Name: "test-invoke-both",
         };
-        storage.registerUpdate(invokeUpdate, mockInvocationId);
+        storage.registerUpdate(invokeUpdate);
 
         const newOperationData = {
           Type: OperationType.CHAINED_INVOKE,
@@ -427,7 +422,7 @@ describe("checkpoint-manager updateOperation", () => {
             Action: OperationAction.START,
             Name: "test-invoke-invalid",
           };
-          storage.registerUpdate(invokeUpdate, mockInvocationId);
+          storage.registerUpdate(invokeUpdate);
 
           const newOperationData = {
             Type: OperationType.CHAINED_INVOKE,
@@ -816,7 +811,7 @@ describe("checkpoint-manager updateOperation", () => {
       Action: OperationAction.START,
       Name: "test-step",
     };
-    storage.registerUpdate(stepUpdate, mockInvocationId);
+    storage.registerUpdate(stepUpdate);
 
     const partialUpdate = {
       Status: OperationStatus.SUCCEEDED,
@@ -866,7 +861,7 @@ describe("checkpoint-manager updateOperation", () => {
       Name: "complex-step",
       Payload: "initial-payload",
     };
-    storage.registerUpdate(complexUpdate, mockInvocationId);
+    storage.registerUpdate(complexUpdate);
 
     const updateData = {
       Status: OperationStatus.SUCCEEDED,
@@ -950,18 +945,15 @@ describe("checkpoint-manager updateOperation", () => {
       storage.initialize();
 
       // Register a STEP operation with RETRY action
-      const result = storage.registerUpdate(
-        {
-          Id: "retry-step-id",
-          Action: OperationAction.RETRY,
-          Type: OperationType.STEP,
-          Name: "test-retry-step",
-          StepOptions: {
-            NextAttemptDelaySeconds: 15,
-          },
+      const result = storage.registerUpdate({
+        Id: "retry-step-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-retry-step",
+        StepOptions: {
+          NextAttemptDelaySeconds: 15,
         },
-        mockInvocationId,
-      );
+      });
 
       expect(result.operation.Id).toBe("retry-step-id");
       expect(result.operation.Status).toBe(OperationStatus.PENDING);
@@ -984,15 +976,12 @@ describe("checkpoint-manager updateOperation", () => {
       storage.initialize();
 
       // Register a STEP operation with RETRY action but no delay
-      const result = storage.registerUpdate(
-        {
-          Id: "retry-no-delay-id",
-          Action: OperationAction.RETRY,
-          Type: OperationType.STEP,
-          Name: "test-retry-no-delay",
-        },
-        mockInvocationId,
-      );
+      const result = storage.registerUpdate({
+        Id: "retry-no-delay-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-retry-no-delay",
+      });
 
       expect(result.operation.Id).toBe("retry-no-delay-id");
       expect(result.operation.Status).toBe(OperationStatus.PENDING);
@@ -1010,18 +999,15 @@ describe("checkpoint-manager updateOperation", () => {
       storage.initialize();
 
       // Register a STEP operation with RETRY action and explicit zero delay
-      const result = storage.registerUpdate(
-        {
-          Id: "retry-zero-delay-id",
-          Action: OperationAction.RETRY,
-          Type: OperationType.STEP,
-          Name: "test-retry-zero-delay",
-          StepOptions: {
-            NextAttemptDelaySeconds: 0,
-          },
+      const result = storage.registerUpdate({
+        Id: "retry-zero-delay-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-retry-zero-delay",
+        StepOptions: {
+          NextAttemptDelaySeconds: 0,
         },
-        mockInvocationId,
-      );
+      });
 
       expect(result.operation.Status).toBe(OperationStatus.PENDING);
       expect(result.operation.StepDetails?.Attempt).toBe(1);

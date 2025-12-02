@@ -19,6 +19,7 @@ describe("validateInvokeOperation", () => {
     Status: status,
     Type: OperationType.CHAINED_INVOKE,
     Id: "test-id",
+    StartTimestamp: undefined,
   });
 
   describe("START action", () => {

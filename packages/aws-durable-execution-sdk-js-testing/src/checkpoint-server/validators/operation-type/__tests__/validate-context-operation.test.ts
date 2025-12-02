@@ -26,6 +26,7 @@ describe("validateContextOperation", () => {
     Status: status,
     Type: OperationType.CONTEXT,
     Id: "test-id",
+    StartTimestamp: undefined,
   });
 
   describe("START action", () => {

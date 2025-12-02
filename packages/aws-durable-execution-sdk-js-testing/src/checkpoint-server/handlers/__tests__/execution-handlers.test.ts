@@ -72,20 +72,20 @@ describe("execution handlers", () => {
       });
     });
 
-    it("should return undefined when execution manager cannot find execution", () => {
+    it("should propagate errors when execution manager cannot find execution", () => {
       const startInvocationSpy = jest
         .spyOn(executionManager, "startInvocation")
-        .mockReturnValue(undefined);
+        .mockImplementation(() => {
+          throw new Error("Execution not found");
+        });
 
-      const result = processStartInvocation(
-        "non-existent-execution",
-        executionManager,
-      );
+      expect(() =>
+        processStartInvocation("non-existent-execution", executionManager),
+      ).toThrow("Execution not found");
 
       expect(startInvocationSpy).toHaveBeenCalledWith(
         createExecutionId("non-existent-execution"),
       );
-      expect(result).toBeUndefined();
     });
   });
 

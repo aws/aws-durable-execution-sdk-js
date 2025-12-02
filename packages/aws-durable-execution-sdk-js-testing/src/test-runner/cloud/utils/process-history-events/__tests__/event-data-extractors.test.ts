@@ -18,6 +18,7 @@ describe("getErrorFromEvent", () => {
         Error: {
           Payload: errorPayload,
         },
+        RetryDetails: undefined,
       },
     };
 
@@ -38,6 +39,7 @@ describe("getErrorFromEvent", () => {
         Result: {
           Payload: "success result",
         },
+        RetryDetails: undefined,
       },
     };
 
@@ -49,6 +51,7 @@ describe("getErrorFromEvent", () => {
     const event: Event = {
       StepFailedDetails: {
         Error: {},
+        RetryDetails: undefined,
       },
     };
 
@@ -97,6 +100,7 @@ describe("getPayloadFromEvent", () => {
         Result: {
           Payload: resultPayload,
         },
+        RetryDetails: undefined,
       },
     };
 
@@ -120,6 +124,7 @@ describe("getPayloadFromEvent", () => {
             ErrorMessage: "Test error",
           },
         },
+        RetryDetails: undefined,
       },
     };
 
@@ -142,6 +147,7 @@ describe("getPayloadFromEvent", () => {
     const event: Event = {
       StepSucceededDetails: {
         Result: {},
+        RetryDetails: undefined,
       },
     };
 

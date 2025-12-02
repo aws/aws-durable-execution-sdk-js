@@ -1,5 +1,4 @@
 import { Context } from "aws-lambda";
-import { Operation } from "@aws-sdk/client-lambda";
 import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
@@ -38,7 +37,15 @@ describe("invoke-handler", () => {
 
       const params: HandlerParameters = {
         durableExecutionArn: "test-arn",
-        operations: [{ id: "op1", name: "testOp" } as Operation],
+        operations: [
+          {
+            Id: "op1",
+            Name: "testOp",
+            Type: undefined,
+            StartTimestamp: undefined,
+            Status: undefined,
+          },
+        ],
         checkpointToken: "test-token",
       };
 
@@ -80,7 +87,15 @@ describe("invoke-handler", () => {
 
       const params: HandlerParameters = {
         durableExecutionArn: "test-arn",
-        operations: [{ id: "op1", name: "testOp" } as Operation],
+        operations: [
+          {
+            Id: "op1",
+            Name: "testOp",
+            Type: undefined,
+            StartTimestamp: undefined,
+            Status: undefined,
+          },
+        ],
         checkpointToken: "test-token",
         contextValues: customContextValues,
       };
@@ -133,7 +148,15 @@ describe("invoke-handler", () => {
 
       const params: HandlerParameters = {
         durableExecutionArn: "test-arn",
-        operations: [{ id: "op1", name: "testOp" } as Operation],
+        operations: [
+          {
+            Id: "op1",
+            Name: "testOp",
+            Type: undefined,
+            StartTimestamp: undefined,
+            Status: undefined,
+          },
+        ],
         checkpointToken: "test-token",
       };
 

@@ -1,5 +1,10 @@
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import {
+  Operation,
+  OperationStatus,
+  OperationType,
+} from "@aws-sdk/client-lambda";
 import { IndexedOperations } from "../indexed-operations";
+import { OperationEvents } from "../operations/operation-with-data";
 
 describe("IndexedOperations", () => {
   // Sample operations for testing
@@ -122,10 +127,12 @@ describe("IndexedOperations", () => {
       const indexed = new IndexedOperations([]);
 
       // Add initial operation
-      const initialOperation = {
+      const initialOperation: Operation = {
         Id: "op1",
         Name: "operation1",
         Status: OperationStatus.STARTED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
       indexed.addOperations([
         {
@@ -141,10 +148,12 @@ describe("IndexedOperations", () => {
       );
 
       // Add operation with same ID but different properties
-      const updatedOperation = {
+      const updatedOperation: Operation = {
         Id: "op1",
         Name: "operation1-updated",
         Status: OperationStatus.SUCCEEDED,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
       indexed.addOperations([
         {
@@ -172,12 +181,14 @@ describe("IndexedOperations", () => {
     it("should handle multiple operations with same ID by keeping the last one", () => {
       const indexed = new IndexedOperations([]);
 
-      const operations = [
+      const operations: OperationEvents[] = [
         {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.STARTED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -186,6 +197,8 @@ describe("IndexedOperations", () => {
             Id: "op2",
             Name: "operation2",
             Status: OperationStatus.STARTED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -194,6 +207,8 @@ describe("IndexedOperations", () => {
             Id: "op1",
             Name: "operation1-updated",
             Status: OperationStatus.SUCCEEDED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         }, // Same ID as first operation
@@ -219,11 +234,13 @@ describe("IndexedOperations", () => {
       const indexed = new IndexedOperations([]);
 
       // Add initial operation
-      const initialOperation = {
+      const initialOperation: OperationEvents = {
         operation: {
           Id: "op1",
           Name: "original-name",
           Status: OperationStatus.STARTED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -236,11 +253,13 @@ describe("IndexedOperations", () => {
       );
 
       // Add operation with same ID but different name
-      const updatedOperation = {
+      const updatedOperation: OperationEvents = {
         operation: {
           Id: "op1",
           Name: "updated-name",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -266,12 +285,14 @@ describe("IndexedOperations", () => {
       const indexed = new IndexedOperations([]);
 
       // Add some operations
-      const operations = [
+      const operations: OperationEvents[] = [
         {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.STARTED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -280,6 +301,8 @@ describe("IndexedOperations", () => {
             Id: "op2",
             Name: "operation2",
             Status: OperationStatus.SUCCEEDED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -300,11 +323,13 @@ describe("IndexedOperations", () => {
       ).toBeDefined();
 
       // Add an operation with same ID as existing one
-      const updatedOp1 = {
+      const updatedOp1: OperationEvents = {
         operation: {
           Id: "op1",
           Name: "operation1-updated",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -324,9 +349,12 @@ describe("IndexedOperations", () => {
 
     it("should not handle operations without id", () => {
       const indexed = new IndexedOperations([]);
-      const operationWithoutId = {
+      const operationWithoutId: Operation = {
         Status: OperationStatus.STARTED,
         Name: "my-operation-name",
+        Id: undefined,
+        Type: undefined,
+        StartTimestamp: undefined,
       };
 
       // Add the operation
@@ -342,11 +370,13 @@ describe("IndexedOperations", () => {
 
     it("should handle operations with empty string id", () => {
       const indexed = new IndexedOperations([]);
-      const operationWithEmptyId = {
+      const operationWithEmptyId: OperationEvents = {
         operation: {
           Id: "",
           Name: undefined,
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -359,11 +389,13 @@ describe("IndexedOperations", () => {
 
     it("should handle operations with empty string name", () => {
       const indexed = new IndexedOperations([]);
-      const operationWithEmptyName = {
+      const operationWithEmptyName: OperationEvents = {
         operation: {
           Id: "test-op",
           Name: "",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       };
@@ -394,12 +426,14 @@ describe("IndexedOperations", () => {
       it("should add all events when adding new operations", () => {
         const indexed = new IndexedOperations([]);
 
-        const operations = [
+        const operations: OperationEvents[] = [
           {
             operation: {
               Id: "op1",
               Name: "operation1",
               Status: OperationStatus.STARTED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 1 }, { EventId: 2 }],
           },
@@ -408,6 +442,8 @@ describe("IndexedOperations", () => {
               Id: "op2",
               Name: "operation2",
               Status: OperationStatus.SUCCEEDED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 3 }, { EventId: 4 }],
           },
@@ -424,11 +460,13 @@ describe("IndexedOperations", () => {
         const indexed = new IndexedOperations([]);
 
         // Add initial operation with 2 events
-        const initialOperation = {
+        const initialOperation: OperationEvents = {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.STARTED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 1 }, { EventId: 2 }],
         };
@@ -439,11 +477,13 @@ describe("IndexedOperations", () => {
         expect(historyEvents.map((e) => e.EventId)).toEqual([1, 2]);
 
         // Update same operation with 2 additional events (4 total)
-        const updatedOperation = {
+        const updatedOperation: OperationEvents = {
           operation: {
             Id: "op1", // Same ID
             Name: "operation1",
             Status: OperationStatus.SUCCEEDED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [
             { EventId: 1 }, // Existing
@@ -464,11 +504,13 @@ describe("IndexedOperations", () => {
       it("should not add duplicate events when updating operation with same events", () => {
         const indexed = new IndexedOperations([]);
 
-        const operation = {
+        const operation: OperationEvents = {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.STARTED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 1 }, { EventId: 2 }],
         };
@@ -487,11 +529,13 @@ describe("IndexedOperations", () => {
       it("should handle operations with no events", () => {
         const indexed = new IndexedOperations([]);
 
-        const operationWithoutEvents = {
+        const operationWithoutEvents: OperationEvents = {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.STARTED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         };
@@ -501,11 +545,13 @@ describe("IndexedOperations", () => {
         expect(historyEvents).toHaveLength(0);
 
         // Update with events
-        const operationWithEvents = {
+        const operationWithEvents: OperationEvents = {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.SUCCEEDED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 1 }],
         };
@@ -520,12 +566,14 @@ describe("IndexedOperations", () => {
         const indexed = new IndexedOperations([]);
 
         // Initial operations
-        const initialOperations = [
+        const initialOperations: OperationEvents[] = [
           {
             operation: {
               Id: "op1",
               Name: "operation1",
               Status: OperationStatus.STARTED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 1 }],
           },
@@ -534,6 +582,8 @@ describe("IndexedOperations", () => {
               Id: "op2",
               Name: "operation2",
               Status: OperationStatus.STARTED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 2 }, { EventId: 3 }],
           },
@@ -544,12 +594,14 @@ describe("IndexedOperations", () => {
         expect(historyEvents).toHaveLength(3);
 
         // Update both operations with additional events
-        const updatedOperations = [
+        const updatedOperations: OperationEvents[] = [
           {
             operation: {
               Id: "op1",
               Name: "operation1",
               Status: OperationStatus.SUCCEEDED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [
               { EventId: 1 }, // Existing
@@ -561,6 +613,8 @@ describe("IndexedOperations", () => {
               Id: "op2",
               Name: "operation2",
               Status: OperationStatus.SUCCEEDED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [
               { EventId: 2 }, // Existing
@@ -589,6 +643,8 @@ describe("IndexedOperations", () => {
               Id: "op1",
               Name: "operation1",
               Status: OperationStatus.STARTED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 1 }],
           },
@@ -601,6 +657,8 @@ describe("IndexedOperations", () => {
               Id: "op2",
               Name: "operation2",
               Status: OperationStatus.STARTED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 2 }],
           },
@@ -613,6 +671,8 @@ describe("IndexedOperations", () => {
               Id: "op1",
               Name: "operation1",
               Status: OperationStatus.SUCCEEDED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 1 }, { EventId: 3 }],
           },
@@ -629,11 +689,13 @@ describe("IndexedOperations", () => {
         const indexed = new IndexedOperations([]);
 
         // Add operation with multiple events
-        const operationWithManyEvents = {
+        const operationWithManyEvents: OperationEvents = {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.STARTED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 1 }, { EventId: 2 }, { EventId: 3 }],
         };
@@ -643,11 +705,13 @@ describe("IndexedOperations", () => {
         expect(historyEvents).toHaveLength(3);
 
         // Update with fewer events (this shouldn't normally happen in practice, but testing edge case)
-        const operationWithFewerEvents = {
+        const operationWithFewerEvents: OperationEvents = {
           operation: {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.FAILED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 1 }, { EventId: 2 }],
         };
@@ -737,12 +801,14 @@ describe("IndexedOperations", () => {
   });
 
   describe("getOperationChildren", () => {
-    const parentChildOperations = [
+    const parentChildOperations: OperationEvents[] = [
       {
         operation: {
           Id: "parent1",
           Name: "parent-operation",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       },
@@ -752,6 +818,8 @@ describe("IndexedOperations", () => {
           Name: "child-operation-1",
           ParentId: "parent1",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       },
@@ -761,6 +829,8 @@ describe("IndexedOperations", () => {
           Name: "child-operation-2",
           ParentId: "parent1",
           Status: OperationStatus.FAILED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       },
@@ -769,6 +839,8 @@ describe("IndexedOperations", () => {
           Id: "orphan",
           Name: "orphan-operation",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       },
@@ -778,6 +850,8 @@ describe("IndexedOperations", () => {
           Name: "child-operation-3",
           ParentId: "different-parent",
           Status: OperationStatus.SUCCEEDED,
+          Type: undefined,
+          StartTimestamp: undefined,
         },
         events: [],
       },
@@ -839,6 +913,8 @@ describe("IndexedOperations", () => {
             Id: "op1",
             Name: "operation1",
             Status: OperationStatus.SUCCEEDED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -878,6 +954,8 @@ describe("IndexedOperations", () => {
               Name: "child-operation-1-updated",
               ParentId: "new-parent", // Different parent
               Status: OperationStatus.SUCCEEDED,
+              Type: undefined,
+              StartTimestamp: undefined,
             },
             events: [],
           },
@@ -901,6 +979,8 @@ describe("IndexedOperations", () => {
             Name: "operation1",
             ParentId: undefined,
             Status: OperationStatus.SUCCEEDED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -918,6 +998,8 @@ describe("IndexedOperations", () => {
             Name: "child-operation",
             ParentId: "", // Empty string parent ID
             Status: OperationStatus.SUCCEEDED,
+            Type: undefined,
+            StartTimestamp: undefined,
           },
           events: [],
         },
@@ -932,12 +1014,13 @@ describe("IndexedOperations", () => {
 
   describe("executionOperation handling", () => {
     describe("should exclude execution operations from main indexes", () => {
-      const executionOperation = {
+      const executionOperation: OperationEvents = {
         operation: {
           Id: "execution-1",
           Name: "my-execution",
           Type: OperationType.EXECUTION,
           Status: OperationStatus.STARTED,
+          StartTimestamp: undefined,
         },
         events: [
           {
@@ -946,12 +1029,13 @@ describe("IndexedOperations", () => {
         ],
       };
 
-      const regularOperation = {
+      const regularOperation: OperationEvents = {
         operation: {
           Id: "step-1",
           Name: "my-step",
           Type: OperationType.STEP,
           Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: undefined,
         },
         events: [
           {
@@ -1036,22 +1120,24 @@ describe("IndexedOperations", () => {
       });
 
       it("should handle multiple execution operations by keeping the last one", () => {
-        const firstExecution = {
+        const firstExecution: OperationEvents = {
           operation: {
             Id: "execution-1",
             Name: "first-execution",
             Type: OperationType.EXECUTION,
             Status: OperationStatus.STARTED,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 100 }],
         };
 
-        const secondExecution = {
+        const secondExecution: OperationEvents = {
           operation: {
             Id: "execution-2",
             Name: "second-execution",
             Type: OperationType.EXECUTION,
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 200 }],
         };
@@ -1081,12 +1167,13 @@ describe("IndexedOperations", () => {
         ]);
 
         // Add updated execution with same ID but additional events
-        const updatedExecution = {
+        const updatedExecution: OperationEvents = {
           operation: {
             Id: "execution-1", // Same ID
             Name: "my-execution-updated",
             Type: OperationType.EXECUTION,
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [
             { EventId: 100 }, // Existing
@@ -1109,23 +1196,25 @@ describe("IndexedOperations", () => {
       });
 
       it("should handle execution operations with parent-child relationships (execution operations cannot have parents but can be parents)", () => {
-        const executionWithChild = {
+        const executionWithChild: OperationEvents = {
           operation: {
             Id: "execution-parent",
             Name: "parent-execution",
             Type: OperationType.EXECUTION,
             Status: OperationStatus.STARTED,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 300 }],
         };
 
-        const childOfExecution = {
+        const childOfExecution: OperationEvents = {
           operation: {
             Id: "child-of-execution",
             Name: "child-step",
             Type: OperationType.STEP,
             ParentId: "execution-parent",
             Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
           },
           events: [{ EventId: 301 }],
         };
@@ -1155,13 +1244,14 @@ describe("IndexedOperations", () => {
       });
 
       it("should handle mixed operations with execution operations", () => {
-        const operations = [
+        const operations: OperationEvents[] = [
           {
             operation: {
               Id: "step-1",
               Name: "first-step",
               Type: OperationType.STEP,
               Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 1 }],
           },
@@ -1171,6 +1261,7 @@ describe("IndexedOperations", () => {
               Name: "execution",
               Type: OperationType.EXECUTION,
               Status: OperationStatus.STARTED,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 2 }],
           },
@@ -1180,6 +1271,7 @@ describe("IndexedOperations", () => {
               Name: "wait-operation",
               Type: OperationType.WAIT,
               Status: OperationStatus.STARTED,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 3 }],
           },
@@ -1189,6 +1281,7 @@ describe("IndexedOperations", () => {
               Name: "context-operation",
               Type: OperationType.CONTEXT,
               Status: OperationStatus.SUCCEEDED,
+              StartTimestamp: undefined,
             },
             events: [{ EventId: 4 }],
           },

@@ -19,6 +19,7 @@ describe("validateCallbackOperation", () => {
     Status: status,
     Type: OperationType.CALLBACK,
     Id: "test-id",
+    StartTimestamp: undefined,
   });
 
   describe("START action", () => {
