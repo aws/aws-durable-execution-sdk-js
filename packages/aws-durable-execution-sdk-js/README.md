@@ -49,8 +49,8 @@ export const lambdaHandler = withDurableExecution(handler);
 
 This README provides a quick reference for the SDK's main features. For more detailed information:
 
+- **[API Specification](api-docs/durable-execution-sdk-js.md)** - Complete technical reference with detailed type definitions and operation specifications
 - **[Concepts and Use Cases](src/documents/CONCEPTS.md)** - Learn about the replay model, best practices, and real-world examples including GenAI agents, human-in-the-loop workflows, and saga patterns
-- **[API Specification](src/documents/API_SPECIFICATION.md)** - Complete technical reference with detailed type definitions and operation specifications
 
 ## Core Concepts
 
@@ -106,7 +106,7 @@ const orderResult = await context.runInChildContext(
 
 ### Invoking Other Functions
 
-Call other durable functions:
+Call another AWS Lambda function and wait for it complete:
 
 ```typescript
 const result = await context.invoke(
@@ -266,16 +266,6 @@ const results = await context.promise.allSettled([operation1(), operation2()]);
 
 ### Retry Strategies
 
-Built-in retry presets:
-
-```typescript
-import { retryPresets } from "@aws/durable-execution-sdk-js";
-
-await context.step("api-call", async () => callExternalAPI(), {
-  retryStrategy: retryPresets.exponentialBackoff(),
-});
-```
-
 Custom retry strategy:
 
 ```typescript
@@ -285,32 +275,6 @@ await context.step("custom-retry", async () => riskyOperation(), {
     delay: { seconds: attempt * 2 },
   }),
 });
-```
-
-### Serialization
-
-Custom serialization for complex types:
-
-```typescript
-import {
-  createClassSerdes,
-  createClassSerdesWithDates,
-} from "@aws/durable-execution-sdk-js";
-
-class User {
-  constructor(
-    public name: string,
-    public createdAt: Date,
-  ) {}
-}
-
-const result = await context.step(
-  "create-user",
-  async () => new User("Alice", new Date()),
-  {
-    serdes: createClassSerdesWithDates(User, ["createdAt"]),
-  },
-);
 ```
 
 ### Step Semantics
@@ -393,18 +357,6 @@ context.configureLogger({
 
 ```typescript
 context.configureLogger({ modeAware: false });
-```
-
-## Testing Locally
-
-Run durable functions locally for development:
-
-```bash
-# Basic example
-npm run run-locally src/demo/usage-example.ts
-
-# With invocation ID
-npm run run-locally src/demo/retry-config.ts invocation001
 ```
 
 ## License
