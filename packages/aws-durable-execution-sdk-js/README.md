@@ -49,7 +49,7 @@ export const lambdaHandler = withDurableExecution(handler);
 
 This README provides a quick reference for the SDK's main features. For more detailed information:
 
-- **[API Specification](../../api-docs/durable-execution-sdk-js.md)** - Complete technical reference with detailed type definitions and operation specifications
+- **[API Reference](../../docs/api-reference/durable-execution-sdk-js.md)** - Complete technical reference with detailed type definitions and operation specifications
 - **[Concepts and Use Cases](src/documents/CONCEPTS.md)** - Learn about the replay model, best practices, and real-world examples including GenAI agents, human-in-the-loop workflows, and saga patterns
 - **[Contributing](../../CONTRIBUTING.md)** - Learn about contributing to the AWS Durable Execution SDK for JavaScript
 

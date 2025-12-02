@@ -10,7 +10,7 @@ The repository also contains example durable functions located [here](https://gi
 
 ## Documentation
 
-- **[API Specification](./api-docs/index.md)** - Complete technical reference with detailed type definitions and operation specifications
+- **[API Reference](./docs/api-reference/index.md)** - Complete technical reference with detailed type definitions and operation specifications
 
 ## Security
 
