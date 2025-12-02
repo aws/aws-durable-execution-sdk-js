@@ -325,6 +325,106 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  ForceCheckpointing:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForceCheckpointing-TypeScript
+      CodeUri: ./dist
+      Handler: force-checkpointing.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 3600
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ForceCheckpointingCallback:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForceCheckpointingCallback-TypeScript
+      CodeUri: ./dist
+      Handler: force-checkpointing-callback.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 3600
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ForceCheckpointingInvoke:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForceCheckpointingInvoke-TypeScript
+      CodeUri: ./dist
+      Handler: force-checkpointing-invoke.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 3600
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ForceCheckpointingMultipleWait:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ForceCheckpointingMultipleWait-TypeScript
+      CodeUri: ./dist
+      Handler: force-checkpointing-multiple-wait.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 3600
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   HandlerError:
     Type: AWS::Serverless::Function
     Properties:
