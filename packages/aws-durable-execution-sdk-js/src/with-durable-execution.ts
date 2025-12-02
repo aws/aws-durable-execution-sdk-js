@@ -201,6 +201,18 @@ async function runHandler<
 
         log("✅", "Large result successfully checkpointed");
 
+        // Wait for any pending checkpoints to complete before returning
+        try {
+          await durableExecution.checkpointManager.waitForQueueCompletion();
+        } catch (waitError) {
+          log(
+            "⚠️",
+            "Error waiting for checkpoint queue completion:",
+            waitError,
+          );
+          // Continue anyway - the checkpoint will be retried on next invocation
+        }
+
         // Return a response indicating the result was checkpointed
         return {
           Status: InvocationStatus.SUCCEEDED,
@@ -214,6 +226,14 @@ async function runHandler<
     }
 
     // If response size is acceptable, return the response
+    // Wait for any pending checkpoints to complete before returning
+    try {
+      await durableExecution.checkpointManager.waitForQueueCompletion();
+    } catch (waitError) {
+      log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
+      // Continue anyway - the checkpoint will be retried on next invocation
+    }
+
     return {
       Status: InvocationStatus.SUCCEEDED,
       Result: serializedResult,
@@ -228,6 +248,14 @@ async function runHandler<
         "Unrecoverable invocation error - terminating Lambda execution",
       );
       throw error; // Re-throw the error to terminate Lambda execution
+    }
+
+    // Wait for any pending checkpoints to complete before returning error
+    try {
+      await durableExecution.checkpointManager.waitForQueueCompletion();
+    } catch (waitError) {
+      log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
+      // Continue anyway - the checkpoint will be retried on next invocation
     }
 
     return {
