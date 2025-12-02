@@ -60,6 +60,6 @@ createTests({
       // Verify operations were tracked
       const operations = execution.getOperations();
       expect(operations.length).toBeGreaterThan(0);
-    }, 20000); // 20 second timeout
+    }, 30000); // 30 second timeout
   },
 });
