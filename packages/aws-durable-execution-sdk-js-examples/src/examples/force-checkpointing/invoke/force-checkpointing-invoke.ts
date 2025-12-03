@@ -22,7 +22,7 @@ export const handler = withDurableExecution(
         return await branchCtx.step(
           "long-running-step",
           async () => {
-            await new Promise((resolve) => setTimeout(resolve, 15000));
+            await new Promise((resolve) => setTimeout(resolve, 20000));
             return "long-complete";
           },
           { retryStrategy: retryPresets.noRetry },
@@ -30,9 +30,21 @@ export const handler = withDurableExecution(
       },
       // Branch 2: Multiple sequential invokes that need force checkpoint
       async (branchCtx: DurableContext) => {
-        await branchCtx.invoke(event.functionNames[0], { input: "data-1" });
-        await branchCtx.invoke(event.functionNames[1], { input: "data-2" });
-        await branchCtx.invoke(event.functionNames[2], { input: "data-3" });
+        await branchCtx.invoke(
+          event.functionNames[0],
+          { input: "data-1" },
+          { retryStrategy: retryPresets.noRetry },
+        );
+        await branchCtx.invoke(
+          event.functionNames[1],
+          { input: "data-2" },
+          { retryStrategy: retryPresets.noRetry },
+        );
+        await branchCtx.invoke(
+          event.functionNames[2],
+          { input: "data-3" },
+          { retryStrategy: retryPresets.noRetry },
+        );
         return "invokes-complete";
       },
     ]);
