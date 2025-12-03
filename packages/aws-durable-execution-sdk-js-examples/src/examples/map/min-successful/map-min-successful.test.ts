@@ -29,8 +29,8 @@ createTests({
         mapContext!.ContextSucceededDetails!.Result!.Payload!,
       );
 
-      // Assert individual item results - should have exactly 2 completed items
-      expect(mapResult.all).toHaveLength(2);
+      // Assert individual item results - includes all started items (2 completed + 3 started)
+      expect(mapResult.all).toHaveLength(5);
 
       // First two items should succeed (items 1 and 2 process fastest due to timeout)
       expect(mapResult.all[0].status).toBe("SUCCEEDED");
@@ -40,6 +40,16 @@ createTests({
       expect(mapResult.all[1].status).toBe("SUCCEEDED");
       expect(mapResult.all[1].result).toBe("Item 2 processed");
       expect(mapResult.all[1].index).toBe(1);
+
+      // Remaining items should be in STARTED state (not completed)
+      expect(mapResult.all[2].status).toBe("STARTED");
+      expect(mapResult.all[2].index).toBe(2);
+
+      expect(mapResult.all[3].status).toBe("STARTED");
+      expect(mapResult.all[3].index).toBe(3);
+
+      expect(mapResult.all[4].status).toBe("STARTED");
+      expect(mapResult.all[4].index).toBe(4);
 
       // Verify the results array matches
       expect(result.results).toEqual(["Item 1 processed", "Item 2 processed"]);

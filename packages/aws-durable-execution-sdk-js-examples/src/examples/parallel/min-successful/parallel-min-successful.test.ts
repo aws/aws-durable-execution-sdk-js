@@ -29,8 +29,8 @@ createTests({
         parallelContext!.ContextSucceededDetails!.Result!.Payload!,
       );
 
-      // Assert individual branch results - should have exactly 2 completed branches
-      expect(parallelResult.all).toHaveLength(2);
+      // Assert individual branch results - includes all started branches (2 completed + 2 started)
+      expect(parallelResult.all).toHaveLength(4);
 
       // First two branches should succeed (branch-1 and branch-2 complete fastest)
       expect(parallelResult.all[0].status).toBe("SUCCEEDED");
@@ -40,6 +40,13 @@ createTests({
       expect(parallelResult.all[1].status).toBe("SUCCEEDED");
       expect(parallelResult.all[1].result).toBe("Branch 2 result");
       expect(parallelResult.all[1].index).toBe(1);
+
+      // Remaining branches should be in STARTED state (not completed)
+      expect(parallelResult.all[2].status).toBe("STARTED");
+      expect(parallelResult.all[2].index).toBe(2);
+
+      expect(parallelResult.all[3].status).toBe("STARTED");
+      expect(parallelResult.all[3].index).toBe(3);
 
       // Verify the results array matches
       expect(result.results).toEqual(["Branch 1 result", "Branch 2 result"]);
