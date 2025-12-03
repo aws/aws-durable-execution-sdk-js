@@ -47,9 +47,9 @@ createTests({
       expect(result.all[0].result).toBe("long-complete");
       expect(result.all[1].result).toBe("invokes-complete");
 
-      // Should complete in less than 15 seconds
-      // (10s for long-running step + time for invokes)
-      expect(duration).toBeLessThan(15000);
+      // Should complete in less than 25 seconds
+      // (20s for long-running step + time for invokes)
+      expect(duration).toBeLessThan(25000);
 
       // Should complete in a single invocation
       // The long-running step prevents termination, so the invoke operations
@@ -60,6 +60,6 @@ createTests({
       // Verify operations were tracked
       const operations = execution.getOperations();
       expect(operations.length).toBeGreaterThan(0);
-    }, 30000); // 30 second timeout
+    }, 60000); // 60 second timeout
   },
 });
