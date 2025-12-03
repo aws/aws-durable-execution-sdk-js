@@ -14,17 +14,22 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
+jest.mock("../../utils/context-tracker/context-tracker");
 
 import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
+import { runWithContext } from "../../utils/context-tracker/context-tracker";
 
 const mockSafeSerialize = safeSerialize as jest.MockedFunction<
   typeof safeSerialize
 >;
 const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
   typeof safeDeserialize
+>;
+const mockRunWithContext = runWithContext as jest.MockedFunction<
+  typeof runWithContext
 >;
 
 describe("WaitForCondition Handler", () => {
@@ -59,6 +64,11 @@ describe("WaitForCondition Handler", () => {
     mockSafeDeserialize.mockImplementation(async (_serdes, value) =>
       value ? JSON.parse(value) : undefined,
     );
+
+    // Set up mockRunWithContext to execute the provided function
+    mockRunWithContext.mockImplementation(async (_stepId, _parentId, fn) => {
+      return await fn();
+    });
   });
 
   describe("Parameter parsing", () => {
@@ -311,6 +321,176 @@ describe("WaitForCondition Handler", () => {
       };
 
       await handler(checkFunc, config);
+    });
+  });
+
+  describe("currentAttempt parameter", () => {
+    it("should pass currentAttempt 1 to both runWithContext and waitStrategy on first execution", async () => {
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        "parent-123",
+      );
+
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("result");
+      const waitStrategy = jest.fn().mockReturnValue({ shouldContinue: false });
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy,
+        initialState: "initial",
+      };
+
+      await handler(checkFunc, config);
+
+      // Verify currentAttempt is passed correctly to both functions
+      expect(mockRunWithContext).toHaveBeenCalledWith(
+        "step-1",
+        "parent-123",
+        expect.any(Function),
+        1, // currentAttempt should be 1 on first execution
+        expect.any(String), // DurableExecutionMode.ExecutionMode
+      );
+      expect(waitStrategy).toHaveBeenCalledWith("result", 1);
+    });
+
+    it("should calculate currentAttempt correctly based on step data attempt count", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+
+      // Mock step data with attempt = 2 (so currentAttempt should be 3)
+      (mockContext as any)._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.READY,
+        StepDetails: {
+          Attempt: 2,
+          Result: JSON.stringify("previous-state"),
+        },
+      };
+
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        "parent-123",
+      );
+
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("result");
+      const waitStrategy = jest.fn().mockReturnValue({ shouldContinue: false });
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy,
+        initialState: "initial",
+      };
+
+      await handler(checkFunc, config);
+
+      // Verify currentAttempt = Attempt + 1 for both functions
+      expect(mockRunWithContext).toHaveBeenCalledWith(
+        "step-1",
+        "parent-123",
+        expect.any(Function),
+        3, // currentAttempt should be Attempt + 1 = 2 + 1 = 3
+        expect.any(String),
+      );
+      expect(waitStrategy).toHaveBeenCalledWith("result", 3);
+    });
+
+    it("should pass incrementing currentAttempt through multiple retries", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+
+      // Track the retry cycle - first call has no step data, then subsequent calls have increasing attempt numbers
+      let getStepDataCallCount = 0;
+      (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+        getStepDataCallCount++;
+
+        // First call - no step data (fresh execution)
+        if (getStepDataCallCount <= 2) {
+          return null;
+        }
+        // Subsequent calls during retry cycles - simulate step data with increasing attempt number
+        const attemptNumber = Math.floor((getStepDataCallCount - 2) / 2);
+        return {
+          Id: hashedStepId,
+          Status: OperationStatus.READY,
+          StepDetails: {
+            Attempt: attemptNumber,
+            Result: JSON.stringify(10),
+          },
+        };
+      });
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue(10);
+
+      const waitStrategy = jest
+        .fn()
+        .mockReturnValueOnce({
+          shouldContinue: true,
+          delay: { milliseconds: 1 },
+        })
+        .mockReturnValueOnce({
+          shouldContinue: true,
+          delay: { milliseconds: 1 },
+        })
+        .mockReturnValue({ shouldContinue: false });
+
+      const config: WaitForConditionConfig<number> = {
+        waitStrategy,
+        initialState: 0,
+      };
+
+      await handler(checkFunc, config);
+
+      // Check that waitStrategy was called with incrementing currentAttempt values
+      expect(waitStrategy).toHaveBeenNthCalledWith(1, 10, 1); // first attempt
+      expect(waitStrategy).toHaveBeenNthCalledWith(2, 10, 2); // second attempt
+      expect(waitStrategy).toHaveBeenNthCalledWith(3, 10, 3); // third attempt
+
+      // Verify runWithContext was also called with correct attempts
+      expect(mockRunWithContext).toHaveBeenCalledTimes(3);
+      expect(mockRunWithContext).toHaveBeenNthCalledWith(
+        1,
+        "step-1",
+        undefined,
+        expect.any(Function),
+        1,
+        expect.any(String),
+      );
+      expect(mockRunWithContext).toHaveBeenNthCalledWith(
+        2,
+        "step-1",
+        undefined,
+        expect.any(Function),
+        2,
+        expect.any(String),
+      );
+      expect(mockRunWithContext).toHaveBeenNthCalledWith(
+        3,
+        "step-1",
+        undefined,
+        expect.any(Function),
+        3,
+        expect.any(String),
+      );
     });
   });
 });
