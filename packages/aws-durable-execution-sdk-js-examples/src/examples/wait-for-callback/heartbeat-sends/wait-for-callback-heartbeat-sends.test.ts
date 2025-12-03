@@ -14,7 +14,7 @@ createTests({
   localRunnerConfig: {
     skipTime: false,
   },
-  tests: (runner, isCloud) => {
+  tests: (runner, { isCloud }) => {
     it("should handle waitForCallback heartbeat scenarios during long-running submitter execution", async () => {
       const executionPromise = runner.run({
         payload: { isCloud },

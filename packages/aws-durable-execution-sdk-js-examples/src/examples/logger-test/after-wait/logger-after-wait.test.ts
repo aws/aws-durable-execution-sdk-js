@@ -1,6 +1,6 @@
 import { handler } from "./logger-after-wait";
 import historyEvents from "./logger-after-wait.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -10,7 +10,7 @@ createTests({
   name: "logger-after-wait",
   functionName: "logger-after-wait",
   handler,
-  tests: (runner, isCloud) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     if (!isCloud) {
       it("should log after wait in execution mode with modeAware=true", async () => {
         const logFilePath = path.join(

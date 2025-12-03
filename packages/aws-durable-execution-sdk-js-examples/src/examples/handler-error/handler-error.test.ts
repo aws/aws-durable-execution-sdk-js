@@ -1,13 +1,13 @@
 import { handler } from "./handler-error";
 import historyEvents from "./handler-error.history.json";
-import { assertEventSignatures, createTests } from "../../utils/test-helper";
+import { createTests } from "../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   name: "handler-error test",
   functionName: "handler-error",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle handler errors gracefully and capture error details", async () => {
       const result = await runner.run({ payload: { test: "error-case" } });
 

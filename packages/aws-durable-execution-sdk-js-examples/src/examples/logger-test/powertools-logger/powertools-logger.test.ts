@@ -1,6 +1,6 @@
 import { handler } from "./powertools-logger";
 import historyEvents from "./powertools-logger.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import util from "node:util";
 
@@ -8,7 +8,7 @@ createTests({
   name: "powertools-logger",
   functionName: "powertools-logger",
   handler,
-  tests: (runner, isCloud) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     if (isCloud) {
       it("should complete step operation successfully", async () => {
         const execution = await runner.run();

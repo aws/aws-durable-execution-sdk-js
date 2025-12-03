@@ -1,12 +1,12 @@
 import { handler } from "./step-error-determinism";
 import historyEvents from "./step-error-determinism.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "step-error-determinism test",
   functionName: "step-error-determinism",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should have deterministic error handling behavior through replay", async () => {
       const execution = await runner.run();
 

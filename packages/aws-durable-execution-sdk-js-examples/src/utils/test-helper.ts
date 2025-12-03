@@ -1,4 +1,4 @@
-import { LambdaClient, Event } from "@aws-sdk/client-lambda";
+import { LambdaClient, Event, EventType } from "@aws-sdk/client-lambda";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -28,7 +28,7 @@ class LocalFunctionNameMap implements FunctionNameMap {
 
 type TestCallback<ResultType> = (
   runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
-  isCloud: boolean,
+  testHelper: TestHelper,
   functionNameMap: FunctionNameMap,
 ) => void;
 
@@ -41,6 +41,15 @@ export interface TestDefinition<ResultType> {
   localRunnerConfig?: {
     skipTime?: boolean;
   };
+}
+
+export interface TestHelper {
+  isTimeSkipping: boolean;
+  isCloud: boolean;
+  assertEventSignatures(
+    actualEvents: Event[],
+    expectedEvents: EventSignature[],
+  ): void;
 }
 
 export type EventSignature = {
@@ -73,21 +82,28 @@ function createEventSignature(event: EventSignature) {
 }
 
 // Count occurrences of each event signature
-function countEventSignatures(events: EventSignature[]) {
+function countEventSignatures(
+  events: EventSignature[],
+  isTimeSkipping: boolean,
+) {
   const counts = new Map();
   events.forEach((event) => {
+    if (event.EventType === EventType.InvocationCompleted && isTimeSkipping) {
+      return;
+    }
     const signature = JSON.stringify(createEventSignature(event));
     counts.set(signature, (counts.get(signature) || 0) + 1);
   });
   return counts;
 }
 
-export function assertEventSignatures(
+function assertEventSignatures(
   actualEvents: Event[],
   expectedEvents: EventSignature[],
+  isTimeSkipping: boolean = false,
 ) {
-  const actualCounts = countEventSignatures(actualEvents);
-  const expectedCounts = countEventSignatures(expectedEvents);
+  const actualCounts = countEventSignatures(actualEvents, isTimeSkipping);
+  const expectedCounts = countEventSignatures(expectedEvents, isTimeSkipping);
 
   expect(actualCounts).toEqual(expectedCounts);
 }
@@ -98,6 +114,19 @@ export function assertEventSignatures(
  */
 export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   const isIntegrationTest = process.env.NODE_ENV === "integration";
+
+  const testHelper: TestHelper = {
+    isTimeSkipping: !!testDef.localRunnerConfig?.skipTime && !isIntegrationTest,
+    isCloud: isIntegrationTest,
+    assertEventSignatures: (actualEvents, expectedEvents) => {
+      return assertEventSignatures(
+        actualEvents,
+        expectedEvents,
+        testHelper.isTimeSkipping,
+      );
+    },
+  };
+
   if (isIntegrationTest) {
     if (!process.env.FUNCTION_NAME_MAP) {
       throw new Error("FUNCTION_NAME_MAP is not set for integration tests");
@@ -131,7 +160,11 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     });
 
     describe(`${testDef.name} (cloud)`, () => {
-      testDef.tests(runner, true, new CloudFunctionNameMap(functionNames));
+      testDef.tests(
+        runner,
+        testHelper,
+        new CloudFunctionNameMap(functionNames),
+      );
     });
     return;
   }
@@ -155,6 +188,6 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       runner.reset();
     });
 
-    testDef.tests(runner, false, new LocalFunctionNameMap());
+    testDef.tests(runner, testHelper, new LocalFunctionNameMap());
   });
 }

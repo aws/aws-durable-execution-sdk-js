@@ -1,6 +1,6 @@
 import { handler } from "./promise-all-settled";
 import historyEvents from "./promise-all-settled.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests<PromiseSettledResult<any>[]>({
   name: "promise-all-settled test",
@@ -9,7 +9,7 @@ createTests<PromiseSettledResult<any>[]>({
   localRunnerConfig: {
     skipTime: false,
   },
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete all promises", async () => {
       const execution = await runner.run();
 

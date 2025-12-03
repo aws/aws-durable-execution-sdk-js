@@ -1,12 +1,12 @@
 import { handler } from "./comprehensive-operations";
 import historyEvents from "./comprehensive-operations.history.json";
-import { assertEventSignatures, createTests } from "../../utils/test-helper";
+import { createTests } from "../../utils/test-helper";
 
 createTests({
   name: "comprehensive-operations test",
   functionName: "comprehensive-operations",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should execute all operations successfully", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;

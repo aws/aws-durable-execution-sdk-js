@@ -1,6 +1,6 @@
 import { handler } from "./promise-combinators";
 import historyEvents from "./promise-combinators.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "promise-combinators",
@@ -9,7 +9,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should execute all promise combinators successfully", async () => {
       const execution = await runner.run();
 

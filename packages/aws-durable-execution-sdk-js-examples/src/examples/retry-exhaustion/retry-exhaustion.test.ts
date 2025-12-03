@@ -5,13 +5,13 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./retry-exhaustion";
 import historyEvents from "./retry-exhaustion.history.json";
-import { assertEventSignatures, createTests } from "../../utils/test-helper";
+import { createTests } from "../../utils/test-helper";
 
 createTests({
   name: "retry-exhaustion test",
   functionName: "retry-exhaustion",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle steps with retry and failure until exhaustion", async () => {
       // Get operation for the retry call
       const retriesOperation = runner.getOperation("retries");

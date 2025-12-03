@@ -1,6 +1,6 @@
 import { handler } from "./run-in-child-context";
 import historyEvents from "./run-in-child-context.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 import {
   OperationType,
   OperationStatus,
@@ -13,7 +13,7 @@ createTests({
   localRunnerConfig: {
     skipTime: true,
   },
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should return correct result", async () => {
       const execution = await runner.run();
 

@@ -1,13 +1,13 @@
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./promise-race";
 import historyEvents from "./promise-race.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "promise-race test",
   functionName: "promise-race",
   handler,
-  tests: (runner, isCloud) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     it("should complete all promises", async () => {
       const execution = await runner.run({
         payload: {

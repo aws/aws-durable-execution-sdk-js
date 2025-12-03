@@ -4,13 +4,13 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./wait";
 import historyEvents from "./wait.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "wait",
   functionName: "wait",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should call wait for 2 seconds with comprehensive verification", async () => {
       const execution = await runner.run();
 

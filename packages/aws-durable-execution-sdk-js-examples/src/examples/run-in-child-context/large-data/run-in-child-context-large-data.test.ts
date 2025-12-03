@@ -1,6 +1,6 @@
 import { handler } from "./run-in-child-context-large-data";
 import historyEvents from "./run-in-child-context-large-data.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "run-in-child-context-large-data test",
@@ -9,7 +9,7 @@ createTests({
   localRunnerConfig: {
     skipTime: true, // Skip wait delays for faster testing
   },
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle large data exceeding 256k limit using runInChildContext", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;

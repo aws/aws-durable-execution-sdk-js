@@ -1,6 +1,6 @@
 import { handler } from "./logger-log-levels";
 import historyEvents from "./logger-log-levels.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import util from "node:util";
 
@@ -8,7 +8,7 @@ createTests({
   name: "logger-log-levels",
   functionName: "logger-log-levels",
   handler,
-  tests: (runner, isCloud) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     if (isCloud) {
       it("should complete step operation successfully", async () => {
         const execution = await runner.run();

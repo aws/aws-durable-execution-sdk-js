@@ -4,7 +4,7 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./map-completion-config-issue";
 import historyEvents from "./map-completion-config-issue.history.json";
-import { assertEventSignatures, createTests } from "../../utils/test-helper";
+import { createTests } from "../../utils/test-helper";
 
 createTests({
   name: "map-completion-config-issue test",
@@ -13,7 +13,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should reproduce the completion config behavior with detailed logging", async () => {
       const execution = await runner.run();
 

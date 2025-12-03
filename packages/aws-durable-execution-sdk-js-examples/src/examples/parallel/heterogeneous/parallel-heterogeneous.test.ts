@@ -1,12 +1,12 @@
 import { handler } from "./parallel-heterogeneous";
 import historyEvents from "./parallel-heterogeneous.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "parallel-heterogeneous test",
   functionName: "parallel-heterogeneous",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle branches with different return types", async () => {
       const execution = await runner.run();
 

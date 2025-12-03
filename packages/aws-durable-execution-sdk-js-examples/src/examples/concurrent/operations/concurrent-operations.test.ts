@@ -1,6 +1,6 @@
 import { handler } from "./concurrent-operations";
 import historyEvents from "./concurrent-operations.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "concurrent-operations test",
@@ -9,7 +9,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle promise.all correctly", async () => {
       const execution = await runner.run();
 

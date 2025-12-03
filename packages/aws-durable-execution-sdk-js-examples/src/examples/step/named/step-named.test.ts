@@ -1,12 +1,12 @@
 import { handler } from "./step-named";
 import historyEvents from "./step-named.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "step-named test",
   functionName: "step-named",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     const DEFAULT = "default";
 
     const getExpectedResult = (input: any) => `processed: ${input}`;

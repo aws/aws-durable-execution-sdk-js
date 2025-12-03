@@ -1,6 +1,6 @@
 import { handler } from "./parent-context-in-wait-condition";
 import historyEvents from "./parent-context-in-wait-condition.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 import {
   ExecutionStatus,
   OperationStatus,
@@ -13,7 +13,7 @@ createTests({
   name: "context validation - parent context in wait condition error",
   functionName: "parent-context-in-wait-condition",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should fail when using parent context inside waitForCondition", async () => {
       const execution = await runner.run();
 

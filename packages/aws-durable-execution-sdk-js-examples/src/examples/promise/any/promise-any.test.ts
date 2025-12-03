@@ -1,13 +1,13 @@
 import { handler } from "./promise-any";
 import historyEventsSuccess from "./promise-any-success.history.json";
 import historyEventsFail from "./promise-any-failure.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests<string>({
   name: "promise-any test",
   functionName: "promise-any",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should return first successful promise result", async () => {
       const execution = await runner.run();
 

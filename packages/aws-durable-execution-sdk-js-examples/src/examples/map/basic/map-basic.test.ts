@@ -1,12 +1,12 @@
 import { handler } from "./map-basic";
 import historyEvents from "./map-basic.history.json";
-import { assertEventSignatures, createTests } from "../../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "map-basic test",
   functionName: "map-basic",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should run correct number of durable steps", async () => {
       const execution = await runner.run();
 
