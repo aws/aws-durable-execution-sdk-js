@@ -53,6 +53,10 @@ function createEventSignature(event: EventSignature) {
   const signature: EventSignature = {
     EventType: event.EventType,
     SubType: event.SubType,
+    // TODO: add more to the event signature such as
+    // - wait duration
+    // - result/error
+    // - step attempt
   };
 
   // Only include Name for events that have stable names (not ExecutionStarted/ExecutionSucceeded)
