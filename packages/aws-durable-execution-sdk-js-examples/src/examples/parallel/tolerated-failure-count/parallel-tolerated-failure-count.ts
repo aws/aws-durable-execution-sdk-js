@@ -24,9 +24,13 @@ export const handler = withDurableExecution(
           });
         },
         async (ctx) => {
-          return await ctx.step("branch-2", async () => {
-            throw new Error("Branch 2 failed");
-          });
+          return await ctx.step(
+            "branch-2",
+            async () => {
+              throw new Error("Branch 2 failed");
+            },
+            { retry: { maxAttempts: 1 } },
+          );
         },
         async (ctx) => {
           return await ctx.step("branch-3", async () => {
@@ -34,9 +38,13 @@ export const handler = withDurableExecution(
           });
         },
         async (ctx) => {
-          return await ctx.step("branch-4", async () => {
-            throw new Error("Branch 4 failed");
-          });
+          return await ctx.step(
+            "branch-4",
+            async () => {
+              throw new Error("Branch 4 failed");
+            },
+            { retry: { maxAttempts: 1 } },
+          );
         },
         async (ctx) => {
           return await ctx.step("branch-5", async () => {
@@ -50,6 +58,8 @@ export const handler = withDurableExecution(
         },
       },
     );
+
+    await context.wait({ seconds: 1 });
 
     log(`Completed with ${results.failureCount} failures`);
     log(`Completion reason: ${results.completionReason}`);

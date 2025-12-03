@@ -21,13 +21,17 @@ export const handler = withDurableExecution(
       "failure-percentage-items",
       items,
       async (ctx, item, index) => {
-        return await ctx.step(`process-${index}`, async () => {
-          // Items 3, 6, 9 will fail (30% failure rate)
-          if (item % 3 === 0) {
-            throw new Error(`Processing failed for item ${item}`);
-          }
-          return `Item ${item} processed`;
-        });
+        return await ctx.step(
+          `process-${index}`,
+          async () => {
+            // Items 3, 6, 9 will fail (30% failure rate)
+            if (item % 3 === 0) {
+              throw new Error(`Processing failed for item ${item}`);
+            }
+            return `Item ${item} processed`;
+          },
+          { retry: { maxAttempts: 1 } },
+        );
       },
       {
         completionConfig: {
@@ -35,6 +39,8 @@ export const handler = withDurableExecution(
         },
       },
     );
+
+    await context.wait({ seconds: 1 });
 
     log(
       `Completed with ${results.failureCount} failures (${((results.failureCount / results.totalCount) * 100).toFixed(1)}%)`,

@@ -20,13 +20,17 @@ export const handler = withDurableExecution(
       "failure-count-items",
       items,
       async (ctx, item, index) => {
-        return await ctx.step(`process-${index}`, async () => {
-          // Items 2 and 4 will fail
-          if (item === 2 || item === 4) {
-            throw new Error(`Processing failed for item ${item}`);
-          }
-          return `Item ${item} processed`;
-        });
+        return await ctx.step(
+          `process-${index}`,
+          async () => {
+            // Items 2 and 4 will fail
+            if (item === 2 || item === 4) {
+              throw new Error(`Processing failed for item ${item}`);
+            }
+            return `Item ${item} processed`;
+          },
+          { retry: { maxAttempts: 1 } },
+        );
       },
       {
         completionConfig: {
@@ -34,6 +38,8 @@ export const handler = withDurableExecution(
         },
       },
     );
+
+    await context.wait({ seconds: 1 });
 
     log(`Completed with ${results.failureCount} failures`);
     log(`Completion reason: ${results.completionReason}`);

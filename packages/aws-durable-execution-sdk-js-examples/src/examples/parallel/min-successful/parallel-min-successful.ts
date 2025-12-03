@@ -49,6 +49,8 @@ export const handler = withDurableExecution(
       },
     );
 
+    await context.wait({ seconds: 1 });
+
     log(`Completed with ${results.successCount} successes`);
     log(`Completion reason: ${results.completionReason}`);
 
