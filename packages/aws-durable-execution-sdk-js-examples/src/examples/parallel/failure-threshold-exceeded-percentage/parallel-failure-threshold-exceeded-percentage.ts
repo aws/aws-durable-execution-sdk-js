@@ -5,7 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Parallel failure threshold exceeded (percentage)",
+  name: "Parallel failure threshold exceeded percentage",
   description:
     "Parallel operation where failure percentage exceeds tolerance threshold",
 };

@@ -2,7 +2,7 @@ import { handler } from "./parallel-failure-threshold-exceeded-count";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "Parallel failure threshold exceeded (count)",
+  name: "Parallel failure threshold exceeded count",
   functionName: "parallel-failure-threshold-exceeded-count",
   handler,
   tests: (runner) => {

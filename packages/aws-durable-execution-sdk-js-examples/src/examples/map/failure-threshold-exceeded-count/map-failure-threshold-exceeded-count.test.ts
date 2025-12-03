@@ -2,7 +2,7 @@ import { handler } from "./map-failure-threshold-exceeded-count";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "Map failure threshold exceeded (count)",
+  name: "Map failure threshold exceeded count",
   functionName: "map-failure-threshold-exceeded-count",
   handler,
   tests: (runner) => {

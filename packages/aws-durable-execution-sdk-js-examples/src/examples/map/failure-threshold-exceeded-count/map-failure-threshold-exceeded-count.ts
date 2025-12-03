@@ -5,7 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Map failure threshold exceeded (count)",
+  name: "Map failure threshold exceeded count",
   description: "Map operation where failure count exceeds tolerance threshold",
 };
 

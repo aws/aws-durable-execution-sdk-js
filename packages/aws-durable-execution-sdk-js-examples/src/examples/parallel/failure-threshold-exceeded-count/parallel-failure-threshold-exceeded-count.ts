@@ -5,7 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Parallel failure threshold exceeded (count)",
+  name: "Parallel failure threshold exceeded count",
   description:
     "Parallel operation where failure count exceeds tolerance threshold",
 };
