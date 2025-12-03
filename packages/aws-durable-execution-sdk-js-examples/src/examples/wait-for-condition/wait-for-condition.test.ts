@@ -5,6 +5,9 @@ createTests({
   name: "wait-for-condition test",
   functionName: "wait-for-condition",
   handler,
+  localRunnerConfig: {
+    skipTime: false,
+  },
   tests: (runner) => {
     it("should invoke step three times before succeeding", async () => {
       const execution = await runner.run();
