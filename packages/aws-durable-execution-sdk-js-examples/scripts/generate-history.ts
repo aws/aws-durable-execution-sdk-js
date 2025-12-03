@@ -2,7 +2,7 @@ import { exampleStorage } from "../src/utils";
 import fs from "fs";
 import path from "path";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
-import { ArgumentParser } from "argparse";
+import { ArgumentParser, BooleanOptionalAction } from "argparse";
 
 async function main() {
   const parser = new ArgumentParser({
@@ -19,9 +19,10 @@ async function main() {
     help: "Log the history events to the console",
   });
 
-  parser.add_argument("--no-skip-time", {
-    action: "store_true",
-    help: "Do not skip time in test environment (default: skip time)",
+  parser.add_argument("--skip-time", {
+    action: BooleanOptionalAction,
+    help: "Enable skip time in test environment",
+    default: true,
   });
 
   parser.add_argument("--suffix", {
@@ -35,7 +36,7 @@ async function main() {
   });
 
   parser.add_argument("--only-missing", {
-    action: "store_true",
+    action: BooleanOptionalAction,
     help: "Only add missing history files for the examples specified",
     default: true,
   });
@@ -44,7 +45,7 @@ async function main() {
 
   const pattern = args.pattern;
   const logEvents = args.log;
-  const skipTime = !args.no_skip_time;
+  const skipTime = args.skip_time;
   const suffix = args.suffix;
   const onlyMissing = args.only_missing;
 
@@ -77,7 +78,11 @@ async function main() {
 
     const generated: string[] = [];
     for (const example of filteredExamples) {
-      if (example.path.includes("callback") || !example.durableConfig) {
+      if (
+        example.path.includes("callback") ||
+        example.path.includes("invoke") ||
+        !example.durableConfig
+      ) {
         console.log("Skipping example", example.name);
         continue;
       }

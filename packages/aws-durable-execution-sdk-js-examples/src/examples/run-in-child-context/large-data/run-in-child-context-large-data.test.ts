@@ -6,9 +6,6 @@ createTests({
   name: "run-in-child-context-large-data test",
   functionName: "run-in-child-context-large-data",
   handler,
-  localRunnerConfig: {
-    skipTime: true, // Skip wait delays for faster testing
-  },
   tests: (runner, { assertEventSignatures }) => {
     it("should handle large data exceeding 256k limit using runInChildContext", async () => {
       const execution = await runner.run();

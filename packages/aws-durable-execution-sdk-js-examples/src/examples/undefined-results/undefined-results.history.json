@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "fdcf9d43-5483-4831-b26f-71c3684b7538",
-    "EventTimestamp": "2025-11-30T22:35:34.674Z",
+    "Id": "79f503e4-fae1-4a51-80d9-3e67cb9a117d",
+    "EventTimestamp": "2025-12-03T22:59:55.729Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "fetch-user",
-    "EventTimestamp": "2025-11-30T22:35:34.716Z",
+    "EventTimestamp": "2025-12-03T22:59:55.732Z",
     "StepStartedDetails": {}
   },
   {
@@ -25,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "fetch-user",
-    "EventTimestamp": "2025-11-30T22:35:34.716Z",
+    "EventTimestamp": "2025-12-03T22:59:55.732Z",
     "StepSucceededDetails": {
       "Result": {},
       "RetryDetails": {}
@@ -37,7 +37,7 @@
     "EventId": 4,
     "Id": "c81e728d9d4c2f63",
     "Name": "parent",
-    "EventTimestamp": "2025-11-30T22:35:34.739Z",
+    "EventTimestamp": "2025-12-03T22:59:55.732Z",
     "ContextStartedDetails": {}
   },
   {
@@ -46,7 +46,7 @@
     "EventId": 5,
     "Id": "c81e728d9d4c2f63",
     "Name": "parent",
-    "EventTimestamp": "2025-11-30T22:35:34.739Z",
+    "EventTimestamp": "2025-12-03T22:59:55.732Z",
     "ContextSucceededDetails": {
       "Result": {}
     }
@@ -56,21 +56,21 @@
     "SubType": "Wait",
     "EventId": 6,
     "Id": "eccbc87e4b5ce2fe",
-    "EventTimestamp": "2025-11-30T22:35:34.759Z",
+    "EventTimestamp": "2025-12-03T22:59:55.732Z",
     "WaitStartedDetails": {
       "Duration": 1,
-      "ScheduledEndTimestamp": "2025-11-30T22:35:35.759Z"
+      "ScheduledEndTimestamp": "2025-12-03T22:59:56.732Z"
     }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 7,
-    "EventTimestamp": "2025-11-30T22:35:34.759Z",
+    "EventTimestamp": "2025-12-03T22:59:55.784Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T22:35:34.674Z",
-      "EndTimestamp": "2025-11-30T22:35:34.759Z",
+      "StartTimestamp": "2025-12-03T22:59:55.729Z",
+      "EndTimestamp": "2025-12-03T22:59:55.784Z",
       "Error": {},
-      "RequestId": "50f82bda-7f7b-41ee-a93b-631dea8df30d"
+      "RequestId": "35c4543f-d35e-45a2-8e0f-5a99f89b86b8"
     }
   },
   {
@@ -78,7 +78,7 @@
     "SubType": "Wait",
     "EventId": 8,
     "Id": "eccbc87e4b5ce2fe",
-    "EventTimestamp": "2025-11-30T22:35:34.759Z",
+    "EventTimestamp": "2025-12-03T22:59:56.733Z",
     "WaitSucceededDetails": {
       "Duration": 1
     }
@@ -86,19 +86,19 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 9,
-    "EventTimestamp": "2025-11-30T22:35:34.780Z",
+    "EventTimestamp": "2025-12-03T22:59:56.736Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2025-11-30T22:35:34.779Z",
-      "EndTimestamp": "2025-11-30T22:35:34.780Z",
+      "StartTimestamp": "2025-12-03T22:59:56.734Z",
+      "EndTimestamp": "2025-12-03T22:59:56.736Z",
       "Error": {},
-      "RequestId": "160b3666-0e1d-409a-b419-69d2c6e17bf3"
+      "RequestId": "4ecb32f9-63c9-44ec-8245-ef65ef2b19c5"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 10,
-    "Id": "fdcf9d43-5483-4831-b26f-71c3684b7538",
-    "EventTimestamp": "2025-11-30T22:35:34.780Z",
+    "Id": "79f503e4-fae1-4a51-80d9-3e67cb9a117d",
+    "EventTimestamp": "2025-12-03T22:59:56.736Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "\"result\""

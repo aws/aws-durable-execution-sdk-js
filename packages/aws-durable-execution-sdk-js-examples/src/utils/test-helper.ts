@@ -29,7 +29,6 @@ class LocalFunctionNameMap implements FunctionNameMap {
 type TestCallback<ResultType> = (
   runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
   testHelper: TestHelper,
-  functionNameMap: FunctionNameMap,
 ) => void;
 
 export interface TestDefinition<ResultType> {
@@ -50,6 +49,7 @@ export interface TestHelper {
     actualEvents: Event[],
     expectedEvents: EventSignature[],
   ): void;
+  functionNameMap: FunctionNameMap;
 }
 
 export type EventSignature = {
@@ -88,11 +88,17 @@ function countEventSignatures(
 ) {
   const counts = new Map();
   events.forEach((event) => {
-    if (event.EventType === EventType.InvocationCompleted && isTimeSkipping) {
-      return;
-    }
     const signature = JSON.stringify(createEventSignature(event));
-    counts.set(signature, (counts.get(signature) || 0) + 1);
+    let count: number;
+    if (event.EventType === EventType.InvocationCompleted && isTimeSkipping) {
+      // Time skipping can result in a different number of completed invocations due to concurrent
+      // logic and early completion of branches in some cases. We will only validate that the
+      // InvocationCompleted event exists when time skipping is enabled.
+      count = -1;
+    } else {
+      count = (counts.get(signature) || 0) + 1;
+    }
+    counts.set(signature, count);
   });
   return counts;
 }
@@ -114,18 +120,33 @@ function assertEventSignatures(
  */
 export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   const isIntegrationTest = process.env.NODE_ENV === "integration";
+  const isTimeSkipping =
+    (testDef.localRunnerConfig?.skipTime ?? true) && !isIntegrationTest;
 
+  let calledAssertEventSignature = false;
   const testHelper: TestHelper = {
-    isTimeSkipping: !!testDef.localRunnerConfig?.skipTime && !isIntegrationTest,
+    isTimeSkipping,
     isCloud: isIntegrationTest,
     assertEventSignatures: (actualEvents, expectedEvents) => {
+      calledAssertEventSignature = true;
       return assertEventSignatures(
         actualEvents,
         expectedEvents,
         testHelper.isTimeSkipping,
       );
     },
+    functionNameMap: isIntegrationTest
+      ? new CloudFunctionNameMap(JSON.parse(process.env.FUNCTION_NAME_MAP!))
+      : new LocalFunctionNameMap(),
   };
+
+  afterAll(() => {
+    if (!calledAssertEventSignature) {
+      console.warn(
+        `assertEventSignature was not called for test ${testDef.name}`,
+      );
+    }
+  });
 
   if (isIntegrationTest) {
     if (!process.env.FUNCTION_NAME_MAP) {
@@ -160,11 +181,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     });
 
     describe(`${testDef.name} (cloud)`, () => {
-      testDef.tests(
-        runner,
-        testHelper,
-        new CloudFunctionNameMap(functionNames),
-      );
+      testDef.tests(runner, testHelper);
     });
     return;
   }
@@ -172,7 +189,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   describe(`${testDef.name} (local)`, () => {
     beforeAll(() =>
       LocalDurableTestRunner.setupTestEnvironment({
-        skipTime: testDef.localRunnerConfig?.skipTime ?? true,
+        skipTime: isTimeSkipping,
       }),
     );
     afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
@@ -188,6 +205,6 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       runner.reset();
     });
 
-    testDef.tests(runner, testHelper, new LocalFunctionNameMap());
+    testDef.tests(runner, testHelper);
   });
 }

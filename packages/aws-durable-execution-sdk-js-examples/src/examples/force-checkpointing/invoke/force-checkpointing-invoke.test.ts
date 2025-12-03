@@ -11,7 +11,7 @@ createTests({
   name: "force-checkpointing-invoke",
   functionName: "force-checkpointing-invoke",
   handler,
-  tests: (runner, _, functionNameMap) => {
+  tests: (runner, { functionNameMap }) => {
     it("should complete with force checkpointing when one branch blocks termination with multiple invokes", async () => {
       // Register the invoked functions for local testing
       if (runner instanceof LocalDurableTestRunner) {

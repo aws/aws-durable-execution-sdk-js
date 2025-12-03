@@ -6,9 +6,6 @@ createTests({
   name: "map-large-scale test",
   functionName: "map-large-scale",
   handler,
-  localRunnerConfig: {
-    skipTime: true, // Skip wait delays for faster testing
-  },
   tests: (runner, { assertEventSignatures }) => {
     it("should handle 50 items with 100KB each using map", async () => {
       const execution = await runner.run();
