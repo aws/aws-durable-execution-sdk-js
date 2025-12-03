@@ -7,6 +7,11 @@ createTests<string>({
   name: "promise-any test",
   functionName: "promise-any",
   handler,
+  localRunnerConfig: {
+    // Time-skipping results in extra retries, since retry timers will finish
+    // Instantly. Disabling time-skipping to stabilize the number of retries.
+    skipTime: false,
+  },
   tests: (runner, { assertEventSignatures }) => {
     it("should return first successful promise result", async () => {
       const execution = await runner.run();
