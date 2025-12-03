@@ -484,4 +484,275 @@ describe("ConcurrencyController - Replay Mode", () => {
     expect(result.successCount).toBe(2);
     expect(result.totalCount).toBe(2);
   });
+
+  it("should reconstruct FAILURE_TOLERANCE_EXCEEDED completion reason in replay with toleratedFailureCount", async () => {
+    const items = [
+      { id: "item-0", data: "data1", index: 0 },
+      { id: "item-1", data: "data2", index: 1 },
+      { id: "item-2", data: "data3", index: 2 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 3,
+      successCount: 1,
+      failureCount: 2,
+      completionReason: "FAILURE_TOLERANCE_EXCEEDED",
+      status: "FAILED",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      if (id === `${entityId}-1`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: "result1" },
+        };
+      }
+      if (id === `${entityId}-2`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
+      }
+      if (id === `${entityId}-3`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext
+      .mockResolvedValueOnce("result1")
+      .mockRejectedValueOnce(new Error("error1"))
+      .mockRejectedValueOnce(new Error("error2"));
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      { completionConfig: { toleratedFailureCount: 1 } },
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    expect(result.successCount).toBe(1);
+    expect(result.failureCount).toBe(2);
+    expect(result.totalCount).toBe(3);
+  });
+
+  it("should reconstruct FAILURE_TOLERANCE_EXCEEDED completion reason in replay with toleratedFailurePercentage", async () => {
+    const items = [
+      { id: "item-0", data: "data1", index: 0 },
+      { id: "item-1", data: "data2", index: 1 },
+      { id: "item-2", data: "data3", index: 2 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 3,
+      successCount: 1,
+      failureCount: 2,
+      completionReason: "FAILURE_TOLERANCE_EXCEEDED",
+      status: "FAILED",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      if (id === `${entityId}-1`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: "result1" },
+        };
+      }
+      if (id === `${entityId}-2`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
+      }
+      if (id === `${entityId}-3`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext
+      .mockResolvedValueOnce("result1")
+      .mockRejectedValueOnce(new Error("error1"))
+      .mockRejectedValueOnce(new Error("error2"));
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      { completionConfig: { toleratedFailurePercentage: 40 } },
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    expect(result.successCount).toBe(1);
+    expect(result.failureCount).toBe(2);
+    expect(result.totalCount).toBe(3);
+    // 2 failures out of 3 items = 66.67% > 40% tolerance
+  });
+
+  it("should reconstruct FAILURE_TOLERANCE_EXCEEDED completion reason in replay with fail-fast (no completion config)", async () => {
+    const items = [
+      { id: "item-0", data: "data1", index: 0 },
+      { id: "item-1", data: "data2", index: 1 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 1,
+      successCount: 0,
+      failureCount: 1,
+      completionReason: "FAILURE_TOLERANCE_EXCEEDED",
+      status: "FAILED",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      if (id === `${entityId}-1`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockRejectedValueOnce(
+      new Error("error1"),
+    );
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      {}, // No completion config - should fail fast
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    expect(result.successCount).toBe(0);
+    expect(result.failureCount).toBe(1);
+    expect(result.totalCount).toBe(1);
+  });
+
+  it("should reconstruct FAILURE_TOLERANCE_EXCEEDED completion reason in replay with empty completion config", async () => {
+    const items = [
+      { id: "item-0", data: "data1", index: 0 },
+      { id: "item-1", data: "data2", index: 1 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 1,
+      successCount: 0,
+      failureCount: 1,
+      completionReason: "FAILURE_TOLERANCE_EXCEEDED",
+      status: "FAILED",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      if (id === `${entityId}-1`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.FAILED,
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockRejectedValueOnce(
+      new Error("error1"),
+    );
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      { completionConfig: {} }, // Empty completion config - should fail fast
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    expect(result.successCount).toBe(0);
+    expect(result.failureCount).toBe(1);
+    expect(result.totalCount).toBe(1);
+  });
 });

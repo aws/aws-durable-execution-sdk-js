@@ -19,14 +19,10 @@ export const handler = withDurableExecution(
     const results = await ctx.parallel([
       // Branch 1: Long-running operation that blocks termination
       async (branchCtx: DurableContext) => {
-        return await branchCtx.step(
-          "long-running-step",
-          async () => {
-            await new Promise((resolve) => setTimeout(resolve, 20000));
-            return "long-complete";
-          },
-          { retryStrategy: retryPresets.noRetry },
-        );
+        return await branchCtx.step("long-running-step", async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20000));
+          return "long-complete";
+        });
       },
       // Branch 2: Multiple sequential invokes that need force checkpoint
       async (branchCtx: DurableContext) => {
