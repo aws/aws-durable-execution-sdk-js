@@ -18,12 +18,23 @@ export const handler = withDurableExecution(
       "failure-threshold-items",
       items,
       async (ctx: DurableContext, item: number, index: number) => {
-        return await ctx.step(`process-${index}`, async () => {
-          if (item <= 3) {
-            throw new Error(`Item ${item} failed`);
-          }
-          return item * 2;
-        });
+        return await ctx.step(
+          `process-${index}`,
+          async () => {
+            if (item <= 3) {
+              throw new Error(`Item ${item} failed`);
+            }
+            return item * 2;
+          },
+          {
+            retryStrategy: (error: Error, attemptCount: number) => {
+              if (attemptCount >= 2) {
+                return { shouldRetry: false };
+              }
+              return { shouldRetry: true, delay: { seconds: 1 } };
+            },
+          },
+        );
       },
       {
         completionConfig: {
