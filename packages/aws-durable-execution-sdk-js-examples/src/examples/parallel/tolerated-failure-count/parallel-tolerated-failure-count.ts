@@ -1,6 +1,7 @@
 import {
   DurableContext,
   withDurableExecution,
+  retryPresets,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 import { log } from "../../../utils/logger";
@@ -29,7 +30,7 @@ export const handler = withDurableExecution(
             async () => {
               throw new Error("Branch 2 failed");
             },
-            { retry: { maxAttempts: 1 } },
+            { retryStrategy: retryPresets.noRetry },
           );
         },
         async (ctx) => {
@@ -43,7 +44,7 @@ export const handler = withDurableExecution(
             async () => {
               throw new Error("Branch 4 failed");
             },
-            { retry: { maxAttempts: 1 } },
+            { retryStrategy: retryPresets.noRetry },
           );
         },
         async (ctx) => {
