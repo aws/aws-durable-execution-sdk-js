@@ -22,7 +22,7 @@ export const handler = withDurableExecution(
         return await branchCtx.step(
           "long-running-step",
           async () => {
-            await new Promise((resolve) => setTimeout(resolve, 20000));
+            await new Promise((resolve) => setTimeout(resolve, 15000));
             return "long-complete";
           },
           { retryStrategy: retryPresets.noRetry },
