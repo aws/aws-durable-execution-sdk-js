@@ -17,6 +17,10 @@ export const handler = withDurableExecution(
       },
       {
         waitStrategy: (state: number, attempt: number) => {
+          if (state !== attempt) {
+            throw new Error("State does not match attempt");
+          }
+
           if (state >= 3) {
             return { shouldContinue: false };
           }
