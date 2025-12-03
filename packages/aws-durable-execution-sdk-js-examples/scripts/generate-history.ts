@@ -11,7 +11,6 @@ async function main() {
 
   parser.add_argument("--pattern", {
     type: "str",
-    required: true,
     help: "String pattern to generate history for a specific example that matches the pattern (default: generate all examples)",
   });
 
@@ -35,12 +34,19 @@ async function main() {
     type: "str",
   });
 
+  parser.add_argument("--only-missing", {
+    action: "store_true",
+    help: "Only add missing history files for the examples specified",
+    default: true,
+  });
+
   const args = parser.parse_args();
 
   const pattern = args.pattern;
   const logEvents = args.log;
   const skipTime = !args.no_skip_time;
   const suffix = args.suffix;
+  const onlyMissing = args.only_missing;
 
   const examples = await exampleStorage.getExamples();
 
@@ -68,13 +74,37 @@ async function main() {
     await LocalDurableTestRunner.setupTestEnvironment({
       skipTime: skipTime,
     });
+
+    const generated: string[] = [];
     for (const example of filteredExamples) {
       if (example.path.includes("callback") || !example.durableConfig) {
         console.log("Skipping example", example.name);
         continue;
       }
-      console.log(`Generating history for ${example.name}`);
+
+      const exampleDir = path.dirname(example.path);
+      const exampleBaseName = path.basename(
+        example.path,
+        path.extname(example.path),
+      );
+      if (
+        // If any .history.json file exists in this directory, don't generate a new one
+        fs
+          .readdirSync(exampleDir)
+          .some(
+            (file) =>
+              file.startsWith(exampleBaseName) &&
+              file.endsWith(".history.json"),
+          ) &&
+        onlyMissing
+      ) {
+        console.log(`History file already exists for ${example.name}`);
+        continue;
+      }
+
       try {
+        console.log(`Generating history for ${example.name}`);
+
         const runner = new LocalDurableTestRunner({
           handlerFunction: (await import(example.path)).handler,
         });
@@ -82,17 +112,12 @@ async function main() {
           payload: args.payload ? JSON.parse(args.payload) : undefined,
         });
 
-        const exampleDir = path.dirname(example.path);
-        const exampleBaseName =
-          path.basename(example.path, path.extname(example.path)) +
-          (suffix ? `-${suffix}` : ``);
-
         const historyEvents = result.getHistoryEvents();
 
-        const outputPath = `${exampleDir}/${exampleBaseName}.history.json`;
-
+        const outputPath = `${exampleDir}/${exampleBaseName + (suffix ? `-${suffix}` : "")}.history.json`;
         console.log(`Output: ${outputPath}`);
         fs.writeFileSync(outputPath, JSON.stringify(historyEvents, null, 2));
+        generated.push(example.name);
 
         if (logEvents) {
           console.log(
@@ -104,6 +129,9 @@ async function main() {
         console.log(`Error generating history for ${example.name}`, err);
       }
     }
+    console.log(
+      `Generated ${generated.length} history files: ${JSON.stringify(generated)}`,
+    );
   } finally {
     await LocalDurableTestRunner.teardownTestEnvironment();
   }
