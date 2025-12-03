@@ -1,7 +1,6 @@
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { DurableExecutionClient } from "./durable-execution";
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
-import { ActiveOperationsTracker } from "../utils/termination-helper/active-operations-tracker";
 
 /**
  * @internal
@@ -323,7 +322,7 @@ export interface ExecutionContext {
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
   terminationManager: TerminationManager;
   durableExecutionArn: string;
-  activeOperationsTracker?: ActiveOperationsTracker;
+
   requestId: string;
   tenantId: string | undefined;
   pendingCompletions: Set<string>; // Track stepIds with pending SUCCEED/FAIL

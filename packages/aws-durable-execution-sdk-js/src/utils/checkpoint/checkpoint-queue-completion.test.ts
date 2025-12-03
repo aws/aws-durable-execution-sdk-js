@@ -26,7 +26,6 @@ describe("CheckpointManager Queue Completion", () => {
       mockContext._stepData,
       mockContext.state,
       mockTerminationManager,
-      undefined,
       "test-token",
       mockEmitter,
       mockLogger,

@@ -20,7 +20,6 @@ export class MockCheckpointManager extends CheckpointManager {
       {},
       {} as DurableExecutionClient,
       {} as TerminationManager,
-      undefined,
       "mock-token",
       {} as EventEmitter,
       {} as DurableLogger,

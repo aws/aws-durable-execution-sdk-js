@@ -82,7 +82,6 @@ export function createTestDurableContext(options?: {
     },
     requestId: "mock-request-id",
     tenantId: undefined,
-    activeOperationsTracker: undefined,
   };
 
   const mockLambdaContext: Context = {

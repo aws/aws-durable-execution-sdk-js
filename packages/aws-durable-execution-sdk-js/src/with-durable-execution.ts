@@ -48,7 +48,6 @@ async function runHandler<
     executionContext._stepData,
     executionContext.durableExecutionClient,
     executionContext.terminationManager,
-    executionContext.activeOperationsTracker,
     checkpointToken,
     stepDataEmitter,
     createDefaultLogger(executionContext),

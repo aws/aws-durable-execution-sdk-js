@@ -138,7 +138,7 @@ describe("initializeExecutionContext", () => {
         durableExecutionClient: mockDurableExecutionClient,
         _stepData: {},
         terminationManager: expect.any(Object),
-        activeOperationsTracker: expect.any(Object),
+
         durableExecutionArn: mockDurableExecutionArn,
         pendingCompletions: expect.any(Set),
         getStepData: expect.any(Function),

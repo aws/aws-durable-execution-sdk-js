@@ -13,7 +13,6 @@ export const createTestCheckpointManager = (
     context._stepData,
     context.durableExecutionClient,
     context.terminationManager,
-    context.activeOperationsTracker,
     checkpointToken,
     emitter,
     logger,

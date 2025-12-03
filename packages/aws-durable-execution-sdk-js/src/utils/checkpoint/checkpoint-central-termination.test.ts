@@ -33,7 +33,6 @@ describe("CheckpointManager - Centralized Termination", () => {
       {},
       mockClient,
       mockTerminationManager,
-      undefined,
       "test-token",
       mockStepDataEmitter,
       {} as any,

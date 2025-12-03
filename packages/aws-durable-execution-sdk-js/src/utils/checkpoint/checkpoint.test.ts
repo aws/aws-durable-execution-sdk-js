@@ -30,7 +30,6 @@ const createCheckpoint = (
     context._stepData,
     context.durableExecutionClient,
     context.terminationManager,
-    undefined,
     token,
     emitter,
     logger,

@@ -32,11 +32,6 @@ interface QueuedCheckpoint {
   reject: (error: Error) => void;
 }
 
-interface ActiveOperationsTracker {
-  increment(): void;
-  decrement(): void;
-}
-
 export class CheckpointManager implements Checkpoint {
   private queue: QueuedCheckpoint[] = [];
   private isProcessing = false;
@@ -64,7 +59,6 @@ export class CheckpointManager implements Checkpoint {
     private stepData: Record<string, Operation>,
     private storage: DurableExecutionClient,
     private terminationManager: TerminationManager,
-    private activeOperationsTracker: ActiveOperationsTracker | undefined,
     initialTaskToken: string,
     private stepDataEmitter: EventEmitter,
     private logger: DurableLogger,
@@ -154,10 +148,6 @@ export class CheckpointManager implements Checkpoint {
       return new Promise(() => {}); // Never resolves during termination
     }
 
-    if (this.activeOperationsTracker) {
-      this.activeOperationsTracker.increment();
-    }
-
     return new Promise<void>((resolve, reject) => {
       if (
         data.Action === OperationAction.SUCCEED ||
@@ -170,15 +160,9 @@ export class CheckpointManager implements Checkpoint {
         stepId,
         data,
         resolve: () => {
-          if (this.activeOperationsTracker) {
-            this.activeOperationsTracker.decrement();
-          }
           resolve();
         },
         reject: (error: Error) => {
-          if (this.activeOperationsTracker) {
-            this.activeOperationsTracker.decrement();
-          }
           reject(error);
         },
       };

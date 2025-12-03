@@ -8,7 +8,7 @@ import {
 import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
-import { ActiveOperationsTracker } from "../../utils/termination-helper/active-operations-tracker";
+
 import { Context } from "aws-lambda";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
@@ -84,7 +84,7 @@ export const initializeExecutionContext = async (
       durableExecutionClient,
       _stepData: stepData,
       terminationManager: new TerminationManager(),
-      activeOperationsTracker: new ActiveOperationsTracker(),
+
       durableExecutionArn,
       pendingCompletions: new Set<string>(),
       getStepData(stepId: string): Operation | undefined {

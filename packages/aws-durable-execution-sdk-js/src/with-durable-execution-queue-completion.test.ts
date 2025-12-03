@@ -41,7 +41,7 @@ describe("withDurableExecution Queue Completion", () => {
       _stepData: {},
       terminationManager: mockTerminationManager,
       durableExecutionArn: "test-arn",
-      activeOperationsTracker: undefined,
+
       pendingCompletions: new Set(),
     };
 

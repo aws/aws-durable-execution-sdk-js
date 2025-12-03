@@ -18,7 +18,6 @@ const createCheckpoint = (
     {},
     context.durableExecutionClient,
     context.terminationManager,
-    undefined,
     token,
     emitter,
     logger,
