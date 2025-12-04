@@ -25,7 +25,6 @@ export function decodeCheckpointToken(
       !decodedJson ||
       typeof decodedJson !== "object" ||
       !("executionId" in decodedJson) ||
-      !("invocationId" in decodedJson) ||
       !("token" in decodedJson)
     ) {
       throw new Error("Invalid CheckpointTokenData format");

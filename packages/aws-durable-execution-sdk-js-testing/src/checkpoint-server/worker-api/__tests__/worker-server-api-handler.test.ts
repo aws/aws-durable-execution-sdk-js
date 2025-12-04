@@ -1,6 +1,9 @@
 import { WorkerServerApiHandler } from "../worker-server-api-handler";
 import { ApiType } from "../worker-api-types";
-import { ExecutionManager } from "../../storage/execution-manager";
+import {
+  ExecutionManager,
+  StartExecutionParams,
+} from "../../storage/execution-manager";
 import {
   processCompleteInvocation,
   processStartDurableExecution,
@@ -17,7 +20,13 @@ import {
   processCallbackHeartbeat,
   processCallbackSuccess,
 } from "../../handlers/callbacks";
-import { ExecutionId, InvocationId } from "../../utils/tagged-strings";
+import {
+  createExecutionId,
+  createInvocationId,
+  ExecutionId,
+  InvocationId,
+} from "../../utils/tagged-strings";
+import { StartInvocationRequest } from "../worker-api-request";
 
 // Mock all dependencies
 jest.mock("../../storage/execution-manager");
@@ -100,31 +109,41 @@ describe("WorkerServerApiHandler", () => {
 
   describe("performApiCall", () => {
     it("should delegate StartDurableExecution to processStartDurableExecution", () => {
+      const params: StartExecutionParams = {
+        payload: "test-payload",
+        invocationId: createInvocationId("test-invocation-id"),
+        executionId: createExecutionId("test-execution-id"),
+      };
+
       const requestData = {
         type: ApiType.StartDurableExecution as const,
         requestId: "test-request-id",
-        params: { payload: "test-payload" },
+        params,
       };
 
       void handler.performApiCall(requestData);
 
       expect(mockProcessStartDurableExecution).toHaveBeenCalledWith(
-        "test-payload",
+        params,
         mockExecutionManagerInstance,
       );
     });
 
     it("should delegate StartInvocation to processStartInvocation", () => {
+      const params: StartInvocationRequest = {
+        executionId: createExecutionId("execution-123"),
+        invocationId: createInvocationId("invocation-123"),
+      };
       const requestData = {
         type: ApiType.StartInvocation as const,
         requestId: "test-request-id",
-        params: { executionId: "execution-123" as ExecutionId },
+        params,
       };
 
       void handler.performApiCall(requestData);
 
       expect(mockProcessStartInvocation).toHaveBeenCalledWith(
-        "execution-123",
+        params,
         mockExecutionManagerInstance,
       );
     });

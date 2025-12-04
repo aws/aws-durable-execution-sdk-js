@@ -6,14 +6,14 @@ import {
   CheckpointTokenData,
 } from "../utils/checkpoint-token";
 import { CallbackId, CheckpointToken } from "../utils/tagged-strings";
-import {
-  ExecutionId,
-  InvocationId,
-  createInvocationId,
-} from "../utils/tagged-strings";
+import { ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { decodeCallbackId } from "../utils/callback-id";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 import { ErrorObject, EventType, Event } from "@aws-sdk/client-lambda";
+import {
+  StartDurableExecutionRequest,
+  StartInvocationRequest,
+} from "../worker-api/worker-api-request";
 
 export interface InvocationResult {
   checkpointToken: CheckpointToken;
@@ -22,8 +22,7 @@ export interface InvocationResult {
   operationEvents: OperationEvents[];
 }
 
-export interface StartExecutionParams {
-  payload?: string;
+export interface StartExecutionParams extends StartDurableExecutionRequest {
   executionId: ExecutionId;
 }
 
@@ -40,7 +39,7 @@ export class ExecutionManager {
    * @returns the necessary initial parameters that must be passed to the execution invocation event.
    */
   startExecution(params: StartExecutionParams): InvocationResult {
-    const invocationId = createInvocationId();
+    const invocationId = params.invocationId;
     const executionId = params.executionId;
     const storage = new CheckpointManager(executionId);
 
@@ -69,34 +68,33 @@ export class ExecutionManager {
    *
    * @returns The list of operations for this execution and other data for the invocation event.
    */
-  startInvocation(executionId: ExecutionId): InvocationResult {
-    const invocationId = createInvocationId();
-    const checkpointStorage = this.executions.get(executionId);
+  startInvocation(params: StartInvocationRequest): InvocationResult {
+    const checkpointStorage = this.executions.get(params.executionId);
 
     if (!checkpointStorage) {
       throw new Error(
-        `Could not start invocation for invalid execution ${executionId}`,
+        `Could not start invocation for invalid execution ${params.executionId}`,
       );
     }
 
     if (checkpointStorage.isExecutionCompleted()) {
       throw new Error(
-        `Could not start invocation for completed execution ${executionId}`,
+        `Could not start invocation for completed execution ${params.executionId}`,
       );
     }
 
-    checkpointStorage.startInvocation(invocationId);
+    checkpointStorage.startInvocation(params.invocationId);
 
     const checkpointToken = encodeCheckpointToken({
-      executionId,
+      executionId: params.executionId,
       token: randomUUID(),
-      invocationId,
+      invocationId: params.invocationId,
     });
 
     return {
       checkpointToken,
-      executionId,
-      invocationId,
+      executionId: params.executionId,
+      invocationId: params.invocationId,
       operationEvents: Array.from(checkpointStorage.operationDataMap.values()),
     };
   }

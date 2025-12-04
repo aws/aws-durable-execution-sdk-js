@@ -8,6 +8,10 @@ import {
 import { CheckpointWorkerManager } from "../worker/checkpoint-worker-manager";
 import { CheckpointApiClient } from "./checkpoint-api-client";
 import { ApiType } from "../../../checkpoint-server/worker-api/worker-api-types";
+import {
+  StartDurableExecutionRequest,
+  StartInvocationRequest,
+} from "../../../checkpoint-server/worker-api/worker-api-request";
 
 export class CheckpointWorkerApiClient implements CheckpointApiClient {
   constructor(private readonly workerManager: CheckpointWorkerManager) {}
@@ -15,10 +19,13 @@ export class CheckpointWorkerApiClient implements CheckpointApiClient {
   /**
    * Start a new durable invocation
    */
-  async startDurableExecution(payload?: string): Promise<InvocationResult> {
-    return this.workerManager.sendApiRequest(ApiType.StartDurableExecution, {
-      payload,
-    });
+  async startDurableExecution(
+    params: StartDurableExecutionRequest,
+  ): Promise<InvocationResult> {
+    return this.workerManager.sendApiRequest(
+      ApiType.StartDurableExecution,
+      params,
+    );
   }
 
   /**
@@ -59,10 +66,10 @@ export class CheckpointWorkerApiClient implements CheckpointApiClient {
   /**
    * Start a new invocation for an existing execution
    */
-  async startInvocation(executionId: ExecutionId): Promise<InvocationResult> {
-    return this.workerManager.sendApiRequest(ApiType.StartInvocation, {
-      executionId,
-    });
+  async startInvocation(
+    params: StartInvocationRequest,
+  ): Promise<InvocationResult> {
+    return this.workerManager.sendApiRequest(ApiType.StartInvocation, params);
   }
 
   async completeInvocation(

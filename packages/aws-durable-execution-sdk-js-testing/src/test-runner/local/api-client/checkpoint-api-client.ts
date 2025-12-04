@@ -6,6 +6,10 @@ import {
   ExecutionId,
   InvocationId,
 } from "../../../checkpoint-server/utils/tagged-strings";
+import {
+  StartDurableExecutionRequest,
+  StartInvocationRequest,
+} from "../../../checkpoint-server/worker-api/worker-api-request";
 
 export interface SerializedPollCheckpointResponse {
   operations: SerializedCheckpointOperation[];
@@ -18,7 +22,9 @@ export interface CheckpointApiClient {
   /**
    * Start a new durable invocation
    */
-  startDurableExecution(payload?: string): Promise<InvocationResult>;
+  startDurableExecution(
+    params: StartDurableExecutionRequest,
+  ): Promise<InvocationResult>;
 
   /**
    * Poll for checkpoint data
@@ -50,7 +56,7 @@ export interface CheckpointApiClient {
   /**
    * Start a new invocation for an existing execution
    */
-  startInvocation(executionId: ExecutionId): Promise<InvocationResult>;
+  startInvocation(params: StartInvocationRequest): Promise<InvocationResult>;
 
   completeInvocation(
     executionId: ExecutionId,

@@ -41,11 +41,9 @@ describe("InvocationTracker", () => {
 
   describe("createInvocation", () => {
     it("should create an invocation with the given ID", () => {
-      const invocationId = createInvocationId("test-invocation");
-
       expect(invocationTracker.hasActiveInvocation()).toBe(false);
 
-      invocationTracker.createInvocation(invocationId);
+      invocationTracker.createInvocation();
 
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
     });
@@ -57,21 +55,15 @@ describe("InvocationTracker", () => {
     });
 
     it("should return true when invocations exist but none are completed", () => {
-      const invocationId1 = createInvocationId("test-invocation-1");
-      const invocationId2 = createInvocationId("test-invocation-2");
-
-      invocationTracker.createInvocation(invocationId1);
-      invocationTracker.createInvocation(invocationId2);
+      invocationTracker.createInvocation();
+      invocationTracker.createInvocation();
 
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
     });
 
     it("should return false when all invocations are completed", async () => {
-      const invocationId1 = createInvocationId("test-invocation-1");
-      const invocationId2 = createInvocationId("test-invocation-2");
-
-      invocationTracker.createInvocation(invocationId1);
-      invocationTracker.createInvocation(invocationId2);
+      const invocationId1 = invocationTracker.createInvocation();
+      const invocationId2 = invocationTracker.createInvocation();
 
       // Complete both invocations
       await invocationTracker.completeInvocation(
@@ -89,13 +81,9 @@ describe("InvocationTracker", () => {
     });
 
     it("should return true when some but not all invocations are completed", async () => {
-      const invocationId1 = createInvocationId("test-invocation-1");
-      const invocationId2 = createInvocationId("test-invocation-2");
-      const invocationId3 = createInvocationId("test-invocation-3");
-
-      invocationTracker.createInvocation(invocationId1);
-      invocationTracker.createInvocation(invocationId2);
-      invocationTracker.createInvocation(invocationId3);
+      const invocationId1 = invocationTracker.createInvocation();
+      const invocationId2 = invocationTracker.createInvocation();
+      invocationTracker.createInvocation();
 
       // Complete only first two invocations
       await invocationTracker.completeInvocation(
@@ -113,13 +101,11 @@ describe("InvocationTracker", () => {
     });
 
     it("should handle single invocation lifecycle correctly", async () => {
-      const invocationId = createInvocationId("test-invocation");
-
       // No invocations - should be false
       expect(invocationTracker.hasActiveInvocation()).toBe(false);
 
       // Create invocation - should be true (active)
-      invocationTracker.createInvocation(invocationId);
+      const invocationId = invocationTracker.createInvocation();
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
 
       // Complete invocation - should be false (no active)
@@ -134,9 +120,7 @@ describe("InvocationTracker", () => {
 
   describe("completeInvocation", () => {
     it("should mark a single invocation as completed", async () => {
-      const invocationId = createInvocationId("test-invocation");
-
-      invocationTracker.createInvocation(invocationId);
+      const invocationId = invocationTracker.createInvocation();
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
 
       await invocationTracker.completeInvocation(
@@ -153,9 +137,7 @@ describe("InvocationTracker", () => {
     });
 
     it("should mark a single invocation as completed with error", async () => {
-      const invocationId = createInvocationId("test-invocation");
-
-      invocationTracker.createInvocation(invocationId);
+      const invocationId = invocationTracker.createInvocation();
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
 
       await invocationTracker.completeInvocation(
@@ -176,13 +158,9 @@ describe("InvocationTracker", () => {
     });
 
     it("should handle completing multiple invocations", async () => {
-      const invocationId1 = createInvocationId("test-invocation-1");
-      const invocationId2 = createInvocationId("test-invocation-2");
-      const invocationId3 = createInvocationId("test-invocation-3");
-
-      invocationTracker.createInvocation(invocationId1);
-      invocationTracker.createInvocation(invocationId2);
-      invocationTracker.createInvocation(invocationId3);
+      const invocationId1 = invocationTracker.createInvocation();
+      const invocationId2 = invocationTracker.createInvocation();
+      const invocationId3 = invocationTracker.createInvocation();
 
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
 
@@ -210,9 +188,7 @@ describe("InvocationTracker", () => {
     });
 
     it("should handle completing the same invocation multiple times", async () => {
-      const invocationId = createInvocationId("test-invocation");
-
-      invocationTracker.createInvocation(invocationId);
+      const invocationId = invocationTracker.createInvocation();
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
 
       // Complete the same invocation multiple times
@@ -227,9 +203,8 @@ describe("InvocationTracker", () => {
 
     it("should handle completing non-existent invocations gracefully", async () => {
       const nonExistentId = createInvocationId("non-existent");
-      const existingId = createInvocationId("existing");
 
-      invocationTracker.createInvocation(existingId);
+      const existingId = invocationTracker.createInvocation();
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
 
       // Try to complete a non-existent invocation
@@ -256,11 +231,8 @@ describe("InvocationTracker", () => {
 
   describe("reset with new completion tracking", () => {
     it("should clear completion tracking when reset", async () => {
-      const invocationId1 = createInvocationId("test-invocation-1");
-      const invocationId2 = createInvocationId("test-invocation-2");
-
-      invocationTracker.createInvocation(invocationId1);
-      invocationTracker.createInvocation(invocationId2);
+      const invocationId1 = invocationTracker.createInvocation();
+      invocationTracker.createInvocation();
 
       await invocationTracker.completeInvocation(
         mockExecutionId,
@@ -276,8 +248,7 @@ describe("InvocationTracker", () => {
       expect(invocationTracker.hasActiveInvocation()).toBe(false); // No invocations
 
       // After reset, creating new invocations should work normally
-      const newInvocationId = createInvocationId("new-invocation");
-      invocationTracker.createInvocation(newInvocationId);
+      invocationTracker.createInvocation();
       expect(invocationTracker.hasActiveInvocation()).toBe(true);
     });
   });

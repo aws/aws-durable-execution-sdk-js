@@ -13,6 +13,7 @@ import {
   ErrorObject,
   Event,
   EventType,
+  OperationAction,
   OperationStatus,
   OperationType,
 } from "@aws-sdk/client-lambda";
@@ -23,6 +24,7 @@ import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -44,7 +46,6 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
   const mockHandlerFunction = jest.fn();
   const mockExecutionId = createExecutionId("test-execution-id");
   const mockCheckpointToken = createCheckpointToken("test-checkpoint-token");
-  const mockInvocationId = createInvocationId("test-invocation-id");
 
   const mockOperationEvents: OperationEvents[] = [
     {
@@ -124,14 +125,12 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         executionId: mockExecutionId,
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
-        invocationId: mockInvocationId,
       }),
       pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
       updateCheckpointData: jest.fn().mockResolvedValue(undefined),
       startInvocation: jest.fn().mockResolvedValue({
         checkpointToken: mockCheckpointToken,
         executionId: mockExecutionId,
-        invocationId: mockInvocationId,
         operationEvents: [],
       }),
       completeInvocation: jest.fn().mockImplementation(() => {
@@ -202,7 +201,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       );
       expect(completeInvocationSpy).toHaveBeenCalledWith(
         mockExecutionId,
-        mockInvocationId,
+        expect.any(String),
         undefined, // no error for successful invocation
       );
     });
@@ -294,7 +293,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       );
       expect(completeInvocationSpy).toHaveBeenCalledWith(
         mockExecutionId,
-        mockInvocationId,
+        expect.any(String),
         mockError,
       );
     });
@@ -330,7 +329,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       );
       expect(completeInvocationSpy).toHaveBeenCalledWith(
         mockExecutionId,
-        mockInvocationId,
+        expect.any(String),
         {
           ErrorMessage: "Handler threw an exception",
           ErrorType: "Error",
@@ -377,13 +376,109 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       );
       expect(completeInvocationSpy).toHaveBeenCalledWith(
         mockExecutionId,
-        mockInvocationId,
+        expect.any(String),
         {
           ErrorMessage: "Async handler failure",
           ErrorType: "Error",
           StackTrace: expect.any(Array),
         },
       );
+    });
+  });
+
+  describe("Race condition prevention", () => {
+    it("should prevent duplicate startInvocation requests when multiple callback operations trigger concurrent invocations", async () => {
+      let startInvocationCallCount = 0;
+      let resolveStartInvocation: () => void;
+
+      // Mock startInvocation to be delayed, allowing us to control when it resolves
+      const startInvocationSpy = jest
+        .spyOn(checkpointApi, "startInvocation")
+        .mockImplementation(() => {
+          startInvocationCallCount++;
+          return new Promise<InvocationResult>((resolve) => {
+            resolveStartInvocation = () => {
+              resolve({
+                checkpointToken: createCheckpointToken("delayed-token"),
+                executionId: mockExecutionId,
+                operationEvents: [],
+                invocationId: createInvocationId("delayed-invocation"),
+              });
+            };
+          });
+        });
+
+      // Mock handler to return PENDING first (to continue execution), then SUCCESS
+      mockInvoke
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+          Result: JSON.stringify({ result: "success" }),
+        });
+
+      // Set up polling to return multiple callback operations that would normally trigger multiple invocations
+      jest
+        .spyOn(checkpointApi, "pollCheckpointData")
+        .mockImplementationOnce(() => {
+          return Promise.resolve({
+            operations: [
+              // Multiple callback operations arriving simultaneously
+              {
+                operation: {
+                  Id: "callback-op-1",
+                  Type: OperationType.CALLBACK,
+                  Status: OperationStatus.SUCCEEDED,
+                  StartTimestamp: new Date(),
+                },
+                update: {
+                  Id: "callback-op-1",
+                  Type: OperationType.CALLBACK,
+                  Action: OperationAction.SUCCEED,
+                },
+                events: [],
+              },
+              {
+                operation: {
+                  Id: "callback-op-2",
+                  Type: OperationType.CALLBACK,
+                  Status: OperationStatus.SUCCEEDED,
+                  StartTimestamp: new Date(),
+                },
+                update: {
+                  Id: "callback-op-2",
+                  Type: OperationType.CALLBACK,
+                  Action: OperationAction.SUCCEED,
+                },
+                events: [],
+              },
+            ],
+          });
+        })
+        .mockReturnValue(nonResolvingPromise);
+
+      // Start execution
+      const executePromise = orchestrator.executeHandler({
+        payload: { input: "race-condition-test" },
+      });
+
+      // Allow initial execution (which returns PENDING) to complete and polling to start
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Despite multiple callback operations, only one startInvocation call was made
+      expect(startInvocationCallCount).toBe(1);
+      expect(startInvocationSpy).toHaveBeenCalledTimes(1);
+
+      // Now resolve the delayed startInvocation to allow the test to complete
+      resolveStartInvocation!();
+
+      // Wait for execution to complete
+      const result = await executePromise;
+
+      // Verify execution completed successfully
+      expect(result.status).toBe(OperationStatus.SUCCEEDED);
+      expect(startInvocationSpy).toHaveBeenCalledTimes(1);
     });
   });
 

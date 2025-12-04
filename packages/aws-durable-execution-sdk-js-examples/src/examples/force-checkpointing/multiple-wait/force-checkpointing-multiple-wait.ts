@@ -15,6 +15,7 @@ export const handler = withDurableExecution(
     const results = await ctx.parallel([
       // Branch 1: Long-running operation that blocks termination
       async (branchCtx: DurableContext) => {
+        await branchCtx.wait("wait-1-1", { seconds: 1 });
         return await branchCtx.step("long-running-step", async () => {
           await new Promise((resolve) => setTimeout(resolve, 10000));
           return "long-complete";
