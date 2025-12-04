@@ -1,7 +1,7 @@
 import {
   DurableContext,
   withDurableExecution,
-  retryPresets,
+  createRetryStrategy,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 
@@ -26,7 +26,7 @@ export const handler = withDurableExecution(
             }
             return item * 2;
           },
-          { retryStrategy: retryPresets.noRetry },
+          { retryStrategy: createRetryStrategy({ maxAttempts: 1 }) },
         );
       },
       {
@@ -35,8 +35,6 @@ export const handler = withDurableExecution(
         },
       },
     );
-
-    await context.wait({ seconds: 1 });
 
     return {
       completionReason: result.completionReason,
