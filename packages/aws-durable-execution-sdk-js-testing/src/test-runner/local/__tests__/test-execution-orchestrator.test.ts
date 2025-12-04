@@ -253,11 +253,12 @@ describe("TestExecutionOrchestrator", () => {
         payload: { input: "test" },
       });
 
-      expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith(
-        JSON.stringify({
+      expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith({
+        invocationId: expect.any(String),
+        payload: JSON.stringify({
           input: "test",
         }),
-      );
+      });
       expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
         durableExecutionArn: mockExecutionId,
         checkpointToken: mockCheckpointToken,
@@ -316,11 +317,12 @@ describe("TestExecutionOrchestrator", () => {
 
         const result = await resultPromise;
 
-        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith(
-          JSON.stringify({
+        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith({
+          invocationId: expect.any(String),
+          payload: JSON.stringify({
             input: "test",
           }),
-        );
+        });
         expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
           durableExecutionArn: mockExecutionId,
           checkpointToken: mockCheckpointToken,
@@ -397,11 +399,12 @@ describe("TestExecutionOrchestrator", () => {
 
         const result = await resultPromise;
 
-        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith(
-          JSON.stringify({
+        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith({
+          invocationId: expect.any(String),
+          payload: JSON.stringify({
             input: "test",
           }),
-        );
+        });
 
         expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
           durableExecutionArn: mockExecutionId,
@@ -465,11 +468,12 @@ describe("TestExecutionOrchestrator", () => {
 
         resolvePolling!();
 
-        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith(
-          JSON.stringify({
+        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith({
+          invocationId: expect.any(String),
+          payload: JSON.stringify({
             input: "test",
           }),
-        );
+        });
         expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
           durableExecutionArn: mockExecutionId,
           checkpointToken: mockCheckpointToken,
@@ -528,11 +532,12 @@ describe("TestExecutionOrchestrator", () => {
 
         expect(mockInvoke).toHaveBeenCalledTimes(1);
 
-        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith(
-          JSON.stringify({
+        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith({
+          invocationId: expect.any(String),
+          payload: JSON.stringify({
             input: "test",
           }),
-        );
+        });
         expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
           durableExecutionArn: mockExecutionId,
           checkpointToken: mockCheckpointToken,
@@ -582,11 +587,12 @@ describe("TestExecutionOrchestrator", () => {
           }),
         ).rejects.toThrow("Could not find status in execution operation");
 
-        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith(
-          JSON.stringify({
+        expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith({
+          invocationId: expect.any(String),
+          payload: JSON.stringify({
             input: "test",
           }),
-        );
+        });
         // Polling resolves before invocation starts, since invocation is scheduled
         expect(mockInvoke).not.toHaveBeenCalled();
       });
@@ -595,9 +601,10 @@ describe("TestExecutionOrchestrator", () => {
     it("should handle execution without parameters", async () => {
       const result = await orchestrator.executeHandler();
 
-      expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith(
-        undefined,
-      );
+      expect(checkpointApi.startDurableExecution).toHaveBeenCalledWith({
+        invocationId: expect.any(String),
+        payload: undefined,
+      });
       expect(result.status).toBe(OperationStatus.SUCCEEDED);
     });
 
@@ -914,9 +921,10 @@ describe("TestExecutionOrchestrator", () => {
       await executePromise;
 
       // Verify new invocation was started
-      expect(checkpointApi.startInvocation).toHaveBeenCalledWith(
-        mockExecutionId,
-      );
+      expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
+        executionId: mockExecutionId,
+        invocationId: expect.any(String),
+      });
 
       // Verify handler was re-invoked after retry
       expect(mockInvoke).toHaveBeenCalledTimes(2); // Initial + retry
@@ -976,9 +984,10 @@ describe("TestExecutionOrchestrator", () => {
       expect(result.status).toBe(OperationStatus.SUCCEEDED);
 
       // Verify new invocation was started (retry was triggered)
-      expect(checkpointApi.startInvocation).toHaveBeenCalledWith(
-        mockExecutionId,
-      );
+      expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
+        executionId: mockExecutionId,
+        invocationId: expect.any(String),
+      });
 
       // Verify handler was re-invoked after retry
       expect(mockInvoke).toHaveBeenCalledTimes(2); // Initial + retry
@@ -1285,9 +1294,10 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       // Verify new invocation was started after status update
-      expect(checkpointApi.startInvocation).toHaveBeenCalledWith(
-        mockExecutionId,
-      );
+      expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
+        executionId: mockExecutionId,
+        invocationId: expect.any(String),
+      });
 
       // Verify handler was re-invoked after retry
       expect(mockInvoke).toHaveBeenCalledTimes(2); // Initial + retry
@@ -1335,9 +1345,10 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       // Verify new invocation was started
-      expect(checkpointApi.startInvocation).toHaveBeenCalledWith(
-        mockExecutionId,
-      );
+      expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
+        executionId: mockExecutionId,
+        invocationId: expect.any(String),
+      });
     });
 
     it("should execute callback before invocation function in scheduleAsyncFunction", async () => {
@@ -1634,9 +1645,10 @@ describe("TestExecutionOrchestrator", () => {
       const result = await executePromise;
 
       // Verify startInvocation was called
-      expect(checkpointApi.startInvocation).toHaveBeenCalledWith(
-        mockExecutionId,
-      );
+      expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
+        executionId: mockExecutionId,
+        invocationId: expect.any(String),
+      });
 
       // Verify handler was invoked twice (initial + callback)
       expect(mockInvoke).toHaveBeenCalledTimes(2);
@@ -1706,9 +1718,10 @@ describe("TestExecutionOrchestrator", () => {
       );
 
       // Verify startInvocation was called
-      expect(checkpointApi.startInvocation).toHaveBeenCalledWith(
-        mockExecutionId,
-      );
+      expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
+        executionId: mockExecutionId,
+        invocationId: expect.any(String),
+      });
 
       // Verify handler was invoked twice (initial)
       expect(mockInvoke).toHaveBeenCalledTimes(1);

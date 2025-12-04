@@ -1,5 +1,6 @@
 import { ErrorObject, Event } from "@aws-sdk/client-lambda";
 import {
+  createInvocationId,
   ExecutionId,
   InvocationId,
 } from "../../../checkpoint-server/utils/tagged-strings";
@@ -23,12 +24,15 @@ export class InvocationTracker {
   }
 
   /**
-   * Create a new invocation with the given ID.
+   * Create a new invocation and returns the invocation ID. The invocation ID
+   * must be tracked before any asynchronous operations to prevent race conditions.
    *
    * @param invocationId The ID of the invocation
    */
-  createInvocation(invocationId: InvocationId): void {
+  createInvocation(): InvocationId {
+    const invocationId = createInvocationId();
     this.invocations.add(invocationId);
+    return invocationId;
   }
 
   hasActiveInvocation(): boolean {

@@ -8,17 +8,21 @@ import {
   ExecutionManager,
   InvocationResult,
 } from "../storage/execution-manager";
+import {
+  StartDurableExecutionRequest,
+  StartInvocationRequest,
+} from "../worker-api/worker-api-request";
 
 /**
  * Starts a durable execution. Returns the data needed for the handler invocation event.
  */
 export function processStartDurableExecution(
-  payload: string | undefined,
+  params: StartDurableExecutionRequest,
   executionManager: ExecutionManager,
 ): InvocationResult {
   return executionManager.startExecution({
-    payload,
     executionId: createExecutionId(),
+    ...params,
   });
 }
 
@@ -27,10 +31,10 @@ export function processStartDurableExecution(
  * in-progress execution.
  */
 export function processStartInvocation(
-  executionIdParam: string,
+  params: StartInvocationRequest,
   executionManager: ExecutionManager,
 ): InvocationResult {
-  return executionManager.startInvocation(createExecutionId(executionIdParam));
+  return executionManager.startInvocation(params);
 }
 
 export function processCompleteInvocation(

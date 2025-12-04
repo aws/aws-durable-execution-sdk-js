@@ -115,9 +115,11 @@ describe("execution-manager", () => {
       it("should create a new execution with the provided parameters", () => {
         // Test data
         const executionId = createExecutionId("test-execution-id");
+        const invocationId = createInvocationId("test-invocation-id");
         const params: StartExecutionParams = {
           executionId,
           payload: '{"key":"value"}',
+          invocationId,
         };
 
         // Expected mock operation with properly typed id
@@ -144,9 +146,9 @@ describe("execution-manager", () => {
 
         // Verify results
         expect(result).toEqual({
-          checkpointToken: `encoded-{"executionId":"test-execution-id","token":"mocked-uuid","invocationId":"mocked-uuid"}`,
+          checkpointToken: `encoded-{"executionId":"${executionId}","token":"mocked-uuid","invocationId":"${invocationId}"}`,
           executionId,
-          invocationId: "mocked-uuid",
+          invocationId,
           operationEvents: [
             {
               operation: mockInitialOperation,
@@ -167,6 +169,7 @@ describe("execution-manager", () => {
         const executionId = createExecutionId("test-execution-id");
         const params: StartExecutionParams = {
           executionId,
+          invocationId: createInvocationId("test-invocation-id"),
         };
 
         const initializeSpy = jest.spyOn(
@@ -185,7 +188,12 @@ describe("execution-manager", () => {
       it("should throw error if execution ID doesn't exist", () => {
         const nonExistentId = createExecutionId("non-existent");
 
-        expect(() => executionManager.startInvocation(nonExistentId)).toThrow(
+        expect(() =>
+          executionManager.startInvocation({
+            executionId: nonExistentId,
+            invocationId: createInvocationId("test-invocation-id"),
+          }),
+        ).toThrow(
           "Could not start invocation for invalid execution non-existent",
         );
       });
@@ -193,30 +201,35 @@ describe("execution-manager", () => {
       it("should start a new invocation for an existing execution", () => {
         // First create an execution
         const executionId = createExecutionId("test-execution-id");
-        executionManager.startExecution({ executionId });
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
 
         // Reset mocks to track new calls
         jest.clearAllMocks();
-        (randomUUID as jest.Mock).mockReturnValue("new-invocation-uuid");
 
+        const newInvocationId = createInvocationId("new-invocation-id");
         // Start a new invocation
-        const result = executionManager.startInvocation(executionId);
+        const result = executionManager.startInvocation({
+          executionId,
+          invocationId: newInvocationId,
+        });
 
         expect(result).toBeDefined();
         expect(result.executionId).toBe(executionId);
-        expect(result.invocationId).toBe("new-invocation-uuid");
+        expect(result.invocationId).toBe(newInvocationId);
         expect(result.operationEvents).toBeInstanceOf(Array);
         expect(encodeCheckpointToken).toHaveBeenCalledWith({
           executionId,
-          token: "new-invocation-uuid",
-          invocationId: "new-invocation-uuid",
+          token: expect.any(String),
+          invocationId: newInvocationId,
         });
       });
 
       it("should include all operations from the checkpoint storage", () => {
         // Create an execution with a mock operation
         const executionId = createExecutionId("test-execution-id");
-        executionManager.startExecution({ executionId });
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
 
         // Get the storage and add some operations to it
         const storage = executionManager.getCheckpointsByExecution(executionId);
@@ -247,7 +260,11 @@ describe("execution-manager", () => {
         });
 
         // Start a new invocation
-        const result = executionManager.startInvocation(executionId);
+        const newInvocationId = createInvocationId("new-invocation-id");
+        const result = executionManager.startInvocation({
+          executionId,
+          invocationId: newInvocationId,
+        });
 
         // Check that we got all operations
         expect(result.operationEvents).toHaveLength(2);
@@ -264,13 +281,20 @@ describe("execution-manager", () => {
       it("should throw error if execution is completed already", () => {
         // First create an execution
         const executionId = createExecutionId("test-execution-id");
-        executionManager.startExecution({ executionId });
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
 
         jest
           .spyOn(CheckpointManager.prototype, "isExecutionCompleted")
           .mockReturnValue(true);
 
-        expect(() => executionManager.startInvocation(executionId)).toThrow(
+        const newInvocationId = createInvocationId("new-invocation-id");
+        expect(() =>
+          executionManager.startInvocation({
+            executionId,
+            invocationId: newInvocationId,
+          }),
+        ).toThrow(
           `Could not start invocation for completed execution ${executionId}`,
         );
       });
@@ -286,7 +310,8 @@ describe("execution-manager", () => {
 
       it("should return the checkpoint storage for an existing execution ID", () => {
         const executionId = createExecutionId("test-execution-id");
-        executionManager.startExecution({ executionId });
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
 
         const storage = executionManager.getCheckpointsByExecution(executionId);
 
@@ -321,7 +346,8 @@ describe("execution-manager", () => {
       it("should return storage and token data for a valid token", () => {
         // Create an execution
         const executionId = createExecutionId("test-execution-id");
-        executionManager.startExecution({ executionId });
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
 
         // Create token data that references the execution
         const tokenData: CheckpointTokenData = {
@@ -378,7 +404,8 @@ describe("execution-manager", () => {
       it("should return CheckpointManager for valid callback ID with existing execution", () => {
         // Create an execution first
         const executionId = createExecutionId("test-execution-id");
-        executionManager.startExecution({ executionId });
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
 
         const callbackId = createCallbackId("valid-callback-id");
 
@@ -398,7 +425,8 @@ describe("execution-manager", () => {
       it("should return the same CheckpointManager instance as getCheckpointsByExecution", () => {
         // Create an execution first
         const executionId = createExecutionId("test-execution-id");
-        executionManager.startExecution({ executionId });
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
 
         const callbackId = createCallbackId("valid-callback-id");
 
@@ -451,7 +479,7 @@ describe("execution-manager", () => {
         // Create an execution first
         const executionId = createExecutionId("test-execution-id");
         const invocationId = createInvocationId("test-invocation-id");
-        executionManager.startExecution({ executionId });
+        executionManager.startExecution({ executionId, invocationId });
 
         const storage = executionManager.getCheckpointsByExecution(executionId);
         expect(storage).toBeDefined();
@@ -517,7 +545,7 @@ describe("execution-manager", () => {
         // Create an execution first
         const executionId = createExecutionId("test-execution-id");
         const invocationId = createInvocationId("test-invocation-id");
-        executionManager.startExecution({ executionId });
+        executionManager.startExecution({ executionId, invocationId });
 
         const storage = executionManager.getCheckpointsByExecution(executionId);
         expect(storage).toBeDefined();
@@ -590,7 +618,7 @@ describe("execution-manager", () => {
         // Create an execution first
         const executionId = createExecutionId("test-execution-id");
         const invocationId = createInvocationId("test-invocation-id");
-        executionManager.startExecution({ executionId });
+        executionManager.startExecution({ executionId, invocationId });
 
         const storage = executionManager.getCheckpointsByExecution(executionId);
         expect(storage).toBeDefined();

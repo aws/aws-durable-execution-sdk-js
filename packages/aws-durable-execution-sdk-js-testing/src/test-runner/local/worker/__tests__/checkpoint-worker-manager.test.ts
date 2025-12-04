@@ -4,6 +4,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { defaultLogger } from "../../../../logger";
 import { ApiType } from "../../../../checkpoint-server/worker-api/worker-api-types";
+import { createInvocationId } from "../../../../checkpoint-server/utils/tagged-strings";
 
 // Mock worker_threads
 jest.mock("worker_threads");
@@ -180,6 +181,7 @@ describe("CheckpointWorkerManager", () => {
       await expect(
         freshManager.sendApiRequest(ApiType.StartDurableExecution, {
           payload: "test-payload",
+          invocationId: createInvocationId(),
         }),
       ).rejects.toThrow("Worker not initialized");
     });
@@ -347,6 +349,7 @@ describe("CheckpointWorkerManager", () => {
 
       const promise = manager.sendApiRequest(ApiType.StartDurableExecution, {
         payload: "test-payload",
+        invocationId: createInvocationId(),
       });
 
       // Verify worker.postMessage was called with correct structure
