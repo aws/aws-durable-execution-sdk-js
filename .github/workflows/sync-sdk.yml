@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   sync-aws-durable-execution-sdk-js:
-    uses: aws/aws-durable-execution-sdk-js/.github/workflows/sync-package.yml@main
+    uses: ./.github/workflows/sync-package.yml
     with:
       package_name: aws-durable-execution-sdk-js
     secrets:
