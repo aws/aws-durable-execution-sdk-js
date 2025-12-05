@@ -26,7 +26,7 @@ export const handler = withDurableExecution(
             }
             return item * 2;
           },
-          { retryStrategy: createRetryStrategy({ maxAttempts: 1 }) },
+          { retryStrategy: createRetryStrategy({ maxAttempts: 2 }) },
         );
       },
       {
@@ -35,6 +35,8 @@ export const handler = withDurableExecution(
         },
       },
     );
+
+    await context.wait({ seconds: 1 });
 
     return {
       completionReason: result.completionReason,

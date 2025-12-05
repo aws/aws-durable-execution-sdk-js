@@ -5,6 +5,9 @@ createTests({
   name: "Map failure threshold exceeded count",
   functionName: "map-failure-threshold-exceeded-count",
   handler,
+  localRunnerConfig: {
+    skipTime: false,
+  },
   tests: (runner) => {
     it("should return FAILURE_TOLERANCE_EXCEEDED when failure count exceeds threshold", async () => {
       const execution = await runner.run();
@@ -55,6 +58,6 @@ createTests({
       expect(mapResult.all[4].status).toBe("SUCCEEDED");
       expect(mapResult.all[4].index).toBe(4);
       expect(mapResult.all[4].result).toBe(10); // 5 * 2
-    });
+    }, 15000); // 15 second timeout to accommodate retry delays
   },
 });

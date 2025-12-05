@@ -27,7 +27,7 @@ export const handler = withDurableExecution(
             }
             return item * 2;
           },
-          { retryStrategy: createRetryStrategy({ maxAttempts: 1 }) },
+          { retryStrategy: createRetryStrategy({ maxAttempts: 2 }) },
         );
       },
       {
