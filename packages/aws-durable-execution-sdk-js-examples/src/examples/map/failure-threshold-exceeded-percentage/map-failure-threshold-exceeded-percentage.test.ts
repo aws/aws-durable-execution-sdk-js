@@ -17,20 +17,15 @@ createTests({
       expect(result.totalCount).toBe(5);
 
       // Verify individual operation statuses
-      const item0 = runner.getOperation("process-0");
-      expect(item0?.getStatus()).toBe(OperationStatus.FAILED);
-
-      const item1 = runner.getOperation("process-1");
-      expect(item1?.getStatus()).toBe(OperationStatus.FAILED);
-
-      const item2 = runner.getOperation("process-2");
-      expect(item2?.getStatus()).toBe(OperationStatus.FAILED);
-
-      const item3 = runner.getOperation("process-3");
-      expect(item3?.getStatus()).toBe(OperationStatus.SUCCEEDED);
-
-      const item4 = runner.getOperation("process-4");
-      expect(item4?.getStatus()).toBe(OperationStatus.SUCCEEDED);
+      [
+        { name: "process-0", status: OperationStatus.FAILED },
+        { name: "process-1", status: OperationStatus.FAILED },
+        { name: "process-2", status: OperationStatus.FAILED },
+        { name: "process-3", status: OperationStatus.SUCCEEDED },
+        { name: "process-4", status: OperationStatus.SUCCEEDED },
+      ].forEach(({ name, status }) => {
+        expect(runner.getOperation(name)?.getStatus()).toBe(status);
+      });
     });
   },
 });

@@ -18,27 +18,16 @@ createTests({
       expect(result.hasFailure).toBe(true);
       expect(result.totalCount).toBe(5);
 
-      // Get individual branch operations
-      const branch1 = runner.getOperation("branch-1");
-      const branch2 = runner.getOperation("branch-2");
-      const branch3 = runner.getOperation("branch-3");
-      const branch4 = runner.getOperation("branch-4");
-      const branch5 = runner.getOperation("branch-5");
-
-      // Branch 1 should succeed
-      expect(branch1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
-
-      // Branch 2 should fail
-      expect(branch2?.getStatus()).toBe(OperationStatus.FAILED);
-
-      // Branch 3 should succeed
-      expect(branch3?.getStatus()).toBe(OperationStatus.SUCCEEDED);
-
-      // Branch 4 should fail
-      expect(branch4?.getStatus()).toBe(OperationStatus.FAILED);
-
-      // Branch 5 should succeed
-      expect(branch5?.getStatus()).toBe(OperationStatus.SUCCEEDED);
+      // Verify individual branch statuses
+      [
+        { name: "branch-1", status: OperationStatus.SUCCEEDED },
+        { name: "branch-2", status: OperationStatus.FAILED },
+        { name: "branch-3", status: OperationStatus.SUCCEEDED },
+        { name: "branch-4", status: OperationStatus.FAILED },
+        { name: "branch-5", status: OperationStatus.SUCCEEDED },
+      ].forEach(({ name, status }) => {
+        expect(runner.getOperation(name)?.getStatus()).toBe(status);
+      });
     });
   },
 });
