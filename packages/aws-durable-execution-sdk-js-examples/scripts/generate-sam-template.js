@@ -17,11 +17,6 @@ const EXAMPLE_CONFIGS = {
       },
     ],
   },
-  "wait-for-callback-submitter-retry-success": {
-    memorySize: 128,
-    timeout: 120,
-    policies: [],
-  },
 };
 
 // Default configuration for Lambda functions
@@ -45,13 +40,18 @@ function toPascalCase(filename) {
  * Get TypeScript files from src/examples directory
  */
 function getExampleFiles() {
-  const examplesDir = path.join(__dirname, "../src/examples");
+  const catalogPath = path.join(
+    __dirname,
+    "../src/utils/examples-catalog.json",
+  );
 
-  if (!fs.existsSync(examplesDir)) {
-    throw new Error(`Examples directory not found: ${examplesDir}`);
+  if (!fs.existsSync(catalogPath)) {
+    throw new Error(`Examples directory not found: ${catalogPath}`);
   }
 
-  const exampleFiles = [];
+  const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+
+  const exampleFiles = catalog.map((example) => example.name);
 
   // Read all directories in examples
   const entries = fs.readdirSync(examplesDir, { withFileTypes: true });
@@ -105,25 +105,25 @@ function getExampleFiles() {
 /**
  * Create a Lambda function resource configuration
  */
-function createFunctionResource(filename, skipVerboseLogging = false) {
-  const resourceName = toPascalCase(filename);
-  const config = EXAMPLE_CONFIGS[filename] || DEFAULT_CONFIG;
+function createFunctionResource(
+  resourceName,
+  catalog,
+  skipVerboseLogging = false,
+) {
+  const config = EXAMPLE_CONFIGS[resourceName] || DEFAULT_CONFIG;
 
   const functionResource = {
     Type: "AWS::Serverless::Function",
     Properties: {
-      FunctionName: `${resourceName}-TypeScript`,
+      FunctionName: resourceName,
       CodeUri: "./dist",
-      Handler: `${filename}.handler`,
+      Handler: catalog.handler,
       Runtime: "nodejs22.x",
       Architectures: ["x86_64"],
       MemorySize: config.memorySize,
       Timeout: config.timeout,
       Role: { "Fn::GetAtt": ["DurableFunctionRole", "Arn"] },
-      DurableConfig: {
-        ExecutionTimeout: 3600,
-        RetentionPeriodInDays: 7,
-      },
+      DurableConfig: catalog.durableConfig,
       Environment: {
         Variables: {
           AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
@@ -149,9 +149,20 @@ function createFunctionResource(filename, skipVerboseLogging = false) {
  * Generate the complete CloudFormation template
  */
 function generateTemplate(skipVerboseLogging = false) {
-  const exampleFiles = getExampleFiles();
+  const examplesCatalogPath = path.join(
+    __dirname,
+    "../src/utils/examples-catalog.json",
+  );
 
-  if (exampleFiles.length === 0) {
+  if (!fs.existsSync(examplesCatalogPath)) {
+    throw new Error(`Examples directory not found: ${examplesCatalogPath}`);
+  }
+
+  const examplesCatalog = JSON.parse(
+    fs.readFileSync(examplesCatalogPath, "utf8"),
+  );
+
+  if (examplesCatalog.length === 0) {
     throw new Error("No TypeScript example files found in src/examples");
   }
 
@@ -202,12 +213,11 @@ function generateTemplate(skipVerboseLogging = false) {
   };
 
   // Generate resources for each example file
-  exampleFiles.forEach((filename) => {
-    const resourceName = toPascalCase(filename);
-    template.Resources[resourceName] = createFunctionResource(
-      filename,
-      skipVerboseLogging,
-    );
+  examplesCatalog.forEach((catalog) => {
+    const resourceName = catalog.name.replace(/\s/g, "") + `-22x-NodeJS-Local`;
+    template.Resources[
+      toPascalCase(catalog.handler.slice(0, -".handler".length))
+    ] = createFunctionResource(resourceName, catalog, skipVerboseLogging);
   });
 
   return template;

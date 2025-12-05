@@ -17,10 +17,19 @@ describe("generate-sam-template", () => {
 
   describe("createFunctionResource", () => {
     test("creates default function resource", () => {
-      const resource = createFunctionResource("hello-world");
+      const resource = createFunctionResource("hello-world", {
+        name: "Hello World",
+        description: "A simple hello world example with no durable operations",
+        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-world.ts",
+        handler: "hello-world.handler",
+        durableConfig: {
+          ExecutionTimeout: 60,
+          RetentionPeriodInDays: 7,
+        },
+      });
 
       expect(resource.Type).toBe("AWS::Serverless::Function");
-      expect(resource.Properties.FunctionName).toBe("HelloWorld-TypeScript");
+      expect(resource.Properties.FunctionName).toBe("hello-world");
       expect(resource.Properties.Handler).toBe("hello-world.handler");
       expect(resource.Properties.Runtime).toBe("nodejs22.x");
       expect(resource.Properties.MemorySize).toBe(128);
@@ -29,11 +38,18 @@ describe("generate-sam-template", () => {
     });
 
     test("creates function resource with custom config for steps-with-retry", () => {
-      const resource = createFunctionResource("steps-with-retry");
+      const resource = createFunctionResource("steps-with-retry", {
+        name: "Steps With Retry",
+        description: "An example demonstrating retry functionality with steps",
+        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/step/steps-with-retry/steps-with-retry.ts",
+        handler: "steps-with-retry.handler",
+        durableConfig: {
+          ExecutionTimeout: 60,
+          RetentionPeriodInDays: 7,
+        },
+      });
 
-      expect(resource.Properties.FunctionName).toBe(
-        "StepsWithRetry-TypeScript",
-      );
+      expect(resource.Properties.FunctionName).toBe("steps-with-retry");
       expect(resource.Properties.MemorySize).toBe(256);
       expect(resource.Properties.Timeout).toBe(300);
       expect(resource.Properties.Policies).toEqual([
@@ -46,7 +62,7 @@ describe("generate-sam-template", () => {
     });
 
     test("includes required environment variables", () => {
-      const resource = createFunctionResource("hello-world");
+      const resource = createFunctionResource("hello-world", {});
 
       expect(resource.Properties.Environment.Variables).toEqual({
         AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
