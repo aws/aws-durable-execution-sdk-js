@@ -90,6 +90,46 @@ export class CheckpointManager implements Checkpoint {
     return false;
   }
 
+  /**
+   * Checks if a step ID or any of its ancestors is already finished
+   * (either in stepData as SUCCEEDED/FAILED or in pendingCompletions)
+   */
+  private hasFinishedAncestor(
+    stepId: string,
+    data: Partial<OperationUpdate>,
+  ): boolean {
+    // Start with the parent from the operation data, or fall back to stepData
+    let currentHashedId: string | undefined = data.ParentId
+      ? hashId(data.ParentId)
+      : undefined;
+
+    // If no ParentId in operation data, check if step exists in stepData
+    if (!currentHashedId) {
+      const currentOperation = this.stepData[hashId(stepId)];
+      currentHashedId = currentOperation?.ParentId;
+    }
+
+    while (currentHashedId) {
+      // Check if ancestor has pending completion
+      if (this.pendingCompletions.has(currentHashedId)) {
+        return true;
+      }
+
+      // Check if ancestor is already finished in stepData
+      const operation: Operation | undefined = this.stepData[currentHashedId];
+      if (
+        operation?.Status === OperationStatus.SUCCEEDED ||
+        operation?.Status === OperationStatus.FAILED
+      ) {
+        return true;
+      }
+
+      currentHashedId = operation?.ParentId;
+    }
+
+    return false;
+  }
+
   async forceCheckpoint(): Promise<void> {
     if (this.isTerminating) {
       log("⚠️", "Force checkpoint skipped - termination in progress");
@@ -148,6 +188,12 @@ export class CheckpointManager implements Checkpoint {
       return new Promise(() => {}); // Never resolves during termination
     }
 
+    // Check if any ancestor is finished - if so, don't checkpoint and don't resolve
+    if (this.hasFinishedAncestor(stepId, data)) {
+      log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
+      return new Promise(() => {}); // Never resolves when ancestor is finished
+    }
+
     return new Promise<void>((resolve, reject) => {
       if (
         data.Action === OperationAction.SUCCEED ||
@@ -181,30 +227,6 @@ export class CheckpointManager implements Checkpoint {
         });
       }
     });
-  }
-
-  private hasFinishedAncestor(parentId?: string): boolean {
-    if (!parentId) {
-      return false;
-    }
-
-    let currentHashedId: string | undefined = hashId(parentId);
-
-    while (currentHashedId) {
-      const parentOperation: Operation | undefined =
-        this.stepData[currentHashedId];
-
-      if (
-        parentOperation?.Status === OperationStatus.SUCCEEDED ||
-        parentOperation?.Status === OperationStatus.FAILED
-      ) {
-        return true;
-      }
-
-      currentHashedId = parentOperation?.ParentId;
-    }
-
-    return false;
   }
 
   private classifyCheckpointError(
@@ -293,7 +315,7 @@ export class CheckpointManager implements Checkpoint {
 
       this.queue.shift();
 
-      if (this.hasFinishedAncestor(nextItem.data.ParentId)) {
+      if (this.hasFinishedAncestor(nextItem.stepId, nextItem.data)) {
         log("⚠️", "Checkpoint skipped - ancestor finished:", {
           stepId: nextItem.stepId,
           parentId: nextItem.data.ParentId,

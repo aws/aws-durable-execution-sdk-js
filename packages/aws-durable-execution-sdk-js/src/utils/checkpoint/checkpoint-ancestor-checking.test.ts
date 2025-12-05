@@ -1,5 +1,9 @@
 import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
-import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
+import {
+  OperationAction,
+  OperationType,
+  OperationStatus,
+} from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { DurableLogger, ExecutionContext } from "../../types";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
@@ -236,6 +240,129 @@ describe("CheckpointManager - Ancestor Checking", () => {
 
     // Checkpoint should not be called (root ancestor is SUCCEEDED)
     expect(mockState.checkpoint).not.toHaveBeenCalled();
+    expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
+  });
+
+  it("should skip checkpoint when ancestor is finished (SUCCEEDED in stepData)", async () => {
+    const parentId = "parent-operation";
+    const childId = "child-operation";
+
+    // Set up parent as SUCCEEDED in stepData
+    mockContext._stepData[hashId(parentId)] = {
+      Id: hashId(parentId),
+      Status: OperationStatus.SUCCEEDED,
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
+    } as any;
+
+    // Set up child with parent relationship
+    mockContext._stepData[hashId(childId)] = {
+      Id: hashId(childId),
+      Status: OperationStatus.STARTED,
+      ParentId: hashId(parentId),
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
+    } as any;
+
+    // Try to checkpoint child success - should be skipped
+    const checkpointPromise = checkpointHandler.checkpoint(childId, {
+      Action: OperationAction.SUCCEED,
+      Type: OperationType.STEP,
+    });
+
+    // Wait for next tick
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // Checkpoint should not be called (parent is SUCCEEDED)
+    expect(mockState.checkpoint).not.toHaveBeenCalled();
+    expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
+
+    // Promise should never resolve (returns never-resolving promise)
+    let resolved = false;
+    checkpointPromise.then(() => {
+      resolved = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(resolved).toBe(false);
+  });
+
+  it("should skip checkpoint when ancestor has pending completion", async () => {
+    const parentId = "parent-operation";
+    const childId = "child-operation";
+
+    // Set up parent-child relationship in stepData
+    mockContext._stepData[hashId(parentId)] = {
+      Id: hashId(parentId),
+      Status: OperationStatus.STARTED,
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
+    } as any;
+
+    mockContext._stepData[hashId(childId)] = {
+      Id: hashId(childId),
+      Status: OperationStatus.STARTED,
+      ParentId: hashId(parentId),
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
+    } as any;
+
+    // Add parent to pending completions
+    mockContext.pendingCompletions.add(hashId(parentId));
+
+    // Try to checkpoint child success - should be skipped
+    const checkpointPromise = checkpointHandler.checkpoint(childId, {
+      Action: OperationAction.SUCCEED,
+      Type: OperationType.STEP,
+    });
+
+    // Wait for next tick
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // Checkpoint should not be called (parent has pending completion)
+    expect(mockState.checkpoint).not.toHaveBeenCalled();
+    expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
+
+    // Promise should never resolve
+    let resolved = false;
+    checkpointPromise.then(() => {
+      resolved = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(resolved).toBe(false);
+  });
+
+  it("should allow checkpoint when no ancestor is finished", async () => {
+    const parentId = "parent-operation";
+    const childId = "child-operation";
+
+    // Set up parent as STARTED (not finished)
+    mockContext._stepData[hashId(parentId)] = {
+      Id: hashId(parentId),
+      Status: OperationStatus.STARTED,
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
+    } as any;
+
+    // Set up child with parent relationship
+    mockContext._stepData[hashId(childId)] = {
+      Id: hashId(childId),
+      Status: OperationStatus.STARTED,
+      ParentId: hashId(parentId),
+      Type: OperationType.STEP,
+      StartTimestamp: new Date(),
+    } as any;
+
+    // Try to checkpoint child success - should proceed
+    checkpointHandler.checkpoint(childId, {
+      Action: OperationAction.SUCCEED,
+      Type: OperationType.STEP,
+    });
+
+    // Wait for next tick
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // Checkpoint should be called (no ancestor is finished)
+    expect(mockState.checkpoint).toHaveBeenCalled();
     expect(checkpointHandler.getQueueStatus().queueLength).toBe(0);
   });
 });
