@@ -173,7 +173,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           currentState = config.initialState;
         }
 
-        const currentAttempt = stepData?.StepDetails?.Attempt || 1;
+        const currentAttempt = (stepData?.StepDetails?.Attempt ?? 0) + 1;
 
         // Checkpoint START if not already started
         if (stepData?.Status !== OperationStatus.STARTED) {
@@ -211,7 +211,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             stepId,
             parentId,
             () => check(currentState, waitForConditionContext),
-            currentAttempt + 1,
+            currentAttempt,
             DurableExecutionMode.ExecutionMode,
           );
 

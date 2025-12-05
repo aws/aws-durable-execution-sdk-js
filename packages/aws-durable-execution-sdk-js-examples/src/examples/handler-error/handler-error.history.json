@@ -1,0 +1,43 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "089fcfd1-a145-4d5c-bf23-b875c774735a",
+    "EventTimestamp": "2025-12-03T22:58:34.985Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 2,
+    "EventTimestamp": "2025-12-03T22:58:34.987Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:58:34.985Z",
+      "EndTimestamp": "2025-12-03T22:58:34.987Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Intentional handler failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "86b05a42-1765-4220-b6fd-0effb9905e15"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 3,
+    "Id": "089fcfd1-a145-4d5c-bf23-b875c774735a",
+    "EventTimestamp": "2025-12-03T22:58:34.987Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Intentional handler failure",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  }
+]

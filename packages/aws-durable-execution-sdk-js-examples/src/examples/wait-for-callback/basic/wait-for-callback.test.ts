@@ -10,7 +10,7 @@ createTests({
   functionName: "wait-for-callback",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner, isCloud) => {
+  tests: (runner, { isCloud }) => {
     it("function completes when callback succeeds - happy case", async () => {
       const executionPromise = runner.run();
 

@@ -1,4 +1,5 @@
 import { handler } from "./parent-context-in-step";
+import historyEvents from "./parent-context-in-step.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 // Set shorter timeout for context validation tests since they should fail quickly
@@ -8,7 +9,7 @@ createTests({
   name: "context validation - parent context in step error",
   functionName: "parent-context-in-step",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should fail when using parent context inside step function", async () => {
       const execution = await runner.run();
 
@@ -74,6 +75,8 @@ createTests({
       // May also have step-with-invalid-nested in local tests
       expect(operations.length).toBeGreaterThanOrEqual(2);
       expect(operations.length).toBeLessThanOrEqual(3);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

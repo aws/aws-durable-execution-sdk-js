@@ -7,7 +7,7 @@ createTests({
   functionName: "create-callback-heartbeat",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner, isCloud) => {
+  tests: (runner, { isCloud }) => {
     it("should handle callback heartbeats during long-running tasks", async () => {
       const callbackOperation = runner.getOperation("long-running-task");
 

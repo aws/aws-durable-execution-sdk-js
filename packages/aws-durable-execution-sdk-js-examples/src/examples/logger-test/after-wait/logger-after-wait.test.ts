@@ -1,4 +1,5 @@
 import { handler } from "./logger-after-wait";
+import historyEvents from "./logger-after-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 import * as fs from "fs";
 import * as path from "path";
@@ -9,7 +10,7 @@ createTests({
   name: "logger-after-wait",
   functionName: "logger-after-wait",
   handler,
-  tests: (runner, isCloud) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     if (!isCloud) {
       it("should log after wait in execution mode with modeAware=true", async () => {
         const logFilePath = path.join(
@@ -44,6 +45,8 @@ createTests({
           // With modeAware: true, both logs appear once (execution mode only)
           expect(beforeWaitLogs.length).toBe(1);
           expect(afterWaitLogs.length).toBe(1);
+
+          assertEventSignatures(execution.getHistoryEvents(), historyEvents);
         } finally {
           if (fs.existsSync(logFilePath)) {
             fs.unlinkSync(logFilePath);
@@ -55,6 +58,8 @@ createTests({
     it("should execute successfully", async () => {
       const execution = await runner.run();
       expect(execution.getResult()).toEqual({ message: "Success" });
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

@@ -1,0 +1,178 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "f4e6c5e3-2f17-4d0d-961a-cea510c5b116",
+    "EventTimestamp": "2025-12-03T22:59:06.981Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:06.983Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:06.983Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:59:06.983Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:06.983Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-03T22:59:06.983Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:06.983Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"success\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:59:06.983Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"another success\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:07.987Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:07.987Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:08.989Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:08.989Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 13,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-03T22:59:08.990Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "[{\"status\":\"fulfilled\",\"value\":\"success\"},{\"status\":\"rejected\",\"reason\":{\"message\":\"failure\",\"name\":\"StepError\",\"stack\":\"StepError: failure\\n    at DurableOperationError.fromErrorObject (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/errors/durable-error/durable-error.ts:67:16)\\n    at executeStepLogic (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:342:41)\\n    at async executeStepLogic (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:379:18)\\n    at async executeStepLogic (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:379:18)\\n    at async <anonymous> (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:220:14)\"}},{\"status\":\"fulfilled\",\"value\":\"another success\"}]"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 14,
+    "EventTimestamp": "2025-12-03T22:59:08.990Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:06.981Z",
+      "EndTimestamp": "2025-12-03T22:59:08.990Z",
+      "Error": {},
+      "RequestId": "eff39010-55a7-4e3e-aa2a-e690162c27cf"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 15,
+    "Id": "f4e6c5e3-2f17-4d0d-961a-cea510c5b116",
+    "EventTimestamp": "2025-12-03T22:59:08.990Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "[{\"status\":\"fulfilled\",\"value\":\"success\"},{\"status\":\"rejected\",\"reason\":{\"name\":\"StepError\"}},{\"status\":\"fulfilled\",\"value\":\"another success\"}]"
+      }
+    }
+  }
+]

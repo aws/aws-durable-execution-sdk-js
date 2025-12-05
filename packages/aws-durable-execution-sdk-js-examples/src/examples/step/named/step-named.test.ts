@@ -1,11 +1,12 @@
 import { handler } from "./step-named";
+import historyEvents from "./step-named.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "step-named test",
   functionName: "step-named",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     const DEFAULT = "default";
 
     const getExpectedResult = (input: any) => `processed: ${input}`;
@@ -14,6 +15,8 @@ createTests({
       const execution = await runner.run();
 
       expect(execution.getResult()).toStrictEqual(getExpectedResult(DEFAULT));
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
 
     it("should return provided input", async () => {
@@ -30,6 +33,8 @@ createTests({
       expect(execution.getResult()).toStrictEqual(
         getExpectedResult(INPUT.data),
       );
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
 
     it("named step should return correct result", async () => {
@@ -38,6 +43,8 @@ createTests({
       expect(
         runner.getOperation("process-data").getStepDetails()?.result,
       ).toStrictEqual(getExpectedResult(DEFAULT));
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

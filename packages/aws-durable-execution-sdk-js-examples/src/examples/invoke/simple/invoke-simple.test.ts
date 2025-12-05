@@ -10,7 +10,7 @@ createTests({
   name: "invoke-simple",
   functionName: "invoke-simple",
   handler,
-  tests: function (runner, _, functionNameMap) {
+  tests: function (runner, { functionNameMap }) {
     it("should run invoke with basic wait state", async () => {
       if (runner instanceof LocalDurableTestRunner) {
         runner.registerDurableFunction(

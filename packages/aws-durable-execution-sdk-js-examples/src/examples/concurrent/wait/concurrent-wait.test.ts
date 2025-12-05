@@ -1,4 +1,5 @@
 import { handler } from "./concurrent-wait";
+import historyEvents from "./concurrent-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
@@ -8,7 +9,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete all waits and wait for the max duration", async () => {
       const execution = await runner.run();
 
@@ -22,6 +23,8 @@ createTests({
       expect(wait1SecondOp.getWaitDetails()!.waitSeconds!).toBe(1);
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
       expect(wait10SecondsOp.getWaitDetails()!.waitSeconds!).toBe(10);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 30000);
   },
 });

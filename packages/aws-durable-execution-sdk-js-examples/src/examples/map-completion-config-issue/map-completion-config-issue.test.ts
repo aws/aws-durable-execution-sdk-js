@@ -3,6 +3,7 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./map-completion-config-issue";
+import historyEvents from "./map-completion-config-issue.history.json";
 import { createTests } from "../../utils/test-helper";
 
 createTests({
@@ -12,7 +13,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should reproduce the completion config behavior with detailed logging", async () => {
       const execution = await runner.run();
 
@@ -74,6 +75,8 @@ createTests({
       operations.forEach((op: any, index: number) => {
         console.log(`${index}: ${op.getName()} - ${op.getType()}`);
       });
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

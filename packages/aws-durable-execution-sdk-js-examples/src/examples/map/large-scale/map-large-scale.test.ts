@@ -1,14 +1,12 @@
 import { handler } from "./map-large-scale";
-import { createTests } from "../../../utils/test-helper";
+import historyEvents from "./map-large-scale.history.json";
+import { createTests, EventSignature } from "../../../utils/test-helper";
 
 createTests({
   name: "map-large-scale test",
   functionName: "map-large-scale",
   handler,
-  localRunnerConfig: {
-    skipTime: true, // Skip wait delays for faster testing
-  },
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle 50 items with 100KB each using map", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
@@ -27,6 +25,11 @@ createTests({
       expect(result.summary.totalDataSizeBytes).toBeGreaterThan(5000000); // ~5MB
       expect(result.summary.averageItemSize).toBeGreaterThan(100000); // ~100KB per item
       expect(result.summary.maxConcurrency).toBe(10);
+
+      assertEventSignatures(
+        execution.getHistoryEvents(),
+        historyEvents as EventSignature[],
+      );
     });
   },
 });

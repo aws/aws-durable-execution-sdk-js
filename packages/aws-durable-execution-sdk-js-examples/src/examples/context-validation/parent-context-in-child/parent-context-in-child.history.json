@@ -1,0 +1,52 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "de606d27-fe21-4f04-ba82-558b98e83e23",
+    "EventTimestamp": "2025-12-03T22:57:22.182Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "child-context",
+    "EventTimestamp": "2025-12-03T22:57:22.185Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-12-03T22:57:22.187Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:57:22.182Z",
+      "EndTimestamp": "2025-12-03T22:57:22.187Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "16cfb77e-a652-4e70-916c-09b053110b91"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 4,
+    "Id": "de606d27-fe21-4f04-ba82-558b98e83e23",
+    "EventTimestamp": "2025-12-03T22:57:22.187Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  }
+]

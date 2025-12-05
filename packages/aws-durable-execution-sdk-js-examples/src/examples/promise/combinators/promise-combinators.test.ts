@@ -1,4 +1,5 @@
 import { handler } from "./promise-combinators";
+import historyEvents from "./promise-combinators.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
@@ -8,7 +9,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should execute all promise combinators successfully", async () => {
       const execution = await runner.run();
 
@@ -34,6 +35,8 @@ createTests({
         ],
         anyResult: "First success!", // The successful promise should be returned
       });
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 30000);
   },
 });

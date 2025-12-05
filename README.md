@@ -1,5 +1,9 @@
 # AWS Durable Execution SDKs for JavaScript
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/aws/aws-durable-execution-sdk-js/badge)](https://scorecard.dev/viewer/?uri=github.com/aws/aws-durable-execution-sdk-js)
+
+---
+
 This repository contains the code for the following 3 packages published to NPM:
 
 - [@aws/durable-execution-sdk-js](https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js)

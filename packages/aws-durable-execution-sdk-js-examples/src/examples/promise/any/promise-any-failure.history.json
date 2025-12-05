@@ -1,0 +1,309 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "6a434920-e5eb-4b41-aa38-a049cdca038c",
+    "EventTimestamp": "2025-12-03T22:50:15.524Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"shouldFail\":true}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:50:15.552Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:50:15.552Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:50:15.552Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:50:15.552Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "failure 1",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:50:15.555Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "ERROR 1",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:50:15.555Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "ERROR 2",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-03T22:50:15.555Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:50:15.572Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:50:15.572Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:50:15.572Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:50:15.572Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "failure 1",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 13,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:50:15.572Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "ERROR 1",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 14,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:50:15.572Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "ERROR 2",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 15,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:50:15.614Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 16,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:50:15.614Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 17,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:50:15.614Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 18,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:50:15.614Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "failure 1",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 19,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:50:15.614Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "ERROR 1",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 20,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:50:15.614Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "ERROR 2",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 21,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-03T22:50:15.635Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "All promises were rejected",
+          "ErrorType": "AggregateError"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 22,
+    "EventTimestamp": "2025-12-03T22:50:15.635Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:50:15.524Z",
+      "EndTimestamp": "2025-12-03T22:50:15.635Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "All promises were rejected"
+        }
+      },
+      "RequestId": "fbc86873-a5cb-453f-a2bd-0856d2471c04"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 23,
+    "Id": "6a434920-e5eb-4b41-aa38-a049cdca038c",
+    "EventTimestamp": "2025-12-03T22:50:15.635Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "All promises were rejected"
+        }
+      }
+    }
+  }
+]

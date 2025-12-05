@@ -1,0 +1,137 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "ffe741a4-7d6a-4303-a8f2-1c7e645bb908",
+    "EventTimestamp": "2025-12-03T22:59:14.890Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failure-step",
+    "EventTimestamp": "2025-12-03T22:59:14.893Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failure-step",
+    "EventTimestamp": "2025-12-03T22:59:14.893Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "This step failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:14.893Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-03T22:59:14.894Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "[{\"status\":\"rejected\",\"reason\":{\"message\":\"This step failed\",\"name\":\"StepError\",\"stack\":\"StepError: This step failed\\n    at DurableOperationError.fromErrorObject (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/errors/durable-error/durable-error.ts:67:16)\\n    at executeStepLogic (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:342:41)\\n    at async <anonymous> (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:220:14)\"}}]"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:59:14.894Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-03T22:59:15.894Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-03T22:59:14.945Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:14.890Z",
+      "EndTimestamp": "2025-12-03T22:59:14.945Z",
+      "Error": {},
+      "RequestId": "f0a273fb-78b3-4c12-b5cf-8554de3c1809"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-03T22:59:15.896Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-03T22:59:15.900Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-03T22:59:16.400Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"Success\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2025-12-03T22:59:16.401Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:15.896Z",
+      "EndTimestamp": "2025-12-03T22:59:16.401Z",
+      "Error": {},
+      "RequestId": "1ea0a09f-8d21-49cf-bfec-10120d705781"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 12,
+    "Id": "ffe741a4-7d6a-4303-a8f2-1c7e645bb908",
+    "EventTimestamp": "2025-12-03T22:59:16.401Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"successStep\":\"Success\"}"
+      }
+    }
+  }
+]

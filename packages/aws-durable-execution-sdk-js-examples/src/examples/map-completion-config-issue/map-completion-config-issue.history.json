@@ -1,0 +1,237 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "bfaf9450-f47c-4993-accc-9113d978c14e",
+    "EventTimestamp": "2025-12-03T22:58:50.210Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "completion-config-items",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "process-item-0",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "process-item-1",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "process-item-2",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "6151f5ab282d90e4",
+    "Name": "process-item-1",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Processing failed for item 2",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "2f221a18eb863803",
+    "Name": "process-item-0",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":1,\"processed\":true,\"result\":\"Item 1 processed successfully\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "b425e0c75591aa8f",
+    "Name": "process-item-2",
+    "EventTimestamp": "2025-12-03T22:58:50.213Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":3,\"processed\":true,\"result\":\"Item 3 processed successfully\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 12,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":1,\"processed\":true,\"result\":\"Item 1 processed successfully\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 13,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":3,\"processed\":true,\"result\":\"Item 3 processed successfully\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 14,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "map-item-3",
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 15,
+    "Id": "a4e1cd317d54f087",
+    "Name": "process-item-3",
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 16,
+    "Id": "a4e1cd317d54f087",
+    "Name": "process-item-3",
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Processing failed for item 4",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 17,
+    "Id": "c4ca4238a0b92382",
+    "Name": "completion-config-items",
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":{\"itemId\":1,\"processed\":true,\"result\":\"Item 1 processed successfully\"},\"index\":0,\"status\":\"SUCCEEDED\"},{\"index\":1,\"status\":\"STARTED\"},{\"result\":{\"itemId\":3,\"processed\":true,\"result\":\"Item 3 processed successfully\"},\"index\":2,\"status\":\"SUCCEEDED\"},{\"index\":3,\"status\":\"STARTED\"}],\"completionReason\":\"MIN_SUCCESSFUL_REACHED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 18,
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:58:50.210Z",
+      "EndTimestamp": "2025-12-03T22:58:50.214Z",
+      "Error": {},
+      "RequestId": "72d09cc7-20d3-4e2c-807d-be9375f2b120"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 19,
+    "Id": "bfaf9450-f47c-4993-accc-9113d978c14e",
+    "EventTimestamp": "2025-12-03T22:58:50.214Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalItems\":4,\"successfulCount\":2,\"failedCount\":0,\"hasFailures\":false,\"batchStatus\":\"SUCCEEDED\",\"completionReason\":\"MIN_SUCCESSFUL_REACHED\",\"successfulItems\":[{\"index\":0,\"itemId\":1},{\"index\":2,\"itemId\":3}],\"failedItems\":[]}"
+      }
+    }
+  }
+]

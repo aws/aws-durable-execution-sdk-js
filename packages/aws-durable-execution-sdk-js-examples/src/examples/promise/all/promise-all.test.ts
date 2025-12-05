@@ -1,11 +1,12 @@
 import { handler } from "./promise-all";
+import historyEvents from "./promise-all.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "promise-all test",
   functionName: "promise-all",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete all promises", async () => {
       const execution = await runner.run();
 
@@ -20,6 +21,8 @@ createTests({
         "result 2",
         "result 3",
       ]);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

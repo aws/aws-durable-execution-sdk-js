@@ -1,11 +1,12 @@
 import { handler } from "./parallel-heterogeneous";
+import historyEvents from "./parallel-heterogeneous.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
   name: "parallel-heterogeneous test",
   functionName: "parallel-heterogeneous",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle branches with different return types", async () => {
       const execution = await runner.run();
 
@@ -16,6 +17,8 @@ createTests({
       expect(result[0]).toEqual({ step1: "completed" });
       expect(result[1]).toBe("task 2 completed");
       expect(result[2]).toBe(42);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

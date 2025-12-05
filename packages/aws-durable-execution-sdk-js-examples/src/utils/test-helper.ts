@@ -1,4 +1,4 @@
-import { LambdaClient } from "@aws-sdk/client-lambda";
+import { LambdaClient, Event, EventType } from "@aws-sdk/client-lambda";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -7,23 +7,6 @@ import {
   DurableOperation,
   InvocationType,
 } from "@aws/durable-execution-sdk-js-testing";
-
-type TestCallback<ResultType> = (
-  runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
-  isCloud: boolean,
-  functionNameMap: FunctionNameMap,
-) => void;
-
-export interface TestDefinition<ResultType> {
-  name: string;
-  functionName: string;
-  handler: DurableLambdaHandler;
-  tests: TestCallback<ResultType>;
-  invocationType?: InvocationType;
-  localRunnerConfig?: {
-    skipTime?: boolean;
-  };
-}
 
 export interface FunctionNameMap {
   getFunctionName(functionName: string): string;
@@ -43,12 +26,128 @@ class LocalFunctionNameMap implements FunctionNameMap {
   }
 }
 
+type TestCallback<ResultType> = (
+  runner: DurableTestRunner<DurableOperation<unknown>, ResultType>,
+  testHelper: TestHelper,
+) => void;
+
+export interface TestDefinition<ResultType> {
+  name: string;
+  functionName: string;
+  handler: DurableLambdaHandler;
+  tests: TestCallback<ResultType>;
+  invocationType?: InvocationType;
+  localRunnerConfig?: {
+    skipTime?: boolean;
+  };
+}
+
+export interface TestHelper {
+  isTimeSkipping: boolean;
+  isCloud: boolean;
+  assertEventSignatures(
+    actualEvents: Event[],
+    expectedEvents: EventSignature[],
+  ): void;
+  functionNameMap: FunctionNameMap;
+}
+
+export type EventSignature = {
+  EventType?: string;
+  SubType?: string;
+  Name?: string;
+};
+
+function createEventSignature(event: EventSignature) {
+  const signature: EventSignature = {
+    EventType: event.EventType,
+    SubType: event.SubType,
+    // TODO: add more to the event signature such as
+    // - wait duration
+    // - result/error
+    // - step attempt
+  };
+
+  // Only include Name for events that have stable names (not ExecutionStarted/ExecutionSucceeded)
+  if (
+    event.EventType !== "ExecutionStarted" &&
+    event.EventType !== "ExecutionSucceeded" &&
+    event.EventType !== "ExecutionFailed" &&
+    event.Name
+  ) {
+    signature.Name = event.Name;
+  }
+
+  return signature;
+}
+
+// Count occurrences of each event signature
+function countEventSignatures(
+  events: EventSignature[],
+  isTimeSkipping: boolean,
+) {
+  const counts = new Map();
+  events.forEach((event) => {
+    const signature = JSON.stringify(createEventSignature(event));
+    let count: number;
+    if (event.EventType === EventType.InvocationCompleted && isTimeSkipping) {
+      // Time skipping can result in a different number of completed invocations due to concurrent
+      // logic and early completion of branches in some cases. We will only validate that the
+      // InvocationCompleted event exists when time skipping is enabled.
+      count = -1;
+    } else {
+      count = (counts.get(signature) || 0) + 1;
+    }
+    counts.set(signature, count);
+  });
+  return counts;
+}
+
+function assertEventSignatures(
+  actualEvents: Event[],
+  expectedEvents: EventSignature[],
+  isTimeSkipping: boolean = false,
+) {
+  const actualCounts = countEventSignatures(actualEvents, isTimeSkipping);
+  const expectedCounts = countEventSignatures(expectedEvents, isTimeSkipping);
+
+  expect(actualCounts).toEqual(expectedCounts);
+}
+
 /**
  * Creates tests that automatically run with the appropriate test runner
  * based on the environment variables passed in.
  */
 export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   const isIntegrationTest = process.env.NODE_ENV === "integration";
+  const isTimeSkipping =
+    (testDef.localRunnerConfig?.skipTime ?? true) && !isIntegrationTest;
+
+  let calledAssertEventSignature = false;
+  const testHelper: TestHelper = {
+    isTimeSkipping,
+    isCloud: isIntegrationTest,
+    assertEventSignatures: (actualEvents, expectedEvents) => {
+      calledAssertEventSignature = true;
+      return assertEventSignatures(
+        actualEvents,
+        expectedEvents,
+        testHelper.isTimeSkipping,
+      );
+    },
+    functionNameMap: isIntegrationTest
+      ? new CloudFunctionNameMap(JSON.parse(process.env.FUNCTION_NAME_MAP!))
+      : new LocalFunctionNameMap(),
+  };
+
+  afterAll(() => {
+    if (!calledAssertEventSignature) {
+      console.warn(
+        `assertEventSignature was not called for test ${testDef.name}`,
+      );
+    }
+  });
+
   if (isIntegrationTest) {
     if (!process.env.FUNCTION_NAME_MAP) {
       throw new Error("FUNCTION_NAME_MAP is not set for integration tests");
@@ -82,7 +181,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     });
 
     describe(`${testDef.name} (cloud)`, () => {
-      testDef.tests(runner, true, new CloudFunctionNameMap(functionNames));
+      testDef.tests(runner, testHelper);
     });
     return;
   }
@@ -90,7 +189,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   describe(`${testDef.name} (local)`, () => {
     beforeAll(() =>
       LocalDurableTestRunner.setupTestEnvironment({
-        skipTime: testDef.localRunnerConfig?.skipTime ?? true,
+        skipTime: isTimeSkipping,
       }),
     );
     afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
@@ -106,6 +205,6 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       runner.reset();
     });
 
-    testDef.tests(runner, false, new LocalFunctionNameMap());
+    testDef.tests(runner, testHelper);
   });
 }

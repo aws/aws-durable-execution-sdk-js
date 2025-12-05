@@ -3,6 +3,7 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./wait-unawaited";
+import historyEvents from "./wait-unawaited.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
@@ -12,7 +13,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should not hang if a long wait is scheduled before the function completes", async () => {
       const execution = await runner.run();
 
@@ -32,6 +33,8 @@ createTests({
       // Verify we have exactly one operation
       const completedOperations = execution.getOperations();
       expect(completedOperations.length).toEqual(1);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     });
   },
 });

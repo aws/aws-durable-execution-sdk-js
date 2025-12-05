@@ -1,11 +1,12 @@
 import { handler } from "./undefined-results";
+import historyEvents from "./undefined-results.history.json";
 import { createTests } from "../../utils/test-helper";
 
 createTests({
   name: "undefined-results test",
   functionName: "undefined-results",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle step operations with undefined result after replay", async () => {
       const result = await runner.run();
 
@@ -27,6 +28,8 @@ createTests({
       // Verify wait operation completed normally
       const waitOp = runner.getOperationByIndex(2);
       expect(waitOp.getWaitDetails()?.waitSeconds).toBe(1);
+
+      assertEventSignatures(result.getHistoryEvents(), historyEvents);
     });
   },
 });

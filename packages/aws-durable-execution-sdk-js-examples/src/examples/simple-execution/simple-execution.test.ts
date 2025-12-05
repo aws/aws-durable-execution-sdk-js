@@ -1,12 +1,13 @@
 import { ExecutionStatus } from "@aws-sdk/client-lambda";
 import { handler } from "./simple-execution";
+import historyEvents from "./simple-execution.history.json";
 import { createTests } from "../../utils/test-helper";
 
 createTests({
   name: "simple-execution test",
   functionName: "simple-execution",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should execute simple handler without operations", async () => {
       const testPayload = {
         userId: "test-user",
@@ -33,6 +34,8 @@ createTests({
 
       // Verify no error occurred
       expect(result.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+
+      assertEventSignatures(result.getHistoryEvents(), historyEvents);
     });
   },
 });

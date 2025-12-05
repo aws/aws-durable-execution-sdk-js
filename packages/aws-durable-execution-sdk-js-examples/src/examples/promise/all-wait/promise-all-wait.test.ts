@@ -1,4 +1,5 @@
 import { handler } from "./promise-all-wait";
+import historyEvents from "./promise-all-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
@@ -8,7 +9,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete all waits and wait for max duration", async () => {
       const execution = await runner.run();
 
@@ -22,6 +23,8 @@ createTests({
       expect(wait1Op.getWaitDetails()!.waitSeconds!).toBe(1);
       expect(wait2Op.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait3Op.getStepDetails()!.result).toBeUndefined();
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 10000);
   },
 });

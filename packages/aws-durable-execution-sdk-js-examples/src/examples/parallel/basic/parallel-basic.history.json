@@ -1,161 +1,209 @@
-{
-  "expectedHistory": {
-    "events": [
-      {
-        "EventType": "ExecutionStarted",
-        "EventId": 1,
-        "Name": "basic-parallel-typescript-acceptance-test",
-        "ExecutionStartedDetails": {
-          "Input": {
-            "Truncated": true
-          },
-          "ExecutionTimeout": 300
-        }
-      },
-      {
-        "EventType": "ContextStarted",
-        "SubType": "Parallel",
-        "EventId": 2,
-        "Name": "parallel",
-        "ContextStartedDetails": {}
-      },
-      {
-        "EventType": "ContextStarted",
-        "SubType": "ParallelBranch",
-        "EventId": 3,
-        "Name": "parallel-branch-0",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextStartedDetails": {}
-      },
-      {
-        "EventType": "ContextStarted",
-        "SubType": "ParallelBranch",
-        "EventId": 4,
-        "Name": "parallel-branch-1",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextStartedDetails": {}
-      },
-      {
-        "EventType": "StepStarted",
-        "SubType": "Step",
-        "EventId": 5,
-        "ParentId": "ea66c06c1e1c05fa",
-        "StepStartedDetails": {}
-      },
-      {
-        "EventType": "StepStarted",
-        "SubType": "Step",
-        "EventId": 6,
-        "ParentId": "98c6f2c2287f4c73",
-        "StepStartedDetails": {}
-      },
-      {
-        "EventType": "StepSucceeded",
-        "SubType": "Step",
-        "EventId": 7,
-        "ParentId": "ea66c06c1e1c05fa",
-        "StepSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          },
-          "RetryDetails": {
-            "CurrentAttempt": 0
-          }
-        }
-      },
-      {
-        "EventType": "StepSucceeded",
-        "SubType": "Step",
-        "EventId": 8,
-        "ParentId": "98c6f2c2287f4c73",
-        "StepSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          },
-          "RetryDetails": {
-            "CurrentAttempt": 0
-          }
-        }
-      },
-      {
-        "EventType": "ContextSucceeded",
-        "SubType": "ParallelBranch",
-        "EventId": 9,
-        "Name": "parallel-branch-0",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
-      },
-      {
-        "EventType": "ContextSucceeded",
-        "SubType": "ParallelBranch",
-        "EventId": 10,
-        "Name": "parallel-branch-1",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
-      },
-      {
-        "EventType": "ContextStarted",
-        "SubType": "ParallelBranch",
-        "EventId": 11,
-        "Name": "parallel-branch-2",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextStartedDetails": {}
-      },
-      {
-        "EventType": "WaitStarted",
-        "SubType": "Wait",
-        "EventId": 12,
-        "ParentId": "13cee27a2bd93915",
-        "WaitStartedDetails": {
-          "Duration": 1
-        }
-      },
-      {
-        "EventType": "WaitSucceeded",
-        "EventId": 13,
-        "WaitSucceededDetails": {}
-      },
-      {
-        "EventType": "ContextSucceeded",
-        "SubType": "ParallelBranch",
-        "EventId": 14,
-        "Name": "parallel-branch-2",
-        "ParentId": "c4ca4238a0b92382",
-        "ContextSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
-      },
-      {
-        "EventType": "ContextSucceeded",
-        "SubType": "Parallel",
-        "EventId": 15,
-        "Name": "parallel",
-        "ContextSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
-      },
-      {
-        "EventType": "ExecutionSucceeded",
-        "EventId": 16,
-        "Name": "history-generation-1757539782",
-        "ExecutionSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "246e233b-9818-4c47-b419-b1e99b6b7012",
+    "EventTimestamp": "2025-12-03T22:59:00.543Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
       }
-    ]
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel",
+    "EventTimestamp": "2025-12-03T22:59:00.545Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2025-12-03T22:59:00.545Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "EventTimestamp": "2025-12-03T22:59:00.545Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2025-12-03T22:59:00.545Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "EventTimestamp": "2025-12-03T22:59:00.545Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "2f221a18eb863803",
+    "EventTimestamp": "2025-12-03T22:59:00.545Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"task 1 completed\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "6151f5ab282d90e4",
+    "EventTimestamp": "2025-12-03T22:59:00.545Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"task 2 completed\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 9,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2025-12-03T22:59:00.546Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"task 1 completed\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 10,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2025-12-03T22:59:00.546Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"task 2 completed\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 11,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2025-12-03T22:59:00.546Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 12,
+    "Id": "b425e0c75591aa8f",
+    "EventTimestamp": "2025-12-03T22:59:00.546Z",
+    "ParentId": "13cee27a2bd93915",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-03T22:59:01.546Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2025-12-03T22:59:00.599Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:00.543Z",
+      "EndTimestamp": "2025-12-03T22:59:00.599Z",
+      "Error": {},
+      "RequestId": "b35cb978-c1a3-415e-8675-20ebc2acc42d"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 14,
+    "Id": "b425e0c75591aa8f",
+    "EventTimestamp": "2025-12-03T22:59:01.547Z",
+    "ParentId": "13cee27a2bd93915",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 15,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2025-12-03T22:59:01.548Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"task 3 completed after wait\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 16,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel",
+    "EventTimestamp": "2025-12-03T22:59:01.548Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":\"task 1 completed\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"result\":\"task 2 completed\",\"index\":1,\"status\":\"SUCCEEDED\"},{\"result\":\"task 3 completed after wait\",\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 17,
+    "EventTimestamp": "2025-12-03T22:59:01.548Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:01.547Z",
+      "EndTimestamp": "2025-12-03T22:59:01.548Z",
+      "Error": {},
+      "RequestId": "4ab7edcc-68ed-443b-8f46-b262cc8dd0dc"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 18,
+    "Id": "246e233b-9818-4c47-b419-b1e99b6b7012",
+    "EventTimestamp": "2025-12-03T22:59:01.548Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "[\"task 1 completed\",\"task 2 completed\",\"task 3 completed after wait\"]"
+      }
+    }
   }
-}
+]

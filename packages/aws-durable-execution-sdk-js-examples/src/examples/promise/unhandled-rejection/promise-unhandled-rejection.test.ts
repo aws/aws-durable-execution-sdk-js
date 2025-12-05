@@ -1,4 +1,5 @@
 import { handler } from "./promise-unhandled-rejection";
+import historyEvents from "./promise-unhandled-rejection.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 interface PromiseUnhandledRejectionResult {
@@ -13,7 +14,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete successfully despite failing steps in promise combinators", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as PromiseUnhandledRejectionResult;
@@ -27,6 +28,8 @@ createTests({
           "combinator-after-wait-replay",
         ],
       });
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 30000);
   },
 });

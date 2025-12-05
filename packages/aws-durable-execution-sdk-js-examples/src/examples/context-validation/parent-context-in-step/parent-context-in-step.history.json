@@ -1,0 +1,87 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "9787fb44-a467-4370-9fc4-9aae5b46a594",
+    "EventTimestamp": "2025-12-03T22:57:22.290Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "child-context",
+    "EventTimestamp": "2025-12-03T22:57:22.292Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "correct-step",
+    "EventTimestamp": "2025-12-03T22:57:22.292Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "correct-step",
+    "EventTimestamp": "2025-12-03T22:57:22.292Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"This should work!\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "step-with-invalid-nested",
+    "EventTimestamp": "2025-12-03T22:57:22.292Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2025-12-03T22:57:22.293Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:57:22.290Z",
+      "EndTimestamp": "2025-12-03T22:57:22.293Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1-2\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "6da2f1a7-269d-448a-b41a-2c2df3f15595"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 7,
+    "Id": "9787fb44-a467-4370-9fc4-9aae5b46a594",
+    "EventTimestamp": "2025-12-03T22:57:22.293Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Context usage error in \"step\": You are using a parent or sibling context instead of the current child context. Expected context ID: \"1-2\", but got: \"undefined\". When inside runInChildContext(), you must use the child context parameter, not the parent context.",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  }
+]

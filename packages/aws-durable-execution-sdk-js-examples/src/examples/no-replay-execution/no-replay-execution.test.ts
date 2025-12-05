@@ -4,13 +4,14 @@ import {
   ExecutionStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./no-replay-execution";
+import historyEvents from "./no-replay-execution.history.json";
 import { createTests } from "../../utils/test-helper";
 
 createTests({
   name: "no-replay-execution test",
   functionName: "no-replay-execution",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle step operations when no replay occurs", async () => {
       const result = await runner.run();
 
@@ -35,6 +36,8 @@ createTests({
 
       // Verify no error occurred
       expect(result.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+
+      assertEventSignatures(result.getHistoryEvents(), historyEvents);
     });
   },
 });

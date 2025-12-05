@@ -1,4 +1,5 @@
 import { handler } from "./promise-all-settled";
+import historyEvents from "./promise-all-settled.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests<PromiseSettledResult<any>[]>({
@@ -8,7 +9,7 @@ createTests<PromiseSettledResult<any>[]>({
   localRunnerConfig: {
     skipTime: false,
   },
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete all promises", async () => {
       const execution = await runner.run();
 
@@ -32,6 +33,8 @@ createTests<PromiseSettledResult<any>[]>({
           value: "another success",
         },
       ]);
+
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 30000);
   },
 });

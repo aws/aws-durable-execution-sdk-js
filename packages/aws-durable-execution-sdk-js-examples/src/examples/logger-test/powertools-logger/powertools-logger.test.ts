@@ -1,4 +1,5 @@
 import { handler } from "./powertools-logger";
+import historyEvents from "./powertools-logger.history.json";
 import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import util from "node:util";
@@ -7,11 +8,12 @@ createTests({
   name: "powertools-logger",
   functionName: "powertools-logger",
   handler,
-  tests: (runner, isCloud) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     if (isCloud) {
       it("should complete step operation successfully", async () => {
         const execution = await runner.run();
         expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+        assertEventSignatures(execution.getHistoryEvents(), historyEvents);
       });
     } else {
       it("should execute successfully with all log levels", async () => {
@@ -27,6 +29,8 @@ createTests({
           const execution = await runner.run();
 
           expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+
+          assertEventSignatures(execution.getHistoryEvents(), historyEvents);
 
           // Parse captured log output as JSON objects from stdout and stderr separately
           const parseLogCalls = (calls: any[]) =>

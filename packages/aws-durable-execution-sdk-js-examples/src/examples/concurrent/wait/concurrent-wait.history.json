@@ -1,0 +1,137 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "dd41e8e0-bae8-4463-b90d-9decfe3c76ca",
+    "EventTimestamp": "2025-12-03T22:57:12.070Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "wait-1-second",
+    "EventTimestamp": "2025-12-03T22:57:12.073Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-03T22:57:13.073Z"
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 3,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "wait-5-seconds",
+    "EventTimestamp": "2025-12-03T22:57:12.073Z",
+    "WaitStartedDetails": {
+      "Duration": 5,
+      "ScheduledEndTimestamp": "2025-12-03T22:57:17.073Z"
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "wait-10-seconds",
+    "EventTimestamp": "2025-12-03T22:57:12.073Z",
+    "WaitStartedDetails": {
+      "Duration": 10,
+      "ScheduledEndTimestamp": "2025-12-03T22:57:22.073Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-03T22:57:12.125Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:57:12.070Z",
+      "EndTimestamp": "2025-12-03T22:57:12.125Z",
+      "Error": {},
+      "RequestId": "2154a890-2a00-4676-981b-e4318564a3cf"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "Name": "wait-1-second",
+    "EventTimestamp": "2025-12-03T22:57:13.074Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-03T22:57:13.128Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:57:13.074Z",
+      "EndTimestamp": "2025-12-03T22:57:13.127Z",
+      "Error": {},
+      "RequestId": "b4aa46bf-44ef-4def-9ecc-8cd3b02f5eeb"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "wait-5-seconds",
+    "EventTimestamp": "2025-12-03T22:57:17.075Z",
+    "WaitSucceededDetails": {
+      "Duration": 5
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2025-12-03T22:57:17.128Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:57:17.075Z",
+      "EndTimestamp": "2025-12-03T22:57:17.128Z",
+      "Error": {},
+      "RequestId": "c66814de-a4d8-41cc-a3b2-a57bb770e6d1"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 10,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "wait-10-seconds",
+    "EventTimestamp": "2025-12-03T22:57:22.074Z",
+    "WaitSucceededDetails": {
+      "Duration": 10
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2025-12-03T22:57:22.076Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:57:22.075Z",
+      "EndTimestamp": "2025-12-03T22:57:22.076Z",
+      "Error": {},
+      "RequestId": "b3f40b56-8494-41dc-99df-cf8407891687"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 12,
+    "Id": "dd41e8e0-bae8-4463-b90d-9decfe3c76ca",
+    "EventTimestamp": "2025-12-03T22:57:22.076Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"Completed waits\""
+      }
+    }
+  }
+]

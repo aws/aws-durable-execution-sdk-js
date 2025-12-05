@@ -1,48 +1,58 @@
-{
-  "expectedHistory": {
-    "events": [
-      {
-        "EventType": "ExecutionStarted",
-        "EventId": 1,
-        "Name": "named-step-typescript-acceptance-test",
-        "ExecutionStartedDetails": {
-          "Input": {
-            "Truncated": true
-          },
-          "ExecutionTimeout": 300
-        }
-      },
-      {
-        "EventType": "StepStarted",
-        "SubType": "Step",
-        "EventId": 2,
-        "Name": "process-data",
-        "StepStartedDetails": {}
-      },
-      {
-        "EventType": "StepSucceeded",
-        "SubType": "Step",
-        "EventId": 3,
-        "Name": "process-data",
-        "StepSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          },
-          "RetryDetails": {
-            "CurrentAttempt": 0
-          }
-        }
-      },
-      {
-        "EventType": "ExecutionSucceeded",
-        "EventId": 4,
-        "Name": "history-generation-1757539029",
-        "ExecutionSucceededDetails": {
-          "Result": {
-            "Truncated": true
-          }
-        }
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "30eccfb1-9113-43b6-a02a-ea1b3d76ae70",
+    "EventTimestamp": "2025-12-03T22:59:46.006Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
       }
-    ]
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "process-data",
+    "EventTimestamp": "2025-12-03T22:59:46.009Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "process-data",
+    "EventTimestamp": "2025-12-03T22:59:46.009Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"processed: default\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-03T22:59:46.009Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:46.006Z",
+      "EndTimestamp": "2025-12-03T22:59:46.009Z",
+      "Error": {},
+      "RequestId": "46ee21c7-a68b-4ab4-9be3-e031f07369c2"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 5,
+    "Id": "30eccfb1-9113-43b6-a02a-ea1b3d76ae70",
+    "EventTimestamp": "2025-12-03T22:59:46.009Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"processed: default\""
+      }
+    }
   }
-}
+]

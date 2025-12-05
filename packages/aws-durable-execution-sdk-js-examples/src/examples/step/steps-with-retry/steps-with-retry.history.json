@@ -1,0 +1,259 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "2e6ab966-c108-4b7a-9397-c69ca6a321f3",
+    "EventTimestamp": "2025-12-03T22:59:47.230Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:47.235Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:47.404Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "The security token included in the request is expired",
+          "ErrorType": "ExpiredTokenException"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-03T22:59:47.456Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:47.229Z",
+      "EndTimestamp": "2025-12-03T22:59:47.456Z",
+      "Error": {},
+      "RequestId": "ce04c745-4969-4879-ad3f-04f5629a1053"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:48.411Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:48.435Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "The security token included in the request is expired",
+          "ErrorType": "ExpiredTokenException"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-03T22:59:48.488Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:48.406Z",
+      "EndTimestamp": "2025-12-03T22:59:48.488Z",
+      "Error": {},
+      "RequestId": "4f3aa7c7-ef13-46eb-aded-a379ef58dcc2"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:49.445Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:49.466Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "The security token included in the request is expired",
+          "ErrorType": "ExpiredTokenException"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2025-12-03T22:59:49.517Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:49.438Z",
+      "EndTimestamp": "2025-12-03T22:59:49.517Z",
+      "Error": {},
+      "RequestId": "a52d5858-07ad-4175-9551-a44818dcc940"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:50.468Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:50.468Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Random failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 3
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2025-12-03T22:59:50.520Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:50.467Z",
+      "EndTimestamp": "2025-12-03T22:59:50.520Z",
+      "Error": {},
+      "RequestId": "80139ad0-6e1a-4662-ac0f-f38d0f81d282"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 14,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:51.470Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 15,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:51.493Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "The security token included in the request is expired",
+          "ErrorType": "ExpiredTokenException"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 4
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 16,
+    "EventTimestamp": "2025-12-03T22:59:51.545Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:51.469Z",
+      "EndTimestamp": "2025-12-03T22:59:51.545Z",
+      "Error": {},
+      "RequestId": "5a24f373-7cfc-4910-92e4-c1b52d5d7461"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 17,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:52.498Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 18,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-03T22:59:52.498Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Random failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 5
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 19,
+    "EventTimestamp": "2025-12-03T22:59:52.502Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-03T22:59:52.496Z",
+      "EndTimestamp": "2025-12-03T22:59:52.502Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Random failure"
+        }
+      },
+      "RequestId": "e61320c1-37c4-4ff7-a624-954d61e5d1e8"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 20,
+    "Id": "2e6ab966-c108-4b7a-9397-c69ca6a321f3",
+    "EventTimestamp": "2025-12-03T22:59:52.503Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Random failure"
+        }
+      }
+    }
+  }
+]
