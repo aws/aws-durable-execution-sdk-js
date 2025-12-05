@@ -5,6 +5,9 @@ import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 createTests({
   name: "Parallel minSuccessful",
   functionName: "parallel-min-successful",
+  localRunnerConfig: {
+    skipTime: false,
+  },
   handler,
   tests: (runner) => {
     it("should complete early when minSuccessful is reached", async () => {

@@ -262,9 +262,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     const successCount = resultItems.filter(
       (item) => item.status === BatchItemStatus.SUCCEEDED,
     ).length;
-    const failureCount = resultItems.filter(
-      (item) => item.status === BatchItemStatus.FAILED,
-    ).length;
+    const failureCount = completedCount - successCount;
 
     return new BatchResultImpl(
       resultItems,
