@@ -246,7 +246,7 @@ describe("WorkerServerApiHandler", () => {
       );
     });
 
-    it("should delegate CheckpointDurableExecutionState to processCheckpointDurableExecution", () => {
+    it("should delegate CheckpointDurableExecutionState to processCheckpointDurableExecution", async () => {
       const requestData = {
         type: ApiType.CheckpointDurableExecutionState as const,
         requestId: TEST_UUIDS.SUCCESS,
@@ -257,7 +257,7 @@ describe("WorkerServerApiHandler", () => {
         },
       };
 
-      void handler.performApiCall(requestData);
+      await handler.performApiCall(requestData);
 
       expect(mockProcessCheckpointDurableExecution).toHaveBeenCalledWith(
         "arn:aws:lambda:us-east-1:123456789012:function:test",
@@ -320,6 +320,95 @@ describe("WorkerServerApiHandler", () => {
       expect(() => {
         void handler.performApiCall(invalidRequestData as never);
       }).toThrow("Unexpected data ApiType");
+    });
+  });
+
+  describe("CheckpointDurableExecutionState with delayMs", () => {
+    let setTimeoutSpy: jest.SpyInstance;
+    let mathRandomSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      setTimeoutSpy = jest.spyOn(global, "setTimeout");
+      mathRandomSpy = jest.spyOn(Math, "random");
+
+      mockProcessCheckpointDurableExecution.mockReturnValue({
+        CheckpointToken: "test-response-token",
+        NewExecutionState: {
+          Operations: [],
+          NextMarker: undefined,
+        },
+      });
+    });
+
+    afterEach(() => {
+      setTimeoutSpy.mockRestore();
+      mathRandomSpy.mockRestore();
+    });
+
+    it("should execute immediately when no delay settings provided", async () => {
+      const handler = new WorkerServerApiHandler();
+      const requestData = {
+        type: ApiType.CheckpointDurableExecutionState as const,
+        requestId: TEST_UUIDS.SUCCESS,
+        params: {
+          DurableExecutionArn:
+            "arn:aws:lambda:us-east-1:123456789012:function:test",
+          CheckpointToken: "test-checkpoint-token",
+        },
+      };
+
+      await handler.performApiCall(requestData);
+
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 0);
+      expect(mathRandomSpy).not.toHaveBeenCalled();
+    });
+
+    it("should calculate delay using Math.random when delay settings provided", async () => {
+      mathRandomSpy.mockReturnValue(0.5);
+      const handler = new WorkerServerApiHandler({
+        checkpointDelaySettings: { min: 100, max: 300 },
+      });
+      const requestData = {
+        type: ApiType.CheckpointDurableExecutionState as const,
+        requestId: TEST_UUIDS.SUCCESS,
+        params: {
+          DurableExecutionArn:
+            "arn:aws:lambda:us-east-1:123456789012:function:test",
+          CheckpointToken: "test-checkpoint-token",
+        },
+      };
+
+      await handler.performApiCall(requestData);
+
+      // 0.5 * (300 - 100) + 100 = 200
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 200);
+      expect(mathRandomSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("should reject promise when processCheckpointDurableExecution throws error after delay", async () => {
+      const handler = new WorkerServerApiHandler({
+        checkpointDelaySettings: { min: 10, max: 10 },
+      });
+      const requestData = {
+        type: ApiType.CheckpointDurableExecutionState as const,
+        requestId: TEST_UUIDS.ERROR,
+        params: {
+          DurableExecutionArn:
+            "arn:aws:lambda:us-east-1:123456789012:function:test",
+          CheckpointToken: "test-checkpoint-token",
+        },
+      };
+
+      const testError = new Error("Checkpoint processing failed");
+      mockProcessCheckpointDurableExecution.mockImplementation(() => {
+        throw testError;
+      });
+
+      await expect(handler.performApiCall(requestData)).rejects.toThrow(
+        "Checkpoint processing failed",
+      );
+
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 10);
     });
   });
 });

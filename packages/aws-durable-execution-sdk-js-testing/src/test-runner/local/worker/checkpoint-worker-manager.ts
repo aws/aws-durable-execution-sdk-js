@@ -14,6 +14,13 @@ import { WorkerApiRequestMapping } from "../../../checkpoint-server/worker-api/w
 import { WorkerApiResponseMapping } from "../../../checkpoint-server/worker-api/worker-api-response";
 import { reparseDates } from "../../../utils";
 import { RealDate } from "../real-timers/real-timers";
+import { CheckpointDelaySettings } from "../../types/durable-test-runner";
+
+export type CheckpointWorkerManagerParams =
+  | {
+      checkpointDelaySettings?: CheckpointDelaySettings;
+    }
+  | undefined;
 
 /**
  *  TODO: handle worker errors after they are started
@@ -25,8 +32,24 @@ export class CheckpointWorkerManager {
 
   private readonly workerApiHandler = new WorkerClientApiHandler();
 
-  static getInstance() {
-    this.instance ??= new CheckpointWorkerManager();
+  constructor(private readonly params?: CheckpointWorkerManagerParams) {}
+
+  private static createInstance(params: CheckpointWorkerManagerParams) {
+    if (this.instance) {
+      throw new Error("CheckpointWorkerManager was already created");
+    }
+    this.instance = new CheckpointWorkerManager(params);
+    return this.instance;
+  }
+
+  static getInstance(params?: CheckpointWorkerManagerParams) {
+    if (!this.instance) {
+      if (params) {
+        this.instance = this.createInstance(params);
+      } else {
+        throw new Error("CheckpointWorkerManager has not been created");
+      }
+    }
     return this.instance;
   }
 
@@ -67,6 +90,7 @@ export class CheckpointWorkerManager {
       execArgv: workerPath.endsWith(".ts")
         ? ["--require", "tsx/cjs"]
         : undefined,
+      workerData: this.params satisfies CheckpointWorkerManagerParams,
     });
     this.worker = worker;
 

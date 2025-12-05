@@ -1,9 +1,9 @@
 /**
  * Worker thread entry point for the checkpoint server.
- * Runs the Express server in isolation from the main thread event loop.
+ * Processes checkpoint data and API requests separately from the main thread event loop.
  */
 
-import type { MessagePort } from "worker_threads";
+import { MessagePort, workerData } from "worker_threads";
 import {
   WorkerCommand,
   WorkerResponse,
@@ -12,13 +12,19 @@ import {
 import { WorkerServerApiHandler } from "../worker-api/worker-server-api-handler";
 import { WorkerApiResponseMapping } from "../worker-api/worker-api-response";
 import { ApiType } from "../worker-api/worker-api-types";
+import { CheckpointWorkerManagerParams } from "../../test-runner/local/worker/checkpoint-worker-manager";
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+const workerParams = workerData as CheckpointWorkerManagerParams;
 
 /**
  * Manages the checkpoint server within a worker thread.
  * Handles server lifecycle and message communication with the main thread.
  */
 export class CheckpointWorker {
-  private readonly workerServerApiHandler = new WorkerServerApiHandler();
+  private readonly workerServerApiHandler = new WorkerServerApiHandler(
+    workerParams,
+  );
 
   constructor(private readonly messagePort: MessagePort) {}
 
@@ -61,9 +67,6 @@ export class CheckpointWorker {
       return;
     }
 
-    // This logic is only for PollCheckpointData
-    // TODO: replace this with event-based resolution
-    // instead of long-polling promises
     if (response instanceof Promise) {
       response
         .then((data) => {

@@ -17,9 +17,20 @@ import {
   processCallbackHeartbeat,
   processCallbackSuccess,
 } from "../handlers/callbacks";
+import { CheckpointDelaySettings } from "../../test-runner/types/durable-test-runner";
+import { CheckpointDurableExecutionResponse } from "@aws-sdk/client-lambda";
+
+export interface WorkerServerApiHandlerParams {
+  checkpointDelaySettings?: CheckpointDelaySettings;
+}
 
 export class WorkerServerApiHandler {
   private readonly executionManager = new ExecutionManager();
+  private readonly checkpointDelaySettings: CheckpointDelaySettings | undefined;
+
+  constructor(params?: WorkerServerApiHandlerParams) {
+    this.checkpointDelaySettings = params?.checkpointDelaySettings;
+  }
 
   performApiCall(data: WorkerApiRequestMessage) {
     switch (data.type) {
@@ -59,12 +70,32 @@ export class WorkerServerApiHandler {
           data.params.DurableExecutionArn,
           this.executionManager,
         );
-      case ApiType.CheckpointDurableExecutionState:
-        return processCheckpointDurableExecution(
-          data.params.DurableExecutionArn,
-          data.params,
-          this.executionManager,
+      case ApiType.CheckpointDurableExecutionState: {
+        const delayMs = this.checkpointDelaySettings
+          ? Math.random() *
+              (this.checkpointDelaySettings.max -
+                this.checkpointDelaySettings.min) +
+            this.checkpointDelaySettings.min
+          : 0;
+        return new Promise<CheckpointDurableExecutionResponse>(
+          (resolve, reject) => {
+            setTimeout(() => {
+              try {
+                resolve(
+                  processCheckpointDurableExecution(
+                    data.params.DurableExecutionArn,
+                    data.params,
+                    this.executionManager,
+                  ),
+                );
+              } catch (err: unknown) {
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+                reject(err);
+              }
+            }, delayMs);
+          },
         );
+      }
       case ApiType.SendDurableExecutionCallbackSuccess:
         return processCallbackSuccess(
           // todo: handle undefined instead of disabling eslint rule

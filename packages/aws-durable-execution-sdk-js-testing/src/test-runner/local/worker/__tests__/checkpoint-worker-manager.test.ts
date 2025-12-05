@@ -36,7 +36,7 @@ describe("CheckpointWorkerManager", () => {
 
     // Reset singleton instance before each test
     CheckpointWorkerManager.resetInstanceForTesting();
-    manager = CheckpointWorkerManager.getInstance();
+    manager = CheckpointWorkerManager.getInstance({}); // pass params for initial create
   });
 
   describe("Singleton Pattern", () => {
@@ -53,9 +53,32 @@ describe("CheckpointWorkerManager", () => {
     it("should create new instance after reset", () => {
       const instance1 = CheckpointWorkerManager.getInstance();
       CheckpointWorkerManager.resetInstanceForTesting();
-      const instance2 = CheckpointWorkerManager.getInstance();
+      const instance2 = CheckpointWorkerManager.getInstance({});
 
       expect(instance1).not.toBe(instance2);
+    });
+
+    it("should throw error when getInstance called without params and no instance exists", () => {
+      CheckpointWorkerManager.resetInstanceForTesting();
+
+      expect(() => {
+        CheckpointWorkerManager.getInstance();
+      }).toThrow("CheckpointWorkerManager has not been created");
+    });
+
+    it("should return existing instance even when called with different params", () => {
+      CheckpointWorkerManager.resetInstanceForTesting();
+      const instance1 = CheckpointWorkerManager.getInstance({
+        checkpointDelaySettings: { min: 100, max: 200 },
+      });
+
+      // Subsequent calls should return the same instance, ignoring new params
+      // TODO: we should update params when this happens instead of ignoring them
+      const instance2 = CheckpointWorkerManager.getInstance({
+        checkpointDelaySettings: { min: 50, max: 150 },
+      });
+
+      expect(instance1).toBe(instance2);
     });
   });
 
@@ -74,6 +97,7 @@ describe("CheckpointWorkerManager", () => {
 
       expect(MockWorker).toHaveBeenCalledWith(expectedDevPath, {
         execArgv: ["--require", "tsx/cjs"],
+        workerData: {},
       });
     });
 
@@ -91,6 +115,7 @@ describe("CheckpointWorkerManager", () => {
 
       expect(MockWorker).toHaveBeenCalledWith(expectedProdPath, {
         execArgv: undefined,
+        workerData: {},
       });
     });
   });
@@ -109,6 +134,24 @@ describe("CheckpointWorkerManager", () => {
       expect(mockWorker.on).toHaveBeenCalledWith(
         "message",
         expect.any(Function),
+      );
+    });
+
+    it("should pass constructor params to worker as workerData", async () => {
+      CheckpointWorkerManager.resetInstanceForTesting();
+      const testParams = {
+        checkpointDelaySettings: { min: 100, max: 500 },
+      };
+      const managerWithParams = CheckpointWorkerManager.getInstance(testParams);
+
+      await managerWithParams.setup();
+
+      expect(MockWorker).toHaveBeenCalledWith(
+        expect.any(String), // worker path
+        {
+          execArgv: ["--require", "tsx/cjs"],
+          workerData: testParams,
+        },
       );
     });
 
@@ -132,7 +175,7 @@ describe("CheckpointWorkerManager", () => {
     it("should throw error when worker not initialized", async () => {
       // Create a fresh manager without setup
       CheckpointWorkerManager.resetInstanceForTesting();
-      const freshManager = CheckpointWorkerManager.getInstance();
+      const freshManager = CheckpointWorkerManager.getInstance({});
 
       await expect(
         freshManager.sendApiRequest(ApiType.StartDurableExecution, {
@@ -208,7 +251,7 @@ describe("CheckpointWorkerManager", () => {
 
       // Re-setup to capture the handler
       CheckpointWorkerManager.resetInstanceForTesting();
-      manager = CheckpointWorkerManager.getInstance();
+      manager = CheckpointWorkerManager.getInstance({});
       await manager.setup();
 
       // Simulate worker error
@@ -233,7 +276,7 @@ describe("CheckpointWorkerManager", () => {
 
       // Re-setup to capture the handler
       CheckpointWorkerManager.resetInstanceForTesting();
-      manager = CheckpointWorkerManager.getInstance();
+      manager = CheckpointWorkerManager.getInstance({});
       await manager.setup();
 
       // Simulate worker exit with non-zero code
@@ -256,7 +299,7 @@ describe("CheckpointWorkerManager", () => {
 
       // Re-setup to capture the handler
       CheckpointWorkerManager.resetInstanceForTesting();
-      manager = CheckpointWorkerManager.getInstance();
+      manager = CheckpointWorkerManager.getInstance({});
       await manager.setup();
 
       // Simulate worker exit with zero code (normal exit)
