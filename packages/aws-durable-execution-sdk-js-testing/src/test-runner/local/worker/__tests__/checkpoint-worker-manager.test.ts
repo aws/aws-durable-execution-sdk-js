@@ -5,6 +5,7 @@ import * as path from "path";
 import { defaultLogger } from "../../../../logger";
 import { ApiType } from "../../../../checkpoint-server/worker-api/worker-api-types";
 import { createInvocationId } from "../../../../checkpoint-server/utils/tagged-strings";
+import { StartDurableExecutionRequest } from "../../../../checkpoint-server/worker-api/worker-api-request";
 
 // Mock worker_threads
 jest.mock("worker_threads");
@@ -304,10 +305,15 @@ describe("CheckpointWorkerManager", () => {
         },
       );
 
-      const promise = manager.sendApiRequest(ApiType.StartDurableExecution, {
+      const params: StartDurableExecutionRequest = {
         payload: "test-payload",
         invocationId: createInvocationId(),
-      });
+      };
+
+      const promise = manager.sendApiRequest(
+        ApiType.StartDurableExecution,
+        params,
+      );
 
       // Verify worker.postMessage was called with correct structure
       expect(mockWorker.postMessage).toHaveBeenCalledWith({
@@ -315,7 +321,7 @@ describe("CheckpointWorkerManager", () => {
         data: {
           requestId: expect.any(String),
           type: ApiType.StartDurableExecution,
-          params: { payload: "test-payload" },
+          params,
         },
       });
 
