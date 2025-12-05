@@ -1,7 +1,7 @@
 name: Sync SDK
 on:
   push:
-    branches: ["main", "ci/remove-sync-version"]
+    branches: ["main"]
     paths:
       - "packages/aws-durable-execution-sdk-js/**"
 
