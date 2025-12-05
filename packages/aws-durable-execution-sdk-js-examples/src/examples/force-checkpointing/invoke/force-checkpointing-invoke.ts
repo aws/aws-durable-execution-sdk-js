@@ -1,7 +1,6 @@
 import {
   withDurableExecution,
   DurableContext,
-  retryPresets,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 
