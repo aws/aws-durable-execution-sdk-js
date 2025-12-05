@@ -16,6 +16,7 @@ export type {
   DurableTestRunner,
   TestResultError,
   TestResult,
+  CheckpointDelaySettings,
 } from "./types/durable-test-runner";
 
 export type {
