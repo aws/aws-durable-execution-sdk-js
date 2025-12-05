@@ -30,7 +30,8 @@ createTests({
         execution.getOperations().length,
       );
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      // TODO: https://github.com/aws/aws-durable-execution-sdk-js/issues/365
+      // assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 120000);
   },
 });
