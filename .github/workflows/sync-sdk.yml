@@ -2,6 +2,8 @@ name: Sync SDK
 on:
   push:
     branches: ["main", "ci/remove-sync-version"]
+    paths:
+      - "packages/aws-durable-execution-sdk-js/**"
 
 env:
   AWS_REGION: "us-west-2"
