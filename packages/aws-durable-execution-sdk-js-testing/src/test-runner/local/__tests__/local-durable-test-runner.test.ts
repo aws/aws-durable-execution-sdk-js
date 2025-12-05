@@ -400,17 +400,11 @@ describe("LocalDurableTestRunner", () => {
 
       it("should pass parameters to CheckpointWorkerManager", async () => {
         await LocalDurableTestRunner.setupTestEnvironment({
-          checkpointDelay: {
-            min: 100,
-            max: 100,
-          },
+          checkpointDelay: 100,
         });
 
         expect(CheckpointWorkerManager.getInstance).toHaveBeenCalledWith({
-          checkpointDelaySettings: {
-            min: 100,
-            max: 100,
-          },
+          checkpointDelaySettings: 100,
         });
         expect(mockCheckpointServerWorkerManager.setup).toHaveBeenCalled();
       });

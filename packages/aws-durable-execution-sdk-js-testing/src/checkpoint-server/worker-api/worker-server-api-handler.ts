@@ -71,12 +71,6 @@ export class WorkerServerApiHandler {
           this.executionManager,
         );
       case ApiType.CheckpointDurableExecutionState: {
-        const delayMs = this.checkpointDelaySettings
-          ? Math.random() *
-              (this.checkpointDelaySettings.max -
-                this.checkpointDelaySettings.min) +
-            this.checkpointDelaySettings.min
-          : 0;
         return new Promise<CheckpointDurableExecutionResponse>(
           (resolve, reject) => {
             setTimeout(() => {
@@ -92,7 +86,7 @@ export class WorkerServerApiHandler {
                 // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
                 reject(err);
               }
-            }, delayMs);
+            }, this.checkpointDelaySettings);
           },
         );
       }

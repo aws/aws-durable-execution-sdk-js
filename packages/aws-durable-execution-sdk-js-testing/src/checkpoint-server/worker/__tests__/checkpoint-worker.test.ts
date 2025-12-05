@@ -17,7 +17,7 @@ import { InvocationResult } from "../../storage/execution-manager";
 // Mock external dependencies
 jest.mock("worker_threads", () => ({
   workerData: {
-    checkpointDelaySettings: { min: 50, max: 150 },
+    checkpointDelaySettings: 100,
   },
 }));
 jest.mock("../../worker-api/worker-server-api-handler");
@@ -55,7 +55,7 @@ describe("CheckpointWorker", () => {
     it("should pass workerParams to WorkerServerApiHandler constructor", () => {
       // Constructor was already called in beforeEach, verify it was called with workerParams
       expect(mockWorkerServerApiHandler).toHaveBeenCalledWith({
-        checkpointDelaySettings: { min: 50, max: 150 },
+        checkpointDelaySettings: 100,
       });
     });
   });

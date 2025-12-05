@@ -69,13 +69,13 @@ describe("CheckpointWorkerManager", () => {
     it("should return existing instance even when called with different params", () => {
       CheckpointWorkerManager.resetInstanceForTesting();
       const instance1 = CheckpointWorkerManager.getInstance({
-        checkpointDelaySettings: { min: 100, max: 200 },
+        checkpointDelaySettings: 50,
       });
 
       // Subsequent calls should return the same instance, ignoring new params
       // TODO: we should update params when this happens instead of ignoring them
       const instance2 = CheckpointWorkerManager.getInstance({
-        checkpointDelaySettings: { min: 50, max: 150 },
+        checkpointDelaySettings: 100,
       });
 
       expect(instance1).toBe(instance2);
@@ -140,7 +140,7 @@ describe("CheckpointWorkerManager", () => {
     it("should pass constructor params to worker as workerData", async () => {
       CheckpointWorkerManager.resetInstanceForTesting();
       const testParams = {
-        checkpointDelaySettings: { min: 100, max: 500 },
+        checkpointDelaySettings: 100,
       };
       const managerWithParams = CheckpointWorkerManager.getInstance(testParams);
 

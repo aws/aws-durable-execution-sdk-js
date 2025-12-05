@@ -13,21 +13,9 @@ import { DurableOperation } from "./durable-operation";
  * to the real world, where checkpoint API calls take longer. This can help with finding concurrency
  * bugs, race conditions, or other issues.
  *
- * The delay will be calculated with a random range betwen the `min` and `max` values. To set the delay
- * to a fixed value, both `min` and `max` can be set to the same value.
- *
  * @public
  */
-export interface CheckpointDelaySettings {
-  /**
-   * Minimum delay in milliseconds
-   */
-  min: number;
-  /**
-   * Maximum delay in milliseconds
-   */
-  max: number;
-}
+export type CheckpointDelaySettings = number;
 
 /**
  * Request parameters for invoking a durable function.

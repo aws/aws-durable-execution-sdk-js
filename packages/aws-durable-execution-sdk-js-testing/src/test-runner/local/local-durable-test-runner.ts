@@ -95,10 +95,6 @@ export interface LocalDurableTestRunnerSetupParameters {
    * Options to simulate checkpoint API delay. Adding delay can make tests behave more similarily
    * to the real world, where checkpoint API calls take longer. This can help with finding concurrency
    * bugs, race conditions, or other issues.
-   *
-   * The delay will be calculated with a random range betwen the `min` and `max` values. To set the delay
-   * to a fixed value, both `min` and `max` can be set to the same value.
-   *
    */
   checkpointDelay?: CheckpointDelaySettings;
 }
