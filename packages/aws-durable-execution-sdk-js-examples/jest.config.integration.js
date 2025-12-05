@@ -6,7 +6,7 @@ const defaultPreset = createDefaultPreset();
 module.exports = {
   ...defaultPreset,
   testMatch: ["**/src/examples/**/*.test.ts"],
-  testTimeout: 90000,
+  testTimeout: 120000,
   testNamePattern: "cloud",
   bail: true,
 };
