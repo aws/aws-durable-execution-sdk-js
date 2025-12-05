@@ -3,8 +3,6 @@ name: Sync Testing SDK
 on:
   push:
     branches: ["main", "ci/remove-sync-version"]
-    paths:
-      - "packages/aws-durable-execution-sdk-js-testing/**"
 
 env:
   AWS_REGION: "us-west-2"
