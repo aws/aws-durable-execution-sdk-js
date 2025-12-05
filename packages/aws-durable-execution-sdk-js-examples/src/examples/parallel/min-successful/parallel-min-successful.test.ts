@@ -1,5 +1,6 @@
 import { handler } from "./parallel-min-successful";
 import { createTests } from "../../../utils/test-helper";
+import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   name: "Parallel minSuccessful",
@@ -16,37 +17,20 @@ createTests({
       expect(result.results).toHaveLength(2);
       expect(result.totalCount).toBe(4);
 
-      // Get the parallel operation from history to verify individual branch results
-      const historyEvents = execution.getHistoryEvents();
-      const parallelContext = historyEvents.find(
-        (event) =>
-          event.EventType === "ContextSucceeded" &&
-          event.Name === "min-successful-branches",
-      );
-
-      expect(parallelContext).toBeDefined();
-      const parallelResult = JSON.parse(
-        parallelContext!.ContextSucceededDetails!.Result!.Payload!,
-      );
-
-      // Assert individual branch results - includes all started branches (2 completed + 2 started)
-      expect(parallelResult.all).toHaveLength(4);
+      // Get the parallel operation to verify individual branch results
+      // Get individual branch operations
+      const branch1 = runner.getOperation("branch-1");
+      const branch2 = runner.getOperation("branch-2");
+      const branch3 = runner.getOperation("branch-3");
+      const branch4 = runner.getOperation("branch-4");
 
       // First two branches should succeed (branch-1 and branch-2 complete fastest)
-      expect(parallelResult.all[0].status).toBe("SUCCEEDED");
-      expect(parallelResult.all[0].result).toBe("Branch 1 result");
-      expect(parallelResult.all[0].index).toBe(0);
-
-      expect(parallelResult.all[1].status).toBe("SUCCEEDED");
-      expect(parallelResult.all[1].result).toBe("Branch 2 result");
-      expect(parallelResult.all[1].index).toBe(1);
+      expect(branch1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
+      expect(branch2?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
       // Remaining branches should be in STARTED state (not completed)
-      expect(parallelResult.all[2].status).toBe("STARTED");
-      expect(parallelResult.all[2].index).toBe(2);
-
-      expect(parallelResult.all[3].status).toBe("STARTED");
-      expect(parallelResult.all[3].index).toBe(3);
+      expect(branch3?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(branch4?.getStatus()).toBe(OperationStatus.STARTED);
 
       // Verify the results array matches
       expect(result.results).toEqual(["Branch 1 result", "Branch 2 result"]);

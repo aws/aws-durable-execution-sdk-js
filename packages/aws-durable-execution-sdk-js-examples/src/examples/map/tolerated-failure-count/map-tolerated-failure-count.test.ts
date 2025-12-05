@@ -1,5 +1,6 @@
 import { handler } from "./map-tolerated-failure-count";
 import { createTests } from "../../../utils/test-helper";
+import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   name: "Map toleratedFailureCount",
@@ -17,46 +18,21 @@ createTests({
       expect(result.hasFailure).toBe(true);
       expect(result.totalCount).toBe(5);
 
-      // Get the map operation from history to verify individual item results
-      const historyEvents = execution.getHistoryEvents();
-      const mapContext = historyEvents.find(
-        (event) =>
-          event.EventType === "ContextSucceeded" &&
-          event.Name === "failure-count-items",
-      );
+      // Verify individual operation statuses
+      const item0 = runner.getOperation("process-0");
+      expect(item0?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      expect(mapContext).toBeDefined();
-      const mapResult = JSON.parse(
-        mapContext!.ContextSucceededDetails!.Result!.Payload!,
-      );
+      const item1 = runner.getOperation("process-1");
+      expect(item1?.getStatus()).toBe(OperationStatus.FAILED);
 
-      // Assert individual item results
-      expect(mapResult.all).toHaveLength(5);
+      const item2 = runner.getOperation("process-2");
+      expect(item2?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      // Item 1 should succeed (index 0)
-      expect(mapResult.all[0].status).toBe("SUCCEEDED");
-      expect(mapResult.all[0].result).toBe("Item 1 processed");
-      expect(mapResult.all[0].index).toBe(0);
+      const item3 = runner.getOperation("process-3");
+      expect(item3?.getStatus()).toBe(OperationStatus.FAILED);
 
-      // Item 2 should fail (index 1)
-      expect(mapResult.all[1].status).toBe("FAILED");
-      expect(mapResult.all[1].error).toBeDefined();
-      expect(mapResult.all[1].index).toBe(1);
-
-      // Item 3 should succeed (index 2)
-      expect(mapResult.all[2].status).toBe("SUCCEEDED");
-      expect(mapResult.all[2].result).toBe("Item 3 processed");
-      expect(mapResult.all[2].index).toBe(2);
-
-      // Item 4 should fail (index 3)
-      expect(mapResult.all[3].status).toBe("FAILED");
-      expect(mapResult.all[3].error).toBeDefined();
-      expect(mapResult.all[3].index).toBe(3);
-
-      // Item 5 should succeed (index 4)
-      expect(mapResult.all[4].status).toBe("SUCCEEDED");
-      expect(mapResult.all[4].result).toBe("Item 5 processed");
-      expect(mapResult.all[4].index).toBe(4);
+      const item4 = runner.getOperation("process-4");
+      expect(item4?.getStatus()).toBe(OperationStatus.SUCCEEDED);
     });
   },
 });

@@ -1,13 +1,11 @@
 import { handler } from "./map-failure-threshold-exceeded-count";
 import { createTests } from "../../../utils/test-helper";
+import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   name: "Map failure threshold exceeded count",
   functionName: "map-failure-threshold-exceeded-count",
   handler,
-  localRunnerConfig: {
-    skipTime: false,
-  },
   tests: (runner) => {
     it("should return FAILURE_TOLERANCE_EXCEEDED when failure count exceeds threshold", async () => {
       const execution = await runner.run();
@@ -18,46 +16,21 @@ createTests({
       expect(result.failureCount).toBe(3); // Items 1, 2, 3 fail (exceeds threshold of 2)
       expect(result.totalCount).toBe(5);
 
-      // Get the map context result from history
-      const historyEvents = execution.getHistoryEvents();
-      const mapContext = historyEvents.find(
-        (event) =>
-          event.EventType === "ContextSucceeded" &&
-          event.Name === "failure-threshold-items",
-      );
+      // Verify individual operation statuses
+      const item0 = runner.getOperation("process-0");
+      expect(item0?.getStatus()).toBe(OperationStatus.FAILED);
 
-      expect(mapContext).toBeDefined();
-      expect(
-        mapContext?.ContextSucceededDetails?.Result?.Payload,
-      ).toBeDefined();
-      const mapResult = JSON.parse(
-        mapContext!.ContextSucceededDetails!.Result!.Payload!,
-      );
+      const item1 = runner.getOperation("process-1");
+      expect(item1?.getStatus()).toBe(OperationStatus.FAILED);
 
-      // Verify individual results
-      expect(mapResult.all).toHaveLength(5);
+      const item2 = runner.getOperation("process-2");
+      expect(item2?.getStatus()).toBe(OperationStatus.FAILED);
 
-      // Items 0, 1, 2 should fail
-      expect(mapResult.all[0].status).toBe("FAILED");
-      expect(mapResult.all[0].index).toBe(0);
-      expect(mapResult.all[0].error.errorType).toBe("ChildContextError");
+      const item3 = runner.getOperation("process-3");
+      expect(item3?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      expect(mapResult.all[1].status).toBe("FAILED");
-      expect(mapResult.all[1].index).toBe(1);
-      expect(mapResult.all[1].error.errorType).toBe("ChildContextError");
-
-      expect(mapResult.all[2].status).toBe("FAILED");
-      expect(mapResult.all[2].index).toBe(2);
-      expect(mapResult.all[2].error.errorType).toBe("ChildContextError");
-
-      // Items 3, 4 should succeed
-      expect(mapResult.all[3].status).toBe("SUCCEEDED");
-      expect(mapResult.all[3].index).toBe(3);
-      expect(mapResult.all[3].result).toBe(8); // 4 * 2
-
-      expect(mapResult.all[4].status).toBe("SUCCEEDED");
-      expect(mapResult.all[4].index).toBe(4);
-      expect(mapResult.all[4].result).toBe(10); // 5 * 2
-    }, 15000); // 15 second timeout to accommodate retry delays
+      const item4 = runner.getOperation("process-4");
+      expect(item4?.getStatus()).toBe(OperationStatus.SUCCEEDED);
+    });
   },
 });

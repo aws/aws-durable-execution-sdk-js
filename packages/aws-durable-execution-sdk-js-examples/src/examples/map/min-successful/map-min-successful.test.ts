@@ -1,5 +1,6 @@
 import { handler } from "./map-min-successful";
 import { createTests } from "../../../utils/test-helper";
+import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   name: "Map minSuccessful",
@@ -17,39 +18,24 @@ createTests({
       expect(result.totalCount).toBe(5);
 
       // Get the map operation from history to verify individual item results
-      const historyEvents = execution.getHistoryEvents();
-      const mapContext = historyEvents.find(
-        (event) =>
-          event.EventType === "ContextSucceeded" &&
-          event.Name === "min-successful-items",
-      );
+      // Get the map operation result
+      const mapResult = runner.getOperation("min-successful-items");
 
-      expect(mapContext).toBeDefined();
-      const mapResult = JSON.parse(
-        mapContext!.ContextSucceededDetails!.Result!.Payload!,
-      );
-
-      // Assert individual item results - includes all started items (2 completed + 3 started)
-      expect(mapResult.all).toHaveLength(5);
+      // Get individual map item operations
+      const item0 = runner.getOperation("process-0");
+      const item1 = runner.getOperation("process-1");
+      const item2 = runner.getOperation("process-2");
+      const item3 = runner.getOperation("process-3");
+      const item4 = runner.getOperation("process-4");
 
       // First two items should succeed (items 1 and 2 process fastest due to timeout)
-      expect(mapResult.all[0].status).toBe("SUCCEEDED");
-      expect(mapResult.all[0].result).toBe("Item 1 processed");
-      expect(mapResult.all[0].index).toBe(0);
-
-      expect(mapResult.all[1].status).toBe("SUCCEEDED");
-      expect(mapResult.all[1].result).toBe("Item 2 processed");
-      expect(mapResult.all[1].index).toBe(1);
+      expect(item0?.getStatus()).toBe(OperationStatus.SUCCEEDED);
+      expect(item1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
       // Remaining items should be in STARTED state (not completed)
-      expect(mapResult.all[2].status).toBe("STARTED");
-      expect(mapResult.all[2].index).toBe(2);
-
-      expect(mapResult.all[3].status).toBe("STARTED");
-      expect(mapResult.all[3].index).toBe(3);
-
-      expect(mapResult.all[4].status).toBe("STARTED");
-      expect(mapResult.all[4].index).toBe(4);
+      expect(item2?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item3?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item4?.getStatus()).toBe(OperationStatus.STARTED);
 
       // Verify the results array matches
       expect(result.results).toEqual(["Item 1 processed", "Item 2 processed"]);

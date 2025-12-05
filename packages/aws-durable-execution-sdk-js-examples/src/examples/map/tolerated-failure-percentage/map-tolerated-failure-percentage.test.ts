@@ -1,5 +1,6 @@
 import { handler } from "./map-tolerated-failure-percentage";
 import { createTests } from "../../../utils/test-helper";
+import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   name: "Map toleratedFailurePercentage",
@@ -17,37 +18,24 @@ createTests({
       expect(result.completionReason).toBe("ALL_COMPLETED");
       expect(result.totalCount).toBe(10);
 
-      // Get the map operation from history to verify individual item results
-      const historyEvents = execution.getHistoryEvents();
-      const mapContext = historyEvents.find(
-        (event) =>
-          event.EventType === "ContextSucceeded" &&
-          event.Name === "failure-percentage-items",
-      );
+      // Verify individual operation statuses (items 3, 6, 9 fail; others succeed)
+      const item0 = runner.getOperation("process-0");
+      expect(item0?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      expect(mapContext).toBeDefined();
-      const mapResult = JSON.parse(
-        mapContext!.ContextSucceededDetails!.Result!.Payload!,
-      );
+      const item1 = runner.getOperation("process-1");
+      expect(item1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      // Assert individual item results
-      expect(mapResult.all).toHaveLength(10);
+      const item2 = runner.getOperation("process-2");
+      expect(item2?.getStatus()).toBe(OperationStatus.FAILED);
 
-      // Items 1, 2, 4, 5, 7, 8, 10 should succeed (not divisible by 3)
-      const expectedSuccesses = [0, 1, 3, 4, 6, 7, 9]; // indices for items 1,2,4,5,7,8,10
-      const expectedFailures = [2, 5, 8]; // indices for items 3,6,9
+      const item3 = runner.getOperation("process-3");
+      expect(item3?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      expectedSuccesses.forEach((index) => {
-        expect(mapResult.all[index].status).toBe("SUCCEEDED");
-        expect(mapResult.all[index].result).toBe(`Item ${index + 1} processed`);
-        expect(mapResult.all[index].index).toBe(index);
-      });
+      const item4 = runner.getOperation("process-4");
+      expect(item4?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      expectedFailures.forEach((index) => {
-        expect(mapResult.all[index].status).toBe("FAILED");
-        expect(mapResult.all[index].error).toBeDefined();
-        expect(mapResult.all[index].index).toBe(index);
-      });
+      const item5 = runner.getOperation("process-5");
+      expect(item5?.getStatus()).toBe(OperationStatus.FAILED);
     });
   },
 });

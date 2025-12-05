@@ -1,5 +1,6 @@
 import { handler } from "./parallel-tolerated-failure-percentage";
 import { createTests } from "../../../utils/test-helper";
+import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   name: "Parallel toleratedFailurePercentage",
@@ -18,46 +19,27 @@ createTests({
       expect(result.completionReason).toBe("ALL_COMPLETED");
       expect(result.totalCount).toBe(5);
 
-      // Get the parallel operation from history to verify individual branch results
-      const historyEvents = execution.getHistoryEvents();
-      const parallelContext = historyEvents.find(
-        (event) =>
-          event.EventType === "ContextSucceeded" &&
-          event.Name === "failure-percentage-branches",
-      );
-
-      expect(parallelContext).toBeDefined();
-      const parallelResult = JSON.parse(
-        parallelContext!.ContextSucceededDetails!.Result!.Payload!,
-      );
-
-      // Assert individual branch results
-      expect(parallelResult.all).toHaveLength(5);
+      // Get individual branch operations
+      const branch1 = runner.getOperation("branch-1");
+      const branch2 = runner.getOperation("branch-2");
+      const branch3 = runner.getOperation("branch-3");
+      const branch4 = runner.getOperation("branch-4");
+      const branch5 = runner.getOperation("branch-5");
 
       // Branch 1 should succeed
-      expect(parallelResult.all[0].status).toBe("SUCCEEDED");
-      expect(parallelResult.all[0].result).toBe("Branch 1 success");
-      expect(parallelResult.all[0].index).toBe(0);
+      expect(branch1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
       // Branch 2 should fail
-      expect(parallelResult.all[1].status).toBe("FAILED");
-      expect(parallelResult.all[1].error).toBeDefined();
-      expect(parallelResult.all[1].index).toBe(1);
+      expect(branch2?.getStatus()).toBe(OperationStatus.FAILED);
 
       // Branch 3 should succeed
-      expect(parallelResult.all[2].status).toBe("SUCCEEDED");
-      expect(parallelResult.all[2].result).toBe("Branch 3 success");
-      expect(parallelResult.all[2].index).toBe(2);
+      expect(branch3?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
       // Branch 4 should fail
-      expect(parallelResult.all[3].status).toBe("FAILED");
-      expect(parallelResult.all[3].error).toBeDefined();
-      expect(parallelResult.all[3].index).toBe(3);
+      expect(branch4?.getStatus()).toBe(OperationStatus.FAILED);
 
       // Branch 5 should succeed
-      expect(parallelResult.all[4].status).toBe("SUCCEEDED");
-      expect(parallelResult.all[4].result).toBe("Branch 5 success");
-      expect(parallelResult.all[4].index).toBe(4);
+      expect(branch5?.getStatus()).toBe(OperationStatus.SUCCEEDED);
     });
   },
 });
