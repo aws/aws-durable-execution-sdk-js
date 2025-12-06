@@ -24,15 +24,9 @@ export class WorkerServerApiHandler {
   performApiCall(data: WorkerApiRequestMessage) {
     switch (data.type) {
       case ApiType.StartDurableExecution:
-        return processStartDurableExecution(
-          data.params.payload,
-          this.executionManager,
-        );
+        return processStartDurableExecution(data.params, this.executionManager);
       case ApiType.StartInvocation:
-        return processStartInvocation(
-          data.params.executionId,
-          this.executionManager,
-        );
+        return processStartInvocation(data.params, this.executionManager);
       case ApiType.CompleteInvocation:
         return processCompleteInvocation(
           data.params.executionId,

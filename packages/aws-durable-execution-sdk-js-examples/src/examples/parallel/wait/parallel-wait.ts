@@ -17,6 +17,8 @@ export const handler = withDurableExecution(
       async (childContext: DurableContext) =>
         await childContext.wait("wait-1-second", { seconds: 1 }),
       async (childContext: DurableContext) =>
+        await childContext.wait("wait-1-second-again", { seconds: 1 }),
+      async (childContext: DurableContext) =>
         await childContext.wait("wait-2-seconds", { seconds: 2 }),
       async (childContext: DurableContext) =>
         await childContext.wait("wait-5-seconds", { seconds: 5 }),

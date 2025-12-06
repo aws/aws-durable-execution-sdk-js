@@ -12,7 +12,10 @@ import {
   processCheckpointDurableExecution,
 } from "../checkpoint-handlers";
 import { ExecutionManager } from "../../storage/execution-manager";
-import { createExecutionId } from "../../utils/tagged-strings";
+import {
+  createExecutionId,
+  createInvocationId,
+} from "../../utils/tagged-strings";
 import { encodeCheckpointToken } from "../../utils/checkpoint-token";
 
 // Mock only external dependencies we can't control
@@ -28,6 +31,7 @@ describe("checkpoint handlers", () => {
     const invocationResult = executionManager.startExecution({
       executionId,
       payload: '{"test": "data"}',
+      invocationId: createInvocationId(),
     });
 
     const storage = executionManager.getCheckpointsByExecution(executionId);

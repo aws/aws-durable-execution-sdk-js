@@ -26,17 +26,25 @@ describe("execution handlers", () => {
       const startExecutionSpy = jest.spyOn(executionManager, "startExecution");
 
       const payload = '{"test": "execution data"}';
-      const result = processStartDurableExecution(payload, executionManager);
+      const invocationId = "mock-invocation-id";
+      const result = processStartDurableExecution(
+        {
+          payload,
+          invocationId: createInvocationId(invocationId),
+        },
+        executionManager,
+      );
 
       expect(startExecutionSpy).toHaveBeenCalledWith({
         payload,
+        invocationId: invocationId,
         executionId: expect.any(String),
       });
 
       expect(result).toEqual({
         checkpointToken: expect.any(String),
         executionId: expect.any(String),
-        invocationId: expect.any(String),
+        invocationId: invocationId,
         operationEvents: expect.any(Array),
       });
     });
@@ -47,6 +55,7 @@ describe("execution handlers", () => {
       // First create an execution
       const payload = '{"test": "data"}';
       executionManager.startExecution({
+        invocationId: createInvocationId(),
         executionId: createExecutionId("test-execution-id"),
         payload,
       });
@@ -56,14 +65,20 @@ describe("execution handlers", () => {
         "startInvocation",
       );
 
+      const executionId = createExecutionId("test-execution-id");
+      const invocationId = createInvocationId("test-invocation-id");
       const result = processStartInvocation(
-        "test-execution-id",
+        {
+          executionId,
+          invocationId,
+        },
         executionManager,
       );
 
-      expect(startInvocationSpy).toHaveBeenCalledWith(
-        createExecutionId("test-execution-id"),
-      );
+      expect(startInvocationSpy).toHaveBeenCalledWith({
+        executionId,
+        invocationId,
+      });
       expect(result).toEqual({
         checkpointToken: expect.any(String),
         executionId: createExecutionId("test-execution-id"),
@@ -79,13 +94,23 @@ describe("execution handlers", () => {
           throw new Error("Execution not found");
         });
 
+      const executionId = createExecutionId("non-existent-execution");
+      const invocationId = createInvocationId("test-invocation-id");
+
       expect(() =>
-        processStartInvocation("non-existent-execution", executionManager),
+        processStartInvocation(
+          {
+            executionId,
+            invocationId,
+          },
+          executionManager,
+        ),
       ).toThrow("Execution not found");
 
-      expect(startInvocationSpy).toHaveBeenCalledWith(
-        createExecutionId("non-existent-execution"),
-      );
+      expect(startInvocationSpy).toHaveBeenCalledWith({
+        executionId,
+        invocationId,
+      });
     });
   });
 
@@ -94,7 +119,11 @@ describe("execution handlers", () => {
       // First create an execution and invocation
       const executionId = createExecutionId("test-execution-id");
       const invocationId = createInvocationId("test-invocation-id");
-      executionManager.startExecution({ executionId, payload: "{}" });
+      executionManager.startExecution({
+        executionId,
+        payload: "{}",
+        invocationId: createInvocationId(),
+      });
 
       const completeInvocationSpy = jest.spyOn(
         executionManager,

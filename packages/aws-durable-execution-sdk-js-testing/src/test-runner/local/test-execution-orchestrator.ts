@@ -119,14 +119,16 @@ export class TestExecutionOrchestrator {
     const abortController = new AbortController();
 
     try {
+      const invocationId = this.invocationTracker.createInvocation();
+
       const {
         executionId,
         operationEvents: initialOperationsEvents,
         checkpointToken,
+      }: InvocationResult = await this.checkpointApi.startDurableExecution({
+        payload: JSON.stringify(params?.payload),
         invocationId,
-      }: InvocationResult = await this.checkpointApi.startDurableExecution(
-        JSON.stringify(params?.payload),
-      );
+      });
 
       const executionOperationId = initialOperationsEvents
         .at(0)
@@ -536,13 +538,14 @@ export class TestExecutionOrchestrator {
    * and polling stops. For "PENDING" status, execution continues.
    *
    * @param executionId Current execution ID
-   * @param invocationParams Data for the invocation. Defaults to creating a new invocation.
+   * @param invocationParams Data for the invocation if an invocation was already created.
+   * If not provided, a new invocation will be created.
    */
   private async invokeHandler(
     executionId: ExecutionId,
     invocationParams?: Omit<InvocationResult, "executionId">,
   ): Promise<void> {
-    if (this.invocationTracker.hasActiveInvocation()) {
+    if (!invocationParams && this.invocationTracker.hasActiveInvocation()) {
       if (this.skipTimeProps.enabled) {
         throw new Error(
           "Cannot schedule concurrent invocation when skip time is enabled",
@@ -554,14 +557,18 @@ export class TestExecutionOrchestrator {
       return;
     }
 
-    const { checkpointToken, invocationId, operationEvents } =
+    const invocationId =
+      invocationParams?.invocationId ??
+      this.invocationTracker.createInvocation();
+
+    const { checkpointToken, operationEvents } =
       invocationParams ??
-      (await this.checkpointApi.startInvocation(executionId));
+      (await this.checkpointApi.startInvocation({
+        executionId,
+        invocationId,
+      }));
 
     const operations = operationEvents.map((operation) => operation.operation);
-
-    // Create invocation record at the start of each invocation using the tracker
-    this.invocationTracker.createInvocation(invocationId);
 
     try {
       defaultLogger.debug(`Invoking handler with invocationId=${invocationId}`);
