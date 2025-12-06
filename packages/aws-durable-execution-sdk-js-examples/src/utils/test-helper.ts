@@ -6,6 +6,7 @@ import {
   DurableTestRunner,
   DurableOperation,
   InvocationType,
+  LocalDurableTestRunnerSetupParameters,
 } from "@aws/durable-execution-sdk-js-testing";
 
 export interface FunctionNameMap {
@@ -37,9 +38,7 @@ export interface TestDefinition<ResultType> {
   handler: DurableLambdaHandler;
   tests: TestCallback<ResultType>;
   invocationType?: InvocationType;
-  localRunnerConfig?: {
-    skipTime?: boolean;
-  };
+  localRunnerConfig?: LocalDurableTestRunnerSetupParameters;
 }
 
 export interface TestHelper {
@@ -189,6 +188,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   describe(`${testDef.name} (local)`, () => {
     beforeAll(() =>
       LocalDurableTestRunner.setupTestEnvironment({
+        ...testDef.localRunnerConfig,
         skipTime: isTimeSkipping,
       }),
     );
