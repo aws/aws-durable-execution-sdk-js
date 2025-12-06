@@ -20,15 +20,12 @@ createTests({
 
       // Verify totalIterations matches actual operations created
       expect(result.totalIterations).toBe(
-        // TODO: https://github.com/aws/aws-durable-execution-sdk-js/issues/365
-        // execution.getOperations({
-        //   status: "SUCCEEDED",
-        // }).length,
-        execution.getOperations().length,
+        execution.getOperations({
+          status: "SUCCEEDED",
+        }).length,
       );
 
-      // TODO: https://github.com/aws/aws-durable-execution-sdk-js/issues/365
-      // assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
     }, 120000);
   },
 });
