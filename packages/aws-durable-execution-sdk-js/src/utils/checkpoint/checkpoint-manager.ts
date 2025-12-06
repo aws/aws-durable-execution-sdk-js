@@ -41,7 +41,6 @@ export class CheckpointManager implements Checkpoint {
     reject: (error: Error) => void;
   }> = [];
   private queueCompletionResolver: (() => void) | null = null;
-  private queueCompletionTimeout: NodeJS.Timeout | null = null;
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private isTerminating = false;
   private static textEncoder = new TextEncoder();
@@ -152,17 +151,8 @@ export class CheckpointManager implements Checkpoint {
       return;
     }
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve) => {
       this.queueCompletionResolver = resolve;
-
-      // Set a timeout to prevent infinite waiting
-      this.queueCompletionTimeout = setTimeout(() => {
-        this.queueCompletionResolver = null;
-        this.queueCompletionTimeout = null;
-        // Clear the queue since it's taking too long
-        this.clearQueue();
-        reject(new Error("Timeout waiting for checkpoint queue completion"));
-      }, 3000); // 3 second timeout
     });
   }
 
@@ -393,10 +383,6 @@ export class CheckpointManager implements Checkpoint {
 
   private notifyQueueCompletion(): void {
     if (this.queueCompletionResolver) {
-      if (this.queueCompletionTimeout) {
-        clearTimeout(this.queueCompletionTimeout);
-        this.queueCompletionTimeout = null;
-      }
       this.queueCompletionResolver();
       this.queueCompletionResolver = null;
     }
