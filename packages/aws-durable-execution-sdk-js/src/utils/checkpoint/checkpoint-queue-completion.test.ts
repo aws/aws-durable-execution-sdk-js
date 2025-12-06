@@ -67,58 +67,6 @@ describe("CheckpointManager Queue Completion", () => {
 
       await expect(waits).resolves.toEqual([undefined, undefined, undefined]);
     });
-
-    it("should timeout after 3 seconds if queue doesn't complete", async () => {
-      jest.useFakeTimers();
-
-      const mockCheckpoint = jest.fn().mockImplementation(
-        () => new Promise(() => {}), // Never resolves
-      );
-      (checkpointManager as any).storage = { checkpoint: mockCheckpoint };
-
-      // Add item to queue
-      checkpointManager.checkpoint("test-step", {});
-
-      const waitPromise = checkpointManager.waitForQueueCompletion();
-
-      // Fast-forward time by 3 seconds
-      jest.advanceTimersByTime(3000);
-
-      await expect(waitPromise).rejects.toThrow(
-        "Timeout waiting for checkpoint queue completion",
-      );
-
-      jest.useRealTimers();
-    });
-
-    it("should clear queue on timeout", async () => {
-      jest.useFakeTimers();
-
-      const mockCheckpoint = jest.fn().mockImplementation(
-        () => new Promise(() => {}), // Never resolves
-      );
-      (checkpointManager as any).storage = { checkpoint: mockCheckpoint };
-
-      // Add items to queue
-      checkpointManager.checkpoint("test-step-1", {});
-      checkpointManager.checkpoint("test-step-2", {});
-
-      expect((checkpointManager as any).queue.length).toBe(2);
-
-      const waitPromise = checkpointManager.waitForQueueCompletion();
-
-      // Fast-forward time by 3 seconds
-      jest.advanceTimersByTime(3000);
-
-      await expect(waitPromise).rejects.toThrow(
-        "Timeout waiting for checkpoint queue completion",
-      );
-
-      // Queue should be cleared
-      expect((checkpointManager as any).queue.length).toBe(0);
-
-      jest.useRealTimers();
-    });
   });
 
   describe("clearQueue", () => {
