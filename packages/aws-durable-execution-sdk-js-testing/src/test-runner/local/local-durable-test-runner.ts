@@ -2,6 +2,7 @@ import {
   TestResult,
   InvokeRequest,
   DurableTestRunner,
+  CheckpointDelaySettings,
 } from "../types/durable-test-runner";
 import { DurableOperation } from "../types/durable-operation";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
@@ -89,6 +90,13 @@ export interface LocalDurableTestRunnerSetupParameters {
    * - All test runners created after setup will inherit this time skipping behavior
    */
   skipTime?: boolean;
+
+  /**
+   * Options to simulate checkpoint API delay. Adding delay can make tests behave more similarily
+   * to the real world, where checkpoint API calls take longer. This can help with finding concurrency
+   * bugs, race conditions, or other issues.
+   */
+  checkpointDelay?: CheckpointDelaySettings;
 }
 
 /**
@@ -128,8 +136,8 @@ export class LocalDurableTestRunner<
   private waitManager: OperationWaitManager;
   private readonly resultFormatter: ResultFormatter<TResult>;
   private operationIndex: IndexedOperations;
-  static skipTime = false;
-  static fakeClock: InstalledClock | undefined;
+  private static skipTime = false;
+  private static fakeClock: InstalledClock | undefined;
   private readonly handlerFunction: DurableLambdaHandler;
   private readonly functionStorage: FunctionStorage;
   private readonly durableApi: DurableApiClient;
@@ -161,24 +169,23 @@ export class LocalDurableTestRunner<
   }
 
   private static createDurableApi(): DurableApiClient {
-    const workerManager = CheckpointWorkerManager.getInstance();
     return {
       sendCallbackSuccess: (request) =>
-        workerManager.sendApiRequest(
+        CheckpointWorkerManager.getInstance().sendApiRequest(
           ApiType.SendDurableExecutionCallbackSuccess,
           request,
         ),
       sendCallbackFailure: (
         request: SendDurableExecutionCallbackFailureRequest,
       ) =>
-        workerManager.sendApiRequest(
+        CheckpointWorkerManager.getInstance().sendApiRequest(
           ApiType.SendDurableExecutionCallbackFailure,
           request,
         ),
       sendCallbackHeartbeat: (
         request: SendDurableExecutionCallbackHeartbeatRequest,
       ) =>
-        workerManager.sendApiRequest(
+        CheckpointWorkerManager.getInstance().sendApiRequest(
           ApiType.SendDurableExecutionCallbackHeartbeat,
           request,
         ),
@@ -480,7 +487,9 @@ export class LocalDurableTestRunner<
         now: Date.now(),
       });
     }
-    return CheckpointWorkerManager.getInstance().setup();
+    return CheckpointWorkerManager.getInstance({
+      checkpointDelaySettings: params?.checkpointDelay,
+    }).setup();
   }
 
   /**
