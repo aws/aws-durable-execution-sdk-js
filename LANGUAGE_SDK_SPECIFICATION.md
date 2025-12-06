@@ -188,14 +188,22 @@ The SDK MUST determine if an operation has already been executed by checking:
 - The operation's current status
 - Whether a result or error is already recorded
 
-### 3.4 Response Size Limits
+### 3.4 Response Size and Error Handling
 
-The SDK MUST handle Lambda's 6MB response payload limit:
+The SDK MUST handle API size limit errors gracefully:
 
-1. If the serialized result exceeds approximately 6MB, the SDK MUST:
+1. When serialization or API calls fail due to size constraints, the SDK MUST:
+   - Catch the error from the API
+   - Return `FAILED` status with a clear error message
+   - NOT allow the error to propagate and trigger invocation-level retries
+
+2. Exception: `InvalidParameterValueException` for checkpoint tokens SHOULD be allowed to propagate, as this indicates a transient issue that may resolve on retry.
+
+3. For large execution results that would exceed response size limits, the SDK MUST:
    - Checkpoint the result using an `EXECUTION` operation with `SUCCEED` action
    - Return an empty `Result` field with `SUCCEEDED` status
-2. The SDK SHOULD monitor payload size proactively to avoid failures
+
+Note: Specific size limits are subject to change. Refer to AWS Lambda service limits documentation for current values.
 
 ## 4. Durable Operations
 
@@ -209,6 +217,19 @@ SDKs MUST support six operation types:
 4. **CALLBACK** - Wait for external system completion
 5. **CHAINED_INVOKE** - Invoke another Lambda function
 6. **CONTEXT** - Group operations with isolated state
+
+#### 4.1.1 API Primitives vs SDK Constructs
+
+The six operation types listed above are **API primitives** defined by the AWS Lambda Durable Execution API. These are the fundamental building blocks provided by the service.
+
+The SDK MAY provide **higher-level constructs** that compose these primitives to offer convenient patterns:
+
+- `map` - Concurrent processing of items (uses CONTEXT operations)
+- `parallel` - Concurrent execution of branches (uses CONTEXT operations)
+- `waitForCondition` - Polling with state accumulation (uses STEP with RETRY)
+- `waitForCallback` - Callback with submission logic (uses CALLBACK primitive)
+
+These constructs exist only in the SDK layer and are built upon the core API primitives. They are not separate operation types in the API.
 
 ### 4.2 Common Operation Properties
 
@@ -480,6 +501,9 @@ Each operation update MAY include:
 - `Error`: Failure error object
 - Type-specific options (`StepOptions`, `WaitOptions`, `CallbackOptions`, `ChainedInvokeOptions`, `ContextOptions`)
 
+For detailed field constraints (length limits, patterns, and valid values), refer to the AWS Lambda API documentation:  
+https://docs.aws.amazon.com/lambda/latest/api/API_OperationUpdate.html
+
 ### 5.5 Checkpoint Response
 
 The SDK MUST process checkpoint responses that include:
@@ -603,14 +627,18 @@ Repeatedly check a condition until it is met, with configurable wait intervals.
 
 The SDK SHOULD implement wait-for-condition as:
 
-1. A loop using STEP operations for each check
-2. WAIT operations for delays between checks
-3. A parent CONTEXT for isolation
-4. User-defined condition check and wait strategy functions
+1. A single STEP operation that acts as a reducer pattern
+2. Each check attempt uses the STEP's retry mechanism via RETRY action
+3. The condition check function returns state that is passed as the payload
+4. On retry, the previous payload (state) is passed to the next attempt (not an error)
+5. The retry delay (NextAttemptDelaySeconds) creates the wait period between checks
+6. No separate WAIT or CONTEXT operations are required
 
 The SDK MAY provide built-in wait strategies (exponential backoff, linear, constant, etc.).
 
 ### 7.2 Callback Patterns
+
+The callback patterns described here are SDK constructs built on the CALLBACK operation primitive. They provide convenient wrappers around the core CALLBACK functionality.
 
 #### 7.2.1 Create Callback
 
