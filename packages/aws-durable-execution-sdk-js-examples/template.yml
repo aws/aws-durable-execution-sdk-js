@@ -725,12 +725,137 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  MapFailureThresholdExceededCount:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Mapfailurethresholdexceededcount-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-failure-threshold-exceeded-count.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  MapFailureThresholdExceededPercentage:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Mapfailurethresholdexceededpercentage-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-failure-threshold-exceeded-percentage.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   MapLargeScale:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: LargeScaleMap-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: map-large-scale.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  MapMinSuccessful:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapminSuccessful-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-min-successful.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  MapToleratedFailureCount:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MaptoleratedFailureCount-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-tolerated-failure-count.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  MapToleratedFailurePercentage:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MaptoleratedFailurePercentage-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-tolerated-failure-percentage.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -873,6 +998,56 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  ParallelFailureThresholdExceededCount:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Parallelfailurethresholdexceededcount-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-failure-threshold-exceeded-count.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ParallelFailureThresholdExceededPercentage:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Parallelfailurethresholdexceededpercentage-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-failure-threshold-exceeded-percentage.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   ParallelHeterogeneous:
     Type: AWS::Serverless::Function
     Properties:
@@ -898,12 +1073,87 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  ParallelMinSuccessful:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelminSuccessful-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-min-successful.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   ParallelMinSuccessfulCallback:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: ParallelminSuccessfulwithCallbacks-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: parallel-min-successful-callback.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ParallelToleratedFailureCount:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParalleltoleratedFailureCount-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-tolerated-failure-count.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ParallelToleratedFailurePercentage:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParalleltoleratedFailurePercentage-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-tolerated-failure-percentage.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -1254,6 +1504,31 @@ Resources:
       FunctionName: RuninChildContextwithFailingStep-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: run-in-child-context-failing-step.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  SerdeBasic:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BasicSerdeswithcreateClassSerdes-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: serde-basic.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

@@ -1,9 +1,35 @@
-const {
+import {
   toPascalCase,
-  getExampleFiles,
   createFunctionResource,
   generateTemplate,
-} = require("../../scripts/generate-sam-template.js");
+  getExamplesCatalogJson,
+} from "../generate-sam-template";
+
+jest.mock("../generate-sam-template", () => ({
+  ...jest.requireActual("../generate-sam-template"),
+  getExamplesCatalogJson: jest.fn(() => [
+    {
+      name: "hello-world",
+      description: "A simple hello world example with no durable operations",
+      path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-world.ts",
+      handler: "hello-world.handler",
+      durableConfig: {
+        ExecutionTimeout: 60,
+        RetentionPeriodInDays: 7,
+      },
+    },
+    {
+      name: "steps-with-retry",
+      description: "An example demonstrating retry functionality with steps",
+      path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/step/steps-with-retry/steps-with-retry.ts",
+      handler: "steps-with-retry.handler",
+      durableConfig: {
+        ExecutionTimeout: 60,
+        RetentionPeriodInDays: 7,
+      },
+    },
+  ]),
+}));
 
 describe("generate-sam-template", () => {
   describe("toPascalCase", () => {
@@ -17,16 +43,10 @@ describe("generate-sam-template", () => {
 
   describe("createFunctionResource", () => {
     test("creates default function resource", () => {
-      const resource = createFunctionResource("hello-world", {
-        name: "Hello World",
-        description: "A simple hello world example with no durable operations",
-        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-world.ts",
-        handler: "hello-world.handler",
-        durableConfig: {
-          ExecutionTimeout: 60,
-          RetentionPeriodInDays: 7,
-        },
-      });
+      const resource = createFunctionResource(
+        "hello-world",
+        getExamplesCatalogJson()[0],
+      );
 
       expect(resource.Type).toBe("AWS::Serverless::Function");
       expect(resource.Properties.FunctionName).toBe("hello-world");
@@ -38,16 +58,10 @@ describe("generate-sam-template", () => {
     });
 
     test("creates function resource with custom config for steps-with-retry", () => {
-      const resource = createFunctionResource("steps-with-retry", {
-        name: "Steps With Retry",
-        description: "An example demonstrating retry functionality with steps",
-        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/step/steps-with-retry/steps-with-retry.ts",
-        handler: "steps-with-retry.handler",
-        durableConfig: {
-          ExecutionTimeout: 60,
-          RetentionPeriodInDays: 7,
-        },
-      });
+      const resource = createFunctionResource(
+        "steps-with-retry",
+        getExamplesCatalogJson()[1],
+      );
 
       expect(resource.Properties.FunctionName).toBe("steps-with-retry");
       expect(resource.Properties.MemorySize).toBe(256);
