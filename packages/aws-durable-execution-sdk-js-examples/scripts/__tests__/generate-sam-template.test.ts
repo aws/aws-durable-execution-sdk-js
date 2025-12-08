@@ -5,30 +5,32 @@ import {
   getExamplesCatalogJson,
 } from "../generate-sam-template";
 
-jest.mock("../generate-sam-template", () => ({
-  ...jest.requireActual("../generate-sam-template"),
-  getExamplesCatalogJson: jest.fn(() => [
-    {
-      name: "hello-world",
-      description: "A simple hello world example with no durable operations",
-      path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-world.ts",
-      handler: "hello-world.handler",
-      durableConfig: {
-        ExecutionTimeout: 60,
-        RetentionPeriodInDays: 7,
+jest.mock("fs", () => ({
+  existsSync: jest.fn(() => true),
+  readFileSync: jest.fn(() =>
+    JSON.stringify([
+      {
+        name: "hello-world",
+        description: "A simple hello world example with no durable operations",
+        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/hello-world/hello-world.ts",
+        handler: "hello-world.handler",
+        durableConfig: {
+          ExecutionTimeout: 60,
+          RetentionPeriodInDays: 7,
+        },
       },
-    },
-    {
-      name: "steps-with-retry",
-      description: "An example demonstrating retry functionality with steps",
-      path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/step/steps-with-retry/steps-with-retry.ts",
-      handler: "steps-with-retry.handler",
-      durableConfig: {
-        ExecutionTimeout: 60,
-        RetentionPeriodInDays: 7,
+      {
+        name: "steps-with-retry",
+        description: "An example demonstrating retry functionality with steps",
+        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/step/steps-with-retry/steps-with-retry.ts",
+        handler: "steps-with-retry.handler",
+        durableConfig: {
+          ExecutionTimeout: 60,
+          RetentionPeriodInDays: 7,
+        },
       },
-    },
-  ]),
+    ]),
+  ),
 }));
 
 describe("generate-sam-template", () => {
