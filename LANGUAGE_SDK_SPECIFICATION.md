@@ -1,8 +1,8 @@
 # AWS Lambda Durable Functions Language SDK Specification
 
-**Version:** 1.0  
-**Date:** December 6, 2025  
-**Status:** Draft
+**Version:** 1.1  
+**Date:** December 9, 2025  
+**Status:** Reviewing
 
 ## 1. Introduction
 
@@ -84,11 +84,17 @@ The SDK SHOULD:
 - Include warnings in documentation about replay behavior
 - Offer testing utilities that can help validate deterministic behavior
 
-The SDK CANNOT:
+The SDK is not responsible for:
 
-- Prevent users from writing non-deterministic code
-- Detect all forms of non-determinism
-- Guarantee that user code will execute deterministically
+- Preventing users from writing non-deterministic code
+- Detecting all forms of non-determinism
+- Guaranteeing that user code will execute deterministically
+
+**Note:** Some languages have inherently non-deterministic constructs that may require alternatives:
+
+- Java: Use `LinkedHashMap` instead of `HashMap` (iteration order is not guaranteed)
+- Go: Map iteration order is purposefully randomized
+- Other languages may have similar constructs requiring deterministic alternatives
 
 **SDK Guarantees During Replay:**
 
@@ -135,9 +141,11 @@ The SDK MUST return an output payload in one of three forms:
 ```json
 {
   "Status": "SUCCEEDED",
-  "Result": "string (optional, JSON-serialized)"
+  "Result": "string (optional)"
 }
 ```
+
+The `Result` field is a string and MAY be JSON-formatted.
 
 #### 3.2.2 Failed Completion
 
@@ -145,12 +153,16 @@ The SDK MUST return an output payload in one of three forms:
 {
   "Status": "FAILED",
   "Error": {
-    "ErrorType": "string",
-    "ErrorMessage": "string",
-    "StackTrace": ["string"] // OPTIONAL
+    "ErrorType": "string (optional)",
+    "ErrorMessage": "string (optional)",
+    "StackTrace": ["string"], // OPTIONAL
+    "ErrorData": "string" // OPTIONAL - additional machine-readable error data
   }
 }
 ```
+
+All Error fields are optional. For detailed error object structure, see:  
+https://docs.aws.amazon.com/lambda/latest/api/API_ErrorObject.html
 
 #### 3.2.3 Pending Continuation
 
@@ -160,12 +172,14 @@ The SDK MUST return an output payload in one of three forms:
 }
 ```
 
-The SDK MUST return `PENDING` status when one or more operations are waiting for external completion:
+The SDK MAY return `PENDING` status when one or more operations are waiting for external completion:
 
 - A `STEP` operation in `PENDING` status
 - A `WAIT` operation in `STARTED` status
 - A `CALLBACK` operation in `STARTED` status
 - A `CHAINED_INVOKE` operation in `STARTED` status
+
+The SDK is not required to return `PENDING` immediately when these conditions are true—it may continue running other work (e.g., if a long-running STEP is in progress concurrently).
 
 The SDK MUST NOT return `PENDING` when no operations are pending, as this results in execution failure.
 
@@ -188,6 +202,14 @@ The SDK MUST determine if an operation has already been executed by checking:
 - The operation's current status
 - Whether a result or error is already recorded
 
+#### 3.3.3 Operation Consistency Checks
+
+The SDK MUST verify operation consistency when encountering an existing operation:
+
+- If an operation ID already exists, the SDK MUST verify the operation type matches
+- For example, if an existing operation with ID "op1" is a STEP, the SDK MUST NOT allow a new CALLBACK or WAIT operation to use the same ID
+- Mismatched operation types indicate a determinism violation and SHOULD result in a terminal error
+
 ### 3.4 Response Size and Error Handling
 
 The SDK MUST handle API size limit errors gracefully:
@@ -209,18 +231,26 @@ Note: Specific size limits are subject to change. Refer to AWS Lambda service li
 
 ### 4.1 Operation Types
 
-SDKs MUST support six operation types:
+SDKs MUST support the following operation types:
 
-1. **EXECUTION** - Represents the execution itself
-2. **STEP** - Execute code with automatic retry and checkpointing
-3. **WAIT** - Pause execution for a specified duration
-4. **CALLBACK** - Wait for external system completion
-5. **CHAINED_INVOKE** - Invoke another Lambda function
-6. **CONTEXT** - Group operations with isolated state
+**Five User-Facing Primitives:**
+
+1. **STEP** - Execute code with automatic retry and checkpointing
+2. **WAIT** - Pause execution for a specified duration
+3. **CALLBACK** - Wait for external system completion
+4. **CHAINED_INVOKE** - Invoke another Lambda function
+5. **CONTEXT** - Group operations with isolated state
+
+**Special Operation:**
+
+6. **EXECUTION** - Represents the execution itself (used only to complete the overall execution, not a user-facing primitive)
+
+For detailed operation definitions, refer to the AWS Lambda API documentation:  
+https://docs.aws.amazon.com/lambda/latest/api/API_Operation.html
 
 #### 4.1.1 API Primitives vs SDK Constructs
 
-The six operation types listed above are **API primitives** defined by the AWS Lambda Durable Execution API. These are the fundamental building blocks provided by the service.
+The five user-facing operation types listed above are **API primitives** defined by the AWS Lambda Durable Execution API. These are the fundamental building blocks provided by the service.
 
 The SDK MAY provide **higher-level constructs** that compose these primitives to offer convenient patterns:
 
@@ -309,6 +339,8 @@ When a step fails, the SDK SHOULD:
 3. Checkpoint retry state with `RETRY` action and `NextAttemptDelaySeconds`
 4. Track attempt numbers in `StepDetails.Attempt`
 
+**Note:** The `RETRY` action can be used with either an `Error` OR a `Payload`. Using RETRY with a Payload (instead of Error) enables the "wait for condition" pattern where a step retries on success to continue polling.
+
 The SDK MAY provide default retry presets.
 
 ### 4.5 WAIT Operation
@@ -322,7 +354,7 @@ Suspend execution for a specified duration without incurring compute charges.
 The SDK MUST:
 
 1. Accept duration specifications (seconds, minutes, hours, days, weeks, months, years)
-2. Convert durations to total seconds for the API
+2. Convert durations to total seconds for the API (minimum 1 second)
 3. Create a WAIT operation with `WaitSeconds` option
 4. Return immediately if the wait has already completed (replay)
 5. Return pending if the wait is still active
@@ -354,8 +386,9 @@ The SDK MUST:
 1. Create a CALLBACK operation and retrieve its `CallbackId`
 2. Provide the callback ID to the user for external completion
 3. Support optional timeout and heartbeat timeout configuration
-4. Handle completion via `SendDurableExecutionCallbackSuccess` or `SendDurableExecutionCallbackFailure`
-5. Support heartbeat via `SendDurableExecutionCallbackHeartbeat`
+4. Handle state transitions when re-invoked (STARTED → SUCCEEDED/FAILED/TIMED_OUT)
+
+**Note:** The callback completion APIs (`SendDurableExecutionCallbackSuccess`, `SendDurableExecutionCallbackFailure`, `SendDurableExecutionCallbackHeartbeat`) are called by external systems, not by the SDK during handler execution. The SDK's responsibility is to handle the resulting state transitions when the function is re-invoked with updated callback state.
 
 #### 4.6.3 Supported Actions
 
@@ -390,9 +423,10 @@ The SDK MUST:
 1. Accept function name or ARN
 2. Serialize input payload
 3. Create a CHAINED_INVOKE operation with the target and payload
-4. Handle both durable and non-durable target functions
-5. Return the target function's result upon success
-6. Propagate errors from the target function
+4. Return the target function's result upon success
+5. Propagate errors from the target function
+
+**Note:** The SDK SHOULD not handle invoking durable and non-durable target functions differently. The service handles the invocation transparently.
 
 #### 4.7.3 Supported Actions
 
@@ -448,14 +482,16 @@ The SDK MUST:
                         └→ FAIL → FAILED [Done]
 ```
 
-#### 4.8.5 Replay Optimization
+#### 4.8.5 ReplayChildren Option
 
-The SDK SHOULD support `ReplayChildren` option:
+The SDK MUST pass the `ReplayChildren` option to the API when starting a CONTEXT if it needs to access children state during replay:
 
-- When `false` and context is completed, child operations are not included in future state loads
-- When `true`, child operations are retained for replay
+- When `false` (default): Child operations are not included in state when the context is completed
+- When `true`: Child operations are included in state loads for replay
 
-This optimization is RECOMMENDED for large parallel operations and maps.
+**Use case:** The JS SDK uses `ReplayChildren: true` to support `parallel`/`map` operations that have a total size larger than the individual operation size limit. It requests children state and replays each branch to combine the output.
+
+This option is particularly useful for large parallel operations where the combined result exceeds size limits.
 
 ## 5. Checkpointing
 
@@ -465,7 +501,7 @@ The SDK MUST use the `CheckpointDurableExecution` API to:
 
 - Start new operations
 - Complete existing operations (succeed, fail, retry)
-- Update operation state
+- Update operation state (e.g., callback completed, wait elapsed)
 
 ### 5.2 Checkpoint Tokens
 
@@ -473,7 +509,7 @@ The SDK MUST:
 
 1. Use the `CheckpointToken` from the invocation input for the first checkpoint
 2. Use the returned `CheckpointToken` from each checkpoint response for subsequent checkpoints
-3. Handle `InvalidParameterValueException` errors for invalid tokens
+3. Handle `InvalidParameterValueException` errors for invalid tokens (message starts with "Invalid checkpoint token")
 4. Never reuse a checkpoint token that has already been consumed
 
 ### 5.3 Checkpoint Request Format
@@ -482,7 +518,7 @@ Each checkpoint request MUST include:
 
 - `DurableExecutionArn`: The execution identifier
 - `CheckpointToken`: The current valid token
-- `Updates`: Array of operation updates
+- `Updates`: Array of operation updates (MAY be empty)
 
 ### 5.4 Operation Updates
 
@@ -497,7 +533,7 @@ Each operation update MAY include:
 - `Name`: Human-readable name
 - `ParentId`: Parent context ID
 - `SubType`: SDK-level categorization
-- `Payload`: Success result (JSON string)
+- `Payload`: Success result (string, MAY be JSON)
 - `Error`: Failure error object
 - Type-specific options (`StepOptions`, `WaitOptions`, `CallbackOptions`, `ChainedInvokeOptions`, `ContextOptions`)
 
@@ -518,13 +554,14 @@ The SDK SHOULD checkpoint:
 
 - After each durable operation starts
 - After each durable operation completes
-- Before returning with pending status
 - When approaching Lambda timeout
+
+The SDK does not need to checkpoint before returning `PENDING` status if it already knows there are only pending operations remaining.
 
 The SDK MAY checkpoint:
 
-- Periodically during long-running operations
-- To receive status updates for pending operations
+- Periodically during long-running operations to receive status updates for pending operations
+- With an empty `Updates` array to poll for state changes (returns any operations whose state changed since the last checkpoint)
 
 ### 5.7 Batch Checkpointing
 
@@ -533,6 +570,8 @@ The SDK MAY batch multiple operation updates in a single checkpoint call to redu
 - Operations MUST be checkpointed in execution order
 - EXECUTION operation completion (if used) MUST be last
 - Child operations MUST be checkpointed after their parent CONTEXT starts
+- Each batch can only include one update per operation ID
+- **Exception:** STEP and CONTEXT operations may include both START and completion (SUCCEED/FAIL/RETRY) in the same batch, allowing a step to be started and completed in a single checkpoint call
 
 ## 6. Concurrency and Parallelism
 
@@ -680,43 +719,50 @@ The SDK SHOULD:
 
 1. Document that combinators work with already-started operations
 2. Recommend map/parallel for controlled concurrency and durability
-3. Implement combinators using CONTEXT operations for tracking
+3. Implement combinators using a STEP operation to track and resolve results
 4. Support proper error propagation and result collection
+
+**Note:** Promise combinators MUST be implemented within a STEP operation to ensure durability. The STEP provides the checkpoint mechanism for tracking which promises have resolved.
 
 ## 8. Error Handling
 
 ### 8.1 Error Classification
 
-The SDK MUST distinguish between:
+Lambda classifies errors into two categories:
 
 1. **Runtime Errors**: Errors in the execution environment
    - Prefixed with `Runtime.`, `Sandbox.`, or `Extension.`
    - Automatically retried by Lambda (up to 3 immediate retries)
    - Exception: `Sandbox.Timedout` is treated as handler error
+   - These occur outside the handler context and the SDK is not directly involved
 
-2. **Handler Errors**: Errors thrown by user code
+2. **Handler Errors**: Errors thrown by or returned from the handler
    - All other error types
    - Retried with exponential backoff over several hours
-   - Expected to be caught and handled by SDK
+   - The SDK controls whether errors are thrown (retryable) or returned as FAILED status (terminal)
 
 ### 8.2 Error Recovery
 
-#### 8.2.1 Retryable Errors
+#### 8.2.1 Retryable vs Terminal Errors
 
-The SDK SHOULD treat errors as retryable by default and:
+The SDK controls error handling through its return behavior:
 
-1. Allow the function to be re-invoked by Lambda
-2. Rely on replay to skip completed operations
-3. Continue from the point of failure
+**Retryable Errors (throw from handler):**
 
-#### 8.2.2 Terminal Errors
+- When the SDK throws an error from the handler, Lambda will retry the invocation
+- The SDK SHOULD throw errors when:
+  - The error is transient and may resolve on retry
+  - The SDK wants Lambda to re-invoke the function
 
-The SDK MUST return `FAILED` status for terminal errors:
+**Terminal Errors (return FAILED status):**
 
-1. User explicitly requests failure
-2. Retry budget is exhausted
-3. Operation reaches terminal failed state
-4. Unrecoverable validation or serialization errors
+- When the SDK returns `FAILED` status, the execution terminates permanently
+- The SDK MUST return `FAILED` status when:
+  - User explicitly requests failure
+  - Retry budget is exhausted (step retries exhausted)
+  - Operation reaches terminal failed state
+  - Unrecoverable validation or serialization errors
+  - Non-retryable API errors (size limit exceeded, etc.)
 
 ### 8.3 Error Propagation
 
@@ -740,12 +786,16 @@ When a child operation fails within a context:
 
 The SDK MUST provide error objects with:
 
-- `ErrorType`: String identifying the error class
-- `ErrorMessage`: Human-readable error description
+- `ErrorType`: String identifying the error class (optional)
+- `ErrorMessage`: Human-readable error description (optional)
 
 The SDK SHOULD include:
 
 - `StackTrace`: Array of stack frame strings
+- `ErrorData`: Additional machine-readable error information (MAY be serialized JSON)
+
+For the complete error object structure, see:  
+https://docs.aws.amazon.com/lambda/latest/api/API_ErrorObject.html
 
 ## 9. Serialization
 
@@ -818,7 +868,7 @@ The SDK MUST integrate with the language's asynchronous programming model:
 - JavaScript/TypeScript: Promises
 - Python: asyncio/coroutines
 - Go: goroutines/channels
-- Java: CompletableFuture
+- Java: CompletableFuture, virtual threads (Java 21)
 - Rust: async/await
 
 ### 11.3 Error Handling Idioms
@@ -862,29 +912,20 @@ The SDK SHOULD allow configuration of:
 
 ## 13. Performance Considerations
 
-### 13.1 State Loading
+### 13.1 Memory Usage
 
 The SDK SHOULD:
 
-1. Load operation state lazily when possible
-2. Index operations for O(1) lookup by ID
-3. Cache checkpoint tokens
-4. Minimize redundant API calls
-
-### 13.2 Memory Usage
-
-The SDK SHOULD:
-
-1. Stream large state when possible
+1. Process large state incrementally when possible
 2. Release completed operation data when safe
 3. Use efficient data structures for operation tracking
 
-### 13.3 Cold Start
+### 13.2 Cold Start
 
 The SDK SHOULD:
 
 1. Minimize initialization overhead
-2. Lazy-load dependencies when possible
+2. Defer non-essential initialization until needed
 3. Reuse SDK client instances across invocations
 
 ## 14. Limitations and Constraints
@@ -895,17 +936,19 @@ The SDK MUST document:
 
 - Maximum execution duration: 1 year
 - Maximum response payload: 6MB
+- Maximum checkpoints (durable operations): Limited by service quotas
 - Maximum history size: Limited by service quotas
-- Maximum concurrent operations: Limited by concurrency configuration
+- Maximum concurrent operations: Limited by account quotas and function-level concurrency configuration
+
+The SDK SHOULD gracefully handle execution limits (quotas) by returning clear error messages rather than letting unexpected failures propagate. Refer to https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html for current service limits.
 
 ### 14.2 Operation Limits
 
 The SDK SHOULD communicate:
 
-- Maximum wait duration
+- Maximum and minimum wait duration
 - Maximum callback timeout
 - Maximum retry attempts (recommended defaults)
-- Maximum operation depth (nesting)
 
 ### 14.3 User Code Determinism Requirements
 
@@ -937,6 +980,8 @@ The SDK SHOULD provide:
 - Testing utilities to validate deterministic behavior
 - Runtime warnings for detected non-deterministic operations (where feasible)
 
+The SDK MAY provide helpers to generate replay-safe non-deterministic values (e.g., deterministic UUID generators seeded by operation ID, replay-safe timestamps derived from execution state).
+
 ## 15. API Client Requirements
 
 ### 15.1 Required APIs
@@ -966,7 +1011,58 @@ The SDK SHOULD:
 2. Propagate terminal errors immediately
 3. Respect Lambda's timeout to avoid infinite retries
 
-## 16. Conformance
+## 16. Execution Semantics
+
+### 16.1 Delivery Guarantees
+
+The durable execution system provides **at-least-once** semantics for executions:
+
+- Operations MAY be executed more than once due to retries, timeouts, or infrastructure failures
+- The SDK relies on checkpoint-and-replay to ensure operations are not re-executed when their results are already recorded
+- User code within STEP operations SHOULD be idempotent to handle potential re-execution
+
+**At-least-once implications:**
+
+1. A STEP operation may be started multiple times before completing
+2. External side effects in user code may occur more than once
+3. The SDK ensures checkpointed results are returned consistently during replay
+
+**At-most-once option:**
+
+The SDK MAY provide STEP configuration for at-most-once semantics. With at-most-once, the step detects re-execution scenarios and may:
+
+- Skip re-execution if the step previously succeeded (return cached result)
+- Skip re-execution if the step does not checkpoint or return data (fire-and-forget)
+- Fail the step if re-execution would cause duplicate side effects and no cached result exists
+
+### 16.2 Exactly-Once Checkpoint Semantics
+
+While execution is at-least-once, **checkpointing** provides exactly-once semantics through checkpoint tokens:
+
+- Each checkpoint token is single-use
+- Attempting to reuse a token results in `InvalidParameterValueException`
+- This ensures operation state transitions are recorded exactly once
+
+### 16.3 Checkpoint Batching Considerations
+
+When batching multiple operation updates:
+
+- The entire batch succeeds or fails atomically
+- If a batch fails, none of the operations in the batch are recorded
+- The SDK SHOULD checkpoint critical state transitions promptly rather than accumulating large batches
+- For time-sensitive operations, the SDK MAY checkpoint immediately rather than batching
+
+### 16.4 Performance vs Durability Trade-offs
+
+SDKs MAY provide configuration options to tune the trade-off between performance and durability:
+
+- **Eager checkpointing**: Checkpoint after every operation (maximum durability, more API calls)
+- **Batched checkpointing**: Group multiple operations per checkpoint (better performance, slightly delayed durability)
+- **Optimistic execution**: Execute multiple operations before checkpointing (best performance, replay may redo more work on failure)
+
+The SDK SHOULD document the default behavior and allow users to configure based on their requirements.
+
+## 17. Conformance
 
 An SDK implementation conforms to this specification if it:
 
@@ -977,15 +1073,15 @@ An SDK implementation conforms to this specification if it:
 5. **SHOULD** implement operations marked as SHOULD
 6. **MAY** implement optional extensions
 
-### 16.1 Conformance Levels
+### 17.1 Conformance Levels
 
 - **Level 1 (Minimal)**: Core operations (STEP, WAIT, basic error handling)
 - **Level 2 (Standard)**: All required operations, serialization, logging
 - **Level 3 (Complete)**: All operations, concurrency, advanced patterns
 
-## 17. Versioning and Compatibility
+## 18. Versioning and Compatibility
 
-### 17.1 Specification Versioning
+### 18.1 Specification Versioning
 
 This specification uses semantic versioning:
 
@@ -993,7 +1089,7 @@ This specification uses semantic versioning:
 - Minor: New optional features
 - Patch: Clarifications and corrections
 
-### 17.2 Backward Compatibility
+### 18.2 Backward Compatibility
 
 SDKs SHOULD:
 
@@ -1001,15 +1097,15 @@ SDKs SHOULD:
 2. Provide migration guides for breaking changes
 3. Support gradual adoption of new features
 
-## 18. References
+## 19. References
 
-### 18.1 AWS Lambda Documentation
+### 19.1 AWS Lambda Documentation
 
 - Lambda Durable Functions: https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html
 - Lambda API Reference: https://docs.aws.amazon.com/lambda/latest/api/
 - Lambda Runtime API: https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html
 
-### 18.2 Related Standards
+### 19.2 Related Standards
 
 - RFC 2119: Key words for use in RFCs to Indicate Requirement Levels
 - JSON: ECMA-404, RFC 8259
@@ -1043,9 +1139,8 @@ Invocation 1:
   - Return: PENDING
 
 Invocation 2 (after 5 seconds):
-  - Load state: [step1: PENDING, Attempt=1]
-  - Resume STEP(id="step1")
-  - Checkpoint: START step1 (attempt 2)
+  - Load state: [step1: READY, Attempt=2]
+  - Resume STEP(id="step1") - already READY, no START checkpoint needed
   - Execute user function (succeeds)
   - Checkpoint: SUCCEED step1, payload="result"
   - Return: SUCCEEDED, Result="result"
@@ -1112,7 +1207,7 @@ return step3_result
 
 ```
 [callback_promise, callback_id] = await context.create_callback("approval")
-await send_approval_email(callback_id)
+await context.step("send-email", () => send_approval_email(callback_id))
 approval_result = await callback_promise
 if approval_result.approved:
     return await context.step("process", process_approved)
@@ -1200,13 +1295,13 @@ except Exception as e:
     │ START action
     ▼
 ┌─────────┐
-│ STARTED │◄──────┐
-└────┬────┘       │
-     │            │
-     ├─ SUCCEED ──► SUCCEEDED (terminal)
-     │
-     ├─ FAIL ─────► FAILED (terminal)
-     │
+│ STARTED │◄───────────────────────────────────────┐
+└────┬────┘                                        │
+     │                                             │
+     ├─ SUCCEED ──► SUCCEEDED (terminal)           │
+     │                                             │
+     ├─ FAIL ─────► FAILED (terminal)              │
+     │                                             │
      └─ RETRY ───► PENDING ──► (delay) ──► READY ──┘
                                               (START action)
 ```
@@ -1308,6 +1403,16 @@ except Exception as e:
 **Completion Policy**: Rules determining when a batch operation (map/parallel) should stop based on success/failure counts.
 
 ## Appendix E: Change Log
+
+### Version 1.1 (December 9, 2025)
+
+- Added graceful quota handling guidance (Section 14.1)
+- Added replay-safe helpers for non-deterministic values (Section 14.3)
+- Added at-most-once semantics option for STEP operations (Section 16.1)
+- Fixed retry example to show READY state instead of re-checkpointing START (Appendix A.2)
+- Fixed Human-in-the-Loop example to wrap side effect in step (Appendix B.2)
+- Removed State Loading section (implementation detail)
+- Changed status to Reviewing
 
 ### Version 1.0 (December 6, 2025)
 
