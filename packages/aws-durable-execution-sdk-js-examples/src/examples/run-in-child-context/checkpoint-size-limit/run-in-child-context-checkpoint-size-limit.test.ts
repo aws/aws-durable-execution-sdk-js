@@ -6,9 +6,9 @@ createTests({
   name: "run-in-child-context-checkpoint-size-limit boundary test",
   functionName: "run-in-child-context-checkpoint-size-limit",
   handler,
-  // localRunnerConfig: {
-  //   checkpointDelay: 100,
-  // },
+  localRunnerConfig: {
+    checkpointDelay: 100,
+  },
   tests: (runner, { assertEventSignatures }) => {
     it("should handle 100 iterations near checkpoint size limit", async () => {
       const execution = await runner.run();
