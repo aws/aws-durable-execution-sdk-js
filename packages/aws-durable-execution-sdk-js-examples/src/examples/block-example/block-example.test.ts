@@ -1,11 +1,8 @@
 import { OperationType } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./block-example";
-import historyEvents from "./block-example.history.json";
 import { createTests } from "../../utils/test-helper";
 
 createTests({
-  name: "block-example test",
-  functionName: "block-example",
   handler,
   tests: (runner, { assertEventSignatures }) => {
     it("should execute nested child contexts with proper checkpointing", async () => {
@@ -54,7 +51,7 @@ createTests({
       );
       expect(waitOp).toBeDefined();
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     });
   },
 });

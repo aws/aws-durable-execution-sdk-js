@@ -8,8 +8,6 @@ import { handler as waitHandler } from "../../wait/basic/wait";
 import { handler as stepHandler } from "../../step/basic/step-basic";
 
 createTests({
-  name: "force-checkpointing-invoke",
-  functionName: "force-checkpointing-invoke",
   handler,
   tests: (runner, { functionNameMap }) => {
     it("should complete with force checkpointing when one branch blocks termination with multiple invokes", async () => {

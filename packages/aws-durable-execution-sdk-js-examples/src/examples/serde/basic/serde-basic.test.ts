@@ -6,8 +6,6 @@ import { createTests } from "../../../utils/test-helper";
 import { handler } from "./serde-basic";
 
 createTests({
-  name: "serde-basic test",
-  functionName: "serde-basic",
   handler,
   tests: (runner) => {
     it("should preserve User class methods across replay with createClassSerdes", async () => {

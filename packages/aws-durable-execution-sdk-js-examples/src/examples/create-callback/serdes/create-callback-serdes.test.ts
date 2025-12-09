@@ -28,8 +28,6 @@ const customSerdes = {
 };
 
 createTests({
-  name: "create-callback-serdes test",
-  functionName: "create-callback-serdes",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

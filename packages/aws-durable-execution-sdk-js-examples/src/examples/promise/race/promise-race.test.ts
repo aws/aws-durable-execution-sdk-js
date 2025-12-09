@@ -1,11 +1,8 @@
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./promise-race";
-import historyEvents from "./promise-race.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "promise-race test",
-  functionName: "promise-race",
   handler,
   tests: (runner, { assertEventSignatures, isCloud }) => {
     it("should complete all promises", async () => {
@@ -25,7 +22,7 @@ createTests({
 
       expect(execution.getResult()).toStrictEqual("fast result");
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     });
   },
 });

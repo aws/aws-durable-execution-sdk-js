@@ -6,8 +6,6 @@ import { handler } from "./wait-for-callback";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback test",
-  functionName: "wait-for-callback",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner, { isCloud }) => {

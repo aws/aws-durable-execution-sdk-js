@@ -7,8 +7,6 @@ import { handler } from "./wait-for-callback-child-context";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-child-context test",
-  functionName: "wait-for-callback-child-context",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

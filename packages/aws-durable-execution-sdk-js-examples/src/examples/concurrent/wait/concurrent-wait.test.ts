@@ -1,10 +1,7 @@
 import { handler } from "./concurrent-wait";
-import historyEvents from "./concurrent-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "concurrent-wait test",
-  functionName: "concurrent-wait",
   localRunnerConfig: {
     skipTime: false,
   },
@@ -24,7 +21,7 @@ createTests({
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
       expect(wait10SecondsOp.getWaitDetails()!.waitSeconds!).toBe(10);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 30000);
   },
 });

@@ -1,5 +1,4 @@
 import { handler } from "./logger-after-wait";
-import historyEvents from "./logger-after-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 import * as fs from "fs";
 import * as path from "path";
@@ -7,8 +6,6 @@ import * as os from "os";
 import { randomUUID } from "crypto";
 
 createTests({
-  name: "logger-after-wait",
-  functionName: "logger-after-wait",
   handler,
   tests: (runner, { assertEventSignatures, isCloud }) => {
     if (!isCloud) {
@@ -46,7 +43,7 @@ createTests({
           expect(beforeWaitLogs.length).toBe(1);
           expect(afterWaitLogs.length).toBe(1);
 
-          assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+          assertEventSignatures(execution);
         } finally {
           if (fs.existsSync(logFilePath)) {
             fs.unlinkSync(logFilePath);
@@ -59,7 +56,7 @@ createTests({
       const execution = await runner.run();
       expect(execution.getResult()).toEqual({ message: "Success" });
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     });
   },
 });

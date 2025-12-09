@@ -1,10 +1,7 @@
 import { handler } from "./concurrent-operations";
-import historyEvents from "./concurrent-operations.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "concurrent-operations test",
-  functionName: "concurrent-operations",
   localRunnerConfig: {
     skipTime: false,
   },
@@ -25,7 +22,7 @@ createTests({
       expect(block2.getContextDetails()?.result).toStrictEqual("task 2 result");
       expect(block2.getChildOperations()).toHaveLength(2);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 10000);
   },
 });

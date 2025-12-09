@@ -1,5 +1,4 @@
 import { handler } from "./promise-unhandled-rejection";
-import historyEvents from "./promise-unhandled-rejection.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 interface PromiseUnhandledRejectionResult {
@@ -8,8 +7,6 @@ interface PromiseUnhandledRejectionResult {
 }
 
 createTests({
-  name: "promise-unhandled-rejection",
-  functionName: "promise-unhandled-rejection",
   localRunnerConfig: {
     skipTime: false,
   },
@@ -29,7 +26,7 @@ createTests({
         ],
       });
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 30000);
   },
 });

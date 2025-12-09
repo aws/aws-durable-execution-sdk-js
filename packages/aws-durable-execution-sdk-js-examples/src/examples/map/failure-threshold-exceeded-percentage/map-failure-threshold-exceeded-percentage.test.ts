@@ -3,8 +3,6 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Map failure threshold exceeded percentage",
-  functionName: "map-failure-threshold-exceeded-percentage",
   handler,
   tests: (runner) => {
     it("should return FAILURE_TOLERANCE_EXCEEDED when failure percentage exceeds threshold", async () => {

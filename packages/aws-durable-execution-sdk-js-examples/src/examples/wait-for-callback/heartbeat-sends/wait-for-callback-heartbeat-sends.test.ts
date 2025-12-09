@@ -7,8 +7,6 @@ import { handler } from "./wait-for-callback-heartbeat-sends";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-heartbeat-sends test",
-  functionName: "wait-for-callback-heartbeat-sends",
   handler,
   invocationType: InvocationType.Event,
   localRunnerConfig: {

@@ -1,13 +1,10 @@
 import { handler } from "./parent-context-in-step";
-import historyEvents from "./parent-context-in-step.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 // Set shorter timeout for context validation tests since they should fail quickly
 jest.setTimeout(5000);
 
 createTests({
-  name: "context validation - parent context in step error",
-  functionName: "parent-context-in-step",
   handler,
   tests: (runner, { assertEventSignatures }) => {
     it("should fail when using parent context inside step function", async () => {
@@ -76,7 +73,7 @@ createTests({
       expect(operations.length).toBeGreaterThanOrEqual(2);
       expect(operations.length).toBeLessThanOrEqual(3);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     });
   },
 });

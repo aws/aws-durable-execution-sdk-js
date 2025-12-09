@@ -1,5 +1,4 @@
 import { handler } from "./run-in-child-context";
-import historyEvents from "./run-in-child-context.history.json";
 import { createTests } from "../../../utils/test-helper";
 import {
   OperationType,
@@ -7,8 +6,6 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "run-in-child-context test",
-  functionName: "run-in-child-context",
   handler,
   localRunnerConfig: {
     skipTime: true,
@@ -57,7 +54,7 @@ createTests({
         "child step completed",
       );
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     });
   },
 });

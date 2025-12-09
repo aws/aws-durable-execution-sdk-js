@@ -7,7 +7,10 @@ import {
   DurableOperation,
   InvocationType,
   LocalDurableTestRunnerSetupParameters,
+  TestResult,
 } from "@aws/durable-execution-sdk-js-testing";
+import { readFileSync } from "fs";
+import path from "path";
 
 export interface FunctionNameMap {
   getFunctionName(functionName: string): string;
@@ -33,8 +36,6 @@ type TestCallback<ResultType> = (
 ) => void;
 
 export interface TestDefinition<ResultType> {
-  name: string;
-  functionName: string;
   handler: DurableLambdaHandler;
   tests: TestCallback<ResultType>;
   invocationType?: InvocationType;
@@ -44,10 +45,7 @@ export interface TestDefinition<ResultType> {
 export interface TestHelper {
   isTimeSkipping: boolean;
   isCloud: boolean;
-  assertEventSignatures(
-    actualEvents: Event[],
-    expectedEvents: EventSignature[],
-  ): void;
+  assertEventSignatures(testResult: TestResult, suffix?: string): void;
   functionNameMap: FunctionNameMap;
 }
 
@@ -114,6 +112,28 @@ function assertEventSignatures(
 }
 
 /**
+ * Find the file path of the caller of createTests
+ */
+function getCallerFile(): string {
+  const stack = new Error().stack;
+  const stackLines = stack?.split("\n") || [];
+
+  // Skip the first line (error message) and find first line not in test-helper
+  for (let i = 1; i < stackLines.length; i++) {
+    const line = stackLines[i];
+    // Match file paths in stack trace
+    const match =
+      line.match(/\((.+?):\d+:\d+\)/) || line.match(/at (.+?):\d+:\d+/);
+
+    if (match && !match[1].includes("test-helper")) {
+      return match[1];
+    }
+  }
+
+  throw new Error("Could not determine caller file from stack trace");
+}
+
+/**
  * Creates tests that automatically run with the appropriate test runner
  * based on the environment variables passed in.
  */
@@ -122,15 +142,26 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   const isTimeSkipping =
     (testDef.localRunnerConfig?.skipTime ?? true) && !isIntegrationTest;
 
+  const testFileName = getCallerFile();
+  const parsedFunctionName = path.basename(testFileName, ".test.ts");
   let calledAssertEventSignature = false;
   const testHelper: TestHelper = {
     isTimeSkipping,
     isCloud: isIntegrationTest,
-    assertEventSignatures: (actualEvents, expectedEvents) => {
+    assertEventSignatures: (testResult: TestResult, suffix) => {
       calledAssertEventSignature = true;
+
+      const historyFileBasename = suffix
+        ? `${parsedFunctionName}-${suffix}`
+        : parsedFunctionName;
+
+      const historyFilePath = path.join(
+        path.dirname(testFileName),
+        `${historyFileBasename}.history.json`,
+      );
       return assertEventSignatures(
-        actualEvents,
-        expectedEvents,
+        testResult.getHistoryEvents(),
+        JSON.parse(readFileSync(historyFilePath).toString("utf-8")),
         testHelper.isTimeSkipping,
       );
     },
@@ -142,7 +173,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   afterAll(() => {
     if (!calledAssertEventSignature) {
       console.warn(
-        `assertEventSignature was not called for test ${testDef.name}`,
+        `assertEventSignature was not called for test ${parsedFunctionName}`,
       );
     }
   });
@@ -156,10 +187,10 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       string,
       string
     >;
-    const functionName = functionNames[testDef.functionName];
+    const functionName = functionNames[parsedFunctionName];
     if (!functionName) {
       throw new Error(
-        `Function name ${testDef.functionName} not found in FUNCTION_NAME_MAP`,
+        `Function name ${parsedFunctionName} not found in FUNCTION_NAME_MAP`,
       );
     }
 
@@ -179,13 +210,13 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       runner.reset();
     });
 
-    describe(`${testDef.name} (cloud)`, () => {
+    describe(`${parsedFunctionName} (cloud)`, () => {
       testDef.tests(runner, testHelper);
     });
     return;
   }
 
-  describe(`${testDef.name} (local)`, () => {
+  describe(`${parsedFunctionName} (local)`, () => {
     beforeAll(() =>
       LocalDurableTestRunner.setupTestEnvironment({
         ...testDef.localRunnerConfig,

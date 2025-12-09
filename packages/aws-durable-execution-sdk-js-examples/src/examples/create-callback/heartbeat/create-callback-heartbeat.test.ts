@@ -3,8 +3,6 @@ import { createTests } from "../../../utils/test-helper";
 import { InvocationType } from "@aws-sdk/client-lambda";
 
 createTests({
-  name: "create-callback-heartbeat test",
-  functionName: "create-callback-heartbeat",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner, { isCloud }) => {

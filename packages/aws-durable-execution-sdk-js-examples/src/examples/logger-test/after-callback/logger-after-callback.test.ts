@@ -10,8 +10,6 @@ import * as os from "os";
 import { randomUUID } from "crypto";
 
 createTests({
-  name: "logger-after-callback",
-  functionName: "logger-after-callback",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner, isCloud) => {

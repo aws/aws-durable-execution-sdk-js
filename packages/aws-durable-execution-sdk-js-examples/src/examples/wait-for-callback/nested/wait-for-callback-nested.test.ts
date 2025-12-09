@@ -6,8 +6,6 @@ import { handler } from "./wait-for-callback-nested";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-nested test",
-  functionName: "wait-for-callback-nested",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

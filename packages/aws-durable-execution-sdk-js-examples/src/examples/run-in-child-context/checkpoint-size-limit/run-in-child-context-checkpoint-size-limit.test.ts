@@ -1,10 +1,7 @@
 import { handler } from "./run-in-child-context-checkpoint-size-limit";
-import historyEvents from "./run-in-child-context-checkpoint-size-limit.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "run-in-child-context-checkpoint-size-limit boundary test",
-  functionName: "run-in-child-context-checkpoint-size-limit",
   handler,
   localRunnerConfig: {
     checkpointDelay: 100,
@@ -25,7 +22,7 @@ createTests({
         }).length,
       );
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 120000);
   },
 });

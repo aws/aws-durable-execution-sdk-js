@@ -7,8 +7,6 @@ import { handler } from "./create-callback-concurrent";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "create-callback-concurrent test",
-  functionName: "create-callback-concurrent",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

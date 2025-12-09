@@ -1,11 +1,7 @@
 import { handler } from "./promise-any";
-import historyEventsSuccess from "./promise-any-success.history.json";
-import historyEventsFail from "./promise-any-failure.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests<string>({
-  name: "promise-any test",
-  functionName: "promise-any",
   handler,
   localRunnerConfig: {
     // Time-skipping results in extra retries, since retry timers will finish
@@ -21,7 +17,7 @@ createTests<string>({
       const result = execution.getResult();
       expect(result).toBe("first success");
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEventsSuccess);
+      assertEventSignatures(execution, "success");
     });
 
     it("should fail if all promises fail - failure case", async () => {
@@ -39,7 +35,7 @@ createTests<string>({
       });
       expect(execution.getOperations()).toHaveLength(4);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEventsFail);
+      assertEventSignatures(execution, "failure");
     });
   },
 });

@@ -1,11 +1,8 @@
 import { handler } from "./simple-powertools-logger";
-import historyEvents from "./simple-powertools-logger.history.json";
 import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "simple-powertools-logger",
-  functionName: "simple-powertools-logger",
   handler,
   tests: (runner, { assertEventSignatures, isCloud }) => {
     if (isCloud) {
@@ -15,7 +12,7 @@ createTests({
         expect(execution.getResult()).toBe(
           "Simple logger example completed successfully",
         );
-        assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+        assertEventSignatures(execution);
       });
     } else {
       it("should execute successfully with simple logger (no DurableLogger interface)", async () => {
@@ -35,7 +32,7 @@ createTests({
             "Simple logger example completed successfully",
           );
 
-          assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+          assertEventSignatures(execution);
 
           // Parse captured log output as JSON objects from stdout and stderr separately
           const parseLogCalls = (calls: any[]) =>
@@ -203,7 +200,7 @@ createTests({
           expect(stdoutLogs).toStrictEqual(expectedStdoutLogs);
           expect(stderrLogs).toStrictEqual(expectedStderrLogs);
 
-          assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+          assertEventSignatures(execution);
         } finally {
           stdoutSpy.mockRestore();
           stderrSpy.mockRestore();

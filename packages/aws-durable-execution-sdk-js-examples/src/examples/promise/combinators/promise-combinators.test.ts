@@ -1,10 +1,7 @@
 import { handler } from "./promise-combinators";
-import historyEvents from "./promise-combinators.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "promise-combinators",
-  functionName: "promise-combinators",
   localRunnerConfig: {
     skipTime: false,
   },
@@ -36,7 +33,7 @@ createTests({
         anyResult: "First success!", // The successful promise should be returned
       });
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 30000);
   },
 });

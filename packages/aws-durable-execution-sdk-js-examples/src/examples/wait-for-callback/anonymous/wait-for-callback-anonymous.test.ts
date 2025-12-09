@@ -6,8 +6,6 @@ import { handler } from "./wait-for-callback-anonymous";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-anonymous test",
-  functionName: "wait-for-callback-anonymous",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

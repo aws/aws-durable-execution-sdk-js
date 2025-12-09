@@ -7,8 +7,6 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "force-checkpointing-callback",
-  functionName: "force-checkpointing-callback",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

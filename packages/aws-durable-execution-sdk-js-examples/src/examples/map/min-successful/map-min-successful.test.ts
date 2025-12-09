@@ -3,8 +3,6 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Map minSuccessful",
-  functionName: "map-min-successful",
   handler,
   tests: (runner) => {
     it("should complete early when minSuccessful is reached", async () => {

@@ -6,8 +6,6 @@ import { handler } from "./create-callback-failures";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "create-callback-failures test",
-  functionName: "create-callback-failures",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {
