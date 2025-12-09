@@ -2,7 +2,6 @@ import {
   TestResult,
   InvokeRequest,
   DurableTestRunner,
-  CheckpointDelaySettings,
 } from "../types/durable-test-runner";
 import { DurableOperation } from "../types/durable-operation";
 import { DurableLambdaHandler } from "@aws/durable-execution-sdk-js";
@@ -92,11 +91,11 @@ export interface LocalDurableTestRunnerSetupParameters {
   skipTime?: boolean;
 
   /**
-   * Options to simulate checkpoint API delay. Adding delay can make tests behave more similarily
+   * Option to simulate checkpoint API delay. Adding delay can make tests behave more similarily
    * to the real world, where checkpoint API calls take longer. This can help with finding concurrency
    * bugs, race conditions, or other issues.
    */
-  checkpointDelay?: CheckpointDelaySettings;
+  checkpointDelay?: number;
 }
 
 /**

@@ -17,16 +17,15 @@ import {
   processCallbackHeartbeat,
   processCallbackSuccess,
 } from "../handlers/callbacks";
-import { CheckpointDelaySettings } from "../../test-runner/types/durable-test-runner";
 import { CheckpointDurableExecutionResponse } from "@aws-sdk/client-lambda";
 
 export interface WorkerServerApiHandlerParams {
-  checkpointDelaySettings?: CheckpointDelaySettings;
+  checkpointDelaySettings?: number;
 }
 
 export class WorkerServerApiHandler {
   private readonly executionManager = new ExecutionManager();
-  private readonly checkpointDelaySettings: CheckpointDelaySettings | undefined;
+  private readonly checkpointDelaySettings: number | undefined;
 
   constructor(params?: WorkerServerApiHandlerParams) {
     this.checkpointDelaySettings = params?.checkpointDelaySettings;

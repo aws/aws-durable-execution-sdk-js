@@ -14,11 +14,10 @@ import { WorkerApiRequestMapping } from "../../../checkpoint-server/worker-api/w
 import { WorkerApiResponseMapping } from "../../../checkpoint-server/worker-api/worker-api-response";
 import { reparseDates } from "../../../utils";
 import { RealDate } from "../real-timers/real-timers";
-import { CheckpointDelaySettings } from "../../types/durable-test-runner";
 
 export type CheckpointWorkerManagerParams =
   | {
-      checkpointDelaySettings?: CheckpointDelaySettings;
+      checkpointDelaySettings?: number;
     }
   | undefined;
 
