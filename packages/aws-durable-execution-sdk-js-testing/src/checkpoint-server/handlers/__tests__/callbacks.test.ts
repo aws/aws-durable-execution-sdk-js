@@ -14,6 +14,7 @@ import { CheckpointManager } from "../../storage/checkpoint-manager";
 import {
   createExecutionId,
   createCallbackId,
+  createInvocationId,
 } from "../../utils/tagged-strings";
 
 describe("callbacks handlers", () => {
@@ -28,6 +29,7 @@ describe("callbacks handlers", () => {
     executionManager.startExecution({
       executionId: mockExecutionId,
       payload: '{"test": "data"}',
+      invocationId: createInvocationId(),
     });
 
     const storage = executionManager.getCheckpointsByExecution(mockExecutionId);

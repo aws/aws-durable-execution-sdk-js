@@ -9,15 +9,6 @@ import {
 import { DurableOperation } from "./durable-operation";
 
 /**
- * Options to simulate checkpoint API delay. Adding delay can make tests behave more similarily
- * to the real world, where checkpoint API calls take longer. This can help with finding concurrency
- * bugs, race conditions, or other issues.
- *
- * @public
- */
-export type CheckpointDelaySettings = number;
-
-/**
  * Request parameters for invoking a durable function.
  * @public
  */

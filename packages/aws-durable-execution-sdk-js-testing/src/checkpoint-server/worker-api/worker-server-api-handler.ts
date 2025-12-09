@@ -17,16 +17,15 @@ import {
   processCallbackHeartbeat,
   processCallbackSuccess,
 } from "../handlers/callbacks";
-import { CheckpointDelaySettings } from "../../test-runner/types/durable-test-runner";
 import { CheckpointDurableExecutionResponse } from "@aws-sdk/client-lambda";
 
 export interface WorkerServerApiHandlerParams {
-  checkpointDelaySettings?: CheckpointDelaySettings;
+  checkpointDelaySettings?: number;
 }
 
 export class WorkerServerApiHandler {
   private readonly executionManager = new ExecutionManager();
-  private readonly checkpointDelaySettings: CheckpointDelaySettings | undefined;
+  private readonly checkpointDelaySettings: number | undefined;
 
   constructor(params?: WorkerServerApiHandlerParams) {
     this.checkpointDelaySettings = params?.checkpointDelaySettings;
@@ -35,15 +34,9 @@ export class WorkerServerApiHandler {
   performApiCall(data: WorkerApiRequestMessage) {
     switch (data.type) {
       case ApiType.StartDurableExecution:
-        return processStartDurableExecution(
-          data.params.payload,
-          this.executionManager,
-        );
+        return processStartDurableExecution(data.params, this.executionManager);
       case ApiType.StartInvocation:
-        return processStartInvocation(
-          data.params.executionId,
-          this.executionManager,
-        );
+        return processStartInvocation(data.params, this.executionManager);
       case ApiType.CompleteInvocation:
         return processCompleteInvocation(
           data.params.executionId,

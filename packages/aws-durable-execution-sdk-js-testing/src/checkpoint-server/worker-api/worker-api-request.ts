@@ -12,10 +12,12 @@ import { ApiType } from "./worker-api-types";
 
 export interface StartDurableExecutionRequest {
   payload?: string;
+  invocationId: InvocationId;
 }
 
 export interface StartInvocationRequest {
   executionId: ExecutionId;
+  invocationId: InvocationId;
 }
 
 export interface CompleteInvocationRequest {

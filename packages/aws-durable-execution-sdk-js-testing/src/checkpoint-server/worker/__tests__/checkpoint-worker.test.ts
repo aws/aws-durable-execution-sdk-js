@@ -249,6 +249,7 @@ describe("CheckpointWorker", () => {
 
     it("should handle StartInvocation API with proper delegation", () => {
       const executionId = createExecutionId("exec-start-123");
+      const invocationId = createInvocationId("inv-start-456");
       const command: WorkerCommand = {
         type: WorkerCommandType.API_REQUEST,
         data: {
@@ -256,6 +257,7 @@ describe("CheckpointWorker", () => {
           requestId: "start-request-123",
           params: {
             executionId,
+            invocationId,
           },
         },
       };
@@ -264,7 +266,7 @@ describe("CheckpointWorker", () => {
         checkpointToken: createCheckpointToken("start-token"),
         executionId,
         operationEvents: [],
-        invocationId: createInvocationId(),
+        invocationId,
       };
       mockApiHandlerInstance.performApiCall.mockReturnValue(
         mockInvocationResult,

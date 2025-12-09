@@ -4,7 +4,14 @@ import { randomUUID } from "node:crypto";
 import { ApiType } from "../../../../checkpoint-server/worker-api/worker-api-types";
 import { WorkerCommandType } from "../../../../checkpoint-server/worker/worker-message-types";
 import { defaultLogger } from "../../../../logger";
-import { ExecutionId } from "../../../../checkpoint-server/utils/tagged-strings";
+import {
+  createInvocationId,
+  ExecutionId,
+} from "../../../../checkpoint-server/utils/tagged-strings";
+import {
+  StartDurableExecutionRequest,
+  StartInvocationRequest,
+} from "../../../../checkpoint-server/worker-api/worker-api-request";
 
 // Mock dependencies
 jest.mock("node:worker_threads");
@@ -50,7 +57,10 @@ describe("WorkerClientApiHandler", () => {
   describe("callWorkerApi", () => {
     it("should send correct message to worker via postMessage", async () => {
       const apiType = ApiType.StartDurableExecution;
-      const params = { payload: "test-payload" };
+      const params = {
+        payload: "test-payload",
+        invocationId: createInvocationId(),
+      };
 
       // Start the API call but don't await it yet
       const promise = handler.callWorkerApi(apiType, params, mockWorker);
@@ -81,15 +91,26 @@ describe("WorkerClientApiHandler", () => {
         .mockReturnValueOnce("11111111-1111-1111-1111-111111111111")
         .mockReturnValueOnce("22222222-2222-2222-2222-222222222222");
 
+      const params1: StartDurableExecutionRequest = {
+        payload: "test1",
+        invocationId: createInvocationId("test-invocation-id"),
+      };
+
       // Start two API calls
       const promise1 = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "test1" },
+        params1,
         mockWorker,
       );
+
+      const params2: StartInvocationRequest = {
+        executionId: "test-execution" as ExecutionId,
+        invocationId: createInvocationId("test-invocation-id"),
+      };
+
       const promise2 = handler.callWorkerApi(
         ApiType.StartInvocation,
-        { executionId: "test-execution" as ExecutionId },
+        params2,
         mockWorker,
       );
 
@@ -99,7 +120,7 @@ describe("WorkerClientApiHandler", () => {
         data: {
           requestId: "11111111-1111-1111-1111-111111111111",
           type: ApiType.StartDurableExecution,
-          params: { payload: "test1" },
+          params: params1,
         },
       });
 
@@ -108,7 +129,7 @@ describe("WorkerClientApiHandler", () => {
         data: {
           requestId: "22222222-2222-2222-2222-222222222222",
           type: ApiType.StartInvocation,
-          params: { executionId: "test-execution" },
+          params: params2,
         },
       });
 
@@ -132,7 +153,7 @@ describe("WorkerClientApiHandler", () => {
       {
         name: "StartDurableExecution",
         apiType: ApiType.StartDurableExecution,
-        params: { payload: "test" },
+        params: { payload: "test", invocationId: createInvocationId() },
         uuid: TEST_UUIDS.SUCCESS,
       },
       {
@@ -151,7 +172,7 @@ describe("WorkerClientApiHandler", () => {
         params: { executionId: "exec-id" as ExecutionId },
         uuid: TEST_UUIDS.CLEANUP,
       },
-    ])(
+    ] as const)(
       "should handle $name API type correctly",
       async ({ apiType, params, uuid }) => {
         mockRandomUUID.mockReturnValue(uuid);
@@ -187,7 +208,10 @@ describe("WorkerClientApiHandler", () => {
       // Start API call
       const promise = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "test" },
+        {
+          payload: "test",
+          invocationId: createInvocationId("test-invocation-id"),
+        },
         mockWorker,
       );
 
@@ -210,7 +234,10 @@ describe("WorkerClientApiHandler", () => {
       // Start API call
       const promise = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "test" },
+        {
+          payload: "test",
+          invocationId: createInvocationId("test-invocation-id"),
+        },
         mockWorker,
       );
 
@@ -248,7 +275,10 @@ describe("WorkerClientApiHandler", () => {
       // Start API call
       const promise = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "test" },
+        {
+          payload: "test",
+          invocationId: createInvocationId("test-invocation-id"),
+        },
         mockWorker,
       );
 
@@ -279,7 +309,10 @@ describe("WorkerClientApiHandler", () => {
       // Start API call
       const promise = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "test" },
+        {
+          payload: "test",
+          invocationId: createInvocationId("test-invocation-id"),
+        },
         mockWorker,
       );
 
@@ -315,7 +348,10 @@ describe("WorkerClientApiHandler", () => {
       // Start three concurrent API calls
       const promise1 = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "test1" },
+        {
+          payload: "test1",
+          invocationId: createInvocationId("test-invocation-id"),
+        },
         mockWorker,
       );
       const promise2 = handler.callWorkerApi(
@@ -364,7 +400,10 @@ describe("WorkerClientApiHandler", () => {
       // Start two API calls
       const successPromise = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "success" },
+        {
+          payload: "success",
+          invocationId: createInvocationId("test-invocation-id"),
+        },
         mockWorker,
       );
       const errorPromise = handler.callWorkerApi(
@@ -406,7 +445,10 @@ describe("WorkerClientApiHandler", () => {
       // Start calls for different API types with same UUID
       const promise1 = handler.callWorkerApi(
         ApiType.StartDurableExecution,
-        { payload: "test1" },
+        {
+          payload: "test1",
+          invocationId: createInvocationId("test-invocation-id"),
+        },
         mockWorker,
       );
       const promise2 = handler.callWorkerApi(
