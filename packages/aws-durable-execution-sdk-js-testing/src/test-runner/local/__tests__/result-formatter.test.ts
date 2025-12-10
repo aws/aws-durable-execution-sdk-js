@@ -375,23 +375,6 @@ describe("ResultFormatter", () => {
       expect(testResult.getResult()).toEqual(complexData);
     });
 
-    it("should throw Error when error object is not found for failed execution", () => {
-      const lambdaResponse: TestExecutionResult = {
-        status: ExecutionStatus.FAILED,
-        result: JSON.stringify({ error: "" }),
-      };
-
-      const testResult = resultFormatter.formatTestResult(
-        lambdaResponse,
-        [],
-        mockOperationStorage,
-      );
-
-      expect(() => testResult.getResult()).toThrow(
-        "Could not find error result",
-      );
-    });
-
     it("should not clean stack trace if error had no stack trace", () => {
       const lambdaResponse: TestExecutionResult = {
         status: ExecutionStatus.FAILED,
@@ -411,12 +394,12 @@ describe("ResultFormatter", () => {
         thrownError = error as Error;
       }
       expect(thrownError!.stack).toBeDefined();
-      expect(thrownError!.stack).toContain("ResultFormatter");
+      expect(thrownError!.stack).toContain("result-formatter.ts");
     });
   });
 
   describe("getError behavior", () => {
-    it("should not return ErrorObject for failed invocation if error object is missing", () => {
+    it("should return generic error when error object is missing", () => {
       const mockError = "Handler execution failed";
 
       const lambdaResponse: TestExecutionResult = {
@@ -430,9 +413,13 @@ describe("ResultFormatter", () => {
         mockOperationStorage,
       );
 
-      expect(() => testResult.getError()).toThrow(
-        "Could not find error result",
-      );
+      const error = testResult.getError();
+      expect(error).toEqual({
+        errorMessage: 'Execution failed with status "FAILED"',
+        errorData: undefined,
+        errorType: undefined,
+        stackTrace: undefined,
+      });
     });
 
     it("should throw error when called on successful execution", () => {
@@ -449,40 +436,6 @@ describe("ResultFormatter", () => {
 
       expect(() => testResult.getError()).toThrow(
         "Cannot get error for succeeded execution",
-      );
-    });
-
-    it("should throw error when parsing fails", () => {
-      const lambdaResponse: TestExecutionResult = {
-        status: ExecutionStatus.FAILED,
-        result: "Raw error message - not JSON",
-      };
-
-      const testResult = resultFormatter.formatTestResult(
-        lambdaResponse,
-        [],
-        mockOperationStorage,
-      );
-
-      expect(() => testResult.getError()).toThrow(
-        "Could not find error result",
-      );
-    });
-
-    it("should throw error when error field is not a string", () => {
-      const lambdaResponse: TestExecutionResult = {
-        status: ExecutionStatus.FAILED,
-        result: JSON.stringify({ error: { nested: "object" } }),
-      };
-
-      const testResult = resultFormatter.formatTestResult(
-        lambdaResponse,
-        [],
-        mockOperationStorage,
-      );
-
-      expect(() => testResult.getError()).toThrow(
-        "Could not find error result",
       );
     });
 
@@ -670,6 +623,28 @@ describe("ResultFormatter", () => {
         errorData: "test-error-data",
         errorType: "TestErrorType",
         stackTrace: ["stack line 1", "stack line 2"],
+      });
+    });
+
+    it("should return timeout error when status is TIMED_OUT and no error data exists", () => {
+      const lambdaResponse: TestExecutionResult = {
+        status: ExecutionStatus.TIMED_OUT,
+        result: JSON.stringify({ someField: "value" }),
+        // No error property - testing the TIMED_OUT specific case
+      };
+
+      const testResult = resultFormatter.formatTestResult(
+        lambdaResponse,
+        [],
+        mockOperationStorage,
+      );
+
+      const error = testResult.getError();
+      expect(error).toEqual({
+        errorMessage: `Execution failed with status "TIMED_OUT"`,
+        errorData: undefined,
+        errorType: undefined,
+        stackTrace: undefined,
       });
     });
   });

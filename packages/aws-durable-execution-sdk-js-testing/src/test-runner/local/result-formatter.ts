@@ -53,11 +53,7 @@ export class ResultFormatter<ResultType> {
         if (lambdaResponse.status !== ExecutionStatus.SUCCEEDED) {
           const errorFromResult = this.getErrorFromResult(lambdaResponse);
 
-          const error = new Error(
-            errorFromResult.errorMessage?.trim()
-              ? errorFromResult.errorMessage
-              : "Execution failed",
-          );
+          const error = new Error(errorFromResult.errorMessage?.trim());
 
           if (errorFromResult.stackTrace) {
             error.stack = errorFromResult.stackTrace.join("\n");
@@ -131,6 +127,11 @@ export class ResultFormatter<ResultType> {
       };
     }
 
-    throw new Error("Could not find error result");
+    return {
+      errorMessage: `Execution failed with status "${result.status}"`,
+      errorData: undefined,
+      errorType: undefined,
+      stackTrace: undefined,
+    };
   }
 }
