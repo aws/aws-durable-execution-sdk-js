@@ -6,6 +6,9 @@ createTests({
   name: "Map minSuccessful",
   functionName: "map-min-successful",
   handler,
+  localRunnerConfig: {
+    checkpointDelay: 100,
+  },
   tests: (runner) => {
     it("should complete early when minSuccessful is reached", async () => {
       const execution = await runner.run();
@@ -32,12 +35,11 @@ createTests({
       expect(item0?.getStatus()).toBe(OperationStatus.SUCCEEDED);
       expect(item1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      // TODO: Re-enable these assertions when we find the root cause of the cloud timing issue
       // where remaining items show SUCCEEDED instead of STARTED
       // Remaining items should be in STARTED state (not completed)
-      // expect(item2?.getStatus()).toBe(OperationStatus.STARTED);
-      // expect(item3?.getStatus()).toBe(OperationStatus.STARTED);
-      // expect(item4?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item2?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item3?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item4?.getStatus()).toBe(OperationStatus.STARTED);
 
       // Verify the results array matches
       expect(result.results).toEqual(["Item 1 processed", "Item 2 processed"]);
