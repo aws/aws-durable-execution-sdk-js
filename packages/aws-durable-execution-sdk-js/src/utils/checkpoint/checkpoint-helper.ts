@@ -11,7 +11,6 @@ export interface Checkpoint {
   forceCheckpoint?(): Promise<void>;
   force?(): Promise<void>;
   setTerminating?(): void;
-  hasPendingAncestorCompletion?(stepId: string): boolean;
   waitForQueueCompletion(): Promise<void>;
 
   // ===== New Methods (Lifecycle & Termination) =====

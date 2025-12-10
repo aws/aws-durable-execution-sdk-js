@@ -53,7 +53,6 @@ describe("Run In Child Context Integration Tests", () => {
           }),
         force: jest.fn(),
         setTerminating: jest.fn(),
-        hasPendingAncestorCompletion: jest.fn(),
         markOperationState: jest.fn(),
         markOperationAwaited: jest.fn(),
         waitForStatusChange: jest.fn().mockResolvedValue(undefined),
@@ -87,7 +86,6 @@ describe("Run In Child Context Integration Tests", () => {
       _stepData: {},
       terminationManager: mockTerminationManager,
       durableExecutionArn: "mock-execution-arn",
-      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),

@@ -17,7 +17,6 @@ describe("DurableContext Logger Property", () => {
         checkpoint: jest.fn(),
         force: jest.fn(),
         setTerminating: jest.fn(),
-        hasPendingAncestorCompletion: jest.fn(),
       },
     } as any;
 

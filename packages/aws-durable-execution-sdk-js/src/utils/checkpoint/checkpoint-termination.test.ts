@@ -23,7 +23,6 @@ describe("CheckpointManager Termination Behavior", () => {
       getStepData: jest.fn(),
       requestId: "",
       tenantId: "",
-      pendingCompletions: new Set(),
     } satisfies ExecutionContext;
 
     checkpointHandler = createTestCheckpointManager(

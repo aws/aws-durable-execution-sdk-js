@@ -86,7 +86,6 @@ export const initializeExecutionContext = async (
       terminationManager: new TerminationManager(),
 
       durableExecutionArn,
-      pendingCompletions: new Set<string>(),
       getStepData(stepId: string): Operation | undefined {
         return getStepDataUtil(stepData, stepId);
       },

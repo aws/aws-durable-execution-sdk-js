@@ -140,7 +140,6 @@ describe("initializeExecutionContext", () => {
         terminationManager: expect.any(Object),
 
         durableExecutionArn: mockDurableExecutionArn,
-        pendingCompletions: expect.any(Set),
         getStepData: expect.any(Function),
         tenantId: mockLambdaContext.tenantId,
         requestId: mockLambdaContext.awsRequestId,

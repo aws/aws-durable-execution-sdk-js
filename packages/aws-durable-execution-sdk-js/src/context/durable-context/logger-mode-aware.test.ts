@@ -13,7 +13,6 @@ describe("DurableContext logger modeAware configuration", () => {
         checkpoint: jest.fn(),
         force: jest.fn(),
         setTerminating: jest.fn(),
-        hasPendingAncestorCompletion: jest.fn(),
       },
     } as any;
   });

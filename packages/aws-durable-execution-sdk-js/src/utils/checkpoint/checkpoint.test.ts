@@ -33,13 +33,11 @@ const createCheckpoint = (
     token,
     emitter,
     logger,
-    new Set<string>(),
   );
   const checkpoint = (stepId: string, data: any): Promise<any> =>
     manager.checkpoint(stepId, data);
   checkpoint.force = (): Promise<any> => manager.forceCheckpoint();
   checkpoint.setTerminating = (): void => manager.setTerminating();
-  checkpoint.hasPendingAncestorCompletion = (): boolean => false;
   return checkpoint;
 };
 
@@ -78,7 +76,6 @@ describe("CheckpointManager", () => {
       durableExecutionClient: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
-      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
@@ -748,7 +745,6 @@ describe("deleteCheckpointHandler", () => {
       durableExecutionClient: mockState1,
       _stepData: stepData1,
       terminationManager: mockTerminationManager,
-      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData1, stepId);
       }),
@@ -762,7 +758,6 @@ describe("deleteCheckpointHandler", () => {
       durableExecutionClient: mockState2,
       _stepData: stepData2,
       terminationManager: mockTerminationManager,
-      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData2, stepId);
       }),
@@ -1028,7 +1023,6 @@ describe("createCheckpointHandler", () => {
       durableExecutionClient: mockState,
       _stepData: stepData,
       terminationManager: mockTerminationManager,
-      pendingCompletions: new Set<string>(),
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),

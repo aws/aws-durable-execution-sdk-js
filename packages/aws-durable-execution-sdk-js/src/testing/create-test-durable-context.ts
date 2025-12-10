@@ -76,7 +76,6 @@ export function createTestDurableContext(options?: {
     terminationManager: new TerminationManager(),
     durableExecutionArn:
       "arn:aws:lambda:us-east-1:123456789012:durable-execution:test",
-    pendingCompletions: new Set<string>(),
     getStepData(stepId: string): Operation | undefined {
       return getStepDataUtil(stepData, stepId);
     },
@@ -106,7 +105,6 @@ export function createTestDurableContext(options?: {
     forceCheckpoint: jest.fn().mockResolvedValue(undefined),
     force: jest.fn().mockResolvedValue(undefined),
     setTerminating: jest.fn(),
-    hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     // New lifecycle methods (stubs)
     markOperationState: jest.fn(),

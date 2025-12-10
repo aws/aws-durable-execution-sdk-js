@@ -23,7 +23,6 @@ export class MockCheckpointManager extends CheckpointManager {
       "mock-token",
       {} as EventEmitter,
       {} as DurableLogger,
-      new Set<string>(),
     );
   }
 
@@ -42,10 +41,6 @@ export class MockCheckpointManager extends CheckpointManager {
 
   setTerminating(): void {
     this.setTerminatingCalls++;
-  }
-
-  hasPendingAncestorCompletion(_stepId: string): boolean {
-    return false;
   }
 
   getQueueStatus(): { queueLength: number; isProcessing: boolean } {

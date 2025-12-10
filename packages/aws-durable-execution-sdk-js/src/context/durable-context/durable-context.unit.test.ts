@@ -35,7 +35,6 @@ describe("DurableContext", () => {
       checkpoint: jest.fn().mockResolvedValue(undefined),
       force: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
-      hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
       markOperationState: jest.fn(),
       markOperationAwaited: jest.fn(),
       waitForStatusChange: jest.fn().mockResolvedValue(undefined),

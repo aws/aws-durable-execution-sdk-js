@@ -41,8 +41,6 @@ describe("withDurableExecution Queue Completion", () => {
       _stepData: {},
       terminationManager: mockTerminationManager,
       durableExecutionArn: "test-arn",
-
-      pendingCompletions: new Set(),
     };
 
     (initializeExecutionContext as jest.Mock).mockResolvedValue({

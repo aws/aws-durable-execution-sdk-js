@@ -21,13 +21,11 @@ const createCheckpoint = (
     token,
     emitter,
     logger,
-    new Set<string>(),
   );
   const checkpoint = (stepId: string, data: any): Promise<any> =>
     manager.checkpoint(stepId, data);
   checkpoint.force = (): Promise<any> => manager.forceCheckpoint();
   checkpoint.setTerminating = (): void => manager.setTerminating();
-  checkpoint.hasPendingAncestorCompletion = (): boolean => false;
   return checkpoint;
 };
 
@@ -54,7 +52,6 @@ describe("TerminationManager Checkpoint Integration", () => {
       terminationManager,
       requestId: "",
       tenantId: "",
-      pendingCompletions: new Set(),
       getStepData: jest.fn(),
     } satisfies ExecutionContext;
 

@@ -26,7 +26,6 @@ export const createMockExecutionContext = (
     durableExecutionArn: "test-arn",
     requestId: "test-request-id",
     tenantId: "test-tenant-id",
-    pendingCompletions: new Set<string>(),
     getStepData: jest.fn((stepId: string) => {
       return getStepDataUtil(defaultMockContext._stepData, stepId);
     }),
