@@ -111,21 +111,40 @@ export class CheckpointManager implements Checkpoint {
 
   private hasCompletedAncestor(stepId: string): boolean {
     let currentStepId = stepId;
+    console.log(`🔍 Checking ancestors for stepId: ${stepId}`);
 
     while (currentStepId) {
       const operation = this.operations.get(currentStepId);
+      console.log(`🔍 Current operation: ${currentStepId}`, {
+        exists: !!operation,
+        parentId: operation?.metadata?.parentId,
+        state: operation?.state,
+      });
+
       if (!operation?.metadata?.parentId) {
+        console.log(
+          `🔍 No parent found for ${currentStepId}, stopping ancestor check`,
+        );
         break;
       }
 
       const parentOp = this.operations.get(operation.metadata.parentId);
+      console.log(`🔍 Parent operation: ${operation.metadata.parentId}`, {
+        exists: !!parentOp,
+        state: parentOp?.state,
+      });
+
       if (parentOp?.state === OperationLifecycleState.COMPLETED) {
+        console.log(
+          `🔍 Found completed ancestor: ${operation.metadata.parentId} for ${stepId}`,
+        );
         return true;
       }
 
       currentStepId = operation.metadata.parentId;
     }
 
+    console.log(`🔍 No completed ancestors found for ${stepId}`);
     return false;
   }
 
@@ -141,7 +160,10 @@ export class CheckpointManager implements Checkpoint {
     // Skip checkpoint if ancestor is already completed (only for existing operations)
     const existingOperation = this.operations.get(stepId);
     if (existingOperation && this.hasCompletedAncestor(stepId)) {
-      log("⚠️", "Checkpoint skipped - ancestor already completed:", { stepId });
+      console.log(
+        `⚠️ Checkpoint skipped - ancestor already completed: ${stepId}`,
+        { existingOp: !!existingOperation },
+      );
       return Promise.resolve();
     }
 
@@ -271,12 +293,13 @@ export class CheckpointManager implements Checkpoint {
 
     try {
       if (batch.length > 0 || this.forceCheckpointPromises.length > 0) {
-        await this.processBatch(batch);
-      }
+        const validBatch = await this.processBatch(batch);
 
-      batch.forEach((item) => {
-        item.resolve();
-      });
+        // Only resolve items that were actually processed (not filtered out)
+        validBatch.forEach((item) => {
+          item.resolve();
+        });
+      }
 
       const forcePromises = this.forceCheckpointPromises.splice(0);
       forcePromises.forEach((promise) => {
@@ -326,8 +349,31 @@ export class CheckpointManager implements Checkpoint {
     }
   }
 
-  private async processBatch(batch: QueuedCheckpoint[]): Promise<void> {
-    const updates: OperationUpdate[] = batch.map((item) => {
+  private async processBatch(
+    batch: QueuedCheckpoint[],
+  ): Promise<QueuedCheckpoint[]> {
+    // Filter out operations whose ancestors have completed
+    const validBatch = batch.filter((item) => {
+      const existingOperation = this.operations.get(item.stepId);
+      if (existingOperation && this.hasCompletedAncestor(item.stepId)) {
+        console.log(
+          `🚫 Filtering out operation with completed ancestor: ${item.stepId}`,
+        );
+        // Resolve the promise since we're not processing it
+        item.resolve();
+        return false;
+      }
+      return true;
+    });
+
+    if (validBatch.length === 0) {
+      console.log(
+        "🚫 All operations in batch filtered out due to completed ancestors",
+      );
+      return [];
+    }
+
+    const updates: OperationUpdate[] = validBatch.map((item) => {
       const hashedStepId = hashId(item.stepId);
 
       const update = {
@@ -368,6 +414,8 @@ export class CheckpointManager implements Checkpoint {
         response.NewExecutionState.Operations,
       );
     }
+
+    return validBatch;
   }
 
   private updateStepDataFromCheckpointResponse(operations: Operation[]): void {
@@ -438,6 +486,12 @@ export class CheckpointManager implements Checkpoint {
   ): void {
     let op = this.operations.get(stepId);
 
+    console.log(`📝 markOperationState: ${stepId} -> ${state}`, {
+      existingOp: !!op,
+      parentId: options?.metadata?.parentId || op?.metadata?.parentId,
+      type: options?.metadata?.type || op?.metadata?.type,
+    });
+
     if (!op) {
       // First call - create operation
       if (!options?.metadata) {
@@ -450,16 +504,21 @@ export class CheckpointManager implements Checkpoint {
         endTimestamp: options.endTimestamp,
       };
       this.operations.set(stepId, op);
+      console.log(`📝 Created new operation: ${stepId}`, {
+        metadata: options.metadata,
+      });
     } else {
       // Update existing operation
       op.state = state;
       if (options?.endTimestamp !== undefined) {
         op.endTimestamp = options.endTimestamp;
       }
+      console.log(`📝 Updated operation: ${stepId} to ${state}`);
     }
 
     // Cleanup if transitioning to COMPLETED
     if (state === OperationLifecycleState.COMPLETED) {
+      console.log(`📝 Cleaning up completed operation: ${stepId}`);
       this.cleanupOperation(stepId);
     }
 

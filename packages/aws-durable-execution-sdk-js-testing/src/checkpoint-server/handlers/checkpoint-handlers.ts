@@ -94,6 +94,15 @@ export function processCheckpointDurableExecution(
 
   const updates = input.Updates ?? [];
 
+  console.log("🔄 Testing Library: Received checkpoint request with updates:", {
+    updateCount: updates.length,
+    updates: updates.map((update) => ({
+      operationId: update.Id,
+      name: update.Name,
+      type: update.Type,
+    })),
+  });
+
   if (!input.CheckpointToken) {
     throw new InvalidParameterValueException({
       message: "Checkpoint token is required",
@@ -122,6 +131,20 @@ export function processCheckpointDurableExecution(
       NextMarker: undefined,
     },
   };
+
+  console.log(
+    "🔄 Testing Library: Returning checkpoint response with operations:",
+    {
+      operationCount: output.NewExecutionState?.Operations?.length,
+
+      operations: output.NewExecutionState?.Operations?.map((op) => ({
+        id: op.Id,
+        name: op.Name,
+        status: op.Status,
+        type: op.Type,
+      })),
+    },
+  );
 
   return output;
 }
