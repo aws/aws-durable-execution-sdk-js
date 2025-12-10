@@ -11,7 +11,7 @@ createTests({
   localRunnerConfig: {
     skipTime: false,
   },
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle multiple invocations tracking with waitForCallback operations", async () => {
       // Get operations for verification
       const firstCallbackOp = runner.getOperation("first-callback");
@@ -51,6 +51,8 @@ createTests({
       // Verify operations were executed
       const operations = result.getOperations();
       expect(operations.length).toBeGreaterThan(4); // wait + callback + step + wait + callback operations
+
+      assertEventSignatures(result);
     });
   },
 });

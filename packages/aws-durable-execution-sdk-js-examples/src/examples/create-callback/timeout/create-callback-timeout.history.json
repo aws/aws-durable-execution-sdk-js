@@ -1,0 +1,82 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "2a59b0ba-c037-4bf2-9659-a6e384d44356",
+    "EventTimestamp": "2025-12-10T00:12:21.428Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"timeoutType\":\"heartbeat\"}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "long-running-task",
+    "EventTimestamp": "2025-12-10T00:12:21.434Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjJkM2NjMjRkLTA1MWEtNDdhOC1iMzNmLWE5ZmE5NGQ5MDUwOSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiZDM5NDgwMmQtZjVjZC00ZmNmLWEwYjgtMGE1Nzc3MDYyZTlhIn0=",
+      "HeartbeatTimeout": 1,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-12-10T00:12:21.485Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:12:21.428Z",
+      "EndTimestamp": "2025-12-10T00:12:21.485Z",
+      "Error": {},
+      "RequestId": "a083c5de-7d37-471a-a204-ce52a4ca54af"
+    }
+  },
+  {
+    "EventType": "CallbackTimedOut",
+    "SubType": "Callback",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "Name": "long-running-task",
+    "EventTimestamp": "2025-12-10T00:12:22.436Z",
+    "CallbackTimedOutDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Callback timed out on heartbeat"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-10T00:12:22.437Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:12:22.436Z",
+      "EndTimestamp": "2025-12-10T00:12:22.437Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Callback timed out on heartbeat"
+        }
+      },
+      "RequestId": "292e244b-a3bd-416f-bc9a-55e5f5e78092"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 6,
+    "Id": "2a59b0ba-c037-4bf2-9659-a6e384d44356",
+    "EventTimestamp": "2025-12-10T00:12:22.437Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Callback timed out on heartbeat"
+        }
+      }
+    }
+  }
+]

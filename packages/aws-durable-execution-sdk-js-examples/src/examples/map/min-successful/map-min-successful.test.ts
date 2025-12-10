@@ -40,6 +40,8 @@ createTests({
 
       // Verify the results array matches
       expect(result.results).toEqual(["Item 1 processed", "Item 2 processed"]);
+
+      assertEventSignatures(execution);
     });
   },
 });

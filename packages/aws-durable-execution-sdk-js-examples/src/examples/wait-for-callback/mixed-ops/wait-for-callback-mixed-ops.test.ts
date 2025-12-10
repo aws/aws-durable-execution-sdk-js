@@ -9,7 +9,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback mixed with steps, waits, and other operations", async () => {
       const callbackOperation = runner.getOperation("wait-for-callback");
 
@@ -44,6 +44,8 @@ createTests({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBe(7);
+
+      assertEventSignatures(result);
     });
   },
 });

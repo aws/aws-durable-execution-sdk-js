@@ -9,7 +9,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback within child contexts", async () => {
       // Get operations - parent callback, child context, child wait, child callback
       const parentCallbackOp = runner.getOperation("parent-callback-op");
@@ -52,6 +52,8 @@ createTests({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBe(8);
+
+      assertEventSignatures(result);
     });
   },
 });

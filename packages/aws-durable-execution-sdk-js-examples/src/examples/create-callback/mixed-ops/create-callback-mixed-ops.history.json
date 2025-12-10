@@ -1,0 +1,118 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "6e7afd87-c2cd-4b0a-9d07-e40c3bf50842",
+    "EventTimestamp": "2025-12-10T00:12:39.173Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2025-12-10T00:12:39.177Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2025-12-10T00:12:39.177Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"userId\":123,\"name\":\"John Doe\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "process-user",
+    "EventTimestamp": "2025-12-10T00:12:39.179Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImM0M2MzNWYzLWRhMzMtNDkwZS05MDljLWMwNTU3ZjJkODQ3NCIsIm9wZXJhdGlvbklkIjoiYzgxZTcyOGQ5ZDRjMmY2MyIsInRva2VuIjoiYTMwNTU3NTMtNWJiMy00MzAyLWJkYjQtZGQ4NTQ0M2ZkMWIxIn0=",
+      "Timeout": 300,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "process-user",
+    "EventTimestamp": "2025-12-10T00:12:39.180Z",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"processed\":true,\"timestamp\":1765325559179}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "initial-wait",
+    "EventTimestamp": "2025-12-10T00:12:39.181Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-10T00:12:40.181Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-10T00:12:39.233Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:12:39.173Z",
+      "EndTimestamp": "2025-12-10T00:12:39.233Z",
+      "Error": {},
+      "RequestId": "e7549444-7453-4869-b047-ee7feb42d122"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "initial-wait",
+    "EventTimestamp": "2025-12-10T00:12:40.183Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2025-12-10T00:12:40.184Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:12:40.183Z",
+      "EndTimestamp": "2025-12-10T00:12:40.184Z",
+      "Error": {},
+      "RequestId": "20d6750d-4768-426c-ab8f-082b128d44de"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "6e7afd87-c2cd-4b0a-9d07-e40c3bf50842",
+    "EventTimestamp": "2025-12-10T00:12:40.184Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"stepResult\":{\"userId\":123,\"name\":\"John Doe\"},\"callbackResult\":\"{\\\"processed\\\":true,\\\"timestamp\\\":1765325559179}\",\"completed\":true}"
+      }
+    }
+  }
+]

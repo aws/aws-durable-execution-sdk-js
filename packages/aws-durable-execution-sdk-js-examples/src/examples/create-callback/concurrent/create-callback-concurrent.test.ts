@@ -9,7 +9,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle multiple concurrent callback operations", async () => {
       // Get all callback operations
       const callback1 = runner.getOperation("api-call-1");
@@ -57,6 +57,8 @@ createTests({
           (op) => op.getType() === OperationType.CALLBACK,
         ),
       ).toBe(true);
+
+      assertEventSignatures(result);
     });
   },
 });

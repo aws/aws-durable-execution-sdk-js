@@ -30,7 +30,7 @@ const customSerdes = {
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle callback operations with custom serdes", async () => {
       const callbackOperation = runner.getOperation("custom-serdes-callback");
       const executionPromise = runner.run();
@@ -58,6 +58,8 @@ createTests({
           }),
         ),
       );
+
+      assertEventSignatures(result);
     });
   },
 });

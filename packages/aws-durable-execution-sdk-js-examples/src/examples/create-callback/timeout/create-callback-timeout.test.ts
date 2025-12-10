@@ -3,7 +3,7 @@ import { createTests } from "../../../utils/test-helper";
 
 createTests({
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should time out if there are no callback heartbeats", async () => {
       const result = await runner.run({
         payload: { timeoutType: "heartbeat" },
@@ -15,6 +15,8 @@ createTests({
         errorType: "CallbackError",
         stackTrace: undefined,
       });
+
+      assertEventSignatures(result);
     });
 
     it("should time out if callback times out", async () => {
@@ -28,6 +30,8 @@ createTests({
         errorType: "CallbackError",
         stackTrace: undefined,
       });
+
+      assertEventSignatures(result);
     });
   },
 });

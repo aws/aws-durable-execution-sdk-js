@@ -8,7 +8,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete successfully when submitter succeeds", async () => {
       const executionPromise = runner.run({ payload: { shouldFail: false } });
 
@@ -24,6 +24,8 @@ createTests({
         result: JSON.stringify({ data: "completed" }),
         success: true,
       });
+
+      assertEventSignatures(execution);
     });
 
     it("should fail after exhausting retries when submitter always fails", async () => {

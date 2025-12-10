@@ -8,7 +8,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle nested waitForCallback operations in child contexts", async () => {
       // Get operations - outer callback, outer context, inner callback, inner context, deep wait, nested callback
       const outerCallbackOp = runner.getOperation("outer-callback-op");
@@ -58,6 +58,8 @@ createTests({
       // Should have tracked all operations
       const completedOperations = result.getOperations();
       expect(completedOperations.length).toBe(12);
+
+      assertEventSignatures(result);
     });
   },
 });

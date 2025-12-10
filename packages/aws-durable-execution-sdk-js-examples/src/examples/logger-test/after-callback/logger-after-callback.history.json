@@ -1,0 +1,69 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "f2fd8f7e-f233-4f2d-991a-0590a5f1fcc3",
+    "EventTimestamp": "2025-12-10T00:15:08.650Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"logFilePath\":\"/var/folders/t8/39f5f5gj7kx35kt8s5bhqj6m0000gr/T/logger-test-9fad77ce-f12b-40c3-b098-46f751b54931.log\",\"modeAware\":true}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-10T00:15:08.675Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImU3ZTE3NGEwLWU5NjUtNGJmNC05ODMxLTk0YjE1Nzc0MTA1MSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiYWUwYWFiZDctMjQwOS00MmMxLWJjYzctYzYyMDgxMThiMTNkIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-10T00:15:08.676Z",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "test-result"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-10T00:15:08.735Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:15:08.650Z",
+      "EndTimestamp": "2025-12-10T00:15:08.735Z",
+      "Error": {},
+      "RequestId": "95ffa90f-3a62-4d70-b1be-d1404f0c386a"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-10T00:15:08.757Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:15:08.756Z",
+      "EndTimestamp": "2025-12-10T00:15:08.757Z",
+      "Error": {},
+      "RequestId": "81aed61d-f37b-43be-bd06-696fc313accf"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "f2fd8f7e-f233-4f2d-991a-0590a5f1fcc3",
+    "EventTimestamp": "2025-12-10T00:15:08.757Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"message\":\"Success\",\"callbackId\":\"eyJleGVjdXRpb25JZCI6ImU3ZTE3NGEwLWU5NjUtNGJmNC05ODMxLTk0YjE1Nzc0MTA1MSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiYWUwYWFiZDctMjQwOS00MmMxLWJjYzctYzYyMDgxMThiMTNkIn0=\",\"result\":\"test-result\"}"
+      }
+    }
+  }
+]

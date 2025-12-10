@@ -1,0 +1,94 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "35c882e2-c63d-4544-8cf8-ae18e1e868b9",
+    "EventTimestamp": "2025-12-10T00:15:10.766Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"functionName\":\"non-durable\",\"payload\":{\"failure\":true}}"
+      }
+    }
+  },
+  {
+    "EventType": "ChainedInvokeStarted",
+    "SubType": "ChainedInvoke",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-10T00:15:10.814Z",
+    "ChainedInvokeStartedDetails": {
+      "FunctionName": "",
+      "Input": {
+        "Payload": ""
+      },
+      "DurableExecutionArn": ""
+    }
+  },
+  {
+    "EventType": "ChainedInvokeFailed",
+    "SubType": "ChainedInvoke",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-10T00:15:10.839Z",
+    "ChainedInvokeFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "This is a failure",
+          "ErrorType": "Error",
+          "StackTrace": [
+            "Error: This is a failure",
+            "    at handler (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/non-durable/non-durable.ts:11:11)",
+            "    at result (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js-testing/src/test-runner/local/operations/function-storage.ts:149:24)",
+            "    at new Promise (<anonymous>)",
+            "    at FunctionStorage.runHandler (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js-testing/src/test-runner/local/operations/function-storage.ts:148:28)",
+            "    at TestExecutionOrchestrator.handleInvokeUpdate (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js-testing/src/test-runner/local/test-execution-orchestrator.ts:297:58)",
+            "    at TestExecutionOrchestrator.processOperation (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js-testing/src/test-runner/local/test-execution-orchestrator.ts:272:14)",
+            "    at TestExecutionOrchestrator.processOperations (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js-testing/src/test-runner/local/test-execution-orchestrator.ts:238:12)",
+            "    at TestExecutionOrchestrator.pollForCheckpointData (/Users/adting/workplace/lambda-durable-functions-sdk-js/packages/aws-durable-execution-sdk-js-testing/src/test-runner/local/test-execution-orchestrator.ts:203:14)"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-10T00:15:10.880Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:15:10.766Z",
+      "EndTimestamp": "2025-12-10T00:15:10.880Z",
+      "Error": {},
+      "RequestId": "fe13dfea-f8f4-424e-99ba-ad360f8afe42"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-10T00:15:10.902Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:15:10.901Z",
+      "EndTimestamp": "2025-12-10T00:15:10.902Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "InvokeError",
+          "ErrorMessage": "This is a failure"
+        }
+      },
+      "RequestId": "bc497243-73e1-47d2-a01a-7c3ef8c7b0b1"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 6,
+    "Id": "35c882e2-c63d-4544-8cf8-ae18e1e868b9",
+    "EventTimestamp": "2025-12-10T00:15:10.902Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "InvokeError",
+          "ErrorMessage": "This is a failure"
+        }
+      }
+    }
+  }
+]

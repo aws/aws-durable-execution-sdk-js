@@ -8,7 +8,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle basic waitForCallback with anonymous submitter", async () => {
       // Start the execution (this will pause at the callback)
       const executionPromise = runner.run();
@@ -33,6 +33,8 @@ createTests({
 
       // Verify operations were tracked
       expect(result.getOperations().length).toBeGreaterThan(0);
+
+      assertEventSignatures(result);
     });
   },
 });

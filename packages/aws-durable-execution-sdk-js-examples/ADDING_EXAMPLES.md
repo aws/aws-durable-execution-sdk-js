@@ -87,21 +87,20 @@ Create a test file in the same directory:
 
 ```typescript
 import { handler } from "./{example-name}";
-import { createTests } from "../../shared/test-helper"; // For nested: "../../../shared/test-helper"
+import { createTests } from "../../../utils/test-helper"; // For standalone: "../../utils/test-helper"
 
 createTests({
-  name: "my-example test",
-  functionName: "{example-name}",
   handler,
-  tests: (runner) => {
-    it("should return expected result", async () => {
+  tests: (runner, { assertEventSignatures }) => {
+    it("should execute successfully with expected result and operations", async () => {
       const execution = await runner.run();
-      expect(execution.getResult()).toEqual("example result");
-    });
 
-    it("should execute correct number of operations", async () => {
-      const execution = await runner.run();
+      // Multiple assertions on the same execution
+      expect(execution.getResult()).toEqual("example result");
       expect(execution.getOperations()).toHaveLength(2); // adjust based on your example
+
+      // REQUIRED: Must call assertEventSignatures for every test
+      assertEventSignatures(execution);
     });
   },
 });
@@ -172,38 +171,147 @@ The `createTests` helper provides a unified interface:
 
 ```typescript
 createTests({
-  name: string;              // Test suite name
-  functionName: string;      // Must match handler filename (without .ts)
-  handler: Function;         // The handler function to test
-  invocationType?: string;   // Optional: 'RequestResponse' | 'Event'
-  tests: (runner, isCloud) => void;  // Test definitions
+  handler: DurableLambdaHandler;                    // The handler function to test
+  tests: TestCallback<ResultType>;                 // Test definitions
+  invocationType?: InvocationType;                  // Optional: 'RequestResponse' | 'Event'
+  localRunnerConfig?: LocalDurableTestRunnerSetupParameters; // Optional local test config
 });
 ```
 
 Inside `tests`, you have access to:
 
 - `runner`: Either `LocalDurableTestRunner` or `CloudDurableTestRunner`
-- `isCloud`: Boolean indicating if running against real Lambda
+- `testHelper`: Object containing:
+  - `assertEventSignatures`: **Required** function to validate execution history
+  - `isTimeSkipping`: Boolean indicating if time is being skipped in tests
+  - `isCloud`: Boolean indicating if running against real Lambda
+  - `functionNameMap`: Helper for resolving function names in tests
+
+## Event Signature Validation with `assertEventSignatures`
+
+**IMPORTANT**: Every test **MUST** call `assertEventSignatures(execution)` at the end. This validates that the execution produces the expected sequence of durable execution events.
+
+### How it Works
+
+1. **First Run**: When you first create a test, run it with `GENERATE_HISTORY=true` to create the history file:
+
+   ```bash
+   GENERATE_HISTORY=true npm test
+   ```
+
+2. **History File Creation**: This generates a `.history.json` file next to your test containing the expected event signatures.
+
+3. **Subsequent Runs**: Normal test runs compare the actual events against the stored history file.
+
+### Example Usage
+
+```typescript
+createTests({
+  handler,
+  tests: (runner, { assertEventSignatures }) => {
+    it("should complete workflow successfully", async () => {
+      const execution = await runner.run();
+
+      // Your test assertions
+      expect(execution.getResult()).toEqual("completed");
+      expect(execution.getOperations()).toHaveLength(3);
+
+      // REQUIRED: Validate event signatures
+      assertEventSignatures(execution);
+    });
+
+    it("should handle callback operations", async () => {
+      const callbackOp = runner.getOperation("my-callback");
+      const executionPromise = runner.run();
+
+      await callbackOp.waitForData();
+      await callbackOp.sendCallbackSuccess("result");
+
+      const execution = await executionPromise;
+      expect(execution.getResult()).toEqual("result");
+
+      // REQUIRED: Validate event signatures
+      assertEventSignatures(execution);
+    });
+  },
+});
+```
+
+### Multiple History Files
+
+For tests with multiple scenarios, you can create separate history files:
+
+```typescript
+it("should handle success case", async () => {
+  const execution = await runner.run({ scenario: "success" });
+  expect(execution.getResult()).toBe("success");
+
+  // Creates/uses example-name-success.history.json
+  assertEventSignatures(execution, "success");
+});
+
+it("should handle failure case", async () => {
+  const execution = await runner.run({ scenario: "failure" });
+  expect(execution.getError()).toBeDefined();
+
+  // Creates/uses example-name-failure.history.json
+  assertEventSignatures(execution, "failure");
+});
+```
 
 ### Common Test Patterns
 
 ```typescript
-tests: (runner, isCloud) => {
-  it("should return expected result", async () => {
+tests: (runner, { assertEventSignatures, isCloud, isTimeSkipping }) => {
+  // Combine tests with identical setup (same runner.run() call)
+  it("should execute successfully with expected result and operations", async () => {
     const execution = await runner.run();
+
+    // Multiple assertions on the same execution
     expect(execution.getResult()).toEqual(expectedValue);
-  });
-
-  it("should execute operations in order", async () => {
-    const execution = await runner.run();
-    const ops = execution.getOperations();
-    expect(ops[0].name).toBe("step-1");
-    expect(ops[1].name).toBe("step-2");
-  });
-
-  it("should execute correct number of operations", async () => {
-    const execution = await runner.run();
     expect(execution.getOperations()).toHaveLength(3);
+
+    // Check operations in order
+    const ops = execution.getOperations();
+    expect(ops[0].getName()).toBe("step-1");
+    expect(ops[1].getName()).toBe("step-2");
+
+    // REQUIRED
+    assertEventSignatures(execution);
+  });
+
+  // Separate test only when setup is different (different parameters, callbacks, etc.)
+  it("should handle callback operations", async () => {
+    const callbackOp = runner.getOperation("my-callback");
+    const executionPromise = runner.run();
+
+    // Wait for callback to start
+    await callbackOp.waitForData();
+
+    // Send callback result
+    await callbackOp.sendCallbackSuccess("callback-result");
+
+    const execution = await executionPromise;
+    expect(execution.getResult()).toContain("callback-result");
+
+    // REQUIRED
+    assertEventSignatures(execution);
+  });
+
+  // Environment-specific tests with different setups
+  it("should behave differently in cloud vs local", async () => {
+    const execution = await runner.run();
+
+    if (isCloud) {
+      // Cloud-specific assertions
+      expect(execution.getInvocations().length).toBeGreaterThan(1);
+    } else {
+      // Local-specific assertions
+      expect(isTimeSkipping).toBe(true);
+    }
+
+    // REQUIRED
+    assertEventSignatures(execution);
   });
 };
 ```
@@ -213,6 +321,9 @@ tests: (runner, isCloud) => {
 - [ ] Created example file in appropriate directory structure
 - [ ] Created test file in same directory
 - [ ] Used correct import paths for test-helper and types
+- [ ] Added `assertEventSignatures` parameter to test callback
+- [ ] Called `assertEventSignatures(execution)` in every test
+- [ ] Generated history files with `GENERATE_HISTORY=true npm test`
 - [ ] Local tests pass (`npm test`)
 - [ ] Integration tests pass in CI/CD
 
@@ -231,6 +342,31 @@ sam local execution history $DURABLE_EXECUTION_ARN
 
 ## Troubleshooting
 
-**Test not found in integration run:**
+### assertEventSignatures Issues
 
-- Verify `functionName` in test matches the example name
+**Error: "assertEventSignature was not called for test [name]"**
+
+- You forgot to call `assertEventSignatures(execution)` in one or more of your tests
+- Make sure every `it()` test calls this function
+
+**Error: "History file [...].history.json does not exist"**
+
+- Run the test with `GENERATE_HISTORY=true npm test` to create the history file
+- Make sure the file is committed to your repository
+
+**Error: Event signature mismatch**
+
+- The execution produced different events than expected
+- If this is intentional (you changed the function), regenerate the history with `GENERATE_HISTORY=true npm test`
+- If not intentional, check your function logic for unintended changes
+
+**TypeError: testResult.getHistoryEvents is not a function**
+
+- You're passing the wrong variable to `assertEventSignatures`
+- Pass the `execution` result from `runner.run()`, not `execution.getResult()`
+
+### Test Setup Issues
+
+**Tests timing out:**
+
+- For local tests with time skipping disabled: make sure step retries are not longer than the timeout

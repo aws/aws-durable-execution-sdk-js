@@ -12,7 +12,7 @@ createTests({
   localRunnerConfig: {
     skipTime: false,
   },
-  tests: (runner, { isCloud }) => {
+  tests: (runner, { isCloud, assertEventSignatures }) => {
     it("should handle waitForCallback heartbeat scenarios during long-running submitter execution", async () => {
       const executionPromise = runner.run({
         payload: { isCloud },
@@ -53,6 +53,8 @@ createTests({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(result);
     });
   },
 });

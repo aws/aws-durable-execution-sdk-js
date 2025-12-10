@@ -9,7 +9,7 @@ import {
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete with force checkpointing when one branch blocks termination with multiple callbacks", async () => {
       const startTime = Date.now();
 
@@ -56,6 +56,8 @@ createTests({
       // Verify operations were tracked
       const operations = execution.getOperations();
       expect(operations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(execution);
     }, 50000);
   },
 });

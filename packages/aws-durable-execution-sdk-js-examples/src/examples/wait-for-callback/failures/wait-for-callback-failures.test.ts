@@ -8,7 +8,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback with callback failure scenarios", async () => {
       // Start the execution (this will pause at the callback)
       const executionPromise = runner.run();
@@ -33,6 +33,8 @@ createTests({
 
       const completedOperations = result.getOperations();
       expect(completedOperations.length).toEqual(3);
+
+      assertEventSignatures(result);
     });
   },
 });

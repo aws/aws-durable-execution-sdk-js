@@ -9,7 +9,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback with custom serdes configuration", async () => {
       const executionPromise = runner.run();
 
@@ -60,6 +60,8 @@ createTests({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(result);
     });
   },
 });

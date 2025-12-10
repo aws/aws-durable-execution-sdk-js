@@ -1,0 +1,72 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "5c002679-931c-4e9e-ac7a-62dbdf5a555d",
+    "EventTimestamp": "2025-12-10T00:12:25.242Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"functionName\":\"non-durable\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ChainedInvokeStarted",
+    "SubType": "ChainedInvoke",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-10T00:12:25.245Z",
+    "ChainedInvokeStartedDetails": {
+      "FunctionName": "",
+      "Input": {
+        "Payload": ""
+      },
+      "DurableExecutionArn": ""
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-12-10T00:12:25.297Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:12:25.242Z",
+      "EndTimestamp": "2025-12-10T00:12:25.297Z",
+      "Error": {},
+      "RequestId": "24a3700d-f1b9-402d-9efd-a2b01025069f"
+    }
+  },
+  {
+    "EventType": "ChainedInvokeSucceeded",
+    "SubType": "ChainedInvoke",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-10T00:12:26.247Z",
+    "ChainedInvokeSucceededDetails": {
+      "Result": {
+        "Payload": "{\"status\":200,\"body\":\"{\\\"message\\\":\\\"Hello from Lambda!\\\"}\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-10T00:12:26.251Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-10T00:12:26.249Z",
+      "EndTimestamp": "2025-12-10T00:12:26.251Z",
+      "Error": {},
+      "RequestId": "02c671e7-0994-40d2-adbe-4056113fd00d"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "5c002679-931c-4e9e-ac7a-62dbdf5a555d",
+    "EventTimestamp": "2025-12-10T00:12:26.251Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"status\":200,\"body\":\"{\\\"message\\\":\\\"Hello from Lambda!\\\"}\"}"
+      }
+    }
+  }
+]

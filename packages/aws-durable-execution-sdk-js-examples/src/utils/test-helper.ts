@@ -9,7 +9,7 @@ import {
   LocalDurableTestRunnerSetupParameters,
   TestResult,
 } from "@aws/durable-execution-sdk-js-testing";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 
 export interface FunctionNameMap {
@@ -139,14 +139,21 @@ function getCallerFile(): string {
  */
 export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   const isIntegrationTest = process.env.NODE_ENV === "integration";
+  const generateHistories = process.env.GENERATE_HISTORY === "true";
   const isTimeSkipping =
     (testDef.localRunnerConfig?.skipTime ?? true) && !isIntegrationTest;
 
+  if (generateHistories && isTimeSkipping && !isIntegrationTest) {
+    console.warn("Disabling skipTime since GENERATE_HISTORY is true");
+    jest.setTimeout(120000);
+  }
+
   const testFileName = getCallerFile();
   const parsedFunctionName = path.basename(testFileName, ".test.ts");
+
   let calledAssertEventSignature = false;
   const testHelper: TestHelper = {
-    isTimeSkipping,
+    isTimeSkipping: isTimeSkipping && !generateHistories,
     isCloud: isIntegrationTest,
     assertEventSignatures: (testResult: TestResult, suffix) => {
       calledAssertEventSignature = true;
@@ -159,10 +166,28 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
         path.dirname(testFileName),
         `${historyFileBasename}.history.json`,
       );
+
+      if (generateHistories) {
+        if (!existsSync(historyFilePath)) {
+          console.log(`Generated missing history for ${historyFileBasename}`);
+          writeFileSync(
+            historyFilePath,
+            JSON.stringify(testResult.getHistoryEvents(), null, 2),
+          );
+          return;
+        }
+      }
+
+      if (!existsSync(historyFilePath)) {
+        throw new Error(
+          `History file ${historyFilePath} does not exist. Please run the test with GENERATE_HISTORY=true to generate it.`,
+        );
+      }
+
       return assertEventSignatures(
         testResult.getHistoryEvents(),
         JSON.parse(readFileSync(historyFilePath).toString("utf-8")),
-        testHelper.isTimeSkipping,
+        isTimeSkipping,
       );
     },
     functionNameMap: isIntegrationTest
@@ -172,7 +197,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
 
   afterAll(() => {
     if (!calledAssertEventSignature) {
-      console.warn(
+      throw new Error(
         `assertEventSignature was not called for test ${parsedFunctionName}`,
       );
     }
