@@ -331,18 +331,11 @@ export class CheckpointManager implements Checkpoint {
   private async processBatch(
     batch: QueuedCheckpoint[],
   ): Promise<QueuedCheckpoint[]> {
-    // Filter out operations whose ancestors have completed, but allow completion events
+    // Filter out operations whose ancestors have completed
     const validBatch = batch.filter((item) => {
       const existingOperation = this.operations.get(item.stepId);
-      const isStartAction = item.data.Action === "START";
 
-      // Only filter START actions when ancestor is completed
-      // Allow completion events and other actions to pass through
-      if (
-        existingOperation &&
-        isStartAction &&
-        this.hasCompletedAncestor(item.stepId)
-      ) {
+      if (existingOperation && this.hasCompletedAncestor(item.stepId)) {
         // Resolve the promise since we're not processing it
         item.resolve();
         return false;
