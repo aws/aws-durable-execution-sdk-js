@@ -250,6 +250,15 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             checkpoint.markOperationState(
               stepId,
               OperationLifecycleState.COMPLETED,
+              {
+                metadata: {
+                  stepId,
+                  name,
+                  type: OperationType.STEP,
+                  subType: OperationSubType.WAIT_FOR_CONDITION,
+                  parentId,
+                },
+              },
             );
             return deserializedState;
           }
@@ -298,6 +307,15 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
+            {
+              metadata: {
+                stepId,
+                name,
+                type: OperationType.STEP,
+                subType: OperationSubType.WAIT_FOR_CONDITION,
+                parentId,
+              },
+            },
           );
           throw DurableOperationError.fromErrorObject(
             createErrorObjectFromError(error),

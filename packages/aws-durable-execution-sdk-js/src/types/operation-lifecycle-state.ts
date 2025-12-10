@@ -24,6 +24,11 @@ export enum OperationLifecycleState {
   IDLE_AWAITED = "IDLE_AWAITED",
 
   /**
+   * Child context is currently executing
+   */
+  CHILD_IS_EXECUTING = "CHILD_IS_EXECUTING",
+
+  /**
    * Operation has completed (success or permanent failure)
    */
   COMPLETED = "COMPLETED",

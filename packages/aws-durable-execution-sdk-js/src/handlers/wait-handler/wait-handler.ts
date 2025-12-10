@@ -154,6 +154,15 @@ export const createWaitHandler = (
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
+          {
+            metadata: {
+              stepId,
+              name: actualName,
+              type: OperationType.WAIT,
+              subType: OperationSubType.WAIT,
+              parentId,
+            },
+          },
         );
         return;
       }

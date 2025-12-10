@@ -231,6 +231,15 @@ export const createInvokeHandler = (
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
+          {
+            metadata: {
+              stepId,
+              name,
+              type: OperationType.CHAINED_INVOKE,
+              subType: OperationSubType.CHAINED_INVOKE,
+              parentId,
+            },
+          },
         );
 
         const invokeDetails = stepData.ChainedInvokeDetails;
@@ -247,7 +256,15 @@ export const createInvokeHandler = (
       // Handle failure
       log("❌", "Invoke failed:", { stepId, status: stepData?.Status });
 
-      checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+      checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED, {
+        metadata: {
+          stepId,
+          name: stepData?.Name,
+          type: OperationType.CONTEXT,
+          subType: stepData?.SubType as OperationSubType,
+          parentId: stepData?.ParentId,
+        },
+      });
 
       const invokeDetails = stepData?.ChainedInvokeDetails;
       if (invokeDetails?.Error) {

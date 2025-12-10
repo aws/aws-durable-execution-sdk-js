@@ -2,8 +2,9 @@ import {
   ExecutionContext,
   DurablePromise,
   OperationLifecycleState,
+  OperationSubType,
 } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Serdes } from "../../utils/serdes/serdes";
@@ -31,7 +32,15 @@ export const createCallbackPromise = <T>(
       log("✅", "Callback completed:", { stepId });
       checkAndUpdateReplayMode();
 
-      checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+      checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED, {
+        metadata: {
+          stepId,
+          name: stepData.Name,
+          type: OperationType.CONTEXT,
+          subType: stepData.SubType as OperationSubType,
+          parentId: stepData.ParentId,
+        },
+      });
 
       const callbackData = stepData.CallbackDetails;
       if (!callbackData) {
@@ -55,7 +64,15 @@ export const createCallbackPromise = <T>(
     // Handle failure
     log("❌", "Callback failed:", { stepId, status: stepData?.Status });
 
-    checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+    checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED, {
+      metadata: {
+        stepId,
+        name: stepData?.Name,
+        type: OperationType.CONTEXT,
+        subType: stepData?.SubType as OperationSubType,
+        parentId: stepData?.ParentId,
+      },
+    });
 
     const callbackData = stepData?.CallbackDetails;
     const error = callbackData?.Error;

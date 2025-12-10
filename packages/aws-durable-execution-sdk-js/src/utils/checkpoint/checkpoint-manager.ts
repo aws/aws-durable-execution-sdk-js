@@ -109,6 +109,26 @@ export class CheckpointManager implements Checkpoint {
     return this.forceCheckpoint();
   }
 
+  private hasCompletedAncestor(stepId: string): boolean {
+    let currentStepId = stepId;
+
+    while (currentStepId) {
+      const operation = this.operations.get(currentStepId);
+      if (!operation?.metadata?.parentId) {
+        break;
+      }
+
+      const parentOp = this.operations.get(operation.metadata.parentId);
+      if (parentOp?.state === OperationLifecycleState.COMPLETED) {
+        return true;
+      }
+
+      currentStepId = operation.metadata.parentId;
+    }
+
+    return false;
+  }
+
   async checkpoint(
     stepId: string,
     data: Partial<OperationUpdate>,
@@ -116,6 +136,13 @@ export class CheckpointManager implements Checkpoint {
     if (this.isTerminating) {
       log("⚠️", "Checkpoint skipped - termination in progress:", { stepId });
       return new Promise(() => {}); // Never resolves during termination
+    }
+
+    // Skip checkpoint if ancestor is already completed (only for existing operations)
+    const existingOperation = this.operations.get(stepId);
+    if (existingOperation && this.hasCompletedAncestor(stepId)) {
+      log("⚠️", "Checkpoint skipped - ancestor already completed:", { stepId });
+      return Promise.resolve();
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -571,7 +598,8 @@ export class CheckpointManager implements Checkpoint {
       if (
         op.state === OperationLifecycleState.RETRY_WAITING ||
         op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
-        op.state === OperationLifecycleState.IDLE_AWAITED
+        op.state === OperationLifecycleState.IDLE_AWAITED ||
+        op.state === OperationLifecycleState.CHILD_IS_EXECUTING
       ) {
         // Check if ancestor is complete in stepData
         let currentHashedId: string | undefined = hashId(op.stepId);
@@ -608,7 +636,8 @@ export class CheckpointManager implements Checkpoint {
       (op) =>
         op.state === OperationLifecycleState.RETRY_WAITING ||
         op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
-        op.state === OperationLifecycleState.IDLE_AWAITED,
+        op.state === OperationLifecycleState.IDLE_AWAITED ||
+        op.state === OperationLifecycleState.CHILD_IS_EXECUTING,
     );
 
     if (hasWaiting) {

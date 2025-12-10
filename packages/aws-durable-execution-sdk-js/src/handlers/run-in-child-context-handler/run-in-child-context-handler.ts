@@ -284,10 +284,19 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Name: name,
     });
 
-    // Mark as IDLE_NOT_AWAITED (phase 1 complete, not awaited yet)
+    // Mark as CHILD_IS_EXECUTING (child context is executing)
     checkpoint.markOperationState(
       entityId,
-      OperationLifecycleState.IDLE_NOT_AWAITED,
+      OperationLifecycleState.CHILD_IS_EXECUTING,
+      {
+        metadata: {
+          stepId: entityId,
+          name,
+          type: OperationType.CONTEXT,
+          subType: subType as OperationSubType,
+          parentId,
+        },
+      },
     );
   }
 
@@ -361,7 +370,16 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     });
 
     // Mark as completed
-    checkpoint.markOperationState(entityId, OperationLifecycleState.COMPLETED);
+    checkpoint.markOperationState(entityId, OperationLifecycleState.COMPLETED, {
+      metadata: {
+        stepId: entityId,
+        name,
+        type: OperationType.CONTEXT,
+        subType: (options?.subType ||
+          OperationSubType.RUN_IN_CHILD_CONTEXT) as OperationSubType,
+        parentId,
+      },
+    });
 
     log("✅", "Child context completed successfully:", {
       entityId,
@@ -389,7 +407,15 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     });
 
     // Mark as completed (even for failures)
-    checkpoint.markOperationState(entityId, OperationLifecycleState.COMPLETED);
+    checkpoint.markOperationState(entityId, OperationLifecycleState.COMPLETED, {
+      metadata: {
+        stepId: entityId,
+        name,
+        type: OperationType.CONTEXT,
+        subType: subType as OperationSubType,
+        parentId,
+      },
+    });
 
     // Reconstruct error from ErrorObject for deterministic behavior
     const errorObject = createErrorObjectFromError(error);
