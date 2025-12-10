@@ -51,7 +51,6 @@ async function runHandler<
     checkpointToken,
     stepDataEmitter,
     createDefaultLogger(executionContext),
-    executionContext.pendingCompletions,
   );
 
   // Set the checkpoint terminating callback on the termination manager

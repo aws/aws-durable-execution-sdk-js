@@ -21,7 +21,6 @@ const createCheckpoint = (
     token,
     emitter,
     logger,
-    new Set<string>(),
   );
   const checkpoint = (stepId: string, data: any): Promise<any> =>
     manager.checkpoint(stepId, data);

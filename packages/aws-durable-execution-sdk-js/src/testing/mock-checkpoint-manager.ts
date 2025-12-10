@@ -23,7 +23,6 @@ export class MockCheckpointManager extends CheckpointManager {
       "mock-token",
       {} as EventEmitter,
       {} as DurableLogger,
-      new Set<string>(),
     );
   }
 

@@ -2,8 +2,6 @@ import {
   CheckpointDurableExecutionRequest,
   OperationUpdate,
   Operation,
-  OperationStatus,
-  OperationAction,
 } from "@aws-sdk/client-lambda";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
@@ -61,7 +59,6 @@ export class CheckpointManager implements Checkpoint {
     initialTaskToken: string,
     private stepDataEmitter: EventEmitter,
     private logger: DurableLogger,
-    private pendingCompletions: Set<string>,
   ) {
     this.currentTaskToken = initialTaskToken;
   }
@@ -69,64 +66,6 @@ export class CheckpointManager implements Checkpoint {
   setTerminating(): void {
     this.isTerminating = true;
     log("🛑", "Checkpoint manager marked as terminating");
-  }
-
-  /**
-   * Checks if a step ID or any of its ancestors has a pending completion
-   */
-  hasPendingAncestorCompletion(stepId: string): boolean {
-    let currentHashedId: string | undefined = hashId(stepId);
-
-    while (currentHashedId) {
-      if (this.pendingCompletions.has(currentHashedId)) {
-        return true;
-      }
-
-      const operation: Operation | undefined = this.stepData[currentHashedId];
-      currentHashedId = operation?.ParentId;
-    }
-
-    return false;
-  }
-
-  /**
-   * Checks if a step ID or any of its ancestors is already finished
-   * (either in stepData as SUCCEEDED/FAILED or in pendingCompletions)
-   */
-  private hasFinishedAncestor(
-    stepId: string,
-    data: Partial<OperationUpdate>,
-  ): boolean {
-    // Start with the parent from the operation data, or fall back to stepData
-    let currentHashedId: string | undefined = data.ParentId
-      ? hashId(data.ParentId)
-      : undefined;
-
-    // If no ParentId in operation data, check if step exists in stepData
-    if (!currentHashedId) {
-      const currentOperation = this.stepData[hashId(stepId)];
-      currentHashedId = currentOperation?.ParentId;
-    }
-
-    while (currentHashedId) {
-      // Check if ancestor has pending completion
-      if (this.pendingCompletions.has(currentHashedId)) {
-        return true;
-      }
-
-      // Check if ancestor is already finished in stepData
-      const operation: Operation | undefined = this.stepData[currentHashedId];
-      if (
-        operation?.Status === OperationStatus.SUCCEEDED ||
-        operation?.Status === OperationStatus.FAILED
-      ) {
-        return true;
-      }
-
-      currentHashedId = operation?.ParentId;
-    }
-
-    return false;
   }
 
   async forceCheckpoint(): Promise<void> {
@@ -178,20 +117,7 @@ export class CheckpointManager implements Checkpoint {
       return new Promise(() => {}); // Never resolves during termination
     }
 
-    // Check if any ancestor is finished - if so, don't checkpoint and don't resolve
-    if (this.hasFinishedAncestor(stepId, data)) {
-      log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
-      return new Promise(() => {}); // Never resolves when ancestor is finished
-    }
-
     return new Promise<void>((resolve, reject) => {
-      if (
-        data.Action === OperationAction.SUCCEED ||
-        data.Action === OperationAction.FAIL
-      ) {
-        this.pendingCompletions.add(stepId);
-      }
-
       const queuedItem: QueuedCheckpoint = {
         stepId,
         data,
@@ -304,16 +230,6 @@ export class CheckpointManager implements Checkpoint {
       }
 
       this.queue.shift();
-
-      if (this.hasFinishedAncestor(nextItem.stepId, nextItem.data)) {
-        log("⚠️", "Checkpoint skipped - ancestor finished:", {
-          stepId: nextItem.stepId,
-          parentId: nextItem.data.ParentId,
-        });
-        skippedCount++;
-        continue;
-      }
-
       batch.push(nextItem);
       currentSize += itemSize;
     }
@@ -331,12 +247,6 @@ export class CheckpointManager implements Checkpoint {
       }
 
       batch.forEach((item) => {
-        if (
-          item.data.Action === OperationAction.SUCCEED ||
-          item.data.Action === OperationAction.FAIL
-        ) {
-          this.pendingCompletions.delete(item.stepId);
-        }
         item.resolve();
       });
 
@@ -662,14 +572,8 @@ export class CheckpointManager implements Checkpoint {
         op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
         op.state === OperationLifecycleState.IDLE_AWAITED
       ) {
-        if (this.hasPendingAncestorCompletion(op.stepId)) {
-          log(
-            "🧹",
-            `Cleaning up operation with completed ancestor: ${op.stepId}`,
-          );
-          this.cleanupOperation(op.stepId);
-          this.operations.delete(op.stepId);
-        }
+        // Remove this check since we no longer track pending completions
+        // Operations will be cleaned up through other mechanisms
       }
     }
 

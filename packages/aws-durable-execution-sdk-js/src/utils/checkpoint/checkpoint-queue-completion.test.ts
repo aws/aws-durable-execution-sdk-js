@@ -29,7 +29,6 @@ describe("CheckpointManager Queue Completion", () => {
       "test-token",
       mockEmitter,
       mockLogger,
-      new Set<string>(),
     );
   });
 
