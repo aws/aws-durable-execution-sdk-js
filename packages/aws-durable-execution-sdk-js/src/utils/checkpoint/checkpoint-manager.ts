@@ -596,7 +596,6 @@ export class CheckpointManager implements Checkpoint {
             `Cleaning up operation with completed ancestor: ${op.stepId}`,
           );
           this.cleanupOperation(op.stepId);
-          this.operations.delete(op.stepId);
         }
       }
     }
