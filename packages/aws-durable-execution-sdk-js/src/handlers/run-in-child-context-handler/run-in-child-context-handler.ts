@@ -5,6 +5,7 @@ import {
   OperationSubType,
   DurableExecutionMode,
   DurableContext,
+  OperationLifecycleState,
 } from "../../types";
 import { Context } from "aws-lambda";
 import {
@@ -282,6 +283,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Type: OperationType.CONTEXT,
       Name: name,
     });
+
+    // Mark as IDLE_NOT_AWAITED (phase 1 complete, not awaited yet)
+    checkpoint.markOperationState(
+      entityId,
+      OperationLifecycleState.IDLE_NOT_AWAITED,
+    );
   }
 
   const childReplayMode = determineChildReplayMode(context, entityId);
@@ -353,6 +360,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Name: name,
     });
 
+    // Mark as completed
+    checkpoint.markOperationState(entityId, OperationLifecycleState.COMPLETED);
+
     log("✅", "Child context completed successfully:", {
       entityId,
       name,
@@ -377,6 +387,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Error: createErrorObjectFromError(error),
       Name: name,
     });
+
+    // Mark as completed (even for failures)
+    checkpoint.markOperationState(entityId, OperationLifecycleState.COMPLETED);
 
     // Reconstruct error from ErrorObject for deterministic behavior
     const errorObject = createErrorObjectFromError(error);
