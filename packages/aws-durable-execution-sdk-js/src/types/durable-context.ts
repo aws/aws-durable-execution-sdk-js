@@ -138,17 +138,18 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
   ): DurablePromise<TOutput>;
 
   /**
-   * Invokes another durable function with the specified input
+   * Invokes another durable or non-durable function with the specified input
    * @param name - Step name for tracking and debugging
-   * @param funcId - Function ID or ARN of the durable function to invoke
+   * @param funcId - Function ID or ARN. Alias/version qualifier required for durable functions only.
    * @param input - Input data to pass to the invoked function
    * @param config - Optional configuration for serialization
    * @throws \{InvokeError\} When the invoked function fails or times out
    * @example
    * ```typescript
+   * // Invoking a durable function by arn using version qualifier
    * const result = await context.invoke(
    *   "process-payment",
-   *   "arn:aws:lambda:us-east-1:123456789012:function:payment-processor",
+   *   "arn:aws:lambda:us-east-1:123456789012:function:payment-processor:1",
    *   { amount: 100, currency: "USD" }
    * );
    * ```
@@ -161,15 +162,16 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
   ): DurablePromise<TOutput>;
 
   /**
-   * Invokes another durable function with the specified input
-   * @param funcId - Function ID or ARN of the durable function to invoke
+   * Invokes another durable or non-durable function with the specified input
+   * @param funcId - Function ID or ARN. Alias/version qualifier required for durable functions only.
    * @param input - Input data to pass to the invoked function
    * @param config - Optional configuration for serialization
    * @throws \{InvokeError\} When the invoked function fails or times out
    * @example
    * ```typescript
+   * // Invoking a durable function by name using alias qualifier
    * const result = await context.invoke(
-   *   "payment-processor-function",
+   *   "payment-processor-function:myalias",
    *   { amount: 100, currency: "USD" }
    * );
    * ```
