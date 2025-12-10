@@ -79,6 +79,15 @@ describe("Wait Handler Tests", () => {
       expect(checkpoint.markOperationState).toHaveBeenCalledWith(
         "1",
         "COMPLETED",
+        {
+          metadata: {
+            stepId: "1",
+            name: undefined,
+            type: OperationType.WAIT,
+            subType: OperationSubType.WAIT,
+            parentId: undefined,
+          },
+        },
       );
     });
 

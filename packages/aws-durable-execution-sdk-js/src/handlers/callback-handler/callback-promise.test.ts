@@ -72,6 +72,7 @@ describe("createCallbackPromise", () => {
     expect(mockCheckpoint.markOperationState).toHaveBeenCalledWith(
       "test-step-id",
       OperationLifecycleState.COMPLETED,
+      expect.any(Object),
     );
     expect(mockSafeDeserialize).toHaveBeenCalledWith(
       mockSerdes,
@@ -143,6 +144,7 @@ describe("createCallbackPromise", () => {
     expect(mockCheckpoint.markOperationState).toHaveBeenCalledWith(
       "test-step-id",
       OperationLifecycleState.COMPLETED,
+      expect.any(Object),
     );
   });
 
