@@ -270,7 +270,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance past cooldown
-      jest.advanceTimersByTime(50);
+      jest.advanceTimersByTime(0);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
@@ -290,8 +290,8 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      // Advance partway through cooldown
-      jest.advanceTimersByTime(25);
+      // No time advancement so the setTimeout will get cancelled from synchronous code
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
 
       // Start new operation
       checkpointManager.markOperationState(
@@ -306,10 +306,11 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      // Advance past original cooldown
-      jest.advanceTimersByTime(50);
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
 
-      // Should not have terminated
+      // Advance past original cooldown
+      jest.advanceTimersByTime(0);
+
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
   });
@@ -340,7 +341,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.advanceTimersByTime(200);
+      jest.advanceTimersByTime(0);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.RETRY_SCHEDULED,
@@ -372,7 +373,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.advanceTimersByTime(200);
+      jest.advanceTimersByTime(0);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
@@ -392,7 +393,7 @@ describe("CheckpointManager - Centralized Termination", () => {
         },
       );
 
-      jest.advanceTimersByTime(200);
+      jest.advanceTimersByTime(0);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.CALLBACK_PENDING,
@@ -677,7 +678,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      jest.advanceTimersByTime(0);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
@@ -701,7 +702,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      jest.advanceTimersByTime(0);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
@@ -725,7 +726,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      jest.advanceTimersByTime(0);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 
@@ -758,7 +759,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       (checkpointManager as any).checkAndTerminate();
 
       // Should not terminate
-      jest.advanceTimersByTime(300);
+      jest.advanceTimersByTime(0);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
 

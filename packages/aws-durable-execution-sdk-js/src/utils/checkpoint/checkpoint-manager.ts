@@ -51,7 +51,6 @@ export class CheckpointManager implements Checkpoint {
   // Termination cooldown
   private terminationTimer: NodeJS.Timeout | null = null;
   private terminationReason: TerminationReason | null = null;
-  private readonly TERMINATION_COOLDOWN_MS = 50;
 
   constructor(
     private durableExecutionArn: string,
@@ -714,12 +713,12 @@ export class CheckpointManager implements Checkpoint {
     this.terminationReason = reason;
     log("⏱️", "Scheduling termination", {
       reason,
-      cooldownMs: this.TERMINATION_COOLDOWN_MS,
     });
 
+    // Schedule termination immediately once event loop is free.
     this.terminationTimer = setTimeout(() => {
       this.executeTermination(reason);
-    }, this.TERMINATION_COOLDOWN_MS);
+    }, 0);
   }
 
   private executeTermination(reason: TerminationReason): void {

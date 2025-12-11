@@ -89,12 +89,9 @@ describe("LocalDurableTestRunner Integration", () => {
     // Verify that operations were tracked
     const operations = result.getOperations();
 
-    // Verify the invocations were tracked - should be exactly 2 invocations
-    // Centralized termination implements a cool-down period prior to termination.
-    // This cool-down phase reduces the total number of invocations needed while increasing
-    // the number of operations performed in each invocation.
+    // Verify the invocations were tracked - should be exactly 3 invocations
     const invocations = result.getInvocations();
-    expect(invocations).toHaveLength(2);
+    expect(invocations).toHaveLength(3);
 
     // We should have 3 operations in total
     expect(operations).toHaveLength(3);
@@ -229,8 +226,19 @@ describe("LocalDurableTestRunner Integration", () => {
         },
       },
       {
-        EventType: "ExecutionSucceeded",
+        EventType: "InvocationCompleted",
         EventId: 10,
+        EventTimestamp: expect.any(Date),
+        InvocationCompletedDetails: {
+          StartTimestamp: expect.any(Date),
+          EndTimestamp: expect.any(Date),
+          Error: {},
+          RequestId: expect.any(String),
+        },
+      },
+      {
+        EventType: "ExecutionSucceeded",
+        EventId: 11,
         Id: expect.any(String),
         EventTimestamp: expect.any(Date),
         ExecutionSucceededDetails: {

@@ -10,6 +10,9 @@ createTests({
   functionName: "wait-for-callback-multiple-invocations",
   handler,
   invocationType: InvocationType.Event,
+  localRunnerConfig: {
+    skipTime: false,
+  },
   tests: (runner) => {
     it("should handle multiple invocations tracking with waitForCallback operations", async () => {
       // Get operations for verification
@@ -41,11 +44,9 @@ createTests({
         invocationCount: "multiple",
       });
 
-      // Verify invocations were tracked - should be 4-5 invocations
-      // Due to update/termination timing, this execution may require 4-5 invocations to complete
+      // Verify invocations were tracked - should be exactly 5 invocations
       const invocations = result.getInvocations();
-      expect(invocations.length).toBeGreaterThanOrEqual(4);
-      expect(invocations.length).toBeLessThanOrEqual(5);
+      expect(invocations.length).toBe(5);
 
       // Verify operations were executed
       const operations = result.getOperations();
