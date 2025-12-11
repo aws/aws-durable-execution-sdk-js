@@ -12,11 +12,15 @@ createTests({
   tests: (runner, { assertEventSignatures }) => {
     it("should handle callback operations mixed with other operation types", async () => {
       const callbackOperation = runner.getOperation("process-user");
+      const waitOperation = runner.getOperation("initial-wait");
 
       const executionPromise = runner.run();
 
       // Wait for callback to start (other operations complete synchronously)
       await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+
+      // Wait for invocation to complete (when the wait state starts)
+      await waitOperation.waitForData();
 
       // Complete the callback
       const callbackResult = JSON.stringify({
