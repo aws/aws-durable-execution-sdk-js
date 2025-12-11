@@ -10,7 +10,36 @@ permissions:
   contents: read # This is required for actions/checkout
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-artifacts
+          path: |
+            packages/**/dist*/*
+            package.json
+            package-lock.json
+
   cleanup-integration-tests:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,10 +47,8 @@ jobs:
 
     concurrency:
       group: ${{ github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ
-      cancel-in-progress: true
 
     strategy:
-      # Clean up functions sequentially to avoid throttling
       max-parallel: 1
       fail-fast: false
       matrix:
@@ -33,15 +60,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "24.x"
           cache: "npm"
 
-      - name: Install dependencies
-        run: |
-          npm ci
-
-      - name: Build project
-        run: npm run build
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: .
 
       - name: Get AWS Credentials for function scrubber
         id: credentials
