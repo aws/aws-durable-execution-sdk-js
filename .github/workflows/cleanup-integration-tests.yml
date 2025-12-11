@@ -53,6 +53,7 @@ jobs:
     concurrency:
       # Concurrency group for integration-test.yml. This will cancel the cleanup if integration tests start for the same branch.
       group: ${{ github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ
+      cancel-in-progress: true
 
     strategy:
       max-parallel: 1
