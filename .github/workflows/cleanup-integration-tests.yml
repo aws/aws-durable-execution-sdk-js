@@ -13,6 +13,7 @@ permissions:
 # for the same branch starts
 concurrency:
   group: ${{ github.head_ref || github.ref_name || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -75,6 +76,9 @@ jobs:
         with:
           name: built-artifacts
           path: .
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Get AWS Credentials for function scrubber
         id: credentials
