@@ -42,10 +42,23 @@ export interface TestDefinition<ResultType> {
   localRunnerConfig?: LocalDurableTestRunnerSetupParameters;
 }
 
+export interface EventSignatureConfig {
+  /**
+   * Due to API delays or other conditions, the number of invocations can change.
+   * This property sets a threshold where the number of invocations in the actual history
+   * must be in a specified range based on the expected history.
+   */
+  invocationCompletedDifference?: number;
+}
+
 export interface TestHelper {
   isTimeSkipping: boolean;
   isCloud: boolean;
-  assertEventSignatures(testResult: TestResult, suffix?: string): void;
+  assertEventSignatures(
+    testResult: TestResult,
+    suffix?: string,
+    eventSignatureConfig?: EventSignatureConfig,
+  ): void;
   functionNameMap: FunctionNameMap;
 }
 
@@ -104,9 +117,33 @@ function assertEventSignatures(
   actualEvents: Event[],
   expectedEvents: EventSignature[],
   isTimeSkipping: boolean = false,
+  eventSignatureConfig?: EventSignatureConfig,
 ) {
   const actualCounts = countEventSignatures(actualEvents, isTimeSkipping);
   const expectedCounts = countEventSignatures(expectedEvents, isTimeSkipping);
+
+  if (eventSignatureConfig?.invocationCompletedDifference) {
+    const invocationCompletedSignature = JSON.stringify(
+      createEventSignature({ EventType: EventType.InvocationCompleted }),
+    );
+
+    const actualInvocationCompleted = actualCounts.get(
+      invocationCompletedSignature,
+    );
+    actualCounts.delete(invocationCompletedSignature);
+
+    const expectedInvocationsCompleted = expectedCounts.get(
+      invocationCompletedSignature,
+    );
+    expectedCounts.delete(invocationCompletedSignature);
+
+    const invocationCompletedDifference = Math.abs(
+      actualInvocationCompleted - expectedInvocationsCompleted,
+    );
+    expect(invocationCompletedDifference).toBeLessThanOrEqual(
+      eventSignatureConfig.invocationCompletedDifference,
+    );
+  }
 
   expect(actualCounts).toEqual(expectedCounts);
 }
@@ -155,7 +192,11 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   const testHelper: TestHelper = {
     isTimeSkipping: isTimeSkipping && !generateHistories,
     isCloud: isIntegrationTest,
-    assertEventSignatures: (testResult: TestResult, suffix) => {
+    assertEventSignatures: (
+      testResult: TestResult,
+      suffix,
+      eventSignatureConfig,
+    ) => {
       calledAssertEventSignature = true;
 
       const historyFileBasename = suffix
@@ -188,6 +229,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
         testResult.getHistoryEvents(),
         JSON.parse(readFileSync(historyFilePath).toString("utf-8")),
         isTimeSkipping,
+        eventSignatureConfig,
       );
     },
     functionNameMap: isIntegrationTest
