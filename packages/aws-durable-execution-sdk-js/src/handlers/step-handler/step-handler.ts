@@ -35,6 +35,7 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
+import { withStepSpan } from "../../utils/otel/otel-instrumentation";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -264,13 +265,15 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
 
           let result: T;
-          result = await runWithContext(
-            stepId,
-            parentId,
-            () => fn(stepContext),
-            currentAttempt + 1,
-            DurableExecutionMode.ExecutionMode,
-          );
+          result = await withStepSpan(stepId, name, async () => {
+            return await runWithContext(
+              stepId,
+              parentId,
+              () => fn(stepContext),
+              currentAttempt + 1,
+              DurableExecutionMode.ExecutionMode,
+            );
+          });
 
           const serializedResult = await safeSerialize(
             serdes,
