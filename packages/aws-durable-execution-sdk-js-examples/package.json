@@ -36,7 +36,7 @@
     "copy-examples": "cp -r dist/examples/*.js dist/examples/*.js.map build/aws-durable-execution-sdk-js-examples",
     "copy-source": "mkdir -p build/source && cp -r src/examples/*.ts build/source/",
     "copy-catalog": "cp examples-catalog.json build/aws-durable-execution-sdk-js-examples/",
-    "generate-sam-template": "node scripts/generate-sam-template.js",
+    "generate-sam-template": "tsx scripts/generate-sam-template.ts",
     "test": "npm run unit-test",
     "test:integration": "NODE_ENV=integration jest --config jest.config.integration.js",
     "pretest-with-sdk-coverage": "node scripts/copy-sdk-source.js",
