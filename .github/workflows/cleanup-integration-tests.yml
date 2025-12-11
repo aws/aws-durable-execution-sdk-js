@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read # This is required for actions/checkout
 
+# Concurrency group for build.yml. This will cancel the cleanup workflow if a new build
+# for the same branch starts
+concurrency:
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,6 +51,7 @@ jobs:
       id-token: write
 
     concurrency:
+      # Concurrency group for integration-test.yml. This will cancel the cleanup if integration tests start for the same branch.
       group: ${{ github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ
 
     strategy:
