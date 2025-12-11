@@ -13,6 +13,7 @@ permissions:
 # for the same branch starts
 concurrency:
   group: ${{ github.head_ref || github.ref_name || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   build:
