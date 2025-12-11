@@ -43,7 +43,7 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: Get AWS Credentials
+      - name: Get AWS Credentials for function scrubber
         id: credentials
         if: github.actor != 'nektos/act'
         uses: aws-actions/configure-aws-credentials@v4
@@ -62,6 +62,15 @@ jobs:
 
       - name: Install awscurl
         run: pip install awscurl
+
+      - name: Get AWS Credentials for log scrubber
+        id: log-credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "${{ secrets.ACTIONS_WEBHOOK_ROLE_ARN }}"
+          role-session-name: "GitHub-PR-${{ github.event.pull_request.number }}-Cleanup"
+          aws-region: ${{ vars.AWS_REGION }}
 
       # TODO: move the logic for this into this repo and also delete logs for main branch
       - name: Cleanup PR log group
