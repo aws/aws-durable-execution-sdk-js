@@ -3,7 +3,11 @@
   "description": "AWS Durable Execution Testing SDK for TypeScript",
   "version": "1.0.0",
   "license": "Apache-2.0",
-  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-testing",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-testing"
+  },
   "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-testing",
   "engines": {
     "node": ">=22"
@@ -12,7 +16,7 @@
   "module": "./dist/index.mjs",
   "types": "./dist-types/index.d.ts",
   "bin": {
-    "run-durable": "./dist/cli/run-durable.js"
+    "run-durable": "dist/cli/run-durable.js"
   },
   "scripts": {
     "clean": "rm -rf dist dist-cjs dist-types node_modules coverage .tsbuildinfo .rollup.cache",

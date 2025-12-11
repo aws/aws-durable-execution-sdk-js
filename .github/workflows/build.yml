@@ -11,7 +11,7 @@ permissions:
 
 # Cancel when pull request is updated
 concurrency:
-  group: ${{ github.head_ref }}-${{ github.run_id}}
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -75,59 +75,3 @@ jobs:
     with:
       node-version: ${{ matrix.node-version }}
     secrets: inherit
-
-  cleanup-integration-tests:
-    needs: [integration-tests]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
-    concurrency:
-      group: ${{ github.head_ref }}-${{ github.run_id }}-${{ matrix.node-version }}-integ
-      cancel-in-progress: true
-
-    strategy:
-      # Clean up functions sequentially to avoid throttling
-      max-parallel: 1
-      fail-fast: false
-      matrix:
-        node-version: ["22.x", "24.x"]
-
-    if: ${{ !failure() }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: "npm"
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: built-artifacts
-          path: .
-
-      - name: Install dependencies
-        run: |
-          npm ci
-
-      - name: Get AWS Credentials
-        id: credentials
-        if: github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
-          role-session-name: githubIntegrationTest
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Cleanup Lambda functions
-        env:
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
-        run: |
-          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only --runtime ${{ matrix.node-version }}

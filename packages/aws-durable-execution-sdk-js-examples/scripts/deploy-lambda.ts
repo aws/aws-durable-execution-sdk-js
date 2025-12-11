@@ -21,6 +21,8 @@ import {
 import { ExamplesWithConfig } from "../src/types";
 import catalog from "@aws/durable-execution-sdk-js-examples/catalog";
 
+const DEBUG = false;
+
 // Types
 interface EnvironmentVariables {
   AWS_ACCOUNT_ID: string;
@@ -174,6 +176,9 @@ async function retryOnConflict<T>(
         error instanceof ResourceConflictException &&
         attempt < maxRetries - 1
       ) {
+        console.warn(
+          `ResourceConflictException encountered: ${error.message}. Retrying ${attempt + 1}/${maxRetries} attempts`,
+        );
         await new Promise((resolve) => setTimeout(resolve, 1000));
         continue;
       }
@@ -265,7 +270,7 @@ async function updateFunction(
     FunctionName: functionName,
     ZipFile: zipBuffer,
   });
-  await retryOnConflict(() => lambdaClient.send(updateCodeCommand));
+  await lambdaClient.send(updateCodeCommand);
 
   // Update environment variables
   console.log("Updating environment variables...");
@@ -279,28 +284,24 @@ async function updateFunction(
     },
   };
 
-  const updateEnvCommand = new UpdateFunctionConfigurationCommand(
-    updateEnvParams,
-  );
-  await retryOnConflict(() => lambdaClient.send(updateEnvCommand));
-
   // Check if DurableConfig needs updating
   if (
     currentRetention !== targetRetention ||
     currentTimeout !== targetTimeout
   ) {
     console.log("DurableConfig differs, updating configuration...");
-    const updateConfigCommand = new UpdateFunctionConfigurationCommand({
-      FunctionName: functionName,
-      DurableConfig: {
-        RetentionPeriodInDays: targetRetention,
-        ExecutionTimeout: targetTimeout,
-      },
-    });
-    await retryOnConflict(() => lambdaClient.send(updateConfigCommand));
+    updateEnvParams.DurableConfig = {
+      RetentionPeriodInDays: targetRetention,
+      ExecutionTimeout: targetTimeout,
+    };
   } else {
     console.log("DurableConfig is up to date");
   }
+
+  const updateEnvCommand = new UpdateFunctionConfigurationCommand(
+    updateEnvParams,
+  );
+  await retryOnConflict(() => lambdaClient.send(updateEnvCommand));
 }
 
 async function showFinalConfiguration(
@@ -347,48 +348,56 @@ async function main(): Promise<void> {
       endpoint: env.LAMBDA_ENDPOINT,
     });
 
-    console.log("Checking if function exists...");
-    let functionExists = await checkFunctionExists(lambdaClient, functionName);
-    let currentConfig: GetFunctionConfigurationCommandOutput;
+    await retryOnConflict(async () => {
+      console.log("Checking if function exists...");
+      let functionExists = await checkFunctionExists(
+        lambdaClient,
+        functionName,
+      );
+      let currentConfig: GetFunctionConfigurationCommandOutput;
 
-    const zipFile = `${example}.zip`;
+      const zipFile = `${example}.zip`;
 
-    const selectedRuntime = mapRuntimeToEnum(runtime);
+      const selectedRuntime = mapRuntimeToEnum(runtime);
 
-    if (functionExists) {
-      currentConfig = await getCurrentConfiguration(lambdaClient, functionName);
-      if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
-        console.log("Deleting function since durable changed");
-        await lambdaClient.send(
-          new DeleteFunctionCommand({
-            FunctionName: functionName,
-          }),
+      if (functionExists) {
+        currentConfig = await getCurrentConfiguration(
+          lambdaClient,
+          functionName,
         );
-        functionExists = false;
+        if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
+          console.log("Deleting function since durable changed");
+          await lambdaClient.send(
+            new DeleteFunctionCommand({
+              FunctionName: functionName,
+            }),
+          );
+          functionExists = false;
+        }
       }
-    }
 
-    if (functionExists) {
-      await updateFunction(
-        lambdaClient,
-        functionName,
-        exampleConfig,
-        zipFile,
-        env,
-        currentConfig!,
-        selectedRuntime,
-      );
-    } else {
-      console.log("Function does not exist");
-      await createFunction(
-        lambdaClient,
-        functionName,
-        exampleConfig,
-        zipFile,
-        env,
-        selectedRuntime,
-      );
-    }
+      if (functionExists) {
+        await updateFunction(
+          lambdaClient,
+          functionName,
+          exampleConfig,
+          zipFile,
+          env,
+          currentConfig!,
+          selectedRuntime,
+        );
+      } else {
+        console.log("Function does not exist");
+        await createFunction(
+          lambdaClient,
+          functionName,
+          exampleConfig,
+          zipFile,
+          env,
+          selectedRuntime,
+        );
+      }
+    });
 
     // Set GITHUB_ENV if running in GitHub Actions
     if (env.GITHUB_ENV) {
@@ -398,8 +407,10 @@ async function main(): Promise<void> {
 
     console.log(`Successfully deployed function: ${functionName}`);
 
-    // Show final configuration
-    await showFinalConfiguration(lambdaClient, functionName);
+    if (DEBUG) {
+      // Show final configuration
+      await showFinalConfiguration(lambdaClient, functionName);
+    }
 
     console.log("Deployment completed successfully!");
   } catch (error) {
