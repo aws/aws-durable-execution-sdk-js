@@ -13,7 +13,9 @@ createTests({
       expect(result.failureCount).toBe(3); // Tasks 1, 2, 3 fail (exceeds threshold of 2)
       expect(result.totalCount).toBe(5);
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, undefined, {
+        invocationCompletedDifference: 1,
+      });
     });
   },
 });
