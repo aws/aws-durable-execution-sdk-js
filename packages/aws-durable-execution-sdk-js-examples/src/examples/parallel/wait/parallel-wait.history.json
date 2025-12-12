@@ -206,6 +206,17 @@
     }
   },
   {
+    "EventType": "InvocationCompleted",
+    "EventId": 19,
+    "EventTimestamp": "2025-12-05T00:16:52.929Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-05T00:16:52.873Z",
+      "EndTimestamp": "2025-12-05T00:16:52.929Z",
+      "Error": {},
+      "RequestId": "5907d455-ef8a-4021-b822-bcffa5dd2d07"
+    }
+  },
+  {
     "EventType": "WaitSucceeded",
     "SubType": "Wait",
     "EventId": 20,
@@ -240,6 +251,17 @@
       "Result": {
         "Payload": "{\"all\":[{\"index\":0,\"status\":\"SUCCEEDED\"},{\"index\":1,\"status\":\"SUCCEEDED\"},{\"index\":2,\"status\":\"SUCCEEDED\"},{\"index\":3,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
       }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 23,
+    "EventTimestamp": "2025-12-05T00:16:55.881Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-05T00:16:55.874Z",
+      "EndTimestamp": "2025-12-05T00:16:55.881Z",
+      "Error": {},
+      "RequestId": "6fa7d6b2-831c-4e48-a0c6-9cb81bdfe3c6"
     }
   },
   {

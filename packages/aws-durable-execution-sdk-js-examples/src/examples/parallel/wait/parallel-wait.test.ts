@@ -26,7 +26,11 @@ createTests({
       expect(wait2SecondsOp.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
 
-      // TODO: Still investigating why local produces 2 events vs CI 4 events
+      // Not compatible with latest changes applied.
+      // There is a good change that this issue is related to
+      // testing library handling PENDING items in a different way than
+      // backend. Backend only cound them after LAn SDK received the changes
+      // in checkpoint response.
       // assertEventSignatures(execution);
     }, 10000);
   },

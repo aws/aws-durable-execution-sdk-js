@@ -20,11 +20,14 @@ export const handler = withDurableExecution(
       "min-successful-items",
       items,
       async (ctx, item, index) => {
-        return await ctx.step(async () => {
-          // Simulate processing time
-          await new Promise((resolve) => setTimeout(resolve, 100 * item));
-          return `Item ${item} processed`;
-        });
+        // Using ctx.step here will prevent us to check minSuccessful if we are trying
+        // to use timeout that is close to checkpopint call latency
+        // The reason is ctx.step is doing checkpoint synchronously and multiple
+        // steps in multiple iterations/branches could finish before map/parallel completion is met
+
+        // Simulate processing time
+        await new Promise((resolve) => setTimeout(resolve, 100 * item));
+        return `Item ${item} processed`;
       },
       {
         completionConfig: {
