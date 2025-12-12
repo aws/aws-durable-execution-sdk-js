@@ -353,6 +353,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Name: name,
     });
 
+    // Mark this run-in-child-context as finished to prevent descendant operations
+    checkpoint.markAncestorFinished(entityId);
+
     log("✅", "Child context completed successfully:", {
       entityId,
       name,
@@ -377,6 +380,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Error: createErrorObjectFromError(error),
       Name: name,
     });
+
+    // Mark this run-in-child-context as finished to prevent descendant operations
+    checkpoint.markAncestorFinished(entityId);
 
     // Reconstruct error from ErrorObject for deterministic behavior
     const errorObject = createErrorObjectFromError(error);
