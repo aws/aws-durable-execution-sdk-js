@@ -37,13 +37,11 @@
     "copy-source": "mkdir -p build/source && cp -r src/examples/*.ts build/source/",
     "copy-catalog": "cp examples-catalog.json build/aws-durable-execution-sdk-js-examples/",
     "generate-sam-template": "tsx scripts/generate-sam-template.ts",
-    "test": "npm run unit-test",
+    "test": "jest && vitest run",
     "test:integration": "NODE_ENV=integration jest --config jest.config.integration.js",
     "pretest-with-sdk-coverage": "node scripts/copy-sdk-source.js",
     "test-with-sdk-coverage": "jest --config jest.config.sdk-coverage.js --collectCoverage",
     "coverage-to-csv": "node scripts/coverage-to-csv.js",
-    "unit-test": "jest --collectCoverage",
-    "unit-test-watch": "jest --watch",
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"
   },
   "dependencies": {
