@@ -46,6 +46,9 @@ export class CheckpointManager implements Checkpoint {
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
 
+  // Parent mapping to track original stepId relationships
+  private parentMapping = new Map<string, string>(); // stepId -> parentId
+
   // Termination cooldown
   private terminationTimer: NodeJS.Timeout | null = null;
   private terminationReason: TerminationReason | null = null;
@@ -67,6 +70,30 @@ export class CheckpointManager implements Checkpoint {
   setTerminating(): void {
     this.isTerminating = true;
     log("🛑", "Checkpoint manager marked as terminating");
+  }
+
+  /**
+   * Checks if any ancestor of the given stepId is finished
+   */
+  private hasFinishedAncestor(
+    stepId: string,
+    data: Partial<OperationUpdate>,
+  ): boolean {
+    // Start with the immediate parent
+    let currentParentId: string | undefined =
+      data.ParentId || this.parentMapping.get(stepId);
+
+    while (currentParentId) {
+      // Check if this ancestor is finished
+      if (this.finishedAncestors.has(currentParentId)) {
+        return true;
+      }
+
+      // Move up to the next ancestor
+      currentParentId = this.parentMapping.get(currentParentId);
+    }
+
+    return false;
   }
 
   async forceCheckpoint(): Promise<void> {
@@ -116,6 +143,17 @@ export class CheckpointManager implements Checkpoint {
     if (this.isTerminating) {
       log("⚠️", "Checkpoint skipped - termination in progress:", { stepId });
       return new Promise(() => {}); // Never resolves during termination
+    }
+
+    // Track parent relationship if ParentId exists
+    if (data.ParentId) {
+      this.parentMapping.set(stepId, data.ParentId);
+    }
+
+    // Check if any ancestor is finished - if so, don't queue and don't resolve
+    if (this.hasFinishedAncestor(stepId, data)) {
+      log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
+      return new Promise(() => {}); // Never resolves when ancestor is finished
     }
 
     return new Promise<void>((resolve, reject) => {
