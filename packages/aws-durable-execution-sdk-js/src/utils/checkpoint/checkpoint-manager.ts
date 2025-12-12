@@ -79,11 +79,19 @@ export class CheckpointManager implements Checkpoint {
 
   /**
    * Checks if any ancestor of the given stepId is finished
+   * Only applies to operations that are descendants of run-in-child-context operations
    */
   private hasFinishedAncestor(
     stepId: string,
     data: Partial<OperationUpdate>,
   ): boolean {
+    // Only check for finished ancestors if this operation has a SubType that indicates
+    // it could be affected by run-in-child-context completion
+    // Parallel operations and other top-level operations should not be affected
+    if (data.SubType === "ParallelBranch" || data.SubType === "Parallel") {
+      return false;
+    }
+
     // Start with the immediate parent from ParentId or extract from stepId
     let currentParentId: string | undefined =
       data.ParentId || this.getParentId(stepId);
