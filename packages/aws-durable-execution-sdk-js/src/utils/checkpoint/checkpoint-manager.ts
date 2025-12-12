@@ -70,6 +70,13 @@ export class CheckpointManager implements Checkpoint {
   }
 
   /**
+   * Mark an ancestor as finished (for run-in-child-context operations)
+   */
+  markAncestorFinished(stepId: string): void {
+    this.finishedAncestors.add(stepId);
+  }
+
+  /**
    * Extract parent ID from hierarchical stepId (e.g., "1-2-3" -\> "1-2")
    */
   private getParentId(stepId: string): string | undefined {
@@ -165,10 +172,6 @@ export class CheckpointManager implements Checkpoint {
     }
 
     return new Promise<void>((resolve, reject) => {
-      if (data.Action === "SUCCEED" || data.Action === "FAIL") {
-        this.finishedAncestors.add(stepId);
-      }
-
       const queuedItem: QueuedCheckpoint = {
         stepId,
         data,

@@ -13,6 +13,7 @@ export interface Checkpoint {
   setTerminating?(): void;
   hasPendingAncestorCompletion?(stepId: string): boolean;
   waitForQueueCompletion(): Promise<void>;
+  markAncestorFinished(stepId: string): void;
 
   // ===== New Methods (Lifecycle & Termination) =====
 
