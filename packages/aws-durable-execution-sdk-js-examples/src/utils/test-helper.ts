@@ -228,7 +228,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       return assertEventSignatures(
         testResult.getHistoryEvents(),
         JSON.parse(readFileSync(historyFilePath).toString("utf-8")),
-        isTimeSkipping,
+        testHelper.isTimeSkipping,
         eventSignatureConfig,
       );
     },
@@ -287,7 +287,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     beforeAll(() =>
       LocalDurableTestRunner.setupTestEnvironment({
         ...testDef.localRunnerConfig,
-        skipTime: isTimeSkipping,
+        skipTime: testHelper.isTimeSkipping,
       }),
     );
     afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
