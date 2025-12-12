@@ -8,7 +8,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner, { isCloud, assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("function completes when callback succeeds - happy case", async () => {
       const executionPromise = runner.run();
 
@@ -37,15 +37,16 @@ createTests({
       assertEventSignatures(execution, "failure");
     });
 
-    // TODO: fix testing lib local runner time scaling to handle timeouts better
-    if (isCloud) {
-      it("function times out when callback is not called - failure case", async () => {
-        const execution = await runner.run();
-
-        expect(execution.getError()).toBeDefined();
-
-        assertEventSignatures(execution, "timed-out");
+    it("function times out when callback is not called - failure case", async () => {
+      const execution = await runner.run({
+        payload: {
+          timeoutSeconds: 1,
+        },
       });
-    }
+
+      expect(execution.getError()).toBeDefined();
+
+      assertEventSignatures(execution, "timed-out");
+    });
   },
 });
