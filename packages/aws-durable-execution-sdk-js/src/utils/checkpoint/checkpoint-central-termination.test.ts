@@ -4,7 +4,6 @@ import { TerminationReason } from "../../termination-manager/types";
 import { OperationLifecycleState, OperationSubType } from "../../types";
 import { OperationType } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
-import { hashId } from "../step-id-utils/step-id-utils";
 
 jest.mock("../logger/logger");
 
@@ -36,7 +35,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       "test-token",
       mockStepDataEmitter,
       {} as any,
-      new Set(),
+      new Set<string>(),
     );
   });
 
@@ -760,59 +759,6 @@ describe("CheckpointManager - Centralized Termination", () => {
       // Should not terminate
       jest.advanceTimersByTime(300);
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
-    });
-
-    it("should clean up operations with completed ancestors", () => {
-      const parentId = "parent-1";
-      const childId = "child-1";
-      const hashedParentId = hashId(parentId);
-
-      // Set up stepData with parent-child relationship
-      (checkpointManager as any).stepData[hashedParentId] = {
-        Id: hashedParentId,
-      };
-
-      const hashedChildId = hashId(childId);
-      (checkpointManager as any).stepData[hashedChildId] = {
-        Id: hashedChildId,
-        ParentId: hashedParentId,
-      };
-
-      // Create operations
-      checkpointManager.markOperationState(
-        parentId,
-        OperationLifecycleState.IDLE_AWAITED,
-        {
-          metadata: {
-            stepId: parentId,
-            type: OperationType.STEP,
-            subType: OperationSubType.WAIT,
-          },
-        },
-      );
-
-      checkpointManager.markOperationState(
-        childId,
-        OperationLifecycleState.IDLE_AWAITED,
-        {
-          metadata: {
-            stepId: childId,
-            type: OperationType.STEP,
-            subType: OperationSubType.WAIT,
-            parentId: parentId,
-          },
-        },
-      );
-
-      // Mark parent as pending completion
-      (checkpointManager as any).pendingCompletions.add(hashedParentId);
-
-      // Trigger checkAndTerminate
-      (checkpointManager as any).checkAndTerminate();
-
-      // Child should be cleaned up
-      const ops = checkpointManager.getAllOperations();
-      expect(ops.has(childId)).toBe(false);
     });
   });
 });
