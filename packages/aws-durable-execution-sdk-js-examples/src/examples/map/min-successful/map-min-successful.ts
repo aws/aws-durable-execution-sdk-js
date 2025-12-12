@@ -20,7 +20,7 @@ export const handler = withDurableExecution(
       "min-successful-items",
       items,
       async (ctx, item, index) => {
-        return await ctx.step(`process-${index}`, async () => {
+        return await ctx.step(async () => {
           // Simulate processing time
           await new Promise((resolve) => setTimeout(resolve, 100 * item));
           return `Item ${item} processed`;
@@ -30,6 +30,7 @@ export const handler = withDurableExecution(
         completionConfig: {
           minSuccessful: 2,
         },
+        itemNamer: (item: number, index: number) => `process-${index}`,
       },
     );
 

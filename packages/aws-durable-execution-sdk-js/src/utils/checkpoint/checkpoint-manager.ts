@@ -88,20 +88,9 @@ export class CheckpointManager implements Checkpoint {
    * Checks if any ancestor of the given stepId is finished
    * Only applies to operations that are descendants of run-in-child-context operations
    */
-  private hasFinishedAncestor(
-    stepId: string,
-    data: Partial<OperationUpdate>,
-  ): boolean {
-    // Only check for finished ancestors if this operation has a SubType that indicates
-    // it could be affected by run-in-child-context completion
-    // Parallel operations and other top-level operations should not be affected
-    if (data.SubType === "ParallelBranch" || data.SubType === "Parallel") {
-      return false;
-    }
-
-    // Start with the immediate parent from ParentId or extract from stepId
-    let currentParentId: string | undefined =
-      data.ParentId || this.getParentId(stepId);
+  private hasFinishedAncestor(stepId: string): boolean {
+    // Only use getParentId to avoid mixing hashed and original stepIds
+    let currentParentId: string | undefined = this.getParentId(stepId);
 
     while (currentParentId) {
       // Check if this ancestor is finished
@@ -112,7 +101,6 @@ export class CheckpointManager implements Checkpoint {
       // Move up to the next ancestor using hierarchical stepId
       currentParentId = this.getParentId(currentParentId);
     }
-
     return false;
   }
 
@@ -166,7 +154,7 @@ export class CheckpointManager implements Checkpoint {
     }
 
     // Check if any ancestor is finished - if so, don't queue and don't resolve
-    if (this.hasFinishedAncestor(stepId, data)) {
+    if (this.hasFinishedAncestor(stepId)) {
       log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
       return new Promise(() => {}); // Never resolves when ancestor is finished
     }

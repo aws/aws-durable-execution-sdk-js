@@ -105,7 +105,14 @@ export function processCheckpointDurableExecution(
     createCheckpointToken(input.CheckpointToken),
   );
 
-  validateCheckpointUpdates(updates, storage.getAllOperationData());
+  validateCheckpointUpdates(updates, storage.operationDataMap);
+
+  console.log(`🧪 TESTING: Registering ${updates.length} checkpoint updates:`);
+  updates.forEach((update, index) => {
+    console.log(
+      `🧪 TESTING: Update ${index}: Id=${update.Id}, Action=${update.Action}, Name=${update.Name}`,
+    );
+  });
   storage.registerUpdates(updates);
 
   const output: CheckpointDurableExecutionResponse = {

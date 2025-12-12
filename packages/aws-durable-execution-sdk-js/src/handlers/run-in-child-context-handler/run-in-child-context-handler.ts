@@ -130,6 +130,9 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         currentStepData?.Status === OperationStatus.SUCCEEDED ||
         currentStepData?.Status === OperationStatus.FAILED
       ) {
+        // Mark this run-in-child-context as finished to prevent descendant operations
+        checkpoint.markAncestorFinished(entityId);
+
         return handleCompletedChildContext(
           context,
           parentContext,
@@ -341,6 +344,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       });
     }
 
+    // Mark this run-in-child-context as finished to prevent descendant operations
+    checkpoint.markAncestorFinished(entityId);
+
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
     checkpoint.checkpoint(entityId, {
       Id: entityId,
@@ -352,9 +358,6 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
       Name: name,
     });
-
-    // Mark this run-in-child-context as finished to prevent descendant operations
-    checkpoint.markAncestorFinished(entityId);
 
     log("✅", "Child context completed successfully:", {
       entityId,
@@ -369,6 +372,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       error,
     });
 
+    // Mark this run-in-child-context as finished to prevent descendant operations
+    checkpoint.markAncestorFinished(entityId);
+
     // Always checkpoint failures
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
     checkpoint.checkpoint(entityId, {
@@ -380,9 +386,6 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Error: createErrorObjectFromError(error),
       Name: name,
     });
-
-    // Mark this run-in-child-context as finished to prevent descendant operations
-    checkpoint.markAncestorFinished(entityId);
 
     // Reconstruct error from ErrorObject for deterministic behavior
     const errorObject = createErrorObjectFromError(error);

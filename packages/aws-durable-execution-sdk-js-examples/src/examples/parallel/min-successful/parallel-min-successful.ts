@@ -17,29 +17,41 @@ export const handler = withDurableExecution(
     const results = await context.parallel(
       "min-successful-branches",
       [
-        async (ctx) => {
-          return await ctx.step("branch-1", async () => {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            return "Branch 1 result";
-          });
+        {
+          name: "branch-1",
+          func: async (ctx) => {
+            return await ctx.step(async () => {
+              await new Promise((resolve) => setTimeout(resolve, 100));
+              return "Branch 1 result";
+            });
+          },
         },
-        async (ctx) => {
-          return await ctx.step("branch-2", async () => {
-            await new Promise((resolve) => setTimeout(resolve, 200));
-            return "Branch 2 result";
-          });
+        {
+          name: "branch-2",
+          func: async (ctx) => {
+            return await ctx.step(async () => {
+              await new Promise((resolve) => setTimeout(resolve, 200));
+              return "Branch 2 result";
+            });
+          },
         },
-        async (ctx) => {
-          return await ctx.step("branch-3", async () => {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            return "Branch 3 result";
-          });
+        {
+          name: "branch-3",
+          func: async (ctx) => {
+            return await ctx.step(async () => {
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              return "Branch 3 result";
+            });
+          },
         },
-        async (ctx) => {
-          return await ctx.step("branch-4", async () => {
-            await new Promise((resolve) => setTimeout(resolve, 400));
-            return "Branch 4 result";
-          });
+        {
+          name: "branch-4",
+          func: async (ctx) => {
+            return await ctx.step(async () => {
+              await new Promise((resolve) => setTimeout(resolve, 400));
+              return "Branch 4 result";
+            });
+          },
         },
       ],
       {
