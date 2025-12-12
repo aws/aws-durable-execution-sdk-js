@@ -26,7 +26,7 @@ createTests({
       expect(wait2SecondsOp.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
 
-      // TODO: Investigate difference between local (2 events) and CI (4 events) behavior
+      // TODO: Still investigating why local produces 2 events vs CI 4 events
       // assertEventSignatures(execution);
     }, 10000);
   },
