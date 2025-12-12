@@ -46,9 +46,6 @@ export class CheckpointManager implements Checkpoint {
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
 
-  // Parent mapping to track original stepId relationships
-  private parentMapping = new Map<string, string>(); // stepId -> parentId
-
   // Termination cooldown
   private terminationTimer: NodeJS.Timeout | null = null;
   private terminationReason: TerminationReason | null = null;
@@ -73,15 +70,23 @@ export class CheckpointManager implements Checkpoint {
   }
 
   /**
+   * Extract parent ID from hierarchical stepId (e.g., "1-2-3" -\> "1-2")
+   */
+  private getParentId(stepId: string): string | undefined {
+    const lastDashIndex = stepId.lastIndexOf("-");
+    return lastDashIndex > 0 ? stepId.substring(0, lastDashIndex) : undefined;
+  }
+
+  /**
    * Checks if any ancestor of the given stepId is finished
    */
   private hasFinishedAncestor(
     stepId: string,
     data: Partial<OperationUpdate>,
   ): boolean {
-    // Start with the immediate parent
+    // Start with the immediate parent from ParentId or extract from stepId
     let currentParentId: string | undefined =
-      data.ParentId || this.parentMapping.get(stepId);
+      data.ParentId || this.getParentId(stepId);
 
     while (currentParentId) {
       // Check if this ancestor is finished
@@ -89,8 +94,8 @@ export class CheckpointManager implements Checkpoint {
         return true;
       }
 
-      // Move up to the next ancestor
-      currentParentId = this.parentMapping.get(currentParentId);
+      // Move up to the next ancestor using hierarchical stepId
+      currentParentId = this.getParentId(currentParentId);
     }
 
     return false;
@@ -143,11 +148,6 @@ export class CheckpointManager implements Checkpoint {
     if (this.isTerminating) {
       log("⚠️", "Checkpoint skipped - termination in progress:", { stepId });
       return new Promise(() => {}); // Never resolves during termination
-    }
-
-    // Track parent relationship if ParentId exists
-    if (data.ParentId) {
-      this.parentMapping.set(stepId, data.ParentId);
     }
 
     // Check if any ancestor is finished - if so, don't queue and don't resolve
