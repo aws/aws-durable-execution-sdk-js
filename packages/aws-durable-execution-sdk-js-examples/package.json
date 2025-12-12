@@ -16,9 +16,9 @@
       "types": "./dist/examples/*"
     },
     "./catalog": {
+      "types": "./dist/utils/examples-catalog.d.ts",
       "require": "./dist/examples-catalog.js",
-      "import": "./dist/examples-catalog.js",
-      "types": "./dist/utils/examples-catalog.d.ts"
+      "import": "./dist/examples-catalog.js"
     }
   },
   "scripts": {
@@ -74,7 +74,8 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^8.29.0"
+    "typescript-eslint": "^8.29.0",
+    "vitest": "^4.0.15"
   },
   "private": true
 }

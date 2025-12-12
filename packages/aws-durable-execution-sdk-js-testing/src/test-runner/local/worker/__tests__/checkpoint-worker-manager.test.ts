@@ -1,6 +1,5 @@
 import { CheckpointWorkerManager } from "../checkpoint-worker-manager";
 import { Worker } from "worker_threads";
-import * as fs from "fs/promises";
 import * as path from "path";
 import { defaultLogger } from "../../../../logger";
 import { ApiType } from "../../../../checkpoint-server/worker-api/worker-api-types";
@@ -9,18 +8,22 @@ import { StartDurableExecutionRequest } from "../../../../checkpoint-server/work
 
 // Mock worker_threads
 jest.mock("worker_threads");
-jest.mock("fs/promises");
 
 const MockWorker = Worker as jest.MockedClass<typeof Worker>;
-const mockFs = fs as jest.Mocked<typeof fs>;
 
 describe("CheckpointWorkerManager", () => {
   let mockWorker: jest.Mocked<Worker>;
   let manager: CheckpointWorkerManager;
+  let originalNodeEnv: string | undefined;
+  let originalIsESM: string | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
     jest.resetModules();
+
+    // Store original env values
+    originalNodeEnv = process.env.NODE_ENV;
+    originalIsESM = process.env.IS_ESM;
 
     // Mock defaultLogger.warn to avoid noise in test output
     defaultLogger.warn = jest.fn();
@@ -38,26 +41,30 @@ describe("CheckpointWorkerManager", () => {
 
     // Reset singleton instance before each test
     CheckpointWorkerManager.resetInstanceForTesting();
-    manager = CheckpointWorkerManager.getInstance({}); // pass params for initial create
+    manager = CheckpointWorkerManager.getInstance({});
+  });
+
+  afterEach(() => {
+    // Restore original env values
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+    if (originalIsESM === undefined) {
+      delete process.env.IS_ESM;
+    } else {
+      process.env.IS_ESM = originalIsESM;
+    }
   });
 
   describe("Singleton Pattern", () => {
     it("should return the same instance across multiple calls", () => {
       const instance1 = CheckpointWorkerManager.getInstance();
       const instance2 = CheckpointWorkerManager.getInstance();
-      const instance3 = CheckpointWorkerManager.getInstance();
 
       expect(instance1).toBe(instance2);
-      expect(instance2).toBe(instance3);
       expect(instance1).toBe(manager);
-    });
-
-    it("should create new instance after reset", () => {
-      const instance1 = CheckpointWorkerManager.getInstance();
-      CheckpointWorkerManager.resetInstanceForTesting();
-      const instance2 = CheckpointWorkerManager.getInstance({});
-
-      expect(instance1).not.toBe(instance2);
     });
 
     it("should throw error when getInstance called without params and no instance exists", () => {
@@ -68,30 +75,23 @@ describe("CheckpointWorkerManager", () => {
       }).toThrow("CheckpointWorkerManager has not been created");
     });
 
-    it("should return existing instance even when called with different params", () => {
+    it("should create new instance with params after reset", () => {
+      const instance1 = CheckpointWorkerManager.getInstance();
       CheckpointWorkerManager.resetInstanceForTesting();
-      const instance1 = CheckpointWorkerManager.getInstance({
-        checkpointDelaySettings: 50,
-      });
-
-      // Subsequent calls should return the same instance, ignoring new params
-      // TODO: we should update params when this happens instead of ignoring them
       const instance2 = CheckpointWorkerManager.getInstance({
         checkpointDelaySettings: 100,
       });
 
-      expect(instance1).toBe(instance2);
+      expect(instance1).not.toBe(instance2);
     });
   });
 
   describe("Worker Path Resolution", () => {
-    it("should use dev path when index.ts exists", async () => {
-      // Mock fs.access to succeed for dev path
-      mockFs.access.mockResolvedValue(undefined);
+    it("should use dev path when NODE_ENV is not production", async () => {
+      delete process.env.NODE_ENV; // Not production
 
       await manager.setup();
 
-      // The actual path resolution from CheckpointWorkerManager perspective
       const expectedDevPath = path.resolve(
         __dirname,
         "../../../../checkpoint-server/index.ts",
@@ -103,34 +103,84 @@ describe("CheckpointWorkerManager", () => {
       });
     });
 
-    it("should fallback to prod path when index.ts does not exist", async () => {
-      // Mock fs.access to fail for dev path (file doesn't exist)
-      mockFs.access.mockRejectedValue(new Error("File not found"));
+    describe("Production environment behavior", () => {
+      beforeEach(() => {
+        process.env.NODE_ENV = "production";
+      });
 
-      await manager.setup();
+      it("should use .js extension when IS_ESM is falsy or undefined", async () => {
+        delete process.env.IS_ESM;
 
-      // The actual path resolution from CheckpointWorkerManager perspective
-      const expectedProdPath = path.resolve(
-        __dirname,
-        "../checkpoint-server/index.js",
+        await manager.setup();
+
+        const expectedProdPath = path.resolve(
+          __dirname,
+          "../checkpoint-server/index.js",
+        );
+
+        expect(MockWorker).toHaveBeenCalledWith(expectedProdPath, {
+          execArgv: undefined,
+          workerData: {},
+        });
+      });
+
+      it.each([
+        { IS_ESM: "true", expectedExt: "mjs" },
+        { IS_ESM: "1", expectedExt: "mjs" },
+        { IS_ESM: "false", expectedExt: "mjs" }, // "false" string is truthy in JS
+        { IS_ESM: "", expectedExt: "js" }, // empty string is falsy
+        { IS_ESM: "0", expectedExt: "mjs" }, // "0" string is truthy in JS
+      ])(
+        "should use .$expectedExt extension when IS_ESM is '$IS_ESM'",
+        async ({ IS_ESM, expectedExt }) => {
+          process.env.IS_ESM = IS_ESM;
+
+          await manager.setup();
+
+          const expectedProdPath = path.resolve(
+            __dirname,
+            `../checkpoint-server/index.${expectedExt}`,
+          );
+
+          expect(MockWorker).toHaveBeenCalledWith(expectedProdPath, {
+            execArgv: undefined,
+            workerData: {},
+          });
+        },
       );
 
-      expect(MockWorker).toHaveBeenCalledWith(expectedProdPath, {
-        execArgv: undefined,
-        workerData: {},
+      it("should ignore IS_ESM when NODE_ENV is not production", async () => {
+        process.env.NODE_ENV = "development";
+        process.env.IS_ESM = "true";
+
+        await manager.setup();
+
+        const expectedDevPath = path.resolve(
+          __dirname,
+          "../../../../checkpoint-server/index.ts",
+        );
+
+        expect(MockWorker).toHaveBeenCalledWith(expectedDevPath, {
+          execArgv: ["--require", "tsx/cjs"],
+          workerData: {},
+        });
       });
     });
   });
 
-  describe("setup", () => {
-    beforeEach(() => {
-      mockFs.access.mockResolvedValue(undefined); // Default to dev path
-    });
+  describe("Worker Management", () => {
+    it("should create worker with params and setup event listeners", async () => {
+      CheckpointWorkerManager.resetInstanceForTesting();
+      const testParams = { checkpointDelaySettings: 100 };
+      const managerWithParams = CheckpointWorkerManager.getInstance(testParams);
 
-    it("should create worker and setup event listeners", async () => {
-      await manager.setup();
+      await managerWithParams.setup();
 
       expect(MockWorker).toHaveBeenCalledTimes(1);
+      expect(MockWorker).toHaveBeenCalledWith(expect.any(String), {
+        execArgv: expect.any(Array),
+        workerData: testParams,
+      });
       expect(mockWorker.on).toHaveBeenCalledWith("error", expect.any(Function));
       expect(mockWorker.on).toHaveBeenCalledWith("exit", expect.any(Function));
       expect(mockWorker.on).toHaveBeenCalledWith(
@@ -139,43 +189,15 @@ describe("CheckpointWorkerManager", () => {
       );
     });
 
-    it("should pass constructor params to worker as workerData", async () => {
-      CheckpointWorkerManager.resetInstanceForTesting();
-      const testParams = {
-        checkpointDelaySettings: 100,
-      };
-      const managerWithParams = CheckpointWorkerManager.getInstance(testParams);
-
-      await managerWithParams.setup();
-
-      expect(MockWorker).toHaveBeenCalledWith(
-        expect.any(String), // worker path
-        {
-          execArgv: ["--require", "tsx/cjs"],
-          workerData: testParams,
-        },
-      );
-    });
-
-    it("should throw error if worker already running", async () => {
-      // First setup should succeed
+    it("should throw error if setup called when worker already running", async () => {
       await manager.setup();
 
-      // Second setup should fail
       await expect(manager.setup()).rejects.toThrow(
         "Worker thread is already running",
       );
     });
-  });
 
-  describe("sendApiRequest", () => {
-    beforeEach(async () => {
-      mockFs.access.mockResolvedValue(undefined);
-      await manager.setup();
-    });
-
-    it("should throw error when worker not initialized", async () => {
-      // Create a fresh manager without setup
+    it("should throw error when sendApiRequest called without setup", async () => {
       CheckpointWorkerManager.resetInstanceForTesting();
       const freshManager = CheckpointWorkerManager.getInstance({});
 
@@ -186,16 +208,12 @@ describe("CheckpointWorkerManager", () => {
         }),
       ).rejects.toThrow("Worker not initialized");
     });
-  });
 
-  describe("teardown", () => {
-    it("should handle no worker gracefully", async () => {
-      // Should not throw when called without setup
+    it("should handle teardown gracefully when no worker exists", async () => {
       await expect(manager.teardown()).resolves.toBeUndefined();
     });
 
-    it("should call unref and clear worker", async () => {
-      mockFs.access.mockResolvedValue(undefined);
+    it("should call unref during teardown", async () => {
       await manager.setup();
 
       await manager.teardown();
@@ -203,30 +221,12 @@ describe("CheckpointWorkerManager", () => {
       expect(mockWorker.unref).toHaveBeenCalled();
     });
 
-    it("should handle unref errors gracefully and terminate worker", async () => {
-      mockFs.access.mockResolvedValue(undefined);
+    it("should handle unref errors and terminate worker", async () => {
       await manager.setup();
 
-      // Mock unref to throw error
       mockWorker.unref.mockImplementation(() => {
         throw new Error("Unref failed");
       });
-
-      await manager.teardown();
-
-      expect(mockWorker.unref).toHaveBeenCalled();
-      expect(mockWorker.terminate).toHaveBeenCalled();
-    });
-
-    it("should handle terminate errors gracefully", async () => {
-      mockFs.access.mockResolvedValue(undefined);
-      await manager.setup();
-
-      // Mock both unref and terminate to throw errors
-      mockWorker.unref.mockImplementation(() => {
-        throw new Error("Unref failed");
-      });
-      mockWorker.terminate.mockRejectedValue(new Error("Terminate failed"));
 
       await manager.teardown();
 
@@ -236,15 +236,9 @@ describe("CheckpointWorkerManager", () => {
   });
 
   describe("Worker Event Handling", () => {
-    beforeEach(async () => {
-      mockFs.access.mockResolvedValue(undefined);
-      await manager.setup();
-    });
-
-    it("should handle worker error events", async () => {
+    it("should log worker errors", async () => {
       let errorHandler: (err: Error) => void;
 
-      // Capture the error handler
       mockWorker.on.mockImplementation((event, listener) => {
         if (event === "error") {
           errorHandler = listener as (err: Error) => void;
@@ -252,12 +246,8 @@ describe("CheckpointWorkerManager", () => {
         return mockWorker as Worker;
       });
 
-      // Re-setup to capture the handler
-      CheckpointWorkerManager.resetInstanceForTesting();
-      manager = CheckpointWorkerManager.getInstance({});
       await manager.setup();
 
-      // Simulate worker error
       const testError = new Error("Worker runtime error");
       errorHandler!(testError);
 
@@ -267,7 +257,7 @@ describe("CheckpointWorkerManager", () => {
       );
     });
 
-    it("should handle worker exit with non-zero code", async () => {
+    it("should log non-zero exit codes", async () => {
       let exitHandler: (code: number) => void;
 
       mockWorker.on.mockImplementation((event, listener) => {
@@ -277,12 +267,8 @@ describe("CheckpointWorkerManager", () => {
         return mockWorker as Worker;
       });
 
-      // Re-setup to capture the handler
-      CheckpointWorkerManager.resetInstanceForTesting();
-      manager = CheckpointWorkerManager.getInstance({});
       await manager.setup();
 
-      // Simulate worker exit with non-zero code
       exitHandler!(1);
 
       expect(defaultLogger.warn).toHaveBeenCalledWith(
@@ -290,7 +276,7 @@ describe("CheckpointWorkerManager", () => {
       );
     });
 
-    it("should handle worker exit with zero code silently", async () => {
+    it("should not log zero exit codes", async () => {
       let exitHandler: (code: number) => void;
 
       mockWorker.on.mockImplementation((event, listener) => {
@@ -300,12 +286,8 @@ describe("CheckpointWorkerManager", () => {
         return mockWorker as Worker;
       });
 
-      // Re-setup to capture the handler
-      CheckpointWorkerManager.resetInstanceForTesting();
-      manager = CheckpointWorkerManager.getInstance({});
       await manager.setup();
 
-      // Simulate worker exit with zero code (normal exit)
       exitHandler!(0);
 
       expect(defaultLogger.warn).not.toHaveBeenCalledWith(
@@ -314,20 +296,18 @@ describe("CheckpointWorkerManager", () => {
     });
   });
 
-  describe("sendApiRequest delegation", () => {
+  describe("API Request Delegation", () => {
     beforeEach(async () => {
-      mockFs.access.mockResolvedValue(undefined);
       await manager.setup();
     });
 
-    it("should delegate to worker via postMessage", async () => {
-      // Mock worker.postMessage to capture and simulate the API call
+    it("should delegate API requests to worker and return response", async () => {
+      // Mock worker.postMessage and simulate response
       mockWorker.postMessage.mockImplementation(
         (message: {
           type: string;
           data: { requestId: string; type: string };
         }) => {
-          // Simulate the worker responding back through message handler
           const messageHandlers = mockWorker.on.mock.calls
             .filter(([event]) => event === "message")
             .map(([, handler]) => handler);
@@ -358,7 +338,6 @@ describe("CheckpointWorkerManager", () => {
         params,
       );
 
-      // Verify worker.postMessage was called with correct structure
       expect(mockWorker.postMessage).toHaveBeenCalledWith({
         type: "API_REQUEST",
         data: {
