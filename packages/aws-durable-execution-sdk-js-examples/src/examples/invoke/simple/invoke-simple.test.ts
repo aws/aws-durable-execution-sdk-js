@@ -7,8 +7,6 @@ import { handler as nonDurableHandler } from "../../non-durable/non-durable";
 import { handler as namedStepHandler } from "../../step/named/step-named";
 
 createTests({
-  name: "invoke-simple",
-  functionName: "invoke-simple",
   handler,
   tests: function (runner, { functionNameMap }) {
     it("should run invoke with basic wait state", async () => {

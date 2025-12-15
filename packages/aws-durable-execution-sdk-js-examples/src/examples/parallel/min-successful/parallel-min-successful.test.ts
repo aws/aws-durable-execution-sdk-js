@@ -3,8 +3,6 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Parallel minSuccessful",
-  functionName: "parallel-min-successful",
   localRunnerConfig: {
     skipTime: false,
   },

@@ -6,8 +6,6 @@ import { handler } from "./wait-for-callback-submitter-retry-success";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-submitter-retry-success test",
-  functionName: "wait-for-callback-submitter-retry-success",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

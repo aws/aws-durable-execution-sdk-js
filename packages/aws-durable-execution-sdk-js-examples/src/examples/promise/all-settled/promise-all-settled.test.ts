@@ -1,10 +1,7 @@
 import { handler } from "./promise-all-settled";
-import historyEvents from "./promise-all-settled.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests<PromiseSettledResult<any>[]>({
-  name: "promise-all-settled test",
-  functionName: "promise-all-settled",
   handler,
   localRunnerConfig: {
     skipTime: false,
@@ -34,7 +31,7 @@ createTests<PromiseSettledResult<any>[]>({
         },
       ]);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 30000);
   },
 });

@@ -7,8 +7,6 @@ import { handler } from "./wait-for-callback-mixed-ops";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-mixed-ops test",
-  functionName: "wait-for-callback-mixed-ops",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

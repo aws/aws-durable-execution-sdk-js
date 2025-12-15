@@ -3,8 +3,6 @@ import { handler } from "./wait-for-callback-submitter-failure-catchable";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-submitter-failure-catchable test",
-  functionName: "wait-for-callback-submitter-failure-catchable",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

@@ -7,8 +7,6 @@ import { CustomData, handler } from "./wait-for-callback-serdes";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-serdes test",
-  functionName: "wait-for-callback-serdes",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

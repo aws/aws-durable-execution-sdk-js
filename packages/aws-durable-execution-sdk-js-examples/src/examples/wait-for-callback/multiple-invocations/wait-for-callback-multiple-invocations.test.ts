@@ -6,8 +6,6 @@ import { handler } from "./wait-for-callback-multiple-invocations";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback multiple invocations test",
-  functionName: "wait-for-callback-multiple-invocations",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

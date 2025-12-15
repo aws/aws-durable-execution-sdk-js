@@ -3,8 +3,6 @@ import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "force-checkpointing",
-  functionName: "force-checkpointing",
   handler,
   tests: (runner) => {
     it("should complete with force checkpointing when one branch blocks termination", async () => {

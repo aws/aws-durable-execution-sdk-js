@@ -2,8 +2,6 @@ import { handler } from "./parallel-failure-threshold-exceeded-percentage";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "Parallel failure threshold exceeded percentage",
-  functionName: "parallel-failure-threshold-exceeded-percentage",
   handler,
   tests: (runner) => {
     it("should return FAILURE_TOLERANCE_EXCEEDED when failure percentage exceeds threshold", async () => {

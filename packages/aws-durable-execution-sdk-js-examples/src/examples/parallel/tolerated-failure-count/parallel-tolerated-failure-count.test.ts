@@ -3,8 +3,6 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Parallel toleratedFailureCount",
-  functionName: "parallel-tolerated-failure-count",
   handler,
   tests: (runner) => {
     it("should complete when failure tolerance is reached", async () => {

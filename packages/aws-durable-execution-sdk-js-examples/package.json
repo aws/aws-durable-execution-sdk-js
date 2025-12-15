@@ -16,9 +16,9 @@
       "types": "./dist/examples/*"
     },
     "./catalog": {
+      "types": "./dist/utils/examples-catalog.d.ts",
       "require": "./dist/examples-catalog.js",
-      "import": "./dist/examples-catalog.js",
-      "types": "./dist/utils/examples-catalog.d.ts"
+      "import": "./dist/examples-catalog.js"
     }
   },
   "scripts": {
@@ -36,14 +36,12 @@
     "copy-examples": "cp -r dist/examples/*.js dist/examples/*.js.map build/aws-durable-execution-sdk-js-examples",
     "copy-source": "mkdir -p build/source && cp -r src/examples/*.ts build/source/",
     "copy-catalog": "cp examples-catalog.json build/aws-durable-execution-sdk-js-examples/",
-    "generate-sam-template": "node scripts/generate-sam-template.js",
-    "test": "npm run unit-test",
+    "generate-sam-template": "tsx scripts/generate-sam-template.ts",
+    "test": "jest && vitest run",
     "test:integration": "NODE_ENV=integration jest --config jest.config.integration.js",
     "pretest-with-sdk-coverage": "node scripts/copy-sdk-source.js",
     "test-with-sdk-coverage": "jest --config jest.config.sdk-coverage.js --collectCoverage",
     "coverage-to-csv": "node scripts/coverage-to-csv.js",
-    "unit-test": "jest --collectCoverage",
-    "unit-test-watch": "jest --watch",
     "prettier": "prettier --write './src/**/*.*' && prettier --write './test/**/*.*'"
   },
   "dependencies": {
@@ -74,7 +72,8 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^8.29.0"
+    "typescript-eslint": "^8.29.0",
+    "vitest": "^4.0.15"
   },
   "private": true
 }

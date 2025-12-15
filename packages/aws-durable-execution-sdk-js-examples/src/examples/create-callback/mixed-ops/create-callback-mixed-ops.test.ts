@@ -7,8 +7,6 @@ import { handler } from "./create-callback-mixed-ops";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "create-callback-mixed-ops test",
-  functionName: "create-callback-mixed-ops",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

@@ -6,8 +6,6 @@ import { handler } from "./parallel-min-successful-callback";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "parallel-min-successful-callback test",
-  functionName: "parallel-min-successful-callback",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {

@@ -3,8 +3,6 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Map toleratedFailurePercentage",
-  functionName: "map-tolerated-failure-percentage",
   handler,
   tests: (runner) => {
     it("should complete with acceptable failure percentage", async () => {

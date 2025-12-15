@@ -1,10 +1,7 @@
 import { handler } from "./comprehensive-operations";
-import historyEvents from "./comprehensive-operations.history.json";
 import { createTests } from "../../utils/test-helper";
 
 createTests({
-  name: "comprehensive-operations test",
-  functionName: "comprehensive-operations",
   handler,
   tests: (runner, { assertEventSignatures }) => {
     it("should execute all operations successfully", async () => {
@@ -95,7 +92,7 @@ createTests({
       expect(execution.getResult()).toBeDefined();
       expect(execution.getOperations().length).toBeGreaterThan(0);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     });
   },
 });

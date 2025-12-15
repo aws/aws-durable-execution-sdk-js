@@ -1,10 +1,7 @@
 import { handler } from "./parallel-wait";
-import historyEvents from "./parallel-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "parallel-wait test",
-  functionName: "parallel-wait",
   localRunnerConfig: {
     skipTime: false,
   },
@@ -29,7 +26,7 @@ createTests({
       expect(wait2SecondsOp.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 10000);
   },
 });

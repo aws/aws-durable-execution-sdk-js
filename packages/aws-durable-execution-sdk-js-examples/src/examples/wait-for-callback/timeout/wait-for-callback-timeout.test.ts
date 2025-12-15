@@ -3,8 +3,6 @@ import { handler } from "./wait-for-callback-timeout";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-timeout test",
-  functionName: "wait-for-callback-timeout",
   handler,
   invocationType: InvocationType.Event,
   tests: (runner) => {
