@@ -16,7 +16,7 @@
   "module": "./dist/index.mjs",
   "types": "./dist-types/index.d.ts",
   "bin": {
-    "run-durable": "dist/cli/run-durable.js"
+    "run-durable": "dist/cli/run-durable.mjs"
   },
   "scripts": {
     "clean": "rm -rf dist dist-cjs dist-types node_modules coverage .tsbuildinfo .rollup.cache",
@@ -28,7 +28,7 @@
     "lint": "eslint --fix",
     "prebuild": "npm run lint",
     "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
-    "run-durable": "tsx src/cli/run-durable.ts"
+    "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --"
   },
   "exports": {
     ".": {
@@ -63,7 +63,8 @@
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.943.0",
     "@sinonjs/fake-timers": "^13.0.5",
-    "@smithy/smithy-client": "^4.9.1"
+    "@smithy/smithy-client": "^4.9.1",
+    "commander": "^14.0.2"
   },
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": "*"
