@@ -106,6 +106,7 @@ export function processCheckpointDurableExecution(
   );
 
   validateCheckpointUpdates(updates, storage.getAllOperationData());
+
   storage.registerUpdates(updates);
 
   const output: CheckpointDurableExecutionResponse = {

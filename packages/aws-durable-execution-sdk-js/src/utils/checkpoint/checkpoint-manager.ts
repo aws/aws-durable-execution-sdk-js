@@ -2,8 +2,6 @@ import {
   CheckpointDurableExecutionRequest,
   OperationUpdate,
   Operation,
-  OperationStatus,
-  OperationAction,
 } from "@aws-sdk/client-lambda";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
@@ -61,7 +59,7 @@ export class CheckpointManager implements Checkpoint {
     initialTaskToken: string,
     private stepDataEmitter: EventEmitter,
     private logger: DurableLogger,
-    private pendingCompletions: Set<string>,
+    private finishedAncestors: Set<string>,
   ) {
     this.currentTaskToken = initialTaskToken;
   }
@@ -72,60 +70,37 @@ export class CheckpointManager implements Checkpoint {
   }
 
   /**
-   * Checks if a step ID or any of its ancestors has a pending completion
+   * Mark an ancestor as finished (for run-in-child-context operations)
    */
-  hasPendingAncestorCompletion(stepId: string): boolean {
-    let currentHashedId: string | undefined = hashId(stepId);
-
-    while (currentHashedId) {
-      if (this.pendingCompletions.has(currentHashedId)) {
-        return true;
-      }
-
-      const operation: Operation | undefined = this.stepData[currentHashedId];
-      currentHashedId = operation?.ParentId;
-    }
-
-    return false;
+  markAncestorFinished(stepId: string): void {
+    this.finishedAncestors.add(stepId);
   }
 
   /**
-   * Checks if a step ID or any of its ancestors is already finished
-   * (either in stepData as SUCCEEDED/FAILED or in pendingCompletions)
+   * Extract parent ID from hierarchical stepId (e.g., "1-2-3" -\> "1-2")
    */
-  private hasFinishedAncestor(
-    stepId: string,
-    data: Partial<OperationUpdate>,
-  ): boolean {
-    // Start with the parent from the operation data, or fall back to stepData
-    let currentHashedId: string | undefined = data.ParentId
-      ? hashId(data.ParentId)
-      : undefined;
+  private getParentId(stepId: string): string | undefined {
+    const lastDashIndex = stepId.lastIndexOf("-");
+    return lastDashIndex > 0 ? stepId.substring(0, lastDashIndex) : undefined;
+  }
 
-    // If no ParentId in operation data, check if step exists in stepData
-    if (!currentHashedId) {
-      const currentOperation = this.stepData[hashId(stepId)];
-      currentHashedId = currentOperation?.ParentId;
-    }
+  /**
+   * Checks if any ancestor of the given stepId is finished
+   * Only applies to operations that are descendants of run-in-child-context operations
+   */
+  private hasFinishedAncestor(stepId: string): boolean {
+    // Only use getParentId to avoid mixing hashed and original stepIds
+    let currentParentId: string | undefined = this.getParentId(stepId);
 
-    while (currentHashedId) {
-      // Check if ancestor has pending completion
-      if (this.pendingCompletions.has(currentHashedId)) {
+    while (currentParentId) {
+      // Check if this ancestor is finished
+      if (this.finishedAncestors.has(currentParentId)) {
         return true;
       }
 
-      // Check if ancestor is already finished in stepData
-      const operation: Operation | undefined = this.stepData[currentHashedId];
-      if (
-        operation?.Status === OperationStatus.SUCCEEDED ||
-        operation?.Status === OperationStatus.FAILED
-      ) {
-        return true;
-      }
-
-      currentHashedId = operation?.ParentId;
+      // Move up to the next ancestor using hierarchical stepId
+      currentParentId = this.getParentId(currentParentId);
     }
-
     return false;
   }
 
@@ -178,20 +153,13 @@ export class CheckpointManager implements Checkpoint {
       return new Promise(() => {}); // Never resolves during termination
     }
 
-    // Check if any ancestor is finished - if so, don't checkpoint and don't resolve
-    if (this.hasFinishedAncestor(stepId, data)) {
+    // Check if any ancestor is finished - if so, don't queue and don't resolve
+    if (this.hasFinishedAncestor(stepId)) {
       log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
       return new Promise(() => {}); // Never resolves when ancestor is finished
     }
 
     return new Promise<void>((resolve, reject) => {
-      if (
-        data.Action === OperationAction.SUCCEED ||
-        data.Action === OperationAction.FAIL
-      ) {
-        this.pendingCompletions.add(stepId);
-      }
-
       const queuedItem: QueuedCheckpoint = {
         stepId,
         data,
@@ -289,7 +257,6 @@ export class CheckpointManager implements Checkpoint {
     this.isProcessing = true;
 
     const batch: QueuedCheckpoint[] = [];
-    let skippedCount = 0;
     const baseSize = this.currentTaskToken.length + 100;
     let currentSize = baseSize;
 
@@ -304,16 +271,6 @@ export class CheckpointManager implements Checkpoint {
       }
 
       this.queue.shift();
-
-      if (this.hasFinishedAncestor(nextItem.stepId, nextItem.data)) {
-        log("⚠️", "Checkpoint skipped - ancestor finished:", {
-          stepId: nextItem.stepId,
-          parentId: nextItem.data.ParentId,
-        });
-        skippedCount++;
-        continue;
-      }
-
       batch.push(nextItem);
       currentSize += itemSize;
     }
@@ -331,12 +288,6 @@ export class CheckpointManager implements Checkpoint {
       }
 
       batch.forEach((item) => {
-        if (
-          item.data.Action === OperationAction.SUCCEED ||
-          item.data.Action === OperationAction.FAIL
-        ) {
-          this.pendingCompletions.delete(item.stepId);
-        }
         item.resolve();
       });
 
@@ -347,7 +298,6 @@ export class CheckpointManager implements Checkpoint {
 
       log("✅", "Checkpoint batch processed successfully:", {
         batchSize: batch.length,
-        skippedCount,
         forceRequests: forcePromises.length,
         newTaskToken: this.currentTaskToken,
       });
@@ -662,10 +612,12 @@ export class CheckpointManager implements Checkpoint {
         op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
         op.state === OperationLifecycleState.IDLE_AWAITED
       ) {
-        if (this.hasPendingAncestorCompletion(op.stepId)) {
+        // Use the original stepId from metadata, not the potentially hashed op.stepId
+        const originalStepId = op.metadata.stepId;
+        if (this.hasFinishedAncestor(originalStepId)) {
           log(
             "🧹",
-            `Cleaning up operation with completed ancestor: ${op.stepId}`,
+            `Cleaning up operation with completed ancestor: ${originalStepId}`,
           );
           this.cleanupOperation(op.stepId);
           this.operations.delete(op.stepId);

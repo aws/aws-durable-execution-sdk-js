@@ -54,6 +54,7 @@ describe("Run In Child Context Integration Tests", () => {
         force: jest.fn(),
         setTerminating: jest.fn(),
         hasPendingAncestorCompletion: jest.fn(),
+        markAncestorFinished: jest.fn(),
         markOperationState: jest.fn(),
         markOperationAwaited: jest.fn(),
         waitForStatusChange: jest.fn().mockResolvedValue(undefined),

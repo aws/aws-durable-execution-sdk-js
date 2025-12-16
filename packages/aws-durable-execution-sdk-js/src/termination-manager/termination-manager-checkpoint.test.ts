@@ -27,7 +27,6 @@ const createCheckpoint = (
     manager.checkpoint(stepId, data);
   checkpoint.force = (): Promise<any> => manager.forceCheckpoint();
   checkpoint.setTerminating = (): void => manager.setTerminating();
-  checkpoint.hasPendingAncestorCompletion = (): boolean => false;
   return checkpoint;
 };
 
