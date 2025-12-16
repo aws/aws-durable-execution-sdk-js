@@ -27,18 +27,42 @@ export interface CheckpointOperation extends OperationEvents {
  * Used for managing the checkpoints of an execution.
  */
 export class CheckpointManager {
-  public readonly operationDataMap = new Map<string, OperationEvents>();
+  private readonly operationDataMap = new Map<string, OperationEvents>();
   private readonly pendingUpdates: CheckpointOperation[] = [];
   private resolvePendingUpdatePromise: (() => void) | undefined = undefined;
   private readonly callbackManager: CallbackManager;
   // TODO: add execution timeout
   readonly eventProcessor = new EventProcessor();
   private readonly invocationsMap = new Map<InvocationId, Date>();
+  private readonly dirtyOperationIds = new Set<string>();
 
   private _isExecutionCompleted = false;
 
   constructor(executionId: ExecutionId) {
     this.callbackManager = new CallbackManager(executionId, this);
+  }
+
+  getOperationData(operationId: string): OperationEvents | undefined {
+    return this.operationDataMap.get(operationId);
+  }
+
+  getAllOperationData(): ReadonlyMap<string, OperationEvents> {
+    return this.operationDataMap;
+  }
+
+  getDirtyOperations(): Operation[] {
+    const dirtyOperations = Array.from(this.dirtyOperationIds).map((id) => {
+      const operationEvents = this.operationDataMap.get(id);
+      if (!operationEvents) {
+        throw new Error(`Operation with ID ${id} not found`);
+      }
+      return operationEvents.operation;
+    });
+
+    // Once we return the dirty operations, we clear them for the next checkpoint call
+    // so that we only return new data to the client
+    this.dirtyOperationIds.clear();
+    return dirtyOperations;
   }
 
   isExecutionCompleted() {
@@ -47,6 +71,12 @@ export class CheckpointManager {
 
   startInvocation(invocationId: InvocationId) {
     this.invocationsMap.set(invocationId, new Date());
+
+    // For each invocation, there are no dirty operations since the client should know the
+    // state of every operation from all the operation data we pass
+    this.dirtyOperationIds.clear();
+
+    return Array.from(this.operationDataMap.values());
   }
 
   completeInvocation(invocationId: InvocationId): {
@@ -157,6 +187,16 @@ export class CheckpointManager {
   }
 
   addOperationUpdate(operationData: CheckpointOperation) {
+    if (!operationData.operation.Id) {
+      throw new Error("Missing Id in operation");
+    }
+
+    const operationEvent: OperationEvents = {
+      operation: operationData.operation,
+      events: operationData.events,
+    };
+    this.operationDataMap.set(operationData.operation.Id, operationEvent);
+    this.dirtyOperationIds.add(operationData.operation.Id);
     this.pendingUpdates.push(operationData);
     this.resolvePendingUpdatePromise?.();
   }
@@ -183,7 +223,6 @@ export class CheckpointManager {
     if (!result.operation.Id) {
       throw new Error("Could not find operation Id");
     }
-    this.operationDataMap.set(result.operation.Id, result);
     return result;
   }
 
@@ -293,8 +332,6 @@ export class CheckpointManager {
         };
         break;
     }
-
-    this.operationDataMap.set(inputUpdate.Id, copied);
 
     return copied;
   }
@@ -456,8 +493,6 @@ export class CheckpointManager {
       }
     }
 
-    this.operationDataMap.set(id, newOperationData);
-
     this.addOperationUpdate({
       ...newOperationData,
       update: undefined,
@@ -573,9 +608,11 @@ export class CheckpointManager {
   }
 
   /**
-   * Clears all callback timers.
+   * Clears all callback timers and all operation data.
    */
   cleanup(): void {
+    this.operationDataMap.clear();
+    this.dirtyOperationIds.clear();
     this.callbackManager.cleanup();
   }
 }
