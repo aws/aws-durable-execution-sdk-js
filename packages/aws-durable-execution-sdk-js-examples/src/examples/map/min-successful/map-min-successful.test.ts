@@ -8,7 +8,7 @@ createTests({
     skipTime: false,
     checkpointDelay: 100,
   },
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete early when minSuccessful is reached", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
