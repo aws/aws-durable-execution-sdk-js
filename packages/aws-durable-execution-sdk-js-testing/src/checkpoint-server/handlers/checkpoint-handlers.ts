@@ -105,7 +105,7 @@ export function processCheckpointDurableExecution(
     createCheckpointToken(input.CheckpointToken),
   );
 
-  validateCheckpointUpdates(updates, storage.operationDataMap);
+  validateCheckpointUpdates(updates, storage.getAllOperationData());
 
   storage.registerUpdates(updates);
 
