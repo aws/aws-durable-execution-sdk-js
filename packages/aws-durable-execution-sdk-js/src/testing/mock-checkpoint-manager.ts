@@ -44,10 +44,6 @@ export class MockCheckpointManager extends CheckpointManager {
     this.setTerminatingCalls++;
   }
 
-  hasPendingAncestorCompletion(_stepId: string): boolean {
-    return false;
-  }
-
   getQueueStatus(): { queueLength: number; isProcessing: boolean } {
     return { queueLength: 0, isProcessing: false };
   }

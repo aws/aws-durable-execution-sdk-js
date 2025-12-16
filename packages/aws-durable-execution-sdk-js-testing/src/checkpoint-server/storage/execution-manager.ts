@@ -83,7 +83,9 @@ export class ExecutionManager {
       );
     }
 
-    checkpointStorage.startInvocation(params.invocationId);
+    const operationEvents = checkpointStorage.startInvocation(
+      params.invocationId,
+    );
 
     const checkpointToken = encodeCheckpointToken({
       executionId: params.executionId,
@@ -95,7 +97,7 @@ export class ExecutionManager {
       checkpointToken,
       executionId: params.executionId,
       invocationId: params.invocationId,
-      operationEvents: Array.from(checkpointStorage.operationDataMap.values()),
+      operationEvents,
     };
   }
 

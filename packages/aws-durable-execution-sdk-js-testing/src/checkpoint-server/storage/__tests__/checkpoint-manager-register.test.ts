@@ -52,7 +52,7 @@ describe("checkpoint-manager registerUpdate", () => {
     expect(result.operation.StartTimestamp).toBeInstanceOf(Date);
     expect(result.operation.StepDetails).toBeUndefined();
 
-    expect(storage.operationDataMap.get("step-id")).toBe(result);
+    expect(storage.getOperationData("step-id")).toStrictEqual(result);
   });
 
   it("should create and register a new CONTEXT operation", () => {
@@ -77,7 +77,7 @@ describe("checkpoint-manager registerUpdate", () => {
     expect(result.operation.StepDetails).toBeUndefined();
     expect(result.operation.ContextDetails?.ReplayChildren).toBe(true);
 
-    expect(storage.operationDataMap.get("CONTEXT-id")).toBe(result);
+    expect(storage.getOperationData("CONTEXT-id")).toStrictEqual(result);
   });
 
   it("should update operation with new step details", () => {
@@ -190,7 +190,7 @@ describe("checkpoint-manager registerUpdate", () => {
     // Try to register it again
     const secondResult = storage.registerUpdate(waitUpdate);
 
-    expect(secondResult).toBe(firstResult);
+    expect(secondResult).toStrictEqual(firstResult);
   });
 
   it("should add operation to pending updates", async () => {
@@ -239,7 +239,7 @@ describe("checkpoint-manager registerUpdate", () => {
       });
       expect(result.operation.EndTimestamp).toBeInstanceOf(Date);
 
-      expect(storage.operationDataMap.get("step-id")).toBe(result);
+      expect(storage.getOperationData("step-id")).toStrictEqual(result);
     },
   );
 
@@ -282,7 +282,7 @@ describe("checkpoint-manager registerUpdate", () => {
       );
 
       // Verify operation is stored correctly
-      expect(storage.operationDataMap.get("retry-step-id")).toBe(result);
+      expect(storage.getOperationData("retry-step-id")).toStrictEqual(result);
     });
 
     it("should not process retry for START action during registration", () => {
@@ -469,8 +469,8 @@ describe("checkpoint-manager registerUpdate", () => {
       expect(() => storage.registerUpdates(updates)).toThrow(
         "Invalid checkpoint token",
       );
-      expect(storage.operationDataMap.has("step-1")).toBe(false);
-      expect(storage.operationDataMap.has("step-2")).toBe(false);
+      expect(storage.getOperationData("step-1")).toBeUndefined();
+      expect(storage.getOperationData("step-2")).toBeUndefined();
     });
 
     it("should not affect execution completion when updating non-execution operations", () => {
