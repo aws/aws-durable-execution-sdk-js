@@ -66,7 +66,7 @@
     "@smithy/smithy-client": "^4.9.1"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": "1.0.1"
+    "@aws/durable-execution-sdk-js": "^1.0.1"
   },
   "private": false
 }
