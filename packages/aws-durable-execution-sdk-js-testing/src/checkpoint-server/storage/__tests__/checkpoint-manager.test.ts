@@ -58,8 +58,8 @@ describe("CheckpointManager", () => {
         },
       });
 
-      expect(storage.operationDataMap.size).toBe(1);
-      expect(storage.operationDataMap.get("mocked-uuid")).toBeDefined();
+      expect(storage.getAllOperationData().size).toBe(1);
+      expect(storage.getOperationData("mocked-uuid")).toBeDefined();
     });
 
     it("should create initial operation with custom payload", () => {
@@ -95,7 +95,7 @@ describe("CheckpointManager", () => {
         },
       });
 
-      expect(storage.operationDataMap.size).toBe(1);
+      expect(storage.getAllOperationData().size).toBe(1);
     });
   });
 
@@ -449,46 +449,6 @@ describe("CheckpointManager", () => {
         });
         expect(result.operation.Status).toBe(OperationStatus.PENDING);
       });
-
-      it("should handle STEP operation completion when original operation has no StepDetails", () => {
-        storage.initialize();
-
-        // Manually create an operation without StepDetails (edge case)
-        const manualOperation = {
-          operation: {
-            Id: "manual-step",
-            Type: OperationType.STEP,
-            Status: OperationStatus.STARTED,
-            StartTimestamp: new Date(),
-          },
-          update: {
-            Id: "manual-step",
-            Action: OperationAction.START,
-            Type: OperationType.STEP,
-          },
-          events: [],
-        };
-        storage.operationDataMap.set("manual-step", manualOperation);
-
-        // Complete the operation with error
-        const result = storage.completeOperation({
-          Id: "manual-step",
-          Action: OperationAction.FAIL,
-          Type: OperationType.STEP,
-          Error: {
-            ErrorMessage: "New error",
-            ErrorType: "NewError",
-          },
-        });
-
-        expect(result.operation.Status).toBe(OperationStatus.FAILED);
-        expect(result.operation.StepDetails?.Error).toEqual({
-          ErrorMessage: "New error",
-          ErrorType: "NewError",
-        });
-        expect(result.operation.StepDetails?.Result).toBeUndefined();
-        expect(result.operation.StepDetails?.Attempt).toBe(1);
-      });
     });
   });
 
@@ -518,7 +478,7 @@ describe("CheckpointManager", () => {
           ReplayChildren: undefined,
         });
 
-        expect(storage.operationDataMap.get("context-id")).toBe(result);
+        expect(storage.getOperationData("context-id")).toStrictEqual(result);
       });
 
       it("should create CONTEXT operation with error", () => {
@@ -619,7 +579,7 @@ describe("CheckpointManager", () => {
           });
           expect(result.operation.EndTimestamp).toBeInstanceOf(Date);
 
-          expect(storage.operationDataMap.get("completed-context")).toBe(
+          expect(storage.getOperationData("completed-context")).toStrictEqual(
             result,
           );
         },
@@ -722,41 +682,6 @@ describe("CheckpointManager", () => {
           ErrorType: "PartialFailure",
         });
       });
-
-      it("should handle CONTEXT operation completion when original operation has no ContextDetails", () => {
-        storage.initialize();
-
-        // Manually create an operation without ContextDetails (edge case)
-        const manualOperation = {
-          operation: {
-            Id: "manual-context",
-            Type: OperationType.CONTEXT,
-            Status: OperationStatus.STARTED,
-            StartTimestamp: new Date(),
-          },
-          update: {
-            Id: "manual-context",
-            Action: OperationAction.START,
-            Type: OperationType.CONTEXT,
-          },
-          events: [],
-        };
-        storage.operationDataMap.set("manual-context", manualOperation);
-
-        // Complete the operation
-        const result = storage.completeOperation({
-          Id: "manual-context",
-          Action: OperationAction.SUCCEED,
-          Type: OperationType.STEP,
-          Payload: '{"new": "result"}',
-        });
-
-        expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED);
-        expect(result.operation.ContextDetails?.Result).toBe(
-          '{"new": "result"}',
-        );
-        expect(result.operation.ContextDetails?.Error).toBeUndefined();
-      });
     });
   });
 
@@ -843,33 +768,13 @@ describe("CheckpointManager", () => {
 
   describe("completeCallback", () => {
     beforeEach(() => {
-      // Set up some mock callback operation data with proper callback ID
-      const mockCallbackId = Buffer.from(
-        JSON.stringify({
-          executionId: "test-execution-id",
-          operationId: "test-callback-op",
-          token: "test-token",
-        }),
-      ).toString("base64");
-
-      const mockCallbackOperation = {
-        operation: {
-          Id: "test-callback-op",
-          Type: OperationType.CALLBACK,
-          Status: OperationStatus.STARTED,
-          StartTimestamp: new Date(),
-          CallbackDetails: {
-            CallbackId: mockCallbackId,
-          },
-        },
-        update: {
+      storage.registerUpdates([
+        {
           Id: "test-callback-op",
           Action: OperationAction.START,
           Type: OperationType.CALLBACK,
         },
-        events: [],
-      };
-      storage.operationDataMap.set("test-callback-op", mockCallbackOperation);
+      ]);
     });
 
     it("should delegate to callback manager and update operation data map", () => {
@@ -930,8 +835,7 @@ describe("CheckpointManager", () => {
       const checkpointManager = storage;
 
       // Should have operationDataMap
-      expect(checkpointManager.operationDataMap).toBeDefined();
-      expect(checkpointManager.operationDataMap).toBeInstanceOf(Map);
+      expect(checkpointManager.getAllOperationData()).toBeInstanceOf(Map);
 
       // Should have addOperationUpdate method
       expect(checkpointManager.addOperationUpdate).toBeDefined();
@@ -960,15 +864,28 @@ describe("CheckpointManager", () => {
         },
         events: [],
       };
-      storage.operationDataMap.set("test-op", mockOperation);
+      storage.registerUpdates([mockOperation.update]);
+
+      const pendingUpdates1 = await storage.getPendingCheckpointUpdates();
+      expect(pendingUpdates1).toHaveLength(1);
+      expect(pendingUpdates1[0]).toEqual({
+        ...mockOperation,
+        operation: {
+          ...mockOperation.operation,
+          CallbackDetails: {
+            CallbackId: expect.any(String),
+          },
+        },
+        events: expect.any(Array),
+      });
 
       // Directly call addOperationUpdate to simulate CallbackManager notification
       storage.addOperationUpdate(mockOperation);
 
       // Should be able to get pending updates
-      const pendingUpdates = await storage.getPendingCheckpointUpdates();
-      expect(pendingUpdates).toHaveLength(1);
-      expect(pendingUpdates[0]).toBe(mockOperation);
+      const pendingUpdates2 = await storage.getPendingCheckpointUpdates();
+      expect(pendingUpdates2).toHaveLength(1);
+      expect(pendingUpdates2[0]).toEqual(mockOperation);
     });
   });
 

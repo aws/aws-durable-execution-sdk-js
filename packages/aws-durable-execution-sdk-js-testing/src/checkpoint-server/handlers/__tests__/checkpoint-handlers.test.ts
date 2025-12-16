@@ -250,20 +250,23 @@ describe("checkpoint handlers", () => {
       expect(registerUpdatesSpy).toHaveBeenCalledWith(input.Updates);
 
       expect(result.CheckpointToken).toBeDefined();
-      expect(result.NewExecutionState?.Operations).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            Type: OperationType.EXECUTION,
-            Status: OperationStatus.STARTED,
-          }),
-          expect.objectContaining({
-            Id: "test-step-op",
-            Type: OperationType.STEP,
-            Status: OperationStatus.STARTED,
-            Name: "TestStep",
-          }),
-        ]),
-      );
+      expect(result.NewExecutionState?.Operations).toEqual([
+        {
+          Id: "test-step-op",
+          Name: "TestStep",
+          StartTimestamp: expect.any(Date),
+          Status: "STARTED",
+          Type: "STEP",
+        },
+        {
+          EndTimestamp: expect.any(Date),
+          Id: "test-update-op",
+          StartTimestamp: expect.any(Date),
+          Status: "SUCCEEDED",
+          StepDetails: { Attempt: 1, Result: "test result" },
+          Type: "STEP",
+        },
+      ]);
       expect(result.NewExecutionState?.NextMarker).toBeUndefined();
     });
 
@@ -337,20 +340,15 @@ describe("checkpoint handlers", () => {
 
       expect(registerUpdatesSpy).toHaveBeenCalledWith([]);
       expect(result.CheckpointToken).toBeDefined();
-      expect(result.NewExecutionState?.Operations).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            Type: OperationType.EXECUTION,
-            Status: OperationStatus.STARTED,
-          }),
-          expect.objectContaining({
-            Id: "test-step-op",
-            Type: OperationType.STEP,
-            Status: OperationStatus.STARTED,
-            Name: "TestStep",
-          }),
-        ]),
-      );
+      expect(result.NewExecutionState?.Operations).toEqual([
+        {
+          Id: "test-step-op",
+          Name: "TestStep",
+          StartTimestamp: expect.any(Date),
+          Status: "STARTED",
+          Type: "STEP",
+        },
+      ]);
     });
 
     it("should generate new checkpoint token with different UUID", () => {
@@ -382,23 +380,18 @@ describe("checkpoint handlers", () => {
       });
 
       expect(result.CheckpointToken).toEqual(expectedNewToken);
-      expect(result.NewExecutionState?.Operations).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            Type: OperationType.EXECUTION,
-            Status: OperationStatus.STARTED,
-          }),
-          expect.objectContaining({
-            Id: "test-step-op",
-            Type: OperationType.STEP,
-            Status: OperationStatus.STARTED,
-            Name: "TestStep",
-          }),
-        ]),
-      );
+      expect(result.NewExecutionState?.Operations).toEqual([
+        {
+          Id: "test-step-op",
+          Name: "TestStep",
+          StartTimestamp: expect.any(Date),
+          Status: "STARTED",
+          Type: "STEP",
+        },
+      ]);
     });
 
-    it("should include all operations from storage in response", () => {
+    it("should include changed operations from storage in response", () => {
       const executionArn = "test-execution-arn";
       const executionId = createExecutionId(executionArn);
       const { storage, invocationResult } =
@@ -429,26 +422,84 @@ describe("checkpoint handlers", () => {
       );
 
       expect(result.CheckpointToken).toBeDefined();
-      expect(result.NewExecutionState?.Operations).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            Type: OperationType.EXECUTION,
-            Status: OperationStatus.STARTED,
-          }),
-          expect.objectContaining({
-            Id: "test-step-op",
-            Type: OperationType.STEP,
-            Status: OperationStatus.STARTED,
-            Name: "TestStep",
-          }),
-          expect.objectContaining({
-            Id: "another-op",
-            Type: OperationType.WAIT,
-            Status: OperationStatus.STARTED,
-          }),
-        ]),
-      );
+      expect(result.NewExecutionState?.Operations).toEqual([
+        {
+          Id: "test-step-op",
+          Name: "TestStep",
+          StartTimestamp: expect.any(Date),
+          Status: "STARTED",
+          Type: "STEP",
+        },
+        {
+          Id: "another-op",
+          StartTimestamp: expect.any(Date),
+          Status: "STARTED",
+          Type: "WAIT",
+          WaitDetails: { ScheduledEndTimestamp: expect.any(Date) },
+        },
+      ]);
       expect(result.NewExecutionState?.NextMarker).toBeUndefined();
+    });
+
+    it("should call getDirtyOperations to return only changed operations", () => {
+      const executionArn = "test-execution-arn";
+      const executionId = createExecutionId(executionArn);
+      const { storage, invocationResult } =
+        createExecutionWithOperations(executionId);
+
+      const getDirtyOperationsSpy = jest.spyOn(storage, "getDirtyOperations");
+      getDirtyOperationsSpy.mockReturnValue([
+        {
+          Id: "dirty-op-1",
+          Type: OperationType.STEP,
+          Status: OperationStatus.STARTED,
+          StartTimestamp: new Date(),
+        },
+        {
+          Id: "dirty-op-2",
+          Type: OperationType.CALLBACK,
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: new Date(),
+        },
+      ]);
+
+      const input: CheckpointDurableExecutionRequest = {
+        DurableExecutionArn: executionArn,
+        CheckpointToken: encodeCheckpointToken({
+          executionId,
+          invocationId: invocationResult.invocationId,
+          token: "test-token",
+        }),
+        Updates: [
+          {
+            Id: "new-op",
+            Type: OperationType.STEP,
+            Action: OperationAction.START,
+          },
+        ],
+      };
+
+      const result = processCheckpointDurableExecution(
+        executionArn,
+        input,
+        executionManager,
+      );
+
+      expect(getDirtyOperationsSpy).toHaveBeenCalledTimes(1);
+      expect(result.NewExecutionState?.Operations).toEqual([
+        {
+          Id: "dirty-op-1",
+          Type: OperationType.STEP,
+          Status: OperationStatus.STARTED,
+          StartTimestamp: expect.any(Date),
+        },
+        {
+          Id: "dirty-op-2",
+          Type: OperationType.CALLBACK,
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: expect.any(Date),
+        },
+      ]);
     });
   });
 });

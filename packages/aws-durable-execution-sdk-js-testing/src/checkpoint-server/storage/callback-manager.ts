@@ -141,8 +141,7 @@ export class CallbackManager {
     const callbackId = createCallbackId(callbackDetails.CallbackId);
     const { operationId } = decodeCallbackId(callbackId);
 
-    const operationData =
-      this.checkpointManager.operationDataMap.get(operationId);
+    const operationData = this.checkpointManager.getOperationData(operationId);
     if (!operationData) {
       throw new InvalidParameterValueException({
         message: "Could not find operation",
@@ -172,7 +171,6 @@ export class CallbackManager {
       ],
     };
 
-    this.checkpointManager.operationDataMap.set(operationId, copied);
     this.callbackIdMap.delete(callbackId);
 
     // Clear timeout timers
@@ -192,8 +190,7 @@ export class CallbackManager {
    */
   heartbeatCallback(callbackId: CallbackId): void {
     const { operationId } = decodeCallbackId(callbackId);
-    const operationData =
-      this.checkpointManager.operationDataMap.get(operationId);
+    const operationData = this.checkpointManager.getOperationData(operationId);
 
     if (!operationData) {
       throw new Error("Could not find operation");

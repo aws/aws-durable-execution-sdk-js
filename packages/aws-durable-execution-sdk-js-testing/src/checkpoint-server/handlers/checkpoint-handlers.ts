@@ -105,7 +105,7 @@ export function processCheckpointDurableExecution(
     createCheckpointToken(input.CheckpointToken),
   );
 
-  validateCheckpointUpdates(updates, storage.operationDataMap);
+  validateCheckpointUpdates(updates, storage.getAllOperationData());
   storage.registerUpdates(updates);
 
   const output: CheckpointDurableExecutionResponse = {
@@ -115,10 +115,7 @@ export function processCheckpointDurableExecution(
       token: randomUUID(),
     }),
     NewExecutionState: {
-      // TODO: implement pagination
-      Operations: Array.from(storage.operationDataMap.values()).map(
-        (data) => data.operation,
-      ),
+      Operations: storage.getDirtyOperations(),
       NextMarker: undefined,
     },
   };
