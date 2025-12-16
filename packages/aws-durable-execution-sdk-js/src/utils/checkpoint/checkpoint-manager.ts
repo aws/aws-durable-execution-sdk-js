@@ -612,7 +612,16 @@ export class CheckpointManager implements Checkpoint {
         op.state === OperationLifecycleState.IDLE_NOT_AWAITED ||
         op.state === OperationLifecycleState.IDLE_AWAITED
       ) {
-        // Note: Ancestor completion checking removed - operations will continue normally
+        // Use the original stepId from metadata, not the potentially hashed op.stepId
+        const originalStepId = op.metadata.stepId;
+        if (this.hasFinishedAncestor(originalStepId)) {
+          log(
+            "🧹",
+            `Cleaning up operation with completed ancestor: ${originalStepId}`,
+          );
+          this.cleanupOperation(op.stepId);
+          this.operations.delete(op.stepId);
+        }
       }
     }
 

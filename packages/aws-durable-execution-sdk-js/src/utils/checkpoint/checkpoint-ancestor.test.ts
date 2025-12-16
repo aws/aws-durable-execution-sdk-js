@@ -4,6 +4,8 @@ import { createTestCheckpointManager } from "../../testing/create-test-checkpoin
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
+import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
+import { OperationSubType } from "../../types/core";
 
 describe("CheckpointManager - Ancestor Functionality", () => {
   let checkpointManager: CheckpointManager;
@@ -89,6 +91,107 @@ describe("CheckpointManager - Ancestor Functionality", () => {
     it("should handle root level stepIds", () => {
       const hasFinished = (checkpointManager as any).hasFinishedAncestor("1");
       expect(hasFinished).toBe(false);
+    });
+  });
+
+  describe("ancestor cleanup during termination", () => {
+    it("should clean up operations with finished ancestors during termination", () => {
+      // Create operations first (before marking ancestors as finished)
+      checkpointManager.markOperationState(
+        "1-2-3",
+        OperationLifecycleState.RETRY_WAITING,
+        {
+          metadata: {
+            stepId: "1-2-3",
+            name: "test-step",
+            type: "STEP",
+            subType: OperationSubType.STEP,
+            parentId: "1-2",
+          },
+        },
+      );
+
+      checkpointManager.markOperationState(
+        "1-2-4",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "1-2-4",
+            name: "test-step-2",
+            type: "STEP",
+            subType: OperationSubType.STEP,
+            parentId: "1-2",
+          },
+        },
+      );
+
+      // Create operation without finished ancestor (should not be cleaned up)
+      checkpointManager.markOperationState(
+        "1-3-1",
+        OperationLifecycleState.RETRY_WAITING,
+        {
+          metadata: {
+            stepId: "1-3-1",
+            name: "test-step-3",
+            type: "STEP",
+            subType: OperationSubType.STEP,
+            parentId: "1-3",
+          },
+        },
+      );
+
+      // Verify operations exist before cleanup
+      expect(checkpointManager.getOperationState("1-2-3")).toBe(
+        OperationLifecycleState.RETRY_WAITING,
+      );
+      expect(checkpointManager.getOperationState("1-2-4")).toBe(
+        OperationLifecycleState.IDLE_AWAITED,
+      );
+      expect(checkpointManager.getOperationState("1-3-1")).toBe(
+        OperationLifecycleState.RETRY_WAITING,
+      );
+
+      // Now mark ancestor as finished
+      checkpointManager.markAncestorFinished("1-2");
+
+      // Trigger termination logic that includes ancestor cleanup
+      (checkpointManager as any).checkAndTerminate();
+
+      // Operations with finished ancestors should be cleaned up
+      expect(checkpointManager.getOperationState("1-2-3")).toBeUndefined();
+      expect(checkpointManager.getOperationState("1-2-4")).toBeUndefined();
+
+      // Operation without finished ancestor should remain
+      expect(checkpointManager.getOperationState("1-3-1")).toBe(
+        OperationLifecycleState.RETRY_WAITING,
+      );
+    });
+
+    it("should not clean up operations in EXECUTING state even with finished ancestors", () => {
+      // Create operation first
+      checkpointManager.markOperationState(
+        "1-2-3",
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: "1-2-3",
+            name: "test-step",
+            type: "STEP",
+            subType: OperationSubType.STEP,
+            parentId: "1-2",
+          },
+        },
+      );
+
+      // Then mark ancestor as finished
+      checkpointManager.markAncestorFinished("1-2");
+
+      (checkpointManager as any).checkAndTerminate();
+
+      // EXECUTING operation should not be cleaned up
+      expect(checkpointManager.getOperationState("1-2-3")).toBe(
+        OperationLifecycleState.EXECUTING,
+      );
     });
   });
 
