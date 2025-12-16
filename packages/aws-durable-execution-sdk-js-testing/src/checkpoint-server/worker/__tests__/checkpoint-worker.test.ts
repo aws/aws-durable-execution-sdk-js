@@ -306,7 +306,10 @@ describe("CheckpointWorker", () => {
         Timestamp: new Date(),
         Type: "InvocationComplete",
       };
-      mockApiHandlerInstance.performApiCall.mockReturnValue(mockEvent);
+      mockApiHandlerInstance.performApiCall.mockReturnValue({
+        event: mockEvent,
+        hasDirtyOperations: false,
+      });
 
       messageHandler(command);
 
@@ -318,7 +321,10 @@ describe("CheckpointWorker", () => {
         data: {
           type: ApiType.CompleteInvocation,
           requestId: "complete-request-456",
-          response: mockEvent,
+          response: {
+            event: mockEvent,
+            hasDirtyOperations: false,
+          },
         },
       });
     });

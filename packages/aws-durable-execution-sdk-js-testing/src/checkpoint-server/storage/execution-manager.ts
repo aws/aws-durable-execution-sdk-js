@@ -9,11 +9,12 @@ import { CallbackId, CheckpointToken } from "../utils/tagged-strings";
 import { ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { decodeCallbackId } from "../utils/callback-id";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
-import { ErrorObject, EventType, Event } from "@aws-sdk/client-lambda";
+import { ErrorObject, EventType } from "@aws-sdk/client-lambda";
 import {
   StartDurableExecutionRequest,
   StartInvocationRequest,
 } from "../worker-api/worker-api-request";
+import { CompleteInvocationResponse } from "../worker-api/worker-api-response";
 
 export interface InvocationResult {
   checkpointToken: CheckpointToken;
@@ -105,7 +106,7 @@ export class ExecutionManager {
     executionId: ExecutionId,
     invocationId: InvocationId,
     error: ErrorObject | undefined,
-  ): Event {
+  ): CompleteInvocationResponse {
     const checkpointStorage = this.executions.get(executionId);
 
     if (!checkpointStorage) {
@@ -115,7 +116,7 @@ export class ExecutionManager {
     const { startTimestamp, endTimestamp } =
       checkpointStorage.completeInvocation(invocationId);
 
-    return checkpointStorage.eventProcessor.createHistoryEvent(
+    const event = checkpointStorage.eventProcessor.createHistoryEvent(
       EventType.InvocationCompleted,
       undefined,
       "InvocationCompletedDetails",
@@ -128,6 +129,11 @@ export class ExecutionManager {
         RequestId: invocationId,
       },
     );
+
+    return {
+      event,
+      hasDirtyOperations: checkpointStorage.hasDirtyOperations(),
+    };
   }
 
   /**

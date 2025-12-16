@@ -1,4 +1,4 @@
-import { ErrorObject, Operation, Event } from "@aws-sdk/client-lambda";
+import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
 import { SerializedCheckpointOperation } from "../../../checkpoint-server/types/operation-event";
@@ -10,6 +10,7 @@ import {
   StartDurableExecutionRequest,
   StartInvocationRequest,
 } from "../../../checkpoint-server/worker-api/worker-api-request";
+import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 export interface SerializedPollCheckpointResponse {
   operations: SerializedCheckpointOperation[];
@@ -62,5 +63,5 @@ export interface CheckpointApiClient {
     executionId: ExecutionId,
     invocationId: InvocationId,
     error: ErrorObject | undefined,
-  ): Promise<Event>;
+  ): Promise<CompleteInvocationResponse>;
 }

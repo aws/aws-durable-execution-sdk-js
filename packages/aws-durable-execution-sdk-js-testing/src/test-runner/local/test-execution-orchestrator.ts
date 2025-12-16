@@ -46,6 +46,7 @@ export class TestExecutionOrchestrator {
   private invokeHandlerInstance: InvokeHandler;
   private invocationTracker: InvocationTracker;
   private readonly scheduler: Scheduler;
+  private readonly pendingOperations = new Set<string>();
 
   constructor(
     private handlerFunction: DurableLambdaHandler,
@@ -294,18 +295,21 @@ export class TestExecutionOrchestrator {
       );
     }
 
+    const operationId = update.Id;
+    if (operationId === undefined) {
+      throw new Error("Missing operation id");
+    }
+
+    this.pendingOperations.add(operationId);
+
     const { result, error } = await this.functionStorage.runHandler(
       functionName,
       update.Payload,
     );
 
-    if (update.Id === undefined) {
-      throw new Error("Missing operation id");
-    }
-
     await this.checkpointApi.updateCheckpointData({
       executionId,
-      operationId: update.Id,
+      operationId: operationId,
       operationData: {
         // todo: handle other operation types as well
         Status: result ? OperationStatus.SUCCEEDED : OperationStatus.FAILED,
@@ -320,6 +324,11 @@ export class TestExecutionOrchestrator {
       () => this.invokeHandler(executionId),
       (err) => {
         this.executionState.rejectWith(err);
+      },
+      undefined,
+      () => {
+        this.pendingOperations.delete(operationId);
+        return Promise.resolve();
       },
     );
   }
@@ -444,7 +453,13 @@ export class TestExecutionOrchestrator {
     operation: Operation,
     executionId: ExecutionId,
   ): void {
+    const operationId = operation.Id;
+    if (!operationId) {
+      throw new Error("Missing operation id");
+    }
+
     if (operation.Status === OperationStatus.STARTED) {
+      this.pendingOperations.add(operationId);
       return;
     }
 
@@ -452,6 +467,11 @@ export class TestExecutionOrchestrator {
       () => this.invokeHandler(executionId),
       (err) => {
         this.executionState.rejectWith(err);
+      },
+      undefined,
+      () => {
+        this.pendingOperations.delete(operationId);
+        return Promise.resolve();
       },
     );
   }
@@ -587,23 +607,58 @@ export class TestExecutionOrchestrator {
         value,
       );
 
-      this.operationStorage.addHistoryEvent(
+      const { event, hasDirtyOperations } =
         await this.invocationTracker.completeInvocation(
           executionId,
           invocationId,
           "Error" in value ? value.Error : undefined,
-        ),
-      );
+        );
+
+      this.operationStorage.addHistoryEvent(event);
 
       if (value.Status === InvocationStatus.SUCCEEDED) {
         this.executionState.resolveWith({
           result: value.Result,
           status: OperationStatus.SUCCEEDED,
         });
-      } else if (value.Status === InvocationStatus.FAILED) {
+        return;
+      }
+
+      if (value.Status === InvocationStatus.FAILED) {
         this.executionState.resolveWith({
           error: value.Error,
           status: OperationStatus.FAILED,
+        });
+        return;
+      }
+
+      if (!this.scheduler.hasScheduledFunction() && hasDirtyOperations) {
+        defaultLogger.debug(
+          "Re-invoking handler since invocation completed with pending dirty operations",
+        );
+        // Re-invoke the handler if its last checkpoint was not synchronized
+        // with the backend and there are pending dirty operations when the
+        // invocation completed.
+        this.scheduler.scheduleFunction(
+          () => this.invokeHandler(executionId),
+          (err) => {
+            this.executionState.rejectWith(err);
+          },
+        );
+        return;
+      }
+
+      if (
+        !this.scheduler.hasScheduledFunction() &&
+        !this.pendingOperations.size
+      ) {
+        this.executionState.rejectWith({
+          error: {
+            ErrorType: "InvalidParameterValueException",
+            ErrorMessage:
+              "Cannot return PENDING status with no pending operations.",
+          },
+          status: ExecutionStatus.FAILED,
         });
       }
     } catch (err) {
@@ -612,18 +667,17 @@ export class TestExecutionOrchestrator {
         err,
       );
 
-      this.operationStorage.addHistoryEvent(
-        await this.invocationTracker.completeInvocation(
-          executionId,
-          invocationId,
-          {
-            ErrorMessage: err instanceof Error ? err.message : undefined,
-            ErrorType: err instanceof Error ? err.name : undefined,
-            StackTrace:
-              err instanceof Error ? err.stack?.split("\n") : undefined,
-          },
-        ),
+      const { event } = await this.invocationTracker.completeInvocation(
+        executionId,
+        invocationId,
+        {
+          ErrorMessage: err instanceof Error ? err.message : undefined,
+          ErrorType: err instanceof Error ? err.name : undefined,
+          StackTrace: err instanceof Error ? err.stack?.split("\n") : undefined,
+        },
       );
+
+      this.operationStorage.addHistoryEvent(event);
       this.executionState.rejectWith(err);
     }
   }

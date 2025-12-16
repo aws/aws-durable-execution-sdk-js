@@ -50,6 +50,10 @@ export class CheckpointManager {
     return this.operationDataMap;
   }
 
+  hasDirtyOperations(): boolean {
+    return !!this.dirtyOperationIds.size;
+  }
+
   getDirtyOperations(): Operation[] {
     const dirtyOperations = Array.from(this.dirtyOperationIds).map((id) => {
       const operationEvents = this.operationDataMap.get(id);

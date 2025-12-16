@@ -1,10 +1,11 @@
-import { ErrorObject, Event } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 import {
   createInvocationId,
   ExecutionId,
   InvocationId,
 } from "../../../checkpoint-server/utils/tagged-strings";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 /**
  * Manages tracking of invocations in local runner.
@@ -49,7 +50,7 @@ export class InvocationTracker {
     executionId: ExecutionId,
     invocationId: InvocationId,
     error: ErrorObject | undefined,
-  ): Promise<Event> {
+  ): Promise<CompleteInvocationResponse> {
     if (!this.invocations.has(invocationId)) {
       throw new Error(`Invocation with ID ${invocationId} not found`);
     }
