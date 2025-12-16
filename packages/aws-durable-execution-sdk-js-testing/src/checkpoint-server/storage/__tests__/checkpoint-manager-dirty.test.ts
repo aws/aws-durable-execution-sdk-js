@@ -36,6 +36,7 @@ describe("CheckpointManager dirty operation tracking", () => {
         const dirtyOperations = storage.getDirtyOperations();
 
         expect(dirtyOperations).toEqual([]);
+        expect(storage.hasDirtyOperations()).toBe(false);
       });
 
       it("should return dirty operations and clear the dirty set", () => {
@@ -51,8 +52,11 @@ describe("CheckpointManager dirty operation tracking", () => {
         expect(firstCall).toHaveLength(1);
         expect(firstCall[0].Id).toBe("dirty-step");
 
+        expect(storage.hasDirtyOperations()).toBe(false);
+
         const secondCall = storage.getDirtyOperations();
         expect(secondCall).toEqual([]);
+        expect(storage.hasDirtyOperations()).toBe(false);
       });
 
       it("should return multiple dirty operations in correct order", () => {
@@ -86,6 +90,7 @@ describe("CheckpointManager dirty operation tracking", () => {
           "second-op",
           "third-op",
         ]);
+        expect(storage.hasDirtyOperations()).toBe(false);
       });
     });
 
@@ -100,16 +105,20 @@ describe("CheckpointManager dirty operation tracking", () => {
         storage.registerUpdate(stepUpdate);
 
         // Verify operation is dirty before invocation
+        expect(storage.hasDirtyOperations()).toBe(true);
         const dirtyBefore = storage.getDirtyOperations();
         expect(dirtyBefore).toHaveLength(1);
+        expect(storage.hasDirtyOperations()).toBe(false);
 
         // Start new invocation should clear dirty set
         const invocationId = createInvocationId("test-invocation");
         storage.startInvocation(invocationId);
+        expect(storage.hasDirtyOperations()).toBe(false);
 
         // Verify dirty set is cleared after invocation
         const dirtyAfter = storage.getDirtyOperations();
         expect(dirtyAfter).toEqual([]);
+        expect(storage.hasDirtyOperations()).toBe(false);
       });
 
       it("should return all operations from startInvocation", () => {
