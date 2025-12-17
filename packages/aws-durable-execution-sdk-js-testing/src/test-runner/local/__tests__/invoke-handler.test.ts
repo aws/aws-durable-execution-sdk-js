@@ -186,6 +186,7 @@ describe("invoke-handler", () => {
         logStreamName: "MyLogStreamName",
       });
       expect(typeof context.getRemainingTimeInMillis).toBe("function");
+      expect(context.getRemainingTimeInMillis()).toBe(900_000);
     });
 
     it("should merge custom context values with defaults", () => {
