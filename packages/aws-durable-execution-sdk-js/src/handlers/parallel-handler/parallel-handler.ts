@@ -13,7 +13,10 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
-import { withParallelBranchSpan } from "../../utils/otel/otel-instrumentation";
+import {
+  withParallelBranchSpan,
+  withParallelSpan,
+} from "../../utils/otel/otel-instrumentation";
 
 export const createParallelHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -122,19 +125,28 @@ export const createParallelHandler = <Logger extends DurableLogger>(
         return result;
       };
 
-      const result = await executeConcurrently(name, executionItems, executor, {
-        maxConcurrency: config?.maxConcurrency,
-        topLevelSubType: OperationSubType.PARALLEL,
-        iterationSubType: OperationSubType.PARALLEL_BRANCH,
-        summaryGenerator: createParallelSummaryGenerator(),
-        completionConfig: config?.completionConfig,
-        serdes: config?.serdes,
-        itemSerdes: config?.itemSerdes,
-        nesting: config?.nesting,
-      });
+      const result = await withParallelSpan(name, async () => {
+        const executionResult = await executeConcurrently(
+          name,
+          executionItems,
+          executor,
+          {
+            maxConcurrency: config?.maxConcurrency,
+            topLevelSubType: OperationSubType.PARALLEL,
+            iterationSubType: OperationSubType.PARALLEL_BRANCH,
+            summaryGenerator: createParallelSummaryGenerator(),
+            completionConfig: config?.completionConfig,
+            serdes: config?.serdes,
+            itemSerdes: config?.itemSerdes,
+            nesting: config?.nesting,
+          },
+        );
 
-      log("🔀", "Parallel operation completed successfully:", {
-        resultCount: result.totalCount,
+        log("🔀", "Parallel operation completed successfully:", {
+          resultCount: executionResult.totalCount,
+        });
+
+        return executionResult;
       });
 
       return result;

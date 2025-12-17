@@ -26,7 +26,6 @@ export async function withStepSpan<T>(
 ): Promise<T> {
   const tracer = getTracer();
   const spanName = stepName || stepId;
-  console.log("TEST: withStepSpan", spanName);
   return tracer.startActiveSpan(spanName, async (span: Span) => {
     try {
       // Add step metadata as span attributes
@@ -81,6 +80,49 @@ export async function withParallelBranchSpan<T>(
         span.setAttribute("durable.parallel.branch.name", branchName);
       }
       span.setAttribute("durable.operation.type", "parallel-branch");
+
+      const result = await fn();
+
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      // Record the error in the span
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+/**
+ * Wraps a parallel operation execution with an OpenTelemetry span
+ *
+ * @param parallelName - The optional name of the parallel operation
+ * @param fn - The function to execute within the span (wraps the entire parallel execution)
+ * @returns The result of the function execution
+ */
+export async function withParallelSpan<T>(
+  parallelName: string | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const tracer = getTracer();
+  const spanName = parallelName || "parallel";
+  return tracer.startActiveSpan(spanName, async (span: Span) => {
+    try {
+      // Add parallel operation metadata as span attributes
+      if (parallelName) {
+        span.setAttribute("durable.parallel.name", parallelName);
+      }
+      span.setAttribute("durable.operation.type", "parallel");
 
       const result = await fn();
 
