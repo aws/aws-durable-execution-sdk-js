@@ -4,6 +4,7 @@ import { TerminationReason } from "../../termination-manager/types";
 import { OperationLifecycleState, OperationSubType } from "../../types";
 import { OperationType } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
+import { hashId } from "../step-id-utils/step-id-utils";
 
 jest.mock("../logger/logger");
 
@@ -199,6 +200,233 @@ describe("CheckpointManager - Centralized Termination", () => {
 
       await expect(promise).resolves.toBeUndefined();
     });
+
+    describe("terminal status instant resolution", () => {
+      it.each([
+        { status: "SUCCEEDED", operationStatus: "SUCCEEDED" },
+        { status: "CANCELLED", operationStatus: "CANCELLED" },
+        { status: "FAILED", operationStatus: "FAILED" },
+        { status: "STOPPED", operationStatus: "STOPPED" },
+        { status: "TIMED_OUT", operationStatus: "TIMED_OUT" },
+      ])(
+        "should instantly resolve when status is $status",
+        async ({ operationStatus }) => {
+          const stepId = "step-1";
+
+          // Create operation in RETRY_WAITING state
+          checkpointManager.markOperationState(
+            stepId,
+            OperationLifecycleState.RETRY_WAITING,
+            {
+              metadata: {
+                stepId,
+                type: OperationType.STEP,
+                subType: OperationSubType.STEP,
+              },
+              endTimestamp: new Date(Date.now() + 5000),
+            },
+          );
+
+          // Set up stepData with terminal status
+          const hashedStepId = hashId(stepId);
+          (checkpointManager as any).stepData[hashedStepId] = {
+            Id: hashedStepId,
+            Status: operationStatus,
+          };
+
+          jest.clearAllTimers();
+
+          // Call waitForRetryTimer - should resolve immediately
+          const promise = checkpointManager.waitForRetryTimer(stepId);
+
+          await expect(promise).resolves.toBeUndefined();
+
+          // Verify no polling was set up
+          const ops = checkpointManager.getAllOperations();
+          const op = ops.get(stepId);
+          expect(op?.timer).toBeUndefined();
+          expect(op?.resolver).toBeUndefined();
+          expect(op?.pollCount).toBeUndefined();
+          expect(op?.pollStartTime).toBeUndefined();
+
+          // Verify no timers were scheduled
+          expect(jest.getTimerCount()).toBe(0);
+        },
+      );
+
+      it("should instantly resolve when status is terminal even with future endTimestamp", async () => {
+        const stepId = "step-1";
+
+        // Create operation with future endTimestamp
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.RETRY_WAITING,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.STEP,
+            },
+            endTimestamp: new Date(Date.now() + 10000), // 10 seconds in future
+          },
+        );
+
+        // Set up stepData with terminal status
+        const hashedStepId = hashId(stepId);
+        (checkpointManager as any).stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: "SUCCEEDED",
+        };
+
+        jest.clearAllTimers();
+
+        // Call waitForRetryTimer - should resolve immediately despite future endTimestamp
+        const promise = checkpointManager.waitForRetryTimer(stepId);
+
+        await expect(promise).resolves.toBeUndefined();
+
+        // Verify no polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeUndefined();
+        expect(op?.resolver).toBeUndefined();
+        expect(op?.pollCount).toBeUndefined();
+        expect(op?.pollStartTime).toBeUndefined();
+
+        // Verify no timers were scheduled
+        expect(jest.getTimerCount()).toBe(0);
+      });
+
+      it("should set up polling when status is not terminal", async () => {
+        const stepId = "step-1";
+
+        // Create operation in RETRY_WAITING state
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.RETRY_WAITING,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.STEP,
+            },
+            endTimestamp: new Date(Date.now() + 5000),
+          },
+        );
+
+        // Set up stepData with non-terminal status
+        const hashedStepId = hashId(stepId);
+        (checkpointManager as any).stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: "STARTED", // Non-terminal status
+        };
+
+        jest.clearAllTimers();
+
+        // Call waitForRetryTimer - should set up polling
+        const promise = checkpointManager.waitForRetryTimer(stepId);
+
+        // Verify polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeDefined();
+        expect(op?.resolver).toBeDefined();
+        expect(op?.pollCount).toBe(0);
+        expect(op?.pollStartTime).toBeDefined();
+
+        // Verify timer was scheduled
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+        // Clean up by resolving the operation
+        op?.resolver?.();
+        await promise;
+      });
+
+      it("should set up polling when stepData is missing", async () => {
+        const stepId = "step-1";
+
+        // Create operation in RETRY_WAITING state
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.RETRY_WAITING,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.STEP,
+            },
+            endTimestamp: new Date(Date.now() + 5000),
+          },
+        );
+
+        // Don't set up stepData - should be missing/undefined
+
+        jest.clearAllTimers();
+
+        // Call waitForRetryTimer - should set up polling
+        const promise = checkpointManager.waitForRetryTimer(stepId);
+
+        // Verify polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeDefined();
+        expect(op?.resolver).toBeDefined();
+        expect(op?.pollCount).toBe(0);
+        expect(op?.pollStartTime).toBeDefined();
+
+        // Verify timer was scheduled
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+        // Clean up by resolving the operation
+        op?.resolver?.();
+        await promise;
+      });
+
+      it("should set up polling when stepData status is undefined", async () => {
+        const stepId = "step-1";
+
+        // Create operation in RETRY_WAITING state
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.RETRY_WAITING,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.STEP,
+            },
+            endTimestamp: new Date(Date.now() + 5000),
+          },
+        );
+
+        // Set up stepData without status
+        const hashedStepId = hashId(stepId);
+        (checkpointManager as any).stepData[hashedStepId] = {
+          Id: hashedStepId,
+          // Status is undefined
+        };
+
+        jest.clearAllTimers();
+
+        // Call waitForRetryTimer - should set up polling
+        const promise = checkpointManager.waitForRetryTimer(stepId);
+
+        // Verify polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeDefined();
+        expect(op?.resolver).toBeDefined();
+        expect(op?.pollCount).toBe(0);
+        expect(op?.pollStartTime).toBeDefined();
+
+        // Verify timer was scheduled
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+        // Clean up by resolving the operation
+        op?.resolver?.();
+        await promise;
+      });
+    });
   });
 
   describe("waitForStatusChange", () => {
@@ -251,6 +479,229 @@ describe("CheckpointManager - Centralized Termination", () => {
       op!.resolver!();
 
       await expect(promise).resolves.toBeUndefined();
+    });
+
+    describe("terminal status instant resolution", () => {
+      it.each([
+        { status: "SUCCEEDED", operationStatus: "SUCCEEDED" },
+        { status: "CANCELLED", operationStatus: "CANCELLED" },
+        { status: "FAILED", operationStatus: "FAILED" },
+        { status: "STOPPED", operationStatus: "STOPPED" },
+        { status: "TIMED_OUT", operationStatus: "TIMED_OUT" },
+      ])(
+        "should instantly resolve when status is $status",
+        async ({ operationStatus }) => {
+          const stepId = "step-1";
+
+          // Create operation in IDLE_AWAITED state
+          checkpointManager.markOperationState(
+            stepId,
+            OperationLifecycleState.IDLE_AWAITED,
+            {
+              metadata: {
+                stepId,
+                type: OperationType.STEP,
+                subType: OperationSubType.WAIT,
+              },
+            },
+          );
+
+          // Set up stepData with terminal status
+          const hashedStepId = hashId(stepId);
+          (checkpointManager as any).stepData[hashedStepId] = {
+            Id: hashedStepId,
+            Status: operationStatus,
+          };
+
+          jest.clearAllTimers();
+
+          // Call waitForStatusChange - should resolve immediately
+          const promise = checkpointManager.waitForStatusChange(stepId);
+
+          await expect(promise).resolves.toBeUndefined();
+
+          // Verify no polling was set up
+          const ops = checkpointManager.getAllOperations();
+          const op = ops.get(stepId);
+          expect(op?.timer).toBeUndefined();
+          expect(op?.resolver).toBeUndefined();
+          expect(op?.pollCount).toBeUndefined();
+          expect(op?.pollStartTime).toBeUndefined();
+
+          // Verify no timers were scheduled
+          expect(jest.getTimerCount()).toBe(0);
+        },
+      );
+
+      it("should instantly resolve when status is terminal even with endTimestamp", async () => {
+        const stepId = "step-1";
+
+        // Create operation with future endTimestamp
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.IDLE_AWAITED,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.WAIT,
+            },
+            endTimestamp: new Date(Date.now() + 10000), // 10 seconds in future
+          },
+        );
+
+        // Set up stepData with terminal status
+        const hashedStepId = hashId(stepId);
+        (checkpointManager as any).stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: "SUCCEEDED",
+        };
+
+        jest.clearAllTimers();
+
+        // Call waitForStatusChange - should resolve immediately despite endTimestamp
+        const promise = checkpointManager.waitForStatusChange(stepId);
+
+        await expect(promise).resolves.toBeUndefined();
+
+        // Verify no polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeUndefined();
+        expect(op?.resolver).toBeUndefined();
+        expect(op?.pollCount).toBeUndefined();
+        expect(op?.pollStartTime).toBeUndefined();
+
+        // Verify no timers were scheduled
+        expect(jest.getTimerCount()).toBe(0);
+      });
+
+      it("should set up polling when status is not terminal", async () => {
+        const stepId = "step-1";
+
+        // Create operation in IDLE_AWAITED state
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.IDLE_AWAITED,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.WAIT,
+            },
+          },
+        );
+
+        // Set up stepData with non-terminal status
+        const hashedStepId = hashId(stepId);
+        (checkpointManager as any).stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: "STARTED", // Non-terminal status
+        };
+
+        jest.clearAllTimers();
+
+        // Call waitForStatusChange - should set up polling
+        const promise = checkpointManager.waitForStatusChange(stepId);
+
+        // Verify polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeDefined();
+        expect(op?.resolver).toBeDefined();
+        expect(op?.pollCount).toBe(0);
+        expect(op?.pollStartTime).toBeDefined();
+
+        // Verify timer was scheduled
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+        // Clean up by resolving the operation
+        op?.resolver?.();
+        await promise;
+      });
+
+      it("should set up polling when stepData is missing", async () => {
+        const stepId = "step-1";
+
+        // Create operation in IDLE_AWAITED state
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.IDLE_AWAITED,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.WAIT,
+            },
+          },
+        );
+
+        // Don't set up stepData - should be missing/undefined
+
+        jest.clearAllTimers();
+
+        // Call waitForStatusChange - should set up polling
+        const promise = checkpointManager.waitForStatusChange(stepId);
+
+        // Verify polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeDefined();
+        expect(op?.resolver).toBeDefined();
+        expect(op?.pollCount).toBe(0);
+        expect(op?.pollStartTime).toBeDefined();
+
+        // Verify timer was scheduled
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+        // Clean up by resolving the operation
+        op?.resolver?.();
+        await promise;
+      });
+
+      it("should set up polling when stepData status is undefined", async () => {
+        const stepId = "step-1";
+
+        // Create operation in IDLE_AWAITED state
+        checkpointManager.markOperationState(
+          stepId,
+          OperationLifecycleState.IDLE_AWAITED,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.WAIT,
+            },
+          },
+        );
+
+        // Set up stepData without status
+        const hashedStepId = hashId(stepId);
+        (checkpointManager as any).stepData[hashedStepId] = {
+          Id: hashedStepId,
+          // Status is undefined
+        };
+
+        jest.clearAllTimers();
+
+        // Call waitForStatusChange - should set up polling
+        const promise = checkpointManager.waitForStatusChange(stepId);
+
+        // Verify polling was set up
+        const ops = checkpointManager.getAllOperations();
+        const op = ops.get(stepId);
+        expect(op?.timer).toBeDefined();
+        expect(op?.resolver).toBeDefined();
+        expect(op?.pollCount).toBe(0);
+        expect(op?.pollStartTime).toBeDefined();
+
+        // Verify timer was scheduled
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+        // Clean up by resolving the operation
+        op?.resolver?.();
+        await promise;
+      });
     });
   });
 

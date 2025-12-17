@@ -2,6 +2,7 @@ import {
   CheckpointDurableExecutionRequest,
   OperationUpdate,
   Operation,
+  OperationStatus,
 } from "@aws-sdk/client-lambda";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
@@ -22,6 +23,14 @@ import {
 } from "../../types";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
+
+const TERMINAL_STATUSES: OperationStatus[] = [
+  OperationStatus.SUCCEEDED,
+  OperationStatus.CANCELLED,
+  OperationStatus.FAILED,
+  OperationStatus.STOPPED,
+  OperationStatus.TIMED_OUT,
+];
 
 interface QueuedCheckpoint {
   stepId: string;
@@ -494,6 +503,12 @@ export class CheckpointManager implements Checkpoint {
       );
     }
 
+    // Resolve immediately if the step was completed already
+    const stepData = this.stepData[hashId(stepId)];
+    if (stepData?.Status && TERMINAL_STATUSES.includes(stepData.Status)) {
+      return Promise.resolve();
+    }
+
     // Start timer with polling
     this.startTimerWithPolling(stepId, op.endTimestamp);
 
@@ -513,6 +528,12 @@ export class CheckpointManager implements Checkpoint {
       throw new Error(
         `Operation ${stepId} must be in IDLE_AWAITED state, got ${op.state}`,
       );
+    }
+
+    // Resolve immediately if the step was completed already
+    const stepData = this.stepData[hashId(stepId)];
+    if (stepData?.Status && TERMINAL_STATUSES.includes(stepData.Status)) {
+      return Promise.resolve();
     }
 
     // Start timer with polling
