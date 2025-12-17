@@ -108,6 +108,7 @@ export function createTestDurableContext(options?: {
     setTerminating: jest.fn(),
     hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    markAncestorFinished: jest.fn(),
     // New lifecycle methods (stubs)
     markOperationState: jest.fn(),
     waitForRetryTimer: jest.fn().mockResolvedValue(undefined),

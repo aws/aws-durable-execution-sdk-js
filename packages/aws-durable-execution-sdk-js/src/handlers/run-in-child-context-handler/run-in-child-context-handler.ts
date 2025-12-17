@@ -130,6 +130,9 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         currentStepData?.Status === OperationStatus.SUCCEEDED ||
         currentStepData?.Status === OperationStatus.FAILED
       ) {
+        // Mark this run-in-child-context as finished to prevent descendant operations
+        checkpoint.markAncestorFinished(entityId);
+
         return handleCompletedChildContext(
           context,
           parentContext,
@@ -341,6 +344,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       });
     }
 
+    // Mark this run-in-child-context as finished to prevent descendant operations
+    checkpoint.markAncestorFinished(entityId);
+
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
     checkpoint.checkpoint(entityId, {
       Id: entityId,
@@ -365,6 +371,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       name,
       error,
     });
+
+    // Mark this run-in-child-context as finished to prevent descendant operations
+    checkpoint.markAncestorFinished(entityId);
 
     // Always checkpoint failures
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;

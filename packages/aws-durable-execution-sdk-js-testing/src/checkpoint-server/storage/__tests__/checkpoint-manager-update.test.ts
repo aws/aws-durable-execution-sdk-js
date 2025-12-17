@@ -759,10 +759,10 @@ describe("checkpoint-manager updateOperation", () => {
     );
 
     // And the stored operation should be the same as returned
-    const storedOperation = storage.operationDataMap.get(
+    const storedOperation = storage.getOperationData(
       initialOperation.operation.Id,
     );
-    expect(storedOperation).toBe(result);
+    expect(storedOperation).toStrictEqual(result);
     expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
     expect(storedOperation?.operation.EndTimestamp).toEqual(
       newOperationData.EndTimestamp,
@@ -787,7 +787,7 @@ describe("checkpoint-manager updateOperation", () => {
       undefined,
     );
 
-    const storedOperation = storage.operationDataMap.get(
+    const storedOperation = storage.getOperationData(
       initialOperation.operation.Id,
     );
     expect(storedOperation?.operation.Type).toBe(originalType);
@@ -828,8 +828,8 @@ describe("checkpoint-manager updateOperation", () => {
     expect(result.operation.Status).toBe(OperationStatus.SUCCEEDED); // Updated
 
     // Check stored operation is the same as returned
-    const storedOperation = storage.operationDataMap.get("step-to-update");
-    expect(storedOperation).toBe(result);
+    const storedOperation = storage.getOperationData("step-to-update");
+    expect(storedOperation).toStrictEqual(result);
     expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
     expect(storedOperation?.operation.Name).toBe("test-step"); // Preserved
     expect(storedOperation?.operation.Type).toBe(OperationType.STEP); // Preserved
@@ -888,8 +888,8 @@ describe("checkpoint-manager updateOperation", () => {
     expect(result.operation.EndTimestamp).toEqual(updateData.EndTimestamp);
 
     // Stored operation should be the same as returned
-    const storedOperation = storage.operationDataMap.get("complex-op");
-    expect(storedOperation).toBe(result);
+    const storedOperation = storage.getOperationData("complex-op");
+    expect(storedOperation).toStrictEqual(result);
     expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
     expect(storedOperation?.operation.StepDetails).toEqual({
       Result: "final-result",
@@ -916,7 +916,7 @@ describe("checkpoint-manager updateOperation", () => {
       undefined,
     );
 
-    const storedOperation = storage.operationDataMap.get(
+    const storedOperation = storage.getOperationData(
       initialOperation.operation.Id,
     );
     expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);

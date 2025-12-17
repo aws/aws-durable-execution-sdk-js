@@ -69,6 +69,14 @@ export interface BatchResult<TResult> {
 }
 
 /**
+ * Configuration for early completion of map/parallel operations
+ *
+ * @remarks
+ * **Race Condition Behavior**: When multiple children complete simultaneously,
+ * the parent operation may have more completed children than the specified threshold
+ * by the time the completion check occurs. This is expected behavior due to the
+ * asynchronous nature of concurrent execution.
+ *
  * @public
  */
 export interface CompletionConfig {
