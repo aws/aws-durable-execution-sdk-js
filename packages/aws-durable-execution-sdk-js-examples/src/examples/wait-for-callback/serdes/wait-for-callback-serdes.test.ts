@@ -9,6 +9,9 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
+  localRunnerConfig: {
+    skipTime: false,
+  },
   tests: (runner) => {
     it("should handle waitForCallback with custom serdes configuration", async () => {
       const executionPromise = runner.run();
