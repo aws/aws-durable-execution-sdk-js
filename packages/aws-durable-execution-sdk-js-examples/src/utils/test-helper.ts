@@ -9,7 +9,7 @@ import {
   LocalDurableTestRunnerSetupParameters,
   TestResult,
 } from "@aws/durable-execution-sdk-js-testing";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 
 export interface FunctionNameMap {
@@ -42,10 +42,23 @@ export interface TestDefinition<ResultType> {
   localRunnerConfig?: LocalDurableTestRunnerSetupParameters;
 }
 
+export interface EventSignatureConfig {
+  /**
+   * Due to API delays or other conditions, the number of invocations can change.
+   * This property sets a threshold where the number of invocations in the actual history
+   * must be in a specified range based on the expected history.
+   */
+  invocationCompletedDifference?: number;
+}
+
 export interface TestHelper {
   isTimeSkipping: boolean;
   isCloud: boolean;
-  assertEventSignatures(testResult: TestResult, suffix?: string): void;
+  assertEventSignatures(
+    testResult: TestResult,
+    suffix?: string,
+    eventSignatureConfig?: EventSignatureConfig,
+  ): void;
   functionNameMap: FunctionNameMap;
 }
 
@@ -104,9 +117,33 @@ function assertEventSignatures(
   actualEvents: Event[],
   expectedEvents: EventSignature[],
   isTimeSkipping: boolean = false,
+  eventSignatureConfig?: EventSignatureConfig,
 ) {
   const actualCounts = countEventSignatures(actualEvents, isTimeSkipping);
   const expectedCounts = countEventSignatures(expectedEvents, isTimeSkipping);
+
+  if (eventSignatureConfig?.invocationCompletedDifference) {
+    const invocationCompletedSignature = JSON.stringify(
+      createEventSignature({ EventType: EventType.InvocationCompleted }),
+    );
+
+    const actualInvocationCompleted = actualCounts.get(
+      invocationCompletedSignature,
+    );
+    actualCounts.delete(invocationCompletedSignature);
+
+    const expectedInvocationsCompleted = expectedCounts.get(
+      invocationCompletedSignature,
+    );
+    expectedCounts.delete(invocationCompletedSignature);
+
+    const invocationCompletedDifference = Math.abs(
+      actualInvocationCompleted - expectedInvocationsCompleted,
+    );
+    expect(invocationCompletedDifference).toBeLessThanOrEqual(
+      eventSignatureConfig.invocationCompletedDifference,
+    );
+  }
 
   expect(actualCounts).toEqual(expectedCounts);
 }
@@ -139,16 +176,27 @@ function getCallerFile(): string {
  */
 export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   const isIntegrationTest = process.env.NODE_ENV === "integration";
+  const generateHistories = process.env.GENERATE_HISTORY === "true";
   const isTimeSkipping =
     (testDef.localRunnerConfig?.skipTime ?? true) && !isIntegrationTest;
 
+  if (generateHistories && isTimeSkipping && !isIntegrationTest) {
+    console.warn("Disabling skipTime since GENERATE_HISTORY is true");
+    jest.setTimeout(120000);
+  }
+
   const testFileName = getCallerFile();
   const parsedFunctionName = path.basename(testFileName, ".test.ts");
+
   let calledAssertEventSignature = false;
   const testHelper: TestHelper = {
-    isTimeSkipping,
+    isTimeSkipping: isTimeSkipping && !generateHistories,
     isCloud: isIntegrationTest,
-    assertEventSignatures: (testResult: TestResult, suffix) => {
+    assertEventSignatures: (
+      testResult: TestResult,
+      suffix,
+      eventSignatureConfig,
+    ) => {
       calledAssertEventSignature = true;
 
       const historyFileBasename = suffix
@@ -159,10 +207,29 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
         path.dirname(testFileName),
         `${historyFileBasename}.history.json`,
       );
+
+      if (generateHistories) {
+        if (!existsSync(historyFilePath)) {
+          console.log(`Generated missing history for ${historyFileBasename}`);
+          writeFileSync(
+            historyFilePath,
+            JSON.stringify(testResult.getHistoryEvents(), null, 2),
+          );
+          return;
+        }
+      }
+
+      if (!existsSync(historyFilePath)) {
+        throw new Error(
+          `History file ${historyFilePath} does not exist. Please run the test with GENERATE_HISTORY=true to generate it.`,
+        );
+      }
+
       return assertEventSignatures(
         testResult.getHistoryEvents(),
         JSON.parse(readFileSync(historyFilePath).toString("utf-8")),
         testHelper.isTimeSkipping,
+        eventSignatureConfig,
       );
     },
     functionNameMap: isIntegrationTest
@@ -220,7 +287,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     beforeAll(() =>
       LocalDurableTestRunner.setupTestEnvironment({
         ...testDef.localRunnerConfig,
-        skipTime: isTimeSkipping,
+        skipTime: testHelper.isTimeSkipping,
       }),
     );
     afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());

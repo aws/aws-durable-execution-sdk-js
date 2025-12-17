@@ -1,0 +1,114 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "537ac9c0-a15f-4546-9287-acd7f3cecc26",
+    "EventTimestamp": "2025-12-17T19:41:56.457Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"shouldFail\":false}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-submitter-callback",
+    "EventTimestamp": "2025-12-17T19:41:56.462Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:41:56.462Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjA2ZmQwN2Q1LTY5YmUtNDNlNC1hMTJjLWEzYmMyMDk0NjcwMCIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiZGEwMWMxMjktMTgyOS00OGRjLWI2ODMtN2U1ZjE4OTM5MDljIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:41:56.466Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:41:56.466Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 6,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:41:56.467Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"data\":\"completed\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-17T19:41:56.518Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:41:56.457Z",
+      "EndTimestamp": "2025-12-17T19:41:56.518Z",
+      "Error": {},
+      "RequestId": "651d32b5-1285-4640-a717-4c830e8676f2"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-submitter-callback",
+    "EventTimestamp": "2025-12-17T19:41:56.522Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"{\\\"data\\\":\\\"completed\\\"}\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2025-12-17T19:41:56.523Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:41:56.521Z",
+      "EndTimestamp": "2025-12-17T19:41:56.523Z",
+      "Error": {},
+      "RequestId": "da3a5e3e-9131-4c18-8061-575ea700dacd"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "537ac9c0-a15f-4546-9287-acd7f3cecc26",
+    "EventTimestamp": "2025-12-17T19:41:56.523Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"result\":\"{\\\"data\\\":\\\"completed\\\"}\",\"success\":true}"
+      }
+    }
+  }
+]

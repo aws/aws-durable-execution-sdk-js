@@ -12,16 +12,16 @@ createTests({
   localRunnerConfig: {
     skipTime: false,
   },
-  tests: (runner, { isCloud }) => {
+  tests: (runner, { isCloud, assertEventSignatures }) => {
     it("should handle waitForCallback heartbeat scenarios during long-running submitter execution", async () => {
       const executionPromise = runner.run({
         payload: { isCloud },
       });
 
-      const callbackOperation = runner.getOperationByIndex(1);
+      const callbackOperation = runner.getOperationByIndex(0);
 
       // Wait for the operation to be available
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
 
       // Send heartbeat to keep the callback alive during processing
       await callbackOperation.sendCallbackHeartbeat();
@@ -53,6 +53,8 @@ createTests({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(result);
     });
   },
 });

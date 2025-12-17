@@ -9,7 +9,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle callback operations mixed with other operation types", async () => {
       const callbackOperation = runner.getOperation("process-user");
 
@@ -17,6 +17,9 @@ createTests({
 
       // Wait for callback to start (other operations complete synchronously)
       await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+
+      // Wait for invocation to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Complete the callback
       const callbackResult = JSON.stringify({
@@ -41,6 +44,8 @@ createTests({
       expect(operationTypes).toContain(OperationType.WAIT);
       expect(operationTypes).toContain(OperationType.STEP);
       expect(operationTypes).toContain(OperationType.CALLBACK);
+
+      assertEventSignatures(result);
     });
   },
 });

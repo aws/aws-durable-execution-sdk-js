@@ -9,7 +9,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle multiple concurrent callback operations", async () => {
       // Get all callback operations
       const callback1 = runner.getOperation("api-call-1");
@@ -25,22 +25,27 @@ createTests({
         callback3.waitForData(WaitingOperationStatus.STARTED),
       ]);
 
+      // Wait a bit to ensure invocations complete (TODO: add a waitForInvocation to testing lib)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Complete callbacks in different order
       const callbackResult2 = JSON.stringify({
         id: 2,
         data: "second",
       });
-      await callback2.sendCallbackSuccess(callbackResult2);
       const callbackResult1 = JSON.stringify({
         id: 1,
         data: "first",
       });
-      await callback1.sendCallbackSuccess(callbackResult1);
       const callbackResult3 = JSON.stringify({
         id: 3,
         data: "third",
       });
-      await callback3.sendCallbackSuccess(callbackResult3);
+      await Promise.all([
+        callback2.sendCallbackSuccess(callbackResult2),
+        callback1.sendCallbackSuccess(callbackResult1),
+        callback3.sendCallbackSuccess(callbackResult3),
+      ]);
 
       const result = await executionPromise;
 
@@ -57,6 +62,10 @@ createTests({
           (op) => op.getType() === OperationType.CALLBACK,
         ),
       ).toBe(true);
+
+      assertEventSignatures(result, undefined, {
+        invocationCompletedDifference: 2,
+      });
     });
   },
 });

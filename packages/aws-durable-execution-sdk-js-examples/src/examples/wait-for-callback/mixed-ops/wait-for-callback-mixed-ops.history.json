@@ -1,0 +1,228 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "6400ea64-7038-4daa-8bfd-262376b86f78",
+    "EventTimestamp": "2025-12-17T19:42:07.267Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "initial-wait",
+    "EventTimestamp": "2025-12-17T19:42:07.272Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-17T19:42:08.272Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-12-17T19:42:07.324Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:07.267Z",
+      "EndTimestamp": "2025-12-17T19:42:07.324Z",
+      "Error": {},
+      "RequestId": "0b010d5d-87fd-4708-af86-7b8f1593152b"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "Name": "initial-wait",
+    "EventTimestamp": "2025-12-17T19:42:08.272Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "fetch-user-data",
+    "EventTimestamp": "2025-12-17T19:42:08.285Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "fetch-user-data",
+    "EventTimestamp": "2025-12-17T19:42:08.285Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"userId\":123,\"name\":\"John Doe\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "wait-for-callback",
+    "EventTimestamp": "2025-12-17T19:42:08.289Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 8,
+    "Id": "c9e6e7b69f98f516",
+    "EventTimestamp": "2025-12-17T19:42:08.289Z",
+    "ParentId": "eccbc87e4b5ce2fe",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjA3Yjk5MGY1LTQyM2UtNDVhMi1hZjVkLTg1ZTgyNzcyNmE5ZiIsIm9wZXJhdGlvbklkIjoiYzllNmU3YjY5Zjk4ZjUxNiIsInRva2VuIjoiOTYyZjFjNWMtOTFlZS00MWIwLTkwMmYtYzc0NjM4NzdiZTA4In0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "b772d43b49bb57b5",
+    "EventTimestamp": "2025-12-17T19:42:08.292Z",
+    "ParentId": "eccbc87e4b5ce2fe",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "b772d43b49bb57b5",
+    "EventTimestamp": "2025-12-17T19:42:08.392Z",
+    "ParentId": "eccbc87e4b5ce2fe",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 11,
+    "Id": "c9e6e7b69f98f516",
+    "EventTimestamp": "2025-12-17T19:42:08.393Z",
+    "ParentId": "eccbc87e4b5ce2fe",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"processed\":true}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 12,
+    "EventTimestamp": "2025-12-17T19:42:08.443Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:08.277Z",
+      "EndTimestamp": "2025-12-17T19:42:08.443Z",
+      "Error": {},
+      "RequestId": "c544bf18-b1d1-4708-ba21-e6de1780a4ff"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 13,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "wait-for-callback",
+    "EventTimestamp": "2025-12-17T19:42:08.447Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"{\\\"processed\\\":true}\""
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 14,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "final-wait",
+    "EventTimestamp": "2025-12-17T19:42:08.447Z",
+    "WaitStartedDetails": {
+      "Duration": 2,
+      "ScheduledEndTimestamp": "2025-12-17T19:42:10.447Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 15,
+    "EventTimestamp": "2025-12-17T19:42:08.498Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:08.445Z",
+      "EndTimestamp": "2025-12-17T19:42:08.498Z",
+      "Error": {},
+      "RequestId": "3e4a0fc2-6814-4d40-90d2-3cf18ea7c093"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 16,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "final-wait",
+    "EventTimestamp": "2025-12-17T19:42:10.449Z",
+    "WaitSucceededDetails": {
+      "Duration": 2
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 17,
+    "Id": "e4da3b7fbbce2345",
+    "Name": "finalize-processing",
+    "EventTimestamp": "2025-12-17T19:42:10.451Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 18,
+    "Id": "e4da3b7fbbce2345",
+    "Name": "finalize-processing",
+    "EventTimestamp": "2025-12-17T19:42:10.451Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"status\":\"completed\",\"timestamp\":1766000530450}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 19,
+    "EventTimestamp": "2025-12-17T19:42:10.451Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:10.449Z",
+      "EndTimestamp": "2025-12-17T19:42:10.451Z",
+      "Error": {},
+      "RequestId": "9a61727c-fa83-4aee-9135-c9c56529526c"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 20,
+    "Id": "6400ea64-7038-4daa-8bfd-262376b86f78",
+    "EventTimestamp": "2025-12-17T19:42:10.451Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"stepResult\":{\"userId\":123,\"name\":\"John Doe\"},\"callbackResult\":\"{\\\"processed\\\":true}\",\"finalStep\":{\"status\":\"completed\",\"timestamp\":1766000530450},\"workflowCompleted\":true}"
+      }
+    }
+  }
+]

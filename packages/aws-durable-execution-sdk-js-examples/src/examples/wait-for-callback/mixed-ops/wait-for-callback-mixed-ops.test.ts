@@ -9,14 +9,14 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback mixed with steps, waits, and other operations", async () => {
       const callbackOperation = runner.getOperation("wait-for-callback");
 
       const executionPromise = runner.run();
 
       // Wait for callback to start (other operations complete synchronously with skipTime)
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
 
       // Complete the callback
       const callbackResult = JSON.stringify({ processed: true });
@@ -44,6 +44,8 @@ createTests({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBe(7);
+
+      assertEventSignatures(result);
     });
   },
 });

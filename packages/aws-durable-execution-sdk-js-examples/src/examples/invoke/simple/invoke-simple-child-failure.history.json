@@ -1,0 +1,83 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "e97d214f-2098-4b6e-88d7-815817b1b85f",
+    "EventTimestamp": "2025-12-17T19:42:06.644Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"functionName\":\"handler-error\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ChainedInvokeStarted",
+    "SubType": "ChainedInvoke",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:06.647Z",
+    "ChainedInvokeStartedDetails": {
+      "FunctionName": "",
+      "Input": {
+        "Payload": ""
+      },
+      "DurableExecutionArn": ""
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-12-17T19:42:06.699Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:06.644Z",
+      "EndTimestamp": "2025-12-17T19:42:06.699Z",
+      "Error": {},
+      "RequestId": "90502e6f-451a-4787-94a3-2c314d95e4e8"
+    }
+  },
+  {
+    "EventType": "ChainedInvokeFailed",
+    "SubType": "ChainedInvoke",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:06.750Z",
+    "ChainedInvokeFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Intentional handler failure",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-17T19:42:06.757Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:06.757Z",
+      "EndTimestamp": "2025-12-17T19:42:06.757Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "InvokeError",
+          "ErrorMessage": "Intentional handler failure"
+        }
+      },
+      "RequestId": "3da81e1d-9deb-4584-bfbb-559f89c7a9f6"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 6,
+    "Id": "e97d214f-2098-4b6e-88d7-815817b1b85f",
+    "EventTimestamp": "2025-12-17T19:42:06.758Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "InvokeError",
+          "ErrorMessage": "Intentional handler failure"
+        }
+      }
+    }
+  }
+]

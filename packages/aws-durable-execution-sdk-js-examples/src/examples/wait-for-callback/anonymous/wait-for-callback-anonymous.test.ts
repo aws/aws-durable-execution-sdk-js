@@ -8,15 +8,15 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle basic waitForCallback with anonymous submitter", async () => {
       // Start the execution (this will pause at the callback)
       const executionPromise = runner.run();
 
-      const callbackOperation = runner.getOperationByIndex(1);
+      const callbackOperation = runner.getOperationByIndex(0);
 
       // Wait for the operation to be available
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
       const callbackResult = JSON.stringify({
         data: "callback_completed",
       });
@@ -33,6 +33,8 @@ createTests({
 
       // Verify operations were tracked
       expect(result.getOperations().length).toBeGreaterThan(0);
+
+      assertEventSignatures(result);
     });
   },
 });

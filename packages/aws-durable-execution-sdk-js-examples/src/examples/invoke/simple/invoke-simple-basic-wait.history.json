@@ -1,0 +1,72 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "e567fc4e-1af2-4ec6-8f22-e68cf0e4bb68",
+    "EventTimestamp": "2025-12-17T19:42:04.204Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"functionName\":\"wait-named\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ChainedInvokeStarted",
+    "SubType": "ChainedInvoke",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:04.206Z",
+    "ChainedInvokeStartedDetails": {
+      "FunctionName": "",
+      "Input": {
+        "Payload": ""
+      },
+      "DurableExecutionArn": ""
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-12-17T19:42:04.256Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:04.204Z",
+      "EndTimestamp": "2025-12-17T19:42:04.256Z",
+      "Error": {},
+      "RequestId": "98ed8a54-c98e-46a5-856f-721423a1d4fc"
+    }
+  },
+  {
+    "EventType": "ChainedInvokeSucceeded",
+    "SubType": "ChainedInvoke",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:06.323Z",
+    "ChainedInvokeSucceededDetails": {
+      "Result": {
+        "Payload": "\"wait finished\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-17T19:42:06.326Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:06.325Z",
+      "EndTimestamp": "2025-12-17T19:42:06.326Z",
+      "Error": {},
+      "RequestId": "54f10185-dc1d-495b-8e0b-6ca7519b1f5b"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "e567fc4e-1af2-4ec6-8f22-e68cf0e4bb68",
+    "EventTimestamp": "2025-12-17T19:42:06.326Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"wait finished\""
+      }
+    }
+  }
+]

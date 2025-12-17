@@ -1,0 +1,115 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "d85704a8-b3b7-4a45-b203-d10599649a30",
+    "EventTimestamp": "2025-12-17T19:42:13.458Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "my callback function",
+    "EventTimestamp": "2025-12-17T19:42:13.463Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:42:13.463Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjdlMjVhYTExLTAzNjAtNDIyMS04ODMzLWE3N2YxODNhMDhhMSIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiMjE5NWJhMTYtNWY4NS00M2E3LWE2MGMtM2M3NTE2YmVmMDhlIn0=",
+      "Timeout": 5,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:42:13.465Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:42:13.465Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 6,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:42:13.466Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "succeeded"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-17T19:42:13.517Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:13.458Z",
+      "EndTimestamp": "2025-12-17T19:42:13.517Z",
+      "Error": {},
+      "RequestId": "153d4d6d-b41e-4535-9e47-0df2dfc38e8e"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "my callback function",
+    "EventTimestamp": "2025-12-17T19:42:13.521Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"succeeded\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2025-12-17T19:42:13.521Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:13.519Z",
+      "EndTimestamp": "2025-12-17T19:42:13.521Z",
+      "Error": {},
+      "RequestId": "39fe6f96-c081-4352-8f22-364ea41a13f3"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "d85704a8-b3b7-4a45-b203-d10599649a30",
+    "EventTimestamp": "2025-12-17T19:42:13.521Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"succeeded\""
+      }
+    }
+  }
+]
