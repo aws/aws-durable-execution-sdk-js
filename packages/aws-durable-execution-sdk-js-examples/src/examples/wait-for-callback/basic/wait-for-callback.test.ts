@@ -13,7 +13,7 @@ createTests({
       const executionPromise = runner.run();
 
       const waitForCallbackOp = runner.getOperationByIndex(0);
-      await waitForCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await waitForCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       await waitForCallbackOp.sendCallbackSuccess("succeeded");
 
       const execution = await executionPromise;
@@ -27,7 +27,7 @@ createTests({
       const executionPromise = runner.run();
 
       const waitForCallbackOp = runner.getOperationByIndex(0);
-      await waitForCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await waitForCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       await waitForCallbackOp.sendCallbackFailure({ ErrorMessage: "ERROR" });
 
       const execution = await executionPromise;

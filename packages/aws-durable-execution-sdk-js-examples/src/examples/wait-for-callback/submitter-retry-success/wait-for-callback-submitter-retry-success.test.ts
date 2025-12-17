@@ -13,7 +13,7 @@ createTests({
       const executionPromise = runner.run({ payload: { shouldFail: false } });
 
       const waitForCallbackOp = runner.getOperationByIndex(0);
-      await waitForCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await waitForCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       await waitForCallbackOp.sendCallbackSuccess(
         JSON.stringify({ data: "completed" }),
       );
@@ -25,7 +25,7 @@ createTests({
         success: true,
       });
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, "success");
     });
 
     it("should fail after exhausting retries when submitter always fails", async () => {
@@ -34,6 +34,8 @@ createTests({
       const error = execution.getError();
       expect(error).toBeDefined();
       expect(error?.errorMessage).toContain("Simulated submitter failure");
+
+      assertEventSignatures(execution, "failure");
     });
   },
 });

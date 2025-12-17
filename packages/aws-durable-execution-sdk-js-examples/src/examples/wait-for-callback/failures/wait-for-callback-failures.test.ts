@@ -13,10 +13,10 @@ createTests({
       // Start the execution (this will pause at the callback)
       const executionPromise = runner.run();
 
-      const callbackOperation = runner.getOperationByIndex(1);
+      const callbackOperation = runner.getOperationByIndex(0);
 
       // Wait for the operation to be available (submitter succeeded)
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
 
       // Simulate external system failing the callback
       await callbackOperation.sendCallbackFailure({

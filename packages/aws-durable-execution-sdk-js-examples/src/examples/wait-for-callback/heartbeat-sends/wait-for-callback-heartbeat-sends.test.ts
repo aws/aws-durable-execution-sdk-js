@@ -18,10 +18,10 @@ createTests({
         payload: { isCloud },
       });
 
-      const callbackOperation = runner.getOperationByIndex(1);
+      const callbackOperation = runner.getOperationByIndex(0);
 
       // Wait for the operation to be available
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
 
       // Send heartbeat to keep the callback alive during processing
       await callbackOperation.sendCallbackHeartbeat();

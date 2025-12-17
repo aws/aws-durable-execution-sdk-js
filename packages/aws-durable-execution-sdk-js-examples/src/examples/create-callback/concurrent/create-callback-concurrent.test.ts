@@ -64,7 +64,7 @@ createTests({
       ).toBe(true);
 
       assertEventSignatures(result, undefined, {
-        invocationCompletedDifference: 1,
+        invocationCompletedDifference: 2,
       });
     });
   },

@@ -15,7 +15,7 @@ createTests({
 
       const callbackOperation = runner.getOperation("custom-serdes-callback");
 
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
 
       // Serialize the data using custom serdes for sending
       await callbackOperation.sendCallbackSuccess(

@@ -20,15 +20,15 @@ createTests({
       const executionPromise = runner.run();
 
       // Complete callbacks in sequence
-      await outerCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await outerCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       const outerCallbackResult = JSON.stringify({ level: "outer-completed" });
       await outerCallbackOp.sendCallbackSuccess(outerCallbackResult);
 
-      await innerCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await innerCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       const innerCallbackResult = JSON.stringify({ level: "inner-completed" });
       await innerCallbackOp.sendCallbackSuccess(innerCallbackResult);
 
-      await nestedCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await nestedCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       const nestedCallbackResult = JSON.stringify({
         level: "nested-completed",
       });

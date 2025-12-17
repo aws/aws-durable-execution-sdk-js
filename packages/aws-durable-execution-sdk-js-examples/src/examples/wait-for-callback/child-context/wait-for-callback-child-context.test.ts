@@ -21,15 +21,14 @@ createTests({
       });
 
       // Wait for parent callback to start
-      await parentCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await parentCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       const parentCallbackResult = JSON.stringify({
         parentData: "parent-completed",
       });
-      console.log("parent callback op", parentCallbackOp.getOperationData());
       await parentCallbackOp.sendCallbackSuccess(parentCallbackResult);
 
       // Wait for child callback to start
-      await childCallbackOp.waitForData(WaitingOperationStatus.STARTED);
+      await childCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       const childCallbackResult = JSON.stringify({ childData: 42 });
       console.log("child callback op", childCallbackOp.getOperationData());
       await childCallbackOp.sendCallbackSuccess(childCallbackResult);
