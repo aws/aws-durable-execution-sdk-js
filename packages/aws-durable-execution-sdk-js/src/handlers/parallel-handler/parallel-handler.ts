@@ -13,6 +13,7 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
+import { withParallelBranchSpan } from "../../utils/otel/otel-instrumentation";
 
 export const createParallelHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -107,7 +108,11 @@ export const createParallelHandler = <Logger extends DurableLogger>(
           index: executionItem.index,
         });
 
-        const result = await executionItem.data(childContext);
+        const result = await withParallelBranchSpan(
+          executionItem.id,
+          executionItem.name,
+          async () => await executionItem.data(childContext),
+        );
 
         log("✅", "Parallel branch completed:", {
           index: executionItem.index,
