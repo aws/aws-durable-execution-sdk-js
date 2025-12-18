@@ -5,7 +5,7 @@ import { InvocationType } from "@aws-sdk/client-lambda";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner, { isCloud }) => {
+  tests: (runner, { isCloud, assertEventSignatures }) => {
     it("should handle callback heartbeats during long-running tasks", async () => {
       const callbackOperation = runner.getOperation("long-running-task");
 
@@ -37,6 +37,8 @@ createTests({
       expect(result.getResult()).toEqual({
         longTaskResult: callbackResult,
       });
+
+      assertEventSignatures(result);
     });
   },
 });

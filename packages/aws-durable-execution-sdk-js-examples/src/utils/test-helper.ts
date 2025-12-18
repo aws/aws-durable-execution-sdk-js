@@ -239,7 +239,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
 
   afterAll(() => {
     if (!calledAssertEventSignature) {
-      console.warn(
+      throw new Error(
         `assertEventSignature was not called for test ${parsedFunctionName}`,
       );
     }

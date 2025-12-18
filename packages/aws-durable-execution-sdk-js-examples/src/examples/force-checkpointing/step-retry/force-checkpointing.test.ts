@@ -4,7 +4,7 @@ import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete with force checkpointing when one branch blocks termination", async () => {
       const startTime = Date.now();
 
@@ -33,6 +33,8 @@ createTests({
       // Verify operations were tracked
       const operations = execution.getOperations();
       expect(operations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(execution);
     }, 20000); // 20 second timeout
   },
 });

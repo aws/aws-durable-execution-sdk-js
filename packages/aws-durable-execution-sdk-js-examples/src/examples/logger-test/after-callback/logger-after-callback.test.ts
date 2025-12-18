@@ -12,7 +12,7 @@ import { randomUUID } from "crypto";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner, isCloud) => {
+  tests: (runner, { isCloud, assertEventSignatures }) => {
     if (!isCloud) {
       it("should log correctly with modeAware=true", async () => {
         const logFilePath = path.join(
@@ -58,6 +58,8 @@ createTests({
           // - "After createCallback" appears once (after callback resolves, in execution mode)
           expect(beforeCallbackLogs.length).toBe(1);
           expect(afterCallbackLogs.length).toBe(1);
+
+          assertEventSignatures(execution);
         } finally {
           if (fs.existsSync(logFilePath)) {
             fs.unlinkSync(logFilePath);
@@ -107,24 +109,28 @@ createTests({
           // - "After createCallback" appears once (after callback resolves)
           expect(beforeCallbackLogs.length).toBe(2);
           expect(afterCallbackLogs.length).toBe(1);
+
+          assertEventSignatures(execution);
         } finally {
           if (fs.existsSync(logFilePath)) {
             fs.unlinkSync(logFilePath);
           }
         }
       });
+    } else {
+      it("should execute successfully", async () => {
+        const executionPromise = runner.run();
+
+        const callbackOp = runner.getOperationByIndex(0);
+        await callbackOp.waitForData(WaitingOperationStatus.STARTED);
+        await callbackOp.sendCallbackSuccess("test-result");
+
+        const execution = await executionPromise;
+        const result = execution.getResult() as any;
+        expect(result.message).toBe("Success");
+
+        assertEventSignatures(execution);
+      });
     }
-
-    it("should execute successfully", async () => {
-      const executionPromise = runner.run();
-
-      const callbackOp = runner.getOperationByIndex(0);
-      await callbackOp.waitForData(WaitingOperationStatus.STARTED);
-      await callbackOp.sendCallbackSuccess("test-result");
-
-      const execution = await executionPromise;
-      const result = execution.getResult() as any;
-      expect(result.message).toBe("Success");
-    });
   },
 });

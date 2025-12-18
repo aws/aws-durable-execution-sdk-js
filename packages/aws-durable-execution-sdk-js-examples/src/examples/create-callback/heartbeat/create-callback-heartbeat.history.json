@@ -1,0 +1,72 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "8196cab6-0731-48d8-8d01-2e8640cfbec1",
+    "EventTimestamp": "2025-12-18T21:47:02.807Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"isCloud\":false}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "long-running-task",
+    "EventTimestamp": "2025-12-18T21:47:02.811Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjU5NWM5NjNiLWUwMGEtNDEyNi1iMWRmLTNhMzNmYWEwZmI0YSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiNzU4MTYxY2UtZDA3Yi00N2M1LWE4NDYtNzZmNjgxMDg2ZDg0In0=",
+      "HeartbeatTimeout": 1,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2025-12-18T21:47:02.863Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:02.806Z",
+      "EndTimestamp": "2025-12-18T21:47:02.863Z",
+      "Error": {},
+      "RequestId": "1aa7b2ab-68c0-44a6-92a9-4876ee2963f3"
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "Name": "long-running-task",
+    "EventTimestamp": "2025-12-18T21:47:04.016Z",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"processed\":1000,\"status\":\"completed\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-18T21:47:04.018Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:04.017Z",
+      "EndTimestamp": "2025-12-18T21:47:04.018Z",
+      "Error": {},
+      "RequestId": "f6c655d4-c681-475c-8e14-17c62257cd6c"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "8196cab6-0731-48d8-8d01-2e8640cfbec1",
+    "EventTimestamp": "2025-12-18T21:47:04.018Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"longTaskResult\":\"{\\\"processed\\\":1000,\\\"status\\\":\\\"completed\\\"}\"}"
+      }
+    }
+  }
+]

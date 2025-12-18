@@ -1,0 +1,165 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "377867c0-e551-46e1-af70-e33487e4855c",
+    "EventTimestamp": "2025-12-18T21:47:11.237Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-callbacks",
+    "EventTimestamp": "2025-12-18T21:47:11.242Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2025-12-18T21:47:11.242Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "branch-1-callback",
+    "EventTimestamp": "2025-12-18T21:47:11.242Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjFlY2ViODE3LTNhZDgtNGMzNi1hMWQyLTkwNmMxZDgzZTRkYSIsIm9wZXJhdGlvbklkIjoiMmYyMjFhMThlYjg2MzgwMyIsInRva2VuIjoiYTJkYjk2ODAtNTY3ZS00ODVjLWJhMzYtN2IzZmEwYmYxZTIzIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2025-12-18T21:47:11.242Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "branch-2-callback",
+    "EventTimestamp": "2025-12-18T21:47:11.242Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjFlY2ViODE3LTNhZDgtNGMzNi1hMWQyLTkwNmMxZDgzZTRkYSIsIm9wZXJhdGlvbklkIjoiNjE1MWY1YWIyODJkOTBlNCIsInRva2VuIjoiODc5ZmY2MzEtMmJjNi00MzczLWJiYjEtZjYzNjQ5MDM0MTVhIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2025-12-18T21:47:11.242Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "branch-3-callback",
+    "EventTimestamp": "2025-12-18T21:47:11.242Z",
+    "ParentId": "13cee27a2bd93915",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjFlY2ViODE3LTNhZDgtNGMzNi1hMWQyLTkwNmMxZDgzZTRkYSIsIm9wZXJhdGlvbklkIjoiYjQyNWUwYzc1NTkxYWE4ZiIsInRva2VuIjoiNDhmMmQ1MDAtOWYyYS00YTA2LWEyMzUtNzJmOGNlMmM1ZWE5In0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 9,
+    "Id": "2f221a18eb863803",
+    "Name": "branch-1-callback",
+    "EventTimestamp": "2025-12-18T21:47:11.244Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "result-1"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2025-12-18T21:47:11.295Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:11.237Z",
+      "EndTimestamp": "2025-12-18T21:47:11.295Z",
+      "Error": {},
+      "RequestId": "5668aa9f-6a32-4b9a-9d6e-0cbe7f974e9c"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 11,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2025-12-18T21:47:11.298Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"result-1\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 12,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-callbacks",
+    "EventTimestamp": "2025-12-18T21:47:11.298Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":\"result-1\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"index\":1,\"status\":\"STARTED\"},{\"index\":2,\"status\":\"STARTED\"}],\"completionReason\":\"MIN_SUCCESSFUL_REACHED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2025-12-18T21:47:11.299Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:11.296Z",
+      "EndTimestamp": "2025-12-18T21:47:11.299Z",
+      "Error": {},
+      "RequestId": "6e89fc39-0d84-4dd6-98b8-6e7497df0921"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "377867c0-e551-46e1-af70-e33487e4855c",
+    "EventTimestamp": "2025-12-18T21:47:11.299Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "[\"result-1\"]"
+      }
+    }
+  }
+]

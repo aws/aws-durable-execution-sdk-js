@@ -1,0 +1,82 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "1fa767a9-4af5-4dd0-99e0-631de26ca1da",
+    "EventTimestamp": "2025-12-18T21:47:14.081Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"shouldCatchError\":false}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-operation",
+    "EventTimestamp": "2025-12-18T21:47:14.087Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImZmYzczMDJkLTQzZDAtNGEzNS1hNDBjLWEyOWZmNDY5MTI0MCIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiYWVjZDg5NTktNjJjMS00NTgxLTk1ODctMmQyYjQzZjM1MmMzIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-operation",
+    "EventTimestamp": "2025-12-18T21:47:14.089Z",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "External API failure",
+          "ErrorType": "APIException"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-18T21:47:14.142Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:14.081Z",
+      "EndTimestamp": "2025-12-18T21:47:14.142Z",
+      "Error": {},
+      "RequestId": "7057c988-1de9-4aae-8af5-46fe656d0ade"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-18T21:47:14.148Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:14.146Z",
+      "EndTimestamp": "2025-12-18T21:47:14.148Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "External API failure"
+        }
+      },
+      "RequestId": "824da5e0-6ac8-4e3d-b462-0009d7391a80"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 6,
+    "Id": "1fa767a9-4af5-4dd0-99e0-631de26ca1da",
+    "EventTimestamp": "2025-12-18T21:47:14.148Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "External API failure"
+        }
+      }
+    }
+  }
+]
