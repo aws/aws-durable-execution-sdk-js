@@ -41,24 +41,18 @@ export class Examples {
       throw new Error(`Invalid config object for ${fileName}`);
     }
 
-    const description =
-      "description" in config && typeof config.description === "string"
-        ? config.description
-        : undefined;
-
     const durableConfig =
       "durableConfig" in config && typeof config.durableConfig === "object"
         ? config.durableConfig
         : undefined;
 
     return {
-      name: config.name,
-      description,
+      ...config,
       path: examplePath,
       handler: handlerName,
       durableConfig:
         durableConfig === undefined ? DEFAULT_DURABLE_CONFIG : durableConfig,
-    };
+    } as ExamplesWithConfig;
   }
 
   async getExamples() {

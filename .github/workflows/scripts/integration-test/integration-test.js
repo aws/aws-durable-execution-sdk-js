@@ -13,6 +13,14 @@ import {
   ResourceNotFoundException,
 } from "@aws-sdk/client-lambda";
 
+import dotenv from "dotenv";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config({
+  path: join(__dirname, "../../../../.env"),
+});
+
 // Colors for output
 const COLORS = {
   RED: "\x1b[0;31m",
@@ -32,9 +40,6 @@ const log = {
   error: (/** @type {string} */ msg) =>
     console.error(`${COLORS.RED}[ERROR]${COLORS.NC} ${msg}`),
 };
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Configuration
 const CONFIG = {
@@ -62,20 +67,17 @@ class IntegrationTestRunner {
     this.cleanupOnExit = options.cleanupOnExit !== false;
     this.runtime = options.runtime;
     this.isGitHubActions = !!process.env.GITHUB_ACTIONS;
-    /** @type {Record<string, string> | undefined} */
+    /** @type {Record<string, {functionName: string, qualifier: string}> | undefined} */
     this.functionNameMap = undefined;
     /** @type {import('@aws-sdk/client-lambda').LambdaClient | null} */
     this.lambdaClient = null;
 
     // Set up cleanup handler
     if (this.cleanupOnExit) {
-      process.on("exit", () => this.cleanup());
       process.on("SIGINT", () => {
-        this.cleanup();
         process.exit(130);
       });
       process.on("SIGTERM", () => {
-        this.cleanup();
         process.exit(143);
       });
     }
@@ -140,7 +142,7 @@ class IntegrationTestRunner {
     }
 
     const examples = this.getIntegrationExamples();
-    /** @type {Record<string, string>} */
+    /** @type {Record<string, {functionName: string, qualifier: string}>} */
     const functionNameMap = {};
 
     // Get runtime suffix from argument or environment variable
@@ -173,15 +175,23 @@ class IntegrationTestRunner {
       }
 
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
-      functionNameMap[handlerFile] = functionName;
+      functionNameMap[handlerFile] = {
+        functionName,
+        qualifier: example.capacityProviderConfig
+          ? "$LATEST.PUBLISHED"
+          : "$LATEST",
+      };
     }
 
     this.functionNameMap = functionNameMap;
     return functionNameMap;
   }
 
-  // Deploy Lambda functions
-  async deployFunctions() {
+  /**
+   * Deploy Lambda functions
+   * @param {string | undefined} testPattern
+   */
+  async deployFunctions(testPattern) {
     log.info("Deploying Lambda functions...");
 
     if (!process.env.AWS_ACCOUNT_ID) {
@@ -198,26 +208,27 @@ class IntegrationTestRunner {
 
       // Extract handler file name from catalog
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
-      const functionName = functionNameMap[handlerFile];
+      const { functionName } = functionNameMap[handlerFile];
 
-      log.info(`Deploying function: ${functionName} (handler: ${handlerFile})`);
+      if (!testPattern || handlerFile.includes(testPattern)) {
+        log.info(
+          `Deploying function: ${functionName} (handler: ${handlerFile})`,
+        );
 
-      // Package the function
-      this.execCommand(`npm run package -- "${handlerFile}"`, {
-        cwd: examplesDir,
-      });
+        // Package the function
+        this.execCommand(`npm run package -- "${handlerFile}"`, {
+          cwd: examplesDir,
+        });
 
-      // Deploy using npm script with runtime parameter
-      const deployCommand = `npm run deploy -- "${handlerFile}" '${functionName}' --runtime ${this.runtime}`;
+        // Deploy using npm script with runtime parameter
+        const deployCommand = `npm run deploy -- "${handlerFile}" '${functionName}' --runtime ${this.runtime}`;
 
-      this.execCommand(deployCommand, {
-        cwd: examplesDir,
-      });
-      log.success(`Deployed function: ${functionName}`);
+        this.execCommand(deployCommand, {
+          cwd: examplesDir,
+        });
+        log.success(`Deployed function: ${functionName}`);
+      }
     }
-
-    log.info("Function name map:");
-    console.log(JSON.stringify(functionNameMap, null, 2));
 
     if (this.isGitHubActions) {
       if (!process.env.GITHUB_OUTPUT) {
@@ -239,9 +250,11 @@ class IntegrationTestRunner {
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
 
     const functionsWithQualifier = Object.fromEntries(
-      Object.entries(this.getFunctionNameMap()).map(([key, value]) => {
-        return [key, `${value}:$LATEST`];
-      }),
+      Object.entries(this.getFunctionNameMap()).map(
+        ([key, { functionName, qualifier }]) => {
+          return [key, `${functionName}:${qualifier}`];
+        },
+      ),
     );
 
     // Set additional environment variables
@@ -250,8 +263,6 @@ class IntegrationTestRunner {
       LAMBDA_ENDPOINT: CONFIG.LAMBDA_ENDPOINT,
     };
 
-    log.info("Running Jest integration tests with function map:");
-    console.log(JSON.stringify(functionsWithQualifier, null, 2));
     log.info(`Lambda Endpoint: ${CONFIG.LAMBDA_ENDPOINT}`);
 
     // Build test command with optional pattern
@@ -282,7 +293,7 @@ class IntegrationTestRunner {
     // Initialize Lambda client for cleanup
     const lambdaClient = this.initializeLambdaClient();
 
-    for (const functionName of Object.values(functionNameMap)) {
+    for (const { functionName } of Object.values(functionNameMap)) {
       log.info(`Deleting function: ${functionName}`);
 
       const deleteCommand = new DeleteFunctionCommand({
@@ -329,7 +340,7 @@ class IntegrationTestRunner {
     }
 
     if (!testOnly) {
-      await this.deployFunctions();
+      await this.deployFunctions(testPattern);
     }
 
     if (!deployOnly) {

@@ -49,8 +49,7 @@
     "@aws-sdk/client-dynamodb": "^3.943.0",
     "@aws-sdk/client-lambda": "^3.943.0",
     "@aws/durable-execution-sdk-js": "*",
-    "@aws/durable-execution-sdk-js-testing": "*",
-    "dotenv": "^17.2.3"
+    "@aws/durable-execution-sdk-js-testing": "*"
   },
   "devDependencies": {
     "@aws/durable-execution-sdk-js-eslint-plugin": "*",
@@ -64,6 +63,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.5",
     "argparse": "^2.0.1",
+    "dotenv": "^17.2.3",
     "eslint": "^9.23.0",
     "jest": "^30.2.0",
     "js-yaml": "^4.1.0",

@@ -52,6 +52,7 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          CAPACITY_PROVIDER_ARN: ${{ secrets.CAPACITY_PROVIDER_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --runtime ${{ inputs.node-version }}
 
   jest-integration-test:
@@ -95,5 +96,6 @@ jobs:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+          CAPACITY_PROVIDER_ARN: ${{ secrets.CAPACITY_PROVIDER_ARN }}
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}

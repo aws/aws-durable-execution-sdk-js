@@ -1,8 +1,6 @@
 #!/usr/bin/env tsx
 
 import { readFileSync, existsSync } from "fs";
-import { resolve } from "path";
-import { config as dotenvConfig } from "dotenv";
 import { ArgumentParser } from "argparse";
 import {
   LambdaClient,
@@ -17,6 +15,12 @@ import {
   ResourceConflictException,
   UpdateFunctionConfigurationCommandInput,
   DeleteFunctionCommand,
+  Architecture,
+  CreateFunctionRequest,
+  PublishVersionCommand,
+  FunctionVersionLatestPublished,
+  LastUpdateStatus,
+  State,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
 import catalog from "@aws/durable-execution-sdk-js-examples/catalog";
@@ -26,10 +30,11 @@ const DEBUG = false;
 // Types
 interface EnvironmentVariables {
   AWS_ACCOUNT_ID: string;
-  LAMBDA_ENDPOINT: string;
   AWS_REGION: string;
+  CAPACITY_PROVIDER_ARN: string;
   GITHUB_ACTIONS?: string;
   GITHUB_ENV?: string;
+  LAMBDA_ENDPOINT?: string;
 }
 
 // Configuration and validation
@@ -67,19 +72,12 @@ function parseArgs(): {
 }
 
 function loadEnvironmentVariables(): EnvironmentVariables {
-  // Load environment variables
-  if (!process.env.GITHUB_ACTIONS) {
-    // Not in GitHub Actions - try to load .secrets file
-    const secretsPath = resolve("../../.secrets");
-    if (existsSync(secretsPath)) {
-      dotenvConfig({ path: secretsPath, override: true, quiet: true });
-    } else {
-      console.warn("Warning: .secrets file not found");
-    }
-  }
-
   // Validate required environment variables
-  const requiredVars = ["AWS_ACCOUNT_ID", "LAMBDA_ENDPOINT"];
+  const requiredVars = [
+    "AWS_ACCOUNT_ID",
+    "CAPACITY_PROVIDER_ARN",
+    "AWS_REGION",
+  ];
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
   if (missingVars.length > 0) {
@@ -91,8 +89,9 @@ function loadEnvironmentVariables(): EnvironmentVariables {
 
   return {
     AWS_ACCOUNT_ID: process.env.AWS_ACCOUNT_ID!,
-    LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT!,
     AWS_REGION: process.env.AWS_REGION!,
+    CAPACITY_PROVIDER_ARN: process.env.CAPACITY_PROVIDER_ARN!,
+    LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT,
     GITHUB_ACTIONS: process.env.GITHUB_ACTIONS,
     GITHUB_ENV: process.env.GITHUB_ENV,
   };
@@ -213,7 +212,7 @@ async function createFunction(
   const zipBuffer = readFileSync(zipFile);
   const roleArn = `arn:aws:iam::${env.AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole`;
 
-  const createParams = {
+  const createParams: CreateFunctionRequest = {
     FunctionName: functionName,
     Runtime: runtime,
     Role: roleArn,
@@ -228,13 +227,26 @@ async function createFunction(
         }
       : undefined,
     Timeout: 60,
-    MemorySize: 128,
+    MemorySize: exampleConfig.capacityProviderConfig ? 2048 : 128,
     Environment: {
-      Variables: {
-        AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
-      },
+      Variables: env.LAMBDA_ENDPOINT
+        ? {
+            AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
+          }
+        : undefined,
     },
-  } as const;
+    Architectures: !!exampleConfig.capacityProviderConfig
+      ? [Architecture.arm64]
+      : undefined,
+    CapacityProviderConfig: exampleConfig.capacityProviderConfig
+      ? {
+          LambdaManagedInstancesCapacityProviderConfig: {
+            CapacityProviderArn: env.CAPACITY_PROVIDER_ARN,
+            ...exampleConfig.capacityProviderConfig,
+          },
+        }
+      : undefined,
+  };
 
   const command = new CreateFunctionCommand(createParams);
   await lambdaClient.send(command);
@@ -278,10 +290,20 @@ async function updateFunction(
     FunctionName: functionName,
     Runtime: runtime,
     Environment: {
-      Variables: {
-        AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
-      },
+      Variables: env.LAMBDA_ENDPOINT
+        ? {
+            AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
+          }
+        : undefined,
     },
+    CapacityProviderConfig: exampleConfig.capacityProviderConfig
+      ? {
+          LambdaManagedInstancesCapacityProviderConfig: {
+            CapacityProviderArn: env.CAPACITY_PROVIDER_ARN,
+            ...exampleConfig.capacityProviderConfig,
+          },
+        }
+      : undefined,
   };
 
   // Check if DurableConfig needs updating
@@ -338,6 +360,10 @@ async function main(): Promise<void> {
     console.log(
       `  Timeout: ${exampleConfig.durableConfig?.ExecutionTimeout} seconds`,
     );
+    console.log(
+      `  Capacity Provider Enabled: ${!!exampleConfig.capacityProviderConfig}`,
+    );
+    console.log(`  Durability Enabled: ${!!exampleConfig.durableConfig}`);
 
     // Validate zip file exists
     validateZipFile(example);
@@ -348,56 +374,125 @@ async function main(): Promise<void> {
       endpoint: env.LAMBDA_ENDPOINT,
     });
 
-    await retryOnConflict(async () => {
-      console.log("Checking if function exists...");
-      let functionExists = await checkFunctionExists(
-        lambdaClient,
-        functionName,
-      );
-      let currentConfig: GetFunctionConfigurationCommandOutput;
-
-      const zipFile = `${example}.zip`;
-
-      const selectedRuntime = mapRuntimeToEnum(runtime);
-
-      if (functionExists) {
-        currentConfig = await getCurrentConfiguration(
+    await retryOnConflict(
+      async () => {
+        console.log("Checking if function exists...");
+        let functionExists = await checkFunctionExists(
           lambdaClient,
           functionName,
         );
-        if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
-          console.log("Deleting function since durable changed");
-          await lambdaClient.send(
-            new DeleteFunctionCommand({
-              FunctionName: functionName,
-            }),
+        let currentConfig: GetFunctionConfigurationCommandOutput;
+
+        const zipFile = `${example}.zip`;
+
+        const selectedRuntime = mapRuntimeToEnum(runtime);
+
+        if (functionExists) {
+          currentConfig = await getCurrentConfiguration(
+            lambdaClient,
+            functionName,
           );
-          functionExists = false;
-        }
-      }
+          if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
+            console.log("Deleting function since durability changed");
+            functionExists = false;
+          }
+          if (
+            !!currentConfig.CapacityProviderConfig !==
+            !!exampleConfig.capacityProviderConfig
+          ) {
+            console.log("Deleting function since capacity provider changed");
+            functionExists = false;
+          }
 
-      if (functionExists) {
-        await updateFunction(
-          lambdaClient,
-          functionName,
-          exampleConfig,
-          zipFile,
-          env,
-          currentConfig!,
-          selectedRuntime,
-        );
-      } else {
-        console.log("Function does not exist");
-        await createFunction(
-          lambdaClient,
-          functionName,
-          exampleConfig,
-          zipFile,
-          env,
-          selectedRuntime,
-        );
-      }
-    });
+          if (!functionExists) {
+            await lambdaClient.send(
+              new DeleteFunctionCommand({
+                FunctionName: functionName,
+              }),
+            );
+          }
+        }
+
+        if (functionExists) {
+          await updateFunction(
+            lambdaClient,
+            functionName,
+            exampleConfig,
+            zipFile,
+            env,
+            currentConfig!,
+            selectedRuntime,
+          );
+        } else {
+          console.log("Function does not exist");
+          await createFunction(
+            lambdaClient,
+            functionName,
+            exampleConfig,
+            zipFile,
+            env,
+            selectedRuntime,
+          );
+        }
+
+        if (exampleConfig.capacityProviderConfig) {
+          console.log(
+            "Publishing LATEST_PUBLISHED for function with capacity provider",
+          );
+          try {
+            await retryOnConflict(
+              () =>
+                lambdaClient.send(
+                  new PublishVersionCommand({
+                    FunctionName: functionName,
+                    PublishTo: FunctionVersionLatestPublished.LATEST_PUBLISHED,
+                  }),
+                ),
+              180,
+            );
+          } catch (err) {
+            throw new Error("Timed out publishing LATEST_PUBLISHED version");
+          }
+
+          try {
+            console.log("Waiting for function to enter active state");
+            const functionWithQualifier = `${functionName}:$LATEST.PUBLISHED`;
+            await retryOnConflict(async () => {
+              const currentConfiguration = await getCurrentConfiguration(
+                lambdaClient,
+                functionWithQualifier,
+              );
+              if (
+                currentConfiguration.State !== State.Active ||
+                currentConfiguration.LastUpdateStatus ===
+                  LastUpdateStatus.InProgress
+              ) {
+                throw new ResourceConflictException({
+                  message: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
+                  $metadata: {},
+                });
+              } else if (
+                currentConfiguration.LastUpdateStatus ===
+                  LastUpdateStatus.Failed ||
+                currentConfiguration.State !== State.Active
+              ) {
+                throw new Error(
+                  `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
+                );
+              }
+            }, 180);
+          } catch (err) {
+            throw new Error(
+              "Timed out waiting for function to enter active state",
+              {
+                cause: err,
+              },
+            );
+          }
+        }
+      },
+      exampleConfig.capacityProviderConfig ? 120 : undefined,
+    );
 
     // Set GITHUB_ENV if running in GitHub Actions
     if (env.GITHUB_ENV) {

@@ -1,4 +1,7 @@
-import { DurableConfig } from "@aws-sdk/client-lambda";
+import {
+  DurableConfig,
+  LambdaManagedInstancesCapacityProviderConfig,
+} from "@aws-sdk/client-lambda";
 
 export interface ExampleConfig {
   name: string;
@@ -8,6 +11,10 @@ export interface ExampleConfig {
    * and ExecutionTimeout will be set to 60 seconds. Null if function is not durable.
    */
   durableConfig?: DurableConfig | null;
+  capacityProviderConfig?: Omit<
+    LambdaManagedInstancesCapacityProviderConfig,
+    "CapacityProviderArn"
+  >;
 }
 
 export type ExamplesWithConfig = ExampleConfig & {
