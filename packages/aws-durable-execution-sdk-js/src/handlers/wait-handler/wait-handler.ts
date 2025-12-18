@@ -14,6 +14,7 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
+import { withWaitSpan } from "../../utils/otel/otel-instrumentation";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -130,39 +131,51 @@ export const createWaitHandler = (
       // Wait for phase 1
       await phase1Promise;
 
-      // If already completed in phase 1, skip phase 2
-      if (isCompleted) {
-        return;
-      }
-
-      log("⏲️", "Wait phase 2:", { stepId });
-
-      // Mark as awaited
-      checkpoint.markOperationAwaited(stepId);
-
-      // Wait for status change
-      await checkpoint.waitForStatusChange(stepId);
-
-      // Check final status
+      // Get stepData for OTEL instrumentation (needed for StartTimestamp)
       const stepData = context.getStepData(stepId);
 
-      if (stepData?.Status === OperationStatus.SUCCEEDED) {
-        log("✅", "Wait completed:", { stepId });
-        checkAndUpdateReplayMode?.();
-
-        // Mark as completed
-        checkpoint.markOperationState(
-          stepId,
-          OperationLifecycleState.COMPLETED,
-        );
-        return;
-      }
-
-      // Should not reach here, but handle gracefully
-      log("⚠️", "Wait ended with unexpected status:", {
+      // Wrap execution with OTEL span (even if already completed)
+      return await withWaitSpan(
         stepId,
-        status: stepData?.Status,
-      });
+        actualName,
+        stepData,
+        actualSeconds,
+        async () => {
+          // If already completed in phase 1, just return
+          if (isCompleted) {
+            return;
+          }
+
+          log("⏲️", "Wait phase 2:", { stepId });
+
+          // Mark as awaited
+          checkpoint.markOperationAwaited(stepId);
+
+          // Wait for status change
+          await checkpoint.waitForStatusChange(stepId);
+
+          // Check final status (refresh stepData after status change)
+          const finalStepData = context.getStepData(stepId);
+
+          if (finalStepData?.Status === OperationStatus.SUCCEEDED) {
+            log("✅", "Wait completed:", { stepId });
+            checkAndUpdateReplayMode?.();
+
+            // Mark as completed
+            checkpoint.markOperationState(
+              stepId,
+              OperationLifecycleState.COMPLETED,
+            );
+            return;
+          }
+
+          // Should not reach here, but handle gracefully
+          log("⚠️", "Wait ended with unexpected status:", {
+            stepId,
+            status: finalStepData?.Status,
+          });
+        },
+      );
     });
   }
 

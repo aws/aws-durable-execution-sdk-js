@@ -28,6 +28,7 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
+import { withRunInChildContextSpan } from "../../utils/otel/otel-instrumentation";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -240,9 +241,11 @@ export const handleCompletedChildContext = async <
       entityId, // parentId
     );
 
-    return await runWithContext(entityId, entityId, () =>
-      fn(durableChildContext),
-    );
+    return await withRunInChildContextSpan(entityId, stepName, async () => {
+      return await runWithContext(entityId, entityId, () =>
+        fn(durableChildContext),
+      );
+    });
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
@@ -315,13 +318,15 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
   try {
     // Execute the child context function with context tracking
-    const result = await runWithContext(
-      entityId,
-      parentId,
-      () => fn(durableChildContext),
-      undefined,
-      childReplayMode,
-    );
+    const result = await withRunInChildContextSpan(entityId, name, async () => {
+      return await runWithContext(
+        entityId,
+        parentId,
+        () => fn(durableChildContext),
+        undefined,
+        childReplayMode,
+      );
+    });
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
