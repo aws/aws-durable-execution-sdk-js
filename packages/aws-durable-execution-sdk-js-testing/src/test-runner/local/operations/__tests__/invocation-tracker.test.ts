@@ -19,14 +19,17 @@ describe("InvocationTracker", () => {
       startInvocation: jest.fn(),
       completeInvocation: jest.fn((_executionId, invocationId, error) =>
         Promise.resolve({
-          InvocationCompletedDetails: {
-            StartTimestamp: new Date(),
-            EndTimestamp: new Date(),
-            Error: {
-              Payload: error,
+          event: {
+            InvocationCompletedDetails: {
+              StartTimestamp: new Date(),
+              EndTimestamp: new Date(),
+              Error: {
+                Payload: error,
+              },
+              RequestId: invocationId,
             },
-            RequestId: invocationId,
           },
+          hasDirtyOperations: false,
         }),
       ),
     };

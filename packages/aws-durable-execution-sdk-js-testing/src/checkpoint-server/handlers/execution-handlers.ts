@@ -1,4 +1,4 @@
-import { ErrorObject, Event } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 import {
   createExecutionId,
   ExecutionId,
@@ -12,6 +12,7 @@ import {
   StartDurableExecutionRequest,
   StartInvocationRequest,
 } from "../worker-api/worker-api-request";
+import { CompleteInvocationResponse } from "../worker-api/worker-api-response";
 
 /**
  * Starts a durable execution. Returns the data needed for the handler invocation event.
@@ -42,6 +43,6 @@ export function processCompleteInvocation(
   invocationId: InvocationId,
   error: ErrorObject | undefined,
   executionManager: ExecutionManager,
-): Event {
+): CompleteInvocationResponse {
   return executionManager.completeInvocation(executionId, invocationId, error);
 }
