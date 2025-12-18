@@ -10,8 +10,13 @@ import examplesCatalog from "@aws/durable-execution-sdk-js-examples/catalog";
 import {
   LambdaClient,
   DeleteFunctionCommand,
-  ResourceNotFoundException,
+  ResourceNotFoundException as ResourceNotFoundExceptionLambda,
 } from "@aws-sdk/client-lambda";
+import {
+  CloudWatchLogsClient,
+  DeleteLogGroupCommand,
+  ResourceNotFoundException as ResourceNotFoundExceptionCloudwatch,
+} from "@aws-sdk/client-cloudwatch-logs";
 
 import dotenv from "dotenv";
 const __filename = fileURLToPath(import.meta.url);
@@ -337,13 +342,16 @@ class IntegrationTestRunner {
       return;
     }
 
-    log.info("Cleaning up deployed functions...");
+    log.info("Cleaning up deployed functions and logs...");
 
     // Initialize Lambda client for cleanup
     const lambdaClient = this.initializeLambdaClient();
 
     for (const { functionName } of Object.values(functionNameMap)) {
       log.info(`Deleting function: ${functionName}`);
+      const cloudwatchLogsClient = new CloudWatchLogsClient({
+        region: CONFIG.AWS_REGION,
+      });
 
       const deleteCommand = new DeleteFunctionCommand({
         FunctionName: functionName,
@@ -352,13 +360,30 @@ class IntegrationTestRunner {
       try {
         await lambdaClient.send(deleteCommand);
       } catch (error) {
-        if (error instanceof ResourceNotFoundException) {
+        if (error instanceof ResourceNotFoundExceptionLambda) {
           log.warning(`Function not found: ${functionName}`);
           continue;
         }
         throw error;
       }
       log.success(`Deleted function: ${functionName}`);
+
+      const logGroupName = `/aws/lambda/${functionName}`;
+      try {
+        await cloudwatchLogsClient.send(
+          new DeleteLogGroupCommand({
+            logGroupName,
+          }),
+        );
+      } catch (err) {
+        if (err instanceof ResourceNotFoundExceptionCloudwatch) {
+          log.warning(`Log group not found: ${logGroupName}`);
+          continue;
+        }
+        throw err;
+      }
+
+      log.success(`Deleted log group ${logGroupName}`);
     }
   }
 
