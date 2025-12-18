@@ -89,32 +89,10 @@ jobs:
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Cleanup Lambda functions
+      - name: Cleanup Lambda functions and log groups
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: "pull_request"
           GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only --runtime ${{ matrix.node-version }}
-
-      - name: Install awscurl
-        run: pip install awscurl
-
-      - name: Get AWS Credentials for log scrubber
-        id: log-credentials
-        if: github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: "${{ secrets.ACTIONS_WEBHOOK_ROLE_ARN }}"
-          role-session-name: "GitHub-PR-${{ github.event.pull_request.number }}-Cleanup"
-          aws-region: ${{ vars.AWS_REGION }}
-
-      # TODO: move the logic for this into this repo and also delete logs for main branch
-      - name: Cleanup PR log group
-        run: |
-          awscurl --service execute-api \
-            --region ${{ vars.AWS_REGION }} \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"logGroupSuffix": "-NodeJS-PR-${{ github.event.pull_request.number }}"}' \
-            "${{ secrets.LOG_GROUP_CLEANUP_WEBHOOK }}"

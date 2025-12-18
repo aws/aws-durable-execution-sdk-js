@@ -16,16 +16,22 @@ import {
   UpdateFunctionConfigurationCommandInput,
   DeleteFunctionCommand,
   Architecture,
-  CreateFunctionRequest,
   PublishVersionCommand,
   FunctionVersionLatestPublished,
   LastUpdateStatus,
   State,
   LastUpdateStatusReasonCode,
   PutFunctionScalingConfigCommand,
+  CreateFunctionCommandInput,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
 import catalog from "@aws/durable-execution-sdk-js-examples/catalog";
+import {
+  CreateLogGroupCommand,
+  CloudWatchLogsClient,
+  PutRetentionPolicyCommand,
+  ResourceAlreadyExistsException,
+} from "@aws-sdk/client-cloudwatch-logs";
 
 const DEBUG = false;
 
@@ -241,7 +247,29 @@ async function createFunction(
   const zipBuffer = readFileSync(zipFile);
   const roleArn = `arn:aws:iam::${env.AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole`;
 
-  const createParams: CreateFunctionRequest = {
+  const logGroupName = `/aws/lambda/${functionName}`;
+  const cwlClient = new CloudWatchLogsClient();
+  try {
+    console.log(`Creating log group ${logGroupName}`);
+    await cwlClient.send(
+      new CreateLogGroupCommand({
+        logGroupName,
+      }),
+    );
+  } catch (err) {
+    if (!(err instanceof ResourceAlreadyExistsException)) {
+      throw err;
+    }
+  }
+
+  await cwlClient.send(
+    new PutRetentionPolicyCommand({
+      logGroupName,
+      retentionInDays: exampleConfig.durableConfig?.RetentionPeriodInDays ?? 7,
+    }),
+  );
+
+  const createParams: CreateFunctionCommandInput = {
     FunctionName: functionName,
     Runtime: runtime,
     Role: roleArn,
@@ -274,6 +302,9 @@ async function createFunction(
             },
           }
         : undefined,
+    LoggingConfig: {
+      LogGroup: logGroupName,
+    },
   };
 
   const command = new CreateFunctionCommand(createParams);
