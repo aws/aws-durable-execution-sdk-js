@@ -164,11 +164,105 @@ describe("Concurrent Execution Handler", () => {
   });
 
   describe("execution", () => {
-    it("should handle empty array", async () => {
-      mockRunInChildContext.mockResolvedValue(new MockBatchResult([]) as any);
+    it.each([
+      {
+        name: "no config",
+        nameParam: undefined,
+        config: undefined,
+        expectedSubType: undefined,
+      },
+      {
+        name: "name parameter",
+        nameParam: "empty-test",
+        config: undefined,
+        expectedSubType: undefined,
+      },
+      {
+        name: "completion config",
+        nameParam: undefined,
+        config: {
+          completionConfig: { minSuccessful: 0, toleratedFailureCount: 5 },
+        },
+        expectedSubType: undefined,
+      },
+      {
+        name: "maxConcurrency config",
+        nameParam: undefined,
+        config: { maxConcurrency: 5 },
+        expectedSubType: undefined,
+      },
+      {
+        name: "all config options",
+        nameParam: "comprehensive-empty",
+        config: {
+          maxConcurrency: 3,
+          topLevelSubType: "TOP_LEVEL",
+          iterationSubType: "ITERATION",
+          completionConfig: {
+            minSuccessful: 0,
+            toleratedFailureCount: 2,
+            toleratedFailurePercentage: 50,
+          },
+        },
+        expectedSubType: "TOP_LEVEL",
+      },
+    ])(
+      "should handle empty array with $name",
+      async ({ nameParam, config, expectedSubType }) => {
+        mockRunInChildContext.mockResolvedValue(new MockBatchResult([]) as any);
+
+        const result = await concurrentExecutionHandler(
+          nameParam,
+          [],
+          jest.fn(),
+          config,
+        );
+
+        expect(result.all).toEqual([]);
+        expect(result.successCount).toBe(0);
+        expect(result.failureCount).toBe(0);
+        expect(result.totalCount).toBe(0);
+        expect(result.status).toBe("SUCCEEDED");
+
+        expect(mockRunInChildContext).toHaveBeenCalledWith(
+          nameParam,
+          expect.any(Function),
+          { subType: expectedSubType },
+        );
+      },
+    );
+
+    it("should handle empty array and execute actual operation function", async () => {
+      // Set up mock to actually execute the operation function
+      let actualExecuteOperation: any;
+      mockRunInChildContext.mockImplementation(
+        (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
+          let actualFn;
+          if (typeof nameOrFn === "string" || nameOrFn === undefined) {
+            actualFn = fnOrConfig;
+          } else {
+            actualFn = nameOrFn;
+          }
+          actualExecuteOperation = actualFn;
+          return new DurablePromise(async () => {
+            if (typeof actualFn === "function") {
+              const mockDurableContext = {
+                runInChildContext: jest.fn(),
+                durableExecutionMode: "ExecutionMode",
+                _stepPrefix: "test-step-prefix",
+              } as any;
+
+              return await actualFn(mockDurableContext);
+            }
+            return new MockBatchResult([]) as any;
+          });
+        },
+      );
 
       const result = await concurrentExecutionHandler([], jest.fn());
 
+      expect(actualExecuteOperation).toBeDefined();
+      expect(result).toBeDefined();
       expect(result.all).toEqual([]);
       expect(result.successCount).toBe(0);
     });
@@ -330,11 +424,17 @@ describe("Concurrent Execution Handler", () => {
           } else {
             capturedExecuteOperation = nameOrFn;
           }
-          return new DurablePromise(() => Promise.resolve(
-            new MockBatchResult([
-              { index: 0, result: "result", status: BatchItemStatus.SUCCEEDED },
-            ]) as any,
-          ));
+          return new DurablePromise(() =>
+            Promise.resolve(
+              new MockBatchResult([
+                {
+                  index: 0,
+                  result: "result",
+                  status: BatchItemStatus.SUCCEEDED,
+                },
+              ]) as any,
+            ),
+          );
         },
       );
 
@@ -499,12 +599,15 @@ describe("ConcurrencyController", () => {
       mockParentContext.runInChildContext.mockImplementation(() => {
         activeCount++;
         maxActive = Math.max(maxActive, activeCount);
-        return new DurablePromise(() => new Promise((resolve) => {
-          setTimeout(() => {
-            activeCount--;
-            resolve("result");
-          }, 10);
-        }));
+        return new DurablePromise(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(() => {
+                activeCount--;
+                resolve("result");
+              }, 10);
+            }),
+        );
       });
 
       await controller.executeItems(items, executor, mockParentContext, {
@@ -524,7 +627,9 @@ describe("ConcurrencyController", () => {
 
       mockParentContext.runInChildContext
         .mockResolvedValueOnce("result1")
-        .mockImplementation(() => new DurablePromise(() => new Promise(() => {}))); // Never resolves
+        .mockImplementation(
+          () => new DurablePromise(() => new Promise(() => {})),
+        ); // Never resolves
 
       const result = await controller.executeItems(
         items,
@@ -551,7 +656,9 @@ describe("ConcurrencyController", () => {
       mockParentContext.runInChildContext
         .mockRejectedValueOnce(new Error("error1"))
         .mockRejectedValueOnce(new Error("error2"))
-        .mockImplementation(() => new DurablePromise(() => new Promise(() => {})));
+        .mockImplementation(
+          () => new DurablePromise(() => new Promise(() => {})),
+        );
 
       const result = await controller.executeItems(
         items,
@@ -578,7 +685,9 @@ describe("ConcurrencyController", () => {
       mockParentContext.runInChildContext
         .mockRejectedValueOnce(new Error("error1"))
         .mockRejectedValueOnce(new Error("error2"))
-        .mockImplementation(() => new DurablePromise(() => new Promise(() => {})));
+        .mockImplementation(
+          () => new DurablePromise(() => new Promise(() => {})),
+        );
 
       const result = await controller.executeItems(
         items,
@@ -621,7 +730,9 @@ describe("ConcurrencyController", () => {
 
       mockParentContext.runInChildContext
         .mockResolvedValueOnce("result1")
-        .mockImplementation(() => new DurablePromise(() => new Promise(() => {}))); // Never resolves
+        .mockImplementation(
+          () => new DurablePromise(() => new Promise(() => {})),
+        ); // Never resolves
 
       const result = await controller.executeItems(
         items,
@@ -715,16 +826,44 @@ describe("ConcurrencyController", () => {
       expect(result.successCount).toBe(1);
     });
 
-    it("should handle empty items array", async () => {
-      // For empty arrays, the promise should resolve immediately
-      // but the current implementation has a bug where it doesn't
-      // Let's test what actually happens
-      controller.executeItems([], jest.fn(), mockParentContext, {});
+    it.each([
+      {
+        name: "no config",
+        config: {},
+      },
+      {
+        name: "completion config",
+        config: {
+          completionConfig: { minSuccessful: 0, toleratedFailureCount: 5 },
+        },
+      },
+      {
+        name: "maxConcurrency set",
+        config: { maxConcurrency: 3 },
+      },
+      {
+        name: "empty completion config",
+        config: { completionConfig: {} },
+      },
+      {
+        name: "undefined completion config",
+        config: { completionConfig: undefined },
+      },
+    ])("should handle empty items array with $name", async ({ config }) => {
+      const result = await controller.executeItems(
+        [],
+        jest.fn(),
+        mockParentContext,
+        config,
+      );
 
-      // Since the implementation has a bug with empty arrays, let's skip this test for now
-      // and focus on the coverage we've achieved
-      expect(true).toBe(true);
-    }, 100); // Short timeout since this should be immediate
+      expect(result.all).toEqual([]);
+      expect(result.successCount).toBe(0);
+      expect(result.failureCount).toBe(0);
+      expect(result.totalCount).toBe(0);
+      expect(result.completionReason).toBe("ALL_COMPLETED");
+      expect(result.status).toBe("SUCCEEDED");
+    });
 
     it("should cover remaining edge cases", async () => {
       const items = [{ id: "item-0", data: "data1", index: 0 }];
@@ -754,9 +893,12 @@ describe("ConcurrencyController", () => {
       // Resolve in reverse order
       let resolvers: Array<(value: any) => void> = [];
       mockParentContext.runInChildContext.mockImplementation(() => {
-        return new DurablePromise(() => new Promise((resolve) => {
-          resolvers.push(resolve);
-        }));
+        return new DurablePromise(
+          () =>
+            new Promise((resolve) => {
+              resolvers.push(resolve);
+            }),
+        );
       });
 
       const resultPromise = controller.executeItems(
@@ -811,7 +953,9 @@ describe("ConcurrencyController", () => {
             expect(options).toEqual({ subType: "TEST_ITERATION_TYPE" });
             // Execute the child function to trigger the actual code path
             const mockChildContext = {} as any;
-            return new DurablePromise(() => Promise.resolve(childFunc(mockChildContext)));
+            return new DurablePromise(() =>
+              Promise.resolve(childFunc(mockChildContext)),
+            );
           }),
       } as any;
 

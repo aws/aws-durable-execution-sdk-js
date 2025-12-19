@@ -1,0 +1,89 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "c7a78a8b-d203-4f2e-a702-efb0585ee131",
+    "EventTimestamp": "2025-12-19T23:26:31.718Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "empty-parallel",
+    "EventTimestamp": "2025-12-19T23:26:31.725Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "empty-parallel",
+    "EventTimestamp": "2025-12-19T23:26:31.725Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-19T23:26:31.728Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-19T23:26:32.728Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-19T23:26:31.779Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-19T23:26:31.718Z",
+      "EndTimestamp": "2025-12-19T23:26:31.779Z",
+      "Error": {},
+      "RequestId": "c81908f2-5367-45d3-9266-7d4d15272780"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-19T23:26:32.730Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-19T23:26:32.732Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-19T23:26:32.731Z",
+      "EndTimestamp": "2025-12-19T23:26:32.732Z",
+      "Error": {},
+      "RequestId": "fbdbe427-9edc-4769-8a74-3b907d28a442"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 8,
+    "Id": "c7a78a8b-d203-4f2e-a702-efb0585ee131",
+    "EventTimestamp": "2025-12-19T23:26:32.732Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"results\":[],\"errors\":[],\"successCount\":0,\"failureCount\":0,\"totalCount\":0,\"status\":\"SUCCEEDED\",\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  }
+]

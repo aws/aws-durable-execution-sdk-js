@@ -461,7 +461,12 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         }
       };
 
-      tryStartNext();
+      if (items.length === 0) {
+        log("🎉", `${this.operationName} completed with no items`);
+        resolve(new BatchResultImpl([], getCompletionReason(0)));
+      } else {
+        tryStartNext();
+      }
     });
   }
 }
