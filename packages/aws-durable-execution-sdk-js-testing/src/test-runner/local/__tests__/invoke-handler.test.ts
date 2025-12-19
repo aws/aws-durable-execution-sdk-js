@@ -1,6 +1,7 @@
 import { Context } from "aws-lambda";
 import {
   DurableExecutionInvocationInput,
+  DurableExecutionInvocationInputWithClient,
   DurableExecutionInvocationOutput,
   InvocationStatus,
 } from "@aws/durable-execution-sdk-js";
@@ -52,7 +53,7 @@ describe("invoke-handler", () => {
       const result = await invokeHandlerInstance.invoke(mockHandler, params);
 
       expect(mockHandler).toHaveBeenCalledWith(
-        {
+        expect.objectContaining({
           CheckpointToken: "test-token",
           DurableExecutionArn: "test-arn",
           InitialExecutionState: {
@@ -60,12 +61,17 @@ describe("invoke-handler", () => {
             NextMarker: "",
           },
           durableExecutionClient: expect.any(LocalRunnerClient),
-        },
+        }),
         expect.objectContaining({
           functionName: "my-function-name",
           awsRequestId: "00000000-0000-0000-0000-000000000000",
         }),
       );
+      expect(mockHandler).toHaveBeenCalledWith(
+        expect.any(DurableExecutionInvocationInputWithClient),
+        expect.any(Object),
+      );
+      expect(mockHandler).toHaveBeenCalledTimes(1);
 
       expect(result).toEqual({
         Status: InvocationStatus.SUCCEEDED,

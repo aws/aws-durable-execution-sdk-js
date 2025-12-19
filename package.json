@@ -14,7 +14,7 @@
     "postpublish": "git restore .",
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
     "prepare": "husky install",
-    "run-durable": "ORIGINAL_CWD=$PWD npm run run-durable -w packages/aws-durable-execution-sdk-js-testing --"
+    "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --"
   },
   "repository": {
     "type": "git",

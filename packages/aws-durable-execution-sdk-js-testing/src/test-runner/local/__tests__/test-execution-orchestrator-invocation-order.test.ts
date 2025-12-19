@@ -25,6 +25,7 @@ import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runne
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
+import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -75,15 +76,20 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
   // Tracking arrays for call order verification
   let callOrder: string[];
   let addHistoryEventSpy: jest.SpyInstance;
-  let completeInvocationSpy: jest.SpyInstance;
+  let completeInvocationSpy: jest.SpyInstance<
+    Promise<CompleteInvocationResponse>
+  >;
 
-  const mockInvocationCompletedEvent: Event = {
-    EventType: EventType.InvocationCompleted,
-    InvocationCompletedDetails: {
-      RequestId: "invocation-request-id",
-      StartTimestamp: new Date(),
-      EndTimestamp: new Date(),
+  const mockInvocationCompletedEvent: CompleteInvocationResponse = {
+    event: {
+      EventType: EventType.InvocationCompleted,
+      InvocationCompletedDetails: {
+        RequestId: "invocation-request-id",
+        StartTimestamp: new Date(),
+        EndTimestamp: new Date(),
+      },
     },
+    hasDirtyOperations: false,
   };
 
   const nonResolvingPromise = new Promise<never>(() => {
@@ -135,7 +141,10 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       }),
       completeInvocation: jest.fn().mockImplementation(() => {
         callOrder.push("completeInvocation");
-        return Promise.resolve(mockInvocationCompletedEvent);
+        return Promise.resolve({
+          event: mockInvocationCompletedEvent,
+          hasDirtyOperations: false,
+        });
       }),
     };
 
@@ -509,8 +518,11 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         invocationCount++;
         callOrder.push(`completeInvocation${invocationCount}`);
         return Promise.resolve({
-          ...mockInvocationCompletedEvent,
-          EventId: invocationCount,
+          event: {
+            ...mockInvocationCompletedEvent,
+            EventId: invocationCount,
+          },
+          hasDirtyOperations: false,
         });
       });
 

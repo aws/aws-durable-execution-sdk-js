@@ -1,11 +1,11 @@
 import {
   CallbackDetails,
   InvalidParameterValueException,
-  OperationStatus,
+  OperationAction,
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { CallbackManager, CompleteCallbackStatus } from "../callback-manager";
-import { CheckpointManager, CheckpointOperation } from "../checkpoint-manager";
+import { CheckpointManager } from "../checkpoint-manager";
 import {
   createExecutionId,
   createCallbackId,
@@ -27,7 +27,6 @@ jest.mock("../../utils/tagged-strings", () => ({
 
 // Import the mocked functions
 import { encodeCallbackId, decodeCallbackId } from "../../utils/callback-id";
-import { OperationEvents } from "../../../test-runner/common/operations/operation-with-data";
 
 describe("CallbackManager", () => {
   let callbackManager: CallbackManager;
@@ -143,24 +142,13 @@ describe("CallbackManager", () => {
       const timeoutSeconds = 30;
 
       // Setup operation data
-      const mockOperationData: CheckpointOperation = {
-        operation: {
+      mockCheckpointManager.registerUpdates([
+        {
           Id: operationId,
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
-          Status: OperationStatus.STARTED,
-          StartTimestamp: undefined,
         },
-        update: {
-          Id: operationId,
-          Type: OperationType.CALLBACK,
-          Action: undefined,
-        },
-        events: [],
-      };
-      mockCheckpointManager.operationDataMap.set(
-        operationId,
-        mockOperationData,
-      );
+      ]);
 
       // Spy on completeCallback
       const completeCallbackSpy = jest.spyOn(
@@ -190,24 +178,13 @@ describe("CallbackManager", () => {
   describe("completeCallback", () => {
     beforeEach(() => {
       // Setup mock operation data
-      const mockOperationData: CheckpointOperation = {
-        operation: {
+      mockCheckpointManager.registerUpdates([
+        {
           Id: "test-operation-id",
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
-          Status: OperationStatus.STARTED,
-          StartTimestamp: undefined,
         },
-        update: {
-          Id: "test-operation-id",
-          Type: OperationType.CALLBACK,
-          Action: undefined,
-        },
-        events: [],
-      };
-      mockCheckpointManager.operationDataMap.set(
-        "test-operation-id",
-        mockOperationData,
-      );
+      ]);
     });
 
     it("should throw error when CallbackId is missing", () => {
@@ -226,8 +203,7 @@ describe("CallbackManager", () => {
         CallbackId: "test-callback-id",
       };
 
-      // Clear the operation data map
-      mockCheckpointManager.operationDataMap.clear();
+      mockCheckpointManager.cleanup();
 
       expect(() => {
         callbackManager.completeCallback(
@@ -289,17 +265,11 @@ describe("CallbackManager", () => {
         Result: "test-result",
       };
 
-      const setSpy = jest.spyOn(mockCheckpointManager.operationDataMap, "set");
-
       const result = callbackManager.completeCallback(
         callbackDetails,
         CompleteCallbackStatus.SUCCEEDED,
       );
 
-      expect(setSpy).toHaveBeenCalledWith(
-        "test-operation-id",
-        expect.any(Object),
-      );
       // Verify the correct structure with CallbackDetails property
       expect(result.operation.CallbackDetails).toEqual(callbackDetails);
     });
@@ -342,33 +312,22 @@ describe("CallbackManager", () => {
 
   describe("heartbeatCallback", () => {
     beforeEach(() => {
-      const mockOperationData: OperationEvents = {
-        operation: {
-          Id: "test-operation-id",
+      mockCheckpointManager.registerUpdates([
+        {
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
-          Status: OperationStatus.STARTED,
-          StartTimestamp: undefined,
-        },
-        events: [
-          {
-            CallbackStartedDetails: {
-              HeartbeatTimeout: 60,
-              CallbackId: undefined,
-            },
+          Id: "test-operation-id",
+          CallbackOptions: {
+            HeartbeatTimeoutSeconds: 60,
           },
-        ],
-      };
-      mockCheckpointManager.operationDataMap.set(
-        "test-operation-id",
-        mockOperationData,
-      );
+        },
+      ]);
     });
 
     it("should throw error when operation is not found", () => {
       const callbackId = createCallbackId("test-callback-id");
 
-      // Clear the operation data map
-      mockCheckpointManager.operationDataMap.clear();
+      mockCheckpointManager.cleanup();
 
       expect(() => {
         callbackManager.heartbeatCallback(callbackId);
@@ -378,26 +337,15 @@ describe("CallbackManager", () => {
     it("should throw error when operation does not require heartbeat", () => {
       const callbackId = createCallbackId("test-callback-id");
 
-      // Update operation to not have heartbeat timeout
-      const mockOperationData: CheckpointOperation = {
-        operation: {
+      mockCheckpointManager.cleanup();
+      mockCheckpointManager.registerUpdates([
+        {
           Id: "test-operation-id",
-          Type: OperationType.CALLBACK,
-          StartTimestamp: undefined,
-          Status: undefined,
-        },
-        update: {
-          Id: "test-operation-id",
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
           CallbackOptions: {},
-          Action: undefined,
         },
-        events: [],
-      };
-      mockCheckpointManager.operationDataMap.set(
-        "test-operation-id",
-        mockOperationData,
-      );
+      ]);
 
       expect(() => {
         callbackManager.heartbeatCallback(callbackId);
@@ -451,43 +399,19 @@ describe("CallbackManager", () => {
       const operationId1 = "operation-1";
       const operationId2 = "operation-2";
 
-      // Setup operation data first
-      const mockOperationData1: CheckpointOperation = {
-        operation: {
+      // Setup mock operation data
+      mockCheckpointManager.registerUpdates([
+        {
           Id: operationId1,
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
-          Status: OperationStatus.STARTED,
-          StartTimestamp: undefined,
         },
-        update: {
-          Id: operationId1,
-          Type: OperationType.CALLBACK,
-          Action: undefined,
-        },
-        events: [],
-      };
-      const mockOperationData2: CheckpointOperation = {
-        operation: {
+        {
           Id: operationId2,
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
-          Status: OperationStatus.STARTED,
-          StartTimestamp: undefined,
         },
-        update: {
-          Id: operationId2,
-          Type: OperationType.CALLBACK,
-          Action: undefined,
-        },
-        events: [],
-      };
-      mockCheckpointManager.operationDataMap.set(
-        operationId1,
-        mockOperationData1,
-      );
-      mockCheckpointManager.operationDataMap.set(
-        operationId2,
-        mockOperationData2,
-      );
+      ]);
 
       // Fix: Make encodeCallbackId return unique IDs for different operations
       (encodeCallbackId as jest.Mock).mockImplementation(({ operationId }) => {
@@ -540,24 +464,13 @@ describe("CallbackManager", () => {
       const operationId = "integration-test-id";
 
       // Setup operation data
-      const mockOperationData: CheckpointOperation = {
-        operation: {
+      mockCheckpointManager.registerUpdates([
+        {
           Id: operationId,
+          Action: OperationAction.START,
           Type: OperationType.CALLBACK,
-          Status: OperationStatus.STARTED,
-          StartTimestamp: undefined,
         },
-        update: {
-          Id: operationId,
-          Type: OperationType.CALLBACK,
-          Action: undefined,
-        },
-        events: [],
-      };
-      mockCheckpointManager.operationDataMap.set(
-        operationId,
-        mockOperationData,
-      );
+      ]);
 
       // Override decodeCallbackId for this test to return the correct operation ID
       (decodeCallbackId as jest.Mock).mockReturnValueOnce({
@@ -594,21 +507,13 @@ describe("CallbackManager", () => {
 
       // Setup operation data for all
       operationIds.forEach((id) => {
-        const mockOperationData: CheckpointOperation = {
-          operation: {
+        mockCheckpointManager.registerUpdates([
+          {
             Id: id,
+            Action: OperationAction.START,
             Type: OperationType.CALLBACK,
-            Status: OperationStatus.STARTED,
-            StartTimestamp: undefined,
           },
-          update: {
-            Id: id,
-            Type: OperationType.CALLBACK,
-            Action: undefined,
-          },
-          events: [],
-        };
-        mockCheckpointManager.operationDataMap.set(id, mockOperationData);
+        ]);
       });
 
       // Fix: Make each callback get a unique ID

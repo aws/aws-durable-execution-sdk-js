@@ -141,7 +141,10 @@ describe("execution handlers", () => {
           Error: { Payload: undefined },
         },
       };
-      completeInvocationSpy.mockReturnValue(mockEvent);
+      completeInvocationSpy.mockReturnValue({
+        event: mockEvent,
+        hasDirtyOperations: false,
+      });
 
       const errorObject: ErrorObject = {
         ErrorType: "TestError",
@@ -160,7 +163,10 @@ describe("execution handlers", () => {
         invocationId,
         errorObject,
       );
-      expect(result).toEqual(mockEvent);
+      expect(result).toEqual({
+        event: mockEvent,
+        hasDirtyOperations: false,
+      });
     });
   });
 });

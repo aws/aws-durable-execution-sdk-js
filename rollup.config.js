@@ -17,9 +17,10 @@ const commonOutputOptions = {
  *
  * @param {import('rollup').RollupOptions} options
  * @param {string | undefined} mode
+ * @param {Record<string, unknown>} packageJson
  * @returns {import('rollup').RollupOptions}
  */
-export function createBuildOptions(options, mode) {
+export function createBuildOptions(options, mode, packageJson) {
   if (mode !== "esm" && mode !== "cjs") {
     throw new Error(`Invalid mode ${mode}`);
   }
@@ -32,6 +33,7 @@ export function createBuildOptions(options, mode) {
       values: {
         "process.env.IS_ESM": JSON.stringify(mode === "esm"),
         "process.env.NODE_ENV": JSON.stringify("production"),
+        "process.env.NPM_PACKAGE_VERSION": JSON.stringify(packageJson.version),
       },
     }),
   ];

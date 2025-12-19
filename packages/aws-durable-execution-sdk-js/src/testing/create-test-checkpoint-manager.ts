@@ -16,6 +16,6 @@ export const createTestCheckpointManager = (
     checkpointToken,
     emitter,
     logger,
-    context.pendingCompletions,
+    new Set<string>(),
   );
 };

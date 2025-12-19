@@ -4,6 +4,7 @@ import {
   OperationType,
   EventType,
   ErrorObject,
+  OperationAction,
 } from "@aws-sdk/client-lambda";
 import { ExecutionManager, StartExecutionParams } from "../execution-manager";
 import { CheckpointManager } from "../checkpoint-manager";
@@ -520,7 +521,10 @@ describe("execution-manager", () => {
         );
 
         // Verify the result
-        expect(result).toBe(mockHistoryEvent);
+        expect(result).toEqual({
+          event: mockHistoryEvent,
+          hasDirtyOperations: false,
+        });
 
         // Verify CheckpointManager.completeInvocation was called
         expect(completeInvocationSpy).toHaveBeenCalledWith(invocationId);
@@ -593,7 +597,10 @@ describe("execution-manager", () => {
         );
 
         // Verify the result
-        expect(result).toBe(mockHistoryEvent);
+        expect(result).toEqual({
+          event: mockHistoryEvent,
+          hasDirtyOperations: false,
+        });
 
         // Verify CheckpointManager.completeInvocation was called
         expect(completeInvocationSpy).toHaveBeenCalledWith(invocationId);
@@ -641,6 +648,91 @@ describe("execution-manager", () => {
 
         // Verify CheckpointManager.completeInvocation was called
         expect(completeInvocationSpy).toHaveBeenCalledWith(invocationId);
+      });
+
+      it("should return hasDirtyOperations as true when checkpoint storage has dirty operations", () => {
+        // Create an execution first
+        const executionId = createExecutionId("test-execution-id");
+        const invocationId = createInvocationId("test-invocation-id");
+        executionManager.startExecution({ executionId, invocationId });
+
+        const storage = executionManager.getCheckpointsByExecution(executionId);
+        expect(storage).toBeDefined();
+
+        // Register an operation to make the storage dirty
+        const stepUpdate = {
+          Id: "test-step-operation",
+          Type: OperationType.STEP,
+          Action: OperationAction.START,
+        };
+        storage!.registerUpdate(stepUpdate);
+
+        // Mock the completeInvocation method on CheckpointManager
+        const mockTimestamps = {
+          startTimestamp: new Date("2023-01-01T00:00:00.000Z"),
+          endTimestamp: new Date("2023-01-01T00:01:00.000Z"),
+        };
+
+        const completeInvocationSpy = jest
+          .spyOn(storage!, "completeInvocation")
+          .mockReturnValue(mockTimestamps);
+
+        // Mock the eventProcessor.createHistoryEvent method
+        const mockHistoryEvent = {
+          EventType: EventType.InvocationCompleted,
+          Timestamp: new Date(),
+          InvocationCompletedDetails: {
+            StartTimestamp: mockTimestamps.startTimestamp,
+            EndTimestamp: mockTimestamps.endTimestamp,
+            Error: {
+              Payload: undefined,
+            },
+            RequestId: invocationId,
+          },
+        };
+
+        const createHistoryEventSpy = jest
+          .spyOn(storage!.eventProcessor, "createHistoryEvent")
+          .mockReturnValue(mockHistoryEvent);
+
+        // Mock hasDirtyOperations to return true
+        const hasDirtyOperationsSpy = jest
+          .spyOn(storage!, "hasDirtyOperations")
+          .mockReturnValue(true);
+
+        // Call the method
+        const result = executionManager.completeInvocation(
+          executionId,
+          invocationId,
+          undefined,
+        );
+
+        // Verify the result shows dirty operations exist
+        expect(result).toEqual({
+          event: mockHistoryEvent,
+          hasDirtyOperations: true,
+        });
+
+        // Verify CheckpointManager.completeInvocation was called
+        expect(completeInvocationSpy).toHaveBeenCalledWith(invocationId);
+
+        // Verify hasDirtyOperations was called
+        expect(hasDirtyOperationsSpy).toHaveBeenCalled();
+
+        // Verify eventProcessor.createHistoryEvent was called with correct parameters
+        expect(createHistoryEventSpy).toHaveBeenCalledWith(
+          EventType.InvocationCompleted,
+          undefined,
+          "InvocationCompletedDetails",
+          {
+            StartTimestamp: mockTimestamps.startTimestamp,
+            EndTimestamp: mockTimestamps.endTimestamp,
+            Error: {
+              Payload: undefined,
+            },
+            RequestId: invocationId,
+          },
+        );
       });
     });
   });

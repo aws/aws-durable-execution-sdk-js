@@ -8,6 +8,9 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
+  localRunnerConfig: {
+    skipTime: false,
+  },
   tests: (runner) => {
     it("should handle multiple invocations tracking with waitForCallback operations", async () => {
       // Get operations for verification

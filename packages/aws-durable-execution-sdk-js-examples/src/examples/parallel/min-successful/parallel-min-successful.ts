@@ -14,32 +14,41 @@ export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     log("Starting parallel execution with minSuccessful: 2");
 
+    // Using ctx.step here will prevent us to check minSuccessful if we are trying
+    // to use timeout that is close to checkpopint call latency
+    // The reason is ctx.step is doing checkpoint synchronously and multiple
+    // steps in multiple iterations/branches could finish before map/parallel completion is met
+
     const results = await context.parallel(
       "min-successful-branches",
       [
-        async (ctx) => {
-          return await ctx.step("branch-1", async () => {
+        {
+          name: "branch-1",
+          func: async (ctx) => {
             await new Promise((resolve) => setTimeout(resolve, 100));
             return "Branch 1 result";
-          });
+          },
         },
-        async (ctx) => {
-          return await ctx.step("branch-2", async () => {
+        {
+          name: "branch-2",
+          func: async (ctx) => {
             await new Promise((resolve) => setTimeout(resolve, 200));
             return "Branch 2 result";
-          });
+          },
         },
-        async (ctx) => {
-          return await ctx.step("branch-3", async () => {
+        {
+          name: "branch-3",
+          func: async (ctx) => {
             await new Promise((resolve) => setTimeout(resolve, 300));
             return "Branch 3 result";
-          });
+          },
         },
-        async (ctx) => {
-          return await ctx.step("branch-4", async () => {
+        {
+          name: "branch-4",
+          func: async (ctx) => {
             await new Promise((resolve) => setTimeout(resolve, 400));
             return "Branch 4 result";
-          });
+          },
         },
       ],
       {
