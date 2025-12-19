@@ -251,6 +251,8 @@ describe("LocalDurableTestRunner Integration", () => {
 
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
+        expect(context.lambdaContext.getRemainingTimeInMillis()).toBe(900_000);
+        
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         const mock1: string = await context.step(() => mockedFunction());
 
