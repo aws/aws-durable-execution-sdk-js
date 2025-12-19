@@ -8,15 +8,15 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback with callback failure scenarios", async () => {
       // Start the execution (this will pause at the callback)
       const executionPromise = runner.run();
 
-      const callbackOperation = runner.getOperationByIndex(1);
+      const callbackOperation = runner.getOperationByIndex(0);
 
       // Wait for the operation to be available (submitter succeeded)
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
 
       // Simulate external system failing the callback
       await callbackOperation.sendCallbackFailure({
@@ -33,6 +33,8 @@ createTests({
 
       const completedOperations = result.getOperations();
       expect(completedOperations.length).toEqual(3);
+
+      assertEventSignatures(result);
     });
   },
 });

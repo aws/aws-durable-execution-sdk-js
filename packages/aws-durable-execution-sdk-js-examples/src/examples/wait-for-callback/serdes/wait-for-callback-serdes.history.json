@@ -1,0 +1,189 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "1786cba2-d720-468c-b378-5e163fffa680",
+    "EventTimestamp": "2025-12-17T19:42:16.876Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "custom-serdes-callback",
+    "EventTimestamp": "2025-12-17T19:42:16.884Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:42:16.884Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImY1YTA1ZjA1LTZlMjctNGJiNy05ZTQ5LTUzYzZlNmE2ODM1MSIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiYzE4ZDEzZDAtM2Q3Ni00MjY5LTk2ODYtM2MxMjZlMmJkZjVlIn0=",
+      "Timeout": 300,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:42:16.888Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:42:16.888Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 6,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:42:16.890Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":42,\"message\":\"Hello Custom Serdes\",\"timestamp\":\"2025-06-15T12:30:45Z\",\"metadata\":{\"version\":\"2.0.0\",\"processed\":false}}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-17T19:42:16.941Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:16.876Z",
+      "EndTimestamp": "2025-12-17T19:42:16.941Z",
+      "Error": {},
+      "RequestId": "2f5a1204-69be-4b97-a417-ee168632bae4"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "custom-serdes-callback",
+    "EventTimestamp": "2025-12-17T19:42:16.946Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"{\\\"id\\\":42,\\\"message\\\":\\\"Hello Custom Serdes\\\",\\\"timestamp\\\":\\\"2025-06-15T12:30:45Z\\\",\\\"metadata\\\":{\\\"version\\\":\\\"2.0.0\\\",\\\"processed\\\":false}}\""
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-17T19:42:16.946Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-17T19:42:16.946Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "true"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-17T19:42:16.948Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2025-12-17T19:42:16.948Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "true"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 13,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-17T19:42:16.950Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-17T19:42:17.950Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 14,
+    "EventTimestamp": "2025-12-17T19:42:17.002Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:16.943Z",
+      "EndTimestamp": "2025-12-17T19:42:17.002Z",
+      "Error": {},
+      "RequestId": "92cf6343-b084-4e51-a7c5-294a7f004a91"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 15,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2025-12-17T19:42:17.953Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 16,
+    "EventTimestamp": "2025-12-17T19:42:17.954Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:17.953Z",
+      "EndTimestamp": "2025-12-17T19:42:17.954Z",
+      "Error": {},
+      "RequestId": "e78e423d-09cb-4466-a015-03358e9b54da"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 17,
+    "Id": "1786cba2-d720-468c-b378-5e163fffa680",
+    "EventTimestamp": "2025-12-17T19:42:17.954Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"receivedData\":{\"id\":42,\"message\":\"Hello Custom Serdes\",\"timestamp\":\"2025-06-15T12:30:45.000Z\",\"metadata\":{\"version\":\"2.0.0\",\"processed\":true}},\"hasCircularReference\":true,\"isDateAfterReplay\":true,\"isDateBeforeReplay\":true,\"isSerdesProcessedBefore\":true,\"isSerdesProcessedAfter\":true}"
+      }
+    }
+  }
+]

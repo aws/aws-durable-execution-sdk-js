@@ -6,7 +6,7 @@ createTests({
     skipTime: false,
   },
   handler,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     it("should complete all waits and wait for max duration", async () => {
       const execution = await runner.run();
 
@@ -26,12 +26,10 @@ createTests({
       expect(wait2SecondsOp.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
 
-      // Not compatible with latest changes applied.
-      // There is a good change that this issue is related to
-      // testing library handling PENDING items in a different way than
-      // backend. Backend only cound them after LAn SDK received the changes
-      // in checkpoint response.
-      // assertEventSignatures(execution);
+      assertEventSignatures(execution, undefined, {
+        // TODO: testing library should also have 4 invocations and not 2
+        invocationCompletedDifference: isCloud ? 0 : 2,
+      });
     }, 10000);
   },
 });

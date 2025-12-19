@@ -4,7 +4,7 @@ import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete when failure tolerance is reached", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
@@ -26,6 +26,8 @@ createTests({
       ].forEach(({ name, status }) => {
         expect(runner.getOperation(name)?.getStatus()).toBe(status);
       });
+
+      assertEventSignatures(execution);
     });
   },
 });

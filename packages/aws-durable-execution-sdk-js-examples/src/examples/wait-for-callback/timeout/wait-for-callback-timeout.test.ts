@@ -5,7 +5,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback timeout scenarios", async () => {
       const result = await runner.run({
         payload: { test: "timeout-scenario" },
@@ -17,6 +17,8 @@ createTests({
         success: false,
         error: expect.any(String),
       });
+
+      assertEventSignatures(result);
     });
   },
 });

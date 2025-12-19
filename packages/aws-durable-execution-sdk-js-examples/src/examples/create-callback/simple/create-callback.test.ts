@@ -8,7 +8,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("function completes when callback succeeds - happy case", async () => {
       const res = "successful";
       const executionPromise = runner.run();
@@ -21,6 +21,8 @@ createTests({
 
       expect(callbackOp.getCallbackDetails()?.result).toStrictEqual(res);
       expect(execution.getResult()).toStrictEqual(res);
+
+      assertEventSignatures(execution, "success");
     });
 
     it("function completes when callback fails - happy case", async () => {
@@ -34,6 +36,8 @@ createTests({
 
       expect(callbackOp.getCallbackDetails()?.error).toBeDefined();
       expect(execution.getError()).toBeDefined();
+
+      assertEventSignatures(execution, "failure");
     });
 
     it("function completes when callback succeeds with undefined - edge case", async () => {
@@ -48,6 +52,8 @@ createTests({
       expect(callbackOp.getCallbackDetails()?.result).toBeUndefined();
       expect(callbackOp.getCallbackDetails()?.error).toBeUndefined();
       expect(execution.getResult()).toBeUndefined();
+
+      assertEventSignatures(execution, "success-undefined");
     });
 
     it("function completes when callback fails with undefined error message - edge case", async () => {
@@ -67,6 +73,8 @@ createTests({
         stackTrace: undefined,
       });
       expect(execution.getError()).toBeDefined();
+
+      assertEventSignatures(execution, "failure-undefined");
     });
   },
 });

@@ -8,7 +8,7 @@ createTests({
   localRunnerConfig: {
     skipTime: false,
   },
-  tests: (runner, { isCloud }) => {
+  tests: (runner, { isCloud, assertEventSignatures }) => {
     it("should handle waitForCallback when callback completes before ", async () => {
       const callbackOp = runner.getOperationByIndex(0);
 
@@ -32,6 +32,8 @@ createTests({
         success: true,
       });
       expect(result.getInvocations().length).toBe(1);
+
+      assertEventSignatures(result);
     });
   },
 });

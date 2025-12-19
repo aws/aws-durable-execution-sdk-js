@@ -1,0 +1,113 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "6f909e36-a863-42ee-895d-26ac8d73e355",
+    "EventTimestamp": "2025-12-18T21:47:07.635Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"firstName\":\"John\",\"lastName\":\"Doe\",\"email\":\"john.doe@example.com\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "create-user",
+    "EventTimestamp": "2025-12-18T21:47:07.642Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "create-user",
+    "EventTimestamp": "2025-12-18T21:47:07.642Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"firstName\":\"John\",\"lastName\":\"Doe\",\"email\":\"john.doe@example.com\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-18T21:47:07.644Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-18T21:47:08.645Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-18T21:47:07.696Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:07.635Z",
+      "EndTimestamp": "2025-12-18T21:47:07.696Z",
+      "Error": {},
+      "RequestId": "4a05bd0c-b34b-4160-9df6-64cb0cba30d1"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-18T21:47:08.650Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "greet-user",
+    "EventTimestamp": "2025-12-18T21:47:08.653Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "greet-user",
+    "EventTimestamp": "2025-12-18T21:47:08.653Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"Hello, I'm John Doe. My email is john.doe@example.com\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2025-12-18T21:47:08.653Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:08.650Z",
+      "EndTimestamp": "2025-12-18T21:47:08.653Z",
+      "Error": {},
+      "RequestId": "ded4d1af-ce07-42d9-91a3-e32132eda61e"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "6f909e36-a863-42ee-895d-26ac8d73e355",
+    "EventTimestamp": "2025-12-18T21:47:08.653Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"user\":{\"firstName\":\"John\",\"lastName\":\"Doe\",\"email\":\"john.doe@example.com\"},\"greeting\":\"Hello, I'm John Doe. My email is john.doe@example.com\"}"
+      }
+    }
+  }
+]

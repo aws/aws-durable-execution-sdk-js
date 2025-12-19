@@ -8,7 +8,7 @@ createTests({
     checkpointDelay: 100,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete early when minSuccessful is reached", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
@@ -36,6 +36,8 @@ createTests({
 
       // Verify the results array matches
       expect(result.results).toEqual(["Branch 1 result", "Branch 2 result"]);
+
+      assertEventSignatures(execution);
     });
   },
 });
