@@ -530,9 +530,9 @@ The SDK MUST:
 flowchart LR
     New[Customer calls operation] --> START
     START --> |Started| SUCCEED
-    SUCCEED --> |Succeeded| Success[Completes successfully]
+    SUCCEED --> |Succeeded| Success[Context completes successfully]
     START --> |Started| FAIL
-    FAIL --> |Failed| Failure[Completes with error]
+    FAIL --> |Failed| Failure[Context completes with error]
 ```
 
 #### 4.8.5 ReplayChildren Option
@@ -1012,8 +1012,10 @@ The SDK MUST document that **user code is responsible for deterministic behavior
 **User code MUST:**
 
 1. NOT use non-deterministic values (e.g., `Date.now()`, `Math.random()`, UUID generation) outside durable operations
-2. NOT perform side effects (API calls, database operations, file I/O) outside durable operations
+2. NOT perform side effects (API calls, database operations, file I/O) outside durable operations that affect operation order
 3. Execute identically on each replay for code outside durable operations
+
+**Note:** Side effects that do not influence operation order (e.g., logging) are acceptable outside durable operations.
 
 **User code SHOULD:**
 
@@ -1367,9 +1369,10 @@ except Exception as e:
 
 ### Version 1.2 (December 20, 2025)
 
-- Clarified side-effects rule: allowed if they don't affect operation order (Section 2.5)
+- Clarified side-effects rule: allowed if they don't affect operation order (Sections 2.5, 14.3)
 - Changed async integration from MUST to SHOULD (Section 11.2)
-- Moved mermaid state diagrams into Section 4 operation definitions, removed Appendix C
+- Moved mermaid state diagrams into Section 4 operation definitions, removed old Appendix C
+- Fixed EXECUTION state diagram to show it starts in STARTED state (no START action)
 
 ### Version 1.1 (December 9, 2025)
 
