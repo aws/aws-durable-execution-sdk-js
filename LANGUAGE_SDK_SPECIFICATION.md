@@ -1,7 +1,7 @@
 # AWS Lambda Durable Functions Language SDK Specification
 
-**Version:** 1.1  
-**Date:** December 9, 2025  
+**Version:** 1.2  
+**Date:** December 20, 2025  
 **Status:** Reviewing
 
 ## 1. Introduction
@@ -67,8 +67,10 @@ For correct replay behavior, **user code MUST be deterministic**:
 
 1. Non-durable code (code outside operations) MUST execute identically on each replay
 2. User code MUST NOT use non-deterministic values (e.g., `Date.now()`, `Math.random()`) outside durable operations
-3. User code MUST NOT perform side effects (e.g., API calls, database writes) outside durable operations
+3. User code MUST NOT perform side effects (e.g., API calls, database writes) outside durable operations affecting operation order
 4. Operation order MUST remain consistent across replays
+
+**Note:** User code MAY perform side effects outside durable operations as long as those side effects do not influence the order or execution of durable operations. For example, logging is acceptable, but using an API response to conditionally skip an operation is not.
 
 **SDK Responsibilities for Determinism:**
 
@@ -296,6 +298,17 @@ The SDK MUST:
 - `SUCCEED`: Complete execution successfully with a result
 - `FAIL`: Complete execution with an error
 
+#### 4.3.4 State Transitions
+
+```mermaid
+flowchart LR
+    New[Customer calls operation] --> START
+    START --> |Started| SUCCEED
+    SUCCEED --> |Succeeded| Success[Completes successfully]
+    START --> |Started| FAIL
+    FAIL --> |Failed| Failure[Completes with error]
+```
+
 ### 4.4 STEP Operation
 
 #### 4.4.1 Purpose
@@ -322,12 +335,18 @@ The SDK MUST:
 
 #### 4.4.4 State Transitions
 
-```
-[New] → START → STARTED → SUCCEED → SUCCEEDED [Done]
-                        ↓
-                     RETRY → PENDING → (delay) → READY → START
-                        ↓
-                     FAIL → FAILED [Done]
+```mermaid
+flowchart LR
+    New[Customer calls ctx.step] --> START
+    START --> |Started| SUCCEED
+    SUCCEED --> |Succeeded| Success[ctx.step completes with result]
+
+    START --> |Started| RETRY
+    RETRY --> |Pending| Delay[Wait for backoff period]
+    Delay --> |Ready| START
+
+    START --> |Started| FAIL
+    FAIL --> |Failed| Failed[ctx.step completes with error]
 ```
 
 #### 4.4.5 Retry Mechanism
@@ -367,10 +386,13 @@ The SDK MUST:
 
 #### 4.5.4 State Transitions
 
-```
-[New] → START → STARTED → (time passes) → SUCCEEDED [Done]
-                        ↓
-                     CANCEL → CANCELLED [Done]
+```mermaid
+flowchart LR
+    New[Customer calls ctx.wait] --> START
+    START --> |Started| Delay{Wait}
+    Delay --> |Succeeded| Success[ctx.wait completes]
+    Delay --> CANCEL
+    CANCEL --> |Cancelled| Cancelled[ctx.wait completes]
 ```
 
 ### 4.6 CALLBACK Operation
@@ -396,11 +418,25 @@ The SDK MUST:
 
 #### 4.6.4 State Transitions
 
-```
-[New] → START → STARTED → (external success) → SUCCEEDED [Done]
-                        ↓
-                        └→ (external failure) → FAILED [Done]
-                        └→ (timeout) → TIMED_OUT [Done]
+```mermaid
+flowchart LR
+    New[Customer calls ctx.createCallback] --> START
+    START --> |Started| Delay{Wait}
+    SUCCEED --> |Succeeded| Success[ctx.createCallback completes successfully]
+    FAIL --> |Failed| Failure[ctx.createCallback completes with error]
+    TIMEOUT --> |TimedOut| Failure
+
+    Delay .-> SendDurableExecutionCallbackSuccess
+    Delay .-> SendDurableExecutionCallbackFailure
+    Delay .-> TIMEOUT
+
+    SendDurableExecutionCallbackSuccess --> SUCCEED
+    SendDurableExecutionCallbackFailure --> FAIL
+
+    subgraph External System
+        SendDurableExecutionCallbackSuccess
+        SendDurableExecutionCallbackFailure
+    end
 ```
 
 #### 4.6.5 Configuration Options
@@ -434,12 +470,26 @@ The SDK MUST:
 
 #### 4.7.4 State Transitions
 
-```
-[New] → START → STARTED → (invoke completes) → SUCCEEDED [Done]
-                        ↓
-                        └→ (invoke fails) → FAILED [Done]
-                        └→ (invoke timeout) → TIMED_OUT [Done]
-                        └→ (invoke stopped) → STOPPED [Done]
+```mermaid
+flowchart LR
+    New[Customer calls ctx.invoke] --> START
+    START --> |Started| Delay{Wait}
+    SUCCEED --> |Succeeded| Success[ctx.invoke completes successfully]
+    FAIL --> |Failed| Failure[ctx.invoke completes with error]
+    TIMEOUT --> |TimedOut| Failure
+    STOP[StopDurableExecution] --> |Stopped| Failure
+
+    Delay .-> External
+    Delay .-> TIMEOUT
+
+    subgraph External System
+        External@{ shape: fork }
+        External .-> Invoked[Invoked Function]
+        External .-> STOP
+    end
+
+    Invoked .-> SUCCEED
+    Invoked .-> FAIL
 ```
 
 #### 4.7.5 Configuration Options
@@ -476,10 +526,13 @@ The SDK MUST:
 
 #### 4.8.4 State Transitions
 
-```
-[New] → START → STARTED → SUCCEED → SUCCEEDED [Done]
-                        ↓
-                        └→ FAIL → FAILED [Done]
+```mermaid
+flowchart LR
+    New[Customer calls operation] --> START
+    START --> |Started| SUCCEED
+    SUCCEED --> |Succeeded| Success[Completes successfully]
+    START --> |Started| FAIL
+    FAIL --> |Failed| Failure[Completes with error]
 ```
 
 #### 4.8.5 ReplayChildren Option
@@ -863,13 +916,15 @@ The SDK SHOULD provide type-safe interfaces where the language supports it:
 
 ### 11.2 Async Patterns
 
-The SDK MUST integrate with the language's asynchronous programming model:
+The SDK SHOULD integrate with the language's asynchronous programming model where appropriate:
 
 - JavaScript/TypeScript: Promises
 - Python: asyncio/coroutines
 - Go: goroutines/channels
 - Java: CompletableFuture, virtual threads (Java 21)
 - Rust: async/await
+
+**Note:** Integration with async primitives is not mandatory. SDKs MAY provide synchronous-only implementations or alternative concurrency models based on language idioms and use case requirements.
 
 ### 11.3 Error Handling Idioms
 
@@ -1284,101 +1339,7 @@ except Exception as e:
     return await context.step("fallback", lambda: fallback_operation())
 ```
 
-## Appendix C: Operation State Diagrams
-
-### C.1 STEP Operation
-
-```
-┌───────┐
-│  New  │
-└───┬───┘
-    │ START action
-    ▼
-┌─────────┐
-│ STARTED │◄───────────────────────────────────────┐
-└────┬────┘                                        │
-     │                                             │
-     ├─ SUCCEED ──► SUCCEEDED (terminal)           │
-     │                                             │
-     ├─ FAIL ─────► FAILED (terminal)              │
-     │                                             │
-     └─ RETRY ───► PENDING ──► (delay) ──► READY ──┘
-                                              (START action)
-```
-
-### C.2 WAIT Operation
-
-```
-┌───────┐
-│  New  │
-└───┬───┘
-    │ START action
-    ▼
-┌─────────┐
-│ STARTED │──────► (time elapses) ──► SUCCEEDED (terminal)
-└────┬────┘
-     │
-     └─ CANCEL action ──► CANCELLED (terminal)
-```
-
-### C.3 CALLBACK Operation
-
-```
-┌───────┐
-│  New  │
-└───┬───┘
-    │ START action
-    ▼
-┌─────────┐
-│ STARTED │──────┬──► SendCallbackSuccess ──► SUCCEEDED (terminal)
-└─────────┘      │
-                 ├──► SendCallbackFailure ──► FAILED (terminal)
-                 │
-                 └──► Timeout/HeartbeatTimeout ──► TIMED_OUT (terminal)
-```
-
-### C.4 CHAINED_INVOKE Operation
-
-```
-┌───────┐
-│  New  │
-└───┬───┘
-    │ START action
-    ▼
-┌─────────┐
-│ STARTED │──────┬──► Invoke succeeds ──► SUCCEEDED (terminal)
-└─────────┘      │
-                 ├──► Invoke fails ──► FAILED (terminal)
-                 │
-                 ├──► Invoke timeout ──► TIMED_OUT (terminal)
-                 │
-                 └──► Invoke stopped ──► STOPPED (terminal)
-```
-
-### C.5 CONTEXT Operation
-
-```
-┌───────┐
-│  New  │
-└───┬───┘
-    │ START action
-    ▼
-┌─────────┐
-│ STARTED │──────┬──► SUCCEED action ──► SUCCEEDED (terminal)
-└─────────┘      │
-                 └──► FAIL action ──► FAILED (terminal)
-```
-
-### C.6 EXECUTION Operation
-
-```
-┌─────────┐
-│ STARTED │──────┬──► SUCCEED action (or return SUCCEEDED) ──► SUCCEEDED (terminal)
-└─────────┘      │
-                 └──► FAIL action (or return FAILED) ──► FAILED (terminal)
-```
-
-## Appendix D: Glossary
+## Appendix C: Glossary
 
 **Checkpoint**: The act of persisting operation state to the durable execution service, enabling resume after interruption.
 
@@ -1402,7 +1363,13 @@ except Exception as e:
 
 **Completion Policy**: Rules determining when a batch operation (map/parallel) should stop based on success/failure counts.
 
-## Appendix E: Change Log
+## Appendix D: Change Log
+
+### Version 1.2 (December 20, 2025)
+
+- Clarified side-effects rule: allowed if they don't affect operation order (Section 2.5)
+- Changed async integration from MUST to SHOULD (Section 11.2)
+- Moved mermaid state diagrams into Section 4 operation definitions, removed Appendix C
 
 ### Version 1.1 (December 9, 2025)
 
