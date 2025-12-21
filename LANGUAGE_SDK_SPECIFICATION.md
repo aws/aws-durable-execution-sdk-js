@@ -302,12 +302,13 @@ The SDK MUST:
 
 ```mermaid
 flowchart LR
-    New[Customer calls operation] --> START
-    START --> |Started| SUCCEED
+    STARTED[Execution starts] --> |Started| SUCCEED
     SUCCEED --> |Succeeded| Success[Completes successfully]
-    START --> |Started| FAIL
+    STARTED --> |Started| FAIL
     FAIL --> |Failed| Failure[Completes with error]
 ```
+
+Note: The EXECUTION operation is always in STARTED status when the handler begins. It does not have a START action.
 
 ### 4.4 STEP Operation
 
