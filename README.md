@@ -5,7 +5,6 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/aws/aws-durable-execution-sdk-js/badge)](https://scorecard.dev/viewer/?uri=github.com/aws/aws-durable-execution-sdk-js)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
 ---
 
@@ -83,7 +82,7 @@ export const lambdaHandler = withDurableExecution(handler);
 
 ## 🧪 Testing
 
-The testing SDK enables local development and unit testing without deploying to AWS:
+The testing SDK enables local development and unit testing without deploying to AWS, as well as cloud testing against deployed Lambda functions:
 
 ```bash
 npm install @aws/durable-execution-sdk-js-testing --save-dev
