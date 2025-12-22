@@ -7,7 +7,7 @@ createTests({
   },
   handler,
   tests: (runner, { assertEventSignatures }) => {
-    it("should complete all waits and wait for max duration", async () => {
+    it("should complete all waits and wait for smallest duration", async () => {
       const execution = await runner.run();
 
       const wait1Op = runner.getOperation("wait-1");

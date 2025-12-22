@@ -5,7 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Concurret Callback with Submitter",
+  name: "Concurrent Callback with Submitter",
   description:
     "Demonstrates waitForCallback with submitter function inside context.parallel",
 };

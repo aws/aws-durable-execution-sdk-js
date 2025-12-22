@@ -9,7 +9,7 @@ createTests({
   },
   invocationType: InvocationType.Event,
   tests: (runner, { assertEventSignatures }) => {
-    it("should call wait for 2 seconds", async () => {
+    it("should complete execution after both wait and callback complete", async () => {
       const executionPromise = runner.run();
       const callback = runner.getOperation("callback");
 
@@ -24,6 +24,8 @@ createTests({
 
       expect(result.getResult()).toBeGreaterThan(1000);
       expect(result.getResult()).toBeLessThan(6000);
+
+      expect(runner.getOperation("wait").getWaitDetails()?.waitSeconds).toBe(1);
 
       assertEventSignatures(result);
     });

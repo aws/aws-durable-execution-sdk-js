@@ -16,7 +16,7 @@ export const handler = withDurableExecution(
 
     const beforeWait = await context.step(async () => Date.now());
     await context.promise.all<any>([
-      context.wait({ seconds: 1 }),
+      context.wait("wait", { seconds: 1 }),
       callbackPromise,
     ]);
     const afterWait = await context.step(async () => Date.now());
