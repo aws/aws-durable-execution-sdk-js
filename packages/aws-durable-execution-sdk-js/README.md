@@ -285,14 +285,14 @@ Control execution guarantees:
 ```typescript
 import { StepSemantics } from "@aws/durable-execution-sdk-js";
 
-// At-most-once per retry (default)
-await context.step("idempotent-operation", async () => updateDatabase(), {
-  semantics: StepSemantics.AtMostOncePerRetry,
-});
-
-// At-least-once per retry
+// At-least-once per execution (default)
 await context.step("retriable-operation", async () => sendNotification(), {
   semantics: StepSemantics.AtLeastOncePerRetry,
+});
+
+// At-most-once per execution
+await context.step("idempotent-operation", async () => updateDatabase(), {
+  semantics: StepSemantics.AtMostOncePerRetry,
 });
 ```
 
