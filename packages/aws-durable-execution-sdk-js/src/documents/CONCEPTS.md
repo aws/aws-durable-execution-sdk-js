@@ -316,6 +316,22 @@ await context.step("api-call", async () => callExternalAPI(), {
 });
 ```
 
+### Step Semantics
+
+Step semantics control execution guarantees _per retry attempt_:
+
+- **AtLeastOncePerRetry** (default): The step executes at least once per retry. If the step succeeds but checkpointing fails, it re-executes on replay.
+- **AtMostOncePerRetry**: A checkpoint is created before execution. If failure occurs after checkpoint but before completion, the previous step retry attempt is skipped on replay.
+
+**Important**: These guarantees are per retry, not per workflow execution. With retries enabled, `AtMostOncePerRetry` could still result in multiple executions across retry attempts. For step-level at-most-once semantics, use a custom retry policy:
+
+```typescript
+await context.step("critical-operation", async () => attemptOnlyOnce(), {
+  semantics: StepSemantics.AtMostOncePerRetry,
+  retryStrategy: () => ({ shouldRetry: false }), // Disable retries
+});
+```
+
 ## Limitations and Considerations
 
 - Code outside steps must be deterministic

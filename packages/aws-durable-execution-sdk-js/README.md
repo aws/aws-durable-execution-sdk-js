@@ -285,16 +285,36 @@ Control execution guarantees:
 ```typescript
 import { StepSemantics } from "@aws/durable-execution-sdk-js";
 
-// At-least-once per execution (default)
+// At-least-once per retry (default)
 await context.step("retriable-operation", async () => sendNotification(), {
   semantics: StepSemantics.AtLeastOncePerRetry,
 });
 
-// At-most-once per execution
+// At-most-once per retry
 await context.step("idempotent-operation", async () => updateDatabase(), {
   semantics: StepSemantics.AtMostOncePerRetry,
 });
 ```
+
+**Important**: These semantics apply _per retry_, not per overall execution:
+
+- **AtLeastOncePerRetry**: The step will execute at least once on each retry attempt. If the step succeeds but the checkpoint fails (e.g., sandbox crash), the step will re-execute on replay.
+- **AtMostOncePerRetry**: The step will execute at most once per retry attempt. A checkpoint is created before execution, so if a failure occurs after the checkpoint but before step completion, the previous step retry attempt is skipped on replay.
+
+**To achieve at-most-once semantics on a step-level**, use a custom retry strategy:
+
+```typescript
+await context.step(
+  "truly-once-only",
+  async () => callThatCannotTolerateDuplicates(),
+  {
+    semantics: StepSemantics.AtMostOncePerRetry,
+    retryStrategy: () => ({ shouldRetry: false }), // No retries
+  },
+);
+```
+
+Without this, a step using `AtMostOncePerRetry` with retries enabled could still execute multiple times across different retry attempts.
 
 ### Jitter Strategies
 

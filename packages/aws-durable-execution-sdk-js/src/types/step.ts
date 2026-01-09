@@ -36,10 +36,56 @@ export interface RetryDecision {
 }
 
 /**
+ * Execution semantics for step operations.
+ *
+ * @remarks
+ * These semantics control how step execution is checkpointed and replayed. **Important**: The guarantees apply *per
+ * retry attempt*, not per overall workflow execution.
+ *
+ * With retries enabled (the default), a step could execute multiple times across different retry attempts even when
+ * using `AtMostOncePerRetry`. To achieve step-level at-most-once execution, combine `AtMostOncePerRetry` with a retry
+ * strategy that disables retries (`shouldRetry: false`).
+ *
+ * @example
+ * ```typescript
+ * // At-least-once per retry (default) - safe for idempotent operations
+ * await context.step("send-notification", async () => sendEmail(), {
+ *   semantics: StepSemantics.AtLeastOncePerRetry,
+ * });
+ *
+ * // At-most-once per retry - for non-idempotent operations
+ * await context.step("charge-payment", async () => processPayment(), {
+ *   semantics: StepSemantics.AtMostOncePerRetry,
+ *   retryStrategy: () => ({ shouldRetry: false }),
+ * });
+ * ```
+ *
  * @public
  */
 export enum StepSemantics {
+  /**
+   * At-most-once execution per retry attempt.
+   *
+   * @remarks
+   * A checkpoint is created before step execution. If a failure occurs after the checkpoint
+   * but before step completion, the previous step retry attempt is skipped on replay.
+   *
+   * **Note**: This is "at-most-once *per retry*". With multiple retry attempts, the step
+   * could still execute multiple times across different retries. To guarantee the step
+   * executes at most once, disable retries by returning
+   * `{ shouldRetry: false }` from your retry strategy.
+   */
   AtMostOncePerRetry = "AT_MOST_ONCE_PER_RETRY",
+
+  /**
+   * At-least-once execution per retry attempt (default).
+   *
+   * @remarks
+   * The step will execute at least once on each retry attempt. If the step succeeds
+   * but the checkpoint fails (e.g., due to a sandbox crash), the step will re-execute
+   * on replay. This is the safer default for operations that are idempotent or can
+   * tolerate duplicate execution.
+   */
   AtLeastOncePerRetry = "AT_LEAST_ONCE_PER_RETRY",
 }
 
