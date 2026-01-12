@@ -35,7 +35,7 @@ export class InvokeHandler {
       logGroupName: "MyLogGroupName",
       logStreamName: "MyLogStreamName",
       getRemainingTimeInMillis: function (): number {
-        throw new Error("Function not implemented.");
+        return 900_000
       },
       done: function (): void {
         throw new Error("Function not implemented.");

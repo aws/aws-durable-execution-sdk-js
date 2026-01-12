@@ -9,7 +9,7 @@ on:
 
 # Cancel when pull request is updated for this node version
 concurrency:
-  group: ${{ github.head_ref }}-${{ github.run_id }}-${{ inputs.node-version }}-integ
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}-${{ inputs.node-version }}-integ
   cancel-in-progress: true
 
 jobs:

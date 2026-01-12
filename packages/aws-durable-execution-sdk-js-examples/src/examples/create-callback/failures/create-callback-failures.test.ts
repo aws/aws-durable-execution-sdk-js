@@ -6,11 +6,9 @@ import { handler } from "./create-callback-failures";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "create-callback-failures test",
-  functionName: "create-callback-failures",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle callback operations with failure", async () => {
       const callbackOperation = runner.getOperation("failing-operation");
 
@@ -34,6 +32,8 @@ createTests({
         errorType: "CallbackError",
         stackTrace: undefined,
       });
+
+      assertEventSignatures(result);
     });
   },
 });

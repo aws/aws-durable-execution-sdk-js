@@ -22,6 +22,11 @@ This package provides testing tools for durable functions both locally and in th
   - **Callback testing** - Send callback responses and verify callback behavior
   - **Retry validation** - Test step retry logic and failure scenarios
 
+- **run-durable CLI** - Command-line tool for quick testing without writing test code
+  - **Zero setup** - Run any durable function with `npx run-durable your-function.js`
+  - **Operation inspection** - View detailed operation tables and execution history
+  - **Time control** - Skip time for fast testing or use real timing for validation
+
 ## Installation
 
 ```bash
@@ -159,6 +164,7 @@ describe("CloudDurableTestRunner", () => {
 This README provides a quick reference for the Testing SDK's main features. For more detailed information:
 
 - **[API Reference](../../docs/api-reference/durable-execution-sdk-js-testing.md)** - Complete technical reference with detailed type definitions and operation specifications
+- **[run-durable CLI Guide](./RUN_DURABLE_CLI.md)** - Complete guide for using the command-line tool to quickly test durable functions
 - **[Contributing](../../CONTRIBUTING.md)** - Learn about contributing to the AWS Durable Execution Testing SDK for JavaScript
 
 ## LocalDurableTestRunner

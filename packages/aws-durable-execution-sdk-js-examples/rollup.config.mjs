@@ -7,6 +7,7 @@ import nodeResolve from "@rollup/plugin-node-resolve";
 import json from "@rollup/plugin-json";
 import commonJs from "@rollup/plugin-commonjs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const allExamplePaths = examplesCatalog.map((example) =>
   path.resolve(example.path),
@@ -43,6 +44,10 @@ export default defineConfig({
     typescript({
       // Disable incremental build to ensure examples catalog is parsed
       incremental: false,
+      tsconfig: path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "./tsconfig.build.json",
+      ),
     }),
     nodeResolve({
       preferBuiltins: true,

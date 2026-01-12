@@ -1,0 +1,67 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`run-durable CLI Integration Tests with format=cjs Core Error Cases should error when file does not exist 1`] = `
+"Error: File not found: nonexistent-file.js
+"
+`;
+
+exports[`run-durable CLI Integration Tests with format=cjs End-to-End Execution should successfully execute test handler end-to-end 1`] = `
+[
+  "Skip time: false, Verbose: false, Show history: false",
+  "",
+  "No operations found.",
+  "",
+  "Execution Status: SUCCEEDED",
+  "",
+  "Result:",
+  ""Test CLI Success!"",
+  "",
+]
+`;
+
+exports[`run-durable CLI Integration Tests with format=cjs End-to-End Execution should successfully execute with custom handler export 1`] = `
+[
+  "Skip time: false, Verbose: false, Show history: false",
+  "",
+  "No operations found.",
+  "",
+  "Execution Status: SUCCEEDED",
+  "",
+  "Result:",
+  ""Custom Handler Success!"",
+  "",
+]
+`;
+
+exports[`run-durable CLI Integration Tests with format=mjs Core Error Cases should error when file does not exist 1`] = `
+"Error: File not found: nonexistent-file.js
+"
+`;
+
+exports[`run-durable CLI Integration Tests with format=mjs End-to-End Execution should successfully execute test handler end-to-end 1`] = `
+[
+  "Skip time: false, Verbose: false, Show history: false",
+  "",
+  "No operations found.",
+  "",
+  "Execution Status: SUCCEEDED",
+  "",
+  "Result:",
+  ""Test CLI Success!"",
+  "",
+]
+`;
+
+exports[`run-durable CLI Integration Tests with format=mjs End-to-End Execution should successfully execute with custom handler export 1`] = `
+[
+  "Skip time: false, Verbose: false, Show history: false",
+  "",
+  "No operations found.",
+  "",
+  "Execution Status: SUCCEEDED",
+  "",
+  "Result:",
+  ""Custom Handler Success!"",
+  "",
+]
+`;

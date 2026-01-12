@@ -1,0 +1,118 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "8d04cd49-1256-464d-bae2-f0d5e542f78a",
+    "EventTimestamp": "2025-12-18T21:47:05.083Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"test\":\"timeout-scenario\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-18T21:47:05.088Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-18T21:47:05.088Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjMxYjFjYjUxLTE0MDAtNDRhMy04OWRkLTc3NTM4MTc1YjRkMiIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiYzYxYjU3Y2EtY2NmNi00OWM4LWEyN2QtMDA0OTM2Y2JlZmViIn0=",
+      "Timeout": 1,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-18T21:47:05.090Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-18T21:47:05.090Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2025-12-18T21:47:05.142Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:05.083Z",
+      "EndTimestamp": "2025-12-18T21:47:05.142Z",
+      "Error": {},
+      "RequestId": "23805ab9-017d-48f1-9c42-825c154e266e"
+    }
+  },
+  {
+    "EventType": "CallbackTimedOut",
+    "SubType": "Callback",
+    "EventId": 7,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-18T21:47:06.090Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackTimedOutDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Callback timed out"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "WaitForCallback",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-18T21:47:06.093Z",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Callback timed out"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2025-12-18T21:47:06.094Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:06.091Z",
+      "EndTimestamp": "2025-12-18T21:47:06.094Z",
+      "Error": {},
+      "RequestId": "c7c5c76d-f988-479d-8fcb-38e11ca675bb"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "8d04cd49-1256-464d-bae2-f0d5e542f78a",
+    "EventTimestamp": "2025-12-18T21:47:06.094Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"success\":false,\"error\":\"Callback timed out\"}"
+      }
+    }
+  }
+]

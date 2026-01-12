@@ -7,17 +7,15 @@ import { CustomData, handler } from "./wait-for-callback-serdes";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-serdes test",
-  functionName: "wait-for-callback-serdes",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle waitForCallback with custom serdes configuration", async () => {
       const executionPromise = runner.run();
 
       const callbackOperation = runner.getOperation("custom-serdes-callback");
 
-      await callbackOperation.waitForData(WaitingOperationStatus.STARTED);
+      await callbackOperation.waitForData(WaitingOperationStatus.SUBMITTED);
 
       // Serialize the data using custom serdes for sending
       await callbackOperation.sendCallbackSuccess(
@@ -62,6 +60,8 @@ createTests({
         status: OperationStatus.SUCCEEDED,
       });
       expect(completedOperations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(result);
     });
   },
 });

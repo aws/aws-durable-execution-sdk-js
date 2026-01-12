@@ -16,10 +16,15 @@ export interface PollCheckpointDataResponse {
   operations: CheckpointOperation[];
 }
 
+export interface CompleteInvocationResponse {
+  event: Event;
+  hasDirtyOperations: boolean;
+}
+
 export interface WorkerApiResponseMapping {
   [ApiType.StartDurableExecution]: InvocationResult;
   [ApiType.StartInvocation]: InvocationResult;
-  [ApiType.CompleteInvocation]: Event;
+  [ApiType.CompleteInvocation]: CompleteInvocationResponse;
   [ApiType.UpdateCheckpointData]: Record<string, never>;
   [ApiType.PollCheckpointData]: Promise<PollCheckpointDataResponse>;
   [ApiType.GetDurableExecutionState]: GetDurableExecutionStateResponse;

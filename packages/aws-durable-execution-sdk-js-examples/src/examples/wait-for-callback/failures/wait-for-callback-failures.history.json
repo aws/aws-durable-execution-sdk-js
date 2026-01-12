@@ -1,0 +1,118 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "6da307a3-bc2a-4f76-9e4e-e19a3baecfe3",
+    "EventTimestamp": "2025-12-17T19:42:14.375Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:14.378Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:42:14.378Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjI0NGI0ZDU0LWYyNWMtNDQxNy1iNGQ5LTUxMDdjNDQ1MjU1ZiIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiOGNlOWM1YjctMWFlNS00MTAxLTgxNjktNWZjOWRmYzU5ZWQ0In0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:42:14.379Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2025-12-17T19:42:15.381Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
+    "EventId": 6,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2025-12-17T19:42:15.383Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "External API failure",
+          "ErrorType": "APIException"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2025-12-17T19:42:15.433Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:14.374Z",
+      "EndTimestamp": "2025-12-17T19:42:15.433Z",
+      "Error": {},
+      "RequestId": "49512b4f-4a28-4ea4-a3e1-d5b99cfef51f"
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "WaitForCallback",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:15.435Z",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "External API failure"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2025-12-17T19:42:15.435Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:15.434Z",
+      "EndTimestamp": "2025-12-17T19:42:15.435Z",
+      "Error": {},
+      "RequestId": "b83c175b-9c12-4185-bcca-d1897e4e0af9"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "6da307a3-bc2a-4f76-9e4e-e19a3baecfe3",
+    "EventTimestamp": "2025-12-17T19:42:15.436Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"success\":false,\"error\":\"External API failure\"}"
+      }
+    }
+  }
+]

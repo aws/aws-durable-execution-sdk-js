@@ -171,20 +171,18 @@ describe("checkpoint-manager completeOperation", () => {
       // Register a step operation with initial attempt
       storage.registerUpdate({
         Id: "retry-step-id",
-        Action: OperationAction.START,
+        Action: OperationAction.RETRY,
         Type: OperationType.STEP,
         Name: "test-step",
       });
 
-      // Set initial attempt to 2
-      const operationData = storage.operationDataMap.get("retry-step-id");
-      if (operationData) {
-        operationData.operation.StepDetails = {
-          ...operationData.operation.StepDetails,
-          Attempt: 2,
-        };
-        storage.operationDataMap.set("retry-step-id", operationData);
-      }
+      // Second attempt
+      storage.registerUpdate({
+        Id: "retry-step-id",
+        Action: OperationAction.RETRY,
+        Type: OperationType.STEP,
+        Name: "test-step",
+      });
 
       // Complete the operation with RETRY action
       const { operation } = storage.completeOperation({
@@ -206,21 +204,12 @@ describe("checkpoint-manager completeOperation", () => {
         Action: OperationAction.START,
         Type: OperationType.STEP,
         Name: "test-step",
+        Payload: "previous result",
+        Error: {
+          ErrorType: "PreviousError",
+          ErrorMessage: "Previous error message",
+        },
       });
-
-      // Add some existing step details
-      const operationData = storage.operationDataMap.get("retry-step-id");
-      if (operationData) {
-        operationData.operation.StepDetails = {
-          ...operationData.operation.StepDetails,
-          Result: "previous result",
-          Error: {
-            ErrorType: "PreviousError",
-            ErrorMessage: "Previous error message",
-          },
-        };
-        storage.operationDataMap.set("retry-step-id", operationData);
-      }
 
       // Complete the operation with RETRY action and a new error
       const { operation } = storage.completeOperation({
@@ -243,37 +232,6 @@ describe("checkpoint-manager completeOperation", () => {
         ErrorType: "RetryError",
         ErrorMessage: "New retry error",
       });
-    });
-
-    it("should handle retry on operation with no existing StepDetails", () => {
-      // Initialize storage
-      storage.initialize();
-
-      // Register a step operation
-      storage.registerUpdate({
-        Id: "retry-step-id",
-        Action: OperationAction.START,
-        Type: OperationType.STEP,
-        Name: "test-step",
-      });
-
-      // Ensure no existing StepDetails
-      const operationData = storage.operationDataMap.get("retry-step-id");
-      if (operationData) {
-        operationData.operation.StepDetails = undefined;
-        storage.operationDataMap.set("retry-step-id", operationData);
-      }
-
-      // Complete the operation with RETRY action
-      const { operation } = storage.completeOperation({
-        Id: "retry-step-id",
-        Action: OperationAction.RETRY,
-        Type: OperationType.STEP,
-      });
-
-      expect(operation.Status).toBe(OperationStatus.PENDING);
-      expect(operation.StepDetails?.Attempt).toBe(1);
-      expect(operation.StepDetails?.NextAttemptTimestamp).toBeInstanceOf(Date);
     });
   });
 

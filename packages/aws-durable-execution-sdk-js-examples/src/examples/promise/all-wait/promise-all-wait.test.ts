@@ -1,10 +1,7 @@
 import { handler } from "./promise-all-wait";
-import historyEvents from "./promise-all-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "promise-all-wait test",
-  functionName: "promise-all-wait",
   localRunnerConfig: {
     skipTime: false,
   },
@@ -24,7 +21,7 @@ createTests({
       expect(wait2Op.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait3Op.getStepDetails()!.result).toBeUndefined();
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 10000);
   },
 });

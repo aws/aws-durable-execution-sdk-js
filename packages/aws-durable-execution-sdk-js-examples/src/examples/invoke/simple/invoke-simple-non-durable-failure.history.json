@@ -1,0 +1,84 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "90bfd695-7575-4b50-b87f-ad2455ebf96f",
+    "EventTimestamp": "2025-12-17T19:42:07.968Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"functionName\":\"non-durable\",\"payload\":{\"failure\":true}}"
+      }
+    }
+  },
+  {
+    "EventType": "ChainedInvokeStarted",
+    "SubType": "ChainedInvoke",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:07.972Z",
+    "ChainedInvokeStartedDetails": {
+      "FunctionName": "",
+      "Input": {
+        "Payload": ""
+      },
+      "DurableExecutionArn": ""
+    }
+  },
+  {
+    "EventType": "ChainedInvokeFailed",
+    "SubType": "ChainedInvoke",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:07.997Z",
+    "ChainedInvokeFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "This is a failure",
+          "ErrorType": "Error",
+          "StackTrace": ["Error: This is a failure", "    at handler"]
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-17T19:42:08.022Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:07.968Z",
+      "EndTimestamp": "2025-12-17T19:42:08.022Z",
+      "Error": {},
+      "RequestId": "f6075c5d-32c0-402d-a026-c5e831bdf07c"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-17T19:42:08.023Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:08.022Z",
+      "EndTimestamp": "2025-12-17T19:42:08.023Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "InvokeError",
+          "ErrorMessage": "This is a failure"
+        }
+      },
+      "RequestId": "8f599618-031c-4d5b-926e-0c408e48d70d"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 6,
+    "Id": "90bfd695-7575-4b50-b87f-ad2455ebf96f",
+    "EventTimestamp": "2025-12-17T19:42:08.023Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "InvokeError",
+          "ErrorMessage": "This is a failure"
+        }
+      }
+    }
+  }
+]

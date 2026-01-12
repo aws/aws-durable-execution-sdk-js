@@ -8,10 +8,8 @@ import { handler as waitHandler } from "../../wait/basic/wait";
 import { handler as stepHandler } from "../../step/basic/step-basic";
 
 createTests({
-  name: "force-checkpointing-invoke",
-  functionName: "force-checkpointing-invoke",
   handler,
-  tests: (runner, { functionNameMap }) => {
+  tests: (runner, { functionNameMap, assertEventSignatures }) => {
     it("should complete with force checkpointing when one branch blocks termination with multiple invokes", async () => {
       // Register the invoked functions for local testing
       if (runner instanceof LocalDurableTestRunner) {
@@ -60,6 +58,8 @@ createTests({
       // Verify operations were tracked
       const operations = execution.getOperations();
       expect(operations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(execution);
     }, 60000); // 60 second timeout
   },
 });

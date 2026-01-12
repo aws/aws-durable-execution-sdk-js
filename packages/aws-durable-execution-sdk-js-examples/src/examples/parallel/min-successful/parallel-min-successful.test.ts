@@ -3,13 +3,12 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Parallel minSuccessful",
-  functionName: "parallel-min-successful",
   localRunnerConfig: {
     skipTime: false,
+    checkpointDelay: 100,
   },
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete early when minSuccessful is reached", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
@@ -31,14 +30,14 @@ createTests({
       expect(branch1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
       expect(branch2?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      // TODO: Re-enable these assertions when we find the root cause of the cloud timing issue
-      // where remaining items show SUCCEEDED instead of STARTED
       // Remaining branches should be in STARTED state (not completed)
-      // expect(branch3?.getStatus()).toBe(OperationStatus.STARTED);
-      // expect(branch4?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(branch3?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(branch4?.getStatus()).toBe(OperationStatus.STARTED);
 
       // Verify the results array matches
       expect(result.results).toEqual(["Branch 1 result", "Branch 2 result"]);
+
+      assertEventSignatures(execution);
     });
   },
 });

@@ -3,10 +3,8 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Map toleratedFailurePercentage",
-  functionName: "map-tolerated-failure-percentage",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete with acceptable failure percentage", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
@@ -29,6 +27,8 @@ createTests({
       ].forEach(({ name, status }) => {
         expect(runner.getOperation(name)?.getStatus()).toBe(status);
       });
+
+      assertEventSignatures(execution);
     });
   },
 });

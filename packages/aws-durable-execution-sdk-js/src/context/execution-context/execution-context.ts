@@ -30,7 +30,7 @@ export const initializeExecutionContext = async (
 
   const durableExecutionClient =
     // Allow passing arbitrary durable clients if the input is a custom class
-    event instanceof DurableExecutionInvocationInputWithClient
+    DurableExecutionInvocationInputWithClient.isInstance(event)
       ? event.durableExecutionClient
       : new DurableExecutionApiClient(lambdaClient);
 

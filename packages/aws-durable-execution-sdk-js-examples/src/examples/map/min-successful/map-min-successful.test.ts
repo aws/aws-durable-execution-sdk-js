@@ -3,10 +3,12 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Map minSuccessful",
-  functionName: "map-min-successful",
   handler,
-  tests: (runner) => {
+  localRunnerConfig: {
+    skipTime: false,
+    checkpointDelay: 100,
+  },
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete early when minSuccessful is reached", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
@@ -32,15 +34,14 @@ createTests({
       expect(item0?.getStatus()).toBe(OperationStatus.SUCCEEDED);
       expect(item1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
 
-      // TODO: Re-enable these assertions when we find the root cause of the cloud timing issue
-      // where remaining items show SUCCEEDED instead of STARTED
-      // Remaining items should be in STARTED state (not completed)
-      // expect(item2?.getStatus()).toBe(OperationStatus.STARTED);
-      // expect(item3?.getStatus()).toBe(OperationStatus.STARTED);
-      // expect(item4?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item2?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item3?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(item4?.getStatus()).toBe(OperationStatus.STARTED);
 
       // Verify the results array matches
       expect(result.results).toEqual(["Item 1 processed", "Item 2 processed"]);
+
+      assertEventSignatures(execution);
     });
   },
 });

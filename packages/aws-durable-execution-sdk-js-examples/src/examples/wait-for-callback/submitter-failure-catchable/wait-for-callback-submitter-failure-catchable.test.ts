@@ -3,11 +3,9 @@ import { handler } from "./wait-for-callback-submitter-failure-catchable";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback-submitter-failure-catchable test",
-  functionName: "wait-for-callback-submitter-failure-catchable",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should catch submitter failure in try-catch block", async () => {
       const execution = await runner.run();
 
@@ -17,18 +15,8 @@ createTests({
         success: false,
         error: expect.stringContaining("Submitter failed"),
       });
-    });
 
-    it("should handle submitter failure gracefully after retries", async () => {
-      const execution = await runner.run();
-
-      // Verify error is caught and returned in response
-      const result = execution.getResult() as any;
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("Submitter failed");
-
-      // Execution completes successfully (doesn't hang or throw unhandled error)
-      expect(execution.getResult()).toBeDefined();
+      assertEventSignatures(execution);
     });
   },
 });

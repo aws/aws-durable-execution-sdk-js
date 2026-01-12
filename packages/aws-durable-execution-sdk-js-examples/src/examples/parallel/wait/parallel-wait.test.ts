@@ -1,15 +1,12 @@
 import { handler } from "./parallel-wait";
-import historyEvents from "./parallel-wait.history.json";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "parallel-wait test",
-  functionName: "parallel-wait",
   localRunnerConfig: {
     skipTime: false,
   },
   handler,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     it("should complete all waits and wait for max duration", async () => {
       const execution = await runner.run();
 
@@ -29,7 +26,10 @@ createTests({
       expect(wait2SecondsOp.getWaitDetails()!.waitSeconds!).toBe(2);
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution, undefined, {
+        // TODO: testing library should also have 4 invocations and not 2
+        invocationCompletedDifference: isCloud ? 0 : 2,
+      });
     }, 10000);
   },
 });

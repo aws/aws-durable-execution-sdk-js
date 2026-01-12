@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-const fs = require("fs");
-const path = require("path");
-const yaml = require("js-yaml");
+import fs from "fs";
+import path from "path";
+import yaml from "js-yaml";
 
 // Configuration for different examples that need special settings
-const EXAMPLE_CONFIGS = {
+const EXAMPLE_CONFIGS: Record<string, any> = {
   "steps-with-retry": {
     memorySize: 256,
     timeout: 300,
@@ -16,11 +16,6 @@ const EXAMPLE_CONFIGS = {
         },
       },
     ],
-  },
-  "wait-for-callback-submitter-retry-success": {
-    memorySize: 128,
-    timeout: 120,
-    policies: [],
   },
 };
 
@@ -34,96 +29,35 @@ const DEFAULT_CONFIG = {
 /**
  * Convert kebab-case filename to PascalCase resource name
  */
-function toPascalCase(filename) {
+function toPascalCase(filename: string) {
   return filename
     .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
     .join("");
-}
-
-/**
- * Get TypeScript files from src/examples directory
- */
-function getExampleFiles() {
-  const examplesDir = path.join(__dirname, "../src/examples");
-
-  if (!fs.existsSync(examplesDir)) {
-    throw new Error(`Examples directory not found: ${examplesDir}`);
-  }
-
-  const exampleFiles = [];
-
-  // Read all directories in examples
-  const entries = fs.readdirSync(examplesDir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    // Skip non-directories and special directories
-    if (!entry.isDirectory() || entry.name.startsWith(".")) {
-      continue;
-    }
-
-    const dirPath = path.join(examplesDir, entry.name);
-    const subEntries = fs.readdirSync(dirPath, { withFileTypes: true });
-
-    // Check if this directory contains TypeScript files directly (standalone examples)
-    const directTsFiles = subEntries.filter(
-      (dirent) =>
-        dirent.isFile() &&
-        dirent.name.endsWith(".ts") &&
-        !dirent.name.includes(".test"),
-    );
-
-    if (directTsFiles.length > 0) {
-      // Standalone example directory
-      directTsFiles.forEach((file) => {
-        exampleFiles.push(path.basename(file.name, ".ts"));
-      });
-    } else {
-      // Nested structure - scan subdirectories
-      const subDirs = subEntries.filter((dirent) => dirent.isDirectory());
-
-      for (const subDir of subDirs) {
-        const subDirPath = path.join(dirPath, subDir.name);
-        const filesInSubDir = fs.readdirSync(subDirPath);
-
-        // Find TypeScript files (excluding test files)
-        const tsFiles = filesInSubDir.filter(
-          (file) => file.endsWith(".ts") && !file.includes(".test."),
-        );
-
-        // Add each example file (without .ts extension)
-        tsFiles.forEach((file) => {
-          exampleFiles.push(path.basename(file, ".ts"));
-        });
-      }
-    }
-  }
-
-  return exampleFiles.sort(); // Sort for consistent output
 }
 
 /**
  * Create a Lambda function resource configuration
  */
-function createFunctionResource(filename, skipVerboseLogging = false) {
-  const resourceName = toPascalCase(filename);
-  const config = EXAMPLE_CONFIGS[filename] || DEFAULT_CONFIG;
+function createFunctionResource(
+  resourceName: string,
+  catalog: any,
+  skipVerboseLogging = false,
+) {
+  const config = EXAMPLE_CONFIGS[resourceName] || DEFAULT_CONFIG;
 
-  const functionResource = {
+  const functionResource: Record<string, any> = {
     Type: "AWS::Serverless::Function",
     Properties: {
-      FunctionName: `${resourceName}-TypeScript`,
+      FunctionName: resourceName,
       CodeUri: "./dist",
-      Handler: `${filename}.handler`,
+      Handler: catalog.handler,
       Runtime: "nodejs22.x",
       Architectures: ["x86_64"],
       MemorySize: config.memorySize,
       Timeout: config.timeout,
       Role: { "Fn::GetAtt": ["DurableFunctionRole", "Arn"] },
-      DurableConfig: {
-        ExecutionTimeout: 3600,
-        RetentionPeriodInDays: 7,
-      },
+      DurableConfig: catalog.durableConfig,
       Environment: {
         Variables: {
           AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
@@ -145,17 +79,34 @@ function createFunctionResource(filename, skipVerboseLogging = false) {
   return functionResource;
 }
 
+function getExamplesCatalogJson() {
+  const examplesCatalogPath = path.join(
+    __dirname,
+    "../src/utils/examples-catalog.json",
+  );
+
+  if (!fs.existsSync(examplesCatalogPath)) {
+    throw new Error(`Examples directory not found: ${examplesCatalogPath}`);
+  }
+
+  const examplesCatalog = JSON.parse(
+    fs.readFileSync(examplesCatalogPath, "utf8"),
+  );
+
+  if (examplesCatalog.length === 0) {
+    throw new Error("No TypeScript example files found in src/examples");
+  }
+
+  return examplesCatalog;
+}
+
 /**
  * Generate the complete CloudFormation template
  */
 function generateTemplate(skipVerboseLogging = false) {
-  const exampleFiles = getExampleFiles();
+  const examplesCatalog = getExamplesCatalogJson();
 
-  if (exampleFiles.length === 0) {
-    throw new Error("No TypeScript example files found in src/examples");
-  }
-
-  const template = {
+  const template: Record<string, any> = {
     AWSTemplateFormatVersion: "2010-09-09",
     Description: "Durable Function examples written in TypeScript.",
     Transform: ["AWS::Serverless-2016-10-31"],
@@ -202,12 +153,11 @@ function generateTemplate(skipVerboseLogging = false) {
   };
 
   // Generate resources for each example file
-  exampleFiles.forEach((filename) => {
-    const resourceName = toPascalCase(filename);
-    template.Resources[resourceName] = createFunctionResource(
-      filename,
-      skipVerboseLogging,
-    );
+  examplesCatalog.forEach((catalog: { name: string; handler: string }) => {
+    const resourceName = catalog.name.replace(/\s/g, "") + `-22x-NodeJS-Local`;
+    template.Resources[
+      toPascalCase(catalog.handler.slice(0, -".handler".length))
+    ] = createFunctionResource(resourceName, catalog, skipVerboseLogging);
   });
 
   return template;
@@ -252,7 +202,7 @@ function main() {
     if (skipVerboseLogging) {
       console.log("🔇 Verbose logging disabled");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Error generating template.yml:", error.message);
     process.exit(1);
   }
@@ -263,9 +213,9 @@ if (require.main === module) {
   main();
 }
 
-module.exports = {
+export {
   generateTemplate,
-  getExampleFiles,
   toPascalCase,
   createFunctionResource,
+  getExamplesCatalogJson,
 };

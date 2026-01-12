@@ -1,0 +1,473 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "66c27018-dc2d-486a-8979-ac4560884907",
+    "EventTimestamp": "2025-12-17T19:42:02.000Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failure-threshold-tasks",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "task-1",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "task-2",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "task-3",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 9,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "parallel-branch-3",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "a4e1cd317d54f087",
+    "Name": "task-4",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 11,
+    "Id": "12426c956d1bc501",
+    "Name": "parallel-branch-4",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "0f42756e5788f9b0",
+    "Name": "task-5",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "12426c956d1bc501",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 13,
+    "Id": "2f221a18eb863803",
+    "Name": "task-1",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Task 1 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 2,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 14,
+    "Id": "6151f5ab282d90e4",
+    "Name": "task-2",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Task 2 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 15,
+    "Id": "b425e0c75591aa8f",
+    "Name": "task-3",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Task 3 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 16,
+    "Id": "a4e1cd317d54f087",
+    "Name": "task-4",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"Task 4 success\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 17,
+    "Id": "0f42756e5788f9b0",
+    "Name": "task-5",
+    "EventTimestamp": "2025-12-17T19:42:02.008Z",
+    "ParentId": "12426c956d1bc501",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"Task 5 success\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 18,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "parallel-branch-3",
+    "EventTimestamp": "2025-12-17T19:42:02.011Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"Task 4 success\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 19,
+    "Id": "12426c956d1bc501",
+    "Name": "parallel-branch-4",
+    "EventTimestamp": "2025-12-17T19:42:02.012Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"Task 5 success\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 20,
+    "EventTimestamp": "2025-12-17T19:42:02.060Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:02.000Z",
+      "EndTimestamp": "2025-12-17T19:42:02.060Z",
+      "Error": {},
+      "RequestId": "d219fe04-3776-473a-9285-a3bdc52f37c4"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 21,
+    "Id": "6151f5ab282d90e4",
+    "Name": "task-2",
+    "EventTimestamp": "2025-12-17T19:42:03.013Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 22,
+    "Id": "b425e0c75591aa8f",
+    "Name": "task-3",
+    "EventTimestamp": "2025-12-17T19:42:03.013Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 23,
+    "Id": "6151f5ab282d90e4",
+    "Name": "task-2",
+    "EventTimestamp": "2025-12-17T19:42:03.013Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Task 2 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 24,
+    "Id": "b425e0c75591aa8f",
+    "Name": "task-3",
+    "EventTimestamp": "2025-12-17T19:42:03.013Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Task 3 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "ParallelBranch",
+    "EventId": 25,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2025-12-17T19:42:03.016Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Task 2 failed"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "ParallelBranch",
+    "EventId": 26,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2025-12-17T19:42:03.016Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Task 3 failed"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 27,
+    "EventTimestamp": "2025-12-17T19:42:03.064Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:03.010Z",
+      "EndTimestamp": "2025-12-17T19:42:03.064Z",
+      "Error": {},
+      "RequestId": "4807de26-6cb6-4ca7-9e3f-8f7b843700e4"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 28,
+    "Id": "2f221a18eb863803",
+    "Name": "task-1",
+    "EventTimestamp": "2025-12-17T19:42:04.010Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 29,
+    "Id": "2f221a18eb863803",
+    "Name": "task-1",
+    "EventTimestamp": "2025-12-17T19:42:04.010Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Task 1 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "ParallelBranch",
+    "EventId": 30,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2025-12-17T19:42:04.012Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Task 1 failed"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 31,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failure-threshold-tasks",
+    "EventTimestamp": "2025-12-17T19:42:04.012Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"error\":{\"cause\":{\"cause\":{\"name\":\"StepError\"},\"name\":\"StepError\",\"errorType\":\"StepError\"},\"name\":\"ChildContextError\",\"errorType\":\"ChildContextError\"},\"index\":0,\"status\":\"FAILED\"},{\"error\":{\"cause\":{\"cause\":{\"name\":\"StepError\"},\"name\":\"StepError\",\"errorType\":\"StepError\"},\"name\":\"ChildContextError\",\"errorType\":\"ChildContextError\"},\"index\":1,\"status\":\"FAILED\"},{\"error\":{\"cause\":{\"cause\":{\"name\":\"StepError\"},\"name\":\"StepError\",\"errorType\":\"StepError\"},\"name\":\"ChildContextError\",\"errorType\":\"ChildContextError\"},\"index\":2,\"status\":\"FAILED\"},{\"result\":\"Task 4 success\",\"index\":3,\"status\":\"SUCCEEDED\"},{\"result\":\"Task 5 success\",\"index\":4,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"FAILURE_TOLERANCE_EXCEEDED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 32,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-17T19:42:04.012Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2025-12-17T19:42:05.012Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 33,
+    "EventTimestamp": "2025-12-17T19:42:04.064Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:04.009Z",
+      "EndTimestamp": "2025-12-17T19:42:04.064Z",
+      "Error": {},
+      "RequestId": "9dce9be2-765e-4cc1-845a-5f0f1f3d7b97"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 34,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2025-12-17T19:42:05.012Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 35,
+    "EventTimestamp": "2025-12-17T19:42:05.013Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:05.012Z",
+      "EndTimestamp": "2025-12-17T19:42:05.013Z",
+      "Error": {},
+      "RequestId": "9db007d0-7dd6-4651-9338-c7cb76da1f22"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 36,
+    "Id": "66c27018-dc2d-486a-8979-ac4560884907",
+    "EventTimestamp": "2025-12-17T19:42:05.013Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"completionReason\":\"FAILURE_TOLERANCE_EXCEEDED\",\"successCount\":2,\"failureCount\":3,\"totalCount\":5}"
+      }
+    }
+  }
+]

@@ -1,0 +1,63 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "2f39c1c4-463a-4160-b6ac-6f23706dd8b6",
+    "EventTimestamp": "2025-12-17T19:42:18.805Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:18.808Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImJkMzg1YTJjLTYxZTgtNGM0Ni05OGNjLWFjNDU2YTJjMWY4ZSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiMjYwOTQ4ODktMTg0NC00YTY0LWE3OGUtYjc3MDExNzA1NGFmIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:18.809Z",
+    "CallbackSucceededDetails": {
+      "Result": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-17T19:42:18.859Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:18.805Z",
+      "EndTimestamp": "2025-12-17T19:42:18.859Z",
+      "Error": {},
+      "RequestId": "69c81a09-696d-465a-88fe-69edf557375e"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-17T19:42:18.862Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:18.861Z",
+      "EndTimestamp": "2025-12-17T19:42:18.862Z",
+      "Error": {},
+      "RequestId": "a1167dc4-63fe-492e-afe4-f63716f65bdf"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "2f39c1c4-463a-4160-b6ac-6f23706dd8b6",
+    "EventTimestamp": "2025-12-17T19:42:18.862Z",
+    "ExecutionSucceededDetails": {}
+  }
+]

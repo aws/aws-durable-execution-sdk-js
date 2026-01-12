@@ -3,10 +3,8 @@ import { createTests } from "../../../utils/test-helper";
 import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "Map failure threshold exceeded count",
-  functionName: "map-failure-threshold-exceeded-count",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should return FAILURE_TOLERANCE_EXCEEDED when failure count exceeds threshold", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
@@ -26,6 +24,8 @@ createTests({
       ].forEach(({ name, status }) => {
         expect(runner.getOperation(name)?.getStatus()).toBe(status);
       });
+
+      assertEventSignatures(execution);
     });
   },
 });

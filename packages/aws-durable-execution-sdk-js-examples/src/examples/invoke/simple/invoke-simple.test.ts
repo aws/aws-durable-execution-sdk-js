@@ -7,10 +7,8 @@ import { handler as nonDurableHandler } from "../../non-durable/non-durable";
 import { handler as namedStepHandler } from "../../step/named/step-named";
 
 createTests({
-  name: "invoke-simple",
-  functionName: "invoke-simple",
   handler,
-  tests: function (runner, { functionNameMap }) {
+  tests: function (runner, { functionNameMap, assertEventSignatures }) {
     it("should run invoke with basic wait state", async () => {
       if (runner instanceof LocalDurableTestRunner) {
         runner.registerDurableFunction(
@@ -25,6 +23,8 @@ createTests({
         },
       });
       expect(result.getResult()).toBe("wait finished");
+
+      assertEventSignatures(result, "basic-wait");
     });
 
     it("should run invoke with step and payload", async () => {
@@ -44,6 +44,8 @@ createTests({
         },
       });
       expect(result.getResult()).toEqual("processed: data from parent");
+
+      assertEventSignatures(result, "step-payload");
     });
 
     it("should run invoke with child function failure", async () => {
@@ -63,6 +65,8 @@ createTests({
         errorMessage: "Intentional handler failure",
         errorType: "InvokeError",
       });
+
+      assertEventSignatures(result, "child-failure");
     });
 
     it("should run invoke with non-durable function success", async () => {
@@ -84,6 +88,8 @@ createTests({
           message: "Hello from Lambda!",
         }),
       });
+
+      assertEventSignatures(result, "non-durable-success");
     });
 
     it("should run invoke with non-durable function failure", async () => {
@@ -106,6 +112,8 @@ createTests({
         errorMessage: "This is a failure",
         errorType: "InvokeError",
       });
+
+      assertEventSignatures(result, "non-durable-failure");
     });
   },
 });

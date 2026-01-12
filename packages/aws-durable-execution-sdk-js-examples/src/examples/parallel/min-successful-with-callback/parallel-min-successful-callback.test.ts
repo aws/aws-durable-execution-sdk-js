@@ -6,11 +6,9 @@ import { handler } from "./parallel-min-successful-callback";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "parallel-min-successful-callback test",
-  functionName: "parallel-min-successful-callback",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should succeed when only one of three callbacks completes (minSuccessful:1)", async () => {
       const callback1Op = runner.getOperation("branch-1-callback");
       const callback2Op = runner.getOperation("branch-2-callback");
@@ -36,6 +34,8 @@ createTests({
       const results = execution.getResult() as string[];
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results[0]).toBe("result-1");
+
+      assertEventSignatures(execution);
     }, 10000);
   },
 });

@@ -8,6 +8,7 @@ export interface CheckpointFunction extends Checkpoint {
   setTerminating(): void;
   hasPendingAncestorCompletion(stepId: string): boolean;
   waitForQueueCompletion(): Promise<void>;
+  markAncestorFinished(stepId: string): void;
 }
 
 export const createMockCheckpoint = (
@@ -26,6 +27,7 @@ export const createMockCheckpoint = (
     setTerminating: jest.fn(),
     hasPendingAncestorCompletion: jest.fn().mockReturnValue(false),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    markAncestorFinished: jest.fn(),
     // New lifecycle methods (stubs)
     markOperationState: jest.fn(),
     waitForRetryTimer: jest.fn().mockResolvedValue(undefined),

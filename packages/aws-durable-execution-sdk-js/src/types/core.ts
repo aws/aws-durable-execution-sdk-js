@@ -67,7 +67,7 @@ export interface DurableExecutionInvocationInput {
      * Used when the operation history is too large to fit in a single response.
      * The Durable Execution Language SDK handles pagination automatically.
      */
-    NextMarker: string;
+    NextMarker?: string | undefined;
   };
 }
 

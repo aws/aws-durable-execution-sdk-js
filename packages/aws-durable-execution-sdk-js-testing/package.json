@@ -1,7 +1,7 @@
 {
   "name": "@aws/durable-execution-sdk-js-testing",
   "description": "AWS Durable Execution Testing SDK for TypeScript",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -16,7 +16,7 @@
   "module": "./dist/index.mjs",
   "types": "./dist-types/index.d.ts",
   "bin": {
-    "run-durable": "dist/cli/run-durable.js"
+    "run-durable": "dist/cli/run-durable.mjs"
   },
   "scripts": {
     "clean": "rm -rf dist dist-cjs dist-types node_modules coverage .tsbuildinfo .rollup.cache",
@@ -28,7 +28,7 @@
     "lint": "eslint --fix",
     "prebuild": "npm run lint",
     "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
-    "run-durable": "tsx src/cli/run-durable.ts"
+    "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --"
   },
   "exports": {
     ".": {
@@ -45,6 +45,7 @@
   "devDependencies": {
     "@eslint/compat": "^1.3.0",
     "@eslint/js": "^9.29.0",
+    "@rollup/plugin-replace": "^6.0.3",
     "@types/aws-lambda": "^8.10.150",
     "@types/morgan": "^1.9.10",
     "@types/sinonjs__fake-timers": "^15.0.1",
@@ -62,10 +63,11 @@
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.943.0",
     "@sinonjs/fake-timers": "^13.0.5",
-    "@smithy/smithy-client": "^4.9.1"
+    "@smithy/smithy-client": "^4.9.1",
+    "commander": "^14.0.2"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": "*"
+    "@aws/durable-execution-sdk-js": "^1.0.1"
   },
   "private": false
 }

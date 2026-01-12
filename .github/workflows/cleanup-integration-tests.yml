@@ -1,0 +1,120 @@
+name: Cleanup Integration Tests
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: read # This is required for actions/checkout
+
+# Concurrency group for build.yml. This will cancel the cleanup workflow if a new build
+# for the same branch starts
+concurrency:
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-artifacts
+          path: |
+            packages/**/dist*/*
+            package.json
+            package-lock.json
+
+  cleanup-integration-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    concurrency:
+      # Concurrency group for integration-test.yml. This will cancel the cleanup if integration tests start for the same branch.
+      group: ${{ github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ
+      cancel-in-progress: true
+
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        node-version: ["22.x", "24.x"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "npm"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get AWS Credentials for function scrubber
+        id: credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-session-name: githubIntegrationTest
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Cleanup Lambda functions
+        env:
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          GITHUB_EVENT_NAME: "pull_request"
+          GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only --runtime ${{ matrix.node-version }}
+
+      - name: Install awscurl
+        run: pip install awscurl
+
+      - name: Get AWS Credentials for log scrubber
+        id: log-credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "${{ secrets.ACTIONS_WEBHOOK_ROLE_ARN }}"
+          role-session-name: "GitHub-PR-${{ github.event.pull_request.number }}-Cleanup"
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # TODO: move the logic for this into this repo and also delete logs for main branch
+      - name: Cleanup PR log group
+        run: |
+          awscurl --service execute-api \
+            --region ${{ vars.AWS_REGION }} \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"logGroupSuffix": "-NodeJS-PR-${{ github.event.pull_request.number }}"}' \
+            "${{ secrets.LOG_GROUP_CLEANUP_WEBHOOK }}"

@@ -2,7 +2,7 @@
   "name": "@aws/durable-execution-sdk-js",
   "description": "AWS Durable Execution Language SDK for TypeScript",
   "license": "Apache-2.0",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",

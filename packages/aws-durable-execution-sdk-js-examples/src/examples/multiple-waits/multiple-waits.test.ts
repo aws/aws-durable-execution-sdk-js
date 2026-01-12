@@ -3,12 +3,9 @@ import {
   OperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./multiple-waits";
-import historyEvents from "./multiple-waits.history.json";
 import { createTests } from "../../utils/test-helper";
 
 createTests({
-  name: "multiple-waits test",
-  functionName: "multiple-waits",
   handler,
   tests: (runner, { assertEventSignatures }) => {
     it("should handle multiple sequential wait operations", async () => {
@@ -42,7 +39,7 @@ createTests({
         Date,
       );
 
-      assertEventSignatures(result.getHistoryEvents(), historyEvents);
+      assertEventSignatures(result);
     });
   },
 });

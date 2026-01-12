@@ -904,9 +904,14 @@ describe("TestExecutionOrchestrator", () => {
         )
         .mockRejectedValue(new Error("Not implemented"));
 
-      mockInvoke.mockResolvedValue({
-        Status: InvocationStatus.PENDING,
-      });
+      mockInvoke
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.PENDING,
+        })
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+          Result: JSON.stringify({ success: true }),
+        });
 
       const executePromise = orchestrator.executeHandler();
 

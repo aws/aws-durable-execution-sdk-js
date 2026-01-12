@@ -1,6 +1,7 @@
 // @ts-check
 
 import { createBuildOptions } from "../../rollup.config.js";
+import packageJson from "./package.json" with { type: "json" };
 
 const config = {
   input: "./src/index.ts",
@@ -10,4 +11,4 @@ const config = {
   },
 };
 
-export default createBuildOptions(config, process.env.MODE);
+export default createBuildOptions(config, process.env.MODE, packageJson);

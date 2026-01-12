@@ -6,10 +6,8 @@ import { createTests } from "../../../utils/test-helper";
 import { handler } from "./serde-basic";
 
 createTests({
-  name: "serde-basic test",
-  functionName: "serde-basic",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should preserve User class methods across replay with createClassSerdes", async () => {
       const execution = await runner.run({
         payload: {
@@ -59,6 +57,8 @@ createTests({
       expect(result.greeting).toBe(
         "Hello, I'm John Doe. My email is john.doe@example.com",
       );
+
+      assertEventSignatures(execution);
     });
 
     it("should work with different user data", async () => {
@@ -84,6 +84,8 @@ createTests({
 
       // This proves createClassSerdes successfully preserved the User class methods
       // during deserialization after the wait/replay
+
+      assertEventSignatures(execution);
     });
   },
 });

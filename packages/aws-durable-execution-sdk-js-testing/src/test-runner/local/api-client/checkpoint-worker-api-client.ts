@@ -1,4 +1,4 @@
-import { Operation, ErrorObject, Event } from "@aws-sdk/client-lambda";
+import { Operation, ErrorObject } from "@aws-sdk/client-lambda";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
 import {
@@ -12,6 +12,7 @@ import {
   StartDurableExecutionRequest,
   StartInvocationRequest,
 } from "../../../checkpoint-server/worker-api/worker-api-request";
+import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 export class CheckpointWorkerApiClient implements CheckpointApiClient {
   constructor(private readonly workerManager: CheckpointWorkerManager) {}
@@ -76,7 +77,7 @@ export class CheckpointWorkerApiClient implements CheckpointApiClient {
     executionId: ExecutionId,
     invocationId: InvocationId,
     error: ErrorObject | undefined,
-  ): Promise<Event> {
+  ): Promise<CompleteInvocationResponse> {
     return this.workerManager.sendApiRequest(ApiType.CompleteInvocation, {
       executionId,
       invocationId,

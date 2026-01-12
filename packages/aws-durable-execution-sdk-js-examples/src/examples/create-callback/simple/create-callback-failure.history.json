@@ -1,0 +1,79 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "35140fe0-045a-45dd-adfc-c1cb5da66f3c",
+    "EventTimestamp": "2025-12-17T19:42:18.646Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:18.649Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjZlZTZlYzZiLTk0MmMtNDMwYy04MzU0LTM0ZmEzYWZjNjVmZCIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiM2RkMTczZjMtYmYzZS00NjJiLTgxMmYtYWYwNGUwNDk0M2RiIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:18.649Z",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "ERROR"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-17T19:42:18.701Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:18.646Z",
+      "EndTimestamp": "2025-12-17T19:42:18.701Z",
+      "Error": {},
+      "RequestId": "0ca767e6-c865-4b4a-acf8-50a345756f02"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-17T19:42:18.703Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:18.702Z",
+      "EndTimestamp": "2025-12-17T19:42:18.703Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "ERROR"
+        }
+      },
+      "RequestId": "bb689b89-afff-4ee0-800a-6382971bc79c"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 6,
+    "Id": "35140fe0-045a-45dd-adfc-c1cb5da66f3c",
+    "EventTimestamp": "2025-12-17T19:42:18.703Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "ERROR"
+        }
+      }
+    }
+  }
+]

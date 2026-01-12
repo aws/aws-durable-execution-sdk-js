@@ -3,10 +3,8 @@ import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 createTests({
-  name: "force-checkpointing",
-  functionName: "force-checkpointing",
   handler,
-  tests: (runner) => {
+  tests: (runner, { assertEventSignatures }) => {
     it("should complete with force checkpointing when one branch blocks termination", async () => {
       const startTime = Date.now();
 
@@ -35,6 +33,8 @@ createTests({
       // Verify operations were tracked
       const operations = execution.getOperations();
       expect(operations.length).toBeGreaterThan(0);
+
+      assertEventSignatures(execution);
     }, 20000); // 20 second timeout
   },
 });

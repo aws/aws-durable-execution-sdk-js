@@ -6,7 +6,6 @@
 import { Worker } from "worker_threads";
 import path from "path";
 import { WorkerResponse } from "../../../checkpoint-server/worker/worker-message-types";
-import { access, constants } from "fs/promises";
 import { defaultLogger } from "../../../logger";
 import { WorkerClientApiHandler } from "./worker-client-api-handler";
 import { ApiType } from "../../../checkpoint-server/worker-api/worker-api-types";
@@ -60,28 +59,27 @@ export class CheckpointWorkerManager {
     this.instance = undefined;
   }
 
-  private async getWorkerPath(): Promise<string> {
+  private getWorkerPath(): string {
     const devWorkerPath = path.resolve(
       __dirname,
       "../../../checkpoint-server/index.ts",
     );
+    const prodWorkerFiletype = process.env.IS_ESM ? "mjs" : "js";
     const prodWorkerPath = path.resolve(
       __dirname,
-      "./checkpoint-server/index.js",
+      `./checkpoint-server/index.${prodWorkerFiletype}`,
     );
 
-    const isDev = await access(devWorkerPath, constants.F_OK)
-      .then(() => true)
-      .catch(() => false);
-
-    return isDev ? devWorkerPath : prodWorkerPath;
+    return process.env.NODE_ENV === "production"
+      ? prodWorkerPath
+      : devWorkerPath;
   }
 
   /**
    * Starts the checkpoint server in the worker thread
    */
   async setup(): Promise<void> {
-    const workerPath = await this.getWorkerPath();
+    const workerPath = this.getWorkerPath();
     if (this.worker) {
       throw new Error("Worker thread is already running");
     }
@@ -109,6 +107,10 @@ export class CheckpointWorkerManager {
         reparseDates(response.data, RealDate),
       );
     });
+
+    // Return a promise for future compatability. We may want to wait for an initial message
+    // to the worker to ensure that it is active
+    return Promise.resolve();
   }
 
   async sendApiRequest<TApiType extends ApiType>(

@@ -1,0 +1,77 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "05982c21-fb2d-4c87-a697-680894fea58f",
+    "EventTimestamp": "2025-12-17T19:42:18.967Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:18.969Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImJjZjNhN2I3LTEwZjItNGIyMS1iOTViLTAzZmVjNjQ5NzcwMyIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiY2ZlMDVhYmUtYjM1Zi00ZTFjLTk2Y2QtMmNlMmQ4OGFmOTFiIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2025-12-17T19:42:18.970Z",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {}
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-17T19:42:19.021Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:18.967Z",
+      "EndTimestamp": "2025-12-17T19:42:19.021Z",
+      "Error": {},
+      "RequestId": "f89a9546-fdfe-4ba2-811b-0792090d12fc"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-17T19:42:19.023Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-17T19:42:19.022Z",
+      "EndTimestamp": "2025-12-17T19:42:19.023Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Callback failed"
+        }
+      },
+      "RequestId": "f84fe9e2-fbf1-4c12-a9f1-67b8d18a0669"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 6,
+    "Id": "05982c21-fb2d-4c87-a697-680894fea58f",
+    "EventTimestamp": "2025-12-17T19:42:19.023Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Callback failed"
+        }
+      }
+    }
+  }
+]

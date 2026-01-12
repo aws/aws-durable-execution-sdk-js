@@ -1,11 +1,8 @@
 import { handler } from "./force-checkpointing-multiple-wait";
 import { createTests } from "../../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
-import historyEvents from "./force-checkpointing-multiple-wait.history.json";
 
 createTests({
-  name: "force-checkpointing-multiple-wait",
-  functionName: "force-checkpointing-multiple-wait",
   handler,
   tests: (runner, { assertEventSignatures }) => {
     it("should complete with force checkpointing when one branch blocks termination with multiple waits", async () => {
@@ -37,7 +34,7 @@ createTests({
       const operations = execution.getOperations();
       expect(operations.length).toBeGreaterThan(0);
 
-      assertEventSignatures(execution.getHistoryEvents(), historyEvents);
+      assertEventSignatures(execution);
     }, 20000); // 20 second timeout
   },
 });

@@ -1,0 +1,72 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "2cc413a6-2fe9-42ea-b57c-a2a82492121e",
+    "EventTimestamp": "2025-12-18T21:47:12.729Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "custom-serdes-callback",
+    "EventTimestamp": "2025-12-18T21:47:12.733Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjA5NWI0MjE4LTJhMjEtNDUyNy05MGRmLWUzNDE1MzI0ZmMyOCIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiOWU2YWZkNTEtOTNjOC00ZjY2LTg2ZDgtYzI4MjAwZGM5NWYyIn0=",
+      "Timeout": 300,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "custom-serdes-callback",
+    "EventTimestamp": "2025-12-18T21:47:12.734Z",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":42,\"message\":\"Hello World\",\"timestamp\":\"2025-01-01T00:00:00.000Z\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2025-12-18T21:47:12.785Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:12.729Z",
+      "EndTimestamp": "2025-12-18T21:47:12.785Z",
+      "Error": {},
+      "RequestId": "7dd3a892-47a5-4a71-9ad4-373104b5e7ac"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2025-12-18T21:47:12.787Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2025-12-18T21:47:12.786Z",
+      "EndTimestamp": "2025-12-18T21:47:12.787Z",
+      "Error": {},
+      "RequestId": "5de442ad-c6ed-4641-bb7f-2bf814680b9f"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "2cc413a6-2fe9-42ea-b57c-a2a82492121e",
+    "EventTimestamp": "2025-12-18T21:47:12.787Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"receivedData\":{\"id\":42,\"message\":\"Hello World\",\"timestamp\":\"2025-01-01T00:00:00.000Z\"},\"isDateObject\":true}"
+      }
+    }
+  }
+]

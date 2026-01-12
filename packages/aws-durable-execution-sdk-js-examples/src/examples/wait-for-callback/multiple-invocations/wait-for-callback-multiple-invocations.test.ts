@@ -6,11 +6,12 @@ import { handler } from "./wait-for-callback-multiple-invocations";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
-  name: "wait-for-callback multiple invocations test",
-  functionName: "wait-for-callback-multiple-invocations",
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner) => {
+  localRunnerConfig: {
+    skipTime: false,
+  },
+  tests: (runner, { assertEventSignatures }) => {
     it("should handle multiple invocations tracking with waitForCallback operations", async () => {
       // Get operations for verification
       const firstCallbackOp = runner.getOperation("first-callback");
@@ -50,6 +51,8 @@ createTests({
       // Verify operations were executed
       const operations = result.getOperations();
       expect(operations.length).toBeGreaterThan(4); // wait + callback + step + wait + callback operations
+
+      assertEventSignatures(result);
     });
   },
 });

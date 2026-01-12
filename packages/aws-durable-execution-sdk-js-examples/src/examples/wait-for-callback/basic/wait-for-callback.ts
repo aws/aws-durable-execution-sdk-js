@@ -21,7 +21,7 @@ export const handler = withDurableExecution(
       "my callback function",
       mySubmitterFunction,
       {
-        timeout: { seconds: 5 },
+        timeout: { seconds: event.timeoutSeconds ?? 5 },
       },
     );
     log("Hello world after callback!");

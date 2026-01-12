@@ -2,6 +2,8 @@
 
 import typescript from "@rollup/plugin-typescript";
 import json from "@rollup/plugin-json";
+import esmShim from "@rollup/plugin-esm-shim";
+import replace from "@rollup/plugin-replace";
 
 const plugins = [json()];
 
@@ -15,9 +17,10 @@ const commonOutputOptions = {
  *
  * @param {import('rollup').RollupOptions} options
  * @param {string | undefined} mode
+ * @param {Record<string, unknown>} packageJson
  * @returns {import('rollup').RollupOptions}
  */
-export function createBuildOptions(options, mode) {
+export function createBuildOptions(options, mode, packageJson) {
   if (mode !== "esm" && mode !== "cjs") {
     throw new Error(`Invalid mode ${mode}`);
   }
@@ -25,6 +28,14 @@ export function createBuildOptions(options, mode) {
   const inputPlugins = [
     ...plugins,
     ...(Array.isArray(options.plugins) ? options.plugins : []),
+    replace({
+      preventAssignment: true,
+      values: {
+        "process.env.IS_ESM": JSON.stringify(mode === "esm"),
+        "process.env.NODE_ENV": JSON.stringify("production"),
+        "process.env.NPM_PACKAGE_VERSION": JSON.stringify(packageJson.version),
+      },
+    }),
   ];
 
   if (Array.isArray(options.output)) {
@@ -60,6 +71,7 @@ export function createBuildOptions(options, mode) {
           exclude: ["**/__tests__/**/*"],
         }),
         ...inputPlugins,
+        esmShim(),
       ],
       output: {
         ...commonOutputOptions,
