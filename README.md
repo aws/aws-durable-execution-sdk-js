@@ -72,6 +72,27 @@ const handler = async (event: any, context: DurableContext) => {
 export const lambdaHandler = withDurableExecution(handler);
 ```
 
+### Invoking Your Durable Function
+
+Durable functions require a **qualified identifier** for invocation. You must specify a version or alias. Unqualified ARNs or function names without a suffix are not supported to ensure deterministic replay behavior.
+
+The following example uses asynchronous invocation (`--invocation-type Event`), which queues the event and returns immediately, enabling executions that can run for up to one year:
+
+```bash
+aws lambda invoke \
+  --function-name my-durable-function:$LATEST \
+  --invocation-type Event \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"userId": "12345"}' \
+  response.json
+```
+
+> [!TIP]
+> To ensure idempotent execution, use the `--durable-execution-name` parameter. See [Idempotency](https://docs.aws.amazon.com/lambda/latest/dg/durable-execution-idempotency.html) in the Lambda developer guide for additional information.
+
+> [!IMPORTANT]
+> For production deployments, use numbered versions or aliases instead of `$LATEST` for deterministic replay behavior. See [Invoking durable Lambda functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking.html) for more details.
+
 ## 📚 Documentation
 
 - **[AWS Documentation](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** – Official AWS Lambda durable functions guide
