@@ -69,6 +69,18 @@ export interface DurableTestRunner<
    * @returns An operation instance for the operation with the specified ID
    */
   getOperationById(id: string): TDurableOperation;
+
+  /**
+   * Gets an operation by its callback identifier.
+   *
+   * This method is useful when you have a callback ID but don't know the operation
+   * name or index. It searches through all operations to find the one with the
+   * matching callback ID.
+   *
+   * @param callbackId - The unique callback identifier
+   * @returns An operation instance for the operation with the specified callback ID
+   */
+  getOperationByCallbackId(callbackId: string): TDurableOperation;
 }
 
 /**

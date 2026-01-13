@@ -344,6 +344,45 @@ export class CloudDurableTestRunner<
   }
 
   /**
+   * Gets an operation by its callback identifier.
+   *
+   * This method is useful when you have a callback ID but don't know the operation
+   * name or index. It searches through all operations to find the one with the
+   * matching callback ID.
+   *
+   * @typeParam TOperationResult - The expected result type of the operation
+   * @param callbackId - The unique callback identifier
+   * @returns An operation instance for the operation with the specified callback ID
+   *
+   * @example
+   * ```typescript
+   * // Get operation by callback ID and send success
+   * const operation = runner.getOperationByCallbackId('callback-123');
+   * await operation.waitForData();
+   * await operation.sendCallbackSuccess('result');
+   * ```
+   */
+  getOperationByCallbackId<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TOperationResult = any,
+  >(callbackId: string): DurableOperation<TOperationResult> {
+    const operation = new CloudOperation<TOperationResult>(
+      this.waitManager,
+      this.indexedOperations,
+      this.apiClient,
+      this.config.invocationType,
+      this.indexedOperations.getByCallbackId(callbackId),
+    );
+    this.operationStorage.registerOperation({
+      operation,
+      params: {
+        callbackId,
+      },
+    });
+    return operation;
+  }
+
+  /**
    * Resets the test runner state, clearing all cached operations and history.
    *
    * This method should be called between test runs to ensure a clean state.

@@ -125,4 +125,27 @@ export class IndexedOperations {
     const operations = this.operationsByName.get(name);
     return operations ? Array.from(operations.values()).at(index) : undefined;
   }
+
+  /**
+   * Get an operation by its callback ID
+   * @param callbackId - The callback ID to search for
+   * @returns The operation with a matching callback ID, or undefined if not found
+   */
+  getByCallbackId(callbackId: string): OperationEvents | undefined {
+    for (const operation of this.operationsById.values()) {
+      const callbackDetails = operation.operation.CallbackDetails;
+      if (callbackDetails?.CallbackId === callbackId) {
+        return operation;
+      }
+
+      // Check child operations for WAIT_FOR_CALLBACK contexts
+      const children = this.getOperationChildren(operation.operation.Id ?? "");
+      for (const child of children) {
+        if (child.operation.CallbackDetails?.CallbackId === callbackId) {
+          return child;
+        }
+      }
+    }
+    return undefined;
+  }
 }

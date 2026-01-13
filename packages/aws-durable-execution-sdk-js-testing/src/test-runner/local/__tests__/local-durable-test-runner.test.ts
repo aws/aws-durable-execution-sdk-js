@@ -321,6 +321,22 @@ describe("LocalDurableTestRunner", () => {
         },
       });
     });
+
+    it("should create and register operation by callback ID", () => {
+      const runner = new LocalDurableTestRunner<{ success: boolean }>({
+        handlerFunction: mockHandlerFunction,
+      });
+
+      const operation = runner.getOperationByCallbackId("callback-123");
+
+      expect(operation).toBeInstanceOf(OperationWithData);
+      expect(mockOperationStorage.registerOperation).toHaveBeenCalledWith({
+        operation,
+        params: {
+          callbackId: "callback-123",
+        },
+      });
+    });
   });
 
   describe("registerFunctions", () => {

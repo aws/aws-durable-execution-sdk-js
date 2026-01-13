@@ -13,6 +13,7 @@ export interface TrackedOperation<Operation extends OperationWithData> {
     id?: string;
     index?: number;
     name?: string;
+    callbackId?: string;
   };
 }
 
@@ -33,6 +34,12 @@ export class OperationStorage {
       () =>
         trackedOperation.params.id !== undefined
           ? this.indexedOperations.getById(trackedOperation.params.id)
+          : null,
+      () =>
+        trackedOperation.params.callbackId !== undefined
+          ? this.indexedOperations.getByCallbackId(
+              trackedOperation.params.callbackId,
+            )
           : null,
       () =>
         trackedOperation.params.name !== undefined &&

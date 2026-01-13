@@ -395,6 +395,41 @@ describe("CloudDurableTestRunner", () => {
       expect(operation.getOperationData()?.Id).toBe("op-123");
     });
 
+    it("should retrieve operation by callback ID", async () => {
+      const callbackEvent: Event = {
+        EventTimestamp: new Date(),
+        EventType: EventType.CallbackStarted,
+        EventId: 1,
+        Id: "callback-op-123",
+        CallbackStartedDetails: {
+          CallbackId: "callback-abc-123",
+        },
+      };
+
+      setupMockApiResponses(mockSend, {
+        historyResponse: {
+          Events: [callbackEvent, mockSuccessEvent],
+          $metadata: {},
+        },
+      });
+
+      const runner = new CloudDurableTestRunner<{ success: boolean }>({
+        functionName: mockFunctionArn,
+      });
+
+      const operation = runner.getOperationByCallbackId("callback-abc-123");
+
+      const runPromise = runner.run();
+      await jest.advanceTimersByTimeAsync(1000);
+      await runPromise;
+
+      expect(operation).toBeDefined();
+      expect(operation.getOperationData()?.Id).toBe("callback-op-123");
+      expect(operation.getCallbackDetails()?.callbackId).toBe(
+        "callback-abc-123",
+      );
+    });
+
     it("should handle multiple operation retrievals", async () => {
       const stepEvent1: Event = {
         EventTimestamp: new Date(),

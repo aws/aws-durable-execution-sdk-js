@@ -1318,4 +1318,190 @@ describe("IndexedOperations", () => {
       });
     });
   });
+
+  describe("getByCallbackId", () => {
+    it("should retrieve operation by callback ID", () => {
+      const operationWithCallback: OperationEvents = {
+        operation: {
+          Id: "op1",
+          Name: "callback-operation",
+          Type: OperationType.CALLBACK,
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: undefined,
+          CallbackDetails: {
+            CallbackId: "callback-123",
+          },
+        },
+        events: [],
+      };
+
+      const indexed = new IndexedOperations([operationWithCallback]);
+      const operation = indexed.getByCallbackId("callback-123");
+
+      expect(operation).toBeDefined();
+      expect(operation?.operation.Id).toBe("op1");
+      expect(operation?.operation.CallbackDetails?.CallbackId).toBe(
+        "callback-123",
+      );
+    });
+
+    it("should return undefined for non-existent callback ID", () => {
+      const indexed = new IndexedOperations(sampleOperations);
+      const operation = indexed.getByCallbackId("non-existent-callback");
+
+      expect(operation).toBeUndefined();
+    });
+
+    it("should find callback in child operations of WAIT_FOR_CALLBACK context", () => {
+      const contextOperation: OperationEvents = {
+        operation: {
+          Id: "context-1",
+          Name: "wait-for-callback-op",
+          Type: OperationType.CONTEXT,
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: undefined,
+        },
+        events: [],
+      };
+
+      const callbackOperation: OperationEvents = {
+        operation: {
+          Id: "callback-1",
+          Name: "callback",
+          Type: OperationType.CALLBACK,
+          ParentId: "context-1",
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: undefined,
+          CallbackDetails: {
+            CallbackId: "child-callback-456",
+          },
+        },
+        events: [],
+      };
+
+      const indexed = new IndexedOperations([
+        contextOperation,
+        callbackOperation,
+      ]);
+      const operation = indexed.getByCallbackId("child-callback-456");
+
+      expect(operation).toBeDefined();
+      expect(operation?.operation.Id).toBe("callback-1");
+      expect(operation?.operation.ParentId).toBe("context-1");
+    });
+
+    it("should prioritize direct callback match over child callbacks", () => {
+      const parentWithCallback: OperationEvents = {
+        operation: {
+          Id: "parent-1",
+          Name: "parent-callback",
+          Type: OperationType.CALLBACK,
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: undefined,
+          CallbackDetails: {
+            CallbackId: "same-callback-id",
+          },
+        },
+        events: [],
+      };
+
+      const childWithCallback: OperationEvents = {
+        operation: {
+          Id: "child-1",
+          Name: "child-callback",
+          Type: OperationType.CALLBACK,
+          ParentId: "parent-1",
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: undefined,
+          CallbackDetails: {
+            CallbackId: "same-callback-id",
+          },
+        },
+        events: [],
+      };
+
+      const indexed = new IndexedOperations([
+        parentWithCallback,
+        childWithCallback,
+      ]);
+      const operation = indexed.getByCallbackId("same-callback-id");
+
+      // Should return the first match (parent in this case)
+      expect(operation).toBeDefined();
+      expect(operation?.operation.Id).toBe("parent-1");
+    });
+
+    it("should handle operations without CallbackDetails", () => {
+      const indexed = new IndexedOperations(sampleOperations);
+      const operation = indexed.getByCallbackId("any-callback-id");
+
+      expect(operation).toBeUndefined();
+    });
+
+    it("should handle empty callback ID", () => {
+      const operationWithEmptyCallback: OperationEvents = {
+        operation: {
+          Id: "op1",
+          Name: "callback-operation",
+          Type: OperationType.CALLBACK,
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: undefined,
+          CallbackDetails: {
+            CallbackId: "",
+          },
+        },
+        events: [],
+      };
+
+      const indexed = new IndexedOperations([operationWithEmptyCallback]);
+      const operation = indexed.getByCallbackId("");
+
+      expect(operation).toBeDefined();
+      expect(operation?.operation.Id).toBe("op1");
+    });
+
+    it("should find callback among multiple operations", () => {
+      const operations: OperationEvents[] = [
+        {
+          operation: {
+            Id: "step-1",
+            Name: "regular-step",
+            Type: OperationType.STEP,
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
+          },
+          events: [],
+        },
+        {
+          operation: {
+            Id: "callback-1",
+            Name: "callback-op",
+            Type: OperationType.CALLBACK,
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
+            CallbackDetails: {
+              CallbackId: "target-callback",
+            },
+          },
+          events: [],
+        },
+        {
+          operation: {
+            Id: "wait-1",
+            Name: "wait-op",
+            Type: OperationType.WAIT,
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
+          },
+          events: [],
+        },
+      ];
+
+      const indexed = new IndexedOperations(operations);
+      const operation = indexed.getByCallbackId("target-callback");
+
+      expect(operation).toBeDefined();
+      expect(operation?.operation.Id).toBe("callback-1");
+    });
+  });
 });
