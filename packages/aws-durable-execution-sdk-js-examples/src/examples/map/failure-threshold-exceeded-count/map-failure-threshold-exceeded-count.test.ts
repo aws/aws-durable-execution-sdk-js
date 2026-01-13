@@ -25,7 +25,9 @@ createTests({
         expect(runner.getOperation(name)?.getStatus()).toBe(status);
       });
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, undefined, {
+        invocationCompletedDifference: 1,
+      });
     });
   },
 });
