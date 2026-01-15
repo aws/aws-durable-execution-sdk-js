@@ -21,6 +21,8 @@ import {
   FunctionVersionLatestPublished,
   LastUpdateStatus,
   State,
+  LastUpdateStatusReasonCode,
+  PutFunctionScalingConfigCommand,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
 import catalog from "@aws/durable-execution-sdk-js-examples/catalog";
@@ -183,6 +185,29 @@ async function retryOnConflict<T>(
       }
       throw error;
     }
+  }
+  throw new Error("Max retries exceeded");
+}
+
+async function runWithRetry<T, P>(
+  operation: () => Promise<T>,
+  checkOperationResult: (result: T) => {
+    shouldRetry?: boolean;
+    reason: string;
+  },
+  maxRetries: number,
+) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const result = await operation();
+    const operationResult = checkOperationResult(result);
+    if (!operationResult.shouldRetry) {
+      console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
+      return result;
+    }
+    console.log(
+      `Retrying: ${operationResult.reason}. ${attempt + 1}/${maxRetries} attempts`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   throw new Error("Max retries exceeded");
 }
@@ -436,58 +461,151 @@ async function main(): Promise<void> {
         }
 
         if (exampleConfig.capacityProviderConfig) {
-          console.log(
-            "Publishing LATEST_PUBLISHED for function with capacity provider",
-          );
-          try {
-            await retryOnConflict(
-              () =>
-                lambdaClient.send(
-                  new PublishVersionCommand({
-                    FunctionName: functionName,
-                    PublishTo: FunctionVersionLatestPublished.LATEST_PUBLISHED,
-                  }),
-                ),
-              180,
+          for (let attempts = 1; attempts <= 2; attempts++) {
+            console.log(
+              "Publishing LATEST_PUBLISHED for function with capacity provider",
             );
-          } catch (err) {
-            throw new Error("Timed out publishing LATEST_PUBLISHED version");
-          }
-
-          try {
-            console.log("Waiting for function to enter active state");
-            const functionWithQualifier = `${functionName}:$LATEST.PUBLISHED`;
-            await retryOnConflict(async () => {
-              const currentConfiguration = await getCurrentConfiguration(
-                lambdaClient,
-                functionWithQualifier,
+            try {
+              await retryOnConflict(
+                () =>
+                  lambdaClient.send(
+                    new PublishVersionCommand({
+                      FunctionName: functionName,
+                      PublishTo:
+                        FunctionVersionLatestPublished.LATEST_PUBLISHED,
+                    }),
+                  ),
+                180,
               );
+            } catch (err) {
+              throw new Error("Timed out publishing LATEST_PUBLISHED version", {
+                cause: err,
+              });
+            }
+
+            try {
+              console.log("Waiting for function to enter active state");
+              const qualifier = "$LATEST.PUBLISHED";
+              const functionWithQualifier = `${functionName}:${qualifier}`;
+
+              const result = await runWithRetry(
+                async () => {
+                  return getCurrentConfiguration(
+                    lambdaClient,
+                    functionWithQualifier,
+                  );
+                },
+                (currentConfiguration) => {
+                  if (
+                    currentConfiguration.LastUpdateStatus ===
+                      LastUpdateStatus.Failed ||
+                    currentConfiguration.State === State.Failed
+                  ) {
+                    if (
+                      currentConfiguration.LastUpdateStatusReasonCode ===
+                      LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
+                    ) {
+                      return {
+                        shouldRetry: false,
+                        reason: `Capacity provider limit exceeded.`,
+                      };
+                    }
+
+                    throw new Error(
+                      `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
+                    );
+                  }
+
+                  if (
+                    currentConfiguration.State !== State.Active ||
+                    currentConfiguration.LastUpdateStatus ===
+                      LastUpdateStatus.InProgress
+                  ) {
+                    return {
+                      shouldRetry: true,
+                      reason: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
+                    };
+                  }
+
+                  return {
+                    shouldRetry: false,
+                    reason: "Function is now active",
+                  };
+                },
+                210,
+              );
+
               if (
-                currentConfiguration.State !== State.Active ||
-                currentConfiguration.LastUpdateStatus ===
-                  LastUpdateStatus.InProgress
+                result.LastUpdateStatusReasonCode !==
+                LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
               ) {
-                throw new ResourceConflictException({
-                  message: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
-                  $metadata: {},
-                });
-              } else if (
-                currentConfiguration.LastUpdateStatus ===
-                  LastUpdateStatus.Failed ||
-                currentConfiguration.State !== State.Active
-              ) {
+                console.log("Setting function scaling config");
+                await lambdaClient.send(
+                  new PutFunctionScalingConfigCommand({
+                    FunctionName: functionName,
+                    Qualifier: qualifier,
+                    FunctionScalingConfig: {
+                      MinExecutionEnvironments: 1,
+                      MaxExecutionEnvironments: 1,
+                    },
+                  }),
+                );
+                break;
+              }
+
+              console.log(
+                "Deleting function version and retrying since capacity limit exceeded",
+              );
+              // If the capacity provider limit exceeded, we should delete the version and retry once.
+              // It's possible for a failed version to take up capacity.
+              await lambdaClient.send(
+                new DeleteFunctionCommand({
+                  FunctionName: functionWithQualifier,
+                }),
+              );
+
+              console.log("Waiting for function to be deleted");
+              await runWithRetry(
+                async () => {
+                  try {
+                    await getCurrentConfiguration(
+                      lambdaClient,
+                      functionWithQualifier,
+                    );
+                    return true;
+                  } catch (err) {
+                    if (err instanceof ResourceNotFoundException) {
+                      return false;
+                    }
+                    throw err;
+                  }
+                },
+                (exists) => {
+                  if (exists) {
+                    return {
+                      shouldRetry: true,
+                      reason: "Function still exists",
+                    };
+                  }
+
+                  return {
+                    shouldRetry: false,
+                    reason: "Function deleted successfully",
+                  };
+                },
+                120,
+              );
+            } catch (err) {
+              if (err instanceof ResourceConflictException) {
                 throw new Error(
-                  `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
+                  "Timed out waiting for function to enter active state",
+                  {
+                    cause: err,
+                  },
                 );
               }
-            }, 180);
-          } catch (err) {
-            throw new Error(
-              "Timed out waiting for function to enter active state",
-              {
-                cause: err,
-              },
-            );
+              throw err;
+            }
           }
         }
       },
