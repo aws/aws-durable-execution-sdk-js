@@ -7,6 +7,7 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Basic Step",
   description: "Basic usage of context.step() to checkpoint a simple operation",
+  capacityProviderConfig: {},
 };
 
 export const handler = withDurableExecution(

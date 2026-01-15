@@ -254,32 +254,53 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
       string,
       string
     >;
-    const functionName = functionNames[parsedFunctionName];
+    const functionName = functionNames[parsedFunctionName] as
+      | string
+      | undefined;
+    const functionNameCapacityProvider = functionNames[
+      `${parsedFunctionName}-capacity-provider`
+    ] as string | undefined;
     if (!functionName) {
       throw new Error(
         `Function name ${parsedFunctionName} not found in FUNCTION_NAME_MAP`,
       );
     }
 
-    const runner = new CloudDurableTestRunner<ResultType>({
-      functionName,
+    const runnerParams = {
       client: new LambdaClient({
         endpoint: process.env.LAMBDA_ENDPOINT,
       }),
       config: {
         invocationType: testDef.invocationType,
       },
-    });
-
-    beforeEach(() => {
-      // TODO: fix the testing library to allow the same runner to run multiple times on the same handler
-      // instead of needing to reset the operation storage
-      runner.reset();
-    });
+    };
 
     describe(`${parsedFunctionName} (cloud)`, () => {
+      const runner = new CloudDurableTestRunner<ResultType>({
+        ...runnerParams,
+        functionName,
+      });
+      const capacityProviderRunner = functionNameCapacityProvider
+        ? new CloudDurableTestRunner<ResultType>({
+            ...runnerParams,
+            functionName: functionNameCapacityProvider,
+          })
+        : undefined;
+
+      beforeEach(() => {
+        // TODO: fix the testing library to allow the same runner to run multiple times on the same handler
+        // instead of needing to reset the operation storage
+        runner.reset();
+      });
+
       testDef.tests(runner, testHelper);
+      if (capacityProviderRunner) {
+        describe("using a capacity provider", () => {
+          testDef.tests(capacityProviderRunner, testHelper);
+        });
+      }
     });
+
     return;
   }
 

@@ -77,6 +77,11 @@ export const config: ExampleConfig = {
 - `description`: What the example demonstrates
 - `durableConfig.RetentionPeriodInDays`: (Default: 7) How long to keep execution history (7-90 days)
 - `durableConfig.ExecutionTimeout`: (Default: 60) Max execution time in seconds
+- `capacityProviderConfig`: Enables dual deployment for testing coverage with capacity providers. When provided, the example will be deployed in two configurations:
+  - **Regular Lambda function**: Standard deployment with 128MB memory and x86 architecture
+  - **Managed instance function**: Deployment with 2048MB memory, arm64 architecture, and capacity provider configuration for testing on managed instances
+
+  Both functions are deployed with automatically generated names (the capacity provider version gets a `-CapacityProvider` suffix) and both are tested during integration runs. This ensures your durable function works correctly in both standard Lambda and managed instance environments. If you don't need managed instance testing, simply omit this configuration option.
 
 ### 3. Create the Test File
 

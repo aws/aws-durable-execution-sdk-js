@@ -44,6 +44,7 @@ function parseArgs(): {
   example: string;
   functionName: string;
   runtime?: string;
+  useCapacityProvider: boolean;
 } {
   const parser = new ArgumentParser({
     description: "Deploy Lambda function with AWS Durable Execution SDK",
@@ -64,12 +65,18 @@ function parseArgs(): {
     help: "Lambda nodejs runtime version (default: 24.x)",
   });
 
+  parser.add_argument("--use-capacity-provider", {
+    action: "store_true",
+    help: "Deploy function with capacity provider configuration",
+  });
+
   const args = parser.parse_args();
 
   return {
     example: args.example,
     functionName: args.function_name || args.example,
     runtime: args.runtime,
+    useCapacityProvider: args.use_capacity_provider,
   };
 }
 
@@ -228,6 +235,7 @@ async function createFunction(
   exampleConfig: ExamplesWithConfig,
   zipFile: string,
   env: EnvironmentVariables,
+  useCapacityProvider: boolean,
   runtime?: Runtime,
 ): Promise<void> {
   console.log(
@@ -252,7 +260,7 @@ async function createFunction(
         }
       : undefined,
     Timeout: 60,
-    MemorySize: exampleConfig.capacityProviderConfig ? 2048 : 128,
+    MemorySize: useCapacityProvider ? 2048 : 128,
     Environment: {
       Variables: env.LAMBDA_ENDPOINT
         ? {
@@ -260,17 +268,16 @@ async function createFunction(
           }
         : undefined,
     },
-    Architectures: !!exampleConfig.capacityProviderConfig
-      ? [Architecture.arm64]
-      : undefined,
-    CapacityProviderConfig: exampleConfig.capacityProviderConfig
-      ? {
-          LambdaManagedInstancesCapacityProviderConfig: {
-            CapacityProviderArn: env.CAPACITY_PROVIDER_ARN,
-            ...exampleConfig.capacityProviderConfig,
-          },
-        }
-      : undefined,
+    Architectures: useCapacityProvider ? [Architecture.arm64] : undefined,
+    CapacityProviderConfig:
+      useCapacityProvider && exampleConfig.capacityProviderConfig
+        ? {
+            LambdaManagedInstancesCapacityProviderConfig: {
+              CapacityProviderArn: env.CAPACITY_PROVIDER_ARN,
+              ...exampleConfig.capacityProviderConfig,
+            },
+          }
+        : undefined,
   };
 
   const command = new CreateFunctionCommand(createParams);
@@ -285,6 +292,7 @@ async function updateFunction(
   zipFile: string,
   env: EnvironmentVariables,
   currentConfig: GetFunctionConfigurationCommandOutput,
+  useCapacityProvider: boolean,
   runtime?: Runtime,
 ): Promise<void> {
   console.log(`Deploying function: ${functionName} (updating existing)`);
@@ -321,14 +329,15 @@ async function updateFunction(
           }
         : undefined,
     },
-    CapacityProviderConfig: exampleConfig.capacityProviderConfig
-      ? {
-          LambdaManagedInstancesCapacityProviderConfig: {
-            CapacityProviderArn: env.CAPACITY_PROVIDER_ARN,
-            ...exampleConfig.capacityProviderConfig,
-          },
-        }
-      : undefined,
+    CapacityProviderConfig:
+      useCapacityProvider && exampleConfig.capacityProviderConfig
+        ? {
+            LambdaManagedInstancesCapacityProviderConfig: {
+              CapacityProviderArn: env.CAPACITY_PROVIDER_ARN,
+              ...exampleConfig.capacityProviderConfig,
+            },
+          }
+        : undefined,
   };
 
   // Check if DurableConfig needs updating
@@ -367,9 +376,17 @@ async function showFinalConfiguration(
 async function main(): Promise<void> {
   try {
     // Parse arguments and load configuration
-    const { example, functionName, runtime } = parseArgs();
+    const { example, functionName, runtime, useCapacityProvider } = parseArgs();
     const env = loadEnvironmentVariables();
     const exampleConfig = loadExampleConfiguration(example);
+
+    // Validate capacity provider flag against example configuration
+    if (useCapacityProvider && !exampleConfig.capacityProviderConfig) {
+      console.error(
+        `Error: --use-capacity-provider flag specified but example '${example}' has no capacityProviderConfig defined`,
+      );
+      process.exit(1);
+    }
 
     console.log("Found example configuration:");
     console.log(`  Name: ${exampleConfig.name}`);
@@ -421,10 +438,7 @@ async function main(): Promise<void> {
             console.log("Deleting function since durability changed");
             functionExists = false;
           }
-          if (
-            !!currentConfig.CapacityProviderConfig !==
-            !!exampleConfig.capacityProviderConfig
-          ) {
+          if (!!currentConfig.CapacityProviderConfig !== useCapacityProvider) {
             console.log("Deleting function since capacity provider changed");
             functionExists = false;
           }
@@ -446,6 +460,7 @@ async function main(): Promise<void> {
             zipFile,
             env,
             currentConfig!,
+            useCapacityProvider,
             selectedRuntime,
           );
         } else {
@@ -456,11 +471,12 @@ async function main(): Promise<void> {
             exampleConfig,
             zipFile,
             env,
+            useCapacityProvider,
             selectedRuntime,
           );
         }
 
-        if (exampleConfig.capacityProviderConfig) {
+        if (useCapacityProvider) {
           for (let attempts = 1; attempts <= 2; attempts++) {
             console.log(
               "Publishing LATEST_PUBLISHED for function with capacity provider",
@@ -609,14 +625,8 @@ async function main(): Promise<void> {
           }
         }
       },
-      exampleConfig.capacityProviderConfig ? 120 : undefined,
+      useCapacityProvider ? 120 : undefined,
     );
-
-    // Set GITHUB_ENV if running in GitHub Actions
-    if (env.GITHUB_ENV) {
-      const fs = await import("fs");
-      fs.appendFileSync(env.GITHUB_ENV, `FUNCTION_NAME=${functionName}\n`);
-    }
 
     console.log(`Successfully deployed function: ${functionName}`);
 

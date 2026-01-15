@@ -152,8 +152,8 @@ class IntegrationTestRunner {
       const exampleName = example.name;
       const exampleHandler = example.handler;
 
-      // Build function name with runtime suffix
-      let functionName;
+      // Build base function name with runtime suffix
+      let baseFunctionName;
       if (this.isGitHubActions) {
         // Functions are named with the runtime first since the log scrubber cleans logs by the NodeJS- suffix
         const baseName =
@@ -164,23 +164,31 @@ class IntegrationTestRunner {
               "Could not find GITHUB_EVENT_NUMBER environment variable",
             );
           }
-          functionName = `${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
+          baseFunctionName = `${baseName}-PR-${process.env.GITHUB_EVENT_NUMBER}`;
         } else {
-          functionName = baseName;
+          baseFunctionName = baseName;
         }
       } else {
         const name =
           exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS-Local`;
-        functionName = name;
+        baseFunctionName = name;
       }
 
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
+
+      // Always create regular function
       functionNameMap[handlerFile] = {
-        functionName,
-        qualifier: example.capacityProviderConfig
-          ? "$LATEST.PUBLISHED"
-          : "$LATEST",
+        functionName: baseFunctionName,
+        qualifier: "$LATEST",
       };
+
+      // Also create capacity provider function if provided
+      if (example.capacityProviderConfig) {
+        functionNameMap[`${handlerFile}-capacity-provider`] = {
+          functionName: `${baseFunctionName}-CapacityProvider`,
+          qualifier: "$LATEST.PUBLISHED",
+        };
+      }
     }
 
     this.functionNameMap = functionNameMap;
@@ -208,25 +216,42 @@ class IntegrationTestRunner {
 
       // Extract handler file name from catalog
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
-      const { functionName } = functionNameMap[handlerFile];
 
       if (!testPattern || handlerFile.includes(testPattern)) {
-        log.info(
-          `Deploying function: ${functionName} (handler: ${handlerFile})`,
-        );
-
-        // Package the function
+        // Package the function once for both deployments
         this.execCommand(`npm run package -- "${handlerFile}"`, {
           cwd: examplesDir,
         });
 
-        // Deploy using npm script with runtime parameter
-        const deployCommand = `npm run deploy -- "${handlerFile}" '${functionName}' --runtime ${this.runtime}`;
+        // Deploy regular function
+        const regularFunctionName = functionNameMap[handlerFile].functionName;
+        log.info(
+          `Deploying regular function: ${regularFunctionName} (handler: ${handlerFile})`,
+        );
 
-        this.execCommand(deployCommand, {
+        let regularDeployCommand = `npm run deploy -- "${handlerFile}" '${regularFunctionName}' --runtime ${this.runtime}`;
+        this.execCommand(regularDeployCommand, {
           cwd: examplesDir,
         });
-        log.success(`Deployed function: ${functionName}`);
+        log.success(`Deployed regular function: ${regularFunctionName}`);
+
+        // Also deploy capacity provider function if supported
+        if (example.capacityProviderConfig) {
+          const capacityProviderKey = `${handlerFile}-capacity-provider`;
+          const capacityProviderFunctionName =
+            functionNameMap[capacityProviderKey].functionName;
+          log.info(
+            `Deploying capacity provider function: ${capacityProviderFunctionName} (handler: ${handlerFile})`,
+          );
+
+          let capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
+          this.execCommand(capacityDeployCommand, {
+            cwd: examplesDir,
+          });
+          log.success(
+            `Deployed capacity provider function: ${capacityProviderFunctionName}`,
+          );
+        }
       }
     }
 
