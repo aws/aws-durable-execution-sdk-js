@@ -548,7 +548,7 @@ async function main(): Promise<void> {
                     reason: "Function is now active",
                   };
                 },
-                210,
+                900,
               );
 
               if (
