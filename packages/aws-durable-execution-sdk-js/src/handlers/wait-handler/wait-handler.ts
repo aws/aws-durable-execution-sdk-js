@@ -175,6 +175,10 @@ export const createWaitHandler = (
             status: finalStepData?.Status,
           });
         },
+        {
+          executionArn: context.durableExecutionArn,
+          parentId,
+        },
       );
     });
   }

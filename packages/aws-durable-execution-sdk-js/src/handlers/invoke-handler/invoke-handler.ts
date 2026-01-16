@@ -19,6 +19,7 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import { withInvokeSpan } from "../../utils/otel/otel-instrumentation";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -185,83 +186,97 @@ export const createInvokeHandler = (
 
     // Phase 2: Wait for completion
     return new DurablePromise(async () => {
-      await phase1Promise;
+      return await withInvokeSpan(
+        stepId,
+        name,
+        funcId,
+        async () => {
+          await phase1Promise;
 
-      if (isCompleted) {
-        const stepData = context.getStepData(stepId);
+          if (isCompleted) {
+            const stepData = context.getStepData(stepId);
 
-        if (stepData?.Status === OperationStatus.SUCCEEDED) {
-          const invokeDetails = stepData.ChainedInvokeDetails;
-          return await safeDeserialize(
-            config?.resultSerdes || defaultSerdes,
-            invokeDetails?.Result,
+            if (stepData?.Status === OperationStatus.SUCCEEDED) {
+              const invokeDetails = stepData.ChainedInvokeDetails;
+              return await safeDeserialize(
+                config?.resultSerdes || defaultSerdes,
+                invokeDetails?.Result,
+                stepId,
+                name,
+                context.terminationManager,
+                context.durableExecutionArn,
+              );
+            }
+
+            // Handle failure
+            const invokeDetails = stepData?.ChainedInvokeDetails;
+            if (invokeDetails?.Error) {
+              throw new InvokeError(
+                invokeDetails.Error.ErrorMessage || "Invoke failed",
+                invokeDetails.Error.ErrorMessage
+                  ? new Error(invokeDetails.Error.ErrorMessage)
+                  : undefined,
+                invokeDetails.Error.ErrorData,
+              );
+            } else {
+              throw new InvokeError("Invoke failed");
+            }
+          }
+
+          log("🔗", "Invoke phase 2:", { stepId });
+
+          checkpoint.markOperationAwaited(stepId);
+
+          await checkpoint.waitForStatusChange(stepId);
+
+          const stepData = context.getStepData(stepId);
+
+          if (stepData?.Status === OperationStatus.SUCCEEDED) {
+            log("✅", "Invoke completed:", { stepId });
+            checkAndUpdateReplayMode?.();
+
+            checkpoint.markOperationState(
+              stepId,
+              OperationLifecycleState.COMPLETED,
+            );
+
+            const invokeDetails = stepData.ChainedInvokeDetails;
+            return await safeDeserialize(
+              config?.resultSerdes || defaultSerdes,
+              invokeDetails?.Result,
+              stepId,
+              name,
+              context.terminationManager,
+              context.durableExecutionArn,
+            );
+          }
+
+          // Handle failure
+          log("❌", "Invoke failed:", { stepId, status: stepData?.Status });
+
+          checkpoint.markOperationState(
             stepId,
-            name,
-            context.terminationManager,
-            context.durableExecutionArn,
+            OperationLifecycleState.COMPLETED,
           );
-        }
 
-        // Handle failure
-        const invokeDetails = stepData?.ChainedInvokeDetails;
-        if (invokeDetails?.Error) {
-          throw new InvokeError(
-            invokeDetails.Error.ErrorMessage || "Invoke failed",
-            invokeDetails.Error.ErrorMessage
-              ? new Error(invokeDetails.Error.ErrorMessage)
-              : undefined,
-            invokeDetails.Error.ErrorData,
-          );
-        } else {
-          throw new InvokeError("Invoke failed");
-        }
-      }
-
-      log("🔗", "Invoke phase 2:", { stepId });
-
-      checkpoint.markOperationAwaited(stepId);
-
-      await checkpoint.waitForStatusChange(stepId);
-
-      const stepData = context.getStepData(stepId);
-
-      if (stepData?.Status === OperationStatus.SUCCEEDED) {
-        log("✅", "Invoke completed:", { stepId });
-        checkAndUpdateReplayMode?.();
-
-        checkpoint.markOperationState(
-          stepId,
-          OperationLifecycleState.COMPLETED,
-        );
-
-        const invokeDetails = stepData.ChainedInvokeDetails;
-        return await safeDeserialize(
-          config?.resultSerdes || defaultSerdes,
-          invokeDetails?.Result,
-          stepId,
-          name,
-          context.terminationManager,
-          context.durableExecutionArn,
-        );
-      }
-
-      // Handle failure
-      log("❌", "Invoke failed:", { stepId, status: stepData?.Status });
-
-      checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
-
-      const invokeDetails = stepData?.ChainedInvokeDetails;
-      if (invokeDetails?.Error) {
-        throw new InvokeError(
-          invokeDetails.Error.ErrorMessage || "Invoke failed",
-          invokeDetails.Error.ErrorMessage
-            ? new Error(invokeDetails.Error.ErrorMessage)
-            : undefined,
-          invokeDetails.Error.ErrorData,
-        );
-      } else {
-        throw new InvokeError("Invoke failed");
-      }
+          const invokeDetails = stepData?.ChainedInvokeDetails;
+          if (invokeDetails?.Error) {
+            throw new InvokeError(
+              invokeDetails.Error.ErrorMessage || "Invoke failed",
+              invokeDetails.Error.ErrorMessage
+                ? new Error(invokeDetails.Error.ErrorMessage)
+                : undefined,
+              invokeDetails.Error.ErrorData,
+            );
+          } else {
+            throw new InvokeError("Invoke failed");
+          }
+        },
+        {
+          executionArn: context.durableExecutionArn,
+          parentId,
+        },
+      );
     });
   }
 

@@ -29,6 +29,7 @@ import {
   WaitForConditionError,
 } from "../../errors/durable-error/durable-error";
 import { DurableLogger } from "../../types/durable-logger";
+import { withWaitForConditionSpan } from "../../utils/otel/otel-instrumentation";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -207,12 +208,23 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
 
-          const newState: T = await runWithContext(
+          const newState: T = await withWaitForConditionSpan(
             stepId,
-            parentId,
-            () => check(currentState, waitForConditionContext),
-            currentAttempt,
-            DurableExecutionMode.ExecutionMode,
+            name,
+            async () =>
+              await runWithContext(
+                stepId,
+                parentId,
+                () => check(currentState, waitForConditionContext),
+                currentAttempt,
+                DurableExecutionMode.ExecutionMode,
+              ),
+            {
+              executionArn: context.durableExecutionArn,
+              parentId,
+              attempt: currentAttempt,
+              executionMode: DurableExecutionMode.ExecutionMode,
+            },
           );
 
           const serializedState = await safeSerialize(

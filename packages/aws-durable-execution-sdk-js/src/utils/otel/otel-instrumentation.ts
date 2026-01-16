@@ -12,6 +12,55 @@ const TRACER_NAME = "@aws/durable-execution-sdk-js";
  */
 export const getTracer = (): Tracer => trace.getTracer(TRACER_NAME);
 
+type SpanAttributeValue = string | number | boolean;
+
+export interface OperationSpanOptions {
+  operationType?: string;
+  operationSubType?: string;
+  operationId?: string;
+  operationName?: string;
+  executionArn?: string;
+  parentId?: string;
+  attempt?: number;
+  executionMode?: string;
+  attributes?: Record<string, SpanAttributeValue>;
+}
+
+const setOperationAttributes = (
+  span: Span,
+  options: OperationSpanOptions,
+): void => {
+  if (options.operationType) {
+    span.setAttribute("durable.operation.type", options.operationType);
+  }
+  if (options.operationSubType) {
+    span.setAttribute("durable.operation.sub_type", options.operationSubType);
+  }
+  if (options.operationId) {
+    span.setAttribute("durable.operation.id", options.operationId);
+  }
+  if (options.operationName) {
+    span.setAttribute("durable.operation.name", options.operationName);
+  }
+  if (options.executionArn) {
+    span.setAttribute("durable.execution.arn", options.executionArn);
+  }
+  if (options.parentId) {
+    span.setAttribute("durable.operation.parent_id", options.parentId);
+  }
+  if (options.attempt !== undefined) {
+    span.setAttribute("durable.operation.attempt", options.attempt);
+  }
+  if (options.executionMode) {
+    span.setAttribute("durable.execution.mode", options.executionMode);
+  }
+  if (options.attributes) {
+    for (const [key, value] of Object.entries(options.attributes)) {
+      span.setAttribute(key, value);
+    }
+  }
+};
+
 /**
  * Wraps a step execution with an OpenTelemetry span
  *
@@ -24,6 +73,7 @@ export async function withStepSpan<T>(
   stepId: string,
   stepName: string | undefined,
   fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
 ): Promise<T> {
   const tracer = getTracer();
   const spanName = stepName || stepId;
@@ -34,7 +84,13 @@ export async function withStepSpan<T>(
       if (stepName) {
         span.setAttribute("durable.step.name", stepName);
       }
-      span.setAttribute("durable.operation.type", "step");
+      setOperationAttributes(span, {
+        operationType: "step",
+        operationSubType: "Step",
+        operationId: stepId,
+        operationName: stepName,
+        ...options,
+      });
 
       const result = await fn();
 
@@ -70,6 +126,7 @@ export async function withParallelBranchSpan<T>(
   branchId: string,
   branchName: string | undefined,
   fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
 ): Promise<T> {
   const tracer = getTracer();
   const spanName = branchName || branchId;
@@ -80,7 +137,13 @@ export async function withParallelBranchSpan<T>(
       if (branchName) {
         span.setAttribute("durable.parallel.branch.name", branchName);
       }
-      span.setAttribute("durable.operation.type", "parallel-branch");
+      setOperationAttributes(span, {
+        operationType: "parallel-branch",
+        operationSubType: "ParallelBranch",
+        operationId: branchId,
+        operationName: branchName,
+        ...options,
+      });
 
       const result = await fn();
 
@@ -114,6 +177,7 @@ export async function withParallelBranchSpan<T>(
 export async function withParallelSpan<T>(
   parallelName: string | undefined,
   fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
 ): Promise<T> {
   const tracer = getTracer();
   const spanName = parallelName || "parallel";
@@ -123,7 +187,13 @@ export async function withParallelSpan<T>(
       if (parallelName) {
         span.setAttribute("durable.parallel.name", parallelName);
       }
-      span.setAttribute("durable.operation.type", "parallel");
+      setOperationAttributes(span, {
+        operationType: "parallel",
+        operationSubType: "Parallel",
+        operationId: parallelName || "parallel",
+        operationName: parallelName,
+        ...options,
+      });
 
       const result = await fn();
 
@@ -159,6 +229,7 @@ export async function withRunInChildContextSpan<T>(
   entityId: string,
   name: string | undefined,
   fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
 ): Promise<T> {
   const tracer = getTracer();
   const spanName = name || entityId;
@@ -169,7 +240,13 @@ export async function withRunInChildContextSpan<T>(
       if (name) {
         span.setAttribute("durable.child-context.name", name);
       }
-      span.setAttribute("durable.operation.type", "run-in-child-context");
+      setOperationAttributes(span, {
+        operationType: "run-in-child-context",
+        operationSubType: "RunInChildContext",
+        operationId: entityId,
+        operationName: name,
+        ...options,
+      });
 
       const result = await fn();
 
@@ -211,6 +288,7 @@ export async function withWaitSpan<T>(
   stepData: Operation | undefined,
   waitDurationSeconds: number,
   fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
 ): Promise<T> {
   const tracer = getTracer();
   const spanName = "wait step";
@@ -252,8 +330,17 @@ export async function withWaitSpan<T>(
     if (waitName) {
       span.setAttribute("durable.wait.name", waitName);
     }
-    span.setAttribute("durable.operation.type", "wait");
-    span.setAttribute("durable.wait.duration.seconds", waitDurationSeconds);
+    setOperationAttributes(span, {
+      operationType: "wait",
+      operationSubType: "Wait",
+      operationId: stepId,
+      operationName: waitName,
+      ...options,
+      attributes: {
+        "durable.wait.duration.seconds": waitDurationSeconds,
+        ...(options.attributes || {}),
+      },
+    });
 
     const result = await fn();
 
@@ -278,4 +365,265 @@ export async function withWaitSpan<T>(
     span.end(endTime);
     throw error;
   }
+}
+
+export async function withMapSpan<T>(
+  mapName: string | undefined,
+  fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
+): Promise<T> {
+  const tracer = getTracer();
+  const spanName = mapName || "map";
+  return tracer.startActiveSpan(spanName, async (span: Span) => {
+    try {
+      setOperationAttributes(span, {
+        operationType: "map",
+        operationSubType: "Map",
+        operationId: mapName || "map",
+        operationName: mapName,
+        ...options,
+      });
+
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+export async function withMapIterationSpan<T>(
+  itemId: string,
+  itemName: string | undefined,
+  itemIndex: number,
+  fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
+): Promise<T> {
+  const tracer = getTracer();
+  const spanName = itemName || itemId;
+  return tracer.startActiveSpan(spanName, async (span: Span) => {
+    try {
+      setOperationAttributes(span, {
+        operationType: "map-iteration",
+        operationSubType: "MapIteration",
+        operationId: itemId,
+        operationName: itemName,
+        ...options,
+        attributes: {
+          "durable.map.item.index": itemIndex,
+          "durable.map.item.id": itemId,
+          ...(itemName ? { "durable.map.item.name": itemName } : {}),
+          ...(options.attributes || {}),
+        },
+      });
+
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+export async function withInvokeSpan<T>(
+  stepId: string,
+  name: string | undefined,
+  functionId: string,
+  fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
+): Promise<T> {
+  const tracer = getTracer();
+  const spanName = name || "invoke";
+  return tracer.startActiveSpan(spanName, async (span: Span) => {
+    try {
+      setOperationAttributes(span, {
+        operationType: "invoke",
+        operationSubType: "ChainedInvoke",
+        operationId: stepId,
+        operationName: name,
+        ...options,
+        attributes: {
+          "durable.invoke.function_id": functionId,
+          ...(options.attributes || {}),
+        },
+      });
+
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+export async function withCallbackSpan<T>(
+  stepId: string,
+  name: string | undefined,
+  fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
+): Promise<T> {
+  const tracer = getTracer();
+  const spanName = name || "callback";
+  return tracer.startActiveSpan(spanName, async (span: Span) => {
+    try {
+      setOperationAttributes(span, {
+        operationType: "callback",
+        operationSubType: "Callback",
+        operationId: stepId,
+        operationName: name,
+        ...options,
+      });
+
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+export async function withWaitForCallbackSpan<T>(
+  stepId: string,
+  name: string | undefined,
+  fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
+): Promise<T> {
+  const tracer = getTracer();
+  const spanName = name || "wait-for-callback";
+  return tracer.startActiveSpan(spanName, async (span: Span) => {
+    try {
+      setOperationAttributes(span, {
+        operationType: "wait-for-callback",
+        operationSubType: "WaitForCallback",
+        operationId: stepId,
+        operationName: name,
+        ...options,
+      });
+
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+export async function withWaitForConditionSpan<T>(
+  stepId: string,
+  name: string | undefined,
+  fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
+): Promise<T> {
+  const tracer = getTracer();
+  const spanName = name || "wait-for-condition";
+  return tracer.startActiveSpan(spanName, async (span: Span) => {
+    try {
+      setOperationAttributes(span, {
+        operationType: "wait-for-condition",
+        operationSubType: "WaitForCondition",
+        operationId: stepId,
+        operationName: name,
+        ...options,
+      });
+
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+export async function withExecutionSpan<T>(
+  executionName: string,
+  fn: () => Promise<T>,
+  options: OperationSpanOptions = {},
+): Promise<T> {
+  const tracer = getTracer();
+  return tracer.startActiveSpan(executionName, async (span: Span) => {
+    try {
+      setOperationAttributes(span, {
+        operationType: "execution",
+        operationSubType: "Execution",
+        operationId: executionName,
+        operationName: executionName,
+        ...options,
+      });
+
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error) {
+        span.recordException(error);
+      }
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }

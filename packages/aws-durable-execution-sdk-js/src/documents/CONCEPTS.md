@@ -339,3 +339,17 @@ await context.step("critical-operation", async () => attemptOnlyOnce(), {
 - Each individual operation is limited by Lambda's timeout (max 15 minutes)
 - Concurrent operations require explicit child contexts for deterministic replay
 - Large payloads may require custom serialization strategies
+
+## OpenTelemetry Coverage
+
+Durable operations emit OpenTelemetry spans when the OpenTelemetry API is present.
+The following operations are currently instrumented:
+
+- `step`, `wait`, `invoke`
+- `createCallback` / `waitForCallback`
+- `waitForCondition`
+- `runInChildContext`
+- `parallel` (overall + branch)
+- `map` (overall + iteration)
+
+All spans include standard attributes such as operation type/subtype and IDs.

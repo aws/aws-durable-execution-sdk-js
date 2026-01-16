@@ -265,15 +265,25 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
 
           let result: T;
-          result = await withStepSpan(stepId, name, async () => {
-            return await runWithContext(
-              stepId,
+          result = await withStepSpan(
+            stepId,
+            name,
+            async () => {
+              return await runWithContext(
+                stepId,
+                parentId,
+                () => fn(stepContext),
+                currentAttempt + 1,
+                DurableExecutionMode.ExecutionMode,
+              );
+            },
+            {
+              executionArn: context.durableExecutionArn,
               parentId,
-              () => fn(stepContext),
-              currentAttempt + 1,
-              DurableExecutionMode.ExecutionMode,
-            );
-          });
+              attempt: currentAttempt + 1,
+              executionMode: DurableExecutionMode.ExecutionMode,
+            },
+          );
 
           const serializedResult = await safeSerialize(
             serdes,

@@ -12,6 +12,10 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createMapSummaryGenerator } from "../../utils/summary-generators/summary-generators";
+import {
+  withMapIterationSpan,
+  withMapSpan,
+} from "../../utils/otel/otel-instrumentation";
 
 export const createMapHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -81,18 +85,39 @@ export const createMapHandler = <Logger extends DurableLogger>(
         executionItem,
         childContext,
       ) =>
-        mapFunc(childContext, executionItem.data, executionItem.index, items);
+        withMapIterationSpan(
+          executionItem.id,
+          executionItem.name,
+          executionItem.index,
+          async () =>
+            mapFunc(
+              childContext,
+              executionItem.data,
+              executionItem.index,
+              items,
+            ),
+          {
+            executionArn: context.durableExecutionArn,
+          },
+        );
 
-      const result = await executeConcurrently(name, executionItems, executor, {
-        maxConcurrency: config?.maxConcurrency,
-        topLevelSubType: OperationSubType.MAP,
-        iterationSubType: OperationSubType.MAP_ITERATION,
-        summaryGenerator: createMapSummaryGenerator(),
-        completionConfig: config?.completionConfig,
-        serdes: config?.serdes,
-        itemSerdes: config?.itemSerdes,
-        nesting: config?.nesting,
-      });
+      const result = await withMapSpan(
+        name,
+        async () =>
+          await executeConcurrently(name, executionItems, executor, {
+            maxConcurrency: config?.maxConcurrency,
+            topLevelSubType: OperationSubType.MAP,
+            iterationSubType: OperationSubType.MAP_ITERATION,
+            summaryGenerator: createMapSummaryGenerator(),
+            completionConfig: config?.completionConfig,
+            serdes: config?.serdes,
+            itemSerdes: config?.itemSerdes,
+            nesting: config?.nesting,
+          }),
+        {
+          executionArn: context.durableExecutionArn,
+        },
+      );
 
       log("🗺️", "Map operation completed successfully:", {
         resultCount: result.totalCount,

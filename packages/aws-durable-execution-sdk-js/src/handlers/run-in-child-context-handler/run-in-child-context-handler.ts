@@ -241,11 +241,20 @@ export const handleCompletedChildContext = async <
       entityId, // parentId
     );
 
-    return await withRunInChildContextSpan(entityId, stepName, async () => {
-      return await runWithContext(entityId, entityId, () =>
-        fn(durableChildContext),
-      );
-    });
+    return await withRunInChildContextSpan(
+      entityId,
+      stepName,
+      async () => {
+        return await runWithContext(entityId, entityId, () =>
+          fn(durableChildContext),
+        );
+      },
+      {
+        executionArn: context.durableExecutionArn,
+        parentId: entityId,
+        executionMode: DurableExecutionMode.ReplaySucceededContext,
+      },
+    );
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
@@ -318,15 +327,24 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
   try {
     // Execute the child context function with context tracking
-    const result = await withRunInChildContextSpan(entityId, name, async () => {
-      return await runWithContext(
-        entityId,
+    const result = await withRunInChildContextSpan(
+      entityId,
+      name,
+      async () => {
+        return await runWithContext(
+          entityId,
+          parentId,
+          () => fn(durableChildContext),
+          undefined,
+          childReplayMode,
+        );
+      },
+      {
+        executionArn: context.durableExecutionArn,
         parentId,
-        () => fn(durableChildContext),
-        undefined,
-        childReplayMode,
-      );
-    });
+        executionMode: childReplayMode,
+      },
+    );
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(

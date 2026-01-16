@@ -4,6 +4,13 @@ import {
   withParallelSpan,
   withRunInChildContextSpan,
   withWaitSpan,
+  withMapSpan,
+  withMapIterationSpan,
+  withInvokeSpan,
+  withCallbackSpan,
+  withWaitForCallbackSpan,
+  withWaitForConditionSpan,
+  withExecutionSpan,
   getTracer,
 } from "./otel-instrumentation";
 import { trace, Span, SpanStatusCode } from "@opentelemetry/api";
@@ -791,6 +798,168 @@ describe("OpenTelemetry Instrumentation", () => {
       const endCall = (mockSpan.end as jest.Mock).mock.calls[0][0];
       expect(endCall).toBeGreaterThanOrEqual(beforeEnd);
       expect(endCall).toBeLessThanOrEqual(afterEnd);
+    });
+  });
+
+  describe("withMapSpan", () => {
+    it("should create a span with map name", async () => {
+      const mapName = "map-users";
+      const expectedResult = { totalCount: 2 };
+
+      const result = await withMapSpan(mapName, async () => expectedResult);
+
+      expect(result).toBe(expectedResult);
+      expect(mockTracer.startActiveSpan).toHaveBeenCalledWith(
+        mapName,
+        expect.any(Function),
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.operation.type",
+        "map",
+      );
+      expect(mockSpan.setStatus).toHaveBeenCalledWith({
+        code: SpanStatusCode.OK,
+      });
+      expect(mockSpan.end).toHaveBeenCalled();
+    });
+  });
+
+  describe("withMapIterationSpan", () => {
+    it("should set map iteration attributes", async () => {
+      const itemId = "map-item-1";
+      const itemName = "user-1";
+      const itemIndex = 1;
+
+      const result = await withMapIterationSpan(
+        itemId,
+        itemName,
+        itemIndex,
+        async () => "ok",
+      );
+
+      expect(result).toBe("ok");
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.map.item.index",
+        itemIndex,
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.map.item.id",
+        itemId,
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.map.item.name",
+        itemName,
+      );
+    });
+  });
+
+  describe("withInvokeSpan", () => {
+    it("should set invoke attributes", async () => {
+      const stepId = "invoke-1";
+      const name = "invoke-user";
+      const functionId = "arn:aws:lambda:us-east-1:123:function:handler";
+
+      const result = await withInvokeSpan(
+        stepId,
+        name,
+        functionId,
+        async () => "done",
+      );
+
+      expect(result).toBe("done");
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.invoke.function_id",
+        functionId,
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.operation.type",
+        "invoke",
+      );
+    });
+  });
+
+  describe("withCallbackSpan", () => {
+    it("should set callback attributes", async () => {
+      const stepId = "callback-1";
+      const name = "callback";
+
+      const result = await withCallbackSpan(stepId, name, async () => "ok");
+
+      expect(result).toBe("ok");
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.operation.type",
+        "callback",
+      );
+    });
+  });
+
+  describe("withWaitForCallbackSpan", () => {
+    it("should set waitForCallback attributes", async () => {
+      const stepId = "wait-callback-1";
+      const name = "wait-for-callback";
+
+      const result = await withWaitForCallbackSpan(
+        stepId,
+        name,
+        async () => "ok",
+      );
+
+      expect(result).toBe("ok");
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.operation.type",
+        "wait-for-callback",
+      );
+    });
+  });
+
+  describe("withWaitForConditionSpan", () => {
+    it("should set waitForCondition attributes", async () => {
+      const stepId = "wait-condition-1";
+      const name = "wait-for-condition";
+
+      const result = await withWaitForConditionSpan(
+        stepId,
+        name,
+        async () => "ok",
+      );
+
+      expect(result).toBe("ok");
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.operation.type",
+        "wait-for-condition",
+      );
+    });
+  });
+
+  describe("withExecutionSpan", () => {
+    it("should set execution attributes", async () => {
+      const executionName = "durable-execution";
+
+      const result = await withExecutionSpan(executionName, async () => "ok", {
+        executionArn: "arn:aws:states:us-east-1:123:execution:exec",
+        executionMode: "ExecutionMode",
+        attributes: {
+          "durable.execution.request_id": "req-123",
+        },
+      });
+
+      expect(result).toBe("ok");
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.operation.type",
+        "execution",
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.execution.arn",
+        "arn:aws:states:us-east-1:123:execution:exec",
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.execution.mode",
+        "ExecutionMode",
+      );
+      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
+        "durable.execution.request_id",
+        "req-123",
+      );
     });
   });
 

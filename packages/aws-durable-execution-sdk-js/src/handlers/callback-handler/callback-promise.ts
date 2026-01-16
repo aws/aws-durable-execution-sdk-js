@@ -9,6 +9,7 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Serdes } from "../../utils/serdes/serdes";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { withCallbackSpan } from "../../utils/otel/otel-instrumentation";
 
 export const createCallbackPromise = <T>(
   context: ExecutionContext,
@@ -19,58 +20,73 @@ export const createCallbackPromise = <T>(
   checkAndUpdateReplayMode: () => void,
 ): DurablePromise<T> => {
   return new DurablePromise(async (): Promise<T> => {
-    log("🔄", "Callback promise phase 2:", { stepId, stepName });
+    return await withCallbackSpan(
+      stepId,
+      stepName,
+      async () => {
+        log("🔄", "Callback promise phase 2:", { stepId, stepName });
 
-    checkpoint.markOperationAwaited(stepId);
+        checkpoint.markOperationAwaited(stepId);
 
-    await checkpoint.waitForStatusChange(stepId);
+        await checkpoint.waitForStatusChange(stepId);
 
-    const stepData = context.getStepData(stepId);
+        const stepData = context.getStepData(stepId);
 
-    if (stepData?.Status === OperationStatus.SUCCEEDED) {
-      log("✅", "Callback completed:", { stepId });
-      checkAndUpdateReplayMode();
+        if (stepData?.Status === OperationStatus.SUCCEEDED) {
+          log("✅", "Callback completed:", { stepId });
+          checkAndUpdateReplayMode();
 
-      checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+          checkpoint.markOperationState(
+            stepId,
+            OperationLifecycleState.COMPLETED,
+          );
 
-      const callbackData = stepData.CallbackDetails;
-      if (!callbackData) {
-        throw new CallbackError(
-          `No callback data found for completed callback: ${stepId}`,
+          const callbackData = stepData.CallbackDetails;
+          if (!callbackData) {
+            throw new CallbackError(
+              `No callback data found for completed callback: ${stepId}`,
+            );
+          }
+
+          const result = await safeDeserialize(
+            serdes,
+            callbackData.Result,
+            stepId,
+            stepName,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
+
+          return result as T;
+        }
+
+        // Handle failure
+        log("❌", "Callback failed:", { stepId, status: stepData?.Status });
+
+        checkpoint.markOperationState(
+          stepId,
+          OperationLifecycleState.COMPLETED,
         );
-      }
 
-      const result = await safeDeserialize(
-        serdes,
-        callbackData.Result,
-        stepId,
-        stepName,
-        context.terminationManager,
-        context.durableExecutionArn,
-      );
+        const callbackData = stepData?.CallbackDetails;
+        const error = callbackData?.Error;
 
-      return result as T;
-    }
+        if (error) {
+          const cause = new Error(error.ErrorMessage);
+          cause.name = error.ErrorType || "Error";
+          cause.stack = error.StackTrace?.join("\n");
+          throw new CallbackError(
+            error.ErrorMessage || "Callback failed",
+            cause,
+            error.ErrorData,
+          );
+        }
 
-    // Handle failure
-    log("❌", "Callback failed:", { stepId, status: stepData?.Status });
-
-    checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
-
-    const callbackData = stepData?.CallbackDetails;
-    const error = callbackData?.Error;
-
-    if (error) {
-      const cause = new Error(error.ErrorMessage);
-      cause.name = error.ErrorType || "Error";
-      cause.stack = error.StackTrace?.join("\n");
-      throw new CallbackError(
-        error.ErrorMessage || "Callback failed",
-        cause,
-        error.ErrorData,
-      );
-    }
-
-    throw new CallbackError("Callback failed");
+        throw new CallbackError("Callback failed");
+      },
+      {
+        executionArn: context.durableExecutionArn,
+      },
+    );
   });
 };

@@ -17,6 +17,7 @@ import {
   ChildContextError,
   CallbackSubmitterError,
 } from "../../errors/durable-error/durable-error";
+import { withWaitForCallbackSpan } from "../../utils/otel/otel-instrumentation";
 
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -162,15 +163,24 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
     return new DurablePromise(async () => {
       const { result, stepId } = await phase1Promise;
 
-      // Always deserialize the result since it's a string
-      return (await safeDeserialize(
-        config?.serdes ?? createPassThroughSerdes(),
-        result,
+      return await withWaitForCallbackSpan(
         stepId,
         name,
-        context.terminationManager,
-        context.durableExecutionArn,
-      ))!;
+        async () => {
+          // Always deserialize the result since it's a string
+          return (await safeDeserialize(
+            config?.serdes ?? createPassThroughSerdes(),
+            result,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          ))!;
+        },
+        {
+          executionArn: context.durableExecutionArn,
+        },
+      );
     });
   };
 };
