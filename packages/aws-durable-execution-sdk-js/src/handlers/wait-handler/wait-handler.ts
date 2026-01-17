@@ -3,6 +3,7 @@ import {
   OperationSubType,
   Duration,
   OperationLifecycleState,
+  DurableExecutionMode,
 } from "../../types";
 import {
   OperationStatus,
@@ -14,7 +15,11 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
-import { withWaitSpan } from "../../utils/otel/otel-instrumentation";
+import {
+  withWaitSpan,
+  endAllActiveParentSpans,
+} from "../../utils/otel/otel-instrumentation";
+import { trace } from "@opentelemetry/api";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -22,6 +27,7 @@ export const createWaitHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
+  getDurableExecutionMode?: () => DurableExecutionMode,
 ): {
   (name: string, duration: Duration): DurablePromise<void>;
   (duration: Duration): DurablePromise<void>;
@@ -40,6 +46,12 @@ export const createWaitHandler = (
 
     // Phase 1: Start wait operation
     let isCompleted = false;
+    // Track whether to skip span creation on replay
+    // - If we're still in ReplayMode after checkAndUpdateReplayMode(), it means there are more
+    //   operations to replay after this wait, so this wait's span was already emitted in a previous invocation
+    // - If we transition to ExecutionMode, this is the first invocation where we complete this wait,
+    //   so we should create the span
+    let skipSpanCreation = false;
 
     const phase1Promise = (async (): Promise<void> => {
       log("⏲️", "Wait phase 1:", {
@@ -66,6 +78,17 @@ export const createWaitHandler = (
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Wait already completed:", { stepId });
         checkAndUpdateReplayMode?.();
+
+        // After checkAndUpdateReplayMode(), check if we're still in ReplayMode
+        // If still in ReplayMode, there are more operations to replay, meaning this wait
+        // was completed in a previous invocation and its span was already emitted
+        const currentMode = getDurableExecutionMode?.();
+        if (currentMode === DurableExecutionMode.ReplayMode) {
+          skipSpanCreation = true;
+          log("⏭️", "Wait in full replay mode, will skip span creation:", {
+            stepId,
+          });
+        }
 
         // Mark as completed
         checkpoint.markOperationState(
@@ -131,18 +154,40 @@ export const createWaitHandler = (
       // Wait for phase 1
       await phase1Promise;
 
+      // If already completed AND we should skip span creation (full replay mode)
+      // This prevents new spans from being generated on subsequent replays
+      // But allows span creation on the first replay (when transitioning from replay to execution mode)
+      if (isCompleted && skipSpanCreation) {
+        log(
+          "⏭️",
+          "Wait already completed (full replay), skipping span creation:",
+          { stepId },
+        );
+        return;
+      }
+
+      // If already completed but NOT in full replay mode, we still create a span
+      // This happens on the first invocation after the wait completes
+      if (isCompleted) {
+        log("⏭️", "Wait already completed (first replay), creating span:", {
+          stepId,
+        });
+      }
+
       // Get stepData for OTEL instrumentation (needed for StartTimestamp)
       const stepData = context.getStepData(stepId);
 
-      // Wrap execution with OTEL span (even if already completed)
+      // Wrap execution with OTEL span
       return await withWaitSpan(
         stepId,
         actualName,
         stepData,
         actualSeconds,
         async () => {
-          // If already completed in phase 1, just return
+          // If already completed (first replay), just return - the span will still be created and ended
+          // This creates the span to record the wait duration without re-executing the wait logic
           if (isCompleted) {
+            log("⏲️", "Wait already completed, span-only mode:", { stepId });
             return;
           }
 
@@ -151,7 +196,30 @@ export const createWaitHandler = (
           // Mark as awaited
           checkpoint.markOperationAwaited(stepId);
 
-          // Wait for status change
+          // CRITICAL: Recursively end all active parent spans BEFORE calling waitForStatusChange,
+          // which will freeze the Lambda runtime. This ensures all nested spans (e.g.,
+          // child context -> parallel -> wait) are ended and exported before freezing.
+          // The wait span itself will be ended after waitForStatusChange returns (in the next invocation).
+          //
+          // The issue: If a wait is called inside nested contexts (e.g., child context -> parallel -> wait),
+          // all parent spans are still active. When waitForStatusChange freezes the runtime, these
+          // parent spans' span.end() never get called because the functions haven't returned yet.
+          // Solution: Recursively end all active parent spans (except the wait span) before freezing.
+          const endedSpanIds = endAllActiveParentSpans("wait step");
+
+          if (endedSpanIds.length > 0) {
+            log(
+              "✅",
+              `Ended ${endedSpanIds.length} parent span(s) before wait freeze:`,
+              {
+                stepId,
+                endedSpanIds,
+              },
+            );
+          }
+
+          // Wait for status change - THIS WILL FREEZE THE RUNTIME
+          // All parent spans have been ended and should be exported before this freeze
           await checkpoint.waitForStatusChange(stepId);
 
           // Check final status (refresh stepData after status change)

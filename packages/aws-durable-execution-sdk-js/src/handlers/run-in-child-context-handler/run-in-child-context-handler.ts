@@ -28,7 +28,10 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
-import { withRunInChildContextSpan } from "../../utils/otel/otel-instrumentation";
+import {
+  OperationSpanOptions,
+  withRunInChildContextSpan,
+} from "../../utils/otel/otel-instrumentation";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -178,6 +181,75 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   };
 };
 
+const createChildSpanOptions = (
+  subType: OperationSubType,
+  entityId: string,
+  name: string | undefined,
+  executionArn: string,
+  parentId: string | undefined,
+  executionMode: DurableExecutionMode,
+): OperationSpanOptions => {
+  if (subType === OperationSubType.PARALLEL_BRANCH) {
+    return {
+      operationType: "parallel-branch",
+      operationSubType: "ParallelBranch",
+      operationId: entityId,
+      operationName: name,
+      executionArn,
+      parentId,
+      executionMode,
+      attributes: {
+        "durable.parallel.branch.id": entityId,
+        ...(name ? { "durable.parallel.branch.name": name } : {}),
+      },
+    };
+  }
+
+  if (subType === OperationSubType.PARALLEL) {
+    return {
+      operationType: "parallel",
+      operationSubType: "Parallel",
+      operationId: entityId,
+      operationName: name,
+      executionArn,
+      parentId,
+      executionMode,
+      attributes: {
+        ...(name ? { "durable.parallel.name": name } : {}),
+      },
+    };
+  }
+
+  if (subType === OperationSubType.MAP_ITERATION) {
+    // Extract index from entityId (format: "map-item-${index}")
+    const indexMatch = entityId.match(/map-item-(\d+)/);
+    const itemIndex = indexMatch ? parseInt(indexMatch[1], 10) : undefined;
+
+    return {
+      operationType: "map-iteration",
+      operationSubType: "MapIteration",
+      operationId: entityId,
+      operationName: name,
+      executionArn,
+      parentId,
+      executionMode,
+      attributes: {
+        "durable.map.item.id": entityId,
+        ...(itemIndex !== undefined
+          ? { "durable.map.item.index": itemIndex }
+          : {}),
+        ...(name ? { "durable.map.item.name": name } : {}),
+      },
+    };
+  }
+
+  return {
+    executionArn,
+    parentId,
+    executionMode,
+  };
+};
+
 export const handleCompletedChildContext = async <
   T,
   Logger extends DurableLogger,
@@ -199,6 +271,7 @@ export const handleCompletedChildContext = async <
     parentId?: string,
   ) => DurableContext<Logger>,
 ): Promise<T> => {
+  const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
   const serdes = options?.serdes || defaultSerdes;
   const errorMapper = options?.errorMapper;
   const stepData = context.getStepData(entityId);
@@ -241,20 +314,28 @@ export const handleCompletedChildContext = async <
       entityId, // parentId
     );
 
-    return await withRunInChildContextSpan(
-      entityId,
-      stepName,
-      async () => {
-        return await runWithContext(entityId, entityId, () =>
-          fn(durableChildContext),
-        );
-      },
-      {
-        executionArn: context.durableExecutionArn,
-        parentId: entityId,
-        executionMode: DurableExecutionMode.ReplaySucceededContext,
-      },
-    );
+    // CRITICAL FIX: Create the span INSIDE runWithContext, ensuring it's created
+    // in the same invocation where the child context function executes. This prevents
+    // "Missing span" issues when execution spans multiple invocations.
+    return await runWithContext(entityId, entityId, async () => {
+      // Create the span here, inside runWithContext, so it's in the same invocation
+      // where the child context function executes.
+      return await withRunInChildContextSpan(
+        entityId,
+        stepName,
+        async () => {
+          return await fn(durableChildContext);
+        },
+        createChildSpanOptions(
+          subType as OperationSubType,
+          entityId,
+          stepName,
+          context.durableExecutionArn,
+          entityId,
+          DurableExecutionMode.ReplaySucceededContext,
+        ),
+      );
+    });
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
@@ -326,24 +407,48 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   );
 
   try {
-    // Execute the child context function with context tracking
-    const result = await withRunInChildContextSpan(
+    // CRITICAL FIX: Create the span INSIDE runWithContext, ensuring it's created
+    // in the same invocation where the child context function executes. This prevents
+    // "Missing span" issues when execution spans multiple invocations.
+    //
+    // The key insight: We need to create the span when fn() actually executes, not when
+    // executeChildContext is called. By wrapping fn() with the span inside runWithContext,
+    // we ensure the span is created in the current invocation's OpenTelemetry context,
+    // even if execution resumed from a checkpoint in a previous invocation.
+    //
+    // IMPORTANT: The span MUST be created synchronously when the child context function
+    // executes, not asynchronously. This ensures the OpenTelemetry context is properly
+    // propagated to child operations (steps) that execute within the child context.
+    const result = await runWithContext(
       entityId,
-      name,
+      entityId, // Use entityId as parentId for context tracking - steps inside will use this as their parent
       async () => {
-        return await runWithContext(
+        // Create the span here, inside runWithContext, so it's in the same invocation
+        // where the child context function executes. This ensures proper parent-child
+        // relationships even when execution spans multiple Lambda invocations.
+        // The span is created synchronously when this function executes, ensuring the
+        // OpenTelemetry context is active before any child operations (steps) are created.
+        return await withRunInChildContextSpan(
           entityId,
-          parentId,
-          () => fn(durableChildContext),
-          undefined,
-          childReplayMode,
+          name,
+          async () => {
+            // Execute the child context function. The span created by withRunInChildContextSpan
+            // is now active, so any steps created inside fn() will correctly use this span
+            // as their parent, preventing "Missing span" issues.
+            return await fn(durableChildContext);
+          },
+          createChildSpanOptions(
+            subType as OperationSubType,
+            entityId,
+            name,
+            context.durableExecutionArn,
+            parentId,
+            childReplayMode,
+          ),
         );
       },
-      {
-        executionArn: context.durableExecutionArn,
-        parentId,
-        executionMode: childReplayMode,
-      },
+      undefined,
+      childReplayMode,
     );
 
     // Serialize the result for consistency

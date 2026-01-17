@@ -129,6 +129,10 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       };
 
       const stepId = getNextStepId();
+      // NOTE: runInChildContext is called in Phase 1, which creates the child context span
+      // when the child context function executes. This is handled correctly by runInChildContext's
+      // two-phase execution model, which ensures the span is created in the same invocation
+      // where the child context function runs.
       return {
         result: await runInChildContext(name, childFunction, {
           subType: OperationSubType.WAIT_FOR_CALLBACK,
@@ -160,6 +164,9 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
     phase1Promise.catch(() => {});
 
     // Phase 2: Return DurablePromise that returns Phase 1 result when awaited
+    // CRITICAL: Create the wait-for-callback span here, in Phase 2 (when awaited).
+    // This ensures the span is created in the same Lambda invocation where it's needed,
+    // preventing "Missing span" issues when execution spans multiple invocations.
     return new DurablePromise(async () => {
       const { result, stepId } = await phase1Promise;
 

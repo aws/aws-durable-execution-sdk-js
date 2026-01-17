@@ -208,6 +208,10 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
 
+          // CRITICAL: Create the span here, wrapping the actual execution of the check function.
+          // This ensures the span is created in the same Lambda invocation where the check executes,
+          // preventing "Missing span" issues when execution spans multiple invocations (e.g., after retry timers).
+          // The span will be active when the check function runs, ensuring proper parent-child relationships.
           const newState: T = await withWaitForConditionSpan(
             stepId,
             name,

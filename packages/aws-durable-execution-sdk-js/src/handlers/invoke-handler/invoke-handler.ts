@@ -19,7 +19,10 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { withInvokeSpan } from "../../utils/otel/otel-instrumentation";
+import {
+  withInvokeSpan,
+  endAllActiveParentSpans,
+} from "../../utils/otel/otel-instrumentation";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -227,6 +230,25 @@ export const createInvokeHandler = (
 
           checkpoint.markOperationAwaited(stepId);
 
+          // CRITICAL: Recursively end all active parent spans BEFORE calling waitForStatusChange,
+          // which will freeze the Lambda runtime. This ensures all nested spans are ended
+          // and exported before freezing. The invoke span itself will be ended after
+          // waitForStatusChange returns (in the next invocation).
+          const endedSpanIds = endAllActiveParentSpans("invoke");
+
+          if (endedSpanIds.length > 0) {
+            log(
+              "✅",
+              `Ended ${endedSpanIds.length} parent span(s) before invoke freeze:`,
+              {
+                stepId,
+                endedSpanIds,
+              },
+            );
+          }
+
+          // Wait for status change - THIS WILL FREEZE THE RUNTIME
+          // All parent spans have been ended and should be exported before this freeze
           await checkpoint.waitForStatusChange(stepId);
 
           const stepData = context.getStepData(stepId);

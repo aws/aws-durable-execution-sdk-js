@@ -36,6 +36,7 @@ import { createErrorObjectFromError } from "../../utils/error-object/error-objec
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
 import { withStepSpan } from "../../utils/otel/otel-instrumentation";
+import { trace } from "@opentelemetry/api";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -264,6 +265,24 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
 
+          // CRITICAL: Create the span here, wrapping the actual execution of the step function.
+          // This ensures the span is created in the same Lambda invocation where the step executes,
+          // preventing "Missing span" issues when execution spans multiple invocations.
+          // The span will be active when the step function runs, ensuring proper parent-child relationships.
+          //
+          // DIAGNOSTIC: Check if there's an active parent span when creating the step span
+          const activeSpan = trace.getActiveSpan();
+          const activeSpanContext = activeSpan?.spanContext();
+          if (!activeSpan) {
+            console.warn(
+              `[OTel] Step handler: No active parent span when creating step span "${name}" (stepId: ${stepId}). This may cause "Missing span" issues.`,
+            );
+          } else if (activeSpanContext) {
+            // Log the parent span ID for debugging
+            console.log(
+              `[OTel] Step handler: Creating step span "${name}" (stepId: ${stepId}) with parent span ID: ${activeSpanContext.spanId}`,
+            );
+          }
           let result: T;
           result = await withStepSpan(
             stepId,

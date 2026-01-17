@@ -12,10 +12,6 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createMapSummaryGenerator } from "../../utils/summary-generators/summary-generators";
-import {
-  withMapIterationSpan,
-  withMapSpan,
-} from "../../utils/otel/otel-instrumentation";
 
 export const createMapHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -85,21 +81,7 @@ export const createMapHandler = <Logger extends DurableLogger>(
         executionItem,
         childContext,
       ) =>
-        withMapIterationSpan(
-          executionItem.id,
-          executionItem.name,
-          executionItem.index,
-          async () =>
-            mapFunc(
-              childContext,
-              executionItem.data,
-              executionItem.index,
-              items,
-            ),
-          {
-            executionArn: context.durableExecutionArn,
-          },
-        );
+        mapFunc(childContext, executionItem.data, executionItem.index, items);
 
       const result = await withMapSpan(
         name,

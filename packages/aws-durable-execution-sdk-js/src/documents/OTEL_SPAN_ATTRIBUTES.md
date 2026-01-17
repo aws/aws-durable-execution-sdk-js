@@ -32,16 +32,6 @@ by all wrappers.
 | `durable.operation.id`       | `step-123`    | Always set                       |
 | `durable.operation.name`     | `fetch-user`  | Only when `stepName` is provided |
 
-### `withParallelSpan`
-
-| Attribute                    | Example Value  | Notes                                |
-| ---------------------------- | -------------- | ------------------------------------ |
-| `durable.parallel.name`      | `parallel-ops` | Only when `parallelName` is provided |
-| `durable.operation.type`     | `parallel`     | Always set                           |
-| `durable.operation.sub_type` | `Parallel`     | Always set                           |
-| `durable.operation.id`       | `parallel-ops` | Falls back to `parallel`             |
-| `durable.operation.name`     | `parallel-ops` | Only when `parallelName` is provided |
-
 ### `withParallelBranchSpan`
 
 | Attribute                      | Example Value       | Notes                              |
@@ -53,6 +43,10 @@ by all wrappers.
 | `durable.operation.id`         | `parallel-branch-0` | Always set                         |
 | `durable.operation.name`       | `branch-A`          | Only when `branchName` is provided |
 
+Note: In the SDK’s `parallel()` implementation, branch spans are emitted via
+`withRunInChildContextSpan` with `ParallelBranch` attributes to avoid duplicate
+wrappers. `withParallelBranchSpan` is available but not used by default.
+
 ### `withRunInChildContextSpan`
 
 | Attribute                    | Example Value          | Notes                        |
@@ -63,6 +57,8 @@ by all wrappers.
 | `durable.operation.sub_type` | `RunInChildContext`    | Always set                   |
 | `durable.operation.id`       | `child-ctx-1`          | Always set                   |
 | `durable.operation.name`     | `process-batch`        | Only when `name` is provided |
+
+Note: This span wrapper is also used for `parallel` branches (with `ParallelBranch` subType and additional `durable.parallel.branch.*` attributes) and `map` iterations (with `MapIteration` subType and additional `durable.map.item.*` attributes). See the respective sections for details.
 
 ### `withWaitSpan`
 
@@ -85,6 +81,8 @@ by all wrappers.
 | `durable.operation.id`       | `map-users`   | Falls back to `map`             |
 | `durable.operation.name`     | `map-users`   | Only when `mapName` is provided |
 
+Note: In the SDK's `map()` implementation, the outer map span wrapper is not used to avoid duplicate spans. Map operations are represented by the `runInChildContext` span for the overall map operation (with `Map` subType) and individual iteration spans (with `MapIteration` subType). `withMapSpan` is available but not used by default.
+
 ### `withMapIterationSpan`
 
 | Attribute                    | Example Value   | Notes                            |
@@ -96,6 +94,8 @@ by all wrappers.
 | `durable.operation.sub_type` | `MapIteration`  | Always set                       |
 | `durable.operation.id`       | `map-item-3`    | Always set                       |
 | `durable.operation.name`     | `user-42`       | Only when `itemName` is provided |
+
+Note: In the SDK's `map()` implementation, iteration spans are emitted via `withRunInChildContextSpan` with `MapIteration` attributes to avoid duplicate wrappers. `withMapIterationSpan` is available but not used by default.
 
 ### `withInvokeSpan`
 
