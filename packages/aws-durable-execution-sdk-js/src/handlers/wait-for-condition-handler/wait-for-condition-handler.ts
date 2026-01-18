@@ -227,7 +227,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               executionArn: context.durableExecutionArn,
               parentId,
               attempt: currentAttempt,
-              executionMode: DurableExecutionMode.ExecutionMode,
             },
           );
 

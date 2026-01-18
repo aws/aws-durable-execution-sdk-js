@@ -19,7 +19,6 @@ import {
   withWaitSpan,
   endAllActiveParentSpans,
 } from "../../utils/otel/otel-instrumentation";
-import { trace } from "@opentelemetry/api";
 
 export const createWaitHandler = (
   context: ExecutionContext,

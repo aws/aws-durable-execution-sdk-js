@@ -21,7 +21,10 @@ jest.mock("@opentelemetry/api", () => {
   return {
     ...actualApi,
     trace: {
+      ...actualApi.trace,
       getTracer: jest.fn(),
+      // getActiveSpan returns undefined (no active span) - tests the fallback path
+      getActiveSpan: jest.fn().mockReturnValue(undefined),
     },
   };
 });
@@ -39,6 +42,12 @@ describe("OpenTelemetry Instrumentation", () => {
       setStatus: jest.fn(),
       recordException: jest.fn(),
       end: jest.fn(),
+      isRecording: jest.fn().mockReturnValue(true),
+      spanContext: jest.fn().mockReturnValue({
+        spanId: "test-span-id",
+        traceId: "test-trace-id",
+        traceFlags: 1,
+      }),
     } as any;
 
     // Create a mock tracer that returns our mock span
@@ -937,7 +946,6 @@ describe("OpenTelemetry Instrumentation", () => {
 
       const result = await withExecutionSpan(executionName, async () => "ok", {
         executionArn: "arn:aws:states:us-east-1:123:execution:exec",
-        executionMode: "ExecutionMode",
         attributes: {
           "durable.execution.request_id": "req-123",
         },
@@ -951,10 +959,6 @@ describe("OpenTelemetry Instrumentation", () => {
       expect(mockSpan.setAttribute).toHaveBeenCalledWith(
         "durable.execution.arn",
         "arn:aws:states:us-east-1:123:execution:exec",
-      );
-      expect(mockSpan.setAttribute).toHaveBeenCalledWith(
-        "durable.execution.mode",
-        "ExecutionMode",
       );
       expect(mockSpan.setAttribute).toHaveBeenCalledWith(
         "durable.execution.request_id",

@@ -10,6 +10,8 @@ export interface DurableLogData {
   tenantId?: string;
   operationId?: string;
   attempt?: number;
+  traceId?: string;
+  spanId?: string;
   // We aren't attaching any additional properties, but this is
   // added for type-compatibility with popular loggers like powertools
   [key: string]: unknown;

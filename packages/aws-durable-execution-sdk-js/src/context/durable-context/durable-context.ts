@@ -27,6 +27,7 @@ import {
   DurablePromise,
   DurableLogData,
 } from "../../types";
+import { trace } from "@opentelemetry/api";
 import { Context } from "aws-lambda";
 import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
 import { EventEmitter } from "events";
@@ -132,6 +133,14 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
         if (activeContext?.attempt !== undefined) {
           result.attempt = activeContext.attempt;
+        }
+
+        // Add trace ID and span ID from OpenTelemetry
+        const activeSpan = trace.getActiveSpan();
+        if (activeSpan) {
+          const spanContext = activeSpan.spanContext();
+          result.traceId = spanContext.traceId;
+          result.spanId = spanContext.spanId;
         }
 
         return result;

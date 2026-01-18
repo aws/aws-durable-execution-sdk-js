@@ -281,7 +281,6 @@ async function runHandler<
     },
     {
       executionArn: executionContext.durableExecutionArn,
-      executionMode: durableExecutionMode,
       attributes: {
         "durable.execution.request_id": executionContext.requestId,
       },
