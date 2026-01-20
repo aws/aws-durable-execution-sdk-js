@@ -55,7 +55,6 @@
     "@types/aws-lambda": "^8.10.147",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
-    "aws-lambda": "^1.0.7",
     "eslint": "^9.21.0",
     "eslint-plugin-filename-convention": "file:scripts/eslint-plugin-filename-convention",
     "eslint-plugin-tsdoc": "^0.4.0",
