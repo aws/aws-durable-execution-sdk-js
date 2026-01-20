@@ -595,23 +595,24 @@ export class CheckpointManager implements Checkpoint {
     }
   }
 
-  private checkAndTerminate(): void {
+  /**
+   * Determines if the function should terminate.
+   * @returns TerminationReason if the function should terminate, or undefined if the function should not terminate
+   */
+  private shouldTerminate(): TerminationReason | undefined {
     // Rule 1: Can't terminate if checkpoint queue is not empty
     if (this.queue.length > 0) {
-      this.abortTermination();
-      return;
+      return undefined;
     }
 
     // Rule 2: Can't terminate if checkpoint is currently processing
     if (this.isProcessing) {
-      this.abortTermination();
-      return;
+      return undefined;
     }
 
     // Rule 3: Can't terminate if there are pending force checkpoint promises
     if (this.forceCheckpointPromises.length > 0) {
-      this.abortTermination();
-      return;
+      return undefined;
     }
 
     const allOps = Array.from(this.operations.values());
@@ -622,8 +623,7 @@ export class CheckpointManager implements Checkpoint {
     );
 
     if (hasExecuting) {
-      this.abortTermination();
-      return;
+      return undefined;
     }
 
     // Rule 5: Clean up operations whose ancestors are complete or pending completion
@@ -658,11 +658,21 @@ export class CheckpointManager implements Checkpoint {
     );
 
     if (hasWaiting) {
-      const reason = this.determineTerminationReason(remainingOps);
-      this.scheduleTermination(reason);
-    } else {
-      this.abortTermination();
+      return this.determineTerminationReason(remainingOps);
     }
+
+    return undefined;
+  }
+
+  private checkAndTerminate(): void {
+    const terminationReason = this.shouldTerminate();
+
+    if (terminationReason) {
+      this.scheduleTermination(terminationReason);
+      return;
+    }
+
+    this.abortTermination();
   }
 
   private abortTermination(): void {
@@ -691,6 +701,14 @@ export class CheckpointManager implements Checkpoint {
     });
 
     this.terminationTimer = setTimeout(() => {
+      if (!this.shouldTerminate()) {
+        log(
+          "🔄",
+          "Termination conditions no longer valid after cooldown, aborting termination",
+        );
+        this.abortTermination();
+        return;
+      }
       this.executeTermination(reason);
     }, this.TERMINATION_COOLDOWN_MS);
   }

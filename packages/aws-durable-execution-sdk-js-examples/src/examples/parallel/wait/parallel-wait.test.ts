@@ -27,8 +27,7 @@ createTests({
       expect(wait5SecondsOp.getWaitDetails()!.waitSeconds!).toBe(5);
 
       assertEventSignatures(execution, undefined, {
-        // TODO: testing library should also have 4 invocations and not 2
-        invocationCompletedDifference: isCloud ? 0 : 2,
+        invocationCompletedDifference: 2,
       });
     }, 10000);
   },

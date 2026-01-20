@@ -1,9 +1,19 @@
 import { CheckpointManager } from "./checkpoint-manager";
 import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
-import { ExecutionContext } from "../../types";
+import {
+  ExecutionContext,
+  OperationLifecycleState,
+  OperationSubType,
+} from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
+import { OperationType } from "@aws-sdk/client-lambda";
+import { log } from "../logger/logger";
+
+jest.mock("../logger/logger", () => ({
+  log: jest.fn(),
+}));
 
 describe("CheckpointManager Termination Behavior", () => {
   let mockContext: ExecutionContext;
@@ -11,6 +21,10 @@ describe("CheckpointManager Termination Behavior", () => {
   let checkpointHandler: CheckpointManager;
 
   beforeEach(() => {
+    // Reset all mocks
+    jest.clearAllMocks();
+    jest.useRealTimers();
+
     stepDataEmitter = new EventEmitter();
     mockContext = {
       durableExecutionClient: {
@@ -195,6 +209,63 @@ describe("CheckpointManager Termination Behavior", () => {
 
       await new Promise((resolve) => setTimeout(resolve, 100));
       expect(resolved).toBe(false);
+    });
+
+    it("should cancel termination when checkpoint processing starts during cooldown period", async () => {
+      jest.useFakeTimers();
+
+      const mockTerminate = jest.fn();
+      mockContext.terminationManager.terminate = mockTerminate;
+
+      // Mock checkpoint API with delayed resolution to simulate network latency
+      const checkpointPromise = new Promise(() => {});
+
+      (
+        mockContext.durableExecutionClient.checkpoint as jest.Mock
+      ).mockReturnValue(checkpointPromise);
+
+      // Step 1: Create scenario where termination would be scheduled
+      // Mark operation as awaited - with clean queue/processing state, this schedules termination
+      checkpointHandler.markOperationState(
+        "test-step",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "test-step",
+            type: OperationType.CHAINED_INVOKE,
+            subType: OperationSubType.CHAINED_INVOKE,
+          },
+        },
+      );
+
+      // Verify termination was actually scheduled
+      expect(log).toHaveBeenCalledWith(
+        "⏱️",
+        "Scheduling termination",
+        expect.objectContaining({
+          reason: "CALLBACK_PENDING",
+          cooldownMs: 50,
+        }),
+      );
+
+      // Step 2: Immediately queue checkpoint
+      // This adds to the checkpoint queue synchronously, which should cancel the termination
+      checkpointHandler.checkpoint("test-step", {
+        Action: "SUCCEED",
+        Type: "CHAINED_INVOKE",
+      });
+
+      // Step 3: Advance time past the termination cooldown (50ms + buffer)
+      await jest.advanceTimersByTimeAsync(60);
+
+      // At this point, the timer callback should execute and re-check shouldTerminate()
+      // It should find isProcessing=true and cancel termination
+      expect(mockTerminate).not.toHaveBeenCalled();
+
+      expect(log).toHaveBeenCalledWith(
+        "🔄",
+        "Termination aborted - conditions changed",
+      );
     });
   });
 });
