@@ -57,6 +57,8 @@ const CONFIG = {
   ),
 };
 
+const CAPACITY_PROVIDER_FUNCTION_SUFFIX = "-capacity-provider";
+
 class IntegrationTestRunner {
   /**
    * @param {Object} options
@@ -67,8 +69,6 @@ class IntegrationTestRunner {
     this.cleanupOnExit = options.cleanupOnExit !== false;
     this.runtime = options.runtime;
     this.isGitHubActions = !!process.env.GITHUB_ACTIONS;
-    /** @type {Record<string, {functionName: string, qualifier: string}> | undefined} */
-    this.functionNameMap = undefined;
     /** @type {import('@aws-sdk/client-lambda').LambdaClient | null} */
     this.lambdaClient = null;
 
@@ -136,11 +136,12 @@ class IntegrationTestRunner {
     return examplesCatalog;
   }
 
-  getFunctionNameMap() {
-    if (this.functionNameMap) {
-      return this.functionNameMap;
-    }
-
+  /**
+   *
+   * @param {{ capacityProviderOnly: boolean }} options
+   * @returns
+   */
+  getFunctionNameMap(options) {
     const examples = this.getIntegrationExamples();
     /** @type {Record<string, {functionName: string, qualifier: string}>} */
     const functionNameMap = {};
@@ -176,30 +177,35 @@ class IntegrationTestRunner {
 
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
 
-      // Always create regular function
-      functionNameMap[handlerFile] = {
-        functionName: baseFunctionName,
-        qualifier: "$LATEST",
-      };
-
-      // Also create capacity provider function if provided
-      if (example.capacityProviderConfig) {
-        functionNameMap[`${handlerFile}-capacity-provider`] = {
-          functionName: `${baseFunctionName}-CapacityProvider`,
-          qualifier: "$LATEST.PUBLISHED",
+      if (options.capacityProviderOnly) {
+        if (example.capacityProviderConfig) {
+          functionNameMap[
+            `${handlerFile}${CAPACITY_PROVIDER_FUNCTION_SUFFIX}`
+          ] = {
+            functionName: `${baseFunctionName}-CapacityProvider`,
+            qualifier: "$LATEST.PUBLISHED",
+          };
+        }
+      } else {
+        functionNameMap[handlerFile] = {
+          functionName: baseFunctionName,
+          qualifier: "$LATEST",
         };
       }
     }
 
-    this.functionNameMap = functionNameMap;
     return functionNameMap;
   }
 
   /**
    * Deploy Lambda functions
    * @param {string | undefined} testPattern
+   * @param {Object} options
+   * @param {boolean} [options.capacityProviderOnly] - Deploy only capacity provider functions
    */
-  async deployFunctions(testPattern) {
+  async deployFunctions(testPattern, options = {}) {
+    const { capacityProviderOnly = false } = options;
+
     log.info("Deploying Lambda functions...");
 
     if (!process.env.AWS_ACCOUNT_ID) {
@@ -209,7 +215,9 @@ class IntegrationTestRunner {
     const examples = this.getIntegrationExamples();
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
 
-    const functionNameMap = this.getFunctionNameMap();
+    const functionNameMap = this.getFunctionNameMap({
+      capacityProviderOnly: capacityProviderOnly,
+    });
 
     for (const example of examples) {
       const exampleHandler = example.handler;
@@ -217,13 +225,22 @@ class IntegrationTestRunner {
       // Extract handler file name from catalog
       const handlerFile = exampleHandler.replace(/\.handler$/, "");
 
-      if (!testPattern || handlerFile.includes(testPattern)) {
-        // Package the function once for both deployments
-        this.execCommand(`npm run package -- "${handlerFile}"`, {
-          cwd: examplesDir,
-        });
+      // Skip if testPattern doesn't match
+      if (testPattern && !handlerFile.includes(testPattern)) {
+        continue;
+      }
 
-        // Deploy regular function
+      if (capacityProviderOnly && !example.capacityProviderConfig) {
+        continue;
+      }
+
+      // Package the function once for both deployments (if needed)
+      this.execCommand(`npm run package -- "${handlerFile}"`, {
+        cwd: examplesDir,
+      });
+
+      // Deploy regular function (unless capacityProviderOnly is true)
+      if (!capacityProviderOnly) {
         const regularFunctionName = functionNameMap[handlerFile].functionName;
         log.info(
           `Deploying regular function: ${regularFunctionName} (handler: ${handlerFile})`,
@@ -234,24 +251,24 @@ class IntegrationTestRunner {
           cwd: examplesDir,
         });
         log.success(`Deployed regular function: ${regularFunctionName}`);
+      }
 
-        // Also deploy capacity provider function if supported
-        if (example.capacityProviderConfig) {
-          const capacityProviderKey = `${handlerFile}-capacity-provider`;
-          const capacityProviderFunctionName =
-            functionNameMap[capacityProviderKey].functionName;
-          log.info(
-            `Deploying capacity provider function: ${capacityProviderFunctionName} (handler: ${handlerFile})`,
-          );
+      // Deploy capacity provider function (only if capacityProviderOnly is true)
+      if (capacityProviderOnly && example.capacityProviderConfig) {
+        const capacityProviderKey = `${handlerFile}-capacity-provider`;
+        const capacityProviderFunctionName =
+          functionNameMap[capacityProviderKey].functionName;
+        log.info(
+          `Deploying capacity provider function: ${capacityProviderFunctionName} (handler: ${handlerFile})`,
+        );
 
-          let capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
-          this.execCommand(capacityDeployCommand, {
-            cwd: examplesDir,
-          });
-          log.success(
-            `Deployed capacity provider function: ${capacityProviderFunctionName}`,
-          );
-        }
+        let capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
+        this.execCommand(capacityDeployCommand, {
+          cwd: examplesDir,
+        });
+        log.success(
+          `Deployed capacity provider function: ${capacityProviderFunctionName}`,
+        );
       }
     }
 
@@ -274,12 +291,13 @@ class IntegrationTestRunner {
 
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
 
+    // For Jest integration tests, exclude capacity provider functions since they weren't deployed
     const functionsWithQualifier = Object.fromEntries(
-      Object.entries(this.getFunctionNameMap()).map(
-        ([key, { functionName, qualifier }]) => {
-          return [key, `${functionName}:${qualifier}`];
-        },
-      ),
+      Object.entries(
+        this.getFunctionNameMap({ capacityProviderOnly: false }),
+      ).map(([key, { functionName, qualifier }]) => {
+        return [key, `${functionName}:${qualifier}`];
+      }),
     );
 
     // Set additional environment variables
@@ -304,9 +322,15 @@ class IntegrationTestRunner {
     log.success("Jest integration tests passed");
   }
 
-  // Cleanup deployed functions
-  async cleanup() {
-    const functionNameMap = this.getFunctionNameMap();
+  /**
+   * Cleanup deployed functions
+   * @param {boolean} capacityProviderOnly
+   * @returns
+   */
+  async cleanup(capacityProviderOnly) {
+    const functionNameMap = this.getFunctionNameMap({
+      capacityProviderOnly: capacityProviderOnly,
+    });
 
     if (Object.keys(functionNameMap).length === 0) {
       log.warning("No functions to clean up");
@@ -344,6 +368,7 @@ class IntegrationTestRunner {
    * @param {boolean} [options.testOnly]
    * @param {boolean} [options.cleanupOnly]
    * @param {string} [options.testPattern]
+   * @param {boolean} [options.capacityProviderOnly]
    */
   async run(options = {}) {
     const {
@@ -351,6 +376,7 @@ class IntegrationTestRunner {
       testOnly = false,
       cleanupOnly = false,
       testPattern,
+      capacityProviderOnly = false,
     } = options;
 
     log.info("Starting integration test...");
@@ -360,12 +386,14 @@ class IntegrationTestRunner {
     }
 
     if (cleanupOnly) {
-      await this.cleanup();
+      await this.cleanup(capacityProviderOnly);
       return;
     }
 
     if (!testOnly) {
-      await this.deployFunctions(testPattern);
+      await this.deployFunctions(testPattern, {
+        capacityProviderOnly,
+      });
     }
 
     if (!deployOnly) {
@@ -374,7 +402,7 @@ class IntegrationTestRunner {
 
     log.success("Integration test completed successfully!");
 
-    if (!this.cleanupOnExit) {
+    if (!this.cleanupOnExit && !capacityProviderOnly) {
       log.warning(
         "Functions were not cleaned up. Use --cleanup-only to clean them up later.",
       );
@@ -414,6 +442,12 @@ async function main() {
     help: "Optional test pattern to filter specific tests (used with --test-only)",
   });
 
+  // Add deployment type arguments
+  parser.add_argument("--capacity-provider-only", {
+    action: "store_true",
+    help: "Deploy only capacity provider functions",
+  });
+
   // Add runtime argument
   parser.add_argument("--runtime", {
     help: "Node runtime version (e.g., 20.x, 22.x, 24.x)",
@@ -431,6 +465,7 @@ async function main() {
     testOnly: args.test_only || false,
     cleanupOnly: args.cleanup_only || false,
     testPattern: args.test_pattern,
+    capacityProviderOnly: args.capacity_provider_only,
     runtime: args.runtime,
   };
 

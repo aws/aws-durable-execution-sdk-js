@@ -52,7 +52,6 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          CAPACITY_PROVIDER_ARN: ${{ secrets.CAPACITY_PROVIDER_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --runtime ${{ inputs.node-version }}
 
   jest-integration-test:
@@ -96,6 +95,133 @@ jobs:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
-          CAPACITY_PROVIDER_ARN: ${{ secrets.CAPACITY_PROVIDER_ARN }}
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}
+
+  deploy-capacity-provider:
+    permissions:
+      contents: read
+      id-token: write # Required for AWS credentials
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+
+      - name: Get AWS Credentials
+        id: credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-session-name: githubIntegrationTest
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy all capacity provider functions
+        id: deploy-capacity-providers
+        env:
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          CAPACITY_PROVIDER_ARN: ${{ secrets.CAPACITY_PROVIDER_ARN }}
+        run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --capacity-provider-only --runtime ${{ inputs.node-version }}
+
+  test-capacity-provider:
+    needs: deploy-capacity-provider
+    runs-on: ubuntu-latest
+    name: Test Capacity Provider Functions
+    permissions:
+      contents: read
+      id-token: write # Required for AWS credentials
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+
+      - name: Get AWS Credentials
+        id: credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-session-name: githubIntegrationTest
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test all capacity provider functions
+        env:
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+        run: |
+          node .github/workflows/scripts/integration-test/integration-test.js --test-only --capacity-provider-only --runtime ${{ inputs.node-version }}
+  cleanup-capacity-provider:
+    if: always()
+    needs: test-capacity-provider
+    runs-on: ubuntu-latest
+    name: Clean up capacity provider functions
+    permissions:
+      contents: read
+      id-token: write # Required for AWS credentials
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+
+      - name: Get AWS Credentials
+        id: credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-session-name: githubIntegrationTest
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: .
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Clean up capacity provider functions
+        env:
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+        run: |
+          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only --capacity-provider-only --runtime ${{ inputs.node-version }}

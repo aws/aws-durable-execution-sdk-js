@@ -82,11 +82,7 @@ function parseArgs(): {
 
 function loadEnvironmentVariables(): EnvironmentVariables {
   // Validate required environment variables
-  const requiredVars = [
-    "AWS_ACCOUNT_ID",
-    "CAPACITY_PROVIDER_ARN",
-    "AWS_REGION",
-  ];
+  const requiredVars = ["AWS_ACCOUNT_ID", "AWS_REGION"];
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
   if (missingVars.length > 0) {
@@ -381,11 +377,20 @@ async function main(): Promise<void> {
     const exampleConfig = loadExampleConfiguration(example);
 
     // Validate capacity provider flag against example configuration
-    if (useCapacityProvider && !exampleConfig.capacityProviderConfig) {
-      console.error(
-        `Error: --use-capacity-provider flag specified but example '${example}' has no capacityProviderConfig defined`,
-      );
-      process.exit(1);
+    if (useCapacityProvider) {
+      if (!exampleConfig.capacityProviderConfig) {
+        console.error(
+          `Error: --use-capacity-provider flag specified but example '${example}' has no capacityProviderConfig defined`,
+        );
+        process.exit(1);
+      }
+
+      if (!process.env.CAPACITY_PROVIDER_ARN) {
+        console.error(
+          `Error: --use-capacity-provider flag specified but no CAPACITY_PROVIDER_ARN env variable is set`,
+        );
+        process.exit(1);
+      }
     }
 
     console.log("Found example configuration:");
