@@ -1,7 +1,6 @@
 import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
-import { SerializedCheckpointOperation } from "../../../checkpoint-server/types/operation-event";
 import {
   ExecutionId,
   InvocationId,
@@ -11,10 +10,6 @@ import {
   StartInvocationRequest,
 } from "../../../checkpoint-server/worker-api/worker-api-request";
 import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
-
-export interface SerializedPollCheckpointResponse {
-  operations: SerializedCheckpointOperation[];
-}
 
 /**
  * Client for interacting with the checkpoint server API

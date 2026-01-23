@@ -14,17 +14,6 @@ export enum WorkerResponseType {
   API_RESPONSE = "API_RESPONSE",
 }
 
-export interface ServerStartedData {
-  port: number;
-  url: string;
-}
-
-export interface ErrorData {
-  message: string;
-  stack?: string;
-  code?: string;
-}
-
 export interface WorkerCommand {
   type: WorkerCommandType.API_REQUEST;
   data: WorkerApiRequestMessage;
