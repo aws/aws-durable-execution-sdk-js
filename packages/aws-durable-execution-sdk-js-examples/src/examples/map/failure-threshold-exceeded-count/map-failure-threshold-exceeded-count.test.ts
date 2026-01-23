@@ -26,7 +26,7 @@ createTests({
       });
 
       assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 1,
+        invocationCompletedDifference: 2,
       });
     });
   },

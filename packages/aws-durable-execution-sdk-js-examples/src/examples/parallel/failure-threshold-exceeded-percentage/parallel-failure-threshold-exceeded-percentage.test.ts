@@ -14,7 +14,7 @@ createTests({
       expect(result.totalCount).toBe(5);
 
       assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 1,
+        invocationCompletedDifference: 2,
       });
     });
   },
