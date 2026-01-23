@@ -30,10 +30,11 @@ To send us a pull request, please:
 
 1. Fork the repository.
 2. Modify the source; please focus on the specific change you are contributing. If you also reformat all the code, it will be hard for us to focus on your change.
-3. Ensure local tests pass.
-4. Commit to your fork using clear commit messages.
-5. Send us a pull request, answering any default questions in the pull request interface.
-6. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
+3. Write unit tests for your changes and ensure all unit tests pass. See [TESTING.md](TESTING.md) for details on running tests and understanding the testing architecture.
+4. If your contribution includes new SDK features, API changes, or testing library enhancements, please also add or update examples in the [examples package](./packages/aws-durable-execution-sdk-js-examples) to demonstrate and validate these changes. Examples serve as both documentation and integration tests. See [ADDING_EXAMPLES.md](./packages/aws-durable-execution-sdk-js-examples/ADDING_EXAMPLES.md) for implementation details.
+5. Commit to your fork using clear conventional commit messages.
+6. Send us a pull request with the title matching conventional commits, answering any default questions in the pull request interface. If the PR type has a scope, it must match `sdk`, `sdk-testing`, `examples`, `eslint-plugin`, or `ci`. For example: `feat(sdk): add map handler functionality` or `fix(sdk-testing): fix race condition in checkpoint server`.
+7. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
 
 GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).

@@ -24,7 +24,13 @@ const types = new Set([
   "types",
 ]);
 
-const scopes = new Set(["testing-sdk", "sdk", "examples", "eslint-plugin"]);
+const scopes = new Set([
+  "testing-sdk",
+  "sdk",
+  "examples",
+  "eslint-plugin",
+  "ci",
+]);
 
 /**
  * Checks that a pull request title, or commit message subject, follows the expected format:
