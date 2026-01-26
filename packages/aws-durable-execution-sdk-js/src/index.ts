@@ -50,6 +50,7 @@ export {
   createClassSerdes,
   createClassSerdesWithDates,
   Serdes,
+  SerdesContext,
 } from "./utils/serdes/serdes";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
