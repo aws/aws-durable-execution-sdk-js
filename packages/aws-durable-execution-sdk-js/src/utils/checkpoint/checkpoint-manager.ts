@@ -49,6 +49,7 @@ export class CheckpointManager implements Checkpoint {
   }> = [];
   private queueCompletionResolver: (() => void) | null = null;
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
+  private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
   private static textEncoder = new TextEncoder();
 
@@ -275,7 +276,11 @@ export class CheckpointManager implements Checkpoint {
         JSON.stringify(nextItem),
       ).length;
 
-      if (currentSize + itemSize > this.MAX_PAYLOAD_SIZE && batch.length > 0) {
+      if (
+        (currentSize + itemSize > this.MAX_PAYLOAD_SIZE ||
+          batch.length >= this.MAX_ITEMS_IN_BATCH) &&
+        batch.length > 0
+      ) {
         break;
       }
 
