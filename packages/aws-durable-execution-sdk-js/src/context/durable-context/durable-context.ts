@@ -74,9 +74,12 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private durableExecution: DurableExecution;
 
   public logger: DurableContextLogger<Logger>;
+  public readonly executionContext: {
+    readonly durableExecutionArn: string;
+  };
 
   constructor(
-    private executionContext: ExecutionContext,
+    private _executionContext: ExecutionContext,
     public lambdaContext: Context,
     durableExecutionMode: DurableExecutionMode,
     inheritedLogger: Logger,
@@ -92,6 +95,10 @@ export class DurableContextImpl<Logger extends DurableLogger>
       this.getDurableLoggingContext(),
     );
     this.logger = this.createModeAwareLogger(inheritedLogger);
+
+    this.executionContext = {
+      durableExecutionArn: _executionContext.durableExecutionArn,
+    };
 
     this.durableExecutionMode = durableExecutionMode;
 
@@ -114,9 +121,9 @@ export class DurableContextImpl<Logger extends DurableLogger>
         const activeContext = getActiveContext();
 
         const result: DurableLogData = {
-          executionArn: this.executionContext.durableExecutionArn,
-          requestId: this.executionContext.requestId,
-          tenantId: this.executionContext.tenantId,
+          executionArn: this._executionContext.durableExecutionArn,
+          requestId: this._executionContext.requestId,
+          tenantId: this._executionContext.tenantId,
           operationId:
             !activeContext || activeContext?.contextId === "root"
               ? undefined
@@ -209,7 +216,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
   private checkAndUpdateReplayMode(): void {
     if (this.durableExecutionMode === DurableExecutionMode.ReplayMode) {
       const nextStepId = this.getNextStepId();
-      const nextStepData = this.executionContext.getStepData(nextStepId);
+      const nextStepData = this._executionContext.getStepData(nextStepId);
       if (!nextStepData) {
         this.durableExecutionMode = DurableExecutionMode.ExecutionMode;
       }
@@ -220,7 +227,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
     const wasInReplayMode =
       this.durableExecutionMode === DurableExecutionMode.ReplayMode;
     const nextStepId = this.getNextStepId();
-    const stepData = this.executionContext.getStepData(nextStepId);
+    const stepData = this._executionContext.getStepData(nextStepId);
     const wasNotFinished = !!(
       stepData &&
       stepData.Status !== OperationStatus.SUCCEEDED &&
@@ -234,7 +241,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
       this.durableExecutionMode === DurableExecutionMode.ReplaySucceededContext
     ) {
       const nextStepId = this.getNextStepId();
-      const nextStepData = this.executionContext.getStepData(nextStepId);
+      const nextStepData = this._executionContext.getStepData(nextStepId);
       if (
         nextStepData &&
         nextStepData.Status !== OperationStatus.SUCCEEDED &&
@@ -264,12 +271,12 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "step",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
 
     return this.withDurableModeManagement(() => {
       const stepHandler = createStepHandler(
-        this.executionContext,
+        this._executionContext,
         this.checkpoint,
         this.lambdaContext,
         this.createStepId.bind(this),
@@ -290,11 +297,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "invoke",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const invokeHandler = createInvokeHandler(
-        this.executionContext,
+        this._executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
         this._parentId,
@@ -319,11 +326,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "runInChildContext",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const blockHandler = createRunInChildContextHandler(
-        this.executionContext,
+        this._executionContext,
         this.checkpoint,
         this.lambdaContext,
         this.createStepId.bind(this),
@@ -360,11 +367,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "wait",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const waitHandler = createWaitHandler(
-        this.executionContext,
+        this._executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
         this._parentId,
@@ -411,11 +418,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "createCallback",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const callbackFactory = createCallbackFactory(
-        this.executionContext,
+        this._executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
         this.checkAndUpdateReplayMode.bind(this),
@@ -435,11 +442,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "waitForCallback",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
-        this.executionContext,
+        this._executionContext,
         this.getNextStepId.bind(this),
         this.runInChildContext.bind(this),
       );
@@ -461,11 +468,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "waitForCondition",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const waitForConditionHandler = createWaitForConditionHandler(
-        this.executionContext,
+        this._executionContext,
         this.checkpoint,
         this.createStepId.bind(this),
         this.durableLogger,
@@ -497,11 +504,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "map",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const mapHandler = createMapHandler(
-        this.executionContext,
+        this._executionContext,
         this._executeConcurrently.bind(this),
       );
       return mapHandler(
@@ -526,11 +533,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "parallel",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const parallelHandler = createParallelHandler(
-        this.executionContext,
+        this._executionContext,
         this._executeConcurrently.bind(this),
       );
       return parallelHandler(nameOrBranches, branchesOrConfig, maybeConfig);
@@ -550,11 +557,11 @@ export class DurableContextImpl<Logger extends DurableLogger>
     validateContextUsage(
       this._stepPrefix,
       "_executeConcurrently",
-      this.executionContext.terminationManager,
+      this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
-        this.executionContext,
+        this._executionContext,
         this.runInChildContext.bind(this),
         this.skipNextOperation.bind(this),
       );
