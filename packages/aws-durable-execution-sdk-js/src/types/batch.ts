@@ -120,6 +120,11 @@ export interface MapConfig<TItem, TResult> {
   itemSerdes?: Serdes<TResult>;
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
+  /**
+   * Whether to create virtual contexts for iterations (default: false)
+   * Virtual contexts skip checkpointing to reduce operational costs while maintaining functionality
+   */
+  createIteration?: boolean;
 }
 
 /**
@@ -156,6 +161,11 @@ export interface ParallelConfig<TResult> {
   itemSerdes?: Serdes<TResult>;
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
+  /**
+   * Whether to create virtual contexts for branches (default: false)
+   * Virtual contexts skip checkpointing to reduce operational costs while maintaining functionality
+   */
+  createBranch?: boolean;
 }
 
 /**
@@ -201,4 +211,9 @@ export interface ConcurrencyConfig<TResult> {
   itemSerdes?: Serdes<TResult>;
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
+  /**
+   * Whether to use virtual contexts for iterations/branches (default: false)
+   * Virtual contexts skip checkpointing to reduce operational costs while maintaining functionality
+   */
+  virtualContext?: boolean;
 }

@@ -7,6 +7,7 @@ import {
   DurableLogger,
 } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
+import { TEST_CONSTANTS } from "../../testing/test-constants";
 
 describe("Parallel Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -64,11 +65,9 @@ describe("Parallel Handler", () => {
         ],
         expect.any(Function),
         {
-          completionConfig: undefined,
-          iterationSubType: "ParallelBranch",
-          maxConcurrency: undefined,
+          ...TEST_CONSTANTS.DEFAULT_PARALLEL_CONFIG,
           summaryGenerator: expect.any(Function),
-          topLevelSubType: "Parallel",
+          completionConfig: undefined,
         },
       );
     });
@@ -100,11 +99,10 @@ describe("Parallel Handler", () => {
         ],
         expect.any(Function),
         {
-          completionConfig: undefined,
-          iterationSubType: "ParallelBranch",
+          ...TEST_CONSTANTS.DEFAULT_PARALLEL_CONFIG,
           maxConcurrency: 2,
           summaryGenerator: expect.any(Function),
-          topLevelSubType: "Parallel",
+          completionConfig: undefined,
         },
       );
     });
@@ -136,11 +134,10 @@ describe("Parallel Handler", () => {
         ],
         expect.any(Function),
         {
-          completionConfig: undefined,
-          iterationSubType: "ParallelBranch",
+          ...TEST_CONSTANTS.DEFAULT_PARALLEL_CONFIG,
           maxConcurrency: 3,
           summaryGenerator: expect.any(Function),
-          topLevelSubType: "Parallel",
+          completionConfig: undefined,
         },
       );
     });
@@ -281,11 +278,9 @@ describe("Parallel Handler", () => {
         ],
         expect.any(Function),
         {
-          completionConfig: undefined,
-          iterationSubType: "ParallelBranch",
-          maxConcurrency: undefined,
+          ...TEST_CONSTANTS.DEFAULT_PARALLEL_CONFIG,
           summaryGenerator: expect.any(Function),
-          topLevelSubType: "Parallel",
+          completionConfig: undefined,
         },
       );
     });
@@ -327,11 +322,9 @@ describe("Parallel Handler", () => {
         ],
         expect.any(Function),
         {
-          completionConfig: undefined,
-          iterationSubType: "ParallelBranch",
-          maxConcurrency: undefined,
+          ...TEST_CONSTANTS.DEFAULT_PARALLEL_CONFIG,
           summaryGenerator: expect.any(Function),
-          topLevelSubType: "Parallel",
+          completionConfig: undefined,
         },
       );
     });
@@ -372,11 +365,9 @@ describe("Parallel Handler", () => {
         ],
         expect.any(Function),
         {
-          completionConfig: undefined,
-          iterationSubType: "ParallelBranch",
-          maxConcurrency: undefined,
+          ...TEST_CONSTANTS.DEFAULT_PARALLEL_CONFIG,
           summaryGenerator: expect.any(Function),
-          topLevelSubType: "Parallel",
+          completionConfig: undefined,
         },
       );
     });
