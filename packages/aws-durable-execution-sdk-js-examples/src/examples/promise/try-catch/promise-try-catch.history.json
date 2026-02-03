@@ -1,0 +1,132 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "ad0a9c03-05e3-4e1b-a493-0de7e56f4533",
+    "EventTimestamp": "2026-02-03T23:42:02.323Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "step-1",
+    "EventTimestamp": "2026-02-03T23:42:02.326Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "step-2",
+    "EventTimestamp": "2026-02-03T23:42:02.326Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "step-3",
+    "EventTimestamp": "2026-02-03T23:42:02.326Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 5,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2026-02-03T23:42:02.326Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "step-2",
+    "EventTimestamp": "2026-02-03T23:42:02.326Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Expected failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "c4ca4238a0b92382",
+    "Name": "step-1",
+    "EventTimestamp": "2026-02-03T23:42:02.326Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"result-1\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "step-3",
+    "EventTimestamp": "2026-02-03T23:42:02.326Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"result-3\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "RunInChildContext",
+    "EventId": 9,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2026-02-03T23:42:02.328Z",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Expected failure"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-02-03T23:42:02.329Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-03T23:42:02.323Z",
+      "EndTimestamp": "2026-02-03T23:42:02.329Z",
+      "Error": {},
+      "RequestId": "9ead098e-9fe5-450e-ba6e-3b6fbf5b0eea"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "ad0a9c03-05e3-4e1b-a493-0de7e56f4533",
+    "EventTimestamp": "2026-02-03T23:42:02.329Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"result\":\"caught PromiseCombinatorError: Expected failure\",\"errorCaught\":true}"
+      }
+    }
+  }
+]
