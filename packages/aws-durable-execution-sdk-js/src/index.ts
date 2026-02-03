@@ -43,6 +43,7 @@ export {
   CallbackError,
   InvokeError,
   ChildContextError,
+  PromiseCombinatorError,
   WaitForConditionError,
 } from "./errors/durable-error/durable-error";
 export {

@@ -25,9 +25,9 @@ createTests({
           { status: "fulfilled", value: "Success!" },
           {
             status: "rejected",
-            reason: {
+            reason: expect.objectContaining({
               name: "StepError",
-            },
+            }),
           },
         ],
         anyResult: "First success!", // The successful promise should be returned

@@ -57,6 +57,12 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "PromiseCombinatorError":
+        return new PromiseCombinatorError(
+          errorObject.ErrorMessage || "Promise combinator failed",
+          cause,
+          errorObject.ErrorData,
+        );
       case "WaitForConditionError":
         return new WaitForConditionError(
           errorObject.ErrorMessage || "Wait for condition failed",
@@ -132,6 +138,18 @@ export class ChildContextError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Child context failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when a promise combinator operation fails
+ * @public
+ */
+export class PromiseCombinatorError extends DurableOperationError {
+  readonly errorType = "PromiseCombinatorError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Promise combinator failed", cause, errorData);
   }
 }
 

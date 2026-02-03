@@ -21,9 +21,9 @@ createTests<PromiseSettledResult<any>[]>({
         },
         {
           status: "rejected",
-          reason: {
+          reason: expect.objectContaining({
             name: "StepError",
-          },
+          }),
         },
         {
           status: "fulfilled",

@@ -1,10 +1,6 @@
-import {
-  DurableContext,
-  RetryDecision,
-  DurablePromise,
-  DurableLogger,
-} from "../../types";
+import { DurableContext, DurablePromise, DurableLogger } from "../../types";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
+import { PromiseCombinatorError } from "../../errors/durable-error/durable-error";
 
 // Minimal error decoration for Promise.allSettled results
 function decorateErrors<T>(
@@ -67,20 +63,25 @@ function createErrorAwareSerdes<T>(): Serdes<PromiseSettledResult<T>[]> {
   };
 }
 
-// No-retry strategy for promise combinators
-const stepConfig = {
-  retryStrategy: (): RetryDecision => ({
-    shouldRetry: false,
-  }),
-};
-
-export const createPromiseHandler = <Logger extends DurableLogger>(
-  step: DurableContext<Logger>["step"],
+export const createPromiseHandler = (
+  runInChildContext: DurableContext["runInChildContext"],
 ): {
-  all: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T[]>;
-  allSettled: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<PromiseSettledResult<T>[]>;
-  any: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
-  race: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
+  all: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T[]>;
+  allSettled: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<PromiseSettledResult<T>[]>;
+  any: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T>;
+  race: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T>;
 } => {
   const parseParams = <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
@@ -96,51 +97,67 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
     maybePromises?: DurablePromise<T>[],
   ): DurablePromise<T[]> => {
-    return new DurablePromise(async () => {
-      const { name, promises } = parseParams(nameOrPromises, maybePromises);
+    const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.all execution in a step for persistence
-      return await step(name, () => Promise.all(promises), stepConfig);
-    });
+    // Use runInChildContext instead of step to allow termination when promises are idle
+    return runInChildContext(
+      name,
+      async () => {
+        return await Promise.all(promises);
+      },
+      { errorClass: PromiseCombinatorError },
+    );
   };
 
   const allSettled = <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
     maybePromises?: DurablePromise<T>[],
   ): DurablePromise<PromiseSettledResult<T>[]> => {
-    return new DurablePromise(async () => {
-      const { name, promises } = parseParams(nameOrPromises, maybePromises);
+    const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.allSettled execution in a step for persistence
-      return await step(name, () => Promise.allSettled(promises), {
-        ...stepConfig,
+    // Use runInChildContext instead of step to allow termination when promises are idle
+    return runInChildContext(
+      name,
+      async () => {
+        return await Promise.allSettled(promises);
+      },
+      {
         serdes: createErrorAwareSerdes<T>(),
-      });
-    });
+        errorClass: PromiseCombinatorError,
+      },
+    );
   };
 
   const any = <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
     maybePromises?: DurablePromise<T>[],
   ): DurablePromise<T> => {
-    return new DurablePromise(async () => {
-      const { name, promises } = parseParams(nameOrPromises, maybePromises);
+    const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.any execution in a step for persistence
-      return await step(name, () => Promise.any(promises), stepConfig);
-    });
+    // Use runInChildContext instead of step to allow termination when promises are idle
+    return runInChildContext(
+      name,
+      async () => {
+        return await Promise.any(promises);
+      },
+      { errorClass: PromiseCombinatorError },
+    );
   };
 
   const race = <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
     maybePromises?: DurablePromise<T>[],
   ): DurablePromise<T> => {
-    return new DurablePromise(async () => {
-      const { name, promises } = parseParams(nameOrPromises, maybePromises);
+    const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.race execution in a step for persistence
-      return await step(name, () => Promise.race(promises), stepConfig);
-    });
+    // Use runInChildContext instead of step to allow termination when promises are idle
+    return runInChildContext(
+      name,
+      async () => {
+        return await Promise.race(promises);
+      },
+      { errorClass: PromiseCombinatorError },
+    );
   };
 
   return {
