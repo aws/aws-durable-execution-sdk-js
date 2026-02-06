@@ -89,11 +89,12 @@ describe("LocalDurableTestRunner Integration", () => {
     // Verify that operations were tracked
     const operations = result.getOperations();
 
-    // Verify the invocations were tracked - with faster termination cooldown (2ms),
-    // we may get an additional invocation due to timing changes
+    // Verify the invocations were tracked - should be exactly 2 invocations
+    // Centralized termination implements a cool-down period prior to termination.
+    // This cool-down phase reduces the total number of invocations needed while increasing
+    // the number of operations performed in each invocation.
     const invocations = result.getInvocations();
-    expect(invocations.length).toBeGreaterThanOrEqual(2);
-    expect(invocations.length).toBeLessThanOrEqual(3);
+    expect(invocations).toHaveLength(2);
 
     // We should have 3 operations in total
     expect(operations).toHaveLength(3);
@@ -116,36 +117,17 @@ describe("LocalDurableTestRunner Integration", () => {
     expect(allOperationIds).toContain(stepOpId);
     expect(allOperationIds).toContain(secondWaitId);
 
-    // Verify invocation structure - with faster termination cooldown, we may have 2-3 invocations
-    if (invocations.length === 2) {
-      expect(invocations[0]).toEqual({
-        startTimestamp: expect.any(Date),
-        endTimestamp: expect.any(Date),
-        requestId: expect.any(String),
-      });
-      expect(invocations[1]).toEqual({
-        startTimestamp: expect.any(Date),
-        endTimestamp: expect.any(Date),
-        requestId: expect.any(String),
-      });
-    } else if (invocations.length === 3) {
-      // With faster cooldown, we may get an additional invocation
-      expect(invocations[0]).toEqual({
-        startTimestamp: expect.any(Date),
-        endTimestamp: expect.any(Date),
-        requestId: expect.any(String),
-      });
-      expect(invocations[1]).toEqual({
-        startTimestamp: expect.any(Date),
-        endTimestamp: expect.any(Date),
-        requestId: expect.any(String),
-      });
-      expect(invocations[2]).toEqual({
-        startTimestamp: expect.any(Date),
-        endTimestamp: expect.any(Date),
-        requestId: expect.any(String),
-      });
-    }
+    // Verify invocation structure
+    expect(invocations[0]).toEqual({
+      startTimestamp: expect.any(Date),
+      endTimestamp: expect.any(Date),
+      requestId: expect.any(String),
+    });
+    expect(invocations[1]).toEqual({
+      startTimestamp: expect.any(Date),
+      endTimestamp: expect.any(Date),
+      requestId: expect.any(String),
+    });
 
     // Verify essential history events are present (flexible check)
     const historyEvents = result.getHistoryEvents();

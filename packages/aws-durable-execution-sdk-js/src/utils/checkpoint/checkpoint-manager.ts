@@ -59,7 +59,7 @@ export class CheckpointManager implements Checkpoint {
   // Termination cooldown
   private terminationTimer: NodeJS.Timeout | null = null;
   private terminationReason: TerminationReason | null = null;
-  private readonly TERMINATION_COOLDOWN_MS = 2;
+  private readonly TERMINATION_COOLDOWN_MS = 10;
 
   constructor(
     private durableExecutionArn: string,
