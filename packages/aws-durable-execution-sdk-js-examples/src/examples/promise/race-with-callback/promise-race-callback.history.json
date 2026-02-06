@@ -1,0 +1,106 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "45abc59e-a348-4c97-b66f-f73b14afaeb1",
+    "EventTimestamp": "2026-02-06T22:03:33.363Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "callback-1",
+    "EventTimestamp": "2026-02-06T22:03:33.369Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjgzOTAyMmVkLTU2NDktNGJhYi1hZWNkLTFkNTIzZDhlY2YyYyIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiNjNkMzU1ZjctN2FiYy00NmUxLThiODctNWVlNzdiYjVjYzA0In0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "callback-1",
+    "EventTimestamp": "2026-02-06T22:03:33.371Z",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "callback-1-result"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "callback-2",
+    "EventTimestamp": "2026-02-06T22:03:33.372Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjgzOTAyMmVkLTU2NDktNGJhYi1hZWNkLTFkNTIzZDhlY2YyYyIsIm9wZXJhdGlvbklkIjoiYzgxZTcyOGQ5ZDRjMmY2MyIsInRva2VuIjoiZTkwM2I5NTMtNjc1Ni00ZDFmLTg1OTQtZTA4NjFjYzZiODVmIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 5,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "callback-3",
+    "EventTimestamp": "2026-02-06T22:03:33.374Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjgzOTAyMmVkLTU2NDktNGJhYi1hZWNkLTFkNTIzZDhlY2YyYyIsIm9wZXJhdGlvbklkIjoiZWNjYmM4N2U0YjVjZTJmZSIsInRva2VuIjoiZDgwOTkxMTUtZGM1MC00YzI1LTkzNzgtMjc4YjFkYzc4OTdhIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 6,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "race-callbacks",
+    "EventTimestamp": "2026-02-06T22:03:33.376Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "RunInChildContext",
+    "EventId": 7,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "race-callbacks",
+    "EventTimestamp": "2026-02-06T22:03:33.376Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"callback-1-result\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2026-02-06T22:03:33.377Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-06T22:03:33.363Z",
+      "EndTimestamp": "2026-02-06T22:03:33.377Z",
+      "Error": {},
+      "RequestId": "98b6d86a-c787-4bdb-bf19-b4f583ffd617"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 9,
+    "Id": "45abc59e-a348-4c97-b66f-f73b14afaeb1",
+    "EventTimestamp": "2026-02-06T22:03:33.377Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"callback-1-result\""
+      }
+    }
+  }
+]
