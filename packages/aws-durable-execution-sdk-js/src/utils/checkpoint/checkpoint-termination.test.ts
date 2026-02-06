@@ -244,7 +244,7 @@ describe("CheckpointManager Termination Behavior", () => {
         "Scheduling termination",
         expect.objectContaining({
           reason: "CALLBACK_PENDING",
-          cooldownMs: 10,
+          cooldownMs: 5,
         }),
       );
 
