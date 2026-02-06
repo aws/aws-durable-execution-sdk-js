@@ -191,7 +191,7 @@ describe("CheckpointManager Termination Behavior", () => {
       // Set terminating while checkpoint is processing
       setTimeout(() => {
         checkpointHandler.setTerminating();
-      }, 50);
+      }, 2);
 
       // Original checkpoint should still complete
       await expect(checkpointPromise).resolves.toBeUndefined();
@@ -244,7 +244,7 @@ describe("CheckpointManager Termination Behavior", () => {
         "Scheduling termination",
         expect.objectContaining({
           reason: "CALLBACK_PENDING",
-          cooldownMs: 50,
+          cooldownMs: 2,
         }),
       );
 
@@ -255,8 +255,8 @@ describe("CheckpointManager Termination Behavior", () => {
         Type: "CHAINED_INVOKE",
       });
 
-      // Step 3: Advance time past the termination cooldown (50ms + buffer)
-      await jest.advanceTimersByTimeAsync(60);
+      // Step 3: Advance time past the termination cooldown (2ms + buffer)
+      await jest.advanceTimersByTimeAsync(5);
 
       // At this point, the timer callback should execute and re-check shouldTerminate()
       // It should find isProcessing=true and cancel termination

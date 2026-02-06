@@ -720,7 +720,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance past cooldown
-      jest.advanceTimersByTime(50);
+      jest.advanceTimersByTime(2);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
@@ -741,7 +741,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance partway through cooldown
-      jest.advanceTimersByTime(25);
+      jest.advanceTimersByTime(1);
 
       // Start new operation
       checkpointManager.markOperationState(
@@ -757,7 +757,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance past original cooldown
-      jest.advanceTimersByTime(50);
+      jest.advanceTimersByTime(2);
 
       // Should not have terminated
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
