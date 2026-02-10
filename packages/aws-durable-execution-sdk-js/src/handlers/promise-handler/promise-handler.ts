@@ -1,5 +1,6 @@
 import { DurableContext, DurablePromise, DurableLogger } from "../../types";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
+import { PromiseCombinatorError } from "../../errors/durable-error/durable-error";
 
 // Minimal error decoration for Promise.allSettled results
 function decorateErrors<T>(
@@ -100,7 +101,9 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
       // Wrap Promise.all execution in a child context for persistence
-      return await runInChildContext(name, () => Promise.all(promises));
+      return await runInChildContext(name, () => Promise.all(promises), {
+        errorClass: PromiseCombinatorError,
+      });
     });
   };
 
@@ -114,6 +117,7 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
       // Wrap Promise.allSettled execution in a child context for persistence
       return await runInChildContext(name, () => Promise.allSettled(promises), {
         serdes: createErrorAwareSerdes<T>(),
+        errorClass: PromiseCombinatorError,
       });
     });
   };
@@ -126,7 +130,9 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
       // Wrap Promise.any execution in a child context for persistence
-      return await runInChildContext(name, () => Promise.any(promises));
+      return await runInChildContext(name, () => Promise.any(promises), {
+        errorClass: PromiseCombinatorError,
+      });
     });
   };
 
@@ -138,7 +144,9 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
       // Wrap Promise.race execution in a child context for persistence
-      return await runInChildContext(name, () => Promise.race(promises));
+      return await runInChildContext(name, () => Promise.race(promises), {
+        errorClass: PromiseCombinatorError,
+      });
     });
   };
 

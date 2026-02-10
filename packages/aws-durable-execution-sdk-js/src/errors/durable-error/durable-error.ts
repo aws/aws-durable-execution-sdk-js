@@ -136,6 +136,18 @@ export class ChildContextError extends DurableOperationError {
 }
 
 /**
+ * Error thrown when a promise combinator operation fails
+ * @public
+ */
+export class PromiseCombinatorError extends DurableOperationError {
+  readonly errorType = "PromiseCombinatorError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Promise combinator failed", cause, errorData);
+  }
+}
+
+/**
  * Error thrown when a wait for condition operation fails
  * @public
  */
