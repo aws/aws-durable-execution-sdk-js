@@ -10,6 +10,7 @@ import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 import { OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../logger/logger";
+import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 
 jest.mock("../logger/logger", () => ({
   log: jest.fn(),
@@ -244,7 +245,7 @@ describe("CheckpointManager Termination Behavior", () => {
         "Scheduling termination",
         expect.objectContaining({
           reason: "CALLBACK_PENDING",
-          cooldownMs: 50,
+          cooldownMs: CHECKPOINT_TERMINATION_COOLDOWN_MS,
         }),
       );
 
@@ -255,8 +256,10 @@ describe("CheckpointManager Termination Behavior", () => {
         Type: "CHAINED_INVOKE",
       });
 
-      // Step 3: Advance time past the termination cooldown (50ms + buffer)
-      await jest.advanceTimersByTimeAsync(60);
+      // Step 3: Advance time past the termination cooldown
+      await jest.advanceTimersByTimeAsync(
+        CHECKPOINT_TERMINATION_COOLDOWN_MS + 10,
+      );
 
       // At this point, the timer callback should execute and re-check shouldTerminate()
       // It should find isProcessing=true and cancel termination

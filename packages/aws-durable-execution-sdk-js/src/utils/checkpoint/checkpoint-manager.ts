@@ -16,6 +16,7 @@ import {
 } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
+import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 import {
   OperationLifecycleState,
   OperationInfo,
@@ -59,7 +60,6 @@ export class CheckpointManager implements Checkpoint {
   // Termination cooldown
   private terminationTimer: NodeJS.Timeout | null = null;
   private terminationReason: TerminationReason | null = null;
-  private readonly TERMINATION_COOLDOWN_MS = 50;
 
   constructor(
     private durableExecutionArn: string,
@@ -702,7 +702,7 @@ export class CheckpointManager implements Checkpoint {
     this.terminationReason = reason;
     log("⏱️", "Scheduling termination", {
       reason,
-      cooldownMs: this.TERMINATION_COOLDOWN_MS,
+      cooldownMs: CHECKPOINT_TERMINATION_COOLDOWN_MS,
     });
 
     this.terminationTimer = setTimeout(() => {
@@ -715,7 +715,7 @@ export class CheckpointManager implements Checkpoint {
         return;
       }
       this.executeTermination(reason);
-    }, this.TERMINATION_COOLDOWN_MS);
+    }, CHECKPOINT_TERMINATION_COOLDOWN_MS);
   }
 
   private executeTermination(reason: TerminationReason): void {
