@@ -578,7 +578,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
   }
 
   get promise(): DurableContext<Logger>["promise"] {
-    return createPromiseHandler(this.step.bind(this));
+    return createPromiseHandler(this.runInChildContext.bind(this));
   }
 }
 

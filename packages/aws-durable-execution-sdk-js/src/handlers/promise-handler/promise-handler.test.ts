@@ -2,12 +2,12 @@ import { createPromiseHandler } from "./promise-handler";
 import { DurablePromise } from "../../types/durable-promise";
 
 describe("Promise Handler", () => {
-  let mockStep: jest.Mock;
+  let mockRunInChildContext: jest.Mock;
   let promiseHandler: ReturnType<typeof createPromiseHandler>;
 
   beforeEach(() => {
-    mockStep = jest.fn();
-    promiseHandler = createPromiseHandler(mockStep);
+    mockRunInChildContext = jest.fn();
+    promiseHandler = createPromiseHandler(mockRunInChildContext);
   });
 
   describe("type constraints", () => {
@@ -15,7 +15,7 @@ describe("Promise Handler", () => {
       // This test verifies at compile time that only DurablePromise is accepted
       const durablePromises = [
         new DurablePromise(() => Promise.resolve(1)),
-        new DurablePromise(() => Promise.resolve(2))
+        new DurablePromise(() => Promise.resolve(2)),
       ];
 
       // These should compile without errors
@@ -34,9 +34,11 @@ describe("Promise Handler", () => {
     it("should use custom serdes for allSettled to preserve Error objects", async () => {
       const promises = [
         new DurablePromise(() => new DurablePromise(() => Promise.resolve(1))),
-        new DurablePromise(() => new DurablePromise(() => Promise.reject(new Error("test"))))
+        new DurablePromise(
+          () => new DurablePromise(() => Promise.reject(new Error("test"))),
+        ),
       ];
-      mockStep.mockImplementation(async (name, fn, config) => {
+      mockRunInChildContext.mockImplementation(async (name, fn, config) => {
         // Simulate serialization/deserialization cycle
         const result = await fn();
         const serialized = await config.serdes.serialize(result, {
@@ -61,11 +63,13 @@ describe("Promise Handler", () => {
     it("should use real errorAwareSerdes for allSettled", async () => {
       const promises = [
         new DurablePromise(() => new DurablePromise(() => Promise.resolve(1))),
-        new DurablePromise(() => new DurablePromise(() => Promise.reject(new Error("test"))))
+        new DurablePromise(
+          () => new DurablePromise(() => Promise.reject(new Error("test"))),
+        ),
       ];
 
-      // Spy on step to capture the actual serdes and use it
-      mockStep.mockImplementation(async (name, fn, config) => {
+      // Spy on runInChildContext to capture the actual serdes and use it
+      mockRunInChildContext.mockImplementation(async (name, fn, config) => {
         const result = await fn();
 
         // Actually call the real serdes methods to test them
@@ -99,8 +103,11 @@ describe("Promise Handler", () => {
       const customError = new TypeError("Custom type error");
       customError.stack = "Custom stack trace";
 
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.reject(customError))];
-      mockStep.mockImplementation(async (name, fn, config) => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.reject(customError)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn, config) => {
         const result = await fn();
         const serialized = await config.serdes.serialize(result, {
           entityId: "test",
@@ -122,7 +129,7 @@ describe("Promise Handler", () => {
     });
 
     it("should handle undefined values in errorAwareSerdes", async () => {
-      mockStep.mockImplementation(async (name, fn, config) => {
+      mockRunInChildContext.mockImplementation(async (name, fn, config) => {
         // Test the serdes with undefined values
         if (config?.serdes) {
           // Test serialize with undefined
@@ -143,12 +150,17 @@ describe("Promise Handler", () => {
         return await fn();
       });
 
-      await promiseHandler.allSettled([new DurablePromise(() => Promise.resolve(1))]);
+      await promiseHandler.allSettled([
+        new DurablePromise(() => Promise.resolve(1)),
+      ]);
     });
 
     it("should handle errors without name property", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.reject(new Error("test")))];
-      mockStep.mockImplementation(async (name, fn, config) => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.reject(new Error("test"))),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn, config) => {
         const result = await fn();
         // Manually create a result with an error that has no name property
         const modifiedResult = [
@@ -184,90 +196,35 @@ describe("Promise Handler", () => {
     });
   });
 
-  describe("retry behavior", () => {
-    it("should configure steps with no-retry strategy", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockResolvedValue([1, 2]);
-
-      await promiseHandler.all(promises);
-
-      expect(mockStep).toHaveBeenCalledWith(
-        undefined,
-        expect.any(Function),
-        expect.objectContaining({
-          retryStrategy: expect.any(Function),
-        }),
-      );
-
-      // Verify the retry strategy returns shouldRetry: false
-      const stepConfig = mockStep.mock.calls[0][2];
-      const retryDecision = stepConfig.retryStrategy(new Error("test"), 1);
-      expect(retryDecision).toEqual({ shouldRetry: false });
-    });
-
-    it("should accept undefined as name parameter", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1))];
-      mockStep.mockResolvedValue([1]);
-
-      await promiseHandler.all(undefined, promises);
-
-      expect(mockStep).toHaveBeenCalledWith(
-        undefined,
-        expect.any(Function),
-        expect.objectContaining({
-          retryStrategy: expect.any(Function),
-        }),
-      );
-    });
-
-    it("should configure named steps with no-retry strategy", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockResolvedValue([1, 2]);
-
-      await promiseHandler.all("test-all", promises);
-
-      expect(mockStep).toHaveBeenCalledWith(
-        "test-all",
-        expect.any(Function),
-        expect.objectContaining({
-          retryStrategy: expect.any(Function),
-        }),
-      );
-
-      // Verify the retry strategy returns shouldRetry: false
-      const stepConfig = mockStep.mock.calls[0][2];
-      const retryDecision = stepConfig.retryStrategy(new Error("test"), 1);
-      expect(retryDecision).toEqual({ shouldRetry: false });
-    });
-  });
-
   describe("all", () => {
-    it("should call step with Promise.all when no name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+    it("should call runInChildContext with Promise.all when no name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.all(promises);
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        expect.objectContaining({
-          retryStrategy: expect.any(Function),
-        }),
       );
       expect(result).toEqual([1, 2]);
     });
 
-    it("should call step with name when name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+    it("should call runInChildContext with name when name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.all("test-all", promises);
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-all",
         expect.any(Function),
-        expect.any(Object),
       );
       expect(result).toEqual([1, 2]);
     });
@@ -277,42 +234,48 @@ describe("Promise Handler", () => {
         new DurablePromise(() => Promise.resolve(1)),
         new DurablePromise(() => Promise.reject(new Error("test error"))),
       ];
-      mockStep.mockImplementation(async (_, fn) => await fn());
+      mockRunInChildContext.mockImplementation(async (_, fn) => await fn());
 
       await expect(promiseHandler.all(promises)).rejects.toThrow("test error");
     });
   });
 
   describe("allSettled", () => {
-    it("should call step with Promise.allSettled when no name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
+    it("should call runInChildContext with Promise.allSettled when no name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
       const expectedResult = [
         { status: "fulfilled", value: 1 },
         { status: "fulfilled", value: 2 },
       ];
-      mockStep.mockResolvedValue(expectedResult);
+      mockRunInChildContext.mockResolvedValue(expectedResult);
 
       await promiseHandler.allSettled(promises);
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
         expect.objectContaining({
-          retryStrategy: expect.any(Function),
+          serdes: expect.any(Object),
         }),
       );
     });
 
-    it("should call step with name when name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+    it("should call runInChildContext with name when name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.allSettled(
         "test-allSettled",
         promises,
       );
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-allSettled",
         expect.any(Function),
         expect.any(Object),
@@ -327,7 +290,7 @@ describe("Promise Handler", () => {
         new DurablePromise(() => Promise.resolve(1)),
         new DurablePromise(() => Promise.reject(new Error("test error"))),
       ];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.allSettled(promises);
 
@@ -341,32 +304,34 @@ describe("Promise Handler", () => {
   });
 
   describe("any", () => {
-    it("should call step with Promise.any when no name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+    it("should call runInChildContext with Promise.any when no name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.any(promises);
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        expect.objectContaining({
-          retryStrategy: expect.any(Function),
-        }),
       );
       expect(result).toBe(1); // Promise.any returns the first resolved value
     });
 
-    it("should call step with name when name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+    it("should call runInChildContext with name when name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.any("test-any", promises);
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-any",
         expect.any(Function),
-        expect.any(Object),
       );
       expect(result).toBe(1); // Promise.any returns the first resolved value
     });
@@ -376,7 +341,7 @@ describe("Promise Handler", () => {
         new DurablePromise(() => Promise.reject(new Error("error1"))),
         new DurablePromise(() => Promise.reject(new Error("error2"))),
       ];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       await expect(promiseHandler.any(promises)).rejects.toThrow(
         "All promises were rejected",
@@ -388,7 +353,7 @@ describe("Promise Handler", () => {
         new DurablePromise(() => Promise.reject(new Error("error"))),
         new DurablePromise(() => Promise.resolve("success")),
       ];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.any(promises);
       expect(result).toBe("success");
@@ -396,32 +361,34 @@ describe("Promise Handler", () => {
   });
 
   describe("race", () => {
-    it("should call step with Promise.race when no name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+    it("should call runInChildContext with Promise.race when no name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.race(promises);
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        expect.objectContaining({
-          retryStrategy: expect.any(Function),
-        }),
       );
       expect(result).toBe(1); // Promise.race returns the first resolved value
     });
 
-    it("should call step with name when name provided", async () => {
-      const promises = [new DurablePromise(() => Promise.resolve(1)), new DurablePromise(() => Promise.resolve(2))];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+    it("should call runInChildContext with name when name provided", async () => {
+      const promises = [
+        new DurablePromise(() => Promise.resolve(1)),
+        new DurablePromise(() => Promise.resolve(2)),
+      ];
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.race("test-race", promises);
 
-      expect(mockStep).toHaveBeenCalledWith(
+      expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-race",
         expect.any(Function),
-        expect.any(Object),
       );
       expect(result).toBe(1); // Promise.race returns the first resolved value
     });
@@ -429,11 +396,14 @@ describe("Promise Handler", () => {
     it("should throw error when fastest promise rejects", async () => {
       const promises = [
         new DurablePromise(() => Promise.reject(new Error("fast error"))),
-        new DurablePromise(() => new Promise((resolve) =>
-          setTimeout(() => resolve("slow success"), 100),
-        )),
+        new DurablePromise(
+          () =>
+            new Promise((resolve) =>
+              setTimeout(() => resolve("slow success"), 100),
+            ),
+        ),
       ];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       await expect(promiseHandler.race(promises)).rejects.toThrow("fast error");
     });
@@ -441,11 +411,14 @@ describe("Promise Handler", () => {
     it("should return value when fastest promise resolves", async () => {
       const promises = [
         new DurablePromise(() => Promise.resolve("fast success")),
-        new DurablePromise(() => new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("slow error")), 100),
-        )),
+        new DurablePromise(
+          () =>
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("slow error")), 100),
+            ),
+        ),
       ];
-      mockStep.mockImplementation(async (name, fn) => await fn());
+      mockRunInChildContext.mockImplementation(async (name, fn) => await fn());
 
       const result = await promiseHandler.race(promises);
       expect(result).toBe("fast success");

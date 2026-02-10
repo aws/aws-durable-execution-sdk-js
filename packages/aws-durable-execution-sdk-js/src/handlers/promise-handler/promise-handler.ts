@@ -1,9 +1,4 @@
-import {
-  DurableContext,
-  RetryDecision,
-  DurablePromise,
-  DurableLogger,
-} from "../../types";
+import { DurableContext, DurablePromise, DurableLogger } from "../../types";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
 // Minimal error decoration for Promise.allSettled results
@@ -67,20 +62,25 @@ function createErrorAwareSerdes<T>(): Serdes<PromiseSettledResult<T>[]> {
   };
 }
 
-// No-retry strategy for promise combinators
-const stepConfig = {
-  retryStrategy: (): RetryDecision => ({
-    shouldRetry: false,
-  }),
-};
-
 export const createPromiseHandler = <Logger extends DurableLogger>(
-  step: DurableContext<Logger>["step"],
+  runInChildContext: DurableContext<Logger>["runInChildContext"],
 ): {
-  all: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T[]>;
-  allSettled: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<PromiseSettledResult<T>[]>;
-  any: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
-  race: <T>(nameOrPromises: string | undefined | DurablePromise<T>[], maybePromises?: DurablePromise<T>[]) => DurablePromise<T>;
+  all: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T[]>;
+  allSettled: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<PromiseSettledResult<T>[]>;
+  any: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T>;
+  race: <T>(
+    nameOrPromises: string | undefined | DurablePromise<T>[],
+    maybePromises?: DurablePromise<T>[],
+  ) => DurablePromise<T>;
 } => {
   const parseParams = <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],
@@ -99,8 +99,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.all execution in a step for persistence
-      return await step(name, () => Promise.all(promises), stepConfig);
+      // Wrap Promise.all execution in a child context for persistence
+      return await runInChildContext(name, () => Promise.all(promises));
     });
   };
 
@@ -111,9 +111,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.allSettled execution in a step for persistence
-      return await step(name, () => Promise.allSettled(promises), {
-        ...stepConfig,
+      // Wrap Promise.allSettled execution in a child context for persistence
+      return await runInChildContext(name, () => Promise.allSettled(promises), {
         serdes: createErrorAwareSerdes<T>(),
       });
     });
@@ -126,8 +125,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.any execution in a step for persistence
-      return await step(name, () => Promise.any(promises), stepConfig);
+      // Wrap Promise.any execution in a child context for persistence
+      return await runInChildContext(name, () => Promise.any(promises));
     });
   };
 
@@ -138,8 +137,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
     return new DurablePromise(async () => {
       const { name, promises } = parseParams(nameOrPromises, maybePromises);
 
-      // Wrap Promise.race execution in a step for persistence
-      return await step(name, () => Promise.race(promises), stepConfig);
+      // Wrap Promise.race execution in a child context for persistence
+      return await runInChildContext(name, () => Promise.race(promises));
     });
   };
 

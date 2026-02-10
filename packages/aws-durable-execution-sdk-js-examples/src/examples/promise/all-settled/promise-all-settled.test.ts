@@ -14,22 +14,16 @@ createTests<PromiseSettledResult<any>[]>({
 
       const result = execution.getResult();
 
-      expect(result).toStrictEqual([
-        {
-          status: "fulfilled",
-          value: "success",
-        },
-        {
-          status: "rejected",
-          reason: {
-            name: "StepError",
-          },
-        },
-        {
-          status: "fulfilled",
-          value: "another success",
-        },
-      ]);
+      expect(result).toHaveLength(3);
+      expect(result![0]).toEqual({ status: "fulfilled", value: "success" });
+      expect(result![1].status).toBe("rejected");
+      expect((result![1] as PromiseRejectedResult).reason.name).toBe(
+        "StepError",
+      );
+      expect(result![2]).toEqual({
+        status: "fulfilled",
+        value: "another success",
+      });
 
       assertEventSignatures(execution);
     }, 30000);
