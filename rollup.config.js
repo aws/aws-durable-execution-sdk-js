@@ -34,6 +34,7 @@ export function createBuildOptions(options, mode, packageJson) {
         "process.env.IS_ESM": JSON.stringify(mode === "esm"),
         "process.env.NODE_ENV": JSON.stringify("production"),
         "process.env.NPM_PACKAGE_VERSION": JSON.stringify(packageJson.version),
+        "process.env.NPM_PACKAGE_NAME": JSON.stringify(packageJson.name),
       },
     }),
   ];
