@@ -1401,4 +1401,40 @@ describe("createCheckpointHandler", () => {
       mockOperations[0],
     ) as unknown as CheckpointFunction;
   });
+
+  it("should respect MAX_ITEMS_IN_BATCH limit", async () => {
+    const checkpoint = createCheckpoint(
+      mockContext,
+      TEST_CONSTANTS.CHECKPOINT_TOKEN,
+      mockEmitter,
+      mockLogger,
+    ) as unknown as CheckpointFunction;
+
+    // Mock checkpoint to resolve immediately
+    mockState.checkpoint.mockResolvedValue({
+      CheckpointToken: "new-task-token",
+      NewExecutionState: {},
+    });
+
+    // Create 300 small checkpoint requests (exceeds MAX_ITEMS_IN_BATCH of 250)
+    const promises = [];
+    for (let i = 0; i < 300; i++) {
+      promises.push(
+        checkpoint(`step-${i}`, {
+          Action: OperationAction.START,
+          SubType: OperationSubType.STEP,
+          Type: OperationType.STEP,
+        }),
+      );
+    }
+
+    await Promise.all(promises);
+
+    // Should make multiple calls due to item count limit
+    expect(mockState.checkpoint).toHaveBeenCalledTimes(2);
+
+    // First batch should have 250 items, second should have 50
+    expect(mockState.checkpoint.mock.calls[0][0].Updates).toHaveLength(250);
+    expect(mockState.checkpoint.mock.calls[1][0].Updates).toHaveLength(50);
+  });
 });

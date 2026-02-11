@@ -5,6 +5,7 @@ import { OperationLifecycleState, OperationSubType } from "../../types";
 import { OperationType } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
 import { hashId } from "../step-id-utils/step-id-utils";
+import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 
 jest.mock("../logger/logger");
 
@@ -720,7 +721,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance past cooldown
-      jest.advanceTimersByTime(50);
+      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS);
 
       expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
         reason: TerminationReason.WAIT_SCHEDULED,
@@ -741,7 +742,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance partway through cooldown
-      jest.advanceTimersByTime(25);
+      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS / 2);
 
       // Start new operation
       checkpointManager.markOperationState(
@@ -757,7 +758,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       );
 
       // Advance past original cooldown
-      jest.advanceTimersByTime(50);
+      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS);
 
       // Should not have terminated
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();

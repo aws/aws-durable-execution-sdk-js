@@ -29,7 +29,7 @@ createTests<string>({
 
       expect(execution.getError()).toEqual({
         errorMessage: "All promises were rejected",
-        errorType: "StepError",
+        errorType: "PromiseCombinatorError",
         errorData: undefined,
         stackTrace: undefined,
       });

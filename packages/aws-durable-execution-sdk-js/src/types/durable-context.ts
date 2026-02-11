@@ -66,6 +66,16 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
   logger: DurableContextLogger<TLogger>;
 
   /**
+   * Readonly metadata about the current execution context
+   */
+  executionContext: {
+    /**
+     * The ARN of the current durable execution
+     */
+    readonly durableExecutionArn: string;
+  };
+
+  /**
    * Executes a function as a durable step with automatic retry and state persistence
    *
    * @remarks

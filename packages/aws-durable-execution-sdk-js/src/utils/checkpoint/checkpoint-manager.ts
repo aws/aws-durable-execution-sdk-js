@@ -16,6 +16,7 @@ import {
 } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
+import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 import {
   OperationLifecycleState,
   OperationInfo,
@@ -49,6 +50,7 @@ export class CheckpointManager implements Checkpoint {
   }> = [];
   private queueCompletionResolver: (() => void) | null = null;
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
+  private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
   private static textEncoder = new TextEncoder();
 
@@ -58,7 +60,6 @@ export class CheckpointManager implements Checkpoint {
   // Termination cooldown
   private terminationTimer: NodeJS.Timeout | null = null;
   private terminationReason: TerminationReason | null = null;
-  private readonly TERMINATION_COOLDOWN_MS = 50;
 
   constructor(
     private durableExecutionArn: string,
@@ -275,7 +276,11 @@ export class CheckpointManager implements Checkpoint {
         JSON.stringify(nextItem),
       ).length;
 
-      if (currentSize + itemSize > this.MAX_PAYLOAD_SIZE && batch.length > 0) {
+      if (
+        (currentSize + itemSize > this.MAX_PAYLOAD_SIZE ||
+          batch.length >= this.MAX_ITEMS_IN_BATCH) &&
+        batch.length > 0
+      ) {
         break;
       }
 
@@ -697,7 +702,7 @@ export class CheckpointManager implements Checkpoint {
     this.terminationReason = reason;
     log("⏱️", "Scheduling termination", {
       reason,
-      cooldownMs: this.TERMINATION_COOLDOWN_MS,
+      cooldownMs: CHECKPOINT_TERMINATION_COOLDOWN_MS,
     });
 
     this.terminationTimer = setTimeout(() => {
@@ -710,7 +715,7 @@ export class CheckpointManager implements Checkpoint {
         return;
       }
       this.executeTermination(reason);
-    }, this.TERMINATION_COOLDOWN_MS);
+    }, CHECKPOINT_TERMINATION_COOLDOWN_MS);
   }
 
   private executeTermination(reason: TerminationReason): void {
