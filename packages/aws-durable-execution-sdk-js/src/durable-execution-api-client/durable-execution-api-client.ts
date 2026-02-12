@@ -10,6 +10,7 @@ import {
 import { DurableExecutionClient } from "../types/durable-execution";
 import { log } from "../utils/logger/logger";
 import { DurableLogger } from "../types/durable-logger";
+import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
 let defaultLambdaClient: LambdaClient | undefined;
 
@@ -27,6 +28,7 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
     if (!client) {
       if (!defaultLambdaClient) {
         defaultLambdaClient = new LambdaClient({
+          customUserAgent: [[SDK_NAME, SDK_VERSION]],
           requestHandler: {
             connectionTimeout: 5000,
             socketTimeout: 50000,

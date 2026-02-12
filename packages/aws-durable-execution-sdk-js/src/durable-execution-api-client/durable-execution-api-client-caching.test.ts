@@ -1,5 +1,6 @@
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { DurableExecutionApiClient } from "./durable-execution-api-client";
+import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
 // Mock the LambdaClient
 jest.mock("@aws-sdk/client-lambda", () => {
@@ -49,6 +50,7 @@ describe("DurableExecutionApiClient Caching", () => {
 
     // Verify the constructor was called with correct configuration
     expect(LambdaClient).toHaveBeenCalledWith({
+      customUserAgent: [[SDK_NAME, SDK_VERSION]],
       requestHandler: {
         connectionTimeout: 5000,
         socketTimeout: 50000,

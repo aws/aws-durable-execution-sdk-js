@@ -10,6 +10,7 @@ import { OperationSubType } from "../types";
 import { log } from "../utils/logger/logger";
 import { DurableExecutionApiClient } from "./durable-execution-api-client";
 import { DurableExecutionClient } from "../types/durable-execution";
+import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
 // Mock the logger
 jest.mock("../utils/logger/logger", () => ({
@@ -46,6 +47,7 @@ describe("ApiStorage", () => {
 
     // Verify that LambdaClient was constructed with the correct default configuration
     expect(LambdaClient).toHaveBeenCalledWith({
+      customUserAgent: [[SDK_NAME, SDK_VERSION]],
       requestHandler: {
         connectionTimeout: 5000,
         socketTimeout: 50000,
