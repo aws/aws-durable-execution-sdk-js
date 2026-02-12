@@ -1,5 +1,5 @@
-import { handler } from "./callback-error-instance";
-import { createTests } from "../../utils/test-helper";
+import { handler } from "./error-instance";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   handler,
