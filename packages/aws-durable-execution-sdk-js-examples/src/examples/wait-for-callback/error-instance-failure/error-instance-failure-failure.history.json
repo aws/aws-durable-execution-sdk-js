@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "cec46841-d889-480a-a21b-cc910e9a5cd6",
-    "EventTimestamp": "2026-02-13T22:27:45.923Z",
+    "Id": "180933a2-0261-4093-9cd9-78d85d4ece5a",
+    "EventTimestamp": "2026-02-13T23:11:16.865Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -15,8 +15,8 @@
     "SubType": "WaitForCallback",
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
-    "Name": "timeout-test",
-    "EventTimestamp": "2026-02-13T22:27:45.927Z",
+    "Name": "failure-test",
+    "EventTimestamp": "2026-02-13T23:11:16.873Z",
     "ContextStartedDetails": {}
   },
   {
@@ -24,11 +24,11 @@
     "SubType": "Callback",
     "EventId": 3,
     "Id": "ea66c06c1e1c05fa",
-    "EventTimestamp": "2026-02-13T22:27:45.927Z",
+    "EventTimestamp": "2026-02-13T23:11:16.874Z",
     "ParentId": "c4ca4238a0b92382",
     "CallbackStartedDetails": {
-      "CallbackId": "eyJleGVjdXRpb25JZCI6IjMyYjgzNDE2LTA4OGUtNDVhZC1iMDE1LWUzMDAxNjRhMTUwNyIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiN2FhNDg4NWQtMTliNS00NDQwLThkYjMtNzVhOWRlOTBkZjRjIn0=",
-      "Timeout": 1,
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjMxY2M3MjgwLTlmZTAtNDdlYS1hNmMyLTQxYjI4NDI3NDMwOCIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiZTJjOThiNTktNjYwYi00YmMyLTgyZGMtMzA4YzBmYTY5NzlkIn0=",
+      "Timeout": 10,
       "Input": {}
     }
   },
@@ -37,7 +37,7 @@
     "SubType": "Step",
     "EventId": 4,
     "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T22:27:45.928Z",
+    "EventTimestamp": "2026-02-13T23:11:16.876Z",
     "ParentId": "c4ca4238a0b92382",
     "StepStartedDetails": {}
   },
@@ -46,7 +46,7 @@
     "SubType": "Step",
     "EventId": 5,
     "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T22:27:45.928Z",
+    "EventTimestamp": "2026-02-13T23:11:16.876Z",
     "ParentId": "c4ca4238a0b92382",
     "StepSucceededDetails": {
       "Result": {},
@@ -54,29 +54,29 @@
     }
   },
   {
-    "EventType": "InvocationCompleted",
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
     "EventId": 6,
-    "EventTimestamp": "2026-02-13T22:27:45.950Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T22:27:45.923Z",
-      "EndTimestamp": "2026-02-13T22:27:45.950Z",
-      "Error": {},
-      "RequestId": "a49ad250-2842-42d7-a3b8-a96f033daefc"
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2026-02-13T23:11:16.878Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Callback failed"
+        }
+      }
     }
   },
   {
-    "EventType": "CallbackTimedOut",
-    "SubType": "Callback",
+    "EventType": "InvocationCompleted",
     "EventId": 7,
-    "Id": "ea66c06c1e1c05fa",
-    "EventTimestamp": "2026-02-13T22:27:46.929Z",
-    "ParentId": "c4ca4238a0b92382",
-    "CallbackTimedOutDetails": {
-      "Error": {
-        "Payload": {
-          "ErrorMessage": "Callback timed out"
-        }
-      }
+    "EventTimestamp": "2026-02-13T23:11:16.898Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-13T23:11:16.865Z",
+      "EndTimestamp": "2026-02-13T23:11:16.898Z",
+      "Error": {},
+      "RequestId": "d2c13bca-ec29-4e17-83ad-2db29df41fe7"
     }
   },
   {
@@ -84,13 +84,13 @@
     "SubType": "WaitForCallback",
     "EventId": 8,
     "Id": "c4ca4238a0b92382",
-    "Name": "timeout-test",
-    "EventTimestamp": "2026-02-13T22:27:46.944Z",
+    "Name": "failure-test",
+    "EventTimestamp": "2026-02-13T23:11:16.902Z",
     "ContextFailedDetails": {
       "Error": {
         "Payload": {
-          "ErrorType": "CallbackTimeoutError",
-          "ErrorMessage": "Callback timed out"
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Callback failed"
         }
       }
     }
@@ -100,21 +100,21 @@
     "SubType": "Wait",
     "EventId": 9,
     "Id": "c81e728d9d4c2f63",
-    "EventTimestamp": "2026-02-13T22:27:46.944Z",
+    "EventTimestamp": "2026-02-13T23:11:16.904Z",
     "WaitStartedDetails": {
       "Duration": 1,
-      "ScheduledEndTimestamp": "2026-02-13T22:27:47.944Z"
+      "ScheduledEndTimestamp": "2026-02-13T23:11:17.904Z"
     }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 10,
-    "EventTimestamp": "2026-02-13T22:27:46.966Z",
+    "EventTimestamp": "2026-02-13T23:11:16.926Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T22:27:46.930Z",
-      "EndTimestamp": "2026-02-13T22:27:46.966Z",
+      "StartTimestamp": "2026-02-13T23:11:16.900Z",
+      "EndTimestamp": "2026-02-13T23:11:16.926Z",
       "Error": {},
-      "RequestId": "44bd5a93-6174-4501-87a0-19120b4ec18c"
+      "RequestId": "c1439b19-8abd-40fa-bbac-e8724404b9f7"
     }
   },
   {
@@ -122,7 +122,7 @@
     "SubType": "Wait",
     "EventId": 11,
     "Id": "c81e728d9d4c2f63",
-    "EventTimestamp": "2026-02-13T22:27:47.946Z",
+    "EventTimestamp": "2026-02-13T23:11:17.904Z",
     "WaitSucceededDetails": {
       "Duration": 1
     }
@@ -133,7 +133,7 @@
     "EventId": 12,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "check-error-type",
-    "EventTimestamp": "2026-02-13T22:27:47.955Z",
+    "EventTimestamp": "2026-02-13T23:11:17.907Z",
     "StepStartedDetails": {}
   },
   {
@@ -142,10 +142,10 @@
     "EventId": 13,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "check-error-type",
-    "EventTimestamp": "2026-02-13T22:27:47.955Z",
+    "EventTimestamp": "2026-02-13T23:11:17.907Z",
     "StepSucceededDetails": {
       "Result": {
-        "Payload": "{\"timeoutError\":{\"isCallbackTimeoutError\":true,\"errorName\":\"CallbackTimeoutError\",\"errorMessage\":\"Callback timed out\"}}"
+        "Payload": "{\"isCallbackError\":true,\"errorName\":\"CallbackError\",\"errorMessage\":\"Callback failed\"}"
       },
       "RetryDetails": {}
     }
@@ -153,22 +153,22 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 14,
-    "EventTimestamp": "2026-02-13T22:27:47.957Z",
+    "EventTimestamp": "2026-02-13T23:11:17.907Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T22:27:47.946Z",
-      "EndTimestamp": "2026-02-13T22:27:47.957Z",
+      "StartTimestamp": "2026-02-13T23:11:17.904Z",
+      "EndTimestamp": "2026-02-13T23:11:17.907Z",
       "Error": {},
-      "RequestId": "5fd2ae5e-77e6-4571-81b0-5f527f757c79"
+      "RequestId": "8d1cd352-b68b-4efb-978d-5745115504aa"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 15,
-    "Id": "cec46841-d889-480a-a21b-cc910e9a5cd6",
-    "EventTimestamp": "2026-02-13T22:27:47.957Z",
+    "Id": "180933a2-0261-4093-9cd9-78d85d4ece5a",
+    "EventTimestamp": "2026-02-13T23:11:17.907Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"timeoutError\":{\"isCallbackTimeoutError\":true,\"errorName\":\"CallbackTimeoutError\",\"errorMessage\":\"Callback timed out\"}}"
+        "Payload": "{\"isCallbackError\":true,\"errorName\":\"CallbackError\",\"errorMessage\":\"Callback failed\"}"
       }
     }
   }
