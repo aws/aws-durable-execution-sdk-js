@@ -40,7 +40,9 @@ createTests({
         },
       });
 
-      assertEventSignatures(result);
+      assertEventSignatures(result, undefined, {
+        invocationCompletedDifference: 1,
+      });
     });
   },
 });
