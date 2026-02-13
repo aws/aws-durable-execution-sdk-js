@@ -13,11 +13,10 @@ export const config: ExampleConfig = {
     "Verifies waitForCallback errors throw correct instances (failure, timeout, submitter)",
 };
 
-export const handler = withDurableExecution(
+export const handlerFailure = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {
-    const errors: Array<Error | null> = [];
+    let error: Error | null = null;
 
-    // Test 1: Callback failure
     try {
       await context.waitForCallback(
         "failure-test",
@@ -28,11 +27,26 @@ export const handler = withDurableExecution(
           timeout: { seconds: 10 },
         },
       );
-    } catch (error) {
-      errors.push(error as Error);
+    } catch (e) {
+      error = e as Error;
     }
 
-    // Test 2: Callback timeout
+    await context.wait({ seconds: 1 });
+
+    return await context.step("check-error-type", async () => ({
+      failureError: {
+        isCallbackError: error instanceof CallbackError,
+        errorName: error?.constructor.name,
+        errorMessage: error?.message,
+      },
+    }));
+  },
+);
+
+export const handlerTimeout = withDurableExecution(
+  async (_event: unknown, context: DurableContext) => {
+    let error: Error | null = null;
+
     try {
       await context.waitForCallback(
         "timeout-test",
@@ -43,41 +57,45 @@ export const handler = withDurableExecution(
           timeout: { seconds: 1 },
         },
       );
-    } catch (error) {
-      errors.push(error as Error);
-    }
-
-    // Test 3: Submitter failure
-    try {
-      await context.waitForCallback("submitter-test", async () => {
-        throw new Error("Submitter failed");
-      });
-    } catch (error) {
-      errors.push(error as Error);
+    } catch (e) {
+      error = e as Error;
     }
 
     await context.wait({ seconds: 1 });
 
-    const errorTypes = await context.step("check-error-types", async () => {
-      return {
-        failureError: {
-          isCallbackError: errors[0] instanceof CallbackError,
-          errorName: errors[0]?.constructor.name,
-          errorMessage: errors[0]?.message,
-        },
-        timeoutError: {
-          isCallbackTimeoutError: errors[1] instanceof CallbackTimeoutError,
-          errorName: errors[1]?.constructor.name,
-          errorMessage: errors[1]?.message,
-        },
-        submitterError: {
-          isCallbackSubmitterError: errors[2] instanceof CallbackSubmitterError,
-          errorName: errors[2]?.constructor.name,
-          errorMessage: errors[2]?.message,
-        },
-      };
-    });
-
-    return errorTypes;
+    return await context.step("check-error-type", async () => ({
+      timeoutError: {
+        isCallbackTimeoutError: error instanceof CallbackTimeoutError,
+        errorName: error?.constructor.name,
+        errorMessage: error?.message,
+      },
+    }));
   },
 );
+
+export const handlerSubmitter = withDurableExecution(
+  async (_event: unknown, context: DurableContext) => {
+    let error: Error | null = null;
+
+    try {
+      await context.waitForCallback("submitter-test", async () => {
+        throw new Error("Submitter failed");
+      });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    await context.wait({ seconds: 1 });
+
+    return await context.step("check-error-type", async () => ({
+      submitterError: {
+        isCallbackSubmitterError: error instanceof CallbackSubmitterError,
+        errorName: error?.constructor.name,
+        errorMessage: error?.message,
+      },
+    }));
+  },
+);
+
+// Default export for backward compatibility
+export const handler = handlerFailure;
