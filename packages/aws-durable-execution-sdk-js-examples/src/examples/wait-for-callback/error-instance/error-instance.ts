@@ -25,7 +25,7 @@ export const handler = withDurableExecution(
           return Promise.resolve();
         },
         {
-          timeout: { seconds: 30 },
+          timeout: { seconds: 10 },
         },
       );
     } catch (error) {
