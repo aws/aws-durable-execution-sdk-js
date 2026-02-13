@@ -41,6 +41,10 @@ createTests({
       const result = await runner.run({ payload: {} });
       const errorCheck = result.getResult() as any;
 
+      // Log full result for debugging cloud failures
+      console.log("Full result:", JSON.stringify(errorCheck, null, 2));
+
+      expect(errorCheck.timeoutError).toBeDefined();
       expect(errorCheck.timeoutError.isCallbackTimeoutError).toBe(true);
       expect(errorCheck.timeoutError.errorName).toBe("CallbackTimeoutError");
       expect(errorCheck.timeoutError.errorMessage).toBe("Callback timed out");
