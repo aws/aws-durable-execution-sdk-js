@@ -19,9 +19,15 @@ export const handler = withDurableExecution(
 
     // Test 1: Callback failure
     try {
-      await context.waitForCallback("failure-test", async () => {
-        return Promise.resolve();
-      });
+      await context.waitForCallback(
+        "failure-test",
+        async () => {
+          return Promise.resolve();
+        },
+        {
+          timeout: { seconds: 30 },
+        },
+      );
     } catch (error) {
       errors.push(error as Error);
     }
