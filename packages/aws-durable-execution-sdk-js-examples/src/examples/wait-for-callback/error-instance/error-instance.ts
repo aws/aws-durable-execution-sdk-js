@@ -10,30 +10,26 @@ import { ExampleConfig } from "../../../types";
 export const config: ExampleConfig = {
   name: "Wait for Callback - Error Instance",
   description:
-    "Verifies waitForCallback errors throw correct instances (timeout, submitter)",
+    "Verifies waitForCallback errors throw correct instances (failure, timeout, submitter)",
 };
 
 export const handler = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {
     const errors: Array<Error | null> = [];
 
-    // Test 1: Callback timeout
+    // Test 1: Callback failure
     try {
-      await context.waitForCallback(
-        async () => {
-          return Promise.resolve();
-        },
-        {
-          timeout: { seconds: 1 },
-        },
-      );
+      await context.waitForCallback("failure-test", async () => {
+        return Promise.resolve();
+      });
     } catch (error) {
       errors.push(error as Error);
     }
 
-    // Test 2: Callback timeout (second one)
+    // Test 2: Callback timeout
     try {
       await context.waitForCallback(
+        "timeout-test",
         async () => {
           return Promise.resolve();
         },
@@ -47,14 +43,9 @@ export const handler = withDurableExecution(
 
     // Test 3: Submitter failure
     try {
-      await context.waitForCallback(
-        async () => {
-          throw new Error("Submitter failed");
-        },
-        {
-          timeout: { seconds: 10 },
-        },
-      );
+      await context.waitForCallback("submitter-test", async () => {
+        throw new Error("Submitter failed");
+      });
     } catch (error) {
       errors.push(error as Error);
     }
@@ -63,12 +54,12 @@ export const handler = withDurableExecution(
 
     const errorTypes = await context.step("check-error-types", async () => {
       return {
-        timeoutError: {
-          isCallbackTimeoutError: errors[0] instanceof CallbackTimeoutError,
+        failureError: {
+          isCallbackError: errors[0] instanceof CallbackError,
           errorName: errors[0]?.constructor.name,
           errorMessage: errors[0]?.message,
         },
-        failureError: {
+        timeoutError: {
           isCallbackTimeoutError: errors[1] instanceof CallbackTimeoutError,
           errorName: errors[1]?.constructor.name,
           errorMessage: errors[1]?.message,
