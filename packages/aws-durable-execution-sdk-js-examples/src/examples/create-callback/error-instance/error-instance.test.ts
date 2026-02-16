@@ -1,8 +1,10 @@
+import { InvocationType } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./error-instance";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
   handler,
+  invocationType: InvocationType.Event,
   tests: (runner, { assertEventSignatures }) => {
     it("should catch correct error instances for timeout and failure", async () => {
       const callbackOp2 = runner.getOperation("failure-test");
