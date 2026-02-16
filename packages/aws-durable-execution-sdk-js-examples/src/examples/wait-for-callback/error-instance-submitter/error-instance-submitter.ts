@@ -6,7 +6,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Wait for Callback - Error Instance (Submitter)",
+  name: "Wait for Callback - Error Instance Submitter",
   description:
     "Verifies CallbackSubmitterError instanceof check works across replays",
 };
