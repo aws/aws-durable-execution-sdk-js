@@ -16,14 +16,18 @@ export const handler = withDurableExecution(
     let error: Error | null = null;
 
     try {
-      await context.waitForCallback("submitter-test", async () => {
-        throw new Error("Submitter failed");
-      });
+      await context.waitForCallback(
+        "submitter-test",
+        async () => {
+          throw new Error("Submitter failed");
+        },
+        {
+          retryStrategy: () => ({ shouldRetry: false }),
+        },
+      );
     } catch (e) {
       error = e as Error;
     }
-
-    await context.wait({ seconds: 1 });
 
     return await context.step("check-error-type", async () => ({
       isCallbackSubmitterError: error instanceof CallbackSubmitterError,

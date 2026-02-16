@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "3ddc8bb2-087b-45fa-b244-351a3f252565",
-    "EventTimestamp": "2026-02-13T23:11:16.889Z",
+    "Id": "8dfcae70-b199-4fbd-b2ed-626f6f65ed82",
+    "EventTimestamp": "2026-02-16T18:09:07.902Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "submitter-test",
-    "EventTimestamp": "2026-02-13T23:11:16.895Z",
+    "EventTimestamp": "2026-02-16T18:09:07.907Z",
     "ContextStartedDetails": {}
   },
   {
@@ -24,10 +24,10 @@
     "SubType": "Callback",
     "EventId": 3,
     "Id": "ea66c06c1e1c05fa",
-    "EventTimestamp": "2026-02-13T23:11:16.895Z",
+    "EventTimestamp": "2026-02-16T18:09:07.907Z",
     "ParentId": "c4ca4238a0b92382",
     "CallbackStartedDetails": {
-      "CallbackId": "eyJleGVjdXRpb25JZCI6IjlmYzc5OWNmLTY0OWQtNGZiMC05YjRlLWUyYmE4YjIyMGEzMSIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiZWM3N2Q4MjEtZTNiYi00YjY1LTk2YmUtMWUwZmM2NmFhNDhhIn0=",
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjlhZGM2YjVlLTJhODUtNDQ1ZS04M2I3LTRhOWQyZjVlOTYwNyIsIm9wZXJhdGlvbklkIjoiZWE2NmMwNmMxZTFjMDVmYSIsInRva2VuIjoiZjAwODJhOTctMDNkYS00MzlhLWE2NzEtMjZmNzk5OWI5MDE0In0=",
       "Input": {}
     }
   },
@@ -36,7 +36,7 @@
     "SubType": "Step",
     "EventId": 4,
     "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:16.898Z",
+    "EventTimestamp": "2026-02-16T18:09:07.910Z",
     "ParentId": "c4ca4238a0b92382",
     "StepStartedDetails": {}
   },
@@ -45,7 +45,7 @@
     "SubType": "Step",
     "EventId": 5,
     "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:16.898Z",
+    "EventTimestamp": "2026-02-16T18:09:07.911Z",
     "ParentId": "c4ca4238a0b92382",
     "StepFailedDetails": {
       "Error": {
@@ -55,217 +55,17 @@
         }
       },
       "RetryDetails": {
-        "NextAttemptDelaySeconds": 4,
         "CurrentAttempt": 1
-      }
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 6,
-    "EventTimestamp": "2026-02-13T23:11:16.921Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T23:11:16.889Z",
-      "EndTimestamp": "2026-02-13T23:11:16.921Z",
-      "Error": {},
-      "RequestId": "bbc23e61-871d-42b0-9eef-74df76cefe03"
-    }
-  },
-  {
-    "EventType": "StepStarted",
-    "SubType": "Step",
-    "EventId": 7,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:20.902Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepFailed",
-    "SubType": "Step",
-    "EventId": 8,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:20.902Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepFailedDetails": {
-      "Error": {
-        "Payload": {
-          "ErrorMessage": "Submitter failed",
-          "ErrorType": "Error"
-        }
-      },
-      "RetryDetails": {
-        "NextAttemptDelaySeconds": 5,
-        "CurrentAttempt": 1
-      }
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 9,
-    "EventTimestamp": "2026-02-13T23:11:20.924Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T23:11:20.900Z",
-      "EndTimestamp": "2026-02-13T23:11:20.924Z",
-      "Error": {},
-      "RequestId": "b72abef7-102f-4dc5-9467-fb110c2fd217"
-    }
-  },
-  {
-    "EventType": "StepStarted",
-    "SubType": "Step",
-    "EventId": 10,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:25.906Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepFailed",
-    "SubType": "Step",
-    "EventId": 11,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:25.906Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepFailedDetails": {
-      "Error": {
-        "Payload": {
-          "ErrorMessage": "Submitter failed",
-          "ErrorType": "Error"
-        }
-      },
-      "RetryDetails": {
-        "NextAttemptDelaySeconds": 16,
-        "CurrentAttempt": 2
-      }
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 12,
-    "EventTimestamp": "2026-02-13T23:11:25.927Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T23:11:25.903Z",
-      "EndTimestamp": "2026-02-13T23:11:25.927Z",
-      "Error": {},
-      "RequestId": "f3b2a246-9901-43bb-90cb-3d26706f5855"
-    }
-  },
-  {
-    "EventType": "StepStarted",
-    "SubType": "Step",
-    "EventId": 13,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:41.910Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepFailed",
-    "SubType": "Step",
-    "EventId": 14,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:11:41.910Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepFailedDetails": {
-      "Error": {
-        "Payload": {
-          "ErrorMessage": "Submitter failed",
-          "ErrorType": "Error"
-        }
-      },
-      "RetryDetails": {
-        "NextAttemptDelaySeconds": 33,
-        "CurrentAttempt": 3
-      }
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 15,
-    "EventTimestamp": "2026-02-13T23:11:41.932Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T23:11:41.908Z",
-      "EndTimestamp": "2026-02-13T23:11:41.932Z",
-      "Error": {},
-      "RequestId": "651503bb-8932-4c08-9e15-0ecb37aaf408"
-    }
-  },
-  {
-    "EventType": "StepStarted",
-    "SubType": "Step",
-    "EventId": 16,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:12:14.920Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepFailed",
-    "SubType": "Step",
-    "EventId": 17,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:12:14.920Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepFailedDetails": {
-      "Error": {
-        "Payload": {
-          "ErrorMessage": "Submitter failed",
-          "ErrorType": "Error"
-        }
-      },
-      "RetryDetails": {
-        "NextAttemptDelaySeconds": 49,
-        "CurrentAttempt": 4
-      }
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 18,
-    "EventTimestamp": "2026-02-13T23:12:14.943Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T23:12:14.913Z",
-      "EndTimestamp": "2026-02-13T23:12:14.943Z",
-      "Error": {},
-      "RequestId": "826cc25b-9e5b-4311-bcf5-056e2ade8d07"
-    }
-  },
-  {
-    "EventType": "StepStarted",
-    "SubType": "Step",
-    "EventId": 19,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:13:03.929Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepFailed",
-    "SubType": "Step",
-    "EventId": 20,
-    "Id": "98c6f2c2287f4c73",
-    "EventTimestamp": "2026-02-13T23:13:03.929Z",
-    "ParentId": "c4ca4238a0b92382",
-    "StepFailedDetails": {
-      "Error": {
-        "Payload": {
-          "ErrorMessage": "Submitter failed",
-          "ErrorType": "Error"
-        }
-      },
-      "RetryDetails": {
-        "CurrentAttempt": 5
       }
     }
   },
   {
     "EventType": "ContextFailed",
     "SubType": "WaitForCallback",
-    "EventId": 21,
+    "EventId": 6,
     "Id": "c4ca4238a0b92382",
     "Name": "submitter-test",
-    "EventTimestamp": "2026-02-13T23:13:03.934Z",
+    "EventTimestamp": "2026-02-16T18:09:07.913Z",
     "ContextFailedDetails": {
       "Error": {
         "Payload": {
@@ -276,53 +76,21 @@
     }
   },
   {
-    "EventType": "WaitStarted",
-    "SubType": "Wait",
-    "EventId": 22,
-    "Id": "c81e728d9d4c2f63",
-    "EventTimestamp": "2026-02-13T23:13:03.934Z",
-    "WaitStartedDetails": {
-      "Duration": 1,
-      "ScheduledEndTimestamp": "2026-02-13T23:13:04.934Z"
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 23,
-    "EventTimestamp": "2026-02-13T23:13:03.957Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T23:13:03.922Z",
-      "EndTimestamp": "2026-02-13T23:13:03.957Z",
-      "Error": {},
-      "RequestId": "45147045-ca91-46d1-b4eb-da5a9858c7b9"
-    }
-  },
-  {
-    "EventType": "WaitSucceeded",
-    "SubType": "Wait",
-    "EventId": 24,
-    "Id": "c81e728d9d4c2f63",
-    "EventTimestamp": "2026-02-13T23:13:04.936Z",
-    "WaitSucceededDetails": {
-      "Duration": 1
-    }
-  },
-  {
     "EventType": "StepStarted",
     "SubType": "Step",
-    "EventId": 25,
-    "Id": "eccbc87e4b5ce2fe",
+    "EventId": 7,
+    "Id": "c81e728d9d4c2f63",
     "Name": "check-error-type",
-    "EventTimestamp": "2026-02-13T23:13:04.953Z",
+    "EventTimestamp": "2026-02-16T18:09:07.913Z",
     "StepStartedDetails": {}
   },
   {
     "EventType": "StepSucceeded",
     "SubType": "Step",
-    "EventId": 26,
-    "Id": "eccbc87e4b5ce2fe",
+    "EventId": 8,
+    "Id": "c81e728d9d4c2f63",
     "Name": "check-error-type",
-    "EventTimestamp": "2026-02-13T23:13:04.953Z",
+    "EventTimestamp": "2026-02-16T18:09:07.913Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"isCallbackSubmitterError\":true,\"errorName\":\"CallbackSubmitterError\",\"errorMessage\":\"Submitter failed\"}"
@@ -332,20 +100,20 @@
   },
   {
     "EventType": "InvocationCompleted",
-    "EventId": 27,
-    "EventTimestamp": "2026-02-13T23:13:04.955Z",
+    "EventId": 9,
+    "EventTimestamp": "2026-02-16T18:09:07.914Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-02-13T23:13:04.939Z",
-      "EndTimestamp": "2026-02-13T23:13:04.955Z",
+      "StartTimestamp": "2026-02-16T18:09:07.902Z",
+      "EndTimestamp": "2026-02-16T18:09:07.914Z",
       "Error": {},
-      "RequestId": "ee6169ad-2c56-4513-82e0-93e86ceeb0dc"
+      "RequestId": "d24dbd85-e047-4960-950a-bc527be95fb0"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
-    "EventId": 28,
-    "Id": "3ddc8bb2-087b-45fa-b244-351a3f252565",
-    "EventTimestamp": "2026-02-13T23:13:04.956Z",
+    "EventId": 10,
+    "Id": "8dfcae70-b199-4fbd-b2ed-626f6f65ed82",
+    "EventTimestamp": "2026-02-16T18:09:07.914Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"isCallbackSubmitterError\":true,\"errorName\":\"CallbackSubmitterError\",\"errorMessage\":\"Submitter failed\"}"
