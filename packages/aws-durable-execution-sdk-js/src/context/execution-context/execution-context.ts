@@ -22,6 +22,9 @@ export const initializeExecutionContext = async (
   durableExecutionMode: DurableExecutionMode;
   checkpointToken: string;
 }> => {
+  log("🔵", "Initializing durable function with event:", event);
+  log("📍", "Function Input:", event);
+
   const checkpointToken = event.CheckpointToken;
   const durableExecutionArn = event.DurableExecutionArn;
 
