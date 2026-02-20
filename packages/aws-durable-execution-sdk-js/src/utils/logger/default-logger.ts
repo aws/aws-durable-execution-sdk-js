@@ -110,17 +110,21 @@ function formatDurableLogData(
     result.attempt = logData.attempt;
   }
 
+  // Use breakLength: Infinity to prevent util.inspect from inserting
+  // newlines when formatting objects (fixes issue #322)
+  const formatOptions = { breakLength: Infinity };
+
   if (messageParams.length === 1) {
     result.message = messageParams[0];
     try {
       return JSON.stringify(result, jsonErrorReplacer);
     } catch (_) {
-      result.message = util.format(result.message);
+      result.message = util.formatWithOptions(formatOptions, result.message);
       return JSON.stringify(result);
     }
   }
 
-  result.message = util.format(...messageParams);
+  result.message = util.formatWithOptions(formatOptions, ...messageParams);
   for (const param of messageParams) {
     if (param instanceof Error) {
       result.errorType = param?.constructor?.name ?? "UnknownError";

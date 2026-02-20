@@ -220,7 +220,7 @@ describe("Default Logger", () => {
         );
       });
 
-      it("should handle multiple message parameters with util.format", () => {
+      it("should handle multiple message parameters with util.formatWithOptions", () => {
         const logger = createDefaultLogger(loggingExecutionContext);
 
         logger.log?.(DurableLogLevel.INFO, "Hello %s", "world", 123);
@@ -233,6 +233,33 @@ describe("Default Logger", () => {
             executionArn: "durable-execution-arn",
             message: "Hello world 123",
           }),
+        );
+      });
+
+      it("should not insert newlines when logging objects with long string values (issue #322)", () => {
+        const logger = createDefaultLogger(loggingExecutionContext);
+
+        // Reproduce the issue from #322: logging an object with a longer timestamp
+        const processed = {
+          orderId: "order-123",
+          status: "processed",
+          timestamp: "2025-2025-2025",
+        };
+
+        logger.log?.(
+          DurableLogLevel.INFO,
+          "Order successfully processed:",
+          processed,
+        );
+
+        const expectedCall = mockConsole.info.mock.calls[0][0];
+        const parsedLog = JSON.parse(expectedCall);
+
+        // The message should NOT contain newlines from object formatting
+        // With breakLength: Infinity, objects stay on a single line
+        expect(parsedLog.message).not.toContain("\n");
+        expect(parsedLog.message).toBe(
+          "Order successfully processed: { orderId: 'order-123', status: 'processed', timestamp: '2025-2025-2025' }",
         );
       });
 
@@ -297,7 +324,7 @@ describe("Default Logger", () => {
         );
       });
 
-      it("should handle JSON stringify errors and fall back to util.format", () => {
+      it("should handle JSON stringify errors and fall back to util.formatWithOptions", () => {
         const logger = createDefaultLogger(loggingExecutionContext);
 
         // Create an object with circular reference to trigger stringify error
@@ -306,8 +333,8 @@ describe("Default Logger", () => {
 
         logger.log?.(DurableLogLevel.INFO, circularObj);
 
-        // Should fall back to util.format and stringify without error replacer
-        // util.format handles circular references with a detailed representation
+        // Should fall back to util.formatWithOptions and stringify without error replacer
+        // util.formatWithOptions with breakLength: Infinity keeps output on a single line
         expect(mockConsole.info).toHaveBeenCalledWith(
           JSON.stringify({
             requestId: "request-id",
@@ -419,13 +446,14 @@ describe("Default Logger", () => {
         const expectedCall = mockConsole.error.mock.calls[0][0];
         const parsedLog = JSON.parse(expectedCall);
 
+        // With breakLength: Infinity, the message stays on a single line (no newlines from formatting)
         expect(parsedLog).toMatchObject({
           timestamp: "2025-11-21T18:33:33.938Z",
           level: "ERROR",
           requestId: "request-id",
           executionArn: "durable-execution-arn",
           message:
-            "Error occurred: Error {\n  message: 'Test error',\n  stack: 'Test error\\n    at test.js:1:1',\n  constructor: null\n}",
+            "Error occurred: Error { message: 'Test error', stack: 'Test error\\n    at test.js:1:1', constructor: null }",
           errorType: "UnknownError",
           errorMessage: "Test error",
           stackTrace: ["Test error", "    at test.js:1:1"],
