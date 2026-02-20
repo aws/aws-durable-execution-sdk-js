@@ -9,7 +9,10 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Serdes } from "../../utils/serdes/serdes";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { withCallbackSpan } from "../../utils/otel/otel-instrumentation";
+import {
+  withCallbackSpan,
+  endAllActiveParentSpans,
+} from "../../utils/otel/otel-instrumentation";
 
 export const createCallbackPromise = <T>(
   context: ExecutionContext,
@@ -27,6 +30,9 @@ export const createCallbackPromise = <T>(
         log("🔄", "Callback promise phase 2:", { stepId, stepName });
 
         checkpoint.markOperationAwaited(stepId);
+
+        // End all parent spans before freeze so they are exported (callback span stays open)
+        endAllActiveParentSpans(stepName || "callback");
 
         await checkpoint.waitForStatusChange(stepId);
 

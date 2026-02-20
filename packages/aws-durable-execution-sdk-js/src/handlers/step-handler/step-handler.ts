@@ -35,7 +35,10 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
-import { withStepSpan } from "../../utils/otel/otel-instrumentation";
+import {
+  withStepSpan,
+  endAllActiveParentSpans,
+} from "../../utils/otel/otel-instrumentation";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -144,13 +147,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
           },
         );
         return (async (): Promise<T> => {
+          endAllActiveParentSpans();
           await checkpoint.waitForRetryTimer(stepId);
           stepData = context.getStepData(stepId);
           return await executeStepLogic();
         })();
       }
 
-      // Check for interrupted step with AT_MOST_ONCE_PER_RETRY
+      // Check if interrupted step with AT_MOST_ONCE_PER_RETRY
       if (
         stepData?.Status === OperationStatus.STARTED &&
         semantics === StepSemantics.AtMostOncePerRetry
@@ -212,6 +216,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
         );
 
         return (async (): Promise<T> => {
+          endAllActiveParentSpans();
           await checkpoint.waitForRetryTimer(stepId);
           stepData = context.getStepData(stepId);
           return await executeStepLogic();
@@ -391,6 +396,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
 
+          endAllActiveParentSpans(name || stepId);
           await checkpoint.waitForRetryTimer(stepId);
           return await executeStepLogic();
         }

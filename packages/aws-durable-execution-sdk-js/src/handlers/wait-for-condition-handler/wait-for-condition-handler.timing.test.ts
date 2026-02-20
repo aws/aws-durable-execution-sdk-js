@@ -1,4 +1,5 @@
 import { createWaitForConditionHandler } from "./wait-for-condition-handler";
+import { endAllActiveParentSpans } from "../../utils/otel/otel-instrumentation";
 import {
   DurableLogger,
   ExecutionContext,
@@ -13,6 +14,10 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
+jest.mock("../../utils/otel/otel-instrumentation", () => ({
+  ...jest.requireActual("../../utils/otel/otel-instrumentation"),
+  endAllActiveParentSpans: jest.fn().mockReturnValue([]),
+}));
 
 import {
   safeSerialize,
@@ -108,6 +113,13 @@ describe("WaitForCondition Handler Timing Tests", () => {
       }),
     );
     expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalledWith(stepId);
+    expect(endAllActiveParentSpans).toHaveBeenCalledWith();
+    expect(
+      (endAllActiveParentSpans as jest.Mock).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      (mockCheckpoint.waitForRetryTimer as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
   });
 
   it("should execute check function after retry timer", async () => {

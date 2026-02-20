@@ -4,9 +4,14 @@ import { OperationStatus } from "@aws-sdk/client-lambda";
 import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
+import { endAllActiveParentSpans } from "../../utils/otel/otel-instrumentation";
 
 jest.mock("../../errors/serdes-errors/serdes-errors");
 jest.mock("../../utils/logger/logger");
+jest.mock("../../utils/otel/otel-instrumentation", () => ({
+  ...jest.requireActual("../../utils/otel/otel-instrumentation"),
+  endAllActiveParentSpans: jest.fn().mockReturnValue([]),
+}));
 
 const mockSafeDeserialize = safeDeserialize as jest.MockedFunction<
   typeof safeDeserialize
@@ -65,6 +70,13 @@ describe("createCallbackPromise", () => {
     expect(result).toBe("deserialized-result");
     expect(mockCheckpoint.markOperationAwaited).toHaveBeenCalledWith(
       "test-step-id",
+    );
+    expect(endAllActiveParentSpans).toHaveBeenCalledWith("test-step");
+    expect(
+      (endAllActiveParentSpans as jest.Mock).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      (mockCheckpoint.waitForStatusChange as jest.Mock).mock
+        .invocationCallOrder[0],
     );
     expect(mockCheckpoint.waitForStatusChange).toHaveBeenCalledWith(
       "test-step-id",

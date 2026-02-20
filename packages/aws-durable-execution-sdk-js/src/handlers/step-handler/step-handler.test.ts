@@ -1,4 +1,5 @@
 import { createStepHandler } from "./step-handler";
+import { endAllActiveParentSpans } from "../../utils/otel/otel-instrumentation";
 import {
   ExecutionContext,
   StepSemantics,
@@ -13,6 +14,10 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
+jest.mock("../../utils/otel/otel-instrumentation", () => ({
+  ...jest.requireActual("../../utils/otel/otel-instrumentation"),
+  endAllActiveParentSpans: jest.fn().mockReturnValue([]),
+}));
 
 import {
   safeSerialize,
@@ -262,6 +267,13 @@ describe("Step Handler", () => {
       }),
     );
     expect(mockCheckpoint.waitForRetryTimer).toHaveBeenCalledWith(stepId);
+    expect(endAllActiveParentSpans).toHaveBeenCalledWith();
+    expect(
+      (endAllActiveParentSpans as jest.Mock).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      (mockCheckpoint.waitForRetryTimer as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
   });
 
   it("should track running operations", async () => {

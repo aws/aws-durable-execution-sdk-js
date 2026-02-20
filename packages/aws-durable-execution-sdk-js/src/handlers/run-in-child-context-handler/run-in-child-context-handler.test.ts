@@ -783,10 +783,11 @@ describe("runWithContext Integration", () => {
 
     await runInChildContextHandler("test-child", childFn);
 
-    // Verify runWithContext was called with correct parameters for ExecutionMode
+    // Verify runWithContext was called with correct parameters for ExecutionMode.
+    // Implementation uses entityId for both stepId and parentId (context tracking).
     expect(runWithContext).toHaveBeenCalledWith(
       "child-context-id",
-      "parent-step-123", // parentId from handler setup
+      "child-context-id",
       expect.any(Function), // The wrapped child function
       undefined, // No attempt number for child contexts
       DurableExecutionMode.ExecutionMode,

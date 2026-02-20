@@ -29,7 +29,10 @@ import {
   WaitForConditionError,
 } from "../../errors/durable-error/durable-error";
 import { DurableLogger } from "../../types/durable-logger";
-import { withWaitForConditionSpan } from "../../utils/otel/otel-instrumentation";
+import {
+  withWaitForConditionSpan,
+  endAllActiveParentSpans,
+} from "../../utils/otel/otel-instrumentation";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -136,6 +139,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           },
         );
         return (async (): Promise<T> => {
+          endAllActiveParentSpans();
           await checkpoint.waitForRetryTimer(stepId);
           stepData = context.getStepData(stepId);
           return await executeCheckLogic();
@@ -298,6 +302,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
 
+          endAllActiveParentSpans(name || "wait-for-condition");
           await checkpoint.waitForRetryTimer(stepId);
           return await executeCheckLogic();
         } catch (error) {

@@ -790,7 +790,6 @@ describe("OpenTelemetry Instrumentation", () => {
 
       mockTracer.startSpan = jest.fn(() => mockSpan);
 
-      const beforeEnd = Date.now();
       const result = await withWaitSpan(
         stepId,
         waitName,
@@ -800,13 +799,10 @@ describe("OpenTelemetry Instrumentation", () => {
           return expectedResult;
         },
       );
-      const afterEnd = Date.now();
 
       expect(result).toBe(expectedResult);
-      expect(mockSpan.end).toHaveBeenCalled();
-      const endCall = (mockSpan.end as jest.Mock).mock.calls[0][0];
-      expect(endCall).toBeGreaterThanOrEqual(beforeEnd);
-      expect(endCall).toBeLessThanOrEqual(afterEnd);
+      expect(mockSpan.end).toHaveBeenCalledTimes(1);
+      // withWaitSpan calls span.end() with no arguments (OTel uses current time when not provided)
     });
   });
 
