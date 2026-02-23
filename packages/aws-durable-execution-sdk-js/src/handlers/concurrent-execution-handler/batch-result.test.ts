@@ -174,6 +174,23 @@ describe("BatchResult", () => {
       expect(result.totalCount).toBe(0);
     });
 
+    it("should return BatchResultImpl directly if already an instance", () => {
+      // Simulate the scenario where restoreBatchResult receives an already-restored
+      // BatchResultImpl instance (e.g., during parallel execution)
+      const originalError = new ChildContextError("Should be propagated");
+      const items: BatchItem<string>[] = [
+        { index: 0, error: originalError, status: BatchItemStatus.FAILED },
+      ];
+      const originalResult = new BatchResultImpl(items, "ALL_COMPLETED");
+
+      // When restoreBatchResult receives a BatchResultImpl, it should return it as-is
+      const restored = restoreBatchResult(originalResult);
+
+      expect(restored).toBe(originalResult); // Same instance
+      expect(restored.failed()[0].error).toBe(originalError); // Same error instance
+      expect(restored.failed()[0].error.message).toBe("Should be propagated");
+    });
+
     it("should preserve ChildContextError with custom cause through serialization round-trip", async () => {
       // Create a ChildContextError with a custom error cause (simulating map/parallel failure)
       const customError = new CustomError("My error");
