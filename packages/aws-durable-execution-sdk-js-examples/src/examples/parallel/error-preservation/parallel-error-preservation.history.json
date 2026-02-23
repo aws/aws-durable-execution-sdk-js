@@ -1,0 +1,373 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "81b441f5-13f6-4a57-b6a8-c835abca09ac",
+    "EventTimestamp": "2026-02-23T22:15:03.002Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-with-errors",
+    "EventTimestamp": "2026-02-23T22:15:03.009Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-02-23T22:15:03.009Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "success-task",
+    "EventTimestamp": "2026-02-23T22:15:03.009Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-02-23T22:15:03.009Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:03.009Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:03.009Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 3,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "2f221a18eb863803",
+    "Name": "success-task",
+    "EventTimestamp": "2026-02-23T22:15:03.011Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"task completed successfully\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 9,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-02-23T22:15:03.014Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"task completed successfully\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-02-23T22:15:03.033Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-23T22:15:03.002Z",
+      "EndTimestamp": "2026-02-23T22:15:03.033Z",
+      "Error": {},
+      "RequestId": "cff3d7d1-0e5e-4b50-b4ec-df8ee6625c8e"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:06.013Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:06.013Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 4,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-02-23T22:15:06.034Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-23T22:15:06.010Z",
+      "EndTimestamp": "2026-02-23T22:15:06.034Z",
+      "Error": {},
+      "RequestId": "b106433d-69aa-4156-a1a3-79aab588ab36"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 14,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:10.018Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 15,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:10.018Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 18,
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 16,
+    "EventTimestamp": "2026-02-23T22:15:10.039Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-23T22:15:10.015Z",
+      "EndTimestamp": "2026-02-23T22:15:10.039Z",
+      "Error": {},
+      "RequestId": "310eeabd-7318-4ca6-b2bd-ce70c3dd3b39"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 17,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:28.028Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 18,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:28.028Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 8,
+        "CurrentAttempt": 3
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 19,
+    "EventTimestamp": "2026-02-23T22:15:28.052Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-23T22:15:28.021Z",
+      "EndTimestamp": "2026-02-23T22:15:28.052Z",
+      "Error": {},
+      "RequestId": "f5aacbe9-69af-4edd-9315-e963d0173801"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 20,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:36.038Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 21,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:15:36.038Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 30,
+        "CurrentAttempt": 4
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 22,
+    "EventTimestamp": "2026-02-23T22:15:36.060Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-23T22:15:36.032Z",
+      "EndTimestamp": "2026-02-23T22:15:36.060Z",
+      "Error": {},
+      "RequestId": "62af7c6a-7f4c-4655-a25e-71cb7447653c"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 23,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:16:06.049Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 24,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:16:06.049Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 5
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "ParallelBranch",
+    "EventId": 25,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-02-23T22:16:06.054Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 26,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-with-errors",
+    "EventTimestamp": "2026-02-23T22:16:06.054Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":\"task completed successfully\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"error\":{\"cause\":{\"cause\":{\"name\":\"CallbackError\"},\"name\":\"CallbackError\",\"errorType\":\"CallbackError\"},\"name\":\"ChildContextError\",\"errorType\":\"ChildContextError\"},\"index\":1,\"status\":\"FAILED\"}],\"completionReason\":\"FAILURE_TOLERANCE_EXCEEDED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 27,
+    "EventTimestamp": "2026-02-23T22:16:06.054Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-23T22:16:06.040Z",
+      "EndTimestamp": "2026-02-23T22:16:06.054Z",
+      "Error": {},
+      "RequestId": "a335d64d-82a9-435b-aa01-d9b1bb2cfb89"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 28,
+    "Id": "81b441f5-13f6-4a57-b6a8-c835abca09ac",
+    "EventTimestamp": "2026-02-23T22:16:06.055Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"success\":[\"task completed successfully\"],\"errors\":[{\"type\":\"ChildContextError\",\"message\":\"Custom callback error message\",\"originalType\":\"CallbackError\",\"originalMessage\":\"Custom callback error message\"}],\"totalErrors\":1}"
+      }
+    }
+  }
+]
