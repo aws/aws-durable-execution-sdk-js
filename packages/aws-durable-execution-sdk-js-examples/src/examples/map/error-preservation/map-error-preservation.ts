@@ -24,16 +24,20 @@ export const handler = withDurableExecution(
       "map-with-errors",
       items,
       async (childContext, item, index) => {
-        return await childContext.step(`process-item-${index}`, async () => {
-          if (item.shouldFail) {
-            if (item.errorType === "CallbackError") {
-              throw new CallbackError(
-                `Custom callback error for item ${item.id}`,
-              );
+        return await childContext.step(
+          `process-item-${index}`,
+          async () => {
+            if (item.shouldFail) {
+              if (item.errorType === "CallbackError") {
+                throw new CallbackError(
+                  `Custom callback error for item ${item.id}`,
+                );
+              }
             }
-          }
-          return `Processed item ${item.id}`;
-        });
+            return `Processed item ${item.id}`;
+          },
+          { retryStrategy: () => ({ shouldRetry: false }) },
+        );
       },
     );
 
