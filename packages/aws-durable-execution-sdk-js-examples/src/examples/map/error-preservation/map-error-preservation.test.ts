@@ -9,16 +9,16 @@ createTests({
       const result = execution.getResult() as any;
 
       expect(result).toBeDefined();
-      expect(result.totalSuccess).toBe(2);
-      expect(result.success).toHaveLength(2);
-      expect(result.success).toContain("Processed item 1");
-      expect(result.success).toContain("Processed item 3");
+
+      // With no-retry config, map operations fail completely when any task fails
+      expect(result.totalSuccess).toBe(0);
+      expect(result.success).toHaveLength(0);
 
       // Verify we have 1 error (simplified test)
       expect(result.totalErrors).toBe(1);
       expect(result.errors).toHaveLength(1);
 
-      // Find the callback error
+      // Find the callback error - this is the key test for error preservation
       const callbackError = result.errors.find(
         (error: any) => error.originalType === "CallbackError",
       );

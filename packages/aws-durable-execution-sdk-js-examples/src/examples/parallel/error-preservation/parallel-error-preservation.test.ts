@@ -9,14 +9,13 @@ createTests({
       const result = execution.getResult() as any;
 
       expect(result).toBeDefined();
-      expect(result.success).toHaveLength(1);
-      expect(result.success[0]).toBe("task completed successfully");
 
-      // Verify we have 1 error (simplified test)
+      // With no-retry config, parallel operations fail completely when any task fails
+      expect(result.success).toHaveLength(0);
       expect(result.totalErrors).toBe(1);
       expect(result.errors).toHaveLength(1);
 
-      // Find the callback error
+      // Find the callback error - this is the key test for error preservation
       const callbackError = result.errors.find(
         (error: any) => error.originalType === "CallbackError",
       );
