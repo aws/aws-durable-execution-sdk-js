@@ -4,6 +4,35 @@ import { ChildContextError } from "../errors/durable-error/durable-error";
 import { DurableLogger } from "./durable-logger";
 
 /**
+ * Nesting type for batch operations (map and parallel)
+ *
+ * Controls how child contexts are created for each branch/iteration, affecting
+ * observability, cost, and scale limits.
+ *
+ * @public
+ */
+export enum NestingType {
+  /**
+   * Create CONTEXT operations for each branch/iteration with full checkpointing.
+   * Operations within each branch/iteration are wrapped in their own context.
+   *
+   * - **Observability**: High - each branch/iteration appears as separate operation in execution history
+   * - **Cost**: Higher - consumes more operations due to CONTEXT creation overhead
+   * - **Scale**: Lower maximum iterations due to operation limits
+   */
+  NESTED = "NESTED",
+  /**
+   * Skip CONTEXT operations for branches/iterations using virtual contexts.
+   * Operations execute directly without individual context wrapping.
+   *
+   * - **Observability**: Lower - branches/iterations don't appear as separate operations
+   * - **Cost**: ~30% lower - reduces operation consumption by skipping CONTEXT overhead
+   * - **Scale**: Higher maximum iterations possible within operation limits
+   */
+  FLAT = "FLAT",
+}
+
+/**
  * The status of a batch item
  * @public
  */
@@ -121,10 +150,11 @@ export interface MapConfig<TItem, TResult> {
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
   /**
-   * Whether to create virtual contexts for iterations (default: false)
-   * Virtual contexts skip checkpointing to reduce operational costs while maintaining functionality
+   * Nesting type for map iterations (default: NestingType.NESTED)
+   * - NESTED: Create full child contexts with checkpointing
+   * - FLAT: Use virtual contexts to skip checkpointing and reduce costs by ~30%
    */
-  createIteration?: boolean;
+  nesting?: NestingType;
 }
 
 /**
@@ -162,10 +192,11 @@ export interface ParallelConfig<TResult> {
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
   /**
-   * Whether to create virtual contexts for branches (default: false)
-   * Virtual contexts skip checkpointing to reduce operational costs while maintaining functionality
+   * Nesting type for parallel branches (default: NestingType.NESTED)
+   * - NESTED: Create full child contexts with checkpointing
+   * - FLAT: Use virtual contexts to skip checkpointing and reduce costs by ~30%
    */
-  createBranch?: boolean;
+  nesting?: NestingType;
 }
 
 /**
@@ -212,8 +243,13 @@ export interface ConcurrencyConfig<TResult> {
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
   /**
-   * Whether to use virtual contexts for iterations/branches (default: false)
-   * Virtual contexts skip checkpointing to reduce operational costs while maintaining functionality
+   * Nesting type for concurrent execution contexts (default: NestingType.NESTED)
+   *
+   * Controls how child contexts are created for each concurrent execution, affecting
+   * observability, cost, and scale limits.
+   *
+   * - **NESTED**: Create CONTEXT operations with full observability but higher cost
+   * - **FLAT**: Use virtual contexts for ~30% cost reduction and higher scale
    */
-  virtualContext?: boolean;
+  nesting?: NestingType;
 }

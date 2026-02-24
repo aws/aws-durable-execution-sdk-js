@@ -30,7 +30,7 @@ export const TEST_CONSTANTS = {
     topLevelSubType: "Map",
     serdes: undefined,
     itemSerdes: undefined,
-    virtualContext: false,
+    nesting: undefined,
   },
   DEFAULT_PARALLEL_CONFIG: {
     iterationSubType: "ParallelBranch",
@@ -38,7 +38,7 @@ export const TEST_CONSTANTS = {
     topLevelSubType: "Parallel",
     serdes: undefined,
     itemSerdes: undefined,
-    virtualContext: false,
+    nesting: undefined,
   },
 
   // Default step checkpoint templates (using string values to match actual usage)

@@ -1,15 +1,18 @@
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import {
+  withDurableExecution,
+  NestingType,
+} from "@aws/durable-execution-sdk-js";
 
 export const config = {
   name: "Map Virtual Context",
   description:
-    "Demonstrates map operation with virtual context for cost optimization",
+    "Demonstrates map operation with flat nesting for cost optimization",
 };
 
 export const handler = withDurableExecution(async (event, context) => {
   const items = [1, 2, 3, 4, 5];
 
-  // Map with virtual context (cost optimized)
+  // Map with flat nesting (cost optimized)
   const result = await context.map(
     "process-items-virtual",
     items,
@@ -18,7 +21,7 @@ export const handler = withDurableExecution(async (event, context) => {
         return item * 2;
       });
     },
-    { createIteration: false }, // Skip checkpointing for iterations
+    { nesting: NestingType.FLAT }, // Use flat nesting to skip checkpointing
   );
 
   return {
