@@ -1,13 +1,16 @@
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import {
+  withDurableExecution,
+  NestingType,
+} from "@aws/durable-execution-sdk-js";
 
 export const config = {
   name: "Parallel Virtual Context",
   description:
-    "Demonstrates parallel execution with virtual context for cost optimization",
+    "Demonstrates parallel execution with flat nesting for cost optimization",
 };
 
 export const handler = withDurableExecution(async (event, context) => {
-  // Parallel execution with virtual context (cost optimized)
+  // Parallel execution with flat nesting (cost optimized)
   const result = await context.parallel(
     "parallel-tasks-virtual",
     [
@@ -36,7 +39,7 @@ export const handler = withDurableExecution(async (event, context) => {
         },
       },
     ],
-    { createBranch: false }, // Skip checkpointing for branches
+    { nesting: NestingType.FLAT }, // Use flat nesting to skip checkpointing
   );
 
   return {

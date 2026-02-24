@@ -91,7 +91,7 @@ export const createMapHandler = <Logger extends DurableLogger>(
         completionConfig: config?.completionConfig,
         serdes: config?.serdes,
         itemSerdes: config?.itemSerdes,
-        virtualContext: config?.createIteration === false,
+        nesting: config?.nesting,
       });
 
       log("🗺️", "Map operation completed successfully:", {

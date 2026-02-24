@@ -10,6 +10,7 @@ import {
   BatchItem,
   DurablePromise,
   DurableLogger,
+  NestingType,
 } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
@@ -216,7 +217,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           {
             subType: config.iterationSubType,
             serdes: config.itemSerdes,
-            virtualContext: config.virtualContext,
+            virtualContext: config.nesting === NestingType.FLAT,
           },
         );
 
@@ -391,7 +392,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
               {
                 subType: config.iterationSubType,
                 serdes: config.itemSerdes,
-                virtualContext: config.virtualContext,
+                virtualContext: config.nesting === NestingType.FLAT,
               },
             )
             .then(
