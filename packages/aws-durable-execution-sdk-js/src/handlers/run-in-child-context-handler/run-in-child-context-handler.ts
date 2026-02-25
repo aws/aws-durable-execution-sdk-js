@@ -306,7 +306,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     getParentLogger(),
     entityId, // stepPrefix: use entityId for unique step IDs
     undefined,
-    isVirtual ? parentId : entityId, // parentId: inherit parent's for virtual, use entityId for normal
+    // parentId: this parameter is used for checkpointing, and should point to
+    // valid parentId tthat is already checkpointed.
+    // If this runInChildContext is a virtual, then we will use the parentId  (the ancestor)
+    // But if this runInChildContext is a virtual, then it's entityId can be used
+    isVirtual ? parentId : entityId,
   );
 
   try {
