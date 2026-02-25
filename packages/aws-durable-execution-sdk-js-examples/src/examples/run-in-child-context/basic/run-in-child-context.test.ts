@@ -1,4 +1,4 @@
-import { handler } from "./basic-run-in-child-context";
+import { handler } from "./run-in-child-context";
 import { createTests } from "../../../utils/test-helper";
 import {
   OperationType,

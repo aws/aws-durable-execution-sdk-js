@@ -1748,12 +1748,12 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
-  BasicRunInChildContext:
+  RunInChildContext:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: RuninChildContext-22x-NodeJS-Local
       CodeUri: ./dist
-      Handler: basic-run-in-child-context.handler
+      Handler: run-in-child-context.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
