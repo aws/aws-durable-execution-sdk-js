@@ -1,0 +1,65 @@
+name: 🧪 Testing & Code Quality
+description: Report gaps in test coverage, flaky tests, or issues with quality validation workflows
+title: "[Testing]: "
+labels: ["testing"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve the reliability and quality of the SDK. Use this template for test coverage gaps, flaky tests, or issues with linting, static analysis, and other quality validation workflows.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area does this relate to?
+      options:
+        - "Unit Tests — missing, failing, or flaky unit tests"
+        - "Integration Tests — missing, failing, or flaky integration tests"
+        - "Code Quality Validation — linting, static analysis, type checking, or other automated checks"
+        - "Testing Automation - issues related to the testing workflows implementation"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the testing gap or quality concern
+      placeholder: |
+        e.g., "The context.map() method has no tests for the case where all items fail"
+        e.g., "Integration test xyz is flaky and fails ~10% of the time"
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected
+    attributes:
+      label: Affected Files or Areas
+      description: Which files, modules, or features are affected?
+      placeholder: |
+        e.g., packages/aws-durable-execution-sdk-js/src/context/
+    validations:
+      required: false
+
+  - type: textarea
+    id: proposed-fix
+    attributes:
+      label: Proposed Improvement
+      description: Suggest how this could be addressed
+      placeholder: |
+        e.g., "Add test cases covering error propagation in map operations"
+        e.g., "Update CI workflow to retry flaky tests automatically"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context about the problem
+      placeholder: |
+        e.g., "This affects production reliability"
+        e.g., "Related to issue #123"
+    validations:
+      required: false
