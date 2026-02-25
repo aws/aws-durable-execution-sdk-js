@@ -1753,7 +1753,7 @@ Resources:
     Properties:
       FunctionName: RuninVirtualChildContext-22x-NodeJS-Local
       CodeUri: ./dist
-      Handler: run-in-child-context.handler
+      Handler: virtual-run-in-child-context.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
