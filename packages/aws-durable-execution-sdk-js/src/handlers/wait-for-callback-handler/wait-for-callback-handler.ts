@@ -13,6 +13,10 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createPassThroughSerdes } from "../callback-handler/callback";
+import {
+  ChildContextError,
+  CallbackSubmitterError,
+} from "../../errors/durable-error/durable-error";
 
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -127,6 +131,24 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       return {
         result: await runInChildContext(name, childFunction, {
           subType: OperationSubType.WAIT_FOR_CALLBACK,
+          errorMapper: (originalError) => {
+            // Pass through callback errors directly (both timeout and failure)
+            if (
+              originalError.errorType === "CallbackTimeoutError" ||
+              originalError.errorType === "CallbackError"
+            ) {
+              return originalError;
+            }
+            // Map step errors to CallbackSubmitterError
+            if (originalError.errorType === "StepError") {
+              return new CallbackSubmitterError(
+                originalError.message,
+                originalError,
+              );
+            }
+            // Wrap other errors in ChildContextError
+            return new ChildContextError(originalError.message, originalError);
+          },
         }),
         stepId,
       };

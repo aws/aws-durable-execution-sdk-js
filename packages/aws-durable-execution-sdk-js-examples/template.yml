@@ -275,6 +275,31 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  ErrorInstance:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CreateCallback-ErrorInstance-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: error-instance.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   CreateCallbackFailures:
     Type: AWS::Serverless::Function
     Properties:
@@ -625,6 +650,31 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  LargePayload:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LargePayload-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: large-payload.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   LoggerAfterCallback:
     Type: AWS::Serverless::Function
     Properties:
@@ -781,6 +831,31 @@ Resources:
       FunctionName: EmptyMap-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: map-empty.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  MapErrorPreservation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapErrorPreservation-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-error-preservation.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -1104,6 +1179,31 @@ Resources:
       FunctionName: EmptyParallel-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: parallel-empty.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ParallelErrorPreservation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelErrorPreservation-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-error-preservation.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -2029,6 +2129,81 @@ Resources:
       FunctionName: WaitforCallback-ChildContext-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: wait-for-callback-child-context.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ErrorInstanceFailure:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitforCallback-ErrorInstanceFailure-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: error-instance-failure.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ErrorInstanceSubmitter:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitforCallback-ErrorInstanceSubmitter-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: error-instance-submitter.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ErrorInstanceTimeout:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WaitforCallback-ErrorInstanceTimeout-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: error-instance-timeout.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

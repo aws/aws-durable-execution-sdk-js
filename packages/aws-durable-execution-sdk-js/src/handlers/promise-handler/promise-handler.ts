@@ -102,7 +102,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
 
       // Wrap Promise.all execution in a child context for persistence
       return await runInChildContext(name, () => Promise.all(promises), {
-        errorClass: PromiseCombinatorError,
+        errorMapper: (error) =>
+          new PromiseCombinatorError(error.message, error),
       });
     });
   };
@@ -117,7 +118,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
       // Wrap Promise.allSettled execution in a child context for persistence
       return await runInChildContext(name, () => Promise.allSettled(promises), {
         serdes: createErrorAwareSerdes<T>(),
-        errorClass: PromiseCombinatorError,
+        errorMapper: (error) =>
+          new PromiseCombinatorError(error.message, error),
       });
     });
   };
@@ -131,7 +133,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
 
       // Wrap Promise.any execution in a child context for persistence
       return await runInChildContext(name, () => Promise.any(promises), {
-        errorClass: PromiseCombinatorError,
+        errorMapper: (error) =>
+          new PromiseCombinatorError(error.message, error),
       });
     });
   };
@@ -145,7 +148,8 @@ export const createPromiseHandler = <Logger extends DurableLogger>(
 
       // Wrap Promise.race execution in a child context for persistence
       return await runInChildContext(name, () => Promise.race(promises), {
-        errorClass: PromiseCombinatorError,
+        errorMapper: (error) =>
+          new PromiseCombinatorError(error.message, error),
       });
     });
   };
