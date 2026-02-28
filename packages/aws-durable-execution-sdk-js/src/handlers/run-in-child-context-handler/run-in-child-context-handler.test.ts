@@ -15,6 +15,7 @@ import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurableExecutionMode } from "../../types/core";
+import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 jest.mock("../../utils/context-tracker/context-tracker", () => ({
   ...jest.requireActual("../../utils/context-tracker/context-tracker"),
@@ -74,6 +75,108 @@ describe("Run In Child Context Handler", () => {
       mockCreateChildContext,
       mockParentDurableContext,
     );
+  });
+
+  describe("Virtual Context", () => {
+    test("should not checkpoint when virtualContext is true", async () => {
+      const childFn = jest
+        .fn()
+        .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+
+      const result = await runInChildContextHandler(
+        TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        childFn,
+        { virtualContext: true },
+      );
+
+      expect(result).toBe(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+      expect(childFn).toHaveBeenCalledTimes(1);
+
+      // Virtual contexts should not checkpoint
+      expect(mockCheckpoint).not.toHaveBeenCalled();
+    });
+
+    test("should pass parent's parentId to child context when virtualContext is true", async () => {
+      const mockCreateChildContext = jest.fn().mockReturnValue({
+        _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      });
+      const parentId = "parent-step-123";
+
+      const virtualHandler = createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        jest.fn().mockReturnValue({ log: jest.fn() }),
+        mockCreateChildContext,
+        parentId,
+      );
+
+      const childFn = jest.fn().mockResolvedValue("result");
+
+      await virtualHandler("test-virtual", childFn, { virtualContext: true });
+
+      // Verify createChildContext was called with parent's parentId for virtual context
+      expect(mockCreateChildContext).toHaveBeenCalledWith(
+        mockExecutionContext,
+        mockParentContext,
+        expect.any(String), // durableExecutionMode is a string enum
+        expect.any(Object), // logger
+        TEST_CONSTANTS.CHILD_CONTEXT_ID, // stepPrefix (entityId)
+        undefined, // checkpointToken
+        parentId, // parentId should be inherited from parent
+      );
+    });
+
+    test("should use entityId as parentId for normal context", async () => {
+      const mockCreateChildContext = jest.fn().mockReturnValue({
+        _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      });
+      const parentId = "parent-step-123";
+
+      const normalHandler = createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        jest.fn().mockReturnValue({ log: jest.fn() }),
+        mockCreateChildContext,
+        parentId,
+      );
+
+      const childFn = jest.fn().mockResolvedValue("result");
+
+      await normalHandler(
+        "test-normal",
+        childFn,
+        { virtualContext: false }, // or omit for default
+      );
+
+      // Verify createChildContext was called with entityId as parentId for normal context
+      expect(mockCreateChildContext).toHaveBeenCalledWith(
+        mockExecutionContext,
+        mockParentContext,
+        expect.any(String), // durableExecutionMode is a string enum
+        expect.any(Object), // logger
+        TEST_CONSTANTS.CHILD_CONTEXT_ID, // stepPrefix (entityId)
+        undefined, // checkpointToken
+        TEST_CONSTANTS.CHILD_CONTEXT_ID, // parentId should be entityId for normal context
+      );
+    });
+
+    test("should still wrap errors in ChildContextError for virtual contexts", async () => {
+      const testError = new Error("Test error");
+      const childFn = jest.fn().mockRejectedValue(testError);
+
+      await expect(
+        runInChildContextHandler("test-virtual-error", childFn, {
+          virtualContext: true,
+        }),
+      ).rejects.toBeInstanceOf(ChildContextError);
+
+      // Should not checkpoint failure for virtual context
+      expect(mockCheckpoint).not.toHaveBeenCalled();
+    });
   });
 
   test("should execute child context function with child context", async () => {
