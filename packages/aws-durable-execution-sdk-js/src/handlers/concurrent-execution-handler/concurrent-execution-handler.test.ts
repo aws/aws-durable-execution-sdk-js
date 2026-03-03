@@ -930,7 +930,11 @@ describe("ConcurrencyController", () => {
       expect(mockParentContext.runInChildContext).toHaveBeenCalledWith(
         "item-0",
         expect.any(Function),
-        { subType: "CUSTOM_ITERATION_TYPE" },
+        {
+          subType: "CUSTOM_ITERATION_TYPE",
+          serdes: undefined,
+          virtualContext: false,
+        },
       );
     });
 
@@ -950,7 +954,11 @@ describe("ConcurrencyController", () => {
           .fn()
           .mockImplementation((itemId, childFunc, options) => {
             // Verify the options contain the iterationSubType
-            expect(options).toEqual({ subType: "TEST_ITERATION_TYPE" });
+            expect(options).toEqual({
+              subType: "TEST_ITERATION_TYPE",
+              serdes: undefined,
+              virtualContext: false,
+            });
             // Execute the child function to trigger the actual code path
             const mockChildContext = {} as any;
             return new DurablePromise(() =>
@@ -970,7 +978,11 @@ describe("ConcurrencyController", () => {
       expect(testParentContext.runInChildContext).toHaveBeenCalledWith(
         "item-0",
         expect.any(Function),
-        { subType: "TEST_ITERATION_TYPE" },
+        {
+          subType: "TEST_ITERATION_TYPE",
+          serdes: undefined,
+          virtualContext: false,
+        },
       );
     });
   });

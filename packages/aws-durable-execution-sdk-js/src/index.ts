@@ -34,6 +34,7 @@ export {
   BatchResult,
   CompletionConfig,
   RetryDecision,
+  NestingType,
 } from "./types";
 export { DurablePromise } from "./types/durable-promise";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
