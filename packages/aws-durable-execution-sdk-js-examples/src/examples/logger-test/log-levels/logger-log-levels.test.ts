@@ -97,9 +97,10 @@ createTests({
             ),
             createLogExpectation("INFO", "Info log from child context", true),
             createLogExpectation("DEBUG", "Debug log from child context", true),
+            // Use formatWithOptions with breakLength: Infinity to match the fix in default-logger.ts (issue #322)
             createLogExpectation(
               "INFO",
-              `Complex object test: ${util.format({ user: { id: 123, name: "John" }, settings: { theme: "dark", notifications: true }, data: [1, 2, { nested: "value" }] })}`,
+              `Complex object test: ${util.formatWithOptions({ breakLength: Infinity }, { user: { id: 123, name: "John" }, settings: { theme: "dark", notifications: true }, data: [1, 2, { nested: "value" }] })}`,
             ),
             createLogExpectation(
               "INFO",
