@@ -1,0 +1,56 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "caf3a43a-540c-49e0-9722-85ca8c0faa33",
+    "EventTimestamp": "2026-01-22T23:10:25.041Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2026-01-22T23:10:25.044Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2026-01-22T23:10:25.044Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"virtual child step completed\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-01-22T23:10:25.044Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-01-22T23:10:25.041Z",
+      "EndTimestamp": "2026-01-22T23:10:25.044Z",
+      "Error": {},
+      "RequestId": "d70e5350-ff1c-40f6-8d56-d224ff3d01ca"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 5,
+    "Id": "caf3a43a-540c-49e0-9722-85ca8c0faa33",
+    "EventTimestamp": "2026-01-22T23:10:25.045Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"virtual child step completed\""
+      }
+    }
+  }
+]

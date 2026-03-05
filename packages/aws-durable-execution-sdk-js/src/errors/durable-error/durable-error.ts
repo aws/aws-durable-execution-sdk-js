@@ -45,6 +45,18 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "CallbackTimeoutError":
+        return new CallbackTimeoutError(
+          errorObject.ErrorMessage || "Callback timed out",
+          cause,
+          errorObject.ErrorData,
+        );
+      case "CallbackSubmitterError":
+        return new CallbackSubmitterError(
+          errorObject.ErrorMessage || "Callback submitter failed",
+          cause,
+          errorObject.ErrorData,
+        );
       case "InvokeError":
         return new InvokeError(
           errorObject.ErrorMessage || "Invoke failed",
@@ -108,6 +120,30 @@ export class CallbackError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Callback failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when a callback operation times out
+ * @public
+ */
+export class CallbackTimeoutError extends DurableOperationError {
+  readonly errorType = "CallbackTimeoutError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Callback timed out", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when a callback submitter fails
+ * @public
+ */
+export class CallbackSubmitterError extends DurableOperationError {
+  readonly errorType = "CallbackSubmitterError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Callback submitter failed", cause, errorData);
   }
 }
 

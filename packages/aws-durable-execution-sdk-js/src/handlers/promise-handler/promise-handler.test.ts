@@ -209,7 +209,7 @@ describe("Promise Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        expect.objectContaining({ errorClass: expect.any(Function) }),
+        expect.objectContaining({ errorMapper: expect.any(Function) }),
       );
       expect(result).toEqual([1, 2]);
     });
@@ -226,7 +226,7 @@ describe("Promise Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-all",
         expect.any(Function),
-        expect.objectContaining({ errorClass: expect.any(Function) }),
+        expect.objectContaining({ errorMapper: expect.any(Function) }),
       );
       expect(result).toEqual([1, 2]);
     });
@@ -261,7 +261,7 @@ describe("Promise Handler", () => {
         expect.any(Function),
         expect.objectContaining({
           serdes: expect.any(Object),
-          errorClass: expect.any(Function),
+          errorMapper: expect.any(Function),
         }),
       );
     });
@@ -283,7 +283,7 @@ describe("Promise Handler", () => {
         expect.any(Function),
         expect.objectContaining({
           serdes: expect.any(Object),
-          errorClass: expect.any(Function),
+          errorMapper: expect.any(Function),
         }),
       );
       expect(result).toHaveLength(2);
@@ -322,7 +322,7 @@ describe("Promise Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        expect.objectContaining({ errorClass: expect.any(Function) }),
+        expect.objectContaining({ errorMapper: expect.any(Function) }),
       );
       expect(result).toBe(1); // Promise.any returns the first resolved value
     });
@@ -339,7 +339,7 @@ describe("Promise Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-any",
         expect.any(Function),
-        expect.objectContaining({ errorClass: expect.any(Function) }),
+        expect.objectContaining({ errorMapper: expect.any(Function) }),
       );
       expect(result).toBe(1); // Promise.any returns the first resolved value
     });
@@ -381,7 +381,7 @@ describe("Promise Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        expect.objectContaining({ errorClass: expect.any(Function) }),
+        expect.objectContaining({ errorMapper: expect.any(Function) }),
       );
       expect(result).toBe(1); // Promise.race returns the first resolved value
     });
@@ -398,7 +398,7 @@ describe("Promise Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-race",
         expect.any(Function),
-        expect.objectContaining({ errorClass: expect.any(Function) }),
+        expect.objectContaining({ errorMapper: expect.any(Function) }),
       );
       expect(result).toBe(1); // Promise.race returns the first resolved value
     });

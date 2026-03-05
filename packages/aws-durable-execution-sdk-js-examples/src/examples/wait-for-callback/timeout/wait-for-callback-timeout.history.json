@@ -105,11 +105,11 @@
     }
   },
   {
-    "EventType": "ExecutionSucceeded",
+    "EventType": "ExecutionFailed",
     "EventId": 10,
     "Id": "8d04cd49-1256-464d-bae2-f0d5e542f78a",
     "EventTimestamp": "2025-12-18T21:47:06.094Z",
-    "ExecutionSucceededDetails": {
+    "ExecutionFailedDetails": {
       "Result": {
         "Payload": "{\"success\":false,\"error\":\"Callback timed out\"}"
       }

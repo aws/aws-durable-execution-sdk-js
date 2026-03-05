@@ -1,0 +1,163 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "5f094557-81f2-461f-b051-1e8329a67990",
+    "EventTimestamp": "2026-02-23T22:53:46.068Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-with-errors",
+    "EventTimestamp": "2026-02-23T22:53:46.072Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-02-23T22:53:46.072Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "success-task",
+    "EventTimestamp": "2026-02-23T22:53:46.072Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-02-23T22:53:46.072Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:53:46.072Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "6151f5ab282d90e4",
+    "Name": "callback-error-task",
+    "EventTimestamp": "2026-02-23T22:53:46.072Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "2f221a18eb863803",
+    "Name": "success-task",
+    "EventTimestamp": "2026-02-23T22:53:46.072Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"task completed successfully\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "ParallelBranch",
+    "EventId": 9,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-02-23T22:53:46.074Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error message"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 10,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-02-23T22:53:46.074Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"task completed successfully\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 11,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-with-errors",
+    "EventTimestamp": "2026-02-23T22:53:46.074Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"index\":0,\"status\":\"STARTED\"},{\"error\":{\"cause\":{\"cause\":{\"name\":\"CallbackError\"},\"name\":\"CallbackError\",\"errorType\":\"CallbackError\"},\"name\":\"ChildContextError\",\"errorType\":\"ChildContextError\"},\"index\":1,\"status\":\"FAILED\"}],\"completionReason\":\"FAILURE_TOLERANCE_EXCEEDED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 12,
+    "EventTimestamp": "2026-02-23T22:53:46.075Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-23T22:53:46.068Z",
+      "EndTimestamp": "2026-02-23T22:53:46.075Z",
+      "Error": {},
+      "RequestId": "c87db69a-f6b4-452e-8e5d-6636ef5acb05"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 13,
+    "Id": "5f094557-81f2-461f-b051-1e8329a67990",
+    "EventTimestamp": "2026-02-23T22:53:46.075Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"success\":[],\"errors\":[{\"type\":\"ChildContextError\",\"message\":\"Custom callback error message\",\"originalType\":\"CallbackError\",\"originalMessage\":\"Custom callback error message\"}],\"totalErrors\":1}"
+      }
+    }
+  }
+]
