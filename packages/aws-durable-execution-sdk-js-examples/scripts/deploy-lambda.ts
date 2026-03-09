@@ -305,6 +305,9 @@ async function createFunction(
     LoggingConfig: {
       LogGroup: logGroupName,
     },
+    TenancyConfig: functionName.includes("tenant-target")
+      ? { TenancyMode: "ENABLED" }
+      : undefined,
   };
 
   const command = new CreateFunctionCommand(createParams);
@@ -365,6 +368,9 @@ async function updateFunction(
             },
           }
         : undefined,
+    TenancyConfig: functionName.includes("tenant-target")
+      ? { TenancyMode: "ENABLED" }
+      : undefined,
   };
 
   // Check if DurableConfig needs updating
