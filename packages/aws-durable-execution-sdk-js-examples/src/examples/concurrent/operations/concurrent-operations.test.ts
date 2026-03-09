@@ -22,9 +22,7 @@ createTests({
       expect(block2.getContextDetails()?.result).toStrictEqual("task 2 result");
       expect(block2.getChildOperations()).toHaveLength(2);
 
-      assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 1,
-      });
+      assertEventSignatures(execution);
     }, 10000);
   },
 });

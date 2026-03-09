@@ -18,7 +18,7 @@ createTests({
       expect(promiseRaceOp.getStatus()).toStrictEqual(
         OperationStatus.SUCCEEDED,
       );
-      expect(promiseRaceOp.getContextDetails()?.result).toBeDefined();
+      expect(promiseRaceOp.getStepDetails()?.result).toBeDefined();
 
       expect(execution.getResult()).toStrictEqual("fast result");
 
