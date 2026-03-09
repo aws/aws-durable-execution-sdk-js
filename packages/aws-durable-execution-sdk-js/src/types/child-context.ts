@@ -1,7 +1,6 @@
 import { Serdes } from "../utils/serdes/serdes";
 import { DurableLogger } from "./durable-logger";
 import { DurableContext } from "./durable-context";
-import { DurableOperationError } from "../errors/durable-error/durable-error";
 
 /**
  * Configuration options for child context operations
@@ -14,12 +13,6 @@ export interface ChildConfig<T> {
   subType?: string;
   /** Function to generate summaries for large results (used internally by map/parallel) */
   summaryGenerator?: (result: T) => string;
-  /** Custom error class to throw when child context fails */
-  errorClass?: new (
-    message?: string,
-    cause?: Error,
-    errorData?: string,
-  ) => DurableOperationError;
 }
 
 /**
