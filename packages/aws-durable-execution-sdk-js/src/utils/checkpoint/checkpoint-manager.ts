@@ -16,7 +16,10 @@ import {
 } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
-import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
+import {
+  CHECKPOINT_TERMINATION_COOLDOWN_MS,
+  MAX_POLL_DURATION_MS,
+} from "../constants/constants";
 import {
   OperationLifecycleState,
   OperationInfo,
@@ -771,6 +774,11 @@ export class CheckpointManager implements Checkpoint {
         endTimestamp instanceof Date ? endTimestamp : new Date(endTimestamp);
       // Wait until endTimestamp
       delay = Math.max(0, timestamp.getTime() - Date.now());
+
+      // Cap delay to prevent setTimeout overflow (32-bit signed integer limit)
+      if (delay > MAX_POLL_DURATION_MS) {
+        delay = MAX_POLL_DURATION_MS;
+      }
     } else {
       // No timestamp, start polling immediately (1 second delay)
       delay = 1000;
@@ -792,7 +800,6 @@ export class CheckpointManager implements Checkpoint {
     if (!op) return;
 
     // Check if we've exceeded max polling duration (15 minutes)
-    const MAX_POLL_DURATION_MS = 15 * 60 * 1000; // 15 minutes
     if (
       op.pollStartTime &&
       Date.now() - op.pollStartTime > MAX_POLL_DURATION_MS
