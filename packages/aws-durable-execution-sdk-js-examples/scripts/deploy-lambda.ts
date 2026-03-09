@@ -485,6 +485,16 @@ async function main(): Promise<void> {
             functionExists = false;
           }
 
+          // Check if tenancy configuration needs to change
+          const needsTenancy = exampleConfig.handler.includes("tenant-target");
+          const hasTenancy = !!currentConfig.TenancyConfig;
+          if (needsTenancy !== hasTenancy) {
+            console.log(
+              "Deleting function since tenancy configuration changed",
+            );
+            functionExists = false;
+          }
+
           if (!functionExists) {
             await lambdaClient.send(
               new DeleteFunctionCommand({
