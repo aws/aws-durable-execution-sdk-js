@@ -125,7 +125,6 @@ export const createParallelHandler = <Logger extends DurableLogger>(
         completionConfig: config?.completionConfig,
         serdes: config?.serdes,
         itemSerdes: config?.itemSerdes,
-        nesting: config?.nesting,
       });
 
       log("🔀", "Parallel operation completed successfully:", {
