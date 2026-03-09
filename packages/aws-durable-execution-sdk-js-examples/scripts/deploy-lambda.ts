@@ -501,6 +501,9 @@ async function main(): Promise<void> {
                 FunctionName: functionName,
               }),
             );
+            // Wait for function to be fully deleted
+            console.log("Waiting for function deletion to complete...");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
           }
         }
 
