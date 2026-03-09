@@ -12,7 +12,7 @@ createTests({
       expect(result.getError()).toEqual({
         errorData: undefined,
         errorMessage: "Callback timed out on heartbeat",
-        errorType: "CallbackTimeoutError",
+        errorType: "CallbackError",
         stackTrace: undefined,
       });
 
@@ -27,7 +27,7 @@ createTests({
       expect(result.getError()).toEqual({
         errorData: undefined,
         errorMessage: "Callback timed out",
-        errorType: "CallbackTimeoutError",
+        errorType: "CallbackError",
         stackTrace: undefined,
       });
 

@@ -11,10 +11,7 @@ import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { Serdes } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-import {
-  CallbackError,
-  CallbackTimeoutError,
-} from "../../errors/durable-error/durable-error";
+import { CallbackError } from "../../errors/durable-error/durable-error";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
@@ -190,33 +187,20 @@ export const createCallback = (
           return [resolvedPromise, callbackData.CallbackId];
         }
 
-        // Handle failure or timeout
+        // Handle failure
         const error = stepData?.CallbackDetails?.Error;
-        const isTimeout = stepData?.Status === OperationStatus.TIMED_OUT;
-
         const callbackError = error
-          ? ((): CallbackError | CallbackTimeoutError => {
+          ? ((): CallbackError => {
               const cause = new Error(error.ErrorMessage);
               cause.name = error.ErrorType || "Error";
               cause.stack = error.StackTrace?.join("\n");
-
-              if (isTimeout) {
-                return new CallbackTimeoutError(
-                  error.ErrorMessage || "Callback timed out",
-                  cause,
-                  error.ErrorData,
-                );
-              }
-
               return new CallbackError(
                 error.ErrorMessage || "Callback failed",
                 cause,
                 error.ErrorData,
               );
             })()
-          : isTimeout
-            ? new CallbackTimeoutError("Callback timed out")
-            : new CallbackError("Callback failed");
+          : new CallbackError("Callback failed");
 
         const rejectedPromise = new DurablePromise(async (): Promise<T> => {
           throw callbackError;

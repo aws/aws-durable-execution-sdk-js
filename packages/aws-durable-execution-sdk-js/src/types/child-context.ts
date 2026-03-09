@@ -14,8 +14,12 @@ export interface ChildConfig<T> {
   subType?: string;
   /** Function to generate summaries for large results (used internally by map/parallel) */
   summaryGenerator?: (result: T) => string;
-  /** Function to map child context errors to custom error types based on the original error */
-  errorMapper?: (originalError: DurableOperationError) => DurableOperationError;
+  /** Custom error class to throw when child context fails */
+  errorClass?: new (
+    message?: string,
+    cause?: Error,
+    errorData?: string,
+  ) => DurableOperationError;
 }
 
 /**

@@ -199,7 +199,7 @@ export const handleCompletedChildContext = async <
   ) => DurableContext<Logger>,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
-  const errorMapper = options?.errorMapper;
+  const ErrorClass = options?.errorClass || ChildContextError;
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
 
@@ -209,15 +209,9 @@ export const handleCompletedChildContext = async <
       const originalError = DurableOperationError.fromErrorObject(
         stepData.ContextDetails.Error,
       );
-
-      // Use errorMapper if provided, otherwise wrap in ChildContextError
-      if (errorMapper) {
-        throw errorMapper(originalError);
-      }
-
-      throw new ChildContextError(originalError.message, originalError);
+      throw new ErrorClass(originalError.message, originalError);
     } else {
-      throw new ChildContextError("Child context failed");
+      throw new ErrorClass("Child context failed");
     }
   }
 
@@ -280,7 +274,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   parentId?: string,
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
-  const errorMapper = options?.errorMapper;
+  const ErrorClass = options?.errorClass || ChildContextError;
 
   // Checkpoint at start if not already started (fire-and-forget for performance)
   if (context.getStepData(entityId) === undefined) {
@@ -399,12 +393,6 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     const errorObject = createErrorObjectFromError(error);
     const reconstructedError =
       DurableOperationError.fromErrorObject(errorObject);
-
-    // Use errorMapper if provided, otherwise wrap in ChildContextError
-    if (errorMapper) {
-      throw errorMapper(reconstructedError);
-    }
-
-    throw new ChildContextError(reconstructedError.message, reconstructedError);
+    throw new ErrorClass(reconstructedError.message, reconstructedError);
   }
 };

@@ -12,10 +12,7 @@ import {
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-import {
-  CallbackError,
-  CallbackTimeoutError,
-} from "../../errors/durable-error/durable-error";
+import { CallbackError } from "../../errors/durable-error/durable-error";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -281,7 +278,6 @@ describe("Callback Handler", () => {
     {
       status: OperationStatus.FAILED,
       statusName: "failed",
-      expectedErrorClass: CallbackError,
       testData: {
         callbackId: "callback-failed-123",
         errorData: "Error data",
@@ -294,7 +290,6 @@ describe("Callback Handler", () => {
     {
       status: OperationStatus.TIMED_OUT,
       statusName: "timed out",
-      expectedErrorClass: CallbackTimeoutError,
       testData: {
         callbackId: "callback-timed-out-123",
         errorData: "Timeout error data",
@@ -304,123 +299,116 @@ describe("Callback Handler", () => {
         callbackIdWithoutError: "callback-timed-out-456",
       },
     },
-  ])(
-    "$statusName Callback Scenarios",
-    ({ status, statusName, expectedErrorClass, testData }) => {
-      it(`should throw error for ${statusName} callback`, async () => {
-        const stepId = "test-callback-id";
-        const hashedStepId = hashId(stepId);
-        (mockContext as any)._stepData = {
-          [hashedStepId]: {
-            Id: hashedStepId,
-            Status: status,
-            CallbackDetails: {
-              CallbackId: testData.callbackId,
-              Error: {
-                ErrorData: testData.errorData,
-                ErrorMessage: testData.errorMessage,
-                ErrorType: testData.errorType,
-                StackTrace: testData.stackTrace,
-              },
+  ])("$statusName Callback Scenarios", ({ status, statusName, testData }) => {
+    it(`should throw error for ${statusName} callback`, async () => {
+      const stepId = "test-callback-id";
+      const hashedStepId = hashId(stepId);
+      (mockContext as any)._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: status,
+          CallbackDetails: {
+            CallbackId: testData.callbackId,
+            Error: {
+              ErrorData: testData.errorData,
+              ErrorMessage: testData.errorMessage,
+              ErrorType: testData.errorType,
+              StackTrace: testData.stackTrace,
             },
-          } as Operation,
-        };
+          },
+        } as Operation,
+      };
 
-        (mockContext.getStepData as jest.Mock).mockReturnValue(
-          (mockContext as any)._stepData[hashedStepId],
-        );
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
 
-        const handler = createCallback(
-          mockContext,
-          mockCheckpoint,
-          createStepId,
-          checkAndUpdateReplayMode,
-        );
+      const handler = createCallback(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        checkAndUpdateReplayMode,
+      );
 
-        const result = await handler<string>(`${statusName}-callback`);
-        const [promise, callbackId] = await result;
+      const result = await handler<string>(`${statusName}-callback`);
+      const [promise, callbackId] = await result;
 
-        expect(callbackId).toBe(testData.callbackId);
+      expect(callbackId).toBe(testData.callbackId);
 
-        await expect(promise).rejects.toThrow(expectedErrorClass);
+      await expect(promise).rejects.toThrow(CallbackError);
 
-        try {
-          await promise;
-        } catch (err) {
-          expect(err).toBeInstanceOf(expectedErrorClass);
-          expect((err as CallbackError).message).toEqual(testData.errorMessage);
-          expect((err as CallbackError).errorData).toEqual(testData.errorData);
+      try {
+        await promise;
+      } catch (err) {
+        expect(err).toBeInstanceOf(CallbackError);
+        expect((err as CallbackError).message).toEqual(testData.errorMessage);
+        expect((err as CallbackError).errorData).toEqual(testData.errorData);
 
-          const cause = (err as CallbackError).cause;
-          expect(cause).toBeInstanceOf(Error);
-          expect(cause!.message).toEqual(testData.errorMessage);
-          expect(cause!.name).toEqual(testData.errorType);
-          expect(cause!.stack).toEqual(testData.stackTrace.join("\n"));
-        }
-      });
+        const cause = (err as CallbackError).cause;
+        expect(cause).toBeInstanceOf(Error);
+        expect(cause!.message).toEqual(testData.errorMessage);
+        expect(cause!.name).toEqual(testData.errorType);
+        expect(cause!.stack).toEqual(testData.stackTrace.join("\n"));
+      }
+    });
 
-      it(`should throw generic error for ${statusName} callback without error message`, async () => {
-        const stepId = "test-callback-id";
-        const hashedStepId = hashId(stepId);
-        (mockContext as any)._stepData = {
-          [hashedStepId]: {
-            Id: hashedStepId,
-            Status: status,
-            CallbackDetails: {
-              CallbackId: testData.callbackIdWithoutError,
-            },
-          } as Operation,
-        };
+    it(`should throw generic error for ${statusName} callback without error message`, async () => {
+      const stepId = "test-callback-id";
+      const hashedStepId = hashId(stepId);
+      (mockContext as any)._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: status,
+          CallbackDetails: {
+            CallbackId: testData.callbackIdWithoutError,
+          },
+        } as Operation,
+      };
 
-        (mockContext.getStepData as jest.Mock).mockReturnValue(
-          (mockContext as any)._stepData[hashedStepId],
-        );
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
 
-        const handler = createCallback(
-          mockContext,
-          mockCheckpoint,
-          createStepId,
-          checkAndUpdateReplayMode,
-        );
+      const handler = createCallback(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        checkAndUpdateReplayMode,
+      );
 
-        const result = await handler<string>(`${statusName}-callback`);
-        const [promise] = await result;
+      const result = await handler<string>(`${statusName}-callback`);
+      const [promise] = await result;
 
-        const expectedMessage =
-          status === OperationStatus.TIMED_OUT
-            ? "Callback timed out"
-            : "Callback failed";
-        await expect(promise).rejects.toThrow(expectedMessage);
-      });
+      await expect(promise).rejects.toThrow("Callback failed");
+    });
 
-      it(`should throw error for ${statusName} callback without CallbackId`, async () => {
-        const stepId = "test-callback-id";
-        const hashedStepId = hashId(stepId);
-        (mockContext as any)._stepData = {
-          [hashedStepId]: {
-            Id: hashedStepId,
-            Status: status,
-            CallbackDetails: {},
-          } as Operation,
-        };
+    it(`should throw error for ${statusName} callback without CallbackId`, async () => {
+      const stepId = "test-callback-id";
+      const hashedStepId = hashId(stepId);
+      (mockContext as any)._stepData = {
+        [hashedStepId]: {
+          Id: hashedStepId,
+          Status: status,
+          CallbackDetails: {},
+        } as Operation,
+      };
 
-        (mockContext.getStepData as jest.Mock).mockReturnValue(
-          (mockContext as any)._stepData[hashedStepId],
-        );
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
 
-        const handler = createCallback(
-          mockContext,
-          mockCheckpoint,
-          createStepId,
-          checkAndUpdateReplayMode,
-        );
+      const handler = createCallback(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        checkAndUpdateReplayMode,
+      );
 
-        await expect(handler<string>(`${statusName}-callback`)).rejects.toThrow(
-          `No callback ID found for callback: ${stepId}`,
-        );
-      });
-    },
-  );
+      await expect(handler<string>(`${statusName}-callback`)).rejects.toThrow(
+        `No callback ID found for callback: ${stepId}`,
+      );
+    });
+  });
 
   describe("Started Callback Scenarios", () => {
     it("should return callback promise for started callback", async () => {

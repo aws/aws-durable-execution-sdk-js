@@ -11,19 +11,26 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: unknown, context: DurableContext) => {
-    const result = await context.waitForCallback(
-      async () => {
-        // Submitter succeeds but callback never completes
-        return Promise.resolve();
-      },
-      {
-        timeout: { seconds: 1 }, // 1 second timeout
-      },
-    );
+    try {
+      const result = await context.waitForCallback(
+        async () => {
+          // Submitter succeeds but callback never completes
+          return Promise.resolve();
+        },
+        {
+          timeout: { seconds: 1 }, // 1 second timeout
+        },
+      );
 
-    return {
-      callbackResult: result,
-      success: true,
-    };
+      return {
+        callbackResult: result,
+        success: true,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   },
 );
