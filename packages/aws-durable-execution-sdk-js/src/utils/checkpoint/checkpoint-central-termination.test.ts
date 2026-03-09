@@ -1213,4 +1213,78 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
     });
   });
+
+  describe("startTimerWithPolling - setTimeout overflow protection", () => {
+    it("should cap delay to MAX_POLL_DURATION_MS to prevent setTimeout overflow", () => {
+      const stepId = "long-wait-step";
+      const MAX_POLL_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+      // Create operation in IDLE_AWAITED state
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.WAIT,
+            subType: OperationSubType.WAIT,
+          },
+          // Set endTimestamp to 364 days in the future (should cause overflow)
+          endTimestamp: new Date(Date.now() + 364 * 24 * 60 * 60 * 1000),
+        },
+      );
+
+      // Spy on setTimeout to capture the delay value
+      const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+
+      // Call waitForStatusChange which internally calls startTimerWithPolling
+      checkpointManager.waitForStatusChange(stepId);
+
+      // Verify setTimeout was called with capped delay
+      expect(setTimeoutSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        MAX_POLL_DURATION_MS,
+      );
+
+      setTimeoutSpy.mockRestore();
+    });
+
+    it("should not cap delay when it's within MAX_POLL_DURATION_MS", () => {
+      const stepId = "short-wait-step";
+      const shortDelay = 5 * 60 * 1000; // 5 minutes
+
+      // Create operation in IDLE_AWAITED state
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.WAIT,
+            subType: OperationSubType.WAIT,
+          },
+          // Set endTimestamp to 5 minutes in the future
+          endTimestamp: new Date(Date.now() + shortDelay),
+        },
+      );
+
+      // Spy on setTimeout to capture the delay value
+      const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+
+      // Call waitForStatusChange which internally calls startTimerWithPolling
+      checkpointManager.waitForStatusChange(stepId);
+
+      // Verify setTimeout was called with original delay (within tolerance)
+      expect(setTimeoutSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Number),
+      );
+
+      const actualDelay = setTimeoutSpy.mock.calls[0][1] as number;
+      expect(actualDelay).toBeLessThanOrEqual(shortDelay);
+      expect(actualDelay).toBeGreaterThan(shortDelay - 1000); // Allow 1s tolerance
+
+      setTimeoutSpy.mockRestore();
+    });
+  });
 });

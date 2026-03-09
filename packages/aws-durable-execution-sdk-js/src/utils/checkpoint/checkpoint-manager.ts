@@ -764,6 +764,7 @@ export class CheckpointManager implements Checkpoint {
     if (!op) return;
 
     let delay: number;
+    const MAX_POLL_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
     if (endTimestamp) {
       // Ensure endTimestamp is a Date object
@@ -771,6 +772,11 @@ export class CheckpointManager implements Checkpoint {
         endTimestamp instanceof Date ? endTimestamp : new Date(endTimestamp);
       // Wait until endTimestamp
       delay = Math.max(0, timestamp.getTime() - Date.now());
+
+      // Cap delay to prevent setTimeout overflow (32-bit signed integer limit)
+      if (delay > MAX_POLL_DURATION_MS) {
+        delay = MAX_POLL_DURATION_MS;
+      }
     } else {
       // No timestamp, start polling immediately (1 second delay)
       delay = 1000;
