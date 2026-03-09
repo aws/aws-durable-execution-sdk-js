@@ -305,7 +305,7 @@ async function createFunction(
     LoggingConfig: {
       LogGroup: logGroupName,
     },
-    TenancyConfig: functionName.includes("tenant-target")
+    TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
   };
@@ -368,7 +368,7 @@ async function updateFunction(
             },
           }
         : undefined,
-    TenancyConfig: functionName.includes("tenant-target")
+    TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
   };
