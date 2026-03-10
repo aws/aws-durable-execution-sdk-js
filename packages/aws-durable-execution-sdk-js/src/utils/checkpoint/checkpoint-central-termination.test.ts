@@ -1218,7 +1218,7 @@ describe("CheckpointManager - Centralized Termination", () => {
   });
 
   describe("startTimerWithPolling - setTimeout overflow protection", () => {
-    it("should cap delay to MAX_POLL_DURATION_MS to prevent setTimeout overflow", () => {
+    it("should skip setTimeout when delay exceeds MAX_POLL_DURATION_MS", () => {
       const stepId = "long-wait-step";
 
       // Create operation in IDLE_AWAITED state
@@ -1231,27 +1231,24 @@ describe("CheckpointManager - Centralized Termination", () => {
             type: OperationType.WAIT,
             subType: OperationSubType.WAIT,
           },
-          // Set endTimestamp to 364 days in the future (should cause overflow)
+          // Set endTimestamp to 364 days in the future (exceeds MAX_POLL_DURATION_MS)
           endTimestamp: new Date(Date.now() + 364 * 24 * 60 * 60 * 1000),
         },
       );
 
-      // Spy on setTimeout to capture the delay value
+      // Spy on setTimeout to verify it's not called
       const setTimeoutSpy = jest.spyOn(global, "setTimeout");
 
       // Call waitForStatusChange which internally calls startTimerWithPolling
       checkpointManager.waitForStatusChange(stepId);
 
-      // Verify setTimeout was called with capped delay
-      expect(setTimeoutSpy).toHaveBeenCalledWith(
-        expect.any(Function),
-        MAX_POLL_DURATION_MS,
-      );
+      // Verify setTimeout was NOT called
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
 
       setTimeoutSpy.mockRestore();
     });
 
-    it("should not cap delay when it's within MAX_POLL_DURATION_MS", () => {
+    it("should use setTimeout when delay is within MAX_POLL_DURATION_MS", () => {
       const stepId = "short-wait-step";
       const shortDelay = 5 * 60 * 1000; // 5 minutes
 

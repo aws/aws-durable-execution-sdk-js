@@ -775,9 +775,9 @@ export class CheckpointManager implements Checkpoint {
       // Wait until endTimestamp
       delay = Math.max(0, timestamp.getTime() - Date.now());
 
-      // Cap delay to prevent setTimeout overflow (32-bit signed integer limit)
+      // Skip setTimeout if delay exceeds MAX_POLL_DURATION_MS (Lambda will timeout before it fires)
       if (delay > MAX_POLL_DURATION_MS) {
-        delay = MAX_POLL_DURATION_MS;
+        return;
       }
     } else {
       // No timestamp, start polling immediately (1 second delay)
