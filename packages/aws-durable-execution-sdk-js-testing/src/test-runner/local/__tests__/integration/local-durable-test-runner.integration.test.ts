@@ -252,7 +252,7 @@ describe("LocalDurableTestRunner Integration", () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         expect(context.lambdaContext.getRemainingTimeInMillis()).toBe(900_000);
-        
+
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         const mock1: string = await context.step(() => mockedFunction());
 
@@ -349,7 +349,6 @@ describe("LocalDurableTestRunner Integration", () => {
 
     // Verify all operations completed successfully
     const operations = result.getOperations();
-    console.log(operations.map((operation) => operation.getOperationData()));
     expect(operations).toHaveLength(8); // 3 parallel waits + 3 parallel contexts + 1 parallel operation + 1 step
 
     // Check that parallel wait operations all succeeded
