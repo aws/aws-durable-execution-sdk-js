@@ -62,7 +62,7 @@
     "commander": "^14.0.2"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": "^1.0.1"
+    "@aws/durable-execution-sdk-js": "*"
   },
   "private": false
 }

@@ -9,4 +9,6 @@ export interface InvokeConfig<I, O> {
   payloadSerdes?: Serdes<I>;
   /** Serialization/deserialization configuration for result data */
   resultSerdes?: Serdes<O>;
+  /** Tenant identifier for invoking tenant-isolated Lambda functions */
+  tenantId?: string;
 }

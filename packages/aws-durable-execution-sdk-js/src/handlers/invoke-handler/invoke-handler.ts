@@ -158,6 +158,7 @@ export const createInvokeHandler = (
           Payload: serializedPayload,
           ChainedInvokeOptions: {
             FunctionName: funcId,
+            ...(config?.tenantId && { TenantId: config.tenantId }),
           },
         });
       }

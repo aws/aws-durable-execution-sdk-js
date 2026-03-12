@@ -32,20 +32,6 @@ createTests({
         }>;
       };
 
-      // Print actual results for debugging
-      console.log("=== ACTUAL RESULTS ===");
-      console.log("Total items processed:", result.totalItems);
-      console.log("Successful count:", result.successfulCount);
-      console.log("Failed count:", result.failedCount);
-      console.log("Has failures:", result.hasFailures);
-      console.log("Batch status:", result.batchStatus);
-      console.log("Completion reason:", result.completionReason);
-      console.log(
-        "Successful items:",
-        JSON.stringify(result.successfulItems, null, 2),
-      );
-      console.log("Failed items:", JSON.stringify(result.failedItems, null, 2));
-
       // Verify the correct behavior after the fix
       expect(result).toMatchObject({
         totalItems: 4,
@@ -54,23 +40,6 @@ createTests({
         hasFailures: false,
         batchStatus: "SUCCEEDED",
         completionReason: "MIN_SUCCESSFUL_REACHED",
-      });
-
-      // Print execution details for debugging
-      console.log("=== EXECUTION DETAILS ===");
-      const operations = execution.getOperations();
-      console.log("Total operations:", operations.length);
-
-      const mapOp = runner.getOperation("completion-config-items");
-      console.log(
-        "Map operation child count:",
-        mapOp.getChildOperations()?.length || 0,
-      );
-
-      // List all operations that were created
-      console.log("=== ALL OPERATIONS ===");
-      operations.forEach((op: any, index: number) => {
-        console.log(`${index}: ${op.getName()} - ${op.getType()}`);
       });
 
       assertEventSignatures(execution);

@@ -14,3 +14,10 @@ export const STORE_STACK_TRACES = false;
  * before terminating to allow for any final checkpoint operations
  */
 export const CHECKPOINT_TERMINATION_COOLDOWN_MS = 20;
+
+/**
+ * Maximum polling duration in milliseconds (15 minutes)
+ * Used to cap setTimeout delays to prevent 32-bit signed integer overflow
+ * and limit polling duration for long-running operations
+ */
+export const MAX_POLL_DURATION_MS = 15 * 60 * 1000;
