@@ -311,6 +311,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   // enable when language SDK supports concurrent waits
+  // eslint-disable-next-line jest/no-disabled-tests
   it.skip("should prevent scheduled function interference in parallel wait scenario", async () => {
     // This test creates a scenario where multiple wait operations could create
     // scheduled functions that fire while invocations are still active.

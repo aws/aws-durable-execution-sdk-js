@@ -5,10 +5,7 @@ import { OperationLifecycleState, OperationSubType } from "../../types";
 import { OperationType } from "@aws-sdk/client-lambda";
 import { EventEmitter } from "events";
 import { hashId } from "../step-id-utils/step-id-utils";
-import {
-  CHECKPOINT_TERMINATION_COOLDOWN_MS,
-  MAX_POLL_DURATION_MS,
-} from "../constants/constants";
+import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 
 jest.mock("../logger/logger");
 

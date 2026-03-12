@@ -650,6 +650,56 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  InvokeTenantId:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: InvokeTenantId-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: invoke-tenant-id.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  TenantTarget:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: TenantTarget-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: tenant-target.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 300
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   LargePayload:
     Type: AWS::Serverless::Function
     Properties:
