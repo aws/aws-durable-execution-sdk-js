@@ -281,9 +281,10 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
   const errorMapper = options?.errorMapper;
+  const isVirtual = options?.virtualContext === true;
 
-  // Checkpoint at start if not already started (fire-and-forget for performance)
-  if (context.getStepData(entityId) === undefined) {
+  // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
+  if (!isVirtual && context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
     checkpoint.checkpoint(entityId, {
       Id: entityId,
@@ -296,15 +297,20 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   }
 
   const childReplayMode = determineChildReplayMode(context, entityId);
-  // Create a child context with the entity ID as prefix
+
+  // Create a child context with appropriate parentId and stepPrefix
   const durableChildContext = createChildContext(
     context,
     parentContext,
     childReplayMode,
     getParentLogger(),
-    entityId,
+    entityId, // stepPrefix: use entityId for unique step IDs
     undefined,
-    entityId, // parentId
+    // parentId: this parameter is used for checkpointing, and should point to
+    // valid parentId tthat is already checkpointed.
+    // If this runInChildContext is a virtual, then we will use the parentId  (the ancestor)
+    // But if this runInChildContext is a virtual, then it's entityId can be used
+    isVirtual ? parentId : entityId,
   );
 
   try {
@@ -352,50 +358,62 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       });
     }
 
-    // Mark this run-in-child-context as finished to prevent descendant operations
-    checkpoint.markAncestorFinished(entityId);
+    // Mark this run-in-child-context as finished to prevent descendant operations (only for non-virtual)
+    if (!isVirtual) {
+      checkpoint.markAncestorFinished(entityId);
 
-    const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint.checkpoint(entityId, {
-      Id: entityId,
-      ParentId: parentId,
-      Action: OperationAction.SUCCEED,
-      SubType: subType,
-      Type: OperationType.CONTEXT,
-      Payload: payloadToCheckpoint,
-      ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
-      Name: name,
-    });
+      const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
+      checkpoint.checkpoint(entityId, {
+        Id: entityId,
+        ParentId: parentId,
+        Action: OperationAction.SUCCEED,
+        SubType: subType,
+        Type: OperationType.CONTEXT,
+        Payload: payloadToCheckpoint,
+        ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
+        Name: name,
+      });
 
-    log("✅", "Child context completed successfully:", {
-      entityId,
-      name,
-    });
+      log("✅", "Child context completed successfully:", {
+        entityId,
+        name,
+      });
+    } else {
+      log("✅", "Virtual child context completed successfully:", {
+        entityId,
+        name,
+      });
+    }
 
     return result;
   } catch (error) {
-    log("❌", "Child context failed:", {
-      entityId,
-      name,
-      error,
-    });
+    log(
+      "❌",
+      isVirtual ? "Virtual child context failed:" : "Child context failed:",
+      {
+        entityId,
+        name,
+        error,
+      },
+    );
 
-    // Mark this run-in-child-context as finished to prevent descendant operations
-    checkpoint.markAncestorFinished(entityId);
+    // Mark this run-in-child-context as finished and checkpoint failure (only for non-virtual)
+    if (!isVirtual) {
+      checkpoint.markAncestorFinished(entityId);
 
-    // Always checkpoint failures
-    const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint.checkpoint(entityId, {
-      Id: entityId,
-      ParentId: parentId,
-      Action: OperationAction.FAIL,
-      SubType: subType,
-      Type: OperationType.CONTEXT,
-      Error: createErrorObjectFromError(error),
-      Name: name,
-    });
+      const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
+      checkpoint.checkpoint(entityId, {
+        Id: entityId,
+        ParentId: parentId,
+        Action: OperationAction.FAIL,
+        SubType: subType,
+        Type: OperationType.CONTEXT,
+        Error: createErrorObjectFromError(error),
+        Name: name,
+      });
+    }
 
-    // Reconstruct error from ErrorObject for deterministic behavior
+    // Always wrap in ChildContextError for consistent error handling
     const errorObject = createErrorObjectFromError(error);
     const reconstructedError =
       DurableOperationError.fromErrorObject(errorObject);

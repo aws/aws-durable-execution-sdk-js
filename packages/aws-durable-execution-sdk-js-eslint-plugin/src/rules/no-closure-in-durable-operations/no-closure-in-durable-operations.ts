@@ -302,9 +302,6 @@ export const noClosureInDurableOperations: Rule.RuleModule = {
         const callback = getCallbackFunction(node);
         if (!callback) return;
 
-        // Get source code for AST traversal
-        const sourceCode = context.getSourceCode();
-
         /**
          * Recursively walks the callback's AST to find all identifier usages.
          *

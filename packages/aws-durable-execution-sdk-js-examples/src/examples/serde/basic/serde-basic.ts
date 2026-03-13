@@ -60,9 +60,6 @@ export const handler = withDurableExecution(
       "create-user",
       async () => {
         const newUser = new User(event.firstName, event.lastName, event.email);
-        context.logger.info("Created user:", {
-          fullName: newUser.getFullName(),
-        });
         return newUser;
       },
       { serdes: userSerdes },

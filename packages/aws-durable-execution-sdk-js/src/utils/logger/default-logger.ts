@@ -36,6 +36,14 @@ interface DefaultDurableLogEntry extends DurableLogData {
 // See: https://github.com/aws/aws-lambda-nodejs-runtime-interface-client/blob/962ed28eefbc052389c4de4366b1c0c49ee08a13/src/LogPatch.js
 
 /**
+ * Format options for util.formatWithOptions.
+ * Using breakLength: Infinity prevents util.inspect from inserting newlines
+ * when formatting objects, regardless of object size (fixes issue #322).
+ * Defined at module level to avoid creating a new object on every function call.
+ */
+const FORMAT_OPTIONS = { breakLength: Infinity } as const;
+
+/**
  * JSON.stringify replacer function for Error objects.
  * Based on AWS Lambda Runtime Interface Client LogPatch functionality.
  * Transforms Error instances into serializable objects with structured error information,
@@ -115,12 +123,12 @@ function formatDurableLogData(
     try {
       return JSON.stringify(result, jsonErrorReplacer);
     } catch (_) {
-      result.message = util.format(result.message);
+      result.message = util.formatWithOptions(FORMAT_OPTIONS, result.message);
       return JSON.stringify(result);
     }
   }
 
-  result.message = util.format(...messageParams);
+  result.message = util.formatWithOptions(FORMAT_OPTIONS, ...messageParams);
   for (const param of messageParams) {
     if (param instanceof Error) {
       result.errorType = param?.constructor?.name ?? "UnknownError";

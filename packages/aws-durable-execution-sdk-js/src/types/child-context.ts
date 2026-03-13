@@ -16,6 +16,8 @@ export interface ChildConfig<T> {
   summaryGenerator?: (result: T) => string;
   /** Function to map child context errors to custom error types based on the original error */
   errorMapper?: (originalError: DurableOperationError) => DurableOperationError;
+  /** If true, skip checkpointing and use parent's parentId for child operations */
+  virtualContext?: boolean;
 }
 
 /**

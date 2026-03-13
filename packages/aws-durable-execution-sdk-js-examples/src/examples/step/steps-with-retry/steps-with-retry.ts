@@ -65,12 +65,10 @@ export const handler = withDurableExecution(
         await context.wait({ seconds: 1 });
       }
     } catch (e) {
-      console.error("Failing - DDB Retries Exhausted. ", e);
       throw e;
     }
 
     if (!item) {
-      console.error("Failing - DDB Item Not Found.");
       throw new Error("Item Not Found");
     }
 
