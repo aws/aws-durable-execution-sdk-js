@@ -17,15 +17,9 @@ export const handler = withDurableExecution(
     const result = await context.waitForCallback(
       "retry-submitter-callback",
       async (callbackId, ctx) => {
-        ctx.logger.info("Submitting callback to external system", {
-          callbackId,
-        });
-
         if (shouldFail) {
           throw new Error("Simulated submitter failure");
         }
-
-        ctx.logger.info("Successfully submitted callback", { callbackId });
       },
       {
         // Retry strategy: up to 4 attempts with exponential backoff

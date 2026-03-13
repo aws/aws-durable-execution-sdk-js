@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "v1.x"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "v1.x"]
 
 permissions:
   contents: read # This is required for actions/checkout

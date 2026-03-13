@@ -305,6 +305,9 @@ async function createFunction(
     LoggingConfig: {
       LogGroup: logGroupName,
     },
+    TenancyConfig: exampleConfig.handler.includes("tenant-target")
+      ? { TenantIsolationMode: "PER_TENANT" }
+      : undefined,
   };
 
   const command = new CreateFunctionCommand(createParams);
@@ -365,6 +368,9 @@ async function updateFunction(
             },
           }
         : undefined,
+    TenancyConfig: exampleConfig.handler.includes("tenant-target")
+      ? { TenantIsolationMode: "PER_TENANT" }
+      : undefined,
   };
 
   // Check if DurableConfig needs updating
@@ -479,12 +485,25 @@ async function main(): Promise<void> {
             functionExists = false;
           }
 
+          // Check if tenancy configuration needs to change
+          const needsTenancy = exampleConfig.handler.includes("tenant-target");
+          const hasTenancy = !!currentConfig.TenancyConfig;
+          if (needsTenancy !== hasTenancy) {
+            console.log(
+              "Deleting function since tenancy configuration changed",
+            );
+            functionExists = false;
+          }
+
           if (!functionExists) {
             await lambdaClient.send(
               new DeleteFunctionCommand({
                 FunctionName: functionName,
               }),
             );
+            // Wait for function to be fully deleted
+            console.log("Waiting for function deletion to complete...");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
           }
         }
 

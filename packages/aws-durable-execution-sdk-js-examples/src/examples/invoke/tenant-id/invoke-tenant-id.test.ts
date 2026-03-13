@@ -1,7 +1,7 @@
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { handler } from "./invoke-tenant-id";
-import { handler as namedWaitHandler } from "../../wait/named/wait-named";
+import { handler as tenantTargetHandler } from "../tenant-target/tenant-target";
 
 createTests({
   handler,
@@ -9,14 +9,14 @@ createTests({
     it("should invoke with tenantId for tenant isolation", async () => {
       if (runner instanceof LocalDurableTestRunner) {
         runner.registerDurableFunction(
-          functionNameMap.getFunctionName("wait-named"),
-          namedWaitHandler,
+          functionNameMap.getFunctionName("tenant-target"),
+          tenantTargetHandler,
         );
       }
 
       const result = await runner.run({
         payload: {
-          functionName: functionNameMap.getFunctionName("wait-named"),
+          functionName: functionNameMap.getFunctionName("tenant-target"),
           tenantId: "tenant-abc-123",
         },
       });
