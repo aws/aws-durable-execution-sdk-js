@@ -21,6 +21,7 @@ describe("WaitForCallback Operations Integration", () => {
   // Concurrent and Complex Workflow Tests Category
   describe("Concurrent and Complex Workflow Tests", () => {
     // todo: add test when language SDK adds concurrency support
+    // eslint-disable-next-line jest/no-disabled-tests
     it.skip("should handle multiple concurrent waitForCallback operations with different submitters", async () => {
       let callback1Id: string | undefined;
       let callback2Id: string | undefined;

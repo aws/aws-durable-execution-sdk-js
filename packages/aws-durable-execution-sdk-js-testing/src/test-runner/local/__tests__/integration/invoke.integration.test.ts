@@ -141,6 +141,7 @@ describe("LocalDurableTestRunner Invoke operations integration", () => {
   });
 
   // TODO: handling errors for callback and checkpoint updates
+  // eslint-disable-next-line jest/no-disabled-tests
   it.skip("should fail execution if invoking a function that does not exist", async () => {
     const handler = withDurableExecution(async (_, ctx) => {
       await ctx.invoke("durableOperation", "nonExistentFunction", {
