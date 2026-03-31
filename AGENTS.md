@@ -834,7 +834,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: myDurableFunction
-      Runtime: nodejs22.x # or python3.12
+      Runtime: nodejs22.x # or python3.14
       Handler: index.handler
       Role: !GetAtt DurableFunctionRole.Arn
       Code:
@@ -895,7 +895,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: myDurableFunction
-      Runtime: nodejs22.x # or python3.12
+      Runtime: nodejs22.x # or python3.14
       Handler: index.handler
       CodeUri: ./src
       DurableConfig:
