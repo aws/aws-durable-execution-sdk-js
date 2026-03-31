@@ -344,6 +344,9 @@ export class CheckpointManager implements Checkpoint {
       } else {
         // Queue is empty and processing is done - notify all waiting promises
         this.notifyQueueCompletion();
+        // Re-evaluate termination after queue drains. Earlier
+        // checkAndTerminate calls may have seen a non-empty queue and skipped.
+        this.checkAndTerminate();
       }
     }
   }
