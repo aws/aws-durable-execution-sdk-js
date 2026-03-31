@@ -77,3 +77,15 @@ jobs:
     with:
       node-version: ${{ matrix.node-version }}
     secrets: inherit
+
+  capacity-provider-tests:
+    needs: build
+    # Skip for PRs from forked repos (no access to secrets)
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      id-token: write
+    uses: "./.github/workflows/capacity-provider-tests.yml"
+    with:
+      node-version: "24.x"
+    secrets: inherit
