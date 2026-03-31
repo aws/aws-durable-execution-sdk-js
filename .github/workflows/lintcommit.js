@@ -30,6 +30,8 @@ const scopes = new Set([
   "examples",
   "eslint-plugin",
   "ci",
+  "deps",
+  "deps-dev",
 ]);
 
 /**
@@ -150,8 +152,11 @@ function _test() {
     "test: add new tests": undefined,
     "types: add type definitions": undefined,
     "Merge staging into feature/lambda-get-started": undefined,
+    "chore(deps): bump the aws-sdk group across 1 directory with 5 updates":
+      undefined,
+    "chore(deps-dev): bump flatted from 3.4.1 to 3.4.2": undefined,
     "feat(foo): fix the types":
-      'invalid scope "foo" (valid scopes are testing-sdk, sdk, examples, eslint-plugin)',
+      'invalid scope "foo" (valid scopes are testing-sdk, sdk, examples, eslint-plugin, deps, deps-dev)',
   };
 
   let passed = 0;

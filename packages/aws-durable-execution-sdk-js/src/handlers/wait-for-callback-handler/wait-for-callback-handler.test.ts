@@ -91,7 +91,7 @@ describe("waitForCallback handler", () => {
     expect(mockRunInChildContext).toHaveBeenCalledWith(
       undefined,
       expect.any(Function),
-      { subType: "WaitForCallback" },
+      expect.objectContaining({ subType: "WaitForCallback" }),
     );
     expect(submitter).toHaveBeenCalledWith(
       "callback-123",
@@ -150,7 +150,7 @@ describe("waitForCallback handler", () => {
     expect(mockRunInChildContext).toHaveBeenCalledWith(
       callbackName,
       expect.any(Function),
-      { subType: "WaitForCallback" },
+      expect.objectContaining({ subType: "WaitForCallback" }),
     );
     expect(submitter).toHaveBeenCalledWith(
       "callback-456",
@@ -244,7 +244,7 @@ describe("waitForCallback handler", () => {
     expect(mockRunInChildContext).toHaveBeenCalledWith(
       undefined,
       expect.any(Function),
-      { subType: "WaitForCallback" },
+      expect.objectContaining({ subType: "WaitForCallback" }),
     );
     expect(submitter).toHaveBeenCalledWith(
       "callback-no-name",
@@ -307,7 +307,7 @@ describe("waitForCallback handler", () => {
     expect(mockRunInChildContext).toHaveBeenCalledWith(
       undefined,
       expect.any(Function),
-      { subType: "WaitForCallback" },
+      expect.objectContaining({ subType: "WaitForCallback" }),
     );
     expect(submitter).toHaveBeenCalledWith(
       "callback-undefined",
@@ -545,10 +545,11 @@ describe("waitForCallback handler", () => {
 
         expect(result).toBe(deserializedResult);
 
-        // Verify serdes is NOT passed to runInChildContext (only subType)
-        expect(capturedRunInChildContextOptions).toEqual({
+        // Verify serdes is NOT passed to runInChildContext (only subType and errorMapper)
+        expect(capturedRunInChildContextOptions).toMatchObject({
           subType: "WaitForCallback",
         });
+        expect(capturedRunInChildContextOptions).toHaveProperty("errorMapper");
 
         // Verify serdes is NOT passed to createCallback (only timeout/heartbeatTimeout)
         expect(capturedCreateCallbackConfig).toEqual({

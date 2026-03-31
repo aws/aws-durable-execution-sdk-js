@@ -1,0 +1,72 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "583741d8-8da7-46b2-a96a-95250aa494d5",
+    "EventTimestamp": "2026-03-05T17:38:24.487Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"functionName\":\"wait-named\",\"tenantId\":\"tenant-abc-123\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ChainedInvokeStarted",
+    "SubType": "ChainedInvoke",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-03-05T17:38:24.491Z",
+    "ChainedInvokeStartedDetails": {
+      "FunctionName": "",
+      "Input": {
+        "Payload": ""
+      },
+      "DurableExecutionArn": ""
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2026-03-05T17:38:24.513Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-03-05T17:38:24.487Z",
+      "EndTimestamp": "2026-03-05T17:38:24.513Z",
+      "Error": {},
+      "RequestId": "d2173995-9714-481b-9e9d-3dbc76cab2b8"
+    }
+  },
+  {
+    "EventType": "ChainedInvokeSucceeded",
+    "SubType": "ChainedInvoke",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-03-05T17:38:26.600Z",
+    "ChainedInvokeSucceededDetails": {
+      "Result": {
+        "Payload": "\"wait finished\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-03-05T17:38:26.603Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-03-05T17:38:26.602Z",
+      "EndTimestamp": "2026-03-05T17:38:26.603Z",
+      "Error": {},
+      "RequestId": "d3426f73-673f-4e40-a240-d56bb90d733c"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "583741d8-8da7-46b2-a96a-95250aa494d5",
+    "EventTimestamp": "2026-03-05T17:38:26.603Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"wait finished\""
+      }
+    }
+  }
+]

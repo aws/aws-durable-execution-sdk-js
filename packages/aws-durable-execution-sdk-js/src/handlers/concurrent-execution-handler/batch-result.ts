@@ -100,6 +100,11 @@ interface SerializedBatchResult {
  * Restores methods to deserialized BatchResult data
  */
 export function restoreBatchResult<R>(data: unknown): BatchResult<R> {
+  // If data is already a BatchResultImpl instance, return it as-is
+  if (data instanceof BatchResultImpl) {
+    return data;
+  }
+
   if (
     data &&
     typeof data === "object" &&

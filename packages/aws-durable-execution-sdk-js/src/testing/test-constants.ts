@@ -28,11 +28,17 @@ export const TEST_CONSTANTS = {
     iterationSubType: "MapIteration",
     maxConcurrency: undefined,
     topLevelSubType: "Map",
+    serdes: undefined,
+    itemSerdes: undefined,
+    nesting: undefined,
   },
   DEFAULT_PARALLEL_CONFIG: {
     iterationSubType: "ParallelBranch",
     maxConcurrency: undefined,
     topLevelSubType: "Parallel",
+    serdes: undefined,
+    itemSerdes: undefined,
+    nesting: undefined,
   },
 
   // Default step checkpoint templates (using string values to match actual usage)

@@ -305,6 +305,9 @@ async function createFunction(
     LoggingConfig: {
       LogGroup: logGroupName,
     },
+    TenancyConfig: exampleConfig.handler.includes("tenant-target")
+      ? { TenantIsolationMode: "PER_TENANT" }
+      : undefined,
   };
 
   const command = new CreateFunctionCommand(createParams);
@@ -365,6 +368,9 @@ async function updateFunction(
             },
           }
         : undefined,
+    TenancyConfig: exampleConfig.handler.includes("tenant-target")
+      ? { TenantIsolationMode: "PER_TENANT" }
+      : undefined,
   };
 
   // Check if DurableConfig needs updating
@@ -452,42 +458,48 @@ async function main(): Promise<void> {
       endpoint: env.LAMBDA_ENDPOINT,
     });
 
+    console.log("Checking if function exists...");
+    let functionExists = await checkFunctionExists(lambdaClient, functionName);
+    let currentConfig: GetFunctionConfigurationCommandOutput;
+
+    const zipFile = `${example}.zip`;
+    const selectedRuntime = mapRuntimeToEnum(runtime);
+
+    // Handle function deletion if configuration changes require it (outside retry logic)
+    if (functionExists) {
+      currentConfig = await getCurrentConfiguration(lambdaClient, functionName);
+      if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
+        console.log("Deleting function since durability changed");
+        functionExists = false;
+      }
+      if (!!currentConfig.CapacityProviderConfig !== useCapacityProvider) {
+        console.log("Deleting function since capacity provider changed");
+        functionExists = false;
+      }
+
+      // Check if tenancy configuration needs to change
+      const needsTenancy = exampleConfig.handler.includes("tenant-target");
+      const hasTenancy = !!currentConfig.TenancyConfig;
+      if (needsTenancy !== hasTenancy) {
+        console.log("Deleting function since tenancy configuration changed");
+        functionExists = false;
+      }
+
+      if (!functionExists) {
+        await lambdaClient.send(
+          new DeleteFunctionCommand({
+            FunctionName: functionName,
+          }),
+        );
+        // Wait for function to be fully deleted
+        console.log("Waiting for function deletion to complete...");
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+
+    // Handle function update or creation with retry logic
     await retryOnConflict(
       async () => {
-        console.log("Checking if function exists...");
-        let functionExists = await checkFunctionExists(
-          lambdaClient,
-          functionName,
-        );
-        let currentConfig: GetFunctionConfigurationCommandOutput;
-
-        const zipFile = `${example}.zip`;
-
-        const selectedRuntime = mapRuntimeToEnum(runtime);
-
-        if (functionExists) {
-          currentConfig = await getCurrentConfiguration(
-            lambdaClient,
-            functionName,
-          );
-          if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
-            console.log("Deleting function since durability changed");
-            functionExists = false;
-          }
-          if (!!currentConfig.CapacityProviderConfig !== useCapacityProvider) {
-            console.log("Deleting function since capacity provider changed");
-            functionExists = false;
-          }
-
-          if (!functionExists) {
-            await lambdaClient.send(
-              new DeleteFunctionCommand({
-                FunctionName: functionName,
-              }),
-            );
-          }
-        }
-
         if (functionExists) {
           await updateFunction(
             lambdaClient,

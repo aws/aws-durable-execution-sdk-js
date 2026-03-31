@@ -75,8 +75,10 @@ async function runHandler<
     durableExecution,
   );
 
-  // Extract customerHandlerEvent from the original event
-  const initialExecutionEvent = event.InitialExecutionState.Operations?.[0];
+  // Extract customerHandlerEvent from the complete operations array (after pagination)
+  // This ensures we get the full payload even for large payloads that are paginated
+  const initialExecutionEvent =
+    executionContext._stepData[Object.keys(executionContext._stepData)[0]];
   const customerHandlerEvent = JSON.parse(
     initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
   );

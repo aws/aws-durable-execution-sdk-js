@@ -73,8 +73,6 @@ describe("step-with-retry test", () => {
     expect(stepDetails).toBeDefined();
     expect(stepDetails?.result).toEqual(EXPECTED_RESULT);
 
-    execution.print();
-
     // Verify retry attempt tracking (should be 2 attempts before success)
     expect(typeof stepDetails?.attempt).toBe("number");
     expect(stepDetails?.attempt).toBeGreaterThanOrEqual(1);

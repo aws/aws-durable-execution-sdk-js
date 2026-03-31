@@ -30,7 +30,6 @@ createTests({
       // Wait for child callback to start
       await childCallbackOp.waitForData(WaitingOperationStatus.SUBMITTED);
       const childCallbackResult = JSON.stringify({ childData: 42 });
-      console.log("child callback op", childCallbackOp.getOperationData());
       await childCallbackOp.sendCallbackSuccess(childCallbackResult);
 
       const result = await executionPromise;

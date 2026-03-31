@@ -1,0 +1,168 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "d0ad0e67-4c41-444a-addd-a60bc9bc29f4",
+    "EventTimestamp": "2026-02-12T21:58:02.738Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "timeout-test",
+    "EventTimestamp": "2026-02-12T21:58:02.743Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjVjOTRiMmM0LTg1MjEtNDY5OC04ZTkzLWIzNWFhYTE4ZGQ0OCIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiMjY3NTVkM2YtY2FkOS00NmUzLWExMmQtMTJmNWI0YmY0N2VmIn0=",
+      "Timeout": 1,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 3,
+    "EventTimestamp": "2026-02-12T21:58:02.765Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-12T21:58:02.738Z",
+      "EndTimestamp": "2026-02-12T21:58:02.765Z",
+      "Error": {},
+      "RequestId": "f818180c-eb9b-4023-a7b1-081463b48b54"
+    }
+  },
+  {
+    "EventType": "CallbackTimedOut",
+    "SubType": "Callback",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "Name": "timeout-test",
+    "EventTimestamp": "2026-02-12T21:58:03.744Z",
+    "CallbackTimedOutDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Callback timed out"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "failure-test",
+    "EventTimestamp": "2026-02-12T21:58:03.747Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjVjOTRiMmM0LTg1MjEtNDY5OC04ZTkzLWIzNWFhYTE4ZGQ0OCIsIm9wZXJhdGlvbklkIjoiYzgxZTcyOGQ5ZDRjMmY2MyIsInRva2VuIjoiMDU2MGYzY2EtNmVlZi00MzlhLWFjMTAtOTgzNjkzOTI2NGY0In0=",
+      "Timeout": 10,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "failure-test",
+    "EventTimestamp": "2026-02-12T21:58:03.748Z",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Callback failed"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-02-12T21:58:03.769Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-12T21:58:03.745Z",
+      "EndTimestamp": "2026-02-12T21:58:03.769Z",
+      "Error": {},
+      "RequestId": "c0f805de-a98c-4971-b585-39d22c6c0293"
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2026-02-12T21:58:03.774Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-02-12T21:58:04.774Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-02-12T21:58:03.796Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-12T21:58:03.770Z",
+      "EndTimestamp": "2026-02-12T21:58:03.796Z",
+      "Error": {},
+      "RequestId": "c65fd8c3-c05d-4124-814a-c5303ed6a9c8"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 10,
+    "Id": "eccbc87e4b5ce2fe",
+    "EventTimestamp": "2026-02-12T21:58:04.773Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "check-error-types",
+    "EventTimestamp": "2026-02-12T21:58:04.776Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "check-error-types",
+    "EventTimestamp": "2026-02-12T21:58:04.776Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"timeoutError\":{\"isCallbackTimeoutError\":true,\"errorName\":\"CallbackTimeoutError\",\"errorMessage\":\"Callback timed out\"},\"failureError\":{\"isCallbackError\":true,\"errorName\":\"CallbackError\",\"errorMessage\":\"Callback failed\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-02-12T21:58:04.777Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-02-12T21:58:04.774Z",
+      "EndTimestamp": "2026-02-12T21:58:04.777Z",
+      "Error": {},
+      "RequestId": "6158a992-8105-4be6-a0d1-3903db62bd5e"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "d0ad0e67-4c41-444a-addd-a60bc9bc29f4",
+    "EventTimestamp": "2026-02-12T21:58:04.777Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"timeoutError\":{\"isCallbackTimeoutError\":true,\"errorName\":\"CallbackTimeoutError\",\"errorMessage\":\"Callback timed out\"},\"failureError\":{\"isCallbackError\":true,\"errorName\":\"CallbackError\",\"errorMessage\":\"Callback failed\"}}"
+      }
+    }
+  }
+]

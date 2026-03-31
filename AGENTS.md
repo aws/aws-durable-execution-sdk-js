@@ -495,9 +495,10 @@ const allResults = results.getResults();
 **Python:**
 
 ```python
+from collections.abc import Sequence
 from aws_durable_execution_sdk_python.concurrency import MapConfig, CompletionConfig
 
-def process_item(ctx: DurableContext, item: dict, index: int) -> dict:
+def process_item(ctx: DurableContext, item: dict, index: int, items: Sequence[dict]) -> dict:) -> dict:
     return ctx.step(lambda _: process(item), name=f"process-{index}")
 
 results = context.map(
@@ -833,7 +834,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: myDurableFunction
-      Runtime: nodejs22.x # or python3.12
+      Runtime: nodejs22.x # or python3.14
       Handler: index.handler
       Role: !GetAtt DurableFunctionRole.Arn
       Code:
@@ -894,7 +895,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: myDurableFunction
-      Runtime: nodejs22.x # or python3.12
+      Runtime: nodejs22.x # or python3.14
       Handler: index.handler
       CodeUri: ./src
       DurableConfig:

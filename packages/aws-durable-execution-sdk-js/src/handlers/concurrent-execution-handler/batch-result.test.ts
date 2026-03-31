@@ -4,7 +4,10 @@ import {
   createBatchResultSerdes,
 } from "./batch-result";
 import { BatchItem, BatchItemStatus } from "../../types";
-import { ChildContextError } from "../../errors/durable-error/durable-error";
+import {
+  ChildContextError,
+  CallbackError,
+} from "../../errors/durable-error/durable-error";
 
 class CustomError extends Error {
   additionalProperty = 1;
@@ -205,6 +208,33 @@ describe("BatchResult", () => {
       expect(failedItem.error).toHaveProperty("errorType", "ChildContextError");
       expect(failedItem.error).toHaveProperty("cause");
       expect(failedItem.error.cause).toBeInstanceOf(Error);
+    });
+
+    it("should return BatchResultImpl instance as-is when passed directly", () => {
+      // Create a BatchResultImpl with a ChildContextError
+      const customError = new CallbackError("Should be preserved");
+      const childContextError = new ChildContextError(
+        customError.message,
+        customError,
+      );
+
+      const items: BatchItem<string>[] = [
+        { index: 0, error: childContextError, status: BatchItemStatus.FAILED },
+      ];
+      const originalBatchResult = new BatchResultImpl(items, "ALL_COMPLETED");
+
+      // Pass the BatchResultImpl instance directly to restoreBatchResult
+      const result = restoreBatchResult(originalBatchResult);
+
+      // Should return the same instance
+      expect(result).toBe(originalBatchResult);
+
+      // Error should be preserved exactly
+      const failedItem = result.failed()[0];
+      expect(failedItem.error).toBe(childContextError);
+      expect(failedItem.error.message).toBe("Should be preserved");
+      expect(failedItem.error.errorType).toBe("ChildContextError");
+      expect(failedItem.error.cause).toBe(customError);
     });
   });
 });

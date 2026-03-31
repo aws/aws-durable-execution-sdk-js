@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "v1.x"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "v1.x"]
 
 permissions:
   contents: read # This is required for actions/checkout
@@ -64,6 +64,8 @@ jobs:
 
   integration-tests:
     needs: build
+    # Skip integration tests for PRs from forked repos (no access to secrets)
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
     permissions:
       contents: read
       id-token: write
