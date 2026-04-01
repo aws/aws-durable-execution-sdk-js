@@ -24,7 +24,7 @@ createTests({
       expect(result.summary.maxConcurrency).toBe(10);
 
       assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 2,
+        invocationCompletedDifference: 1,
       });
     });
   },

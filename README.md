@@ -113,10 +113,11 @@ npm install @aws/durable-execution-sdk-js-testing --save-dev
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 
 // Create runner with skipTime to fast-forward through waits
+await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });
+
 const runner = new LocalDurableTestRunner({
   handlerFunction: myDurableHandler,
 });
-await runner.setupTestEnvironment({ skipTime: true });
 
 const result = await runner.run({ userId: "123" });
 

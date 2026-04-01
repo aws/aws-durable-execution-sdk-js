@@ -29,6 +29,7 @@ const scopes = new Set([
   "sdk",
   "examples",
   "eslint-plugin",
+  "ci",
   "deps",
   "deps-dev",
 ]);
