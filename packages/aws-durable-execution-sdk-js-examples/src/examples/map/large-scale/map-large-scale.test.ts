@@ -23,9 +23,7 @@ createTests({
       expect(result.summary.averageItemSize).toBeGreaterThan(100000); // ~100KB per item
       expect(result.summary.maxConcurrency).toBe(10);
 
-      assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 1,
-      });
+      assertEventSignatures(execution);
     });
   },
 });

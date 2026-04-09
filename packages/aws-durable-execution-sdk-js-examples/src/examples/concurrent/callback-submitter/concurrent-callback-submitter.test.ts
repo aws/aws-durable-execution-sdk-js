@@ -32,7 +32,7 @@ createTests({
       const execution = await executionPromise;
 
       assertEventSignatures(execution, "concurrent-callback-submitter", {
-        invocationCompletedDifference: 2,
+        invocationCompletedDifference: 1,
       });
     });
   },
