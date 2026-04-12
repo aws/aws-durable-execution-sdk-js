@@ -158,8 +158,8 @@ withDurableExecution(handler, { plugins: [pluginA, pluginB] })
 
 // Supporting types
 interface InvocationInfo   { requestId, executionArn }
-interface OperationInfo    { operationId, operationName?, operationType, parentOperationId?, attributes? }
-interface AttemptInfo      extends OperationInfo { attempt }
+interface OperationInfo    { Id, Name?, Type, SubType?, ParentId?, StartTimestamp? }
+interface AttemptInfo      extends OperationInfo { Attempt }
 interface AttemptEndInfo   extends AttemptInfo   { outcome: 'succeeded'|'failed'|'retrying', error?, nextAttemptDelaySeconds? }
 interface ExecutionEndInfo extends InvocationInfo { status: 'SUCCEEDED'|'FAILED', executionInput, executionResult?, executionError?, operations: Record<string, Operation> }
 
