@@ -19,17 +19,35 @@ export function createPluginRunner(
   ) =>
     plugins.forEach((p) => {
       try {
-        (p[method] as any)?.(info);
-      } catch (e) {
-        // Plugin errors must never affect SDK execution
+        const result = (p[method] as any)?.(info);
+        // Fire-and-forget — never block the SDK on plugin async work
+        if (result && typeof result.catch === "function") {
+          result.catch(() => {});
+        }
+      } catch {
+        // Sync errors also swallowed
       }
     });
+
+  const runAwait = async <K extends keyof DurableInstrumentationPlugin>(
+    method: K,
+    info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
+  ) => {
+    for (const p of plugins) {
+      try {
+        await (p[method] as any)?.(info);
+      } catch {
+        // Plugin errors must never affect SDK execution
+      }
+    }
+  };
 
   return {
     onExecutionStart: (info: InvocationInfo) => run("onExecutionStart", info),
     onExecutionEnd: (info: ExecutionEndInfo) => run("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
-    onInvocationEnd: (info: InvocationInfo) => run("onInvocationEnd", info),
+    onInvocationEnd: async (info: InvocationInfo) =>
+      runAwait("onInvocationEnd", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
     onOperationEnd: (info: OperationInfo & { error?: Error }) =>
       run("onOperationEnd", info),

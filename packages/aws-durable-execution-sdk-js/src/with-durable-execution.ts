@@ -313,7 +313,7 @@ async function runHandler<
         Error: createErrorObjectFromError(error),
       };
     } finally {
-      plugin.onInvocationEnd?.(invocationInfo);
+      await plugin.onInvocationEnd?.(invocationInfo);
     }
   })();
 }
