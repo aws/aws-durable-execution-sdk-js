@@ -66,3 +66,12 @@ export {
 } from "./utils/retry/retry-config";
 export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
+export {
+  DurableInstrumentationPlugin,
+  InvocationInfo,
+  ExecutionEndInfo,
+  OperationChangeInfo,
+  AttemptInfo,
+  AttemptEndInfo,
+  shouldSampleExecution,
+} from "./types/plugin";
