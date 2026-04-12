@@ -146,7 +146,6 @@ Add the plugin system to the TypeScript SDK. This is the foundation everything e
 
 - Define and export `DurableInstrumentationPlugin` interface and all supporting types (`InvocationInfo`, `OperationInfo`, `AttemptInfo`, `ExecutionEndInfo`, `OperationChangeInfo`)
 - Wire plugin hooks into `with-durable-execution.ts` and all handlers (step, wait, invoke, parallel, map, runInChildContext, waitForCallback, waitForCondition)
-- Remove `endAllActiveParentSpans()` from all handlers as part of this wiring
 - Implement `enrichLogContext` in the SDK logger
 - Export `shouldSampleExecution(executionArn, rate)` sampling helper
 

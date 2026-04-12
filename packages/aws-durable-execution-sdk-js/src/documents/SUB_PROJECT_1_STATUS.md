@@ -39,10 +39,6 @@ Each handler needs to call `onOperationStart`, `onOperationEnd`, `onOperationAtt
 
 `src/utils/logger/default-logger.ts` — call `plugin.enrichLogContext?.()` before each log line and merge the result into the structured log output. The logger currently has no plugin reference; it needs to be passed in or accessed via context.
 
-### Remove `endAllActiveParentSpans()` from handlers
-
-The OTel POC added `endAllActiveParentSpans()` calls in `wait-handler.ts`, `invoke-handler.ts`, and others. These are incorrect (wrong timing, split traces) and should be removed as part of this wiring. The plugin model replaces this approach.
-
 ### Export `shouldSampleExecution` from public `index.ts`
 
 Currently exported from `src/types/index.ts` but needs to be verified it reaches the package's public `src/index.ts` barrel export.
