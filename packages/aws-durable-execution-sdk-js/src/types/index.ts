@@ -12,4 +12,12 @@ export * from "./durable-promise";
 export * from "./durable-execution";
 export * from "./operation-lifecycle-state";
 export * from "./operation-lifecycle";
-export * from "./plugin";
+export {
+  DurableInstrumentationPlugin,
+  InvocationInfo,
+  ExecutionEndInfo,
+  OperationChangeInfo,
+  AttemptInfo,
+  AttemptEndInfo,
+  shouldSampleExecution,
+} from "./plugin";

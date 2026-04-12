@@ -408,7 +408,7 @@ export class CheckpointManager implements Checkpoint {
       operationIds: operations.map((op) => op.Id).filter(Boolean),
     });
 
-    const updatedOperations: Record<string, OperationUpdate> = {};
+    const updatedOperations: Record<string, Operation> = {};
 
     operations.forEach((operation) => {
       if (operation.Id) {
@@ -425,7 +425,7 @@ export class CheckpointManager implements Checkpoint {
         // If status changed and we have a waiting promise, resolve it
         if (oldStatus !== newStatus) {
           this.resolveWaitingOperation(operation.Id);
-          updatedOperations[operation.Id] = operation as OperationUpdate;
+          updatedOperations[operation.Id] = operation;
         }
       }
     });

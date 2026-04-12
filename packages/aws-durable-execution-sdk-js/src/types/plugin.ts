@@ -33,7 +33,7 @@ export interface ExecutionEndInfo extends InvocationInfo {
 }
 
 export interface OperationChangeInfo extends InvocationInfo {
-  updatedOperations: Record<string, OperationUpdate>;
+  updatedOperations: Record<string, Operation>;
   operations: Record<string, Operation>;
 }
 
