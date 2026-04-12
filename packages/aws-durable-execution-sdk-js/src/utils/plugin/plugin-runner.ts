@@ -16,7 +16,14 @@ export function createPluginRunner(
   const run = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
-  ) => plugins.forEach((p) => (p[method] as any)?.(info));
+  ) =>
+    plugins.forEach((p) => {
+      try {
+        (p[method] as any)?.(info);
+      } catch (e) {
+        // Plugin errors must never affect SDK execution
+      }
+    });
 
   return {
     onExecutionStart: (info: InvocationInfo) => run("onExecutionStart", info),
@@ -34,7 +41,13 @@ export function createPluginRunner(
       run("onOperationChange", info),
     enrichLogContext: () =>
       plugins.reduce(
-        (acc, p) => ({ ...acc, ...p.enrichLogContext?.() }),
+        (acc, p) => {
+          try {
+            return { ...acc, ...p.enrichLogContext?.() };
+          } catch {
+            return acc;
+          }
+        },
         {} as Record<string, string | number | boolean>,
       ),
   };

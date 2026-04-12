@@ -155,6 +155,32 @@ describe("plugin hooks", () => {
     expect(plugin2.onInvocationStart).toHaveBeenCalled();
   });
 
+  it("plugin errors do not affect SDK execution", async () => {
+    const throwingPlugin: DurableInstrumentationPlugin = {
+      onInvocationStart: () => {
+        throw new Error("plugin bug");
+      },
+      onInvocationEnd: () => {
+        throw new Error("plugin bug");
+      },
+      onExecutionStart: () => {
+        throw new Error("plugin bug");
+      },
+      onExecutionEnd: () => {
+        throw new Error("plugin bug");
+      },
+    };
+
+    const handler = withDurableExecution(
+      jest.fn().mockResolvedValue({ ok: true }),
+      { plugins: [throwingPlugin] },
+    );
+
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: "SUCCEEDED",
+    });
+  });
+
   it("enrichLogContext merges results from all plugins", () => {
     const pluginA: DurableInstrumentationPlugin = {
       enrichLogContext: () => ({ traceId: "abc" }),
@@ -163,7 +189,6 @@ describe("plugin hooks", () => {
       enrichLogContext: () => ({ spanId: "xyz" }),
     };
 
-    // Access the runner directly via createPluginRunner
     const { createPluginRunner } = jest.requireActual(
       "./utils/plugin/plugin-runner",
     );
@@ -177,18 +202,17 @@ describe("plugin hooks", () => {
 });
 
 describe("shouldSampleExecution", () => {
+  const { shouldSampleExecution } = jest.requireActual("./types/plugin");
+
   it("always returns true when rate is 1.0", () => {
-    const { shouldSampleExecution } = jest.requireActual("./types/plugin");
     expect(shouldSampleExecution("arn:test", 1.0)).toBe(true);
   });
 
   it("always returns false when rate is 0.0", () => {
-    const { shouldSampleExecution } = jest.requireActual("./types/plugin");
     expect(shouldSampleExecution("arn:test", 0.0)).toBe(false);
   });
 
   it("is deterministic — same arn always gives same result", () => {
-    const { shouldSampleExecution } = jest.requireActual("./types/plugin");
     const arn = "arn:aws:lambda:us-east-1:123:function:my-fn:1/exec/abc";
     const result = shouldSampleExecution(arn, 0.5);
     expect(shouldSampleExecution(arn, 0.5)).toBe(result);
