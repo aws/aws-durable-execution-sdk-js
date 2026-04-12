@@ -12,3 +12,4 @@ export * from "./durable-promise";
 export * from "./durable-execution";
 export * from "./operation-lifecycle-state";
 export * from "./operation-lifecycle";
+export * from "./plugin";

@@ -12,6 +12,7 @@ import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
 } from "./core";
+import { DurableInstrumentationPlugin } from "./plugin";
 
 /**
  * A handler function type for a durable execution that provides automatic state persistence,
@@ -116,6 +117,7 @@ export interface DurableExecutionConfig {
    * ```
    */
   client?: LambdaClient;
+  plugins?: DurableInstrumentationPlugin[];
 }
 
 /**
