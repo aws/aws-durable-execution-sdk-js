@@ -57,15 +57,23 @@ withDurableExecution(handler)
 
 ```typescript
 export interface OperationInfo {
-  operationId: string;
-  operationName?: string;
-  operationType: string; // "step" | "wait" | "parallel" | "map" | "invoke" | "callback" | "wait-for-callback" | "wait-for-condition" | "child-context" | "execution"
-  parentOperationId?: string;
-  attributes?: Record<string, string | number | boolean>;
+  /** Matches Operation.Id (hashed) */
+  Id: string;
+  /** Matches Operation.Name */
+  Name?: string;
+  /** Matches Operation.Type */
+  Type: string;
+  /** Matches Operation.SubType */
+  SubType?: string;
+  /** Matches Operation.ParentId (hashed) */
+  ParentId?: string;
+  /** Matches Operation.StartTimestamp — available if operation was previously checkpointed */
+  StartTimestamp?: Date;
 }
 
 export interface AttemptInfo extends OperationInfo {
-  attempt: number;
+  /** Matches Operation.StepDetails.Attempt */
+  Attempt: number;
 }
 
 export interface AttemptEndInfo extends AttemptInfo {
