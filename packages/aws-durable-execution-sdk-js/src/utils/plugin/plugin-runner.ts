@@ -44,7 +44,8 @@ export function createPluginRunner(
 
   return {
     onExecutionStart: (info: InvocationInfo) => run("onExecutionStart", info),
-    onExecutionEnd: (info: ExecutionEndInfo) => run("onExecutionEnd", info),
+    onExecutionEnd: async (info: ExecutionEndInfo) =>
+      runAwait("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
     onInvocationEnd: async (info: InvocationInfo) =>
       runAwait("onInvocationEnd", info),

@@ -181,7 +181,7 @@ async function runHandler<
             result.error || new Error(result.message),
           ),
         };
-        plugin.onExecutionEnd?.({
+        await plugin.onExecutionEnd?.({
           ...invocationInfo,
           status: "FAILED",
           executionInput: customerHandlerEvent,
@@ -238,7 +238,7 @@ async function runHandler<
             // Continue anyway - the checkpoint will be retried on next invocation
           }
 
-          plugin.onExecutionEnd?.({
+          await plugin.onExecutionEnd?.({
             ...invocationInfo,
             status: "SUCCEEDED",
             executionInput: customerHandlerEvent,
