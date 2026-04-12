@@ -144,7 +144,7 @@ Sampling is execution-level consistent — if an execution is sampled, all its i
 
 Add the plugin system to the TypeScript SDK. This is the foundation everything else builds on.
 
-- Define and export `DurableInstrumentationPlugin` interface and all supporting types (`InvocationInfo`, `OperationInfo`, `AttemptInfo`, `ExecutionEndInfo`, `ExecutionSummary`)
+- Define and export `DurableInstrumentationPlugin` interface and all supporting types (`InvocationInfo`, `OperationInfo`, `AttemptInfo`, `ExecutionEndInfo`, `OperationChangeInfo`)
 - Wire plugin hooks into `with-durable-execution.ts` and all handlers (step, wait, invoke, parallel, map, runInChildContext, waitForCallback, waitForCondition)
 - Remove `endAllActiveParentSpans()` from all handlers as part of this wiring
 - Implement `enrichLogContext` in the SDK logger
@@ -161,8 +161,7 @@ interface InvocationInfo   { requestId, executionArn }
 interface OperationInfo    { operationId, operationName?, operationType, parentOperationId?, attributes? }
 interface AttemptInfo      extends OperationInfo { attempt }
 interface AttemptEndInfo   extends AttemptInfo   { outcome: 'succeeded'|'failed'|'retrying', error?, nextAttemptDelaySeconds? }
-interface ExecutionEndInfo extends InvocationInfo { status: 'SUCCEEDED'|'FAILED', executionInput, executionResult?, executionError?, getSummary() }
-interface ExecutionSummary { durationMs, totalOperations, totalAttempts, failedOperations, retriedOperations, operationsByType }
+interface ExecutionEndInfo extends InvocationInfo { status: 'SUCCEEDED'|'FAILED', executionInput, executionResult?, executionError?, operations: Record<string, Operation> }
 
 // Plugin interface — all methods optional
 interface DurableInstrumentationPlugin {
@@ -174,7 +173,15 @@ interface DurableInstrumentationPlugin {
   onOperationEnd?(info: OperationInfo & { error? }): void
   onOperationAttemptStart?(info: AttemptInfo): void
   onOperationAttemptEnd?(info: AttemptEndInfo): void
+  // fired only when ≥1 operation status changed after a checkpoint batch
+  onOperationChange?(info: OperationChangeInfo): void
   enrichLogContext?(): Record<string, string|number|boolean> | undefined
+}
+
+// OperationChangeInfo — aligns with AWS Lambda API naming
+interface OperationChangeInfo extends InvocationInfo {
+  updatedOperations: Record<string, OperationUpdate>  // delta: status-changed ops (CheckpointDurableExecution)
+  operations: Record<string, Operation>               // full current state (GetDurableExecutionState)
 }
 
 // Sampling helper

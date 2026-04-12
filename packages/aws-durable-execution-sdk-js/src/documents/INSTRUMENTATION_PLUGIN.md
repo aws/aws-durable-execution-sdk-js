@@ -84,16 +84,24 @@ export interface ExecutionEndInfo extends InvocationInfo {
   executionResult?: unknown;
   executionError?: Error;
   executionInput: unknown;
-  getSummary(): ExecutionSummary;
+  /**
+   * Full execution state at the time the execution reached terminal status.
+   * Keyed by hashed operation ID — same shape as GetDurableExecutionState Operations.
+   */
+  operations: Record<string, Operation>;
 }
 
-export interface ExecutionSummary {
-  durationMs: number;
-  totalOperations: number;
-  totalAttempts: number;
-  failedOperations: number;
-  retriedOperations: number;
-  operationsByType: Record<string, number>;
+export interface OperationChangeInfo extends InvocationInfo {
+  /**
+   * Operations whose status changed in this checkpoint response (the delta).
+   * Keyed by hashed operation ID. Uses OperationUpdate from CheckpointDurableExecution response.
+   */
+  updatedOperations: Record<string, OperationUpdate>;
+  /**
+   * Full current execution state after applying this checkpoint response.
+   * Keyed by hashed operation ID — same shape as GetDurableExecutionState Operations.
+   */
+  operations: Record<string, Operation>;
 }
 
 export interface DurableInstrumentationPlugin {
@@ -105,6 +113,11 @@ export interface DurableInstrumentationPlugin {
   onOperationEnd?(info: OperationInfo & { error?: Error }): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
+  /**
+   * Called after a checkpoint batch completes and the backend returns new state.
+   * Only fires when at least one operation's status changed in the response.
+   */
+  onOperationChange?(info: OperationChangeInfo): void;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
 }
 ```
@@ -141,6 +154,7 @@ export function createPluginRunner(
     onOperationEnd: (info) => run("onOperationEnd", info),
     onOperationAttemptStart: (info) => run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info) => run("onOperationAttemptEnd", info),
+    onOperationChange: (info) => run("onOperationChange", info),
     enrichLogContext: () =>
       plugins.reduce((acc, p) => ({ ...acc, ...p.enrichLogContext?.() }), {}),
   };
