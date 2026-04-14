@@ -17,11 +17,13 @@ import {
   ChildContextError,
   CallbackSubmitterError,
 } from "../../errors/durable-error/durable-error";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   getNextStepId: () => string,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc<Logger>,

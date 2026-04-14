@@ -18,6 +18,7 @@ import {
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -30,6 +31,7 @@ export const createCallback = (
   createStepId: () => string,
   checkAndUpdateReplayMode: () => void,
   parentId?: string,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,

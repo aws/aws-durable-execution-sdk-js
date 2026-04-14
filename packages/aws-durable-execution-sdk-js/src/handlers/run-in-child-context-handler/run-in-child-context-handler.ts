@@ -28,6 +28,7 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -75,6 +76,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,

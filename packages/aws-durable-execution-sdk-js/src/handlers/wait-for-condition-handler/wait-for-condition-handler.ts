@@ -29,6 +29,7 @@ import {
   WaitForConditionError,
 } from "../../errors/durable-error/durable-error";
 import { DurableLogger } from "../../types/durable-logger";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -36,6 +37,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   createStepId: () => string,
   logger: Logger,
   parentId: string | undefined,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T, Logger>,

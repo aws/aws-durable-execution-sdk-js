@@ -19,6 +19,7 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -26,6 +27,7 @@ export const createInvokeHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
+  plugin: DurableInstrumentationPlugin = {},
 ): {
   <I, O>(
     funcId: string,

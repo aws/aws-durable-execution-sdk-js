@@ -35,6 +35,7 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -43,6 +44,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
   createStepId: () => string,
   logger: Logger,
   parentId?: string,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,

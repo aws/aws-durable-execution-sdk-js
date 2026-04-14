@@ -13,6 +13,7 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createParallelHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -22,6 +23,7 @@ export const createParallelHandler = <Logger extends DurableLogger>(
     executor: ConcurrentExecutor<TItem, TResult, Logger>,
     config?: ConcurrencyConfig<TResult>,
   ) => DurablePromise<BatchResult<TResult>>,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrBranches:

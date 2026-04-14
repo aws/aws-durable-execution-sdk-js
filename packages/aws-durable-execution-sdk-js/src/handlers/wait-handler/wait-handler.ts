@@ -14,6 +14,7 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -21,6 +22,7 @@ export const createWaitHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
+  plugin: DurableInstrumentationPlugin = {},
 ): {
   (name: string, duration: Duration): DurablePromise<void>;
   (duration: Duration): DurablePromise<void>;

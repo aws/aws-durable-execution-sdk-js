@@ -53,16 +53,18 @@ import {
   DurableLoggingContext,
 } from "../../types/durable-logger";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
   stepDataEmitter: EventEmitter;
+  plugin: DurableInstrumentationPlugin;
   setTerminating(): void;
 }
 
-export class DurableContextImpl<Logger extends DurableLogger>
-  implements DurableContext<Logger>
-{
+export class DurableContextImpl<
+  Logger extends DurableLogger,
+> implements DurableContext<Logger> {
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
   private durableLogger: Logger;
@@ -282,6 +284,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.createStepId.bind(this),
         this.durableLogger,
         this._parentId,
+        this.durableExecution.plugin,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -306,6 +309,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.createStepId.bind(this),
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
+        this.durableExecution.plugin,
       );
       return invokeHandler<I, O>(
         ...([
@@ -355,6 +359,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
             parentId,
           ),
         this._parentId,
+        this.durableExecution.plugin,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
@@ -376,6 +381,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.createStepId.bind(this),
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
+        this.durableExecution.plugin,
       );
       return typeof nameOrDuration === "string"
         ? waitHandler(nameOrDuration, maybeDuration!)
@@ -427,6 +433,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.createStepId.bind(this),
         this.checkAndUpdateReplayMode.bind(this),
         this._parentId,
+        this.durableExecution.plugin,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });
@@ -449,6 +456,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this._executionContext,
         this.getNextStepId.bind(this),
         this.runInChildContext.bind(this),
+        this.durableExecution.plugin,
       );
       return waitForCallbackHandler(
         nameOrSubmitter!,
@@ -477,6 +485,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.createStepId.bind(this),
         this.durableLogger,
         this._parentId,
+        this.durableExecution.plugin,
       );
 
       return typeof nameOrCheckFunc === "string" ||
@@ -510,6 +519,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const mapHandler = createMapHandler(
         this._executionContext,
         this._executeConcurrently.bind(this),
+        this.durableExecution.plugin,
       );
       return mapHandler(
         nameOrItems,
@@ -539,6 +549,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
       const parallelHandler = createParallelHandler(
         this._executionContext,
         this._executeConcurrently.bind(this),
+        this.durableExecution.plugin,
       );
       return parallelHandler(nameOrBranches, branchesOrConfig, maybeConfig);
     });
@@ -564,6 +575,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this._executionContext,
         this.runInChildContext.bind(this),
         this.skipNextOperation.bind(this),
+        this.durableExecution.plugin,
       );
       const promise = concurrentExecutionHandler(
         nameOrItems,
@@ -578,7 +590,10 @@ export class DurableContextImpl<Logger extends DurableLogger>
   }
 
   get promise(): DurableContext<Logger>["promise"] {
-    return createPromiseHandler(this.runInChildContext.bind(this));
+    return createPromiseHandler(
+      this.runInChildContext.bind(this),
+      this.durableExecution.plugin,
+    );
   }
 }
 

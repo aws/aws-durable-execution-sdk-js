@@ -1,6 +1,7 @@
 import { DurableContext, DurablePromise, DurableLogger } from "../../types";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 import { PromiseCombinatorError } from "../../errors/durable-error/durable-error";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 // Minimal error decoration for Promise.allSettled results
 function decorateErrors<T>(
@@ -65,6 +66,7 @@ function createErrorAwareSerdes<T>(): Serdes<PromiseSettledResult<T>[]> {
 
 export const createPromiseHandler = <Logger extends DurableLogger>(
   runInChildContext: DurableContext<Logger>["runInChildContext"],
+  plugin: DurableInstrumentationPlugin = {},
 ): {
   all: <T>(
     nameOrPromises: string | undefined | DurablePromise<T>[],

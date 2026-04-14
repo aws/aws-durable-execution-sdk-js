@@ -77,6 +77,7 @@ async function runHandler<
   const durableExecution = {
     checkpointManager,
     stepDataEmitter,
+    plugin,
     setTerminating: (): void => checkpointManager.setTerminating(),
   };
 
