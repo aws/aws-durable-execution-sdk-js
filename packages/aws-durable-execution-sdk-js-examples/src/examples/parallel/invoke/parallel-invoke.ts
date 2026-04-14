@@ -13,15 +13,22 @@ export const config: ExampleConfig = {
 };
 
 export const handler = withDurableExecution(
-  async (event: { functionNames: string[] }, context: DurableContext) => {
+  async (
+    event: {
+      branches: Array<{ functionName: string; payload?: unknown }>;
+    },
+    context: DurableContext,
+  ) => {
     const results = await context.parallel(
       "parallel-invokes",
-      event.functionNames.map((fnName, index) => ({
+      event.branches.map((branch, index) => ({
         name: `branch-${index}`,
         func: async (ctx: DurableContext) => {
-          return await ctx.invoke(`invoke-${index}`, fnName, {
-            data: `input-${index}`,
-          });
+          return await ctx.invoke(
+            `invoke-${index}`,
+            branch.functionName,
+            branch.payload ?? {},
+          );
         },
       })),
     );
