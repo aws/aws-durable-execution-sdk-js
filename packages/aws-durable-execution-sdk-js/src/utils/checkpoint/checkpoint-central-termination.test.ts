@@ -1217,6 +1217,226 @@ describe("CheckpointManager - Centralized Termination", () => {
     });
   });
 
+  describe("processQueue triggers checkAndTerminate after queue drains", () => {
+    it("should call checkAndTerminate when checkpoint queue finishes processing and no termination is scheduled", async () => {
+      // Setup: mock the checkpoint API to succeed
+      mockClient.checkpointDurableExecution.mockResolvedValue({
+        checkpointToken: "new-token",
+      });
+
+      // Spy on checkAndTerminate BEFORE any operations that trigger it
+      const checkAndTerminateSpy = jest.spyOn(
+        checkpointManager as any,
+        "checkAndTerminate",
+      );
+
+      // 1. Enqueue a checkpoint FIRST so the queue is non-empty when
+      //    markOperationAwaited calls checkAndTerminate (which will see
+      //    a non-empty queue and NOT schedule termination).
+      const checkpointPromise = checkpointManager.checkpoint("completed-step", {
+        Action: "SUCCEED" as any,
+        SubType: OperationSubType.STEP,
+        Type: OperationType.STEP,
+      });
+      checkpointPromise.catch(() => {});
+
+      // 2. Register an operation in IDLE_NOT_AWAITED (no checkAndTerminate call)
+      checkpointManager.markOperationState(
+        "invoke-1",
+        OperationLifecycleState.IDLE_NOT_AWAITED,
+        {
+          metadata: {
+            stepId: "invoke-1",
+            type: OperationType.CHAINED_INVOKE,
+            subType: OperationSubType.CHAINED_INVOKE,
+          },
+        },
+      );
+
+      // 3. Transition to IDLE_AWAITED — calls checkAndTerminate, but queue
+      //    is non-empty so shouldTerminate returns undefined → no timer set
+      checkpointManager.markOperationAwaited("invoke-1");
+
+      expect(checkAndTerminateSpy).toHaveBeenCalledTimes(1);
+
+      // 4. Let the queue drain — since no terminationTimer is set,
+      //    processQueue should call checkAndTerminate
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(checkAndTerminateSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("should skip checkAndTerminate when queue drains but termination is already scheduled", async () => {
+      // Setup: mock the checkpoint API to succeed
+      mockClient.checkpointDurableExecution.mockResolvedValue({
+        checkpointToken: "new-token",
+      });
+
+      const checkAndTerminateSpy = jest.spyOn(
+        checkpointManager as any,
+        "checkAndTerminate",
+      );
+
+      // 1. Register an operation in IDLE_AWAITED — this calls
+      //    checkAndTerminate which schedules termination (timer starts)
+      checkpointManager.markOperationState(
+        "invoke-1",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "invoke-1",
+            type: OperationType.CHAINED_INVOKE,
+            subType: OperationSubType.CHAINED_INVOKE,
+          },
+        },
+      );
+
+      expect(checkAndTerminateSpy).toHaveBeenCalledTimes(1);
+
+      // 2. Enqueue a checkpoint while termination timer is ticking
+      const checkpointPromise = checkpointManager.checkpoint("completed-step", {
+        Action: "SUCCEED" as any,
+        SubType: OperationSubType.STEP,
+        Type: OperationType.STEP,
+      });
+      checkpointPromise.catch(() => {});
+
+      // 3. Let the queue drain — terminationTimer is already set,
+      //    so processQueue should NOT call checkAndTerminate again
+      await jest.advanceTimersByTimeAsync(0);
+
+      // checkAndTerminate should still have been called only once
+      // (from markOperationState), not again from processQueue
+      expect(checkAndTerminateSpy).toHaveBeenCalledTimes(1);
+
+      // 4. Let the cooldown fire — termination should still happen
+      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
+
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: expect.any(String),
+        }),
+      );
+    });
+
+    it("should terminate after queue drains when all operations are IDLE_AWAITED", async () => {
+      // Setup: mock the checkpoint API to succeed
+      mockClient.checkpointDurableExecution.mockResolvedValue({
+        checkpointToken: "new-token",
+      });
+
+      // Simulate the parallel invoke race condition:
+      // 1. A completed invoke checkpoints SUCCEED (adds to queue)
+      const checkpointPromise = checkpointManager.checkpoint(
+        "completed-invoke",
+        {
+          Action: "SUCCEED" as any,
+          SubType: OperationSubType.CHAINED_INVOKE,
+          Type: OperationType.CHAINED_INVOKE,
+        },
+      );
+      checkpointPromise.catch(() => {});
+
+      // 2. Pending invokes transition to IDLE_NOT_AWAITED (skips checkAndTerminate)
+      checkpointManager.markOperationState(
+        "pending-invoke-1",
+        OperationLifecycleState.IDLE_NOT_AWAITED,
+        {
+          metadata: {
+            stepId: "pending-invoke-1",
+            type: OperationType.CHAINED_INVOKE,
+            subType: OperationSubType.CHAINED_INVOKE,
+          },
+        },
+      );
+
+      // 3. Pending invokes transition to IDLE_AWAITED (calls checkAndTerminate,
+      //    but queue is non-empty so shouldTerminate returns undefined)
+      checkpointManager.markOperationAwaited("pending-invoke-1");
+
+      // At this point, checkAndTerminate was called but couldn't terminate
+      // because the queue was non-empty.
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+
+      // 4. Let the queue drain (processQueue runs via setImmediate)
+      await jest.advanceTimersByTimeAsync(0);
+
+      // 5. After queue drains, processQueue should call checkAndTerminate,
+      //    which now sees: queue empty, not processing, all ops IDLE_AWAITED
+      //    → schedules termination → cooldown fires → terminates
+      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
+
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: expect.any(String),
+        }),
+      );
+    });
+
+    it("should terminate after queue drains with multiple pending parallel invoke branches", async () => {
+      // Simulates 4 parallel invoke branches where one completes and checkpoints
+      // SUCCEED while the remaining 3 transition to IDLE_AWAITED. Verifies that
+      // processQueue calls checkAndTerminate after the queue drains, allowing
+      // the function to suspend while remaining branches are pending.
+      mockClient.checkpointDurableExecution.mockResolvedValue({
+        checkpointToken: "new-token",
+      });
+
+      // Branch A completed — its child context checkpoints SUCCEED (fire-and-forget)
+      const checkpointPromise = checkpointManager.checkpoint(
+        "branch-a-child-ctx",
+        {
+          Action: "SUCCEED" as any,
+          SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+          Type: OperationType.CONTEXT,
+        },
+      );
+      checkpointPromise.catch(() => {});
+
+      // Branches B, C, D still running — their invokes go through Phase 1 → IDLE_NOT_AWAITED
+      for (const branch of [
+        "branch-b-invoke",
+        "branch-c-invoke",
+        "branch-d-invoke",
+      ]) {
+        checkpointManager.markOperationState(
+          branch,
+          OperationLifecycleState.IDLE_NOT_AWAITED,
+          {
+            metadata: {
+              stepId: branch,
+              type: OperationType.CHAINED_INVOKE,
+              subType: OperationSubType.CHAINED_INVOKE,
+            },
+          },
+        );
+      }
+
+      // Phase 2: all pending invokes transition to IDLE_AWAITED
+      // Each calls checkAndTerminate, but queue is non-empty → no termination
+      for (const branch of [
+        "branch-b-invoke",
+        "branch-c-invoke",
+        "branch-d-invoke",
+      ]) {
+        checkpointManager.markOperationAwaited(branch);
+      }
+
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+
+      // Queue drains → processQueue finally block → checkAndTerminate
+      await jest.advanceTimersByTimeAsync(0);
+      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
+
+      // Function should suspend with all 3 pending invokes in IDLE_AWAITED
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: expect.any(String),
+        }),
+      );
+    });
+  });
+
   describe("startTimerWithPolling - setTimeout overflow protection", () => {
     it("should skip setTimeout when delay exceeds MAX_POLL_DURATION_MS", () => {
       const stepId = "long-wait-step";
