@@ -12,7 +12,6 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createMapSummaryGenerator } from "../../utils/summary-generators/summary-generators";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const createMapHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -22,7 +21,6 @@ export const createMapHandler = <Logger extends DurableLogger>(
     executor: ConcurrentExecutor<TItem, TResult, Logger>,
     config?: ConcurrencyConfig<TResult>,
   ) => DurablePromise<BatchResult<TResult>>,
-  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <TInput, TOutput>(
     nameOrItems: string | undefined | TInput[],

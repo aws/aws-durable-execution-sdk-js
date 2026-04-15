@@ -456,7 +456,6 @@ export class DurableContextImpl<
         this._executionContext,
         this.getNextStepId.bind(this),
         this.runInChildContext.bind(this),
-        this.durableExecution.plugin,
       );
       return waitForCallbackHandler(
         nameOrSubmitter!,
@@ -519,7 +518,6 @@ export class DurableContextImpl<
       const mapHandler = createMapHandler(
         this._executionContext,
         this._executeConcurrently.bind(this),
-        this.durableExecution.plugin,
       );
       return mapHandler(
         nameOrItems,
@@ -549,7 +547,6 @@ export class DurableContextImpl<
       const parallelHandler = createParallelHandler(
         this._executionContext,
         this._executeConcurrently.bind(this),
-        this.durableExecution.plugin,
       );
       return parallelHandler(nameOrBranches, branchesOrConfig, maybeConfig);
     });
@@ -575,7 +572,6 @@ export class DurableContextImpl<
         this._executionContext,
         this.runInChildContext.bind(this),
         this.skipNextOperation.bind(this),
-        this.durableExecution.plugin,
       );
       const promise = concurrentExecutionHandler(
         nameOrItems,
@@ -590,10 +586,7 @@ export class DurableContextImpl<
   }
 
   get promise(): DurableContext<Logger>["promise"] {
-    return createPromiseHandler(
-      this.runInChildContext.bind(this),
-      this.durableExecution.plugin,
-    );
+    return createPromiseHandler(this.runInChildContext.bind(this));
   }
 }
 

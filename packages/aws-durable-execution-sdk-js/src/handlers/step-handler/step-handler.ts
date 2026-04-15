@@ -35,7 +35,14 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  AttemptEndInfoOutcome,
+} from "../../types/plugin";
+import {
+  toAttemptEndInfo,
+  toAttemptInfo,
+} from "../../utils/operation/operation";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -247,7 +254,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
         try {
           stepData = context.getStepData(stepId);
-          const currentAttempt = stepData?.StepDetails?.Attempt || 0;
+          const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
           const stepContext: StepContext<Logger> = { logger };
 
           // Mark operation as EXECUTING
@@ -264,13 +271,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
               },
             },
           );
-
+          const attemptInfo = toAttemptInfo(stepData, currentAttempt);
+          plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           result = await runWithContext(
             stepId,
             parentId,
             () => fn(stepContext),
-            currentAttempt + 1,
+            currentAttempt,
             DurableExecutionMode.ExecutionMode,
           );
 
@@ -292,6 +300,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Payload: serializedResult,
             Name: name,
           });
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.SUCCEEDED,
+            {
+              attempt: currentAttempt,
+            },
+          );
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
 
           checkpoint.markOperationState(
             stepId,
@@ -341,11 +357,24 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               OperationLifecycleState.COMPLETED,
             );
+            const attemptEndInfo = toAttemptEndInfo(
+              stepData,
+              AttemptEndInfoOutcome.FAILED,
+              {
+                attempt: currentAttempt,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              },
+            );
+            plugin.onOperationAttemptEnd?.(attemptEndInfo);
             throw DurableOperationError.fromErrorObject(
               createErrorObjectFromError(error),
             );
           }
 
+          const nextAttemptDelaySeconds = retryDecision.delay
+            ? durationToSeconds(retryDecision.delay)
+            : 1;
           await checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
@@ -355,11 +384,19 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Error: createErrorObjectFromError(error),
             Name: name,
             StepOptions: {
-              NextAttemptDelaySeconds: retryDecision.delay
-                ? durationToSeconds(retryDecision.delay)
-                : 1,
+              NextAttemptDelaySeconds: nextAttemptDelaySeconds,
             },
           });
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.RETRYING,
+            {
+              attempt: currentAttempt,
+              error: error instanceof Error ? error : new Error(String(error)),
+              nextAttemptDelaySeconds,
+            },
+          );
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
 
           checkpoint.markOperationState(
             stepId,

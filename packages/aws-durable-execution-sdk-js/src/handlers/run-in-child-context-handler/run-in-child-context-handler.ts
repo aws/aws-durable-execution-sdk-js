@@ -29,6 +29,7 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
+import { toOperationInfo } from "../../utils/operation/operation";
 
 // Checkpoint size limit in bytes (256KB)
 const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
@@ -119,6 +120,9 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       context,
     );
 
+    const opInfo = toOperationInfo(stepData);
+    plugin.onOperationStart?.(opInfo);
+
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     let phase1Result: T | undefined;
     let phase1Error: unknown;
@@ -135,7 +139,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         // Mark this run-in-child-context as finished to prevent descendant operations
         checkpoint.markAncestorFinished(entityId);
 
-        return handleCompletedChildContext(
+        const result = await handleCompletedChildContext(
           context,
           parentContext,
           entityId,
@@ -145,6 +149,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           getParentLogger,
           createChildContext,
         );
+        plugin.onOperationEnd?.(opInfo);
+        return result;
       }
 
       // Execute if not completed
@@ -159,6 +165,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         getParentLogger,
         createChildContext,
         parentId,
+        plugin,
       );
     })()
       .then((result) => {
@@ -280,10 +287,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+  plugin: DurableInstrumentationPlugin = {},
 ): Promise<T> => {
   const serdes = options?.serdes || defaultSerdes;
   const errorMapper = options?.errorMapper;
   const isVirtual = options?.virtualContext === true;
+  const opInfo = toOperationInfo(context.getStepData(entityId));
 
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
@@ -387,6 +396,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       });
     }
 
+    plugin.onOperationEnd?.(opInfo);
     return result;
   } catch (error) {
     log(
@@ -419,6 +429,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     const errorObject = createErrorObjectFromError(error);
     const reconstructedError =
       DurableOperationError.fromErrorObject(errorObject);
+
+    plugin.onOperationEnd?.({ ...opInfo, error: reconstructedError });
 
     // Use errorMapper if provided, otherwise wrap in ChildContextError
     if (errorMapper) {

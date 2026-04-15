@@ -17,7 +17,6 @@ import { log } from "../../utils/logger/logger";
 import { BatchResultImpl, restoreBatchResult } from "./batch-result";
 import { defaultSerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export class ConcurrencyController<Logger extends DurableLogger> {
   constructor(
@@ -485,7 +484,6 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
   skipNextOperation: () => void,
-  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],

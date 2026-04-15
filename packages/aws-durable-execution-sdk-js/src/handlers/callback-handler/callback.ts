@@ -50,6 +50,14 @@ export const createCallback = (
     const stepId = createStepId();
     const serdes = config?.serdes || createPassThroughSerdes<T>();
 
+    const opInfo = {
+      Id: stepId,
+      Name: name,
+      Type: OperationType.CALLBACK,
+      SubType: OperationSubType.CALLBACK,
+      ParentId: parentId,
+    };
+
     // Phase 1: Setup and checkpoint
     let isCompleted = false;
 
@@ -70,6 +78,8 @@ export const createCallback = (
         context,
       );
 
+      plugin.onOperationStart?.(opInfo);
+
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Callback already completed:", { stepId });
@@ -89,6 +99,7 @@ export const createCallback = (
           },
         );
 
+        plugin.onOperationEnd?.(opInfo);
         isCompleted = true;
         return;
       }
@@ -114,6 +125,10 @@ export const createCallback = (
           },
         );
 
+        plugin.onOperationEnd?.({
+          ...opInfo,
+          error: new Error("Callback failed"),
+        });
         isCompleted = true;
         return;
       }

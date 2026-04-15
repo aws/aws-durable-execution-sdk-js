@@ -39,6 +39,14 @@ export const createWaitHandler = (
     const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();
 
+    const opInfo = {
+      Id: stepId,
+      Name: actualName,
+      Type: OperationType.WAIT,
+      SubType: OperationSubType.WAIT,
+      ParentId: parentId,
+    };
+
     // Phase 1: Start wait operation
     let isCompleted = false;
 
@@ -63,6 +71,8 @@ export const createWaitHandler = (
         context,
       );
 
+      plugin.onOperationStart?.(opInfo);
+
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Wait already completed:", { stepId });
@@ -83,6 +93,7 @@ export const createWaitHandler = (
           },
         );
 
+        plugin.onOperationEnd?.(opInfo);
         isCompleted = true;
         return;
       }
@@ -157,6 +168,7 @@ export const createWaitHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
+        plugin.onOperationEnd?.(opInfo);
         return;
       }
 

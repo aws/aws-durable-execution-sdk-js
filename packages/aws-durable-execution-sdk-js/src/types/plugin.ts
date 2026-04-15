@@ -1,4 +1,4 @@
-import { Operation, OperationUpdate } from "@aws-sdk/client-lambda";
+import { Operation } from "@aws-sdk/client-lambda";
 
 export interface OperationInfo {
   Id: string;
@@ -13,8 +13,17 @@ export interface AttemptInfo extends OperationInfo {
   Attempt: number;
 }
 
+export enum AttemptEndInfoOutcome {
+  SUCCEEDED = "succeeded",
+  FAILED = "failed",
+  RETRYING = "retrying",
+}
+
 export interface AttemptEndInfo extends AttemptInfo {
-  outcome: "succeeded" | "failed" | "retrying";
+  outcome:
+    | AttemptEndInfoOutcome.SUCCEEDED
+    | AttemptEndInfoOutcome.FAILED
+    | AttemptEndInfoOutcome.RETRYING;
   error?: Error;
   nextAttemptDelaySeconds?: number;
 }

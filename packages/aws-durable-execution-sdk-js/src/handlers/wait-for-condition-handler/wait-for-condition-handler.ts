@@ -29,7 +29,14 @@ import {
   WaitForConditionError,
 } from "../../errors/durable-error/durable-error";
 import { DurableLogger } from "../../types/durable-logger";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  AttemptEndInfoOutcome,
+} from "../../types/plugin";
+import {
+  toAttemptInfo,
+  toAttemptEndInfo,
+} from "../../utils/operation/operation";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -209,6 +216,10 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
 
+          plugin.onOperationAttemptStart?.(
+            toAttemptInfo(stepData, currentAttempt),
+          );
+
           const newState: T = await runWithContext(
             stepId,
             parentId,
@@ -249,6 +260,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               Payload: serializedState,
               Name: name,
             });
+            plugin.onOperationAttemptEnd?.(
+              toAttemptEndInfo(stepData, AttemptEndInfoOutcome.SUCCEEDED, {
+                attempt: currentAttempt,
+              }),
+            );
             checkpoint.markOperationState(
               stepId,
               OperationLifecycleState.COMPLETED,
@@ -256,6 +272,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             return deserializedState;
           }
 
+          const nextAttemptDelaySeconds = durationToSeconds(decision.delay);
           await checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
@@ -265,9 +282,15 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             Payload: serializedState,
             Name: name,
             StepOptions: {
-              NextAttemptDelaySeconds: durationToSeconds(decision.delay),
+              NextAttemptDelaySeconds: nextAttemptDelaySeconds,
             },
           });
+          plugin.onOperationAttemptEnd?.(
+            toAttemptEndInfo(stepData, AttemptEndInfoOutcome.RETRYING, {
+              attempt: currentAttempt,
+              nextAttemptDelaySeconds,
+            }),
+          );
 
           checkpoint.markOperationState(
             stepId,
@@ -297,6 +320,12 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             Error: createErrorObjectFromError(error),
             Name: name,
           });
+          plugin.onOperationAttemptEnd?.(
+            toAttemptEndInfo(stepData, AttemptEndInfoOutcome.FAILED, {
+              attempt: currentAttempt,
+              error: error instanceof Error ? error : new Error(String(error)),
+            }),
+          );
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,

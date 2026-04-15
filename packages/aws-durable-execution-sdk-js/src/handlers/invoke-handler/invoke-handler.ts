@@ -70,6 +70,14 @@ export const createInvokeHandler = (
 
     const stepId = createStepId();
 
+    const opInfo = {
+      Id: stepId,
+      Name: name,
+      Type: OperationType.CHAINED_INVOKE,
+      SubType: OperationSubType.CHAINED_INVOKE,
+      ParentId: parentId,
+    };
+
     // Phase 1: Start invoke operation
     let isCompleted = false;
 
@@ -90,6 +98,8 @@ export const createInvokeHandler = (
         context,
       );
 
+      plugin.onOperationStart?.(opInfo);
+
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Invoke already completed:", { stepId });
@@ -109,6 +119,7 @@ export const createInvokeHandler = (
           },
         );
 
+        plugin.onOperationEnd?.(opInfo);
         isCompleted = true;
         return;
       }
@@ -135,6 +146,10 @@ export const createInvokeHandler = (
           },
         );
 
+        plugin.onOperationEnd?.({
+          ...opInfo,
+          error: new Error("Invoke failed"),
+        });
         isCompleted = true;
         return;
       }
@@ -235,6 +250,7 @@ export const createInvokeHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
+        plugin.onOperationEnd?.(opInfo);
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
@@ -251,6 +267,7 @@ export const createInvokeHandler = (
       log("❌", "Invoke failed:", { stepId, status: stepData?.Status });
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+      plugin.onOperationEnd?.({ ...opInfo, error: new Error("Invoke failed") });
 
       const invokeDetails = stepData?.ChainedInvokeDetails;
       if (invokeDetails?.Error) {
