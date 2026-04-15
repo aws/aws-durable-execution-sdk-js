@@ -12,6 +12,10 @@ export interface LoggingExecutionContext {
   tenantId: string | undefined;
 }
 
+export type EnrichLogContextFn = () =>
+  | Record<string, string | number | boolean>
+  | undefined;
+
 type DurableLogField = unknown;
 
 /**
@@ -96,6 +100,7 @@ function jsonErrorReplacer(
 function formatDurableLogData(
   level: DurableLogLevel,
   logData: DurableLogData,
+  enrichLogContext: EnrichLogContextFn | undefined,
   ...messageParams: DurableLogField[]
 ): string {
   const result: DefaultDurableLogEntry = {
@@ -116,6 +121,18 @@ function formatDurableLogData(
 
   if (logData.attempt !== undefined) {
     result.attempt = logData.attempt;
+  }
+
+  // Merge plugin-provided context fields
+  if (enrichLogContext) {
+    try {
+      const extra = enrichLogContext();
+      if (extra) {
+        Object.assign(result, extra);
+      }
+    } catch {
+      // Plugin errors must never affect logging
+    }
   }
 
   if (messageParams.length === 1) {
@@ -164,10 +181,15 @@ export class DefaultLogger implements DurableLogger {
   private consoleLogger: Console;
   private durableLoggingContext: DurableLoggingContext | undefined = undefined;
   private executionContext: LoggingExecutionContext | undefined;
+  private enrichLogContext: EnrichLogContextFn | undefined;
   private noOpLog = (): void => {};
 
-  constructor(executionContext?: LoggingExecutionContext) {
+  constructor(
+    executionContext?: LoggingExecutionContext,
+    enrichLogContext?: EnrichLogContextFn,
+  ) {
     this.executionContext = executionContext;
+    this.enrichLogContext = enrichLogContext;
 
     // Override the RIC logger to provide custom attributes on the structured log output
     this.consoleLogger = new Console({
@@ -217,6 +239,7 @@ export class DefaultLogger implements DurableLogger {
           formatDurableLogData(
             DurableLogLevel.DEBUG,
             loggingContext.getDurableLogData(),
+            this.enrichLogContext,
             ...params,
           ),
         );
@@ -235,6 +258,7 @@ export class DefaultLogger implements DurableLogger {
           formatDurableLogData(
             DurableLogLevel.INFO,
             loggingContext.getDurableLogData(),
+            this.enrichLogContext,
             ...params,
           ),
         );
@@ -253,6 +277,7 @@ export class DefaultLogger implements DurableLogger {
           formatDurableLogData(
             DurableLogLevel.WARN,
             loggingContext.getDurableLogData(),
+            this.enrichLogContext,
             ...params,
           ),
         );
@@ -271,6 +296,7 @@ export class DefaultLogger implements DurableLogger {
           formatDurableLogData(
             DurableLogLevel.ERROR,
             loggingContext.getDurableLogData(),
+            this.enrichLogContext,
             ...params,
           ),
         );
@@ -363,6 +389,7 @@ export class DefaultLogger implements DurableLogger {
  */
 export const createDefaultLogger = (
   executionContext?: LoggingExecutionContext,
+  enrichLogContext?: EnrichLogContextFn,
 ): DurableLogger => {
-  return new DefaultLogger(executionContext);
+  return new DefaultLogger(executionContext, enrichLogContext);
 };

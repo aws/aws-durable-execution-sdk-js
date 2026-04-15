@@ -53,7 +53,10 @@ async function runHandler<
     executionContext.terminationManager,
     checkpointToken,
     stepDataEmitter,
-    createDefaultLogger(executionContext),
+    createDefaultLogger(
+      executionContext,
+      plugin.enrichLogContext?.bind(plugin),
+    ),
     new Set<string>(),
     plugin,
     executionContext.requestId,
@@ -86,7 +89,10 @@ async function runHandler<
     context,
     durableExecutionMode,
     // Default logger may not have the same type as Logger, but we should always provide a default logger even if the user overrides it
-    createDefaultLogger() as Logger,
+    createDefaultLogger(
+      undefined,
+      plugin.enrichLogContext?.bind(plugin),
+    ) as Logger,
     undefined,
     durableExecution,
   );
