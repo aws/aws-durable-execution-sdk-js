@@ -138,7 +138,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   onOperationAttemptStart(info: AttemptInfo): void {
     if (!this.sampled) return;
-    const spanId = deterministicSpanId(info.Id);
+    const spanId = deterministicSpanId(info.Id + info.Attempt);
     const operationType = this.mapOperationType(info);
     const attemptSpan = this.tracer.startActiveSpan(
       info.Name ?? operationType,
@@ -160,7 +160,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   onOperationAttemptEnd(info: AttemptEndInfo): void {
     if (!this.sampled) return;
-    const spanId = deterministicSpanId(info.Id);
+    const spanId = deterministicSpanId(info.Id + info.Attempt);
     const key = `${spanId}-attempt-${info.Attempt}`;
     const span = this.operationSpans.get(key);
     if (!span) return;

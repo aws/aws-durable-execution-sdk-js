@@ -5,6 +5,8 @@
 */build
 /dist
 */dist
+*dist-cjs
+*dist
 /coverage
 */coverage
 *.iml
@@ -15,6 +17,11 @@
 *.tsbuildinfo
 .rollup.cache
 */.rollup.cache
+
+# tsc or npm pack artifacts
+*.d.ts
+*.d.ts.map
+*.tgz
 
 # VS Code
 .vscode/

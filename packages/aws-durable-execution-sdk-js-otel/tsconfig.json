@@ -13,10 +13,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "incremental": true,
-    "paths": {
-      "@aws/durable-execution-sdk-js": ["../aws-durable-execution-sdk-js/src"]
-    }
+    "incremental": true
   },
   "include": ["src"]
 }
