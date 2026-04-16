@@ -19,5 +19,6 @@ export {
   OperationChangeInfo,
   AttemptInfo,
   AttemptEndInfo,
+  AttemptEndInfoOutcome,
   shouldSampleExecution,
 } from "./plugin";

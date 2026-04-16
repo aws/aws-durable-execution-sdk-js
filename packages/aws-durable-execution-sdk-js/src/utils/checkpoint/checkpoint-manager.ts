@@ -21,10 +21,10 @@ import {
   MAX_POLL_DURATION_MS,
 } from "../constants/constants";
 import {
-  OperationLifecycleState,
   OperationInfo,
   OperationMetadata,
-} from "../../types";
+} from "../../types/operation-lifecycle";
+import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";

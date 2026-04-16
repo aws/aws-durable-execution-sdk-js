@@ -71,7 +71,9 @@ export {
   InvocationInfo,
   ExecutionEndInfo,
   OperationChangeInfo,
+  OperationInfo,
   AttemptInfo,
   AttemptEndInfo,
+  AttemptEndInfoOutcome,
   shouldSampleExecution,
 } from "./types/plugin";
