@@ -1,12 +1,13 @@
 import {
   trace,
-  context as otelContext,
+  ROOT_CONTEXT,
   Span,
   SpanStatusCode,
   Context,
   TracerProvider,
   Tracer,
 } from "@opentelemetry/api";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type {
   DurableInstrumentationPlugin,
   InvocationInfo,
@@ -17,7 +18,7 @@ import type {
 } from "@aws/durable-execution-sdk-js";
 import { shouldSampleExecution } from "@aws/durable-execution-sdk-js";
 import { ContextExtractor, xRayContextExtractor } from "./context-extractors";
-import { deterministicSpanId } from "./deterministic-id";
+import { DeterministicIdGenerator } from "./deterministic-id-generator";
 
 export interface DurableOtelPluginConfig {
   provider?: TracerProvider;
@@ -31,21 +32,70 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   private contextExtractor: ContextExtractor;
   private samplingRate: number;
   private sampled = false;
-  private parentContext: () => Context = () => otelContext.active();
   private executionArn = "";
+  private invocationContext: Context = ROOT_CONTEXT;
   private invocationSpan: Span | undefined;
+  private activeSpan: Span | undefined;
+  // Maps operation ID → span
   private operationSpans = new Map<string, Span>();
+  // Maps operation ID → context (with that operation's span set on it)
+  private operationContexts = new Map<string, Context>();
   private provider: TracerProvider | undefined;
+  private idGenerator: DeterministicIdGenerator;
+  private INVOCATION_SPAN_ID = "0";
 
   constructor(config: DurableOtelPluginConfig = {}) {
     const instrumentationName =
       config.instrumentationName ?? "aws-durable-execution-sdk-js";
-    this.provider = config.provider;
-    this.tracer = (config.provider ?? trace.getTracerProvider()).getTracer(
-      instrumentationName,
-    );
+    this.idGenerator = new DeterministicIdGenerator();
+    if (config.provider) {
+      this.provider = config.provider;
+      this.tracer = config.provider.getTracer(instrumentationName);
+    } else {
+      const provider = new NodeTracerProvider({
+        idGenerator: this.idGenerator,
+      });
+      this.provider = provider;
+      this.tracer = provider.getTracer(instrumentationName);
+    }
+
     this.contextExtractor = config.contextExtractor ?? xRayContextExtractor;
     this.samplingRate = config.samplingRate ?? 1.0;
+  }
+
+  /**
+   * Resolves the parent operation ID for a given operation.
+   * First tries to infer from the ID structure (e.g., "1-3" → "1").
+   * Falls back to explicit parentId, then undefined.
+   */
+  private resolveParentId(id: string, parentId?: string): string {
+    const lastDash = id.lastIndexOf("-");
+    if (lastDash > 0) {
+      const inferredParentId = id.substring(0, lastDash);
+      if (
+        inferredParentId !== id &&
+        this.operationContexts.has(inferredParentId)
+      ) {
+        return inferredParentId;
+      }
+    }
+    if (parentId && this.operationContexts.has(parentId)) {
+      return parentId;
+    }
+    return this.INVOCATION_SPAN_ID;
+  }
+
+  /**
+   * Resolves the parent context for a given operation.
+   * First tries to infer the parent from the operation ID structure (e.g., "1-3" → parent "1").
+   * Falls back to explicit ParentId lookup, then to invocation context.
+   */
+  private getParentContext(id: string, parentId?: string): Context {
+    const resolved = this.resolveParentId(id, parentId);
+    if (resolved) {
+      return this.operationContexts.get(resolved) ?? this.invocationContext;
+    }
+    return this.invocationContext;
   }
 
   onExecutionStart(info: InvocationInfo): void {
@@ -55,22 +105,23 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   onInvocationStart(info: InvocationInfo): void {
     if (!this.sampled) return;
     this.executionArn = info.executionArn;
-    this.parentContext = () => this.contextExtractor(info);
-    this.invocationSpan = this.tracer.startActiveSpan(
+    const extractedContext = this.contextExtractor(info);
+    this.idGenerator.setNextSpanOperationId(this.INVOCATION_SPAN_ID);
+    this.invocationSpan = this.tracer.startSpan(
       "invocation",
       {
         attributes: {
           "durable.execution.arn": info.executionArn,
         },
       },
-      this.parentContext(),
-      (span) => span,
+      extractedContext,
     );
-    const invocationContext = trace.setSpan(
-      this.parentContext(),
+    this.invocationContext = trace.setSpan(
+      extractedContext,
       this.invocationSpan,
     );
-    this.parentContext = () => invocationContext;
+    this.activeSpan = this.invocationSpan;
+    this.operationSpans.set(this.INVOCATION_SPAN_ID, this.invocationSpan);
   }
 
   private static readonly OPERATION_TYPE_MAP: Record<string, string> = {
@@ -83,9 +134,9 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   private static readonly SUBTYPE_MAP: Record<string, string> = {
     PARALLEL: "parallel",
-    PARALLEL_BRANCH: "parallel",
+    PARALLEL_BRANCH: "parallel-branch",
     MAP: "map",
-    MAP_ITERATION: "map",
+    MAP_ITERATION: "map-iteration",
     WAIT_FOR_CALLBACK: "wait-for-callback",
     WAIT_FOR_CONDITION: "wait-for-condition",
   };
@@ -101,9 +152,10 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   onOperationStart(info: OperationInfo): void {
     if (!this.sampled) return;
-    const spanId = deterministicSpanId(info.Id);
     const operationType = this.mapOperationType(info);
-    const span = this.tracer.startActiveSpan(
+    const parentCtx = this.getParentContext(info.Id, info.ParentId);
+    this.idGenerator.setNextSpanOperationId(info.Id);
+    const span = this.tracer.startSpan(
       info.Name ?? operationType,
       {
         attributes: {
@@ -114,16 +166,16 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
         },
         startTime: info.StartTimestamp,
       },
-      this.parentContext(),
-      (s) => s,
+      parentCtx,
     );
-    this.operationSpans.set(spanId, span);
+    this.operationSpans.set(info.Id, span);
+    this.operationContexts.set(info.Id, trace.setSpan(parentCtx, span));
+    this.activeSpan = span;
   }
 
   onOperationEnd(info: OperationInfo & { error?: Error }): void {
     if (!this.sampled) return;
-    const spanId = deterministicSpanId(info.Id);
-    const span = this.operationSpans.get(spanId);
+    const span = this.operationSpans.get(info.Id);
     if (!span) return;
     if (info.error) {
       span.setStatus({
@@ -133,14 +185,19 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       span.recordException(info.error);
     }
     span.end();
-    this.operationSpans.delete(spanId);
+    this.operationSpans.delete(info.Id);
+    this.operationContexts.delete(info.Id);
+    const parentId = this.resolveParentId(info.Id, info.ParentId);
+    this.activeSpan = this.operationSpans.get(parentId);
   }
 
   onOperationAttemptStart(info: AttemptInfo): void {
     if (!this.sampled) return;
-    const spanId = deterministicSpanId(info.Id + info.Attempt);
+    const key = `${info.Id}-attempt-${info.Attempt}`;
     const operationType = this.mapOperationType(info);
-    const attemptSpan = this.tracer.startActiveSpan(
+    const parentCtx = this.getParentContext(info.Id, info.ParentId);
+    this.idGenerator.setNextSpanOperationId(key);
+    const attemptSpan = this.tracer.startSpan(
       info.Name ?? operationType,
       {
         attributes: {
@@ -152,16 +209,15 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
         },
         startTime: info.StartTimestamp,
       },
-      this.parentContext(),
-      (s) => s,
+      parentCtx,
     );
-    this.operationSpans.set(`${spanId}-attempt-${info.Attempt}`, attemptSpan);
+    this.operationSpans.set(key, attemptSpan);
+    this.activeSpan = attemptSpan;
   }
 
   onOperationAttemptEnd(info: AttemptEndInfo): void {
     if (!this.sampled) return;
-    const spanId = deterministicSpanId(info.Id + info.Attempt);
-    const key = `${spanId}-attempt-${info.Attempt}`;
+    const key = `${info.Id}-attempt-${info.Attempt}`;
     const span = this.operationSpans.get(key);
     if (!span) return;
     span.setAttribute("durable.attempt.outcome", info.outcome);
@@ -174,12 +230,15 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     }
     span.end();
     this.operationSpans.delete(key);
+    const parentId = this.resolveParentId(info.Id, info.ParentId);
+    this.activeSpan = this.operationSpans.get(parentId);
   }
 
   async onInvocationEnd(_info: InvocationInfo): Promise<void> {
     if (!this.sampled) return;
     this.invocationSpan?.end();
     this.invocationSpan = undefined;
+    this.activeSpan = undefined;
     // Flush before Lambda freeze
     if (this.provider && "forceFlush" in this.provider) {
       await (this.provider as { forceFlush: () => Promise<void> }).forceFlush();
@@ -191,7 +250,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
-    const span = trace.getActiveSpan();
+    const span = this.activeSpan;
     if (!span?.isRecording()) return undefined;
     const ctx = span.spanContext();
     return { traceId: ctx.traceId, spanId: ctx.spanId };

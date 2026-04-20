@@ -120,9 +120,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       context,
     );
 
-    const opInfo = toOperationInfo(stepData);
-    plugin.onOperationStart?.(opInfo);
-
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     let phase1Result: T | undefined;
     let phase1Error: unknown;
@@ -149,7 +146,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           getParentLogger,
           createChildContext,
         );
-        plugin.onOperationEnd?.(opInfo);
         return result;
       }
 
@@ -292,7 +288,13 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   const serdes = options?.serdes || defaultSerdes;
   const errorMapper = options?.errorMapper;
   const isVirtual = options?.virtualContext === true;
-  const opInfo = toOperationInfo(context.getStepData(entityId));
+  const opInfo = {
+    Id: entityId,
+    Name: name,
+    Type: OperationType.CONTEXT,
+    SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+    ParentId: isVirtual ? parentId : entityId,
+  };
 
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
@@ -320,9 +322,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // parentId: this parameter is used for checkpointing, and should point to
     // valid parentId tthat is already checkpointed.
     // If this runInChildContext is a virtual, then we will use the parentId  (the ancestor)
-    // But if this runInChildContext is a virtual, then it's entityId can be used
+    // But if this runInChildContext is not virtual, then it's entityId can be used
     isVirtual ? parentId : entityId,
   );
+
+  plugin.onOperationStart?.(opInfo);
 
   try {
     // Execute the child context function with context tracking

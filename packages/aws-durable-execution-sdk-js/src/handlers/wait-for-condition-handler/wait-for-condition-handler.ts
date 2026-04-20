@@ -196,6 +196,14 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           });
         }
 
+        const baseAttemptInfo = toAttemptInfo(stepData, currentAttempt);
+        baseAttemptInfo.Id = baseAttemptInfo.Id || stepId;
+        baseAttemptInfo.Type = baseAttemptInfo.Type || OperationType.STEP;
+        baseAttemptInfo.SubType =
+          baseAttemptInfo.SubType || OperationSubType.WAIT_FOR_CONDITION;
+        baseAttemptInfo.Name = baseAttemptInfo.Name || name;
+        baseAttemptInfo.ParentId = baseAttemptInfo.ParentId || parentId;
+
         try {
           const waitForConditionContext: WaitForConditionContext<Logger> = {
             logger,
@@ -216,9 +224,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
 
-          plugin.onOperationAttemptStart?.(
-            toAttemptInfo(stepData, currentAttempt),
-          );
+          plugin.onOperationAttemptStart?.(baseAttemptInfo);
 
           const newState: T = await runWithContext(
             stepId,
@@ -260,11 +266,10 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               Payload: serializedState,
               Name: name,
             });
-            plugin.onOperationAttemptEnd?.(
-              toAttemptEndInfo(stepData, AttemptEndInfoOutcome.SUCCEEDED, {
-                attempt: currentAttempt,
-              }),
-            );
+            plugin.onOperationAttemptEnd?.({
+              ...baseAttemptInfo,
+              outcome: AttemptEndInfoOutcome.SUCCEEDED,
+            });
             checkpoint.markOperationState(
               stepId,
               OperationLifecycleState.COMPLETED,
@@ -285,12 +290,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               NextAttemptDelaySeconds: nextAttemptDelaySeconds,
             },
           });
-          plugin.onOperationAttemptEnd?.(
-            toAttemptEndInfo(stepData, AttemptEndInfoOutcome.RETRYING, {
-              attempt: currentAttempt,
-              nextAttemptDelaySeconds,
-            }),
-          );
+          plugin.onOperationAttemptEnd?.({
+            ...baseAttemptInfo,
+            outcome: AttemptEndInfoOutcome.RETRYING,
+            nextAttemptDelaySeconds,
+          });
 
           checkpoint.markOperationState(
             stepId,
@@ -320,12 +324,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             Error: createErrorObjectFromError(error),
             Name: name,
           });
-          plugin.onOperationAttemptEnd?.(
-            toAttemptEndInfo(stepData, AttemptEndInfoOutcome.FAILED, {
-              attempt: currentAttempt,
-              error: error instanceof Error ? error : new Error(String(error)),
-            }),
-          );
+          plugin.onOperationAttemptEnd?.({
+            ...baseAttemptInfo,
+            outcome: AttemptEndInfoOutcome.FAILED,
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,

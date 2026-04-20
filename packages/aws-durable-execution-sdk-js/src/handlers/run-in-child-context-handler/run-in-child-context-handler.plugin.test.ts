@@ -96,34 +96,6 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     );
   });
 
-  it("should call onOperationEnd on replay completed", async () => {
-    mockExecutionContext._stepData[hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)] = {
-      Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
-      Type: OperationType.CONTEXT,
-      StartTimestamp: new Date(),
-      Status: OperationStatus.SUCCEEDED,
-      ContextDetails: { Result: JSON.stringify("cached-result") },
-    } as any;
-
-    const handler = createRunInChildContextHandler(
-      mockExecutionContext,
-      mockCheckpoint,
-      mockParentContext,
-      createStepId,
-      mockGetLogger,
-      mockCreateChildContext,
-      "parent-123",
-      mockPlugin,
-    );
-
-    const childFn = jest.fn();
-    const result = await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
-
-    expect(result).toBe("cached-result");
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-  });
-
   it("should not throw when plugin hooks are undefined", async () => {
     const handler = createRunInChildContextHandler(
       mockExecutionContext,

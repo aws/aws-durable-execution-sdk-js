@@ -272,6 +272,11 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
+          attemptInfo.Id = attemptInfo.Id || stepId;
+          attemptInfo.Type = OperationType.STEP;
+          attemptInfo.SubType = attemptInfo.SubType || OperationSubType.STEP;
+          attemptInfo.Name = attemptInfo.Name || name;
+          attemptInfo.ParentId = attemptInfo.ParentId || parentId;
           plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           result = await runWithContext(
@@ -307,6 +312,12 @@ export const createStepHandler = <Logger extends DurableLogger>(
               attempt: currentAttempt,
             },
           );
+          attemptEndInfo.Id = attemptEndInfo.Id || stepId;
+          attemptEndInfo.Type = OperationType.STEP;
+          attemptEndInfo.SubType =
+            attemptEndInfo.SubType || OperationSubType.STEP;
+          attemptEndInfo.Name = attemptEndInfo.Name || name;
+          attemptEndInfo.ParentId = attemptEndInfo.ParentId || parentId;
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
 
           checkpoint.markOperationState(
@@ -366,6 +377,12 @@ export const createStepHandler = <Logger extends DurableLogger>(
                   error instanceof Error ? error : new Error(String(error)),
               },
             );
+            attemptEndInfo.Id = attemptEndInfo.Id || stepId;
+            attemptEndInfo.Type = OperationType.STEP;
+            attemptEndInfo.SubType =
+              attemptEndInfo.SubType || OperationSubType.STEP;
+            attemptEndInfo.Name = attemptEndInfo.Name || name;
+            attemptEndInfo.ParentId = attemptEndInfo.ParentId || parentId;
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
             throw DurableOperationError.fromErrorObject(
               createErrorObjectFromError(error),
@@ -396,6 +413,12 @@ export const createStepHandler = <Logger extends DurableLogger>(
               nextAttemptDelaySeconds,
             },
           );
+          attemptEndInfo.Id = attemptEndInfo.Id || stepId;
+          attemptEndInfo.Type = OperationType.STEP;
+          attemptEndInfo.SubType =
+            attemptEndInfo.SubType || OperationSubType.STEP;
+          attemptEndInfo.Name = attemptEndInfo.Name || name;
+          attemptEndInfo.ParentId = attemptEndInfo.ParentId || parentId;
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
 
           checkpoint.markOperationState(
