@@ -7,6 +7,7 @@ const sdk_trace_base_1 = require("@opentelemetry/sdk-trace-base");
 const exporter_trace_otlp_http_1 = require("@opentelemetry/exporter-trace-otlp-http");
 const id_generator_aws_xray_1 = require("@opentelemetry/id-generator-aws-xray");
 const propagator_aws_xray_1 = require("@opentelemetry/propagator-aws-xray");
+const api_1 = require("@opentelemetry/api");
 const exporter = new exporter_trace_otlp_http_1.OTLPTraceExporter({
   url: "http://localhost:4318/v1/traces",
 });
@@ -26,7 +27,7 @@ class MyError extends Error {
 /**
  * Durable Lambda function handler.
  */
-const lambdaHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
+const durableHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
   async (event, context) => {
     context.logger.info(
       "Starting comprehensive operations example with event:",
@@ -152,4 +153,20 @@ const lambdaHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
     ],
   },
 );
+const lambdaHandler = async (event, lambdaContext) => {
+  // CRITICAL: Extract X-Ray trace context per invocation
+  const xrayTraceId = process.env._X_AMZN_TRACE_ID;
+  const parentContext = xrayTraceId
+    ? api_1.propagation.extract(api_1.ROOT_CONTEXT, {
+        "x-amzn-trace-id": xrayTraceId,
+      })
+    : api_1.ROOT_CONTEXT;
+  return api_1.context.with(parentContext, async () => {
+    try {
+      return await durableHandler(event, lambdaContext);
+    } finally {
+      await provider.forceFlush();
+    }
+  });
+};
 module.exports = { lambdaHandler };

@@ -12,6 +12,11 @@ import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { AWSXRayIdGenerator } from "@opentelemetry/id-generator-aws-xray";
 import { AWSXRayPropagator } from "@opentelemetry/propagator-aws-xray";
+import {
+  propagation,
+  context as otelContext,
+  ROOT_CONTEXT,
+} from "@opentelemetry/api";
 
 const exporter = new OTLPTraceExporter({
   url: "http://localhost:4318/v1/traces",
@@ -34,7 +39,7 @@ class MyError extends Error {
 /**
  * Durable Lambda function handler.
  */
-const lambdaHandler = withDurableExecution(
+const durableHandler = withDurableExecution(
   async (event: any, context: DurableContext): Promise<any> => {
     context.logger.info(
       "Starting comprehensive operations example with event:",
@@ -171,5 +176,21 @@ const lambdaHandler = withDurableExecution(
     ],
   },
 );
+
+const lambdaHandler = async (event: any, lambdaContext: any) => {
+  // CRITICAL: Extract X-Ray trace context per invocation
+  const xrayTraceId = process.env._X_AMZN_TRACE_ID;
+  const parentContext = xrayTraceId
+    ? propagation.extract(ROOT_CONTEXT, { "x-amzn-trace-id": xrayTraceId })
+    : ROOT_CONTEXT;
+
+  return otelContext.with(parentContext, async () => {
+    try {
+      return await durableHandler(event, lambdaContext);
+    } finally {
+      await provider.forceFlush();
+    }
+  });
+};
 
 module.exports = { lambdaHandler };
