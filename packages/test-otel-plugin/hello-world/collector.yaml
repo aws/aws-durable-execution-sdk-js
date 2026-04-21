@@ -1,0 +1,15 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "localhost:4318"
+
+exporters:
+  awsxray:
+    region: "ap-southeast-2" # must be hardcoded — ${AWS_REGION} is NOT expanded
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [awsxray]

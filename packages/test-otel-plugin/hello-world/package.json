@@ -1,0 +1,35 @@
+{
+  "name": "hello-world",
+  "version": "1.0.0",
+  "description": "hello world sample for NodeJS",
+  "main": "app.js",
+  "scripts": {
+    "test": "jest",
+    "compile": "tsc"
+  },
+  "author": "SAM CLI",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-lambda": "^3.0.0",
+    "@aws/durable-execution-sdk-js": "file:aws-durable-execution-sdk-js-2.0.0-alpha.1.tgz",
+    "@aws/durable-execution-sdk-js-otel": "file:aws-durable-execution-sdk-js-otel-1.0.0.tgz",
+    "@grpc/grpc-js": "^1.14.3",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.214.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
+    "@opentelemetry/id-generator-aws-xray": "^2.1.0",
+    "@opentelemetry/propagator-aws-xray": "^2.2.0",
+    "@opentelemetry/sdk-trace-base": "^2.6.1",
+    "@opentelemetry/sdk-trace-node": "^2.6.1",
+    "esbuild": "^0.28.0"
+  },
+  "devDependencies": {
+    "@aws/durable-execution-sdk-js-testing": "file:aws-durable-execution-sdk-js-testing-1.1.1.tgz",
+    "@types/aws-lambda": "^8.10.145",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}
