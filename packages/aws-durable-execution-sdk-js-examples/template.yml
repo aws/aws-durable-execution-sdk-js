@@ -1373,6 +1373,31 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  ParallelInvoke:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelInvoke-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-invoke.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   ParallelMinSuccessful:
     Type: AWS::Serverless::Function
     Properties:
@@ -2148,6 +2173,31 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  WaitConfigurable:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfigurableWait-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: wait-configurable.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   WaitNamed:
     Type: AWS::Serverless::Function
     Properties:
@@ -2629,6 +2679,81 @@ Resources:
       FunctionName: WaitforCondition-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: wait-for-condition.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  WithRetryCallback:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WithRetry-Callback-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: with-retry-callback.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  WithRetryInvokeTarget:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WithRetry-InvokeTarget-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: with-retry-invoke-target.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  WithRetryInvoke:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WithRetry-Invoke-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: with-retry-invoke.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
