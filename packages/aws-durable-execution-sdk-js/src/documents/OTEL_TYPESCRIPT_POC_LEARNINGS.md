@@ -27,3 +27,12 @@ I did not explicitly test the links but the "branches" of the map and parallel a
 operation span. There is no use for the links in our case.
 Links are more useful when spans are in different traces or when the relationship is non-hierarchical. We don't have that
 issue here. We also do not persist span information across invocations, making links not useful for our use case.
+
+### Spans split across traces without \_X_AMZN_TRACE_ID extraction
+
+> The durable execution backend propagates the same Root traceId to every invocation via traceFields.
+> But without explicitly extracting \_X_AMZN_TRACE_ID per invocation, each invocation creates a new root span with a new traceId.
+> Fix: Extract \_X_AMZN_TRACE_ID inside the handler (not at module load) on every invocation.
+
+This wasn't the case in my testing, but explicitly extracting the \_X_AMZN_TRACE_ID per invocation led to the Lambda API calls
+to be part of the same trace.
