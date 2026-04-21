@@ -193,9 +193,12 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   onOperationAttemptStart(info: AttemptInfo): void {
     if (!this.sampled) return;
-    const key = `${info.Id}-attempt-${info.Attempt}`;
+    const key = `${info.Id}-${info.Attempt}`;
     const operationType = this.mapOperationType(info);
-    const parentCtx = this.getParentContext(info.Id, info.ParentId);
+    // Attempt spans nest under their operation span
+    const parentCtx =
+      this.operationContexts.get(info.Id) ??
+      this.getParentContext(info.Id, info.ParentId);
     this.idGenerator.setNextSpanOperationId(key);
     const attemptSpan = this.tracer.startSpan(
       info.Name ?? operationType,
@@ -217,7 +220,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   onOperationAttemptEnd(info: AttemptEndInfo): void {
     if (!this.sampled) return;
-    const key = `${info.Id}-attempt-${info.Attempt}`;
+    const key = `${info.Id}-${info.Attempt}`;
     const span = this.operationSpans.get(key);
     if (!span) return;
     span.setAttribute("durable.attempt.outcome", info.outcome);
