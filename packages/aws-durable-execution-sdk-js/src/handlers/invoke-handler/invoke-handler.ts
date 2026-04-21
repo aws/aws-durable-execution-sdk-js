@@ -98,8 +98,6 @@ export const createInvokeHandler = (
         context,
       );
 
-      plugin.onOperationStart?.(opInfo);
-
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Invoke already completed:", { stepId });
@@ -119,7 +117,6 @@ export const createInvokeHandler = (
           },
         );
 
-        plugin.onOperationEnd?.(opInfo);
         isCompleted = true;
         return;
       }
@@ -146,10 +143,6 @@ export const createInvokeHandler = (
           },
         );
 
-        plugin.onOperationEnd?.({
-          ...opInfo,
-          error: new Error("Invoke failed"),
-        });
         isCompleted = true;
         return;
       }
@@ -179,6 +172,8 @@ export const createInvokeHandler = (
           },
         });
       }
+
+      plugin.onOperationStart?.(opInfo);
 
       // Mark as IDLE_NOT_AWAITED
       checkpoint.markOperationState(

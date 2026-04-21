@@ -71,8 +71,6 @@ export const createWaitHandler = (
         context,
       );
 
-      plugin.onOperationStart?.(opInfo);
-
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Wait already completed:", { stepId });
@@ -93,7 +91,6 @@ export const createWaitHandler = (
           },
         );
 
-        plugin.onOperationEnd?.(opInfo);
         isCompleted = true;
         return;
       }

@@ -94,7 +94,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
         SubType: OperationSubType.STEP,
         ParentId: parentId,
       };
-      plugin.onOperationStart?.(opInfo);
 
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
@@ -112,7 +111,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
-        plugin.onOperationEnd?.(opInfo);
         return await safeDeserialize(
           serdes,
           stepData.StepDetails?.Result,
@@ -138,12 +136,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
-        plugin.onOperationEnd?.({
-          ...opInfo,
-          error: stepData.StepDetails?.Error
-            ? DurableOperationError.fromErrorObject(stepData.StepDetails.Error)
-            : undefined,
-        });
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(
             stepData.StepDetails.Error,
@@ -294,6 +286,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           attemptInfo.SubType = attemptInfo.SubType || OperationSubType.STEP;
           attemptInfo.Name = attemptInfo.Name || name;
           attemptInfo.ParentId = parentId;
+          plugin.onOperationStart?.(opInfo);
           plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           result = await runWithContext(
