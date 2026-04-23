@@ -552,4 +552,36 @@ describe("withDurableExecution", () => {
       mockDurableContext,
     );
   });
+
+  it("should return FAILED status when initializeExecutionContext throws a non-retryable KMS error", async () => {
+    const kmsError = Object.assign(new Error("KMS access was denied"), {
+      name: "KMSAccessDeniedException",
+      $metadata: { httpStatusCode: 502 },
+    });
+    (initializeExecutionContext as jest.Mock).mockRejectedValue(kmsError);
+
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler);
+    const result = await wrappedHandler(mockEvent, mockContext);
+
+    expect(result.Status).toBe(InvocationStatus.FAILED);
+    expect(result).toHaveProperty("Error");
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it("should re-throw non-KMS errors from initializeExecutionContext", async () => {
+    const serviceError = Object.assign(new Error("Service unavailable"), {
+      name: "ServiceException",
+      $metadata: { httpStatusCode: 500 },
+    });
+    (initializeExecutionContext as jest.Mock).mockRejectedValue(serviceError);
+
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler);
+
+    await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
+      "Service unavailable",
+    );
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
 });
