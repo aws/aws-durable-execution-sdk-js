@@ -111,6 +111,70 @@ describe("Checkpoint Error Classification", () => {
     expect(result.message).toContain("Network timeout");
   });
 
+  it("should classify KMSAccessDeniedException as execution error", () => {
+    const awsError = {
+      name: "KMSAccessDeniedException",
+      message:
+        "Lambda was unable to decrypt the environment variables because KMS access was denied.",
+      $metadata: { httpStatusCode: 502 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableExecutionError);
+    expect(result.message).toContain("KMS access was denied");
+  });
+
+  it("should classify KMSDisabledException as execution error", () => {
+    const awsError = {
+      name: "KMSDisabledException",
+      message:
+        "Lambda was unable to decrypt the environment variables because the KMS key used is disabled.",
+      $metadata: { httpStatusCode: 502 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableExecutionError);
+  });
+
+  it("should classify KMSInvalidStateException as execution error", () => {
+    const awsError = {
+      name: "KMSInvalidStateException",
+      message: "KMS key state is not valid for Decrypt.",
+      $metadata: { httpStatusCode: 502 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableExecutionError);
+  });
+
+  it("should classify KMSNotFoundException as execution error", () => {
+    const awsError = {
+      name: "KMSNotFoundException",
+      message: "KMS key was not found.",
+      $metadata: { httpStatusCode: 502 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableExecutionError);
+  });
+
+  it("should classify 502 without KMS error name as invocation error", () => {
+    const awsError = {
+      name: "ServiceException",
+      message: "Service unavailable",
+      $metadata: { httpStatusCode: 502 },
+    };
+
+    const result = (handler as any).classifyCheckpointError(awsError);
+
+    expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
+    expect(result.message).toContain("Service unavailable");
+  });
+
   it("should preserve original error in classified error", () => {
     const originalError = new Error("Original error");
     const result = (handler as any).classifyCheckpointError(originalError);

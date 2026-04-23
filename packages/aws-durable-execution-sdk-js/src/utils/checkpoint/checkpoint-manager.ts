@@ -14,6 +14,7 @@ import {
   CheckpointUnrecoverableInvocationError,
   CheckpointUnrecoverableExecutionError,
 } from "../../errors/checkpoint-errors/checkpoint-errors";
+import { isNonRetryableCustomerError } from "../../errors/non-retryable-errors";
 import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
 import {
@@ -243,6 +244,15 @@ export class CheckpointManager implements Checkpoint {
       statusCode < 500 &&
       statusCode !== 429
     ) {
+      return new CheckpointUnrecoverableExecutionError(
+        `Checkpoint failed: ${errorMessage}`,
+        originalError,
+      );
+    }
+
+    // For example: KMS errors from Lambda arrive as 502 errors. These indicate customer-caused
+    // KMS key misconfiguration and should not be retried — treat as execution error.
+    if (isNonRetryableCustomerError(error)) {
       return new CheckpointUnrecoverableExecutionError(
         `Checkpoint failed: ${errorMessage}`,
         originalError,
