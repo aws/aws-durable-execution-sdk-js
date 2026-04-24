@@ -77,3 +77,4 @@ export {
   AttemptEndInfoOutcome,
   shouldSampleExecution,
 } from "./types/plugin";
+export { hashId } from "./utils/step-id-utils/step-id-utils";

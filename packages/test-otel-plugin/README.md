@@ -4,12 +4,17 @@ This is the POC Otel plugin integrated with traces on AWS CloudWatch.
 
 ### How to build the function.zip to use for testing with AWS Lambda and AWS Xray.
 
-1. In the root package, install and build all the packages via `npm run install-all` and `npm run build`.
-2. `cd packages/aws-durable-execution-sdk-js`, `npm pack`.
-3. `cd ../packages/aws-durable-execution-sdk-js-testing`, `npm pack`.
-4. `cd ../packages/aws-durable-execution-sdk-js-otel`, `npm pack`.
-5. `cd ../packages/test-otel-plugin/hello-world/`, copy over all the zip files from the previous steps into the `hello-world` folder.
-6. Install all the zip files and compile the typescript app.ts file. It should look like this. Finally, zip the required files into `function.zip`.
+1. In the root package, install and build all the packages via `npm run install-all && npm run build`.
+2. `npm pack` required packages:
+
+```
+cd packages/aws-durable-execution-sdk-js && npm pack && \
+cd ../aws-durable-execution-sdk-js-testing && npm pack && \
+cd ../aws-durable-execution-sdk-js-otel && npm pack
+```
+
+3. `cd ../packages/test-otel-plugin/hello-world/`, copy over all the zip files from the previous steps into the `hello-world` folder.
+4. Install all the zip files and compile the typescript app.ts file. It should look like this. Finally, zip the required files into `function.zip`.
 
 ```
 npm install aws-durable-execution-sdk-js-2.0.0-alpha.1.tgz  && \

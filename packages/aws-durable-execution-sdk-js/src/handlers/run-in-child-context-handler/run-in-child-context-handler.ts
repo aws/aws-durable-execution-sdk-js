@@ -105,6 +105,17 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     });
 
     const stepData = context.getStepData(entityId);
+    if (stepData == undefined) {
+      plugin.onOperationStart?.({
+        Id: entityId,
+        Name: name,
+        Type: OperationType.CONTEXT,
+        SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+        ParentId: parentId,
+      });
+    } else {
+      plugin.onOperationStart?.(toOperationInfo(stepData));
+    }
 
     // Validate replay consistency
     validateReplayConsistency(
@@ -146,6 +157,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           getParentLogger,
           createChildContext,
         );
+        const opInfo = toOperationInfo(currentStepData);
+        plugin.onOperationEnd?.(opInfo);
         return result;
       }
 
@@ -325,8 +338,6 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // But if this runInChildContext is not virtual, then it's entityId can be used
     isVirtual ? parentId : entityId,
   );
-
-  plugin.onOperationStart?.(opInfo);
 
   try {
     // Execute the child context function with context tracking

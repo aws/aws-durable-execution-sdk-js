@@ -1,15 +1,6 @@
 import { IdGenerator } from "@opentelemetry/sdk-trace-base";
 import { randomBytes } from "crypto";
-import { createHash } from "crypto";
-
-/**
- * Derives a deterministic 16-character hex spanId from an operationId.
- * The same operation always produces the same spanId across invocations,
- * so the span is only exported once — on completion — with no duplicates.
- */
-export function deterministicSpanId(operationId: string): string {
-  return createHash("sha256").update(operationId).digest("hex").slice(0, 16);
-}
+import { hashId } from "@aws/durable-execution-sdk-js";
 
 /**
  * An IdGenerator that produces deterministic spanIds when a pending operation ID is set,
@@ -32,7 +23,7 @@ export class DeterministicIdGenerator implements IdGenerator {
 
   generateSpanId(): string {
     if (this.pendingOperationId) {
-      const id = deterministicSpanId(this.pendingOperationId);
+      const id = hashId(this.pendingOperationId);
       this.pendingOperationId = undefined;
       return id;
     }

@@ -43,6 +43,7 @@ import {
 import {
   toAttemptEndInfo,
   toAttemptInfo,
+  backfillOperationInfo,
 } from "../../utils/operation/operation";
 
 export const createStepHandler = <Logger extends DurableLogger>(
@@ -111,6 +112,21 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
+        const attemptInfo = toAttemptInfo(
+          stepData,
+          stepData.StepDetails?.Attempt,
+        );
+        backfillOperationInfo(attemptInfo, opInfo);
+        plugin.onOperationStart?.(attemptInfo);
+        plugin.onOperationAttemptStart?.(attemptInfo);
+        const attemptEndInfo = toAttemptEndInfo(
+          stepData,
+          AttemptEndInfoOutcome.SUCCEEDED,
+        );
+        backfillOperationInfo(attemptEndInfo, opInfo);
+        plugin.onOperationEnd?.(attemptInfo);
+        plugin.onOperationAttemptEnd?.(attemptEndInfo);
+
         return await safeDeserialize(
           serdes,
           stepData.StepDetails?.Result,
@@ -136,6 +152,20 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
+        const attemptInfo = toAttemptInfo(
+          stepData,
+          stepData.StepDetails?.Attempt,
+        );
+        backfillOperationInfo(attemptInfo, opInfo);
+        plugin.onOperationStart?.(attemptInfo);
+        plugin.onOperationAttemptStart?.(attemptInfo);
+        const attemptEndInfo = toAttemptEndInfo(
+          stepData,
+          AttemptEndInfoOutcome.FAILED,
+        );
+        backfillOperationInfo(attemptEndInfo, opInfo);
+        plugin.onOperationEnd?.(attemptInfo);
+        plugin.onOperationAttemptEnd?.(attemptEndInfo);
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(
             stepData.StepDetails.Error,
@@ -281,12 +311,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
-          attemptInfo.Id = stepId;
-          attemptInfo.Type = OperationType.STEP;
-          attemptInfo.SubType = attemptInfo.SubType || OperationSubType.STEP;
-          attemptInfo.Name = attemptInfo.Name || name;
-          attemptInfo.ParentId = parentId;
-          plugin.onOperationStart?.(opInfo);
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationStart?.(attemptInfo);
           plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           result = await runWithContext(
@@ -315,6 +341,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Payload: serializedResult,
             Name: name,
           });
+          stepData = context.getStepData(stepId);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.SUCCEEDED,
@@ -322,19 +349,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
               attempt: currentAttempt,
             },
           );
-          attemptEndInfo.Id = stepId;
-          attemptEndInfo.Type = OperationType.STEP;
-          attemptEndInfo.SubType =
-            attemptEndInfo.SubType || OperationSubType.STEP;
-          attemptEndInfo.Name = attemptEndInfo.Name || name;
-          attemptEndInfo.ParentId = parentId;
+          backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
-
+          plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
           );
-          plugin.onOperationEnd?.(opInfo);
 
           return await safeDeserialize(
             serdes,
@@ -379,6 +400,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               OperationLifecycleState.COMPLETED,
             );
+            stepData = context.getStepData(stepId);
             const attemptEndInfo = toAttemptEndInfo(
               stepData,
               AttemptEndInfoOutcome.FAILED,
@@ -388,15 +410,10 @@ export const createStepHandler = <Logger extends DurableLogger>(
                   error instanceof Error ? error : new Error(String(error)),
               },
             );
-            attemptEndInfo.Id = stepId;
-            attemptEndInfo.Type = OperationType.STEP;
-            attemptEndInfo.SubType =
-              attemptEndInfo.SubType || OperationSubType.STEP;
-            attemptEndInfo.Name = attemptEndInfo.Name || name;
-            attemptEndInfo.ParentId = parentId;
+            backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
             plugin.onOperationEnd?.({
-              ...opInfo,
+              ...attemptEndInfo,
               error: error instanceof Error ? error : new Error(String(error)),
             });
             throw DurableOperationError.fromErrorObject(
@@ -419,6 +436,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               NextAttemptDelaySeconds: nextAttemptDelaySeconds,
             },
           });
+          stepData = context.getStepData(stepId);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.RETRYING,
@@ -428,14 +446,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
               nextAttemptDelaySeconds,
             },
           );
-          attemptEndInfo.Id = stepId;
-          attemptEndInfo.Type = OperationType.STEP;
-          attemptEndInfo.SubType =
-            attemptEndInfo.SubType || OperationSubType.STEP;
-          attemptEndInfo.Name = attemptEndInfo.Name || name;
-          attemptEndInfo.ParentId = parentId;
+          backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationEnd?.(opInfo);
+          plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.RETRY_WAITING,

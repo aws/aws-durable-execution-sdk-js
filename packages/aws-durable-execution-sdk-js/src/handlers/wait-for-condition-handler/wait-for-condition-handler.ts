@@ -37,6 +37,7 @@ import {
 import {
   toAttemptInfo,
   toAttemptEndInfo,
+  backfillOperationInfo,
 } from "../../utils/operation/operation";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
@@ -86,7 +87,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
         SubType: OperationSubType.WAIT_FOR_CONDITION,
         ParentId: parentId,
       };
-      plugin.onOperationStart?.(opInfo);
 
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
@@ -104,7 +104,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           },
         );
-        plugin.onOperationEnd?.(opInfo);
         return await safeDeserialize(
           serdes,
           stepData.StepDetails?.Result,
@@ -130,12 +129,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           },
         );
-        plugin.onOperationEnd?.({
-          ...opInfo,
-          error: stepData.StepDetails?.Error
-            ? DurableOperationError.fromErrorObject(stepData.StepDetails.Error)
-            : undefined,
-        });
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(
             stepData.StepDetails.Error,
@@ -214,12 +207,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
         }
 
         const baseAttemptInfo = toAttemptInfo(stepData, currentAttempt);
-        baseAttemptInfo.Id = stepId;
-        baseAttemptInfo.Type = baseAttemptInfo.Type || OperationType.STEP;
-        baseAttemptInfo.SubType =
-          baseAttemptInfo.SubType || OperationSubType.WAIT_FOR_CONDITION;
-        baseAttemptInfo.Name = baseAttemptInfo.Name || name;
-        baseAttemptInfo.ParentId = parentId;
+        backfillOperationInfo(baseAttemptInfo, opInfo);
 
         try {
           const waitForConditionContext: WaitForConditionContext<Logger> = {
@@ -240,7 +228,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               },
             },
           );
-
+          plugin.onOperationStart?.(opInfo);
           plugin.onOperationAttemptStart?.(baseAttemptInfo);
 
           const newState: T = await runWithContext(

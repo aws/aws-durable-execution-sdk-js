@@ -34,5 +34,44 @@ issue here.
 > But without explicitly extracting \_X_AMZN_TRACE_ID per invocation, each invocation creates a new root span with a new traceId.
 > Fix: Extract \_X_AMZN_TRACE_ID inside the handler (not at module load) on every invocation.
 
-This wasn't the case in my testing, but explicitly extracting the \_X_AMZN_TRACE_ID per invocation led to the Lambda API calls
-to be part of the same trace.
+This wasn't the case in my testing, but explicitly extracting the \_X_AMZN_TRACE_ID per invocation groups the Lambda API calls into the operation trace.
+
+### Wait operation duplication issues
+
+Wait operations often start in one invocation and are resolved in another. Most times, they are completed while there is no invocation and lambda is idle. This is a problem for the current plugin
+model because we have no way of knowing if we have exported a duplicate span representing the wait. The immediate most obvious short term fix is to introduce some sort of cache which would persist that we have already exported a span for the wait across invocations.
+
+### Steps within run-in-child-context which complete in separate invocations.
+
+There is a similar issue with steps, to ensure that all steps are represented we have no choice but to register a span upon seeing a step operation on replay. This leads to multiple duplicate spans representing the same steps at the invocation level.
+
+### weird span drop issue
+
+For map and parallel operations, if you have many branches, meaning you have child-contexts nested in root child-context. If a child context completes over multiple invocations, it can drop
+an operation span if there's no wait after. I don't know how else to describe this at the moment.
+
+```
+    const parallelWaitsResults = await context.parallel([
+      // Branch 1: Returns "basketball"
+      async (ctx: DurableContext) => {
+        await ctx.wait("wait-sport-step-1", { seconds: 5 });
+        const result = await ctx.step("sport-step-1", async () => {
+          return "basketball";
+        });
+        await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
+        return result;
+      },
+
+      // Branch 2: Returns "football"
+      async (ctx: DurableContext) => {
+        await ctx.wait("wait-sport-step-2", { seconds: 10 });
+        const result = await ctx.step("sport-step-2", async () => {
+          return "football";
+        });
+        return result;
+      },
+
+    ]);
+```
+
+The `sport-step-2` is completely dropped from the trace for some reason, even though it should have completed in the same invocation following the 10 second wait.

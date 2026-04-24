@@ -14,6 +14,7 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
     SubType: operation?.SubType,
     ParentId: operation?.ParentId,
     StartTimestamp: operation?.StartTimestamp,
+    EndTimestamp: operation?.EndTimestamp,
   };
 }
 
@@ -42,4 +43,22 @@ export function toAttemptEndInfo(
     error: options?.error,
     nextAttemptDelaySeconds: options?.nextAttemptDelaySeconds,
   };
+}
+
+/**
+ * Backfills missing fields on an OperationInfo (or subtype) with the provided defaults.
+ * Only sets a field if it's not already present (undefined or empty string).
+ */
+export function backfillOperationInfo<T extends OperationInfo>(
+  info: T,
+  defaults: Partial<OperationInfo>,
+): T {
+  if (!info.Id) info.Id = defaults.Id ?? "";
+  if (!info.Type) info.Type = defaults.Type ?? "";
+  if (!info.SubType) info.SubType = defaults.SubType;
+  if (!info.Name) info.Name = defaults.Name;
+  if (!info.ParentId) info.ParentId = defaults.ParentId;
+  if (!info.StartTimestamp) info.StartTimestamp = defaults.StartTimestamp;
+  if (!info.EndTimestamp) info.EndTimestamp = defaults.EndTimestamp;
+  return info;
 }

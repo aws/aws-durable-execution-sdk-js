@@ -66,5 +66,10 @@
     "*.{js,ts}": "eslint --cache --fix",
     "*.{js,mjs,ts,md,json,yml}": "prettier --write"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "^2.0.0-alpha.1",
+    "@aws/durable-execution-sdk-js-otel": "^1.0.0",
+    "@aws/durable-execution-sdk-js-testing": "^1.1.1"
+  }
 }

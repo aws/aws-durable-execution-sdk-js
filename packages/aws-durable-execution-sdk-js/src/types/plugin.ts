@@ -7,6 +7,7 @@ export interface OperationInfo {
   SubType?: string;
   ParentId?: string;
   StartTimestamp?: Date;
+  EndTimestamp?: Date;
 }
 
 export interface AttemptInfo extends OperationInfo {

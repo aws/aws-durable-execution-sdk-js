@@ -16,9 +16,19 @@ import type {
   AttemptEndInfo,
   ExecutionEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { shouldSampleExecution } from "@aws/durable-execution-sdk-js";
+import { shouldSampleExecution, hashId } from "@aws/durable-execution-sdk-js";
 import { ContextExtractor, xRayContextExtractor } from "./context-extractors";
 import { DeterministicIdGenerator } from "./deterministic-id-generator";
+
+const HASHED_ID_PATTERN = /^[0-9a-f]{16}$/;
+
+/**
+ * Ensures an operation ID is in hashed form.
+ * If already hashed (16-char hex), returns as-is. Otherwise hashes it.
+ */
+function ensureHashedId(id: string): string {
+  return HASHED_ID_PATTERN.test(id) ? id : hashId(id);
+}
 
 export interface DurableOtelPluginConfig {
   provider?: TracerProvider;
@@ -61,6 +71,43 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
     this.contextExtractor = config.contextExtractor ?? xRayContextExtractor;
     this.samplingRate = config.samplingRate ?? 1.0;
+  }
+
+  /**
+   * Stores a span under both the raw key and its hashed form (if different),
+   * so lookups work regardless of which ID format is used.
+   */
+  private setSpan(key: string, span: Span): void {
+    this.operationSpans.set(key, span);
+    const hashed = ensureHashedId(key);
+    if (hashed !== key) this.operationSpans.set(hashed, span);
+  }
+
+  /**
+   * Stores a context under both the raw key and its hashed form (if different).
+   */
+  private setContext(key: string, ctx: Context): void {
+    this.operationContexts.set(key, ctx);
+    const hashed = ensureHashedId(key);
+    if (hashed !== key) this.operationContexts.set(hashed, ctx);
+  }
+
+  /**
+   * Deletes a span under both the raw key and its hashed form.
+   */
+  private deleteSpan(key: string): void {
+    this.operationSpans.delete(key);
+    const hashed = ensureHashedId(key);
+    if (hashed !== key) this.operationSpans.delete(hashed);
+  }
+
+  /**
+   * Deletes a context under both the raw key and its hashed form.
+   */
+  private deleteContext(key: string): void {
+    this.operationContexts.delete(key);
+    const hashed = ensureHashedId(key);
+    if (hashed !== key) this.operationContexts.delete(hashed);
   }
 
   /**
@@ -160,7 +207,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       {
         attributes: {
           "durable.execution.arn": this.executionArn,
-          "durable.operation.id": info.Id,
+          "durable.operation.id": ensureHashedId(info.Id),
           "durable.operation.type": operationType,
           ...(info.Name && { "durable.operation.name": info.Name }),
         },
@@ -168,14 +215,14 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       },
       parentCtx,
     );
-    this.operationSpans.set(info.Id, span);
-    this.operationContexts.set(info.Id, trace.setSpan(parentCtx, span));
+    this.setSpan(info.Id, span);
+    this.setContext(info.Id, trace.setSpan(parentCtx, span));
     this.activeSpan = span;
   }
 
   onOperationEnd(info: OperationInfo & { error?: Error }): void {
     if (!this.sampled) return;
-    const span = this.operationSpans.get(info.Id);
+    const span = this.operationSpans.get(ensureHashedId(info.Id));
     if (!span) return;
     if (info.error) {
       span.setStatus({
@@ -184,9 +231,8 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       });
       span.recordException(info.error);
     }
-    span.end();
-    this.operationSpans.delete(info.Id);
-    this.operationContexts.delete(info.Id);
+    span.end(info.EndTimestamp);
+    this.deleteSpan(info.Id);
     const parentId = this.resolveParentId(info.Id, info.ParentId);
     this.activeSpan = this.operationSpans.get(parentId);
   }
@@ -199,13 +245,13 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     const parentCtx =
       this.operationContexts.get(info.Id) ??
       this.getParentContext(info.Id, info.ParentId);
-    this.idGenerator.setNextSpanOperationId(key);
+    this.idGenerator.setNextSpanOperationId(info.Id);
     const attemptSpan = this.tracer.startSpan(
       info.Name ?? operationType,
       {
         attributes: {
           "durable.execution.arn": this.executionArn,
-          "durable.operation.id": info.Id,
+          "durable.operation.id": ensureHashedId(info.Id),
           "durable.operation.type": operationType,
           ...(info.Name && { "durable.operation.name": info.Name }),
           "durable.attempt.number": info.Attempt,
@@ -214,7 +260,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       },
       parentCtx,
     );
-    this.operationSpans.set(key, attemptSpan);
+    this.setSpan(key, attemptSpan);
     this.activeSpan = attemptSpan;
   }
 
@@ -231,8 +277,8 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       });
       span.recordException(info.error);
     }
-    span.end();
-    this.operationSpans.delete(key);
+    span.end(info.EndTimestamp);
+    this.deleteSpan(key);
     const parentId = this.resolveParentId(info.Id, info.ParentId);
     this.activeSpan = this.operationSpans.get(parentId);
   }

@@ -15,6 +15,7 @@ import { validateReplayConsistency } from "../../utils/replay-validation/replay-
 import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
+import { toOperationInfo } from "../../utils/operation/operation";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -92,6 +93,9 @@ export const createWaitHandler = (
         );
 
         isCompleted = true;
+        const checkPointedOpInfo = toOperationInfo(stepData);
+        plugin.onOperationStart?.(checkPointedOpInfo);
+        plugin.onOperationEnd?.(checkPointedOpInfo);
         return;
       }
 
@@ -112,6 +116,8 @@ export const createWaitHandler = (
 
       // Refresh stepData after checkpoint
       stepData = context.getStepData(stepId);
+      const checkPointedOpInfo = toOperationInfo(stepData);
+      plugin.onOperationStart?.(checkPointedOpInfo);
 
       // Mark as IDLE_NOT_AWAITED (phase 1 complete, not awaited yet)
       checkpoint.markOperationState(
@@ -142,6 +148,7 @@ export const createWaitHandler = (
 
       // If already completed in phase 1, skip phase 2
       if (isCompleted) {
+        plugin.onOperationEnd?.(opInfo);
         return;
       }
 
@@ -156,6 +163,9 @@ export const createWaitHandler = (
       // Check final status
       const stepData = context.getStepData(stepId);
 
+      const checkPointedOpInfo = toOperationInfo(stepData);
+      plugin.onOperationEnd?.(checkPointedOpInfo);
+
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("✅", "Wait completed:", { stepId });
         checkAndUpdateReplayMode?.();
@@ -165,7 +175,6 @@ export const createWaitHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
-        plugin.onOperationEnd?.(opInfo);
         return;
       }
 
