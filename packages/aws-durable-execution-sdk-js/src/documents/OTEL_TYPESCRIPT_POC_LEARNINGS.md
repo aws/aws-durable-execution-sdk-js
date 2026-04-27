@@ -45,10 +45,26 @@ model because we have no way of knowing if we have exported a duplicate span rep
 
 There is a similar issue with steps, to ensure that all steps are represented we have no choice but to register a span upon seeing a step operation on replay. This leads to multiple duplicate spans representing the same steps at the invocation level.
 
+### must use AlwaysOnSampler() to export spans across invocations which might not have parents.
+
+```
+const exporter = new OTLPTraceExporter({
+  url: "http://localhost:4318/v1/traces",
+});
+
+const provider = new NodeTracerProvider({
+  idGenerator: new AWSXRayIdGenerator(),
+  spanProcessors: [new SimpleSpanProcessor(exporter)],
+  sampler: new AlwaysOnSampler(),
+});
+
+provider.register({ propagator: new AWSXRayPropagator() });
+```
+
 ### weird span drop issue
 
 For map and parallel operations, if you have many branches, meaning you have child-contexts nested in root child-context. If a child context completes over multiple invocations, it can drop
-an operation span if there's no wait after. I don't know how else to describe this at the moment.
+an operation span if there's no wait after. I don't know how else to describe this at the moment. I'm not sure why it's occuring yet.
 
 ```
     const parallelWaitsResults = await context.parallel([
@@ -74,4 +90,4 @@ an operation span if there's no wait after. I don't know how else to describe th
     ]);
 ```
 
-The `sport-step-2` is completely dropped from the trace for some reason, even though it should have completed in the same invocation following the 10 second wait.
+In the above example, the `sport-step-2` is completely dropped from the trace for some reason, even though it should have completed in the same invocation following the 10 second wait. Even if you add a step after the parallel, it is dropped. There's some weird issue with the run-in-child-context hooks.

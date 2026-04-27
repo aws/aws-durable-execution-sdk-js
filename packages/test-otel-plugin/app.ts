@@ -10,6 +10,7 @@ import {
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import {
   AlwaysOnSampler,
+  ConsoleSpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
@@ -27,7 +28,10 @@ const exporter = new OTLPTraceExporter({
 
 const provider = new NodeTracerProvider({
   idGenerator: new AWSXRayIdGenerator(),
-  spanProcessors: [new SimpleSpanProcessor(exporter)],
+  spanProcessors: [
+    new SimpleSpanProcessor(exporter),
+    new SimpleSpanProcessor(new ConsoleSpanExporter()),
+  ],
   sampler: new AlwaysOnSampler(),
 });
 

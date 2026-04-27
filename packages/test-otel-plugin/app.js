@@ -13,7 +13,12 @@ const exporter = new exporter_trace_otlp_http_1.OTLPTraceExporter({
 });
 const provider = new sdk_trace_node_1.NodeTracerProvider({
   idGenerator: new id_generator_aws_xray_1.AWSXRayIdGenerator(),
-  spanProcessors: [new sdk_trace_base_1.SimpleSpanProcessor(exporter)],
+  spanProcessors: [
+    new sdk_trace_base_1.SimpleSpanProcessor(exporter),
+    new sdk_trace_base_1.SimpleSpanProcessor(
+      new sdk_trace_base_1.ConsoleSpanExporter(),
+    ),
+  ],
   sampler: new sdk_trace_base_1.AlwaysOnSampler(),
 });
 provider.register({
