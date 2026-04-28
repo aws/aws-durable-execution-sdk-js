@@ -64,6 +64,7 @@ export {
   createRetryStrategy,
   RetryStrategyConfig,
 } from "./utils/retry/retry-config";
+export { createLinearRetryStrategy } from "./utils/retry/linear-retry-strategy/linear-retry-strategy";
 export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
 export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
