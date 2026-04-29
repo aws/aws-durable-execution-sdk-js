@@ -25,7 +25,7 @@ import {
   DurableOperationError,
   StepError,
 } from "../../errors/durable-error/durable-error";
-import { defaultSerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, Serdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -43,6 +43,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   createStepId: () => string,
   logger: Logger,
   parentId?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getDefaultSerdes?: () => Serdes<any>,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -64,7 +66,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
     const stepId = createStepId();
     const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
-    const serdes = options?.serdes || defaultSerdes;
+    const serdes =
+      options?.serdes ||
+      (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
 
     // Phase 1: Execute step
     const phase1Promise = (async (): Promise<T> => {

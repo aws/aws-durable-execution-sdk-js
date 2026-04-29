@@ -30,6 +30,8 @@ export const createCallback = (
   createStepId: () => string,
   checkAndUpdateReplayMode: () => void,
   parentId?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getDefaultCallbackDeserializer?: () => Pick<Serdes<any>, "deserialize">,
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -46,7 +48,11 @@ export const createCallback = (
     }
 
     const stepId = createStepId();
-    const serdes = config?.serdes || createPassThroughSerdes<T>();
+    const serdes =
+      config?.serdes ||
+      (getDefaultCallbackDeserializer
+        ? getDefaultCallbackDeserializer()
+        : createPassThroughSerdes<T>());
 
     // Phase 1: Setup and checkpoint
     let isCompleted = false;

@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, Serdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -75,6 +75,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getDefaultSerdes?: () => Serdes<any>,
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,
@@ -142,6 +144,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           options,
           getParentLogger,
           createChildContext,
+          getDefaultSerdes,
         );
       }
 
@@ -157,6 +160,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         getParentLogger,
         createChildContext,
         parentId,
+        getDefaultSerdes,
       );
     })()
       .then((result) => {
@@ -197,8 +201,11 @@ export const handleCompletedChildContext = async <
     checkpointToken: string | undefined,
     parentId?: string,
   ) => DurableContext<Logger>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getDefaultSerdes?: () => Serdes<any>,
 ): Promise<T> => {
-  const serdes = options?.serdes || defaultSerdes;
+  const serdes =
+    options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
@@ -278,8 +285,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getDefaultSerdes?: () => Serdes<any>,
 ): Promise<T> => {
-  const serdes = options?.serdes || defaultSerdes;
+  const serdes =
+    options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const isVirtual = options?.virtualContext === true;
 
