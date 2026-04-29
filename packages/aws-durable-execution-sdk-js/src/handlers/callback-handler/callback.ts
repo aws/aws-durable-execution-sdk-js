@@ -9,7 +9,7 @@ import {
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { Serdes } from "../../utils/serdes/serdes";
+import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
@@ -31,7 +31,7 @@ export const createCallback = (
   checkAndUpdateReplayMode: () => void,
   parentId?: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getDefaultCallbackDeserializer?: () => Pick<Serdes<any>, "deserialize">,
+  getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,

@@ -17,7 +17,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes, Serdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, Serdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -37,7 +37,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   logger: Logger,
   parentId: string | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getDefaultSerdes?: () => Serdes<any>,
+  getDefaultSerdes?: () => AnySerdes,
 ) => {
   return <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T, Logger>,

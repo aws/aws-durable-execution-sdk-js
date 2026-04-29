@@ -55,6 +55,8 @@ export {
   Serdes,
   SerdesContext,
   SerdesConfig,
+  AnySerdes,
+  AnySerdesDeserializer,
 } from "./utils/serdes/serdes";
 export {
   createFileSystemSerdes,

@@ -56,7 +56,13 @@ import {
   DurableLoggingContext,
 } from "../../types/durable-logger";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-import { Serdes, SerdesConfig, defaultSerdes } from "../../utils/serdes/serdes";
+import {
+  Serdes,
+  SerdesConfig,
+  defaultSerdes,
+  AnySerdes,
+  AnySerdesDeserializer,
+} from "../../utils/serdes/serdes";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
@@ -77,9 +83,9 @@ export class DurableContextImpl<
   private modeManagement: ModeManagement;
   private durableExecution: DurableExecution;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _defaultSerdes: Serdes<any> = defaultSerdes;
+  private _defaultSerdes: AnySerdes = defaultSerdes;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _defaultCallbackDeserializer: Pick<Serdes<any>, "deserialize"> =
+  private _defaultCallbackDeserializer: AnySerdesDeserializer =
     createPassThroughSerdes();
 
   public logger: DurableContextLogger<Logger>;

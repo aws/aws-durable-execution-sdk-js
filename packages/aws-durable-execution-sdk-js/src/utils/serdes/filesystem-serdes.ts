@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Serdes, SerdesContext } from "./serdes";
+import { Serdes, SerdesContext, AnySerdes } from "./serdes";
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../constants/constants";
 
 // Subtract 1KB headroom for the envelope wrapper and other checkpoint metadata
@@ -86,7 +86,7 @@ export function createFileSystemSerdes(
   basePath: string,
   config: FileSystemSerdesConfig = {},
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Serdes<any> {
+): AnySerdes {
   const mode = config.mode ?? FileSystemSerdesMode.ALWAYS;
   return {
     serialize: async (

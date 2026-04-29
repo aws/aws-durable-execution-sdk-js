@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes, Serdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, Serdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -75,7 +75,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   ) => DurableContext<Logger>,
   parentId?: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getDefaultSerdes?: () => Serdes<any>,
+  getDefaultSerdes?: () => AnySerdes,
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,
@@ -201,7 +201,7 @@ export const handleCompletedChildContext = async <
     parentId?: string,
   ) => DurableContext<Logger>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getDefaultSerdes?: () => Serdes<any>,
+  getDefaultSerdes?: () => AnySerdes,
 ): Promise<T> => {
   const serdes =
     options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
@@ -285,7 +285,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   ) => DurableContext<Logger>,
   parentId?: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getDefaultSerdes?: () => Serdes<any>,
+  getDefaultSerdes?: () => AnySerdes,
 ): Promise<T> => {
   const serdes =
     options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
