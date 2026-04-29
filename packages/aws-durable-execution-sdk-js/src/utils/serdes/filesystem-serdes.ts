@@ -2,34 +2,91 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Serdes, SerdesContext } from "./serdes";
 
+// Checkpoint size limit minus overhead for envelope and other metadata
+const OVERFLOW_THRESHOLD_BYTES = 256 * 1024 - 1024;
+
 /**
- * Creates a Serdes that stores serialized values as JSON files on the filesystem.
+ * Controls when data is written to the filesystem.
+ *
+ * - `ALWAYS`: Every value is written to a file; the checkpoint stores only a file pointer.
+ *   Best for consistently large payloads or when you want predictable checkpoint sizes.
+ *
+ * - `OVERFLOW`: Data is written inline (as JSON) unless it exceeds the durable function
+ *   checkpoint size limit (~256KB), in which case it overflows to a file.
+ *   Best for mixed workloads where most payloads are small.
+ *
+ * @public
+ */
+export enum FileSystemSerdesMode {
+  ALWAYS = "ALWAYS",
+  OVERFLOW = "OVERFLOW",
+}
+
+/** @internal */
+type FileSystemEnvelope = { data: string } | { file: string };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function writeToFile(
+  basePath: string,
+  value: any,
+  context: SerdesContext,
+): Promise<string> {
+  const dir = join(basePath, encodeURIComponent(context.durableExecutionArn));
+  await mkdir(dir, { recursive: true });
+  const filePath = join(dir, `${context.entityId}.json`);
+  await writeFile(filePath, JSON.stringify(value), "utf-8");
+  return filePath;
+}
+
+/**
+ * Configuration options for {@link createFileSystemSerdes}.
+ *
+ * @public
+ */
+export interface FileSystemSerdesConfig {
+  /**
+   * Controls when data is written to the filesystem.
+   * @defaultValue `FileSystemSerdesMode.ALWAYS`
+   */
+  mode?: FileSystemSerdesMode;
+}
+
+/**
+ * Creates a Serdes that stores serialized values on the filesystem.
  *
  * Designed for use with Lambda functions that mount an Amazon S3 bucket as a
  * filesystem via S3 Files, enabling durable, shared state across invocations
- * and parallel function instances without size constraints of checkpoint payloads.
+ * and parallel function instances without checkpoint size constraints.
  *
- * The serialized pointer stored in the checkpoint is the file path, not the data itself.
- * On deserialization, the file is read and parsed back to the original value.
+ * The checkpoint stores a JSON envelope that is either:
+ * - `{"data":"<inline JSON>"}` — value stored inline (OVERFLOW mode, under threshold)
+ * - `{"file":"<path>"}` — value stored in a file (ALWAYS mode, or OVERFLOW above threshold)
  *
  * @param basePath - Directory path where data files will be stored (e.g. the S3 Files mount point)
+ * @param config - Optional configuration options
  * @returns A Serdes that reads/writes JSON files under basePath
  *
  * @example
  * ```typescript
- * // Mount path configured via S3 Files in Lambda
- * const s3Serdes = createFileSystemSerdes("/mnt/s3");
+ * // Always write to S3 Files mount (default)
+ * context.configureSerdes({
+ *   defaultSerdes: createFileSystemSerdes("/mnt/s3"),
+ * });
  *
- * context.configureSerdes({ defaultSerdes: s3Serdes });
- *
- * // Large result is written to /mnt/s3/<executionArn>/<entityId>.json
- * const result = await context.step("process-large-data", async () => largeObject);
+ * // Only overflow to filesystem when payload exceeds ~256KB
+ * context.configureSerdes({
+ *   defaultSerdes: createFileSystemSerdes("/mnt/s3", { mode: FileSystemSerdesMode.OVERFLOW }),
+ * });
  * ```
  *
  * @public
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createFileSystemSerdes(basePath: string): Serdes<any> {
+export function createFileSystemSerdes(
+  basePath: string,
+  config: FileSystemSerdesConfig = {},
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Serdes<any> {
+  const mode = config.mode ?? FileSystemSerdesMode.ALWAYS;
   return {
     serialize: async (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,15 +95,20 @@ export function createFileSystemSerdes(basePath: string): Serdes<any> {
     ): Promise<string | undefined> => {
       if (value === undefined) return undefined;
 
-      const dir = join(
-        basePath,
-        encodeURIComponent(context.durableExecutionArn),
-      );
-      await mkdir(dir, { recursive: true });
+      if (mode === FileSystemSerdesMode.ALWAYS) {
+        const filePath = await writeToFile(basePath, value, context);
+        const envelope: FileSystemEnvelope = { file: filePath };
+        return JSON.stringify(envelope);
+      }
 
-      const filePath = join(dir, `${context.entityId}.json`);
-      await writeFile(filePath, JSON.stringify(value), "utf-8");
-      return filePath;
+      // OVERFLOW mode: serialize inline first, overflow to file if too large
+      const inlineJson = JSON.stringify(value);
+      const envelope: FileSystemEnvelope =
+        Buffer.byteLength(inlineJson, "utf-8") > OVERFLOW_THRESHOLD_BYTES
+          ? { file: await writeToFile(basePath, value, context) }
+          : { data: inlineJson };
+
+      return JSON.stringify(envelope);
     },
 
     deserialize: async (
@@ -55,8 +117,15 @@ export function createFileSystemSerdes(basePath: string): Serdes<any> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): Promise<any> => {
       if (data === undefined) return undefined;
-      const contents = await readFile(data, "utf-8");
-      return JSON.parse(contents);
+
+      const envelope = JSON.parse(data) as FileSystemEnvelope;
+
+      if ("file" in envelope) {
+        const contents = await readFile(envelope.file, "utf-8");
+        return JSON.parse(contents);
+      }
+
+      return JSON.parse(envelope.data);
     },
   };
 }

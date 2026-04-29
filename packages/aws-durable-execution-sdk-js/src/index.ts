@@ -56,7 +56,11 @@ export {
   SerdesContext,
   SerdesConfig,
 } from "./utils/serdes/serdes";
-export { createFileSystemSerdes } from "./utils/serdes/filesystem-serdes";
+export {
+  createFileSystemSerdes,
+  FileSystemSerdesMode,
+  FileSystemSerdesConfig,
+} from "./utils/serdes/filesystem-serdes";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
   createWaitStrategy,
