@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Serdes, SerdesContext, AnySerdes } from "./serdes";
+import { SerdesContext, AnySerdes } from "./serdes";
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../constants/constants";
 
 // Subtract 1KB headroom for the envelope wrapper and other checkpoint metadata
@@ -26,9 +26,9 @@ export enum FileSystemSerdesMode {
 /** @internal */
 type FileSystemEnvelope = { data: string } | { file: string };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function writeToFile(
   basePath: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   context: SerdesContext,
 ): Promise<string> {
@@ -85,7 +85,6 @@ export interface FileSystemSerdesConfig {
 export function createFileSystemSerdes(
   basePath: string,
   config: FileSystemSerdesConfig = {},
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): AnySerdes {
   const mode = config.mode ?? FileSystemSerdesMode.ALWAYS;
   return {

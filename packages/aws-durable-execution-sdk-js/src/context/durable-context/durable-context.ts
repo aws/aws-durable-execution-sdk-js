@@ -57,7 +57,6 @@ import {
 } from "../../types/durable-logger";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import {
-  Serdes,
   SerdesConfig,
   defaultSerdes,
   AnySerdes,
@@ -82,9 +81,9 @@ export class DurableContextImpl<
   private _parentId?: string;
   private modeManagement: ModeManagement;
   private durableExecution: DurableExecution;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   private _defaultSerdes: AnySerdes = defaultSerdes;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   private _defaultCallbackDeserializer: AnySerdesDeserializer =
     createPassThroughSerdes();
 

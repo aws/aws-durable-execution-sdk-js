@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes, Serdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -74,7 +74,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   getDefaultSerdes?: () => AnySerdes,
 ) => {
   return <T>(
@@ -200,7 +200,7 @@ export const handleCompletedChildContext = async <
     checkpointToken: string | undefined,
     parentId?: string,
   ) => DurableContext<Logger>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   getDefaultSerdes?: () => AnySerdes,
 ): Promise<T> => {
   const serdes =
@@ -284,7 +284,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   getDefaultSerdes?: () => AnySerdes,
 ): Promise<T> => {
   const serdes =

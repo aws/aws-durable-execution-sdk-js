@@ -25,7 +25,7 @@ import {
   DurableOperationError,
   StepError,
 } from "../../errors/durable-error/durable-error";
-import { defaultSerdes, Serdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -43,7 +43,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
   createStepId: () => string,
   logger: Logger,
   parentId?: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   getDefaultSerdes?: () => AnySerdes,
 ) => {
   return <T>(

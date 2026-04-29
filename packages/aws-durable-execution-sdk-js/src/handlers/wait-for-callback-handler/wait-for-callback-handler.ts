@@ -13,7 +13,7 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createPassThroughSerdes } from "../callback-handler/callback";
-import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
+import { AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import {
   ChildContextError,
   CallbackSubmitterError,
@@ -22,7 +22,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   getNextStepId: () => string,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
 ) => {
   return <T>(

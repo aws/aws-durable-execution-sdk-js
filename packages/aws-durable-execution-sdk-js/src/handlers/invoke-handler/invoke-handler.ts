@@ -13,7 +13,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes, Serdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -26,7 +26,7 @@ export const createInvokeHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   getDefaultSerdes?: () => AnySerdes,
 ): {
   <I, O>(

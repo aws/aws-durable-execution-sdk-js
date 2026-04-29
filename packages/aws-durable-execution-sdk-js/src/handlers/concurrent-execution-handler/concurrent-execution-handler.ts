@@ -15,14 +15,14 @@ import {
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { BatchResultImpl, restoreBatchResult } from "./batch-result";
-import { defaultSerdes, Serdes, AnySerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 export class ConcurrencyController<Logger extends DurableLogger> {
   constructor(
     private readonly operationName: string,
     private readonly skipNextOperation: () => void,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     private readonly getDefaultSerdes?: () => AnySerdes,
   ) {}
 
@@ -488,7 +488,7 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
   skipNextOperation: () => void,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   getDefaultSerdes?: () => AnySerdes,
 ) => {
   return <TItem, TResult>(
