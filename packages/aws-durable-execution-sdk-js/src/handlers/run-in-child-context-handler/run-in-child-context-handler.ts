@@ -29,8 +29,7 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
 
-// Checkpoint size limit in bytes (256KB)
-const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
+import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
 export const determineChildReplayMode = (
   context: ExecutionContext,
@@ -349,7 +348,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
     if (
       serializedResult &&
-      Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT
+      Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT_BYTES
     ) {
       replayChildren = true;
 
@@ -364,7 +363,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
         payloadSize: Buffer.byteLength(serializedResult, "utf8"),
-        limit: CHECKPOINT_SIZE_LIMIT,
+        limit: CHECKPOINT_SIZE_LIMIT_BYTES,
       });
     }
 

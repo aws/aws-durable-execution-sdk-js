@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Serdes, SerdesContext } from "./serdes";
+import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../constants/constants";
 
-// Checkpoint size limit minus overhead for envelope and other metadata
-const OVERFLOW_THRESHOLD_BYTES = 256 * 1024 - 1024;
+// Subtract 1KB headroom for the envelope wrapper and other checkpoint metadata
+const OVERFLOW_THRESHOLD_BYTES = CHECKPOINT_SIZE_LIMIT_BYTES - 1024;
 
 /**
  * Controls when data is written to the filesystem.
