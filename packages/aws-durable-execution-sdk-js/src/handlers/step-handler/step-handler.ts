@@ -124,8 +124,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
           AttemptEndInfoOutcome.SUCCEEDED,
         );
         backfillOperationInfo(attemptEndInfo, opInfo);
-        plugin.onOperationEnd?.(attemptInfo);
         plugin.onOperationAttemptEnd?.(attemptEndInfo);
+        plugin.onOperationEnd?.(attemptInfo);
 
         return await safeDeserialize(
           serdes,
@@ -164,8 +164,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
           AttemptEndInfoOutcome.FAILED,
         );
         backfillOperationInfo(attemptEndInfo, opInfo);
-        plugin.onOperationEnd?.(attemptInfo);
         plugin.onOperationAttemptEnd?.(attemptEndInfo);
+        plugin.onOperationEnd?.(attemptInfo);
+
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(
             stepData.StepDetails.Error,

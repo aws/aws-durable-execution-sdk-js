@@ -4,6 +4,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import {
+  DeterministicIdGenerator,
   DurableOtelPlugin,
   xRayContextExtractor,
 } from "@aws/durable-execution-sdk-js-otel";
@@ -14,7 +15,6 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { AWSXRayIdGenerator } from "@opentelemetry/id-generator-aws-xray";
 import { AWSXRayPropagator } from "@opentelemetry/propagator-aws-xray";
 import {
   propagation,
@@ -26,8 +26,10 @@ const exporter = new OTLPTraceExporter({
   url: "http://localhost:4318/v1/traces",
 });
 
+const idGenerator = new DeterministicIdGenerator();
+
 const provider = new NodeTracerProvider({
-  idGenerator: new AWSXRayIdGenerator(),
+  idGenerator,
   spanProcessors: [
     new SimpleSpanProcessor(exporter),
     new SimpleSpanProcessor(new ConsoleSpanExporter()),
@@ -173,6 +175,9 @@ const durableHandler = withDurableExecution(
         const result = await ctx.step("sport-step-2", async () => {
           return "football";
         });
+        const result2 = await ctx.step("sport-step-2-1", async () => {
+          return "soccer";
+        });
         return result;
       },
     ]);
@@ -190,7 +195,7 @@ const durableHandler = withDurableExecution(
             return item;
           },
         );
-        await ctx.wait(`map-wait-step-${index}`, { seconds: 5 });
+        await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
         return result;
       },
     );
@@ -212,6 +217,7 @@ const durableHandler = withDurableExecution(
     plugins: [
       new DurableOtelPlugin({
         provider,
+        idGenerator,
         contextExtractor: xRayContextExtractor,
         samplingRate: 1,
       }),

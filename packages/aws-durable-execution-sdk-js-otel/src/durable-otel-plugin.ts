@@ -32,6 +32,7 @@ function ensureHashedId(id: string): string {
 
 export interface DurableOtelPluginConfig {
   provider?: TracerProvider;
+  idGenerator?: DeterministicIdGenerator;
   contextExtractor?: ContextExtractor;
   samplingRate?: number;
   instrumentationName?: string;
@@ -57,7 +58,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   constructor(config: DurableOtelPluginConfig = {}) {
     const instrumentationName =
       config.instrumentationName ?? "aws-durable-execution-sdk-js";
-    this.idGenerator = new DeterministicIdGenerator();
+    this.idGenerator = config.idGenerator ?? new DeterministicIdGenerator();
     if (config.provider) {
       this.provider = config.provider;
       this.tracer = config.provider.getTracer(instrumentationName);
@@ -153,7 +154,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     if (!this.sampled) return;
     this.executionArn = info.executionArn;
     const extractedContext = this.contextExtractor(info);
-    this.idGenerator.setNextSpanOperationId(this.INVOCATION_SPAN_ID);
+    this.idGenerator.setExecutionTraceId(info.executionArn, new Date());
     this.invocationSpan = this.tracer.startSpan(
       "invocation",
       {
@@ -168,7 +169,6 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       this.invocationSpan,
     );
     this.activeSpan = this.invocationSpan;
-    this.operationSpans.set(this.INVOCATION_SPAN_ID, this.invocationSpan);
   }
 
   private static readonly OPERATION_TYPE_MAP: Record<string, string> = {
@@ -234,7 +234,13 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     span.end(info.EndTimestamp);
     this.deleteSpan(info.Id);
     const parentId = this.resolveParentId(info.Id, info.ParentId);
-    this.activeSpan = this.operationSpans.get(parentId);
+    this.activeSpan = this.operationSpans.get(parentId) ?? this.invocationSpan;
+    if (this.activeSpan) {
+      trace.setSpan(
+        this.operationContexts.get(parentId) ?? this.invocationContext,
+        this.activeSpan,
+      );
+    }
   }
 
   onOperationAttemptStart(info: AttemptInfo): void {
@@ -245,7 +251,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     const parentCtx =
       this.operationContexts.get(info.Id) ??
       this.getParentContext(info.Id, info.ParentId);
-    this.idGenerator.setNextSpanOperationId(info.Id);
+    this.idGenerator.setNextSpanOperationId(key);
     const attemptSpan = this.tracer.startSpan(
       info.Name ?? operationType,
       {
@@ -280,7 +286,13 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     span.end(info.EndTimestamp);
     this.deleteSpan(key);
     const parentId = this.resolveParentId(info.Id, info.ParentId);
-    this.activeSpan = this.operationSpans.get(parentId);
+    this.activeSpan = this.operationSpans.get(parentId) ?? this.invocationSpan;
+    if (this.activeSpan) {
+      trace.setSpan(
+        this.operationContexts.get(parentId) ?? this.invocationContext,
+        this.activeSpan,
+      );
+    }
   }
 
   async onInvocationEnd(_info: InvocationInfo): Promise<void> {

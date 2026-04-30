@@ -5,14 +5,15 @@ const durable_execution_sdk_js_otel_1 = require("@aws/durable-execution-sdk-js-o
 const sdk_trace_node_1 = require("@opentelemetry/sdk-trace-node");
 const sdk_trace_base_1 = require("@opentelemetry/sdk-trace-base");
 const exporter_trace_otlp_http_1 = require("@opentelemetry/exporter-trace-otlp-http");
-const id_generator_aws_xray_1 = require("@opentelemetry/id-generator-aws-xray");
 const propagator_aws_xray_1 = require("@opentelemetry/propagator-aws-xray");
 const api_1 = require("@opentelemetry/api");
 const exporter = new exporter_trace_otlp_http_1.OTLPTraceExporter({
   url: "http://localhost:4318/v1/traces",
 });
+const idGenerator =
+  new durable_execution_sdk_js_otel_1.DeterministicIdGenerator();
 const provider = new sdk_trace_node_1.NodeTracerProvider({
-  idGenerator: new id_generator_aws_xray_1.AWSXRayIdGenerator(),
+  idGenerator,
   spanProcessors: [
     new sdk_trace_base_1.SimpleSpanProcessor(exporter),
     new sdk_trace_base_1.SimpleSpanProcessor(
@@ -147,6 +148,9 @@ const durableHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
         const result = await ctx.step("sport-step-2", async () => {
           return "football";
         });
+        const result2 = await ctx.step("sport-step-2-1", async () => {
+          return "soccer";
+        });
         return result;
       },
     ]);
@@ -163,7 +167,7 @@ const durableHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
             return item;
           },
         );
-        await ctx.wait(`map-wait-step-${index}`, { seconds: 5 });
+        await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
         return result;
       },
     );
@@ -183,6 +187,7 @@ const durableHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
     plugins: [
       new durable_execution_sdk_js_otel_1.DurableOtelPlugin({
         provider,
+        idGenerator,
         contextExtractor: durable_execution_sdk_js_otel_1.xRayContextExtractor,
         samplingRate: 1,
       }),

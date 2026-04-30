@@ -9,6 +9,7 @@
 *dist
 /coverage
 */coverage
+*coverage
 *.iml
 .aws-sam/*
 *.zip

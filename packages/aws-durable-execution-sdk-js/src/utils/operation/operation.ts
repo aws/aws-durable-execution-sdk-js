@@ -53,7 +53,7 @@ export function backfillOperationInfo<T extends OperationInfo>(
   info: T,
   defaults: Partial<OperationInfo>,
 ): T {
-  if (!info.Id) info.Id = defaults.Id ?? "";
+  info.Id = defaults.Id ?? "";
   if (!info.Type) info.Type = defaults.Type ?? "";
   if (!info.SubType) info.SubType = defaults.SubType;
   if (!info.Name) info.Name = defaults.Name;
