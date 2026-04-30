@@ -86,6 +86,7 @@ export class DurableContextImpl<
 
   private _defaultCallbackDeserializer: AnySerdesDeserializer =
     createPassThroughSerdes();
+  private _customCallbackDeserializerSet: boolean = false;
 
   public logger: DurableContextLogger<Logger>;
   public readonly executionContext: {
@@ -373,7 +374,9 @@ export class DurableContextImpl<
           // Propagate serdes config to child context
           childCtx.configureSerdes({
             defaultSerdes: this._defaultSerdes,
-            defaultCallbackDeserializer: this._defaultCallbackDeserializer,
+            ...(this._customCallbackDeserializerSet && {
+              defaultCallbackDeserializer: this._defaultCallbackDeserializer,
+            }),
           });
           return childCtx;
         },
@@ -441,6 +444,7 @@ export class DurableContextImpl<
     }
     if (config.defaultCallbackDeserializer !== undefined) {
       this._defaultCallbackDeserializer = config.defaultCallbackDeserializer;
+      this._customCallbackDeserializerSet = true;
     }
   }
 
@@ -483,7 +487,12 @@ export class DurableContextImpl<
         this._executionContext,
         this.getNextStepId.bind(this),
         this.runInChildContext.bind(this),
-        () => this._defaultCallbackDeserializer,
+        // Only pass the getter when the user has explicitly configured a custom
+        // deserializer. The default is createPassThroughSerdes() which matches
+        // the original behavior, so no injection is needed in that case.
+        this._customCallbackDeserializerSet
+          ? () => this._defaultCallbackDeserializer
+          : undefined,
       );
       return waitForCallbackHandler(
         nameOrSubmitter!,
