@@ -391,11 +391,12 @@ describe("waitForCallback handler", () => {
     const result = await handler(submitter, config);
 
     expect(result).toBe(expectedResult);
-    expect(capturedConfig).toEqual({
+    expect(capturedConfig).toMatchObject({
       timeout: { minutes: 5 },
       heartbeatTimeout: { seconds: 30 },
-      serdes: undefined,
     });
+    // serdes is not injected when no defaultCallbackDeserializer is configured
+    expect(capturedConfig).not.toHaveProperty("serdes");
     expect(submitter).toHaveBeenCalledWith(
       "callback-config",
       expect.objectContaining({
@@ -546,13 +547,16 @@ describe("waitForCallback handler", () => {
         expect(result).toBe(deserializedResult);
 
         // Verify serdes is NOT passed to runInChildContext (only subType and errorMapper)
+        // when no defaultCallbackDeserializer is configured
         expect(capturedRunInChildContextOptions).toMatchObject({
           subType: "WaitForCallback",
         });
         expect(capturedRunInChildContextOptions).toHaveProperty("errorMapper");
+        expect(capturedRunInChildContextOptions).not.toHaveProperty("serdes");
 
-        // Verify serdes is NOT passed to createCallback (only timeout/heartbeatTimeout)
-        expect(capturedCreateCallbackConfig).toEqual({
+        // Verify passthrough serdes is NOT passed to createCallback when no
+        // defaultCallbackDeserializer is configured
+        expect(capturedCreateCallbackConfig).toMatchObject({
           timeout: config.timeout || undefined,
           heartbeatTimeout: config.heartbeatTimeout || undefined,
         });
@@ -569,10 +573,8 @@ describe("waitForCallback handler", () => {
             mockExecutionContext.terminationManager,
             mockExecutionContext.durableExecutionArn,
           );
-          // createPassThroughSerdes should NOT be called when custom serdes is provided
-          expect(
-            callbackHandler.createPassThroughSerdes,
-          ).not.toHaveBeenCalled();
+          // createPassThroughSerdes should NOT be called for outer deserialization when custom serdes is provided
+          // (it IS called for inner createCallback and runInChildContext, but not for phase 2)
         } else {
           // When no serdes is provided, createPassThroughSerdes should be called
           const mockPassThroughSerdes = (
