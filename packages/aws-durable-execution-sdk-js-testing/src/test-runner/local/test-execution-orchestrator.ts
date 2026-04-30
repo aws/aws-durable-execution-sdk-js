@@ -632,13 +632,21 @@ export class TestExecutionOrchestrator {
         return;
       }
 
-      if (!this.scheduler.hasScheduledFunction() && hasDirtyOperations) {
+      if (hasDirtyOperations) {
+        // Re-invoke the handler whenever the invocation returns PENDING with
+        // updates on the server that weren't delivered to the handler before
+        // it returned (for example, a callback SUCCEEDED that arrived while
+        // the handler was mid-teardown).
+        //
+        // We do NOT gate this on `!hasScheduledFunction()`: a pre-existing
+        // scheduled function (e.g., the timer for a sibling `ctx.wait`) is
+        // independent and will still fire on its own schedule. Gating on it
+        // causes callback completions to be missed whenever an unrelated
+        // timer is pending, which wedges executions that look like
+        // `parallel(map(waitForCallback), ctx.wait)` until the wait fires.
         defaultLogger.debug(
           "Re-invoking handler since invocation completed with pending dirty operations",
         );
-        // Re-invoke the handler if its last checkpoint was not synchronized
-        // with the backend and there are pending dirty operations when the
-        // invocation completed.
         this.scheduler.scheduleFunction(
           () => this.invokeHandler(executionId),
           (err) => {
