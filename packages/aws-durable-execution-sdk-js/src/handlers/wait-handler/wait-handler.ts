@@ -3,6 +3,7 @@ import {
   OperationSubType,
   Duration,
   OperationLifecycleState,
+  DurableExecutionMode,
 } from "../../types";
 import {
   OperationStatus,
@@ -24,6 +25,7 @@ export const createWaitHandler = (
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
   plugin: DurableInstrumentationPlugin = {},
+  getDurableExecutionMode?: () => DurableExecutionMode,
 ): {
   (name: string, duration: Duration): DurablePromise<void>;
   (duration: Duration): DurablePromise<void>;
@@ -40,16 +42,14 @@ export const createWaitHandler = (
     const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();
 
-    const opInfo = {
-      Id: stepId,
-      Name: actualName,
-      Type: OperationType.WAIT,
-      SubType: OperationSubType.WAIT,
-      ParentId: parentId,
-    };
-
     // Phase 1: Start wait operation
     let isCompleted = false;
+    // Track whether to skip plugin calls (onOperationStart/onOperationEnd) on replay.
+    // If we're still in ReplayMode after checkAndUpdateReplayMode(), there are more
+    // operations to replay after this wait, meaning this wait's plugin events were
+    // already emitted in a previous invocation. We only fire them on the first
+    // invocation where the wait completes (transition to ExecutionMode).
+    let skipPluginCalls = false;
 
     const phase1Promise = (async (): Promise<void> => {
       log("⏲️", "Wait phase 1:", {
@@ -77,6 +77,18 @@ export const createWaitHandler = (
         log("⏭️", "Wait already completed:", { stepId });
         checkAndUpdateReplayMode?.();
 
+        // After checkAndUpdateReplayMode(), check if we're still in ReplayMode.
+        // If still in ReplayMode, there are more operations to replay, meaning this
+        // wait was completed in a previous invocation and its plugin events were
+        // already emitted then.
+        const currentMode = getDurableExecutionMode?.();
+        if (currentMode === DurableExecutionMode.ReplayMode) {
+          skipPluginCalls = true;
+          log("⏭️", "Wait in full replay mode, skipping plugin calls:", {
+            stepId,
+          });
+        }
+
         // Mark as completed
         checkpoint.markOperationState(
           stepId,
@@ -93,9 +105,11 @@ export const createWaitHandler = (
         );
 
         isCompleted = true;
-        const checkPointedOpInfo = toOperationInfo(stepData);
-        plugin.onOperationStart?.(checkPointedOpInfo);
-        plugin.onOperationEnd?.(checkPointedOpInfo);
+        if (!skipPluginCalls) {
+          const checkPointedOpInfo = toOperationInfo(stepData);
+          plugin.onOperationStart?.(checkPointedOpInfo);
+          plugin.onOperationEnd?.(checkPointedOpInfo);
+        }
         return;
       }
 
@@ -146,9 +160,10 @@ export const createWaitHandler = (
       // Wait for phase 1
       await phase1Promise;
 
-      // If already completed in phase 1, skip phase 2
+      // If already completed in phase 1, skip phase 2.
+      // Plugin calls were already handled in phase 1 (both onOperationStart
+      // and onOperationEnd), so nothing more to do here.
       if (isCompleted) {
-        plugin.onOperationEnd?.(opInfo);
         return;
       }
 

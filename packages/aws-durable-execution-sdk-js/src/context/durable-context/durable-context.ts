@@ -285,6 +285,8 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         this.durableExecution.plugin,
+        this.checkAndUpdateReplayMode.bind(this),
+        () => this.durableExecutionMode,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -382,6 +384,7 @@ export class DurableContextImpl<
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
         this.durableExecution.plugin,
+        () => this.durableExecutionMode,
       );
       return typeof nameOrDuration === "string"
         ? waitHandler(nameOrDuration, maybeDuration!)

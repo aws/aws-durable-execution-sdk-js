@@ -54,6 +54,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   logger: Logger,
   parentId?: string,
   plugin: DurableInstrumentationPlugin = {},
+  checkAndUpdateReplayMode?: () => void,
+  getDurableExecutionMode?: () => DurableExecutionMode,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -99,6 +101,19 @@ export const createStepHandler = <Logger extends DurableLogger>(
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Step already completed:", { stepId });
+        checkAndUpdateReplayMode?.();
+
+        // After checkAndUpdateReplayMode(), check if we're still in ReplayMode.
+        // If still in ReplayMode, there are more operations to replay, meaning this
+        // step's plugin events were already emitted in a previous invocation.
+        const skipPluginCalls =
+          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
+        if (skipPluginCalls) {
+          log("⏭️", "Step in full replay mode, skipping plugin calls:", {
+            stepId,
+          });
+        }
+
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -112,20 +127,23 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationAttemptStart?.(attemptInfo);
-        const attemptEndInfo = toAttemptEndInfo(
-          stepData,
-          AttemptEndInfoOutcome.SUCCEEDED,
-        );
-        backfillOperationInfo(attemptEndInfo, opInfo);
-        plugin.onOperationAttemptEnd?.(attemptEndInfo);
-        plugin.onOperationEnd?.(attemptInfo);
+
+        if (!skipPluginCalls) {
+          const attemptInfo = toAttemptInfo(
+            stepData,
+            stepData.StepDetails?.Attempt,
+          );
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationStart?.(attemptInfo);
+          plugin.onOperationAttemptStart?.(attemptInfo);
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.SUCCEEDED,
+          );
+          backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationEnd?.(attemptInfo);
+        }
 
         return await safeDeserialize(
           serdes,
@@ -139,6 +157,20 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
       // Check if already failed
       if (stepData?.Status === OperationStatus.FAILED) {
+        checkAndUpdateReplayMode?.();
+
+        const skipPluginCalls =
+          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
+        if (skipPluginCalls) {
+          log(
+            "⏭️",
+            "Step (failed) in full replay mode, skipping plugin calls:",
+            {
+              stepId,
+            },
+          );
+        }
+
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -152,20 +184,23 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationAttemptStart?.(attemptInfo);
-        const attemptEndInfo = toAttemptEndInfo(
-          stepData,
-          AttemptEndInfoOutcome.FAILED,
-        );
-        backfillOperationInfo(attemptEndInfo, opInfo);
-        plugin.onOperationAttemptEnd?.(attemptEndInfo);
-        plugin.onOperationEnd?.(attemptInfo);
+
+        if (!skipPluginCalls) {
+          const attemptInfo = toAttemptInfo(
+            stepData,
+            stepData.StepDetails?.Attempt,
+          );
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationStart?.(attemptInfo);
+          plugin.onOperationAttemptStart?.(attemptInfo);
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.FAILED,
+          );
+          backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationEnd?.(attemptInfo);
+        }
 
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(

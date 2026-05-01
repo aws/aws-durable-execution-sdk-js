@@ -8,9 +8,11 @@ This is the POC Otel plugin integrated with traces on AWS CloudWatch.
 2. `npm pack` required packages:
 
 ```
+npm run install-all && npm run build &&
 cd packages/aws-durable-execution-sdk-js && npm pack && \
 cd ../aws-durable-execution-sdk-js-testing && npm pack && \
-cd ../aws-durable-execution-sdk-js-otel && npm pack
+cd ../aws-durable-execution-sdk-js-otel && npm pack && \
+cd ../..
 ```
 
 3. `cd ../packages/test-otel-plugin/hello-world/`, copy over all the zip files from the previous steps into the `hello-world` folder.
