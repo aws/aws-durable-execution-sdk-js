@@ -23,22 +23,84 @@ export enum FileSystemSerdesMode {
   OVERFLOW = "OVERFLOW",
 }
 
-/** @internal */
-type FileSystemEnvelope =
-  | { data: string }
-  | { file: string; preview?: Record<string, unknown> };
+/**
+ * Controls whether a preview field is matched by name anywhere in the object
+ * tree, or by exact dot-notation path from the root.
+ *
+ * @public
+ */
+export enum FieldMatchMode {
+  /** Match the field name at any depth in the object tree (default). */
+  ANYWHERE = "ANYWHERE",
+  /**
+   * Match by exact dot-notation path from root.
+   * A single segment (e.g. `"email"`) matches only the root-level field.
+   * A dotted path (e.g. `"user.email"`) matches that exact nested location.
+   */
+  PATH = "PATH",
+}
 
-async function writeToFile(
-  basePath: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  value: any,
-  context: SerdesContext,
-): Promise<string> {
-  const dir = join(basePath, encodeURIComponent(context.durableExecutionArn));
-  await mkdir(dir, { recursive: true });
-  const filePath = join(dir, `${context.entityId}.json`);
-  await writeFile(filePath, JSON.stringify(value), "utf-8");
-  return filePath;
+/**
+ * Controls which fields are included in the preview by default.
+ *
+ * @public
+ */
+export enum PreviewMode {
+  /** Include all fields, then apply `exclude` and `mask` rules. */
+  INCLUDE_ALL = "INCLUDE_ALL",
+  /** Exclude all fields, then apply `include` and `mask` rules. */
+  EXCLUDE_ALL = "EXCLUDE_ALL",
+}
+
+/**
+ * A field selector used in preview include/exclude/mask lists.
+ *
+ * @public
+ */
+export interface PreviewField {
+  /** Field name or dot-notation path. */
+  name: string;
+  /** How to match the field. Defaults to `FieldMatchMode.ANYWHERE`. */
+  match?: FieldMatchMode;
+}
+
+/**
+ * Configuration for the preview feature of {@link createFileSystemSerdes}.
+ *
+ * When configured, a subset of the original value is stored inline in the
+ * checkpoint envelope alongside the file pointer, making it visible in the
+ * console and API without reading the full file.
+ *
+ * @public
+ */
+export interface PreviewConfig {
+  /**
+   * Whether to start with all fields included or all excluded.
+   */
+  mode: PreviewMode;
+  /**
+   * Fields to include (used with `EXCLUDE_ALL` mode, or to override `INCLUDE_ALL`).
+   */
+  include?: PreviewField[];
+  /**
+   * Fields to exclude (used with `INCLUDE_ALL` mode, or to override `EXCLUDE_ALL`).
+   */
+  exclude?: PreviewField[];
+  /**
+   * Fields to mask — if visible, their value is replaced with `maskString`.
+   */
+  mask?: PreviewField[];
+  /**
+   * String used to replace masked field values.
+   * @defaultValue `"***"`
+   */
+  maskString?: string;
+  /**
+   * Maximum size in bytes for the preview object (JSON-serialized).
+   * Fields are added until this limit is reached.
+   * @defaultValue `4096`
+   */
+  maxPreviewBytes?: number;
 }
 
 /**
@@ -53,22 +115,10 @@ export interface FileSystemSerdesConfig {
    */
   storageMode?: FileSystemSerdesMode;
   /**
-   * Optional function that generates a preview object from the value.
-   * When provided, the preview is stored inline in the checkpoint envelope
-   * alongside the file pointer, making data visible in the console and API
-   * without reading the full file.
-   *
-   * @example
-   * ```typescript
-   * createFileSystemSerdes("/mnt/s3", {
-   *   generatePreview: (value) => ({
-   *     id: (value as any).id,
-   *     status: (value as any).status,
-   *   }),
-   * });
-   * ```
+   * When set, a preview of the value is stored inline in the checkpoint
+   * envelope alongside the file pointer.
    */
-  generatePreview?: (value: unknown) => Record<string, unknown> | undefined;
+  preview?: PreviewConfig;
 }
 
 /**
@@ -78,9 +128,116 @@ export interface FileSystemSerdesConfig {
  * filesystem via S3 Files, enabling durable, shared state across invocations
  * and parallel function instances without checkpoint size constraints.
  *
+/** @internal */
+type FileSystemEnvelope =
+  | { data: string }
+  | { file: string; preview?: Record<string, unknown> };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function writeToFile(
+  basePath: string,
+  value: any,
+  context: SerdesContext,
+): Promise<string> {
+  const dir = join(basePath, encodeURIComponent(context.durableExecutionArn));
+  await mkdir(dir, { recursive: true });
+  const filePath = join(dir, `${context.entityId}.json`);
+  await writeFile(filePath, JSON.stringify(value), "utf-8");
+  return filePath;
+}
+
+/** Returns true if the field at `path` (dot-notation) matches the given PreviewField rule. */
+function fieldMatches(path: string, field: PreviewField): boolean {
+  const mode = field.match ?? FieldMatchMode.ANYWHERE;
+  if (mode === FieldMatchMode.PATH) {
+    return path === field.name;
+  }
+  // ANYWHERE: match if any segment of the path equals the field name
+  return path.split(".").includes(field.name);
+}
+
+function isMatched(path: string, fields: PreviewField[] | undefined): boolean {
+  return fields?.some((f) => fieldMatches(path, f)) ?? false;
+}
+
+/**
+ * Builds a preview object from `value` according to `config`.
+ * Only top-level and nested scalar/object fields are included (no special array handling).
+ * Fields are added until `maxPreviewBytes` is reached.
+ * @internal
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildPreview(
+  value: any,
+  config: PreviewConfig,
+): Record<string, unknown> | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+
+  const maskString = config.maskString ?? "***";
+  const maxBytes = config.maxPreviewBytes ?? 4096;
+  const preview: Record<string, unknown> = {};
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function collect(obj: any, pathPrefix: string): void {
+    if (obj === null || typeof obj !== "object") return;
+    for (const key of Object.keys(obj)) {
+      const path = pathPrefix ? `${pathPrefix}.${key}` : key;
+      const masked = isMatched(path, config.mask);
+      const visible =
+        masked || // mask implies visible, unless explicitly excluded
+        (config.mode === PreviewMode.INCLUDE_ALL
+          ? !isMatched(path, config.exclude)
+          : isMatched(path, config.include));
+      // exclude always wins — even over mask
+      const excluded = isMatched(path, config.exclude);
+
+      if (!visible || excluded) {
+        // Recurse into objects to find nested matches
+        if (
+          obj[key] !== null &&
+          typeof obj[key] === "object" &&
+          !Array.isArray(obj[key])
+        ) {
+          collect(obj[key], path);
+        }
+        continue;
+      }
+
+      if (masked) {
+        const candidate = { ...preview, [path]: maskString };
+        if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes)
+          return;
+        preview[path] = maskString;
+        continue;
+      }
+
+      // For objects, recurse rather than storing the whole object
+      if (
+        obj[key] !== null &&
+        typeof obj[key] === "object" &&
+        !Array.isArray(obj[key])
+      ) {
+        collect(obj[key], path);
+        continue;
+      }
+
+      const candidate = { ...preview, [path]: obj[key] };
+      if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes)
+        return;
+      preview[path] = obj[key];
+    }
+  }
+
+  collect(value, "");
+  return Object.keys(preview).length > 0 ? preview : undefined;
+}
+
+/**
+ * Creates a Serdes that stores serialized values on the filesystem.
+ *
  * The checkpoint stores a JSON envelope that is either:
- * - `{"data":"<inline JSON>"}` — value stored inline (OVERFLOW mode, under threshold)
  * - `{"file":"<path>"}` — value stored in a file (ALWAYS mode, or OVERFLOW above threshold)
+ * - `{"file":"<path>","preview":{...}}` — file pointer with inline preview (when preview is configured)
  *
  * @param basePath - Directory path where data files will be stored (e.g. the S3 Files mount point)
  * @param config - Optional configuration options
@@ -96,6 +253,17 @@ export interface FileSystemSerdesConfig {
  * // Only overflow to filesystem when payload exceeds ~256KB
  * context.configureSerdes({
  *   defaultSerdes: createFileSystemSerdes("/mnt/s3", { storageMode: FileSystemSerdesMode.OVERFLOW }),
+ * });
+ *
+ * // With preview: show id and masked email in checkpoint
+ * context.configureSerdes({
+ *   defaultSerdes: createFileSystemSerdes("/mnt/s3", {
+ *     preview: {
+ *       mode: PreviewMode.EXCLUDE_ALL,
+ *       include: [{ name: "id" }, { name: "status" }],
+ *       mask: [{ name: "email" }],
+ *     },
+ *   }),
  * });
  * ```
  *
@@ -116,7 +284,9 @@ export function createFileSystemSerdes(
 
       if (storageMode === FileSystemSerdesMode.ALWAYS) {
         const filePath = await writeToFile(basePath, value, context);
-        const preview = config.generatePreview?.(value);
+        const preview = config.preview
+          ? buildPreview(value, config.preview)
+          : undefined;
         const envelope: FileSystemEnvelope = preview
           ? { file: filePath, preview }
           : { file: filePath };
@@ -127,7 +297,9 @@ export function createFileSystemSerdes(
       const inlineJson = JSON.stringify(value);
       if (Buffer.byteLength(inlineJson, "utf-8") > OVERFLOW_THRESHOLD_BYTES) {
         const filePath = await writeToFile(basePath, value, context);
-        const preview = config.generatePreview?.(value);
+        const preview = config.preview
+          ? buildPreview(value, config.preview)
+          : undefined;
         const envelope: FileSystemEnvelope = preview
           ? { file: filePath, preview }
           : { file: filePath };
