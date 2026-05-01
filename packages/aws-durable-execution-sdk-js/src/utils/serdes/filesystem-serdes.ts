@@ -167,73 +167,35 @@ function isMatched(path: string, fields: PreviewField[] | undefined): boolean {
  * @internal
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deepMerge(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): void {
-  for (const key of Object.keys(source)) {
-    const sourceVal = source[key];
-    if (
-      sourceVal !== null &&
-      typeof sourceVal === "object" &&
-      !Array.isArray(sourceVal) &&
-      typeof target[key] === "object" &&
-      target[key] !== null
-    ) {
-      deepMerge(
-        target[key] as Record<string, unknown>,
-        sourceVal as Record<string, unknown>,
-      );
-    } else {
-      target[key] = sourceVal;
-    }
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function setNestedValue(
-  obj: Record<string, unknown>,
-  path: string,
-  value: unknown,
-): void {
-  const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-  const parts = path.split(".");
-  if (parts.some((p) => DANGEROUS_KEYS.has(p))) return;
-  // Build nested structure from inside out, then merge — avoids dynamic traversal
-  const nested = parts.reduceRight<unknown>(
-    (acc, key) => ({ [key]: acc }),
-    value,
-  );
-  deepMerge(obj, nested as Record<string, unknown>);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildPreview(
   value: any,
   config: PreviewConfig,
 ): Record<string, unknown> | undefined {
   if (value === null || typeof value !== "object") return undefined;
 
+  const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
   const maskString = config.maskString ?? "***";
   const maxBytes = config.maxPreviewBytes ?? 4096;
-  const preview: Record<string, unknown> = {};
+
+  // Step 1: collect flat (path, displayValue) pairs
+  const pairs: Array<[string, unknown]> = [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function collect(obj: any, pathPrefix: string): void {
     if (obj === null || typeof obj !== "object") return;
     for (const key of Object.keys(obj)) {
+      if (DANGEROUS_KEYS.has(key)) continue;
       const path = pathPrefix ? `${pathPrefix}.${key}` : key;
       const masked = isMatched(path, config.mask);
-      const visible =
-        masked || // mask implies visible, unless explicitly excluded
-        (config.mode === PreviewMode.INCLUDE_ALL
-          ? !isMatched(path, config.exclude)
-          : isMatched(path, config.include));
-      // exclude always wins — even over mask
       const excluded = isMatched(path, config.exclude);
+      const visible =
+        !excluded &&
+        (masked ||
+          (config.mode === PreviewMode.INCLUDE_ALL
+            ? true
+            : isMatched(path, config.include)));
 
-      if (!visible || excluded) {
-        // Recurse into objects to find nested matches
+      if (!visible) {
         if (
           obj[key] !== null &&
           typeof obj[key] === "object" &&
@@ -245,15 +207,10 @@ export function buildPreview(
       }
 
       if (masked) {
-        const candidate = JSON.parse(JSON.stringify(preview));
-        setNestedValue(candidate, path, maskString);
-        if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes)
-          return;
-        setNestedValue(preview, path, maskString);
+        pairs.push([path, maskString]);
         continue;
       }
 
-      // For objects, recurse rather than storing the whole object
       if (
         obj[key] !== null &&
         typeof obj[key] === "object" &&
@@ -263,16 +220,30 @@ export function buildPreview(
         continue;
       }
 
-      const candidate = JSON.parse(JSON.stringify(preview));
-      setNestedValue(candidate, path, obj[key]);
-      if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes)
-        return;
-      setNestedValue(preview, path, obj[key]);
+      pairs.push([path, obj[key]]);
     }
   }
 
   collect(value, "");
-  return Object.keys(preview).length > 0 ? preview : undefined;
+  if (pairs.length === 0) return undefined;
+
+  // Step 2: build nested object from flat pairs, respecting maxPreviewBytes
+  let result: Record<string, unknown> = {};
+  for (const [path, val] of pairs) {
+    const nested = path
+      .split(".")
+      .reduceRight<unknown>((acc, k) => ({ [k]: acc }), val) as Record<
+      string,
+      unknown
+    >;
+    const candidate = JSON.parse(
+      JSON.stringify({ ...result, ...nested }),
+    ) as Record<string, unknown>;
+    if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes) break;
+    result = candidate;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /**
