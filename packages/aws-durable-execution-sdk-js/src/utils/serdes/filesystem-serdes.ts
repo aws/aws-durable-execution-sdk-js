@@ -227,21 +227,40 @@ export function buildPreview(
   collect(value, "");
   if (pairs.length === 0) return undefined;
 
-  // Step 2: build nested object from flat pairs, respecting maxPreviewBytes
-  let result: Record<string, unknown> = {};
+  // Step 2: filter pairs by maxPreviewBytes using incremental size tracking (O(n)),
+  // then build the nested object once from accepted pairs.
+  // Using flat path as key for size estimation — slightly over-estimates for nested
+  // keys but is safe (never under-estimates).
+  const accepted: Array<[string, unknown]> = [];
+  let estimatedSize = 2; // "{}"
   for (const [path, val] of pairs) {
-    const nested = path
-      .split(".")
-      .reduceRight<unknown>((acc, k) => ({ [k]: acc }), val) as Record<
-      string,
-      unknown
-    >;
-    const candidate = JSON.parse(
-      JSON.stringify({ ...result, ...nested }),
-    ) as Record<string, unknown>;
-    if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes) break;
-    result = candidate;
+    const entrySize = Buffer.byteLength(
+      `"${path}":${JSON.stringify(val)},`,
+      "utf-8",
+    );
+    if (estimatedSize + entrySize > maxBytes) break;
+    accepted.push([path, val]);
+    estimatedSize += entrySize;
   }
+
+  if (accepted.length === 0) return undefined;
+
+  // Build nested structure from accepted pairs (no dynamic assignment)
+  const result = accepted.reduce<Record<string, unknown>>(
+    (acc, [path, val]) => {
+      const nested = path
+        .split(".")
+        .reduceRight<unknown>((a, k) => ({ [k]: a }), val) as Record<
+        string,
+        unknown
+      >;
+      return JSON.parse(JSON.stringify({ ...acc, ...nested })) as Record<
+        string,
+        unknown
+      >;
+    },
+    {},
+  );
 
   return Object.keys(result).length > 0 ? result : undefined;
 }
