@@ -172,15 +172,20 @@ function setNestedValue(
   path: string,
   value: unknown,
 ): void {
+  const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
   const parts = path.split(".");
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
+    if (DANGEROUS_KEYS.has(parts[i])) return;
     if (!(parts[i] in current) || typeof current[parts[i]] !== "object") {
       current[parts[i]] = {};
     }
     current = current[parts[i]] as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]] = value;
+  const lastKey = parts[parts.length - 1];
+  if (!DANGEROUS_KEYS.has(lastKey)) {
+    current[lastKey] = value;
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
