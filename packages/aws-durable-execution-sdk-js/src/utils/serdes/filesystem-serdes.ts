@@ -257,13 +257,27 @@ export function buildPreview(
 }
 
 /**
- * Creates a Serdes that stores serialized values on the filesystem.
+ * Creates a Serdes that stores serialized values on a durable filesystem.
+ *
+ * **⚠️ WARNING: Do NOT use with Lambda's ephemeral `/tmp` storage.**
+ * Lambda's `/tmp` filesystem is local to a single execution environment and is
+ * not shared across invocations or function instances. On replay, a different
+ * execution environment may be used and the file will not be found, causing
+ * deserialization to fail.
+ *
+ * **Use only with a durable, shared filesystem such as:**
+ * - **Amazon S3 Files** — mount an S3 bucket as a filesystem via the Lambda console or IaC
+ * - **Amazon EFS** — mount an EFS file system to your Lambda function
+ *
+ * Both options provide persistence across invocations and are accessible from
+ * multiple concurrent function instances, which is required for correct replay behavior.
  *
  * The checkpoint stores a JSON envelope that is either:
- * - `{"file":"<path>"}` — value stored in a file (ALWAYS mode, or OVERFLOW above threshold)
+ * - `{"data":"<inline JSON>"}` — value stored inline (OVERFLOW mode, under threshold)
+ * - `{"file":"<path>"}` — value stored in a file
  * - `{"file":"<path>","preview":{...}}` — file pointer with inline preview (when preview is configured)
  *
- * @param basePath - Directory path where data files will be stored (e.g. the S3 Files mount point)
+ * @param basePath - Directory path where data files will be stored (e.g. `/mnt/s3` for S3 Files, `/mnt/efs` for EFS)
  * @param config - Optional configuration options
  * @returns A Serdes that reads/writes JSON files under basePath
  *
