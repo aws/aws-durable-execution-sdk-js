@@ -245,22 +245,20 @@ export function buildPreview(
 
   if (accepted.length === 0) return undefined;
 
-  // Build nested structure from accepted pairs (no dynamic assignment)
-  const result = accepted.reduce<Record<string, unknown>>(
-    (acc, [path, val]) => {
-      const nested = path
-        .split(".")
-        .reduceRight<unknown>((a, k) => ({ [k]: a }), val) as Record<
-        string,
-        unknown
-      >;
-      return JSON.parse(JSON.stringify({ ...acc, ...nested })) as Record<
-        string,
-        unknown
-      >;
-    },
-    {},
-  );
+  // Build nested structure from accepted pairs in O(n).
+  // Keys are safe at this point — dangerous keys were filtered in collect().
+  const result: Record<string, unknown> = {};
+  for (const [path, val] of accepted) {
+    const parts = path.split(".");
+    let node = result;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (typeof node[parts[i]] !== "object" || node[parts[i]] === null) {
+        node[parts[i]] = {};
+      }
+      node = node[parts[i]] as Record<string, unknown>;
+    }
+    node[parts[parts.length - 1]] = val;
+  }
 
   return Object.keys(result).length > 0 ? result : undefined;
 }
