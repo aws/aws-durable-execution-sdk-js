@@ -167,6 +167,23 @@ function isMatched(path: string, fields: PreviewField[] | undefined): boolean {
  * @internal
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function setNestedValue(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): void {
+  const parts = path.split(".");
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!(parts[i] in current) || typeof current[parts[i]] !== "object") {
+      current[parts[i]] = {};
+    }
+    current = current[parts[i]] as Record<string, unknown>;
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildPreview(
   value: any,
   config: PreviewConfig,
@@ -204,10 +221,11 @@ export function buildPreview(
       }
 
       if (masked) {
-        const candidate = { ...preview, [path]: maskString };
+        const candidate = JSON.parse(JSON.stringify(preview));
+        setNestedValue(candidate, path, maskString);
         if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes)
           return;
-        preview[path] = maskString;
+        setNestedValue(preview, path, maskString);
         continue;
       }
 
@@ -221,10 +239,11 @@ export function buildPreview(
         continue;
       }
 
-      const candidate = { ...preview, [path]: obj[key] };
+      const candidate = JSON.parse(JSON.stringify(preview));
+      setNestedValue(candidate, path, obj[key]);
       if (Buffer.byteLength(JSON.stringify(candidate), "utf-8") > maxBytes)
         return;
-      preview[path] = obj[key];
+      setNestedValue(preview, path, obj[key]);
     }
   }
 
