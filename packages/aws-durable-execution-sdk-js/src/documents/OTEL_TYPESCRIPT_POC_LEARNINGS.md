@@ -16,6 +16,8 @@ for more details on some other pain points.
 ### Operations with nested attempts across invocations can be imported as a single span but there is an issue with "Operation" span duplication
 For each "Attempt" span, we wish to nest under the parent "Operation" span. However, if there are multiple attempts, the onOperationStart and onOperationEnd hook may be triggered multiple times until the "Attempt" succeeds or the step fails due to running out of attempts.
 
+Solution: Only export the Operation and Attempt span for the very last attempt.
+
 ### Map and Parallel operations are best represented as nested parent, child spans. Not links.
 
 I did not explicitly test the links but the "branches" of the map and parallel are naturally a child of the root map or parallel
