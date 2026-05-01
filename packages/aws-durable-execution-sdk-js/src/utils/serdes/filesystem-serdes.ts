@@ -167,6 +167,30 @@ function isMatched(path: string, fields: PreviewField[] | undefined): boolean {
  * @internal
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): void {
+  for (const key of Object.keys(source)) {
+    const sourceVal = source[key];
+    if (
+      sourceVal !== null &&
+      typeof sourceVal === "object" &&
+      !Array.isArray(sourceVal) &&
+      typeof target[key] === "object" &&
+      target[key] !== null
+    ) {
+      deepMerge(
+        target[key] as Record<string, unknown>,
+        sourceVal as Record<string, unknown>,
+      );
+    } else {
+      target[key] = sourceVal;
+    }
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function setNestedValue(
   obj: Record<string, unknown>,
   path: string,
@@ -175,18 +199,12 @@ function setNestedValue(
   const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
   const parts = path.split(".");
   if (parts.some((p) => DANGEROUS_KEYS.has(p))) return;
-  let current = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (
-      !Object.prototype.hasOwnProperty.call(current, parts[i]) ||
-      typeof current[parts[i]] !== "object" ||
-      current[parts[i]] === null
-    ) {
-      current[parts[i]] = Object.create(null) as Record<string, unknown>;
-    }
-    current = current[parts[i]] as Record<string, unknown>;
-  }
-  current[parts[parts.length - 1]] = value;
+  // Build nested structure from inside out, then merge — avoids dynamic traversal
+  const nested = parts.reduceRight<unknown>(
+    (acc, key) => ({ [key]: acc }),
+    value,
+  );
+  deepMerge(obj, nested as Record<string, unknown>);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
