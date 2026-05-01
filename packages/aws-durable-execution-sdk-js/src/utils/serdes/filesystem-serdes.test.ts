@@ -186,7 +186,7 @@ describe("buildPreview", () => {
       },
     );
     expect(result?.["email"]).toBe("root@example.com");
-    expect(result?.["user.email"]).toBe("nested@example.com");
+    expect((result?.["user"] as any)?.["email"]).toBe("nested@example.com");
   });
 
   it("respects maxPreviewBytes budget", () => {
