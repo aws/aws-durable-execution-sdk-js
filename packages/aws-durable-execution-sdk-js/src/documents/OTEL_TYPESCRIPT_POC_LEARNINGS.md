@@ -25,6 +25,8 @@ operation span. The way our language SDK creates run-in-child-context operations
 Links are more useful when spans are in different traces or when the relationship is non-hierarchical. We don't have that
 issue here.
 
+The main issue is that if we want onOperationStart and onOperationEnd hooks to only be called at most once. AND we wish to use these hooks to represent map and parallel operations as spans, then it's difficult to create the branches of the map and parallel under a single parent span. The completions of each branch may be spread across invocations which makes visualization difficult.
+
 ### Wait operation duplication issues
 
 This is solved by https://github.com/aws/aws-durable-execution-sdk-js/commit/d75518f5b7a69dc30e65cc8326e9d97dcf4af639.
