@@ -4,6 +4,7 @@ import {
   CreateCallbackResult,
   OperationSubType,
   DurablePromise,
+  DurableExecutionMode,
   OperationLifecycleState,
 } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
@@ -18,7 +19,14 @@ import {
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  OperationInfo,
+} from "../../types/plugin";
+import {
+  toAttemptInfo,
+  backfillOperationInfo,
+} from "../../utils/operation/operation";
 
 export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -32,6 +40,7 @@ export const createCallback = (
   checkAndUpdateReplayMode: () => void,
   parentId?: string,
   plugin: DurableInstrumentationPlugin = {},
+  getDurableExecutionMode?: () => DurableExecutionMode,
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -50,7 +59,7 @@ export const createCallback = (
     const stepId = createStepId();
     const serdes = config?.serdes || createPassThroughSerdes<T>();
 
-    const opInfo = {
+    const opInfo: OperationInfo = {
       Id: stepId,
       Name: name,
       Type: OperationType.CALLBACK,
@@ -78,12 +87,18 @@ export const createCallback = (
         context,
       );
 
-      plugin.onOperationStart?.(opInfo);
-
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Callback already completed:", { stepId });
         checkAndUpdateReplayMode();
+
+        const skipPluginCalls =
+          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
+        if (skipPluginCalls) {
+          log("⏭️", "Callback in full replay mode, skipping plugin calls:", {
+            stepId,
+          });
+        }
 
         checkpoint.markOperationState(
           stepId,
@@ -99,7 +114,16 @@ export const createCallback = (
           },
         );
 
-        plugin.onOperationEnd?.(opInfo);
+        if (!skipPluginCalls) {
+          const attemptInfo = toAttemptInfo(
+            stepData,
+            stepData.StepDetails?.Attempt,
+          );
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationStart?.(attemptInfo);
+          plugin.onOperationEnd?.(attemptInfo);
+        }
+
         isCompleted = true;
         return;
       }
@@ -110,6 +134,17 @@ export const createCallback = (
         stepData?.Status === OperationStatus.TIMED_OUT
       ) {
         log("❌", "Callback already failed:", { stepId });
+        checkAndUpdateReplayMode();
+
+        const skipPluginCalls =
+          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
+        if (skipPluginCalls) {
+          log(
+            "⏭️",
+            "Callback (failed) in full replay mode, skipping plugin calls:",
+            { stepId },
+          );
+        }
 
         checkpoint.markOperationState(
           stepId,
@@ -125,10 +160,16 @@ export const createCallback = (
           },
         );
 
-        plugin.onOperationEnd?.({
-          ...opInfo,
-          error: new Error("Callback failed"),
-        });
+        if (!skipPluginCalls) {
+          const attemptInfo = toAttemptInfo(
+            stepData,
+            stepData.StepDetails?.Attempt,
+          );
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationStart?.(attemptInfo);
+          plugin.onOperationEnd?.(attemptInfo);
+        }
+
         isCompleted = true;
         return;
       }
@@ -260,6 +301,8 @@ export const createCallback = (
         name,
         serdes,
         checkAndUpdateReplayMode,
+        plugin,
+        opInfo,
       );
 
       log("✅", "Callback created:", { stepId, name, callbackId });

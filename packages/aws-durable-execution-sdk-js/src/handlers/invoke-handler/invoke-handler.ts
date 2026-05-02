@@ -3,6 +3,7 @@ import {
   InvokeConfig,
   OperationSubType,
   DurablePromise,
+  DurableExecutionMode,
   OperationLifecycleState,
 } from "../../types";
 import { InvokeError } from "../../errors/durable-error/durable-error";
@@ -19,7 +20,15 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  AttemptEndInfoOutcome,
+} from "../../types/plugin";
+import {
+  toAttemptInfo,
+  toAttemptEndInfo,
+  backfillOperationInfo,
+} from "../../utils/operation/operation";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -28,6 +37,7 @@ export const createInvokeHandler = (
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
   plugin: DurableInstrumentationPlugin = {},
+  getDurableExecutionMode?: () => DurableExecutionMode,
 ): {
   <I, O>(
     funcId: string,
@@ -103,6 +113,14 @@ export const createInvokeHandler = (
         log("⏭️", "Invoke already completed:", { stepId });
         checkAndUpdateReplayMode?.();
 
+        const skipPluginCalls =
+          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
+        if (skipPluginCalls) {
+          log("⏭️", "Invoke in full replay mode, skipping plugin calls:", {
+            stepId,
+          });
+        }
+
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -116,6 +134,23 @@ export const createInvokeHandler = (
             },
           },
         );
+
+        if (!skipPluginCalls) {
+          const attemptInfo = toAttemptInfo(
+            stepData,
+            stepData.StepDetails?.Attempt,
+          );
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationStart?.(attemptInfo);
+          plugin.onOperationAttemptStart?.(attemptInfo);
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.SUCCEEDED,
+          );
+          backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationEnd?.(attemptInfo);
+        }
 
         isCompleted = true;
         return;
@@ -128,6 +163,17 @@ export const createInvokeHandler = (
         stepData?.Status === OperationStatus.STOPPED
       ) {
         log("❌", "Invoke already failed:", { stepId });
+        checkAndUpdateReplayMode?.();
+
+        const skipPluginCalls =
+          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
+        if (skipPluginCalls) {
+          log(
+            "⏭️",
+            "Invoke (failed) in full replay mode, skipping plugin calls:",
+            { stepId },
+          );
+        }
 
         checkpoint.markOperationState(
           stepId,
@@ -142,6 +188,23 @@ export const createInvokeHandler = (
             },
           },
         );
+
+        if (!skipPluginCalls) {
+          const attemptInfo = toAttemptInfo(
+            stepData,
+            stepData.StepDetails?.Attempt,
+          );
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationStart?.(attemptInfo);
+          plugin.onOperationAttemptStart?.(attemptInfo);
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.FAILED,
+          );
+          backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationEnd?.(attemptInfo);
+        }
 
         isCompleted = true;
         return;
@@ -173,7 +236,11 @@ export const createInvokeHandler = (
         });
       }
 
-      plugin.onOperationStart?.(opInfo);
+      const currentAttempt = (stepData?.StepDetails?.Attempt ?? 0) + 1;
+      const attemptInfo = toAttemptInfo(stepData, currentAttempt);
+      backfillOperationInfo(attemptInfo, opInfo);
+      plugin.onOperationStart?.(attemptInfo);
+      plugin.onOperationAttemptStart?.(attemptInfo);
 
       // Mark as IDLE_NOT_AWAITED
       checkpoint.markOperationState(
@@ -245,7 +312,13 @@ export const createInvokeHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
-        plugin.onOperationEnd?.(opInfo);
+        const attemptEndInfo = toAttemptEndInfo(
+          stepData,
+          AttemptEndInfoOutcome.SUCCEEDED,
+        );
+        backfillOperationInfo(attemptEndInfo, opInfo);
+        plugin.onOperationAttemptEnd?.(attemptEndInfo);
+        plugin.onOperationEnd?.(attemptEndInfo);
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
@@ -262,16 +335,32 @@ export const createInvokeHandler = (
       log("❌", "Invoke failed:", { stepId, status: stepData?.Status });
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
-      plugin.onOperationEnd?.({ ...opInfo, error: new Error("Invoke failed") });
+      const invokeError = stepData?.ChainedInvokeDetails?.Error;
+      const attemptEndInfo = toAttemptEndInfo(
+        stepData,
+        AttemptEndInfoOutcome.FAILED,
+        {
+          error: invokeError?.ErrorMessage
+            ? new Error(invokeError.ErrorMessage)
+            : new Error("Invoke failed"),
+        },
+      );
+      backfillOperationInfo(attemptEndInfo, opInfo);
+      plugin.onOperationAttemptEnd?.(attemptEndInfo);
+      plugin.onOperationEnd?.({
+        ...attemptEndInfo,
+        error: invokeError?.ErrorMessage
+          ? new Error(invokeError.ErrorMessage)
+          : new Error("Invoke failed"),
+      });
 
-      const invokeDetails = stepData?.ChainedInvokeDetails;
-      if (invokeDetails?.Error) {
+      if (invokeError) {
         throw new InvokeError(
-          invokeDetails.Error.ErrorMessage || "Invoke failed",
-          invokeDetails.Error.ErrorMessage
-            ? new Error(invokeDetails.Error.ErrorMessage)
+          invokeError.ErrorMessage || "Invoke failed",
+          invokeError.ErrorMessage
+            ? new Error(invokeError.ErrorMessage)
             : undefined,
-          invokeDetails.Error.ErrorData,
+          invokeError.ErrorData,
         );
       } else {
         throw new InvokeError("Invoke failed");

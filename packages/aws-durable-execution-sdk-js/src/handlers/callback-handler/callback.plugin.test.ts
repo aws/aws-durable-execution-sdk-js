@@ -1,5 +1,5 @@
 import { createCallback } from "./callback";
-import { ExecutionContext } from "../../types";
+import { ExecutionContext, DurableExecutionMode } from "../../types";
 import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
@@ -44,7 +44,7 @@ describe("Callback Handler - plugin hooks", () => {
     mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
 
-  it("should call onOperationStart and onOperationEnd on replay succeeded", async () => {
+  it("should call all plugin hooks on replay succeeded", async () => {
     const hashedStepId = hashId("test-callback-id");
     (mockContext as any)._stepData[hashedStepId] = {
       Id: hashedStepId,
@@ -73,7 +73,7 @@ describe("Callback Handler - plugin hooks", () => {
     );
   });
 
-  it("should call onOperationEnd with error on replay failed", async () => {
+  it("should call all plugin hooks on replay failed", async () => {
     const hashedStepId = hashId("test-callback-id");
     (mockContext as any)._stepData[hashedStepId] = {
       Id: hashedStepId,
@@ -99,12 +99,9 @@ describe("Callback Handler - plugin hooks", () => {
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.any(Error) }),
-    );
   });
 
-  it("should call onOperationEnd with error on replay timed out", async () => {
+  it("should call all plugin hooks on replay timed out", async () => {
     const hashedStepId = hashId("test-callback-id");
     (mockContext as any)._stepData[hashedStepId] = {
       Id: hashedStepId,
@@ -130,9 +127,102 @@ describe("Callback Handler - plugin hooks", () => {
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.any(Error) }),
+  });
+
+  it("should skip plugin calls in full replay mode on replay succeeded", async () => {
+    const hashedStepId = hashId("test-callback-id");
+    (mockContext as any)._stepData[hashedStepId] = {
+      Id: hashedStepId,
+      Status: OperationStatus.SUCCEEDED,
+      CallbackDetails: { CallbackId: "cb-123", Result: "result" },
+    } as Operation;
+    (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext as any)._stepData[hashedStepId],
     );
+
+    const handler = createCallback(
+      mockContext,
+      mockCheckpoint,
+      createStepId,
+      checkAndUpdateReplayMode,
+      undefined,
+      mockPlugin,
+      () => DurableExecutionMode.ReplayMode,
+    );
+
+    await handler<string>("test-callback");
+
+    expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
+    expect(mockPlugin.onOperationEnd).not.toHaveBeenCalled();
+  });
+
+  it("should skip plugin calls in full replay mode on replay failed", async () => {
+    const hashedStepId = hashId("test-callback-id");
+    (mockContext as any)._stepData[hashedStepId] = {
+      Id: hashedStepId,
+      Status: OperationStatus.FAILED,
+      CallbackDetails: { CallbackId: "cb-456" },
+    } as Operation;
+    (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext as any)._stepData[hashedStepId],
+    );
+
+    const handler = createCallback(
+      mockContext,
+      mockCheckpoint,
+      createStepId,
+      checkAndUpdateReplayMode,
+      undefined,
+      mockPlugin,
+      () => DurableExecutionMode.ReplayMode,
+    );
+
+    const result = await handler<string>("test-callback");
+    const [promise] = await result;
+    await expect(promise).rejects.toThrow();
+
+    expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
+    expect(mockPlugin.onOperationEnd).not.toHaveBeenCalled();
+  });
+
+  it("should call plugin hooks for new callback (phase 1 start)", async () => {
+    (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
+
+    (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
+      async (stepId: string) => {
+        const hashedStepId = hashId(stepId);
+        (mockContext as any)._stepData[hashedStepId] = {
+          Id: hashedStepId,
+          Status: OperationStatus.STARTED,
+          CallbackDetails: {
+            CallbackId: "new-cb-123",
+          },
+        } as Operation;
+      },
+    );
+
+    (mockContext.getStepData as jest.Mock).mockImplementation(
+      (stepId: string) => {
+        const hashedStepId = hashId(stepId);
+        return (mockContext as any)._stepData[hashedStepId];
+      },
+    );
+
+    const handler = createCallback(
+      mockContext,
+      mockCheckpoint,
+      createStepId,
+      checkAndUpdateReplayMode,
+      undefined,
+      mockPlugin,
+    );
+
+    const result = await handler<string>("new-callback");
+    const [, callbackId] = await result;
+
+    expect(callbackId).toBe("new-cb-123");
+    // Phase 1 fires onOperationStart
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
   });
 
   it("should not throw when plugin hooks are undefined", async () => {

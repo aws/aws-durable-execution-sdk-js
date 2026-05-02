@@ -348,8 +348,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           result = await runWithContext(
             stepId,
@@ -386,6 +384,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationStart?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.(attemptEndInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
           plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
@@ -447,6 +447,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
               },
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
+            plugin.onOperationStart?.(attemptEndInfo);
+            plugin.onOperationAttemptStart?.(attemptEndInfo);
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
             plugin.onOperationEnd?.({
               ...attemptEndInfo,
@@ -483,8 +485,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationAttemptStart?.(attemptEndInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.RETRY_WAITING,

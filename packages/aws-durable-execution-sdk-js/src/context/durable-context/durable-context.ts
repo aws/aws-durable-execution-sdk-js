@@ -312,6 +312,7 @@ export class DurableContextImpl<
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
         this.durableExecution.plugin,
+        () => this.durableExecutionMode,
       );
       return invokeHandler<I, O>(
         ...([
@@ -362,6 +363,8 @@ export class DurableContextImpl<
           ),
         this._parentId,
         this.durableExecution.plugin,
+        this.checkAndUpdateReplayMode.bind(this),
+        () => this.durableExecutionMode,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
@@ -437,6 +440,7 @@ export class DurableContextImpl<
         this.checkAndUpdateReplayMode.bind(this),
         this._parentId,
         this.durableExecution.plugin,
+        () => this.durableExecutionMode,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });
@@ -488,6 +492,8 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         this.durableExecution.plugin,
+        this.checkAndUpdateReplayMode.bind(this),
+        () => this.durableExecutionMode,
       );
 
       return typeof nameOrCheckFunc === "string" ||
