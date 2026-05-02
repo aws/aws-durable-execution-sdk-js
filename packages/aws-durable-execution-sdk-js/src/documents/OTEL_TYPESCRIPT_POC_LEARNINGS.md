@@ -27,7 +27,7 @@ issue here.
 
 The main issue is that if we want onOperationStart and onOperationEnd hooks to only be called at most once. AND we wish to use these hooks to represent map and parallel operations as spans, then it's difficult to create the branches of the map and parallel under a single parent span. The completions of each branch may be spread across invocations which makes visualization difficult.
 
-I am investigating whether it's possible to create a placeholder span that's not exported to tracing backend but that we can track in our plugin.
+I am investigating whether it's possible to create a placeholder span that's not exported to tracing backend but that we can track in our plugin. When the parent context completes, the span is actually exported and the child spans are then populated inside the parent span.
 
 ### Wait operation duplication issues
 
