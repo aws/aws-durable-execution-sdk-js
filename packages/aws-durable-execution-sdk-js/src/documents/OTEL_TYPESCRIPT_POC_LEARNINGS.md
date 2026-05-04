@@ -2,6 +2,14 @@
 
 Some of these I believe Pooya already mentioned. I'm recompiling some of the learning for ease of reference.
 
+### Spans which are not closed, are not exported to observability backend
+
+This means that for all operations, we cannot call onOperationStart when the operation genuinely starts (for example, when the operation START is checkpointed). It's possible for any of these operations to start within 1 lambda invocation, and for it to end in any subsequent lambda invocation. Between lambda invocations, the Otel exporter is re-initialized, unclosed "operation" spans are lost.
+
+Feature request on otel side: https://github.com/open-telemetry/opentelemetry-specification/issues/373
+
+Solution: we call onOperationStart and onOperationEnd together and backfill both the startTime and endTime for the operation within the span attributes.
+
 ### It's annoying to wire the lambda with OTel and Xray
 
 The plugin is not plug and play. Integration with Xray is not straightforward.
@@ -12,6 +20,22 @@ I assume integrating with Datadog or other observability platforms would also be
 
 See [OTEL_XRAY_SETUP](https://github.com/aws/aws-durable-execution-sdk-js/blob/f64147ce32e6be2f809ed31a8fc1d79c4798ade9/packages/aws-durable-execution-sdk-js/src/documents/OTEL_XRAY_SETUP.md)
 for more details on some other pain points.
+
+#### must use AlwaysOnSampler() to export spans across invocations which might not have parents.
+
+```
+const exporter = new OTLPTraceExporter({
+  url: "http://localhost:4318/v1/traces",
+});
+
+const provider = new NodeTracerProvider({
+  idGenerator: new AWSXRayIdGenerator(),
+  spanProcessors: [new SimpleSpanProcessor(exporter)],
+  sampler: new AlwaysOnSampler(),
+});
+
+provider.register({ propagator: new AWSXRayPropagator() });
+```
 
 ### Operations with nested attempts across invocations can be imported as a single span but there is an issue with "Operation" span duplication
 For each "Attempt" span, we wish to nest under the parent "Operation" span. However, if there are multiple attempts, the onOperationStart and onOperationEnd hook may be triggered multiple times until the "Attempt" succeeds or the step fails due to running out of attempts.
@@ -37,18 +61,3 @@ This is solved by https://github.com/aws/aws-durable-execution-sdk-js/commit/d75
 
 This is solved by the customIdGenerator. You have to ensure that the id's generated are deterministic.
 
-### must use AlwaysOnSampler() to export spans across invocations which might not have parents.
-
-```
-const exporter = new OTLPTraceExporter({
-  url: "http://localhost:4318/v1/traces",
-});
-
-const provider = new NodeTracerProvider({
-  idGenerator: new AWSXRayIdGenerator(),
-  spanProcessors: [new SimpleSpanProcessor(exporter)],
-  sampler: new AlwaysOnSampler(),
-});
-
-provider.register({ propagator: new AWSXRayPropagator() });
-```
