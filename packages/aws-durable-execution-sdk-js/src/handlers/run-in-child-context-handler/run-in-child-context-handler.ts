@@ -221,7 +221,11 @@ export const handleCompletedChildContext = async <
         throw errorMapper(originalError);
       }
 
-      throw new ChildContextError(originalError.message, originalError);
+      throw new ChildContextError(
+        originalError.message,
+        originalError,
+        originalError.errorData,
+      );
     } else {
       throw new ChildContextError("Child context failed");
     }
@@ -432,6 +436,10 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       throw errorMapper(reconstructedError);
     }
 
-    throw new ChildContextError(reconstructedError.message, reconstructedError);
+    throw new ChildContextError(
+      reconstructedError.message,
+      reconstructedError,
+      reconstructedError.errorData,
+    );
   }
 };

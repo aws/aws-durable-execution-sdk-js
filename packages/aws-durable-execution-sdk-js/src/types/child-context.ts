@@ -14,7 +14,11 @@ export interface ChildConfig<T> {
   subType?: string;
   /** Function to generate summaries for large results (used internally by map/parallel) */
   summaryGenerator?: (result: T) => string;
-  /** Function to map child context errors to custom error types based on the original error */
+  /**
+   * Function to map child context errors to custom error types based on the
+   * original error. Forward `errorData` explicitly to preserve it:
+   * `(e) => new MyError(e.message, e, e.errorData)`.
+   */
   errorMapper?: (originalError: DurableOperationError) => DurableOperationError;
   /** If true, skip checkpointing and use parent's parentId for child operations */
   virtualContext?: boolean;

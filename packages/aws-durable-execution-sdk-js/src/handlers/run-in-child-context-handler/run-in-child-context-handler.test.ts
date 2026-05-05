@@ -15,7 +15,10 @@ import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurableExecutionMode } from "../../types/core";
-import { ChildContextError } from "../../errors/durable-error/durable-error";
+import {
+  ChildContextError,
+  StepError,
+} from "../../errors/durable-error/durable-error";
 
 jest.mock("../../utils/context-tracker/context-tracker", () => ({
   ...jest.requireActual("../../utils/context-tracker/context-tracker"),
@@ -686,6 +689,31 @@ describe("runInChildContext with custom serdes", () => {
 
     expect(childFn).not.toHaveBeenCalled(); // Should not execute function for failed context
     expect(mockCheckpoint).not.toHaveBeenCalled(); // Should not checkpoint during replay
+  });
+
+  test("should propagate errorData onto the wrapping ChildContextError on replay", async () => {
+    const originalError = new StepError(
+      "step-failed",
+      undefined,
+      "user-cancelled",
+    );
+    const stepData = mockExecutionContext._stepData;
+    stepData[hashId("test-step-id")] = {
+      Id: "test-step-id",
+      Type: OperationType.CONTEXT,
+      StartTimestamp: new Date(),
+      Status: OperationStatus.FAILED,
+      ContextDetails: {
+        Error: originalError.toErrorObject(),
+      },
+    };
+
+    await expect(
+      runInChildContext("test-child", jest.fn()),
+    ).rejects.toMatchObject({
+      name: "ChildContextError",
+      errorData: "user-cancelled",
+    });
   });
 
   test("should throw ChildContextError for failed child context without Error field", async () => {
