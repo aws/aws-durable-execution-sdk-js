@@ -3,6 +3,7 @@ import {
   WaitForConditionDecision,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import {
   DeterministicIdGenerator,
   DurableOtelPlugin,
@@ -21,6 +22,8 @@ import {
   context as otelContext,
   ROOT_CONTEXT,
 } from "@opentelemetry/api";
+
+const sqsClient = new SQSClient({});
 
 const exporter = new OTLPTraceExporter({
   url: "http://localhost:4318/v1/traces",
@@ -100,117 +103,132 @@ const durableHandler = withDurableExecution(
 
     // ]);
 
-    // const invokeResult = await context.invoke("hello-world", {
-    //   key1: "value1",
-    //   key2: "value2",
-    //   key3: "value3",
-    // });
+    const invokeResult = await context.invoke("hello-world", {
+      key1: "value1",
+      key2: "value2",
+      key3: "value3",
+    });
 
-    // const stepRetryResult = await context.step(
-    //   "test step retry",
-    //   async () => {
-    //     if (Math.random() * 100 > 80) {
-    //       return "test retry step completed successfully";
-    //     } else {
-    //       throw new MyError("my error");
-    //     }
-    //   },
-    //   {
-    //     retryStrategy: (error: Error, attemptCount: number) => {
-    //       var shouldRetry = true;
-    //       if (attemptCount > 10) {
-    //         shouldRetry = false;
-    //       }
-    //       return {
-    //         shouldRetry,
-    //         delay: { seconds: 5 },
-    //       };
-    //     },
-    //   },
-    // );
-
-    // const waitForConditionStep = await context.waitForCondition(
-    //   "test wait for condition",
-    //   async () => {
-    //     if (Math.random() * 100 > 80) {
-    //       return { ready: true };
-    //     } else {
-    //       return { ready: false };
-    //     }
-    //   },
-    //   {
-    //     initialState: { ready: false },
-    //     waitStrategy(state: any, attempt: number): WaitForConditionDecision {
-    //       var shouldContinue = true;
-    //       if (state.ready) {
-    //         shouldContinue = false;
-    //       } else {
-    //         shouldContinue = true;
-    //       }
-    //       if (attempt > 10) {
-    //         shouldContinue = false;
-    //       }
-    //       return {
-    //         shouldContinue,
-    //         delay: { seconds: 5 },
-    //       };
-    //     },
-    //   },
-    // );
-
-    const parallelWaitsResults = await context.parallel([
-      // Branch 1: Returns "basketball"
-      async (ctx: DurableContext) => {
-        await ctx.wait("wait-sport-step-1", { seconds: 5 });
-        const result = await ctx.step("sport-step-1", async () => {
-          return "basketball";
-        });
-        await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
-        return result;
+    const stepRetryResult = await context.step(
+      "test step retry",
+      async () => {
+        if (Math.random() * 100 > 80) {
+          return "test retry step completed successfully";
+        } else {
+          throw new MyError("my error");
+        }
       },
-
-      // Branch 2: Returns "football"
-      async (ctx: DurableContext) => {
-        await ctx.wait("wait-sport-step-2", { seconds: 10 });
-        const result = await ctx.step("sport-step-2", async () => {
-          return "football";
-        });
-        const result2 = await ctx.step("sport-step-2-1", async () => {
-          return "soccer";
-        });
-        return result;
-      },
-    ]);
-
-    const mapWaitInput = [1, 2, 3];
-    const mapWaitResults = await context.map(
-      "map-numbers-wait",
-      mapWaitInput,
-      async (ctx, item, index) => {
-        // Each iteration returns the number (1 to 3)
-        await ctx.wait(`map-wait-step-${index}`, { seconds: 5 * item });
-        const result = await ctx.step(
-          `map-numbers-wait-step-${index}`,
-          async () => {
-            return item;
-          },
-        );
-        await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
-        return result;
+      {
+        retryStrategy: (error: Error, attemptCount: number) => {
+          var shouldRetry = true;
+          if (attemptCount > 10) {
+            shouldRetry = false;
+          }
+          return {
+            shouldRetry,
+            delay: { seconds: 5 },
+          };
+        },
       },
     );
 
-    const stepResult = await context.step(`final-step`, async () => {
-      return "finished";
+    const waitForConditionStep = await context.waitForCondition(
+      "test wait for condition",
+      async () => {
+        if (Math.random() * 100 > 80) {
+          return { ready: true };
+        } else {
+          return { ready: false };
+        }
+      },
+      {
+        initialState: { ready: false },
+        waitStrategy(state: any, attempt: number): WaitForConditionDecision {
+          var shouldContinue = true;
+          if (state.ready) {
+            shouldContinue = false;
+          } else {
+            shouldContinue = true;
+          }
+          if (attempt > 10) {
+            shouldContinue = false;
+          }
+          return {
+            shouldContinue,
+            delay: { seconds: 5 },
+          };
+        },
+      },
+    );
+
+    // Step: Send message to SQS
+    const sqsMessageId = await context.step("send-sqs-message", async () => {
+      const command = new SendMessageCommand({
+        QueueUrl: process.env.QUEUE_URL!,
+        MessageBody: JSON.stringify({
+          source: "durable-function",
+          timestamp: Date.now(),
+          data: { step1Result, invokeResult },
+        }),
+      });
+      const response = await sqsClient.send(command);
+      return response.MessageId;
     });
+
+    // const parallelWaitsResults = await context.parallel([
+    //   // Branch 1: Returns "basketball"
+    //   async (ctx: DurableContext) => {
+    //     await ctx.wait("wait-sport-step-1", { seconds: 5 });
+    //     const result = await ctx.step("sport-step-1", async () => {
+    //       return "basketball";
+    //     });
+    //     await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
+    //     return result;
+    //   },
+
+    //   // Branch 2: Returns "football"
+    //   async (ctx: DurableContext) => {
+    //     await ctx.wait("wait-sport-step-2", { seconds: 10 });
+    //     const result = await ctx.step("sport-step-2", async () => {
+    //       return "football";
+    //     });
+    //     const result2 = await ctx.step("sport-step-2-1", async () => {
+    //       return "soccer";
+    //     });
+    //     return result;
+    //   },
+    // ]);
+
+    // const mapWaitInput = [1, 2, 3];
+    // const mapWaitResults = await context.map(
+    //   "map-numbers-wait",
+    //   mapWaitInput,
+    //   async (ctx, item, index) => {
+    //     // Each iteration returns the number (1 to 3)
+    //     await ctx.wait(`map-wait-step-${index}`, { seconds: 5 * item });
+    //     const result = await ctx.step(
+    //       `map-numbers-wait-step-${index}`,
+    //       async () => {
+    //         return item;
+    //       },
+    //     );
+    //     await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
+    //     return result;
+    //   },
+    // );
+
+    // const stepResult = await context.step(`final-step`, async () => {
+    //   return "finished";
+    // });
 
     // Final result combining all operations
     return {
       step1: step1Result,
       waitCompleted: true,
-      parallelWaitsResults,
-      mapWaitResults,
-      stepResult,
+      invokeResult,
+      stepRetryResult,
+      waitForConditionStep,
+      sqsMessageId,
     };
   },
   {

@@ -119,13 +119,13 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
    * Falls back to explicit parentId, then to the invocation span ID.
    */
   private resolveParentId(id: string, parentId?: string): string {
-    if (parentId) {
-      return ensureHashedId(parentId);
-    }
     const lastDash = id.lastIndexOf("-");
     if (lastDash > 0) {
       const inferredParentId = id.substring(0, lastDash);
       return ensureHashedId(inferredParentId);
+    }
+    if (parentId) {
+      return ensureHashedId(parentId);
     }
     return this.invocationSpan?.spanContext().spanId ?? this.INVOCATION_SPAN_ID;
   }
@@ -140,19 +140,19 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
    * placeholder non-recording span is created with the correct span ID and
    * registered so that child spans are properly nested in the trace.
    */
-  private resolveParentContext(info: OperationInfo): Context {
-    const parentId = this.resolveParentId(info.Id, info.ParentId);
+  private resolveParentContext(id: string, parentId?: string): Context {
+    const resolvedParentId = this.resolveParentId(id, parentId);
 
     // Check if we already have a context for this parent
-    const existingCtx = this.operationContexts.get(parentId);
+    const existingCtx = this.operationContexts.get(resolvedParentId);
     if (existingCtx) {
       return existingCtx;
     }
 
     // Fall back to the invocation context if the parent is the invocation span
     if (
-      parentId === this.INVOCATION_SPAN_ID ||
-      parentId === this.invocationSpan?.spanContext().spanId
+      resolvedParentId === this.INVOCATION_SPAN_ID ||
+      resolvedParentId === this.invocationSpan?.spanContext().spanId
     ) {
       return this.invocationContext;
     }
@@ -164,15 +164,15 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       this.idGenerator.generateTraceId();
     const placeholderSpan = trace.wrapSpanContext({
       traceId,
-      spanId: ensureHashedId(parentId),
+      spanId: ensureHashedId(resolvedParentId),
       traceFlags: TraceFlags.SAMPLED,
     });
     const placeholderCtx = trace.setSpan(
       this.invocationContext,
       placeholderSpan,
     );
-    this.setSpan(parentId, placeholderSpan);
-    this.setContext(parentId, placeholderCtx);
+    this.setSpan(resolvedParentId, placeholderSpan);
+    this.setContext(resolvedParentId, placeholderCtx);
     return placeholderCtx;
   }
 
@@ -230,7 +230,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   onOperationStart(info: OperationInfo): void {
     if (!this.sampled) return;
     const operationType = this.mapOperationType(info);
-    const parentCtx = this.resolveParentContext(info);
+    const parentCtx = this.resolveParentContext(info.Id, info.ParentId);
     this.idGenerator.setNextSpanOperationId(info.Id);
     const span = this.tracer.startSpan(
       info.Name ?? operationType,
@@ -279,10 +279,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     const key = `${info.Id}-${info.Attempt}`;
     const operationType = this.mapOperationType(info);
     // Attempt spans nest under their operation span
-    const parentCtx =
-      this.operationContexts.get(info.Id) ??
-      this.operationContexts.get(ensureHashedId(info.Id)) ??
-      this.invocationContext;
+    const parentCtx = this.resolveParentContext(key, info.ParentId);
     this.idGenerator.setNextSpanOperationId(key);
     const attemptSpan = this.tracer.startSpan(
       info.Name ?? operationType,
@@ -317,7 +314,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     }
     span.end(info.EndTimestamp);
     this.deleteSpan(key);
-    const parentId = this.resolveParentId(info.Id, info.ParentId);
+    const parentId = this.resolveParentId(key, info.Id);
     this.activeSpan = this.operationSpans.get(parentId) ?? this.invocationSpan;
     if (this.activeSpan) {
       trace.setSpan(

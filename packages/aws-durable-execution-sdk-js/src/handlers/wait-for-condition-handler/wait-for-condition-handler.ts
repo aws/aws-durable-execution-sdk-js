@@ -130,10 +130,13 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.SUCCEEDED,
+            {
+              attempt: stepData.StepDetails?.Attempt,
+            },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationEnd?.(attemptEndInfo);
         }
 
         return await safeDeserialize(
@@ -185,6 +188,9 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.FAILED,
+            {
+              attempt: stepData.StepDetails?.Attempt,
+            },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
@@ -340,8 +346,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               },
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
-            plugin.onOperationAttemptStart?.(attemptEndInfo);
             plugin.onOperationStart?.(attemptEndInfo);
+            plugin.onOperationAttemptStart?.(attemptEndInfo);
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
             plugin.onOperationEnd?.(attemptEndInfo);
             checkpoint.markOperationState(
@@ -419,8 +425,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptStart?.(attemptEndInfo);
           plugin.onOperationStart?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.(attemptEndInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
           plugin.onOperationEnd?.({
             ...attemptEndInfo,

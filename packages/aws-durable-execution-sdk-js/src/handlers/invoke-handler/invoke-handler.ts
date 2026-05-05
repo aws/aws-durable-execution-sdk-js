@@ -236,12 +236,6 @@ export const createInvokeHandler = (
         });
       }
 
-      const currentAttempt = (stepData?.StepDetails?.Attempt ?? 0) + 1;
-      const attemptInfo = toAttemptInfo(stepData, currentAttempt);
-      backfillOperationInfo(attemptInfo, opInfo);
-      plugin.onOperationStart?.(attemptInfo);
-      plugin.onOperationAttemptStart?.(attemptInfo);
-
       // Mark as IDLE_NOT_AWAITED
       checkpoint.markOperationState(
         stepId,
@@ -317,6 +311,8 @@ export const createInvokeHandler = (
           AttemptEndInfoOutcome.SUCCEEDED,
         );
         backfillOperationInfo(attemptEndInfo, opInfo);
+        plugin.onOperationStart?.(attemptEndInfo);
+        plugin.onOperationAttemptStart?.(attemptEndInfo);
         plugin.onOperationAttemptEnd?.(attemptEndInfo);
         plugin.onOperationEnd?.(attemptEndInfo);
 
@@ -346,6 +342,8 @@ export const createInvokeHandler = (
         },
       );
       backfillOperationInfo(attemptEndInfo, opInfo);
+      plugin.onOperationStart?.(attemptEndInfo);
+      plugin.onOperationAttemptStart?.(attemptEndInfo);
       plugin.onOperationAttemptEnd?.(attemptEndInfo);
       plugin.onOperationEnd?.({
         ...attemptEndInfo,

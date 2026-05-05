@@ -11,6 +11,7 @@
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.1043.0",
     "@aws/durable-execution-sdk-js": "file:aws-durable-execution-sdk-js-2.0.0-alpha.1.tgz",
     "@aws/durable-execution-sdk-js-otel": "file:aws-durable-execution-sdk-js-otel-1.0.0.tgz",
     "@grpc/grpc-js": "^1.14.3",

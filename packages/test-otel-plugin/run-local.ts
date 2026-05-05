@@ -25,6 +25,11 @@ async function main() {
       handlerFunction: lambdaHandler,
     });
 
+    // Register a stub for the "hello-world" function that the handler invokes
+    runner.registerFunction("hello-world", async (event: any) => {
+      return { statusCode: 200, body: "Hello from stub!" };
+    });
+
     console.log("Running durable handler locally…\n");
 
     const execution = await runner.run({

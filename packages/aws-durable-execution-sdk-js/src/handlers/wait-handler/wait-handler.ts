@@ -130,8 +130,6 @@ export const createWaitHandler = (
 
       // Refresh stepData after checkpoint
       stepData = context.getStepData(stepId);
-      const checkPointedOpInfo = toOperationInfo(stepData);
-      plugin.onOperationStart?.(checkPointedOpInfo);
 
       // Mark as IDLE_NOT_AWAITED (phase 1 complete, not awaited yet)
       checkpoint.markOperationState(
@@ -177,9 +175,6 @@ export const createWaitHandler = (
 
       // Check final status
       const stepData = context.getStepData(stepId);
-
-      const checkPointedOpInfo = toOperationInfo(stepData);
-      plugin.onOperationEnd?.(checkPointedOpInfo);
 
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("✅", "Wait completed:", { stepId });

@@ -25,6 +25,10 @@ async function main() {
       new durable_execution_sdk_js_testing_1.LocalDurableTestRunner({
         handlerFunction: lambdaHandler,
       });
+    // Register a stub for the "hello-world" function that the handler invokes
+    runner.registerFunction("hello-world", async (event) => {
+      return { statusCode: 200, body: "Hello from stub!" };
+    });
     console.log("Running durable handler locally…\n");
     const execution = await runner.run({
       payload: { message: "hello from local" },

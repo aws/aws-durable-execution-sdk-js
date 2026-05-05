@@ -1,7 +1,7 @@
 Running durable handler locally…
 
-{"requestId":"fa9fa0e7-1374-4f08-b96a-225d989a5fa3","timestamp":"2026-04-29T19:42:11.447Z","level":"INFO","executionArn":"b8670b39-3b04-4689-9605-b8df6039760d","traceId":"69f25f136e265f579f692a7f1c24d5ce","spanId":"ee73b53b01a80688","message":"Starting comprehensive operations example with event: { message: 'hello from local' }"}
-{"requestId":"fa9fa0e7-1374-4f08-b96a-225d989a5fa3","timestamp":"2026-04-29T19:42:11.447Z","level":"INFO","executionArn":"b8670b39-3b04-4689-9605-b8df6039760d","operationId":"c4ca4238a0b92382","attempt":1,"traceId":"69f25f136e265f579f692a7f1c24d5ce","spanId":"c4ca4238a0b92382","message":"Executing step1"}
+{"requestId":"e048b86d-1521-46b0-96bb-1d4be6e870e1","timestamp":"2026-05-05T21:47:48.428Z","level":"INFO","executionArn":"5063a7a3-c1ed-482d-ba88-ede885275e56","traceId":"69fa6584b370294e711716a735f97d76","spanId":"88c6f287d039aaed","message":"Starting comprehensive operations example with event: { message: 'hello from local' }"}
+{"requestId":"e048b86d-1521-46b0-96bb-1d4be6e870e1","timestamp":"2026-05-05T21:47:48.428Z","level":"INFO","executionArn":"5063a7a3-c1ed-482d-ba88-ede885275e56","operationId":"c4ca4238a0b92382","attempt":1,"traceId":"69fa6584b370294e711716a735f97d76","spanId":"88c6f287d039aaed","message":"Executing step1"}
 {
   resource: {
     attributes: {
@@ -16,21 +16,21 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
+    traceId: '69fa6584b370294e711716a735f97d76',
     spanId: 'c4ca4238a0b92382',
     traceFlags: 1,
     traceState: undefined
   },
   traceState: undefined,
   name: 'step1',
-  id: 'c4ca4238a0b92382',
+  id: 'ea66c06c1e1c05fa',
   kind: 0,
-  timestamp: 1777491731447000,
-  duration: 25000,
+  timestamp: 1778017668454000,
+  duration: 1000,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
     'durable.operation.id': 'c4ca4238a0b92382',
     'durable.operation.type': 'step',
     'durable.operation.name': 'step1',
@@ -55,10 +55,10 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'ee73b53b01a80688',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '88c6f287d039aaed',
     traceFlags: 1,
     traceState: undefined
   },
@@ -66,10 +66,10 @@ Running durable handler locally…
   name: 'step1',
   id: 'c4ca4238a0b92382',
   kind: 0,
-  timestamp: 1777491731447000,
-  duration: 25000,
+  timestamp: 1778017668454000,
+  duration: 1000,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
     'durable.operation.id': 'c4ca4238a0b92382',
     'durable.operation.type': 'step',
     'durable.operation.name': 'step1'
@@ -92,20 +92,20 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '72eef250a76d8f84',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
     traceFlags: 1,
     isRemote: true
   },
   traceState: undefined,
   name: 'invocation',
-  id: 'ee73b53b01a80688',
+  id: '88c6f287d039aaed',
   kind: 0,
-  timestamp: 1777491731447000,
-  duration: 45269.916,
-  attributes: { 'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d' },
+  timestamp: 1778017668428000,
+  duration: 48338.125,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
   status: { code: 0 },
   events: [],
   links: []
@@ -124,86 +124,10 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'c4ca4238a0b92382',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'step1',
-  id: 'c4ca4238a0b92382',
-  kind: 0,
-  timestamp: 1777491731472000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'c4ca4238a0b92382',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'step1',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '6741308528d15b55',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'step1',
-  id: 'c4ca4238a0b92382',
-  kind: 0,
-  timestamp: 1777491731472000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'c4ca4238a0b92382',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'step1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '6741308528d15b55',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '1ce860fdcc17165a',
     traceFlags: 1,
     traceState: undefined
   },
@@ -211,10 +135,10 @@ Running durable handler locally…
   name: 'wait',
   id: 'c81e728d9d4c2f63',
   kind: 0,
-  timestamp: 1777491731496000,
-  duration: 9440000,
+  timestamp: 1778017668479000,
+  duration: 9860000,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
     'durable.operation.id': 'c81e728d9d4c2f63',
     'durable.operation.type': 'wait'
   },
@@ -236,20 +160,20 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '72eef250a76d8f84',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
     traceFlags: 1,
     isRemote: true
   },
   traceState: undefined,
   name: 'invocation',
-  id: '6741308528d15b55',
+  id: '1ce860fdcc17165a',
   kind: 0,
-  timestamp: 1777491740936000,
-  duration: 23221.583,
-  attributes: { 'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d' },
+  timestamp: 1778017678339000,
+  duration: 40082.625,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
   status: { code: 0 },
   events: [],
   links: []
@@ -268,438 +192,25 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'c4ca4238a0b92382',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'step1',
-  id: 'c4ca4238a0b92382',
-  kind: 0,
-  timestamp: 1777491731472000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'c4ca4238a0b92382',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'step1',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'dd3aeae4ccc4df14',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'step1',
-  id: 'c4ca4238a0b92382',
-  kind: 0,
-  timestamp: 1777491731472000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'c4ca4238a0b92382',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'step1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'dd3aeae4ccc4df14',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'wait',
-  id: 'c81e728d9d4c2f63',
-  kind: 0,
-  timestamp: 1777491731496000,
-  duration: 23814000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'c81e728d9d4c2f63',
-    'durable.operation.type': 'wait'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'c9e6e7b69f98f516',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'wait-sport-step-1',
-  id: '284ee898088b7efd',
-  kind: 0,
-  timestamp: 1777491740550000,
-  duration: 14760000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '284ee898088b7efd',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'wait-sport-step-1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'b772d43b49bb57b5',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'wait-sport-step-2',
-  id: 'e9fa198e766d7b9b',
-  kind: 0,
-  timestamp: 1777491740550000,
-  duration: 14760000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'e9fa198e766d7b9b',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'wait-sport-step-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '91745dee930a3421',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'sport-step-1',
-  id: '91745dee930a3421',
-  kind: 0,
-  timestamp: 1777491755310000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '91745dee930a3421',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'sport-step-1',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'c9e6e7b69f98f516',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'sport-step-1',
-  id: '91745dee930a3421',
-  kind: 0,
-  timestamp: 1777491755310000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '91745dee930a3421',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'sport-step-1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '73713654faa9b756',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'sport-step-2',
-  id: '73713654faa9b756',
-  kind: 0,
-  timestamp: 1777491755310000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '73713654faa9b756',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'sport-step-2',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'b772d43b49bb57b5',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'sport-step-2',
-  id: '73713654faa9b756',
-  kind: 0,
-  timestamp: 1777491755310000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '73713654faa9b756',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'sport-step-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '293ccf5668d11bc9',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'sport-step-2-1',
-  id: '293ccf5668d11bc9',
-  kind: 0,
-  timestamp: 1777491755330000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '293ccf5668d11bc9',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'sport-step-2-1',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'b772d43b49bb57b5',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'sport-step-2-1',
-  id: '293ccf5668d11bc9',
-  kind: 0,
-  timestamp: 1777491755330000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '293ccf5668d11bc9',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'sport-step-2-1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
+    traceId: '69fa6584b370294e711716a735f97d76',
     spanId: 'eccbc87e4b5ce2fe',
     traceFlags: 1,
     traceState: undefined
   },
   traceState: undefined,
-  name: 'parallel-branch-1',
-  id: 'b772d43b49bb57b5',
+  name: 'invoke',
+  id: '2dd6b4185ffaf931',
   kind: 0,
-  timestamp: 1777491740550000,
-  duration: 14800000,
+  timestamp: 1778017677840000,
+  duration: 9639000,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'b772d43b49bb57b5',
-    'durable.operation.type': 'child-context',
-    'durable.operation.name': 'parallel-branch-1'
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'eccbc87e4b5ce2fe',
+    'durable.operation.type': 'invoke',
+    'durable.attempt.number': 0,
+    'durable.attempt.outcome': 'succeeded'
   },
   status: { code: 0 },
   events: [],
@@ -719,97 +230,23 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'c9e6e7b69f98f516',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '54f7b4de230f4f5d',
     traceFlags: 1,
     traceState: undefined
   },
   traceState: undefined,
-  name: 'wait-sport-step-1-2',
-  id: 'aaa68db5a014a2ce',
-  kind: 0,
-  timestamp: 1777491745704000,
-  duration: 9666000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'aaa68db5a014a2ce',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'wait-sport-step-1-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'eccbc87e4b5ce2fe',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'parallel-branch-0',
-  id: 'c9e6e7b69f98f516',
-  kind: 0,
-  timestamp: 1777491740550000,
-  duration: 14820000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'c9e6e7b69f98f516',
-    'durable.operation.type': 'child-context',
-    'durable.operation.name': 'parallel-branch-0'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'dd3aeae4ccc4df14',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'child-context',
+  name: 'invoke',
   id: 'eccbc87e4b5ce2fe',
   kind: 0,
-  timestamp: 1777491740549000,
-  duration: 14821000,
+  timestamp: 1778017677840000,
+  duration: 9639000,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
     'durable.operation.id': 'eccbc87e4b5ce2fe',
-    'durable.operation.type': 'child-context'
+    'durable.operation.type': 'invoke'
   },
   status: { code: 0 },
   events: [],
@@ -829,474 +266,26 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '74bdefab9757a081',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-wait-step-0',
-  id: 'ec3805c75ba4921d',
-  kind: 0,
-  timestamp: 1777491745747000,
-  duration: 15000000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'ec3805c75ba4921d',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'map-wait-step-0'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '2f5bb7747efda054',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-wait-step-1',
-  id: '23197d0b00fdfb44',
-  kind: 0,
-  timestamp: 1777491745747000,
-  duration: 15000000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '23197d0b00fdfb44',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'map-wait-step-1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '4864dafb55d05d74',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-wait-step-2',
-  id: '89106acc4a33cc6b',
-  kind: 0,
-  timestamp: 1777491745747000,
-  duration: 15000000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '89106acc4a33cc6b',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'map-wait-step-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '07ef21a31b180512',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-numbers-wait-step-0',
-  id: '07ef21a31b180512',
-  kind: 0,
-  timestamp: 1777491760747000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '07ef21a31b180512',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'map-numbers-wait-step-0',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '74bdefab9757a081',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-numbers-wait-step-0',
-  id: '07ef21a31b180512',
-  kind: 0,
-  timestamp: 1777491760747000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '07ef21a31b180512',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'map-numbers-wait-step-0'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'd26701961f3d992c',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-numbers-wait-step-1',
-  id: 'd26701961f3d992c',
-  kind: 0,
-  timestamp: 1777491760747000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'd26701961f3d992c',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'map-numbers-wait-step-1',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '2f5bb7747efda054',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-numbers-wait-step-1',
-  id: 'd26701961f3d992c',
-  kind: 0,
-  timestamp: 1777491760747000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'd26701961f3d992c',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'map-numbers-wait-step-1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '7ec62ab42fa0d4d6',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-numbers-wait-step-2',
-  id: '7ec62ab42fa0d4d6',
-  kind: 0,
-  timestamp: 1777491760747000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '7ec62ab42fa0d4d6',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'map-numbers-wait-step-2',
-    'durable.attempt.number': 1,
-    'durable.attempt.outcome': 'succeeded'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '4864dafb55d05d74',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-numbers-wait-step-2',
-  id: '7ec62ab42fa0d4d6',
-  kind: 0,
-  timestamp: 1777491760747000,
-  duration: 0,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '7ec62ab42fa0d4d6',
-    'durable.operation.type': 'step',
-    'durable.operation.name': 'map-numbers-wait-step-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '74bdefab9757a081',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-wait-step-0-2',
-  id: 'a8b28dbbe77fb7cf',
-  kind: 0,
-  timestamp: 1777491745808000,
-  duration: 14999000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': 'a8b28dbbe77fb7cf',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'map-wait-step-0-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '2f5bb7747efda054',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-wait-step-1-2',
-  id: '2fa273985cc917fb',
-  kind: 0,
-  timestamp: 1777491745808000,
-  duration: 14999000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '2fa273985cc917fb',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'map-wait-step-1-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '4864dafb55d05d74',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-wait-step-2-2',
-  id: '26ec27bcf7f53fe2',
-  kind: 0,
-  timestamp: 1777491745808000,
-  duration: 14999000,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '26ec27bcf7f53fe2',
-    'durable.operation.type': 'wait',
-    'durable.operation.name': 'map-wait-step-2-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
+    traceId: '69fa6584b370294e711716a735f97d76',
     spanId: 'a87ff679a2f3e71d',
     traceFlags: 1,
     traceState: undefined
   },
   traceState: undefined,
-  name: 'map-item-0',
+  name: 'test step retry',
   id: '74bdefab9757a081',
   kind: 0,
-  timestamp: 1777491755370000,
-  duration: 100659.375,
+  timestamp: 1778017687442000,
+  duration: 0,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '74bdefab9757a081',
-    'durable.operation.type': 'child-context',
-    'durable.operation.name': 'map-item-0'
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'a87ff679a2f3e71d',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test step retry',
+    'durable.attempt.number': 1,
+    'durable.attempt.outcome': 'succeeded'
   },
   status: { code: 0 },
   events: [],
@@ -1316,98 +305,24 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'a87ff679a2f3e71d',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '54f7b4de230f4f5d',
     traceFlags: 1,
     traceState: undefined
   },
   traceState: undefined,
-  name: 'map-item-1',
-  id: '2f5bb7747efda054',
-  kind: 0,
-  timestamp: 1777491755370000,
-  duration: 100571.542,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '2f5bb7747efda054',
-    'durable.operation.type': 'child-context',
-    'durable.operation.name': 'map-item-1'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'a87ff679a2f3e71d',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-item-2',
-  id: '4864dafb55d05d74',
-  kind: 0,
-  timestamp: 1777491755370000,
-  duration: 100544.333,
-  attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
-    'durable.operation.id': '4864dafb55d05d74',
-    'durable.operation.type': 'child-context',
-    'durable.operation.name': 'map-item-2'
-  },
-  status: { code: 0 },
-  events: [],
-  links: []
-}
-{
-  resource: {
-    attributes: {
-      'service.name': 'unknown_service:node',
-      'telemetry.sdk.language': 'nodejs',
-      'telemetry.sdk.name': 'opentelemetry',
-      'telemetry.sdk.version': '2.6.1'
-    }
-  },
-  instrumentationScope: {
-    name: 'aws-durable-execution-sdk-js',
-    version: undefined,
-    schemaUrl: undefined
-  },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
-  parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'dd3aeae4ccc4df14',
-    traceFlags: 1,
-    traceState: undefined
-  },
-  traceState: undefined,
-  name: 'map-numbers-wait',
+  name: 'test step retry',
   id: 'a87ff679a2f3e71d',
   kind: 0,
-  timestamp: 1777491755370000,
-  duration: 101409.375,
+  timestamp: 1778017687442000,
+  duration: 0,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
     'durable.operation.id': 'a87ff679a2f3e71d',
-    'durable.operation.type': 'child-context',
-    'durable.operation.name': 'map-numbers-wait'
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test step retry'
   },
   status: { code: 0 },
   events: [],
@@ -1427,25 +342,451 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '54f7b4de230f4f5d',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'test wait for condition',
+  id: '19a1de167122a18a',
+  kind: 0,
+  timestamp: 1778017687463000,
+  duration: 56000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'e4da3b7fbbce2345',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test wait for condition',
+    'durable.attempt.number': 1,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: '54f7b4de230f4f5d',
+  kind: 0,
+  timestamp: 1778017687479000,
+  duration: 44798.292,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'b419383009919cb7',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'test wait for condition',
+  id: 'dca19ffa163054fe',
+  kind: 0,
+  timestamp: 1778017687463000,
+  duration: 12841000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'e4da3b7fbbce2345',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test wait for condition',
+    'durable.attempt.number': 2,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: 'b419383009919cb7',
+  kind: 0,
+  timestamp: 1778017700284000,
+  duration: 26704.208,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'af9b2b75c5f0283e',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'test wait for condition',
+  id: '0dd954ea204f19a1',
+  kind: 0,
+  timestamp: 1778017687463000,
+  duration: 21672000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'e4da3b7fbbce2345',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test wait for condition',
+    'durable.attempt.number': 3,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: 'af9b2b75c5f0283e',
+  kind: 0,
+  timestamp: 1778017709115000,
+  duration: 23922.375,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '65c801b8738948f6',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'test wait for condition',
+  id: '60274c1ac606dddf',
+  kind: 0,
+  timestamp: 1778017687463000,
+  duration: 31076000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'e4da3b7fbbce2345',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test wait for condition',
+    'durable.attempt.number': 4,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: '65c801b8738948f6',
+  kind: 0,
+  timestamp: 1778017718519000,
+  duration: 24296.5,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'b9dbf479abf3890e',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'test wait for condition',
+  id: '6dc47662e0ba8f7d',
+  kind: 0,
+  timestamp: 1778017687463000,
+  duration: 40169000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'e4da3b7fbbce2345',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test wait for condition',
+    'durable.attempt.number': 5,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: 'b9dbf479abf3890e',
+  kind: 0,
+  timestamp: 1778017727612000,
+  duration: 26672.125,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'bae6b4486031d9f9',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'test wait for condition',
+  id: '34ffb55da2652f21',
+  kind: 0,
+  timestamp: 1778017687463000,
+  duration: 49247000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': 'e4da3b7fbbce2345',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'test wait for condition',
+    'durable.attempt.number': 6,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: 'bae6b4486031d9f9',
+  kind: 0,
+  timestamp: 1778017736690000,
+  duration: 24551.666,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
     spanId: 'e4da3b7fbbce2345',
     traceFlags: 1,
     traceState: undefined
   },
   traceState: undefined,
-  name: 'final-step',
-  id: 'e4da3b7fbbce2345',
+  name: 'test wait for condition',
+  id: '6d72ba750226637d',
   kind: 0,
-  timestamp: 1777491760807000,
-  duration: 0,
+  timestamp: 1778017687463000,
+  duration: 53789000,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
     'durable.operation.id': 'e4da3b7fbbce2345',
     'durable.operation.type': 'step',
-    'durable.operation.name': 'final-step',
-    'durable.attempt.number': 1,
+    'durable.operation.name': 'test wait for condition',
+    'durable.attempt.number': 7,
     'durable.attempt.outcome': 'succeeded'
   },
   status: { code: 0 },
@@ -1466,24 +807,24 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: 'dd3aeae4ccc4df14',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'e616e5392f37d3d8',
     traceFlags: 1,
     traceState: undefined
   },
   traceState: undefined,
-  name: 'final-step',
+  name: 'test wait for condition',
   id: 'e4da3b7fbbce2345',
   kind: 0,
-  timestamp: 1777491760807000,
-  duration: 0,
+  timestamp: 1778017687463000,
+  duration: 53789000,
   attributes: {
-    'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d',
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
     'durable.operation.id': 'e4da3b7fbbce2345',
     'durable.operation.type': 'step',
-    'durable.operation.name': 'final-step'
+    'durable.operation.name': 'test wait for condition'
   },
   status: { code: 0 },
   events: [],
@@ -1503,89 +844,560 @@ Running durable handler locally…
     version: undefined,
     schemaUrl: undefined
   },
-  traceId: '69f25f136e265f579f692a7f1c24d5ce',
+  traceId: '69fa6584b370294e711716a735f97d76',
   parentSpanContext: {
-    traceId: '69f25f136e265f579f692a7f1c24d5ce',
-    spanId: '72eef250a76d8f84',
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'e616e5392f37d3d8',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'send-sqs-message',
+  id: '0299c06aed970473',
+  kind: 0,
+  timestamp: 1778017741273000,
+  duration: 4673000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': '1679091c5a880faf',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'send-sqs-message',
+    'durable.attempt.number': 1,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: {
+    code: 2,
+    message: 'The security token included in the request is invalid'
+  },
+  events: [
+    {
+      name: 'exception',
+      attributes: {
+        'exception.type': 'InvalidClientTokenId',
+        'exception.message': 'The security token included in the request is invalid',
+        'exception.stacktrace': 'InvalidClientTokenId: The security token included in the request is invalid\n' +
+          '    at ProtocolLib.getErrorSchemaOrThrowBaseException (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:72:67)\n' +
+          '    at AwsJson1_0Protocol.handleError (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:793:65)\n' +
+          '    at AwsJson1_0Protocol.deserializeResponse (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/protocols/index.js:516:24)\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:27:24\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/index.js:120:20\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/middleware-retry/dist-cjs/index.js:300:46\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-sdk-sqs/dist-cjs/index.js:88:18\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:5:26\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/app.js:133:26\n' +
+          '    at async executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:352:20)'
+      },
+      time: [ 1778017745, 946000000 ],
+      droppedAttributesCount: 0
+    }
+  ],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'e616e5392f37d3d8',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'send-sqs-message',
+  id: '17380ddb842e9843',
+  kind: 0,
+  timestamp: 1778017741273000,
+  duration: 4793000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': '1679091c5a880faf',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'send-sqs-message',
+    'durable.attempt.number': 2,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: {
+    code: 2,
+    message: 'The security token included in the request is invalid'
+  },
+  events: [
+    {
+      name: 'exception',
+      attributes: {
+        'exception.type': 'InvalidClientTokenId',
+        'exception.message': 'The security token included in the request is invalid',
+        'exception.stacktrace': 'InvalidClientTokenId: The security token included in the request is invalid\n' +
+          '    at ProtocolLib.getErrorSchemaOrThrowBaseException (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:72:67)\n' +
+          '    at AwsJson1_0Protocol.handleError (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:793:65)\n' +
+          '    at AwsJson1_0Protocol.deserializeResponse (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/protocols/index.js:516:24)\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:27:24\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/index.js:120:20\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/middleware-retry/dist-cjs/index.js:300:46\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-sdk-sqs/dist-cjs/index.js:88:18\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:5:26\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/app.js:133:26\n' +
+          '    at async executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:352:20)'
+      },
+      time: [ 1778017746, 66000000 ],
+      droppedAttributesCount: 0
+    }
+  ],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
     traceFlags: 1,
     isRemote: true
   },
   traceState: undefined,
   name: 'invocation',
-  id: 'dd3aeae4ccc4df14',
+  id: 'e616e5392f37d3d8',
   kind: 0,
-  timestamp: 1777491755310000,
-  duration: 188537.584,
-  attributes: { 'durable.execution.arn': 'b8670b39-3b04-4689-9605-b8df6039760d' },
+  timestamp: 1778017745786000,
+  duration: 291772.5,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
   status: { code: 0 },
   events: [],
   links: []
 }
-Status: SUCCEEDED
-Result: {
-  "step1": "Step 1 completed successfully",
-  "waitCompleted": true,
-  "parallelWaitsResults": {
-    "all": [
-      {
-        "result": "basketball",
-        "index": 0,
-        "status": "SUCCEEDED"
-      },
-      {
-        "result": "football",
-        "index": 1,
-        "status": "SUCCEEDED"
-      }
-    ],
-    "completionReason": "ALL_COMPLETED"
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
   },
-  "mapWaitResults": {
-    "all": [
-      {
-        "result": 1,
-        "index": 0,
-        "status": "SUCCEEDED"
-      },
-      {
-        "result": 2,
-        "index": 1,
-        "status": "SUCCEEDED"
-      },
-      {
-        "result": 3,
-        "index": 2,
-        "status": "SUCCEEDED"
-      }
-    ],
-    "completionReason": "ALL_COMPLETED"
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
   },
-  "stepResult": "finished"
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '58e8a07cca05f0cc',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'send-sqs-message',
+  id: 'fae594628f003e7d',
+  kind: 0,
+  timestamp: 1778017741273000,
+  duration: 17189000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': '1679091c5a880faf',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'send-sqs-message',
+    'durable.attempt.number': 3,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: {
+    code: 2,
+    message: 'The security token included in the request is invalid'
+  },
+  events: [
+    {
+      name: 'exception',
+      attributes: {
+        'exception.type': 'InvalidClientTokenId',
+        'exception.message': 'The security token included in the request is invalid',
+        'exception.stacktrace': 'InvalidClientTokenId: The security token included in the request is invalid\n' +
+          '    at ProtocolLib.getErrorSchemaOrThrowBaseException (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:72:67)\n' +
+          '    at AwsJson1_0Protocol.handleError (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:793:65)\n' +
+          '    at AwsJson1_0Protocol.deserializeResponse (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/protocols/index.js:516:24)\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:27:24\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/index.js:120:20\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/middleware-retry/dist-cjs/index.js:300:46\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-sdk-sqs/dist-cjs/index.js:88:18\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:5:26\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/app.js:133:26\n' +
+          '    at async executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:352:20)'
+      },
+      time: [ 1778017758, 462000000 ],
+      droppedAttributesCount: 0
+    }
+  ],
+  links: []
 }
-
-Recorded 25 operation(s):
-  [STEP] step1 — SUCCEEDED
-  [WAIT] undefined — SUCCEEDED
-  [CONTEXT] undefined — SUCCEEDED
-  [CONTEXT] parallel-branch-0 — SUCCEEDED
-  [WAIT] wait-sport-step-1 — SUCCEEDED
-  [CONTEXT] parallel-branch-1 — SUCCEEDED
-  [WAIT] wait-sport-step-2 — SUCCEEDED
-  [STEP] sport-step-1 — SUCCEEDED
-  [STEP] sport-step-2 — SUCCEEDED
-  [WAIT] wait-sport-step-1-2 — SUCCEEDED
-  [STEP] sport-step-2-1 — SUCCEEDED
-  [CONTEXT] map-numbers-wait — SUCCEEDED
-  [CONTEXT] map-item-0 — SUCCEEDED
-  [WAIT] map-wait-step-0 — SUCCEEDED
-  [CONTEXT] map-item-1 — SUCCEEDED
-  [WAIT] map-wait-step-1 — SUCCEEDED
-  [CONTEXT] map-item-2 — SUCCEEDED
-  [WAIT] map-wait-step-2 — SUCCEEDED
-  [STEP] map-numbers-wait-step-0 — SUCCEEDED
-  [STEP] map-numbers-wait-step-1 — SUCCEEDED
-  [STEP] map-numbers-wait-step-2 — SUCCEEDED
-  [WAIT] map-wait-step-0-2 — SUCCEEDED
-  [WAIT] map-wait-step-1-2 — SUCCEEDED
-  [WAIT] map-wait-step-2-2 — SUCCEEDED
-  [STEP] final-step — SUCCEEDED
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: '58e8a07cca05f0cc',
+  kind: 0,
+  timestamp: 1778017758362000,
+  duration: 105715.209,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '7cad76e985383cae',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'send-sqs-message',
+  id: 'a5cb00d7c8fffe5f',
+  kind: 0,
+  timestamp: 1778017741273000,
+  duration: 33832000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': '1679091c5a880faf',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'send-sqs-message',
+    'durable.attempt.number': 4,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: {
+    code: 2,
+    message: 'The security token included in the request is invalid'
+  },
+  events: [
+    {
+      name: 'exception',
+      attributes: {
+        'exception.type': 'InvalidClientTokenId',
+        'exception.message': 'The security token included in the request is invalid',
+        'exception.stacktrace': 'InvalidClientTokenId: The security token included in the request is invalid\n' +
+          '    at ProtocolLib.getErrorSchemaOrThrowBaseException (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:72:67)\n' +
+          '    at AwsJson1_0Protocol.handleError (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:793:65)\n' +
+          '    at AwsJson1_0Protocol.deserializeResponse (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/protocols/index.js:516:24)\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:27:24\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/index.js:120:20\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/middleware-retry/dist-cjs/index.js:300:46\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-sdk-sqs/dist-cjs/index.js:88:18\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:5:26\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/app.js:133:26\n' +
+          '    at async executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:352:20)'
+      },
+      time: [ 1778017775, 105000000 ],
+      droppedAttributesCount: 0
+    }
+  ],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: '7cad76e985383cae',
+  kind: 0,
+  timestamp: 1778017774985000,
+  duration: 133264.417,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'c8c4ca43cfa7561f',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'send-sqs-message',
+  id: 'fb95759984296d1e',
+  kind: 0,
+  timestamp: 1778017741273000,
+  duration: 53936000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': '1679091c5a880faf',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'send-sqs-message',
+    'durable.attempt.number': 5,
+    'durable.attempt.outcome': 'retrying'
+  },
+  status: {
+    code: 2,
+    message: 'The security token included in the request is invalid'
+  },
+  events: [
+    {
+      name: 'exception',
+      attributes: {
+        'exception.type': 'InvalidClientTokenId',
+        'exception.message': 'The security token included in the request is invalid',
+        'exception.stacktrace': 'InvalidClientTokenId: The security token included in the request is invalid\n' +
+          '    at ProtocolLib.getErrorSchemaOrThrowBaseException (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:72:67)\n' +
+          '    at AwsJson1_0Protocol.handleError (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:793:65)\n' +
+          '    at AwsJson1_0Protocol.deserializeResponse (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/protocols/index.js:516:24)\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:27:24\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/index.js:120:20\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/middleware-retry/dist-cjs/index.js:300:46\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-sdk-sqs/dist-cjs/index.js:88:18\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:5:26\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/app.js:133:26\n' +
+          '    at async executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:352:20)'
+      },
+      time: [ 1778017795, 209000000 ],
+      droppedAttributesCount: 0
+    }
+  ],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '1679091c5a880faf',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'send-sqs-message',
+  id: 'e397961a0aa9ade0',
+  kind: 0,
+  timestamp: 1778017741273000,
+  duration: 26465000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': '1679091c5a880faf',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'send-sqs-message',
+    'durable.attempt.number': 6,
+    'durable.attempt.outcome': 'failed'
+  },
+  status: {
+    code: 2,
+    message: 'The security token included in the request is invalid'
+  },
+  events: [
+    {
+      name: 'exception',
+      attributes: {
+        'exception.type': 'InvalidClientTokenId',
+        'exception.message': 'The security token included in the request is invalid',
+        'exception.stacktrace': 'InvalidClientTokenId: The security token included in the request is invalid\n' +
+          '    at ProtocolLib.getErrorSchemaOrThrowBaseException (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:72:67)\n' +
+          '    at AwsJson1_0Protocol.handleError (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:793:65)\n' +
+          '    at AwsJson1_0Protocol.deserializeResponse (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/protocols/index.js:516:24)\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:27:24\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/index.js:120:20\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/middleware-retry/dist-cjs/index.js:300:46\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-sdk-sqs/dist-cjs/index.js:88:18\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:5:26\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/app.js:133:26\n' +
+          '    at async executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:352:20)'
+      },
+      time: [ 1778017795, 329000000 ],
+      droppedAttributesCount: 0
+    }
+  ],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: 'c8c4ca43cfa7561f',
+    traceFlags: 1,
+    traceState: undefined
+  },
+  traceState: undefined,
+  name: 'send-sqs-message',
+  id: '1679091c5a880faf',
+  kind: 0,
+  timestamp: 1778017741273000,
+  duration: 26465000,
+  attributes: {
+    'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56',
+    'durable.operation.id': '1679091c5a880faf',
+    'durable.operation.type': 'step',
+    'durable.operation.name': 'send-sqs-message'
+  },
+  status: {
+    code: 2,
+    message: 'The security token included in the request is invalid'
+  },
+  events: [
+    {
+      name: 'exception',
+      attributes: {
+        'exception.type': 'InvalidClientTokenId',
+        'exception.message': 'The security token included in the request is invalid',
+        'exception.stacktrace': 'InvalidClientTokenId: The security token included in the request is invalid\n' +
+          '    at ProtocolLib.getErrorSchemaOrThrowBaseException (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:72:67)\n' +
+          '    at AwsJson1_0Protocol.handleError (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/core/dist-cjs/submodules/protocols/index.js:793:65)\n' +
+          '    at AwsJson1_0Protocol.deserializeResponse (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/protocols/index.js:516:24)\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:27:24\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/core/dist-cjs/index.js:120:20\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@smithy/middleware-retry/dist-cjs/index.js:300:46\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-sdk-sqs/dist-cjs/index.js:88:18\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@aws-sdk/middleware-logger/dist-cjs/index.js:5:26\n' +
+          '    at async /Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/app.js:133:26\n' +
+          '    at async executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:352:20)'
+      },
+      time: [ 1778017795, 329000000 ],
+      droppedAttributesCount: 0
+    }
+  ],
+  links: []
+}
+{
+  resource: {
+    attributes: {
+      'service.name': 'unknown_service:node',
+      'telemetry.sdk.language': 'nodejs',
+      'telemetry.sdk.name': 'opentelemetry',
+      'telemetry.sdk.version': '2.6.1'
+    }
+  },
+  instrumentationScope: {
+    name: 'aws-durable-execution-sdk-js',
+    version: undefined,
+    schemaUrl: undefined
+  },
+  traceId: '69fa6584b370294e711716a735f97d76',
+  parentSpanContext: {
+    traceId: '69fa6584b370294e711716a735f97d76',
+    spanId: '4f0872ba777cf279',
+    traceFlags: 1,
+    isRemote: true
+  },
+  traceState: undefined,
+  name: 'invocation',
+  id: 'c8c4ca43cfa7561f',
+  kind: 0,
+  timestamp: 1778017795109000,
+  duration: 234291.5,
+  attributes: { 'durable.execution.arn': '5063a7a3-c1ed-482d-ba88-ede885275e56' },
+  status: { code: 0 },
+  events: [],
+  links: []
+}
+Status: FAILED
+Error: Error: The security token included in the request is invalid
+    at Object.getResult (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/node_modules/@aws/durable-execution-sdk-js-testing/src/test-runner/local/result-formatter.ts:56:25)
+    at main (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/test-otel-plugin/run-local.ts:40:53)
