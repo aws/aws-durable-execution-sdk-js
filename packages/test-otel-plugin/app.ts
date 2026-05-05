@@ -22,6 +22,8 @@ import {
   context as otelContext,
   ROOT_CONTEXT,
 } from "@opentelemetry/api";
+import { AwsInstrumentation } from "@opentelemetry/instrumentation-aws-sdk";
+import { registerInstrumentations } from "@opentelemetry/instrumentation";
 
 const sqsClient = new SQSClient({});
 
@@ -41,6 +43,16 @@ const provider = new NodeTracerProvider({
 });
 
 provider.register({ propagator: new AWSXRayPropagator() });
+
+registerInstrumentations({
+  tracerProvider: provider,
+  instrumentations: [
+    new AwsInstrumentation({
+      suppressInternalInstrumentation: true, // avoids noisy HTTP sub-spans
+      sqsExtractContextPropagationFromPayload: true, // for receiving side
+    }),
+  ],
+});
 
 class MyError extends Error {
   constructor(message: string) {
@@ -175,51 +187,47 @@ const durableHandler = withDurableExecution(
       return response.MessageId;
     });
 
-    // const parallelWaitsResults = await context.parallel([
-    //   // Branch 1: Returns "basketball"
-    //   async (ctx: DurableContext) => {
-    //     await ctx.wait("wait-sport-step-1", { seconds: 5 });
-    //     const result = await ctx.step("sport-step-1", async () => {
-    //       return "basketball";
-    //     });
-    //     await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
-    //     return result;
-    //   },
+    const parallelWaitsResults = await context.parallel([
+      // Branch 1: Returns "basketball"
+      async (ctx: DurableContext) => {
+        await ctx.wait("wait-sport-step-1", { seconds: 5 });
+        const result = await ctx.step("sport-step-1", async () => {
+          return "basketball";
+        });
+        await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
+        return result;
+      },
 
-    //   // Branch 2: Returns "football"
-    //   async (ctx: DurableContext) => {
-    //     await ctx.wait("wait-sport-step-2", { seconds: 10 });
-    //     const result = await ctx.step("sport-step-2", async () => {
-    //       return "football";
-    //     });
-    //     const result2 = await ctx.step("sport-step-2-1", async () => {
-    //       return "soccer";
-    //     });
-    //     return result;
-    //   },
-    // ]);
+      // Branch 2: Returns "football"
+      async (ctx: DurableContext) => {
+        await ctx.wait("wait-sport-step-2", { seconds: 10 });
+        const result = await ctx.step("sport-step-2", async () => {
+          return "football";
+        });
+        const result2 = await ctx.step("sport-step-2-1", async () => {
+          return "soccer";
+        });
+        return result;
+      },
+    ]);
 
-    // const mapWaitInput = [1, 2, 3];
-    // const mapWaitResults = await context.map(
-    //   "map-numbers-wait",
-    //   mapWaitInput,
-    //   async (ctx, item, index) => {
-    //     // Each iteration returns the number (1 to 3)
-    //     await ctx.wait(`map-wait-step-${index}`, { seconds: 5 * item });
-    //     const result = await ctx.step(
-    //       `map-numbers-wait-step-${index}`,
-    //       async () => {
-    //         return item;
-    //       },
-    //     );
-    //     await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
-    //     return result;
-    //   },
-    // );
-
-    // const stepResult = await context.step(`final-step`, async () => {
-    //   return "finished";
-    // });
+    const mapWaitInput = [1, 2, 3];
+    const mapWaitResults = await context.map(
+      "map-numbers-wait",
+      mapWaitInput,
+      async (ctx, item, index) => {
+        // Each iteration returns the number (1 to 3)
+        await ctx.wait(`map-wait-step-${index}`, { seconds: 5 * item });
+        const result = await ctx.step(
+          `map-numbers-wait-step-${index}`,
+          async () => {
+            return item;
+          },
+        );
+        await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
+        return result;
+      },
+    );
 
     // Final result combining all operations
     return {
@@ -229,6 +237,8 @@ const durableHandler = withDurableExecution(
       stepRetryResult,
       waitForConditionStep,
       sqsMessageId,
+      parallelWaitsResults,
+      mapWaitResults,
     };
   },
   {

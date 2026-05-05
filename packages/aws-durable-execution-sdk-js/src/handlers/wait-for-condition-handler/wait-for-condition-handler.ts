@@ -120,13 +120,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
         );
 
         if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationAttemptStart?.(attemptInfo);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.SUCCEEDED,
@@ -135,7 +128,15 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationStart?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
           plugin.onOperationEnd?.(attemptEndInfo);
         }
 
@@ -178,13 +179,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
         );
 
         if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationAttemptStart?.(attemptInfo);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.FAILED,
@@ -193,8 +187,16 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationStart?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationEnd?.(attemptEndInfo);
         }
 
         if (stepData.StepDetails?.Error) {
@@ -347,8 +349,14 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationStart?.(attemptEndInfo);
-            plugin.onOperationAttemptStart?.(attemptEndInfo);
-            plugin.onOperationAttemptEnd?.(attemptEndInfo);
+            plugin.onOperationAttemptStart?.({
+              ...attemptEndInfo,
+              StartTimestamp: attemptEndInfo.EndTimestamp,
+            });
+            plugin.onOperationAttemptEnd?.({
+              ...attemptEndInfo,
+              StartTimestamp: attemptEndInfo.EndTimestamp,
+            });
             plugin.onOperationEnd?.(attemptEndInfo);
             checkpoint.markOperationState(
               stepId,
@@ -380,8 +388,14 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptStart?.(attemptEndInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
 
           checkpoint.markOperationState(
             stepId,
@@ -426,8 +440,14 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationStart?.(attemptEndInfo);
-          plugin.onOperationAttemptStart?.(attemptEndInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
           plugin.onOperationEnd?.({
             ...attemptEndInfo,
             error: error instanceof Error ? error : new Error(String(error)),

@@ -44,6 +44,7 @@ import {
   toAttemptEndInfo,
   toAttemptInfo,
   backfillOperationInfo,
+  toOperationInfo,
 } from "../../utils/operation/operation";
 
 export const createStepHandler = <Logger extends DurableLogger>(
@@ -129,20 +130,24 @@ export const createStepHandler = <Logger extends DurableLogger>(
         );
 
         if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationAttemptStart?.(attemptInfo);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.SUCCEEDED,
+            {
+              attempt: stepData.StepDetails?.Attempt,
+            },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationStart?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationEnd?.(attemptEndInfo);
         }
 
         return await safeDeserialize(
@@ -186,20 +191,24 @@ export const createStepHandler = <Logger extends DurableLogger>(
         );
 
         if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationAttemptStart?.(attemptInfo);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
             AttemptEndInfoOutcome.FAILED,
+            {
+              attempt: stepData.StepDetails?.Attempt,
+            },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationStart?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationEnd?.(attemptEndInfo);
         }
 
         if (stepData.StepDetails?.Error) {
@@ -385,8 +394,15 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationStart?.(attemptEndInfo);
-          plugin.onOperationAttemptStart?.(attemptEndInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          attemptEndInfo.StartTimestamp = attemptEndInfo.EndTimestamp;
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
           plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
@@ -448,8 +464,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationStart?.(attemptEndInfo);
-            plugin.onOperationAttemptStart?.(attemptEndInfo);
-            plugin.onOperationAttemptEnd?.(attemptEndInfo);
+            plugin.onOperationAttemptStart?.({
+              ...attemptEndInfo,
+              StartTimestamp: attemptEndInfo.EndTimestamp,
+            });
+            plugin.onOperationAttemptEnd?.({
+              ...attemptEndInfo,
+              StartTimestamp: attemptEndInfo.EndTimestamp,
+            });
             plugin.onOperationEnd?.({
               ...attemptEndInfo,
               error: error instanceof Error ? error : new Error(String(error)),
@@ -485,8 +507,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptStart?.(attemptEndInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationAttemptStart?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
+          plugin.onOperationAttemptEnd?.({
+            ...attemptEndInfo,
+            StartTimestamp: attemptEndInfo.EndTimestamp,
+          });
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.RETRY_WAITING,

@@ -28,6 +28,7 @@ import {
   toAttemptInfo,
   toAttemptEndInfo,
   backfillOperationInfo,
+  toOperationInfo,
 } from "../../utils/operation/operation";
 
 export const createInvokeHandler = (
@@ -196,13 +197,6 @@ export const createInvokeHandler = (
           );
           backfillOperationInfo(attemptInfo, opInfo);
           plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationAttemptStart?.(attemptInfo);
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.FAILED,
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
           plugin.onOperationEnd?.(attemptInfo);
         }
 
@@ -306,15 +300,10 @@ export const createInvokeHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
-        const attemptEndInfo = toAttemptEndInfo(
-          stepData,
-          AttemptEndInfoOutcome.SUCCEEDED,
-        );
-        backfillOperationInfo(attemptEndInfo, opInfo);
-        plugin.onOperationStart?.(attemptEndInfo);
-        plugin.onOperationAttemptStart?.(attemptEndInfo);
-        plugin.onOperationAttemptEnd?.(attemptEndInfo);
-        plugin.onOperationEnd?.(attemptEndInfo);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        plugin.onOperationStart?.(operationInfo);
+        plugin.onOperationEnd?.(operationInfo);
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
@@ -332,21 +321,11 @@ export const createInvokeHandler = (
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
       const invokeError = stepData?.ChainedInvokeDetails?.Error;
-      const attemptEndInfo = toAttemptEndInfo(
-        stepData,
-        AttemptEndInfoOutcome.FAILED,
-        {
-          error: invokeError?.ErrorMessage
-            ? new Error(invokeError.ErrorMessage)
-            : new Error("Invoke failed"),
-        },
-      );
-      backfillOperationInfo(attemptEndInfo, opInfo);
-      plugin.onOperationStart?.(attemptEndInfo);
-      plugin.onOperationAttemptStart?.(attemptEndInfo);
-      plugin.onOperationAttemptEnd?.(attemptEndInfo);
+      const operationInfo = toOperationInfo(stepData);
+      backfillOperationInfo(operationInfo, opInfo);
+      plugin.onOperationStart?.(operationInfo);
       plugin.onOperationEnd?.({
-        ...attemptEndInfo,
+        ...operationInfo,
         error: invokeError?.ErrorMessage
           ? new Error(invokeError.ErrorMessage)
           : new Error("Invoke failed"),

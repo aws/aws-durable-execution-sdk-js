@@ -8,6 +8,8 @@ const sdk_trace_base_1 = require("@opentelemetry/sdk-trace-base");
 const exporter_trace_otlp_http_1 = require("@opentelemetry/exporter-trace-otlp-http");
 const propagator_aws_xray_1 = require("@opentelemetry/propagator-aws-xray");
 const api_1 = require("@opentelemetry/api");
+const instrumentation_aws_sdk_1 = require("@opentelemetry/instrumentation-aws-sdk");
+const instrumentation_1 = require("@opentelemetry/instrumentation");
 const sqsClient = new client_sqs_1.SQSClient({});
 const exporter = new exporter_trace_otlp_http_1.OTLPTraceExporter({
   url: "http://localhost:4318/v1/traces",
@@ -26,6 +28,15 @@ const provider = new sdk_trace_node_1.NodeTracerProvider({
 });
 provider.register({
   propagator: new propagator_aws_xray_1.AWSXRayPropagator(),
+});
+(0, instrumentation_1.registerInstrumentations)({
+  tracerProvider: provider,
+  instrumentations: [
+    new instrumentation_aws_sdk_1.AwsInstrumentation({
+      suppressInternalInstrumentation: true, // avoids noisy HTTP sub-spans
+      sqsExtractContextPropagationFromPayload: true, // for receiving side
+    }),
+  ],
 });
 class MyError extends Error {
   constructor(message) {
@@ -147,48 +158,45 @@ const durableHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
       const response = await sqsClient.send(command);
       return response.MessageId;
     });
-    // const parallelWaitsResults = await context.parallel([
-    //   // Branch 1: Returns "basketball"
-    //   async (ctx: DurableContext) => {
-    //     await ctx.wait("wait-sport-step-1", { seconds: 5 });
-    //     const result = await ctx.step("sport-step-1", async () => {
-    //       return "basketball";
-    //     });
-    //     await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
-    //     return result;
-    //   },
-    //   // Branch 2: Returns "football"
-    //   async (ctx: DurableContext) => {
-    //     await ctx.wait("wait-sport-step-2", { seconds: 10 });
-    //     const result = await ctx.step("sport-step-2", async () => {
-    //       return "football";
-    //     });
-    //     const result2 = await ctx.step("sport-step-2-1", async () => {
-    //       return "soccer";
-    //     });
-    //     return result;
-    //   },
-    // ]);
-    // const mapWaitInput = [1, 2, 3];
-    // const mapWaitResults = await context.map(
-    //   "map-numbers-wait",
-    //   mapWaitInput,
-    //   async (ctx, item, index) => {
-    //     // Each iteration returns the number (1 to 3)
-    //     await ctx.wait(`map-wait-step-${index}`, { seconds: 5 * item });
-    //     const result = await ctx.step(
-    //       `map-numbers-wait-step-${index}`,
-    //       async () => {
-    //         return item;
-    //       },
-    //     );
-    //     await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
-    //     return result;
-    //   },
-    // );
-    // const stepResult = await context.step(`final-step`, async () => {
-    //   return "finished";
-    // });
+    const parallelWaitsResults = await context.parallel([
+      // Branch 1: Returns "basketball"
+      async (ctx) => {
+        await ctx.wait("wait-sport-step-1", { seconds: 5 });
+        const result = await ctx.step("sport-step-1", async () => {
+          return "basketball";
+        });
+        await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
+        return result;
+      },
+      // Branch 2: Returns "football"
+      async (ctx) => {
+        await ctx.wait("wait-sport-step-2", { seconds: 10 });
+        const result = await ctx.step("sport-step-2", async () => {
+          return "football";
+        });
+        const result2 = await ctx.step("sport-step-2-1", async () => {
+          return "soccer";
+        });
+        return result;
+      },
+    ]);
+    const mapWaitInput = [1, 2, 3];
+    const mapWaitResults = await context.map(
+      "map-numbers-wait",
+      mapWaitInput,
+      async (ctx, item, index) => {
+        // Each iteration returns the number (1 to 3)
+        await ctx.wait(`map-wait-step-${index}`, { seconds: 5 * item });
+        const result = await ctx.step(
+          `map-numbers-wait-step-${index}`,
+          async () => {
+            return item;
+          },
+        );
+        await ctx.wait(`map-wait-step-${index}-2`, { seconds: 5 });
+        return result;
+      },
+    );
     // Final result combining all operations
     return {
       step1: step1Result,
@@ -197,6 +205,8 @@ const durableHandler = (0, durable_execution_sdk_js_1.withDurableExecution)(
       stepRetryResult,
       waitForConditionStep,
       sqsMessageId,
+      parallelWaitsResults,
+      mapWaitResults,
     };
   },
   {
