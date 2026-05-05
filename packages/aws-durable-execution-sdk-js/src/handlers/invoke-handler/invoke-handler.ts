@@ -143,13 +143,6 @@ export const createInvokeHandler = (
           );
           backfillOperationInfo(attemptInfo, opInfo);
           plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationAttemptStart?.(attemptInfo);
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.SUCCEEDED,
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.(attemptEndInfo);
           plugin.onOperationEnd?.(attemptInfo);
         }
 
