@@ -1,0 +1,156 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "67b757a6-3953-4ad5-b096-b3a9347ecc4c",
+    "EventTimestamp": "2026-05-01T19:26:17.193Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"jobs\":[{\"id\":99,\"name\":\"instant-job\",\"completesAfterChecks\":1}]}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "job-pipeline",
+    "EventTimestamp": "2026-05-01T19:26:17.196Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:26:17.196Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "submit-instant-job",
+    "EventTimestamp": "2026-05-01T19:26:17.196Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "2f221a18eb863803",
+    "Name": "submit-instant-job",
+    "EventTimestamp": "2026-05-01T19:26:17.196Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":99,\"jobName\":\"instant-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 6,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-instant-job",
+    "EventTimestamp": "2026-05-01T19:26:17.198Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 7,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-instant-job",
+    "EventTimestamp": "2026-05-01T19:26:17.198Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":99,\"checkCount\":1,\"status\":\"completed\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "collect-instant-job",
+    "EventTimestamp": "2026-05-01T19:26:17.199Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "collect-instant-job",
+    "EventTimestamp": "2026-05-01T19:26:17.199Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":99,\"jobName\":\"instant-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 10,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:26:17.201Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":99,\"jobName\":\"instant-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 11,
+    "Id": "c4ca4238a0b92382",
+    "Name": "job-pipeline",
+    "EventTimestamp": "2026-05-01T19:26:17.201Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":{\"jobId\":99,\"jobName\":\"instant-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1},\"index\":0,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 12,
+    "EventTimestamp": "2026-05-01T19:26:17.201Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:17.193Z",
+      "EndTimestamp": "2026-05-01T19:26:17.201Z",
+      "Error": {},
+      "RequestId": "36edfdec-0e81-4c96-9384-c38ef7e0f32d"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 13,
+    "Id": "67b757a6-3953-4ad5-b096-b3a9347ecc4c",
+    "EventTimestamp": "2026-05-01T19:26:17.201Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalProcessed\":1,\"totalFailed\":0,\"completionReason\":\"ALL_COMPLETED\",\"jobs\":[{\"jobId\":99,\"jobName\":\"instant-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1}]}"
+      }
+    }
+  }
+]

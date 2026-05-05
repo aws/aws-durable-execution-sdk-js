@@ -1,0 +1,462 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "ed871e1c-27d6-4755-9a66-0074bb8f16f3",
+    "EventTimestamp": "2026-05-01T19:26:15.064Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "job-pipeline",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "submit-job-fast",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "submit-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "submit-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "2f221a18eb863803",
+    "Name": "submit-job-fast",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"jobName\":\"job-fast\",\"submittedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "6151f5ab282d90e4",
+    "Name": "submit-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":2,\"jobName\":\"job-medium\",\"submittedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "b425e0c75591aa8f",
+    "Name": "submit-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:15.070Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":3,\"jobName\":\"job-slow\",\"submittedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 12,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-job-fast",
+    "EventTimestamp": "2026-05-01T19:26:15.073Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 13,
+    "Id": "e61730e6717b1787",
+    "Name": "poll-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:15.073Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 14,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "poll-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:15.073Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 15,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-job-fast",
+    "EventTimestamp": "2026-05-01T19:26:15.073Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"checkCount\":1,\"status\":\"completed\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 16,
+    "Id": "e61730e6717b1787",
+    "Name": "poll-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:15.073Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":2,\"checkCount\":1,\"status\":\"running\"}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 17,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "poll-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:15.075Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":3,\"checkCount\":1,\"status\":\"running\"}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 18,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "collect-job-fast",
+    "EventTimestamp": "2026-05-01T19:26:15.077Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 19,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "collect-job-fast",
+    "EventTimestamp": "2026-05-01T19:26:15.077Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"jobName\":\"job-fast\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 20,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:26:15.079Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"jobName\":\"job-fast\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 21,
+    "EventTimestamp": "2026-05-01T19:26:15.097Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:15.064Z",
+      "EndTimestamp": "2026-05-01T19:26:15.097Z",
+      "Error": {},
+      "RequestId": "47dbd907-0f4b-4165-9477-58249bead27a"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 22,
+    "Id": "e61730e6717b1787",
+    "Name": "poll-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:16.078Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 23,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "poll-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:16.078Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 24,
+    "Id": "e61730e6717b1787",
+    "Name": "poll-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:16.078Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":2,\"checkCount\":2,\"status\":\"completed\"}"
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 25,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "poll-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:16.078Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":3,\"checkCount\":2,\"status\":\"running\"}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 26,
+    "Id": "453e406dcee4d181",
+    "Name": "collect-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:16.080Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 27,
+    "Id": "453e406dcee4d181",
+    "Name": "collect-job-medium",
+    "EventTimestamp": "2026-05-01T19:26:16.080Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":2,\"jobName\":\"job-medium\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":2}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 28,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-05-01T19:26:16.080Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":2,\"jobName\":\"job-medium\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":2}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 29,
+    "EventTimestamp": "2026-05-01T19:26:16.101Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:16.075Z",
+      "EndTimestamp": "2026-05-01T19:26:16.101Z",
+      "Error": {},
+      "RequestId": "7cf0003f-9be7-4792-8146-8c41498a980d"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 30,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "poll-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:17.083Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 31,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "poll-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:17.083Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":3,\"checkCount\":3,\"status\":\"completed\"}"
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 32,
+    "Id": "e0260672e1e9df5a",
+    "Name": "collect-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:17.085Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 33,
+    "Id": "e0260672e1e9df5a",
+    "Name": "collect-job-slow",
+    "EventTimestamp": "2026-05-01T19:26:17.085Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":3,\"jobName\":\"job-slow\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":3}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 34,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-05-01T19:26:17.087Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":3,\"jobName\":\"job-slow\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":3}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 35,
+    "Id": "c4ca4238a0b92382",
+    "Name": "job-pipeline",
+    "EventTimestamp": "2026-05-01T19:26:17.087Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":{\"jobId\":1,\"jobName\":\"job-fast\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1},\"index\":0,\"status\":\"SUCCEEDED\"},{\"result\":{\"jobId\":2,\"jobName\":\"job-medium\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":2},\"index\":1,\"status\":\"SUCCEEDED\"},{\"result\":{\"jobId\":3,\"jobName\":\"job-slow\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":3},\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 36,
+    "EventTimestamp": "2026-05-01T19:26:17.088Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:17.079Z",
+      "EndTimestamp": "2026-05-01T19:26:17.088Z",
+      "Error": {},
+      "RequestId": "00f91bb0-be02-467b-898b-f3de2ece74c6"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 37,
+    "Id": "ed871e1c-27d6-4755-9a66-0074bb8f16f3",
+    "EventTimestamp": "2026-05-01T19:26:17.088Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalProcessed\":3,\"totalFailed\":0,\"completionReason\":\"ALL_COMPLETED\",\"jobs\":[{\"jobId\":1,\"jobName\":\"job-fast\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":1},{\"jobId\":2,\"jobName\":\"job-medium\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":2},{\"jobId\":3,\"jobName\":\"job-slow\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":3}]}"
+      }
+    }
+  }
+]

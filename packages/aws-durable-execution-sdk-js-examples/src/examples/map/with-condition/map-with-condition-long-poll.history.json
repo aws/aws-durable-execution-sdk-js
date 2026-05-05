@@ -1,0 +1,313 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "e3fd9383-91fe-4317-a95b-0a49ce38f6fd",
+    "EventTimestamp": "2026-05-01T19:26:17.305Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"jobs\":[{\"id\":1,\"name\":\"long-poll-job\",\"completesAfterChecks\":5}]}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "job-pipeline",
+    "EventTimestamp": "2026-05-01T19:26:17.309Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:26:17.309Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "submit-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:17.309Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "2f221a18eb863803",
+    "Name": "submit-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:17.309Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"jobName\":\"long-poll-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 6,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:17.312Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 7,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:17.312Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"checkCount\":1,\"status\":\"running\"}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2026-05-01T19:26:17.333Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:17.305Z",
+      "EndTimestamp": "2026-05-01T19:26:17.333Z",
+      "Error": {},
+      "RequestId": "6b5862b4-2f66-4b06-9265-832281b3df6c"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 9,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:18.316Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 10,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:18.316Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"checkCount\":2,\"status\":\"running\"}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-05-01T19:26:18.338Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:18.313Z",
+      "EndTimestamp": "2026-05-01T19:26:18.338Z",
+      "Error": {},
+      "RequestId": "6cb80cad-343f-4cfc-9a25-99504cbe65b8"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 12,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:19.319Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 13,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:19.319Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"checkCount\":3,\"status\":\"running\"}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 14,
+    "EventTimestamp": "2026-05-01T19:26:19.345Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:19.317Z",
+      "EndTimestamp": "2026-05-01T19:26:19.345Z",
+      "Error": {},
+      "RequestId": "0ac806c4-4ad5-40cb-9091-0b275cc8a1c9"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 15,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:20.322Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 16,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:20.322Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"checkCount\":4,\"status\":\"running\"}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 3
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 17,
+    "EventTimestamp": "2026-05-01T19:26:20.344Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:20.320Z",
+      "EndTimestamp": "2026-05-01T19:26:20.344Z",
+      "Error": {},
+      "RequestId": "d67e2823-02b9-4199-bd08-ec33ba0e6e51"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 18,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:21.329Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 19,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "poll-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:21.329Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"checkCount\":5,\"status\":\"completed\"}"
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 4
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 20,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "collect-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:21.331Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 21,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "collect-long-poll-job",
+    "EventTimestamp": "2026-05-01T19:26:21.331Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"jobName\":\"long-poll-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":5}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 22,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:26:21.333Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"jobId\":1,\"jobName\":\"long-poll-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":5}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 23,
+    "Id": "c4ca4238a0b92382",
+    "Name": "job-pipeline",
+    "EventTimestamp": "2026-05-01T19:26:21.333Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":{\"jobId\":1,\"jobName\":\"long-poll-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":5},\"index\":0,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 24,
+    "EventTimestamp": "2026-05-01T19:26:21.334Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:26:21.325Z",
+      "EndTimestamp": "2026-05-01T19:26:21.334Z",
+      "Error": {},
+      "RequestId": "f5c12817-ec84-4646-8ece-67a214741d11"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 25,
+    "Id": "e3fd9383-91fe-4317-a95b-0a49ce38f6fd",
+    "EventTimestamp": "2026-05-01T19:26:21.334Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalProcessed\":1,\"totalFailed\":0,\"completionReason\":\"ALL_COMPLETED\",\"jobs\":[{\"jobId\":1,\"jobName\":\"long-poll-job\",\"submittedAt\":\"2025-01-01T00:00:00Z\",\"finalStatus\":\"completed\",\"totalChecks\":5}]}"
+      }
+    }
+  }
+]

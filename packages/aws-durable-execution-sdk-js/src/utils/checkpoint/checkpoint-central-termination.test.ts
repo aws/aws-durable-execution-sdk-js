@@ -1263,7 +1263,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(checkAndTerminateSpy).toHaveBeenCalledTimes(2);
     });
 
-    it("should skip checkAndTerminate when queue drains but termination is already scheduled", async () => {
+    it("should call checkAndTerminate when queue drains even if termination is already scheduled", async () => {
       // Setup: mock the checkpoint API to succeed
       mockClient.checkpointDurableExecution.mockResolvedValue({
         checkpointToken: "new-token",
@@ -1298,13 +1298,12 @@ describe("CheckpointManager - Centralized Termination", () => {
       });
       checkpointPromise.catch(() => {});
 
-      // 3. Let the queue drain — terminationTimer is already set,
-      //    so processQueue should NOT call checkAndTerminate again
+      // 3. Let the queue drain — processQueue should always call
+      //    checkAndTerminate after draining
       await jest.advanceTimersByTimeAsync(0);
 
-      // checkAndTerminate should still have been called only once
-      // (from markOperationState), not again from processQueue
-      expect(checkAndTerminateSpy).toHaveBeenCalledTimes(1);
+      // checkAndTerminate is called again from processQueue after drain
+      expect(checkAndTerminateSpy).toHaveBeenCalledTimes(2);
 
       // 4. Let the cooldown fire — termination should still happen
       jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
@@ -1431,6 +1430,116 @@ describe("CheckpointManager - Centralized Termination", () => {
           reason: expect.any(String),
         }),
       );
+    });
+  });
+
+  describe("processQueue re-evaluates termination with pending callbacks", () => {
+    /**
+     * Verifies that processQueue always re-evaluates termination after
+     * the checkpoint queue drains, even when a terminationTimer is set.
+     */
+    it("should call checkAndTerminate after queue drains even when terminationTimer is already set", async () => {
+      mockClient.checkpointDurableExecution.mockResolvedValue({
+        checkpointToken: "new-token",
+      });
+
+      const checkAndTerminateSpy = jest.spyOn(
+        checkpointManager as any,
+        "checkAndTerminate",
+      );
+
+      // 1. Enqueue a checkpoint so the queue is non-empty
+      const cp = checkpointManager.checkpoint("branch-succeed", {
+        Action: "SUCCEED" as any,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+      });
+      cp.catch(() => {});
+
+      // 2. Register a callback branch as IDLE_NOT_AWAITED (no checkAndTerminate)
+      checkpointManager.markOperationState(
+        "pending-cb",
+        OperationLifecycleState.IDLE_NOT_AWAITED,
+        {
+          metadata: {
+            stepId: "pending-cb",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT_FOR_CALLBACK,
+          },
+        },
+      );
+
+      // 3. Transition to IDLE_AWAITED — calls checkAndTerminate, but queue
+      //    is non-empty → shouldTerminate returns undefined → abortTermination
+      checkpointManager.markOperationAwaited("pending-cb");
+
+      const callsBeforeDrain = checkAndTerminateSpy.mock.calls.length;
+
+      // 4. Manually set terminationTimer to simulate the scenario where
+      //    a timer was set during batch processing (e.g., by a checkpoint
+      //    response triggering resolveWaitingOperation → state changes →
+      //    checkAndTerminate → scheduleTermination)
+      (checkpointManager as any).terminationTimer = setTimeout(() => {
+        // Stale timer — would fire but may have wrong reason or stale state
+      }, 999999);
+      (checkpointManager as any).terminationReason =
+        TerminationReason.CALLBACK_PENDING;
+
+      // 5. Let the queue drain
+      await jest.advanceTimersByTimeAsync(0);
+
+      const callsAfterDrain = checkAndTerminateSpy.mock.calls.length;
+
+      // KEY ASSERTION: processQueue MUST call checkAndTerminate after drain,
+      // even though terminationTimer is non-null.
+      //
+      // With the bug: `if (!this.terminationTimer)` skips the call → 0 new calls
+      // With the fix: always calls checkAndTerminate → at least 1 new call
+      expect(callsAfterDrain).toBeGreaterThan(callsBeforeDrain);
+    });
+
+    it("should terminate with CALLBACK_PENDING after queue drains when callback branches are pending", async () => {
+      mockClient.checkpointDurableExecution.mockResolvedValue({
+        checkpointToken: "new-token",
+      });
+
+      // 1. Enqueue a checkpoint FIRST so queue is non-empty
+      const cp = checkpointManager.checkpoint("completed-branch", {
+        Action: "SUCCEED" as any,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Type: OperationType.CONTEXT,
+      });
+      cp.catch(() => {});
+
+      // 2. Register pending callback branch (Phase 1: IDLE_NOT_AWAITED)
+      checkpointManager.markOperationState(
+        "pending-cb",
+        OperationLifecycleState.IDLE_NOT_AWAITED,
+        {
+          metadata: {
+            stepId: "pending-cb",
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT_FOR_CALLBACK,
+          },
+        },
+      );
+
+      // 3. Phase 2: IDLE_AWAITED — checkAndTerminate called but queue non-empty
+      checkpointManager.markOperationAwaited("pending-cb");
+
+      // No termination yet — queue is non-empty
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+
+      // 4. Queue drains → processQueue should call checkAndTerminate
+      await jest.advanceTimersByTimeAsync(0);
+
+      // 5. Advance past cooldown
+      jest.advanceTimersByTime(CHECKPOINT_TERMINATION_COOLDOWN_MS + 1);
+
+      // Must terminate — pending-cb is still IDLE_AWAITED
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.CALLBACK_PENDING,
+      });
     });
   });
 

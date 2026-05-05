@@ -1,0 +1,503 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "30665a9c-8a86-4fa4-9eb9-80752683ed73",
+    "EventTimestamp": "2026-05-01T19:30:08.030Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "approval-pipeline",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "prepare-order-alpha",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "prepare-order-beta",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "prepare-order-gamma",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "2f221a18eb863803",
+    "Name": "prepare-order-alpha",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":1,\"itemName\":\"order-alpha\",\"preparedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "6151f5ab282d90e4",
+    "Name": "prepare-order-beta",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":2,\"itemName\":\"order-beta\",\"preparedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "b425e0c75591aa8f",
+    "Name": "prepare-order-gamma",
+    "EventTimestamp": "2026-05-01T19:30:08.036Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":3,\"itemName\":\"order-gamma\",\"preparedAt\":\"2025-01-01T00:00:00Z\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 12,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "approval-order-alpha",
+    "EventTimestamp": "2026-05-01T19:30:08.038Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 13,
+    "Id": "b697d277a571d176",
+    "EventTimestamp": "2026-05-01T19:30:08.038Z",
+    "ParentId": "4f57d0ecf9622a0b",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImUwY2NmOGQ2LTA3M2UtNDk3YS1iYjgxLTg5NjIzMmZjMDQwMSIsIm9wZXJhdGlvbklkIjoiYjY5N2QyNzdhNTcxZDE3NiIsInRva2VuIjoiOGUxMTdhMjctYWMzMC00NjJmLTk5NDktMjA3ODZlYTk1NmYyIn0=",
+      "Timeout": 10,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 14,
+    "Id": "e61730e6717b1787",
+    "Name": "approval-order-beta",
+    "EventTimestamp": "2026-05-01T19:30:08.038Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 15,
+    "Id": "ef2b084287e9b4f3",
+    "EventTimestamp": "2026-05-01T19:30:08.038Z",
+    "ParentId": "e61730e6717b1787",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImUwY2NmOGQ2LTA3M2UtNDk3YS1iYjgxLTg5NjIzMmZjMDQwMSIsIm9wZXJhdGlvbklkIjoiZWYyYjA4NDI4N2U5YjRmMyIsInRva2VuIjoiN2JhOWFhMDAtMjRlYS00NzczLWI4NzYtYmExNTNlNTg5MmVlIn0=",
+      "Timeout": 10,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 16,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "approval-order-gamma",
+    "EventTimestamp": "2026-05-01T19:30:08.038Z",
+    "ParentId": "13cee27a2bd93915",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 17,
+    "Id": "01969074dcd609ca",
+    "EventTimestamp": "2026-05-01T19:30:08.038Z",
+    "ParentId": "bc5861c5c13a0b06",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6ImUwY2NmOGQ2LTA3M2UtNDk3YS1iYjgxLTg5NjIzMmZjMDQwMSIsIm9wZXJhdGlvbklkIjoiMDE5NjkwNzRkY2Q2MDljYSIsInRva2VuIjoiNzNjZTZlYTMtZTQ0Ny00MDMzLThmYmYtOGZiY2Q1YzNkMGE5In0=",
+      "Timeout": 10,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 18,
+    "Id": "80baea63d9af7475",
+    "EventTimestamp": "2026-05-01T19:30:08.040Z",
+    "ParentId": "4f57d0ecf9622a0b",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 19,
+    "Id": "797da8d133f38126",
+    "EventTimestamp": "2026-05-01T19:30:08.040Z",
+    "ParentId": "e61730e6717b1787",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 20,
+    "Id": "df5c34dd8665ff93",
+    "EventTimestamp": "2026-05-01T19:30:08.040Z",
+    "ParentId": "bc5861c5c13a0b06",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 21,
+    "Id": "80baea63d9af7475",
+    "EventTimestamp": "2026-05-01T19:30:08.040Z",
+    "ParentId": "4f57d0ecf9622a0b",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 22,
+    "Id": "797da8d133f38126",
+    "EventTimestamp": "2026-05-01T19:30:08.040Z",
+    "ParentId": "e61730e6717b1787",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 23,
+    "Id": "df5c34dd8665ff93",
+    "EventTimestamp": "2026-05-01T19:30:08.040Z",
+    "ParentId": "bc5861c5c13a0b06",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 24,
+    "Id": "b697d277a571d176",
+    "EventTimestamp": "2026-05-01T19:30:08.041Z",
+    "ParentId": "4f57d0ecf9622a0b",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "\"approved\""
+      }
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 25,
+    "Id": "ef2b084287e9b4f3",
+    "EventTimestamp": "2026-05-01T19:30:08.041Z",
+    "ParentId": "e61730e6717b1787",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "\"approved\""
+      }
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 26,
+    "Id": "01969074dcd609ca",
+    "EventTimestamp": "2026-05-01T19:30:08.042Z",
+    "ParentId": "bc5861c5c13a0b06",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "\"approved\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 27,
+    "EventTimestamp": "2026-05-01T19:30:08.062Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:30:08.030Z",
+      "EndTimestamp": "2026-05-01T19:30:08.062Z",
+      "Error": {},
+      "RequestId": "f776da84-8dac-46d2-8692-fb24cd7c38fa"
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 28,
+    "Id": "4f57d0ecf9622a0b",
+    "Name": "approval-order-alpha",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"\\\"approved\\\"\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 29,
+    "Id": "e61730e6717b1787",
+    "Name": "approval-order-beta",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"\\\"approved\\\"\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 30,
+    "Id": "bc5861c5c13a0b06",
+    "Name": "approval-order-gamma",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "13cee27a2bd93915",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"\\\"approved\\\"\""
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 31,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "process-order-alpha",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 32,
+    "Id": "453e406dcee4d181",
+    "Name": "process-order-beta",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 33,
+    "Id": "e0260672e1e9df5a",
+    "Name": "process-order-gamma",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 34,
+    "Id": "98c1d2a9d58ce748",
+    "Name": "process-order-alpha",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":1,\"itemName\":\"order-alpha\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 35,
+    "Id": "453e406dcee4d181",
+    "Name": "process-order-beta",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":2,\"itemName\":\"order-beta\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 36,
+    "Id": "e0260672e1e9df5a",
+    "Name": "process-order-gamma",
+    "EventTimestamp": "2026-05-01T19:30:08.066Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":3,\"itemName\":\"order-gamma\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 37,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-05-01T19:30:08.068Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":1,\"itemName\":\"order-alpha\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 38,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-05-01T19:30:08.068Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":2,\"itemName\":\"order-beta\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 39,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-05-01T19:30:08.068Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"itemId\":3,\"itemName\":\"order-gamma\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 40,
+    "Id": "c4ca4238a0b92382",
+    "Name": "approval-pipeline",
+    "EventTimestamp": "2026-05-01T19:30:08.068Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":{\"itemId\":1,\"itemName\":\"order-alpha\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"},\"index\":0,\"status\":\"SUCCEEDED\"},{\"result\":{\"itemId\":2,\"itemName\":\"order-beta\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"},\"index\":1,\"status\":\"SUCCEEDED\"},{\"result\":{\"itemId\":3,\"itemName\":\"order-gamma\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"},\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 41,
+    "EventTimestamp": "2026-05-01T19:30:08.068Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-01T19:30:08.063Z",
+      "EndTimestamp": "2026-05-01T19:30:08.068Z",
+      "Error": {},
+      "RequestId": "3168b868-3a6a-46e1-9d85-325510babfb7"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 42,
+    "Id": "30665a9c-8a86-4fa4-9eb9-80752683ed73",
+    "EventTimestamp": "2026-05-01T19:30:08.068Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalProcessed\":3,\"totalFailed\":0,\"completionReason\":\"ALL_COMPLETED\",\"items\":[{\"itemId\":1,\"itemName\":\"order-alpha\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"},{\"itemId\":2,\"itemName\":\"order-beta\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"},{\"itemId\":3,\"itemName\":\"order-gamma\",\"preparedAt\":\"2025-01-01T00:00:00Z\",\"approval\":\"\\\"approved\\\"\",\"status\":\"completed\"}]}"
+      }
+    }
+  }
+]
