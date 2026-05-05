@@ -152,17 +152,33 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           createChildContext,
         );
 
-        const opInfo = {
-          Id: entityId,
-          Name: name,
-          Type: OperationType.CONTEXT,
-          SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
-          ParentId: parentId,
-        };
-        const operationInfo = toOperationInfo(currentStepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
-        plugin.onOperationEnd?.(operationInfo);
+        checkAndUpdateReplayMode?.();
+
+        const skipPluginCalls =
+          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
+        if (skipPluginCalls) {
+          log(
+            "⏭️",
+            "Step (complete: Succeeded||Failed) in full replay mode, skipping plugin calls:",
+            {
+              entityId,
+            },
+          );
+        }
+
+        if (!skipPluginCalls) {
+          const opInfo = {
+            Id: entityId,
+            Name: name,
+            Type: OperationType.CONTEXT,
+            SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+            ParentId: parentId,
+          };
+          const operationInfo = toOperationInfo(currentStepData);
+          backfillOperationInfo(operationInfo, opInfo);
+          plugin.onOperationStart?.(operationInfo);
+          plugin.onOperationEnd?.(operationInfo);
+        }
 
         return result;
       }
