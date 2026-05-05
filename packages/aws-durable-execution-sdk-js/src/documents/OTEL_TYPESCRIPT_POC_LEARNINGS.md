@@ -61,3 +61,7 @@ This is solved by https://github.com/aws/aws-durable-execution-sdk-js/commit/d75
 
 This is solved by the customIdGenerator. You have to ensure that the id's generated are deterministic.
 
+### Auto instrumentation API calls are not nested properly
+
+This is due to the location of the hooks for onOperationStart, onOperationEnd, onOperationAttemptStart and onOperationAttemptEnd. In order to ensure they are called at-most-once, I've had to bunch the "start" and "end" together and backfill the timestamps. This doesn't work well wit hthe auto instrumentation layer since when the API calls are actually performed, the parent span is often wrong.
+
