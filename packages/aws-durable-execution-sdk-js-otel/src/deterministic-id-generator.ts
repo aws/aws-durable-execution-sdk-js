@@ -29,7 +29,17 @@ function parseXRayRootTraceId(
 }
 
 /**
- * Build an X-Ray-compatible trace ID.
+ * Convert an X-Ray trace ID to the W3C/OpenTelemetry 32-char hex format.
+ *
+ * X-Ray format: "1-<8hex>-<24hex>" (36 chars with prefix and dashes)
+ * OTel format:  "<8hex><24hex>" (32 lowercase hex chars)
+ */
+function xRayTraceIdToOtel(xrayTraceId: string): string {
+  return xrayTraceId.replace(/^1-/, "").replace(/-/g, "").toLowerCase();
+}
+
+/**
+ * Build an OTel-compatible trace ID (32 lowercase hex chars).
  *
  * First attempts to read the trace ID from the `_X_AMZN_TRACE_ID` environment
  * variable that Lambda populates on each invocation. This ties the durable
@@ -38,10 +48,13 @@ function parseXRayRootTraceId(
  * Falls back to generating a deterministic trace ID from the execution ARN
  * and timestamp when the environment variable is not set (e.g. in tests or
  * non-Lambda environments).
+ *
+ * In both cases the returned value is a 32-char hex string conforming to the
+ * W3C Trace Context / OpenTelemetry spec (not the X-Ray `1-...-...` format).
  */
-function toXRayTraceId(executionArn: string, timestamp: Date): string {
+function toOtelTraceId(executionArn: string, timestamp: Date): string {
   const envTraceId = parseXRayRootTraceId(process.env["_X_AMZN_TRACE_ID"]);
-  if (envTraceId) return envTraceId;
+  if (envTraceId) return xRayTraceIdToOtel(envTraceId);
 
   // Fallback: deterministic ID from execution ARN + timestamp
   const epochSeconds = Math.floor(timestamp.getTime() / 1000);
@@ -50,7 +63,7 @@ function toXRayTraceId(executionArn: string, timestamp: Date): string {
     .update(executionArn)
     .digest("hex")
     .substring(0, 24);
-  return `1-${timePart}-${hashPart}`;
+  return `${timePart}${hashPart}`;
 }
 
 /**
@@ -79,7 +92,7 @@ export class DeterministicIdGenerator implements IdGenerator {
    * @param timestamp    - A timestamp to embed in the X-Ray trace ID prefix.
    */
   setExecutionTraceId(executionArn: string, timestamp: Date): void {
-    this.executionTraceId = toXRayTraceId(executionArn, timestamp);
+    this.executionTraceId = toOtelTraceId(executionArn, timestamp);
   }
 
   generateTraceId(): string {

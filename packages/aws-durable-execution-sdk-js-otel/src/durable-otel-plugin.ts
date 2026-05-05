@@ -6,6 +6,7 @@ import {
   Context,
   TracerProvider,
   Tracer,
+  TraceFlags,
 } from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type {
@@ -113,37 +114,66 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   /**
    * Resolves the parent operation ID for a given operation.
+   * Used by onOperationEnd/onOperationAttemptEnd to restore the active span.
    * First tries to infer from the ID structure (e.g., "1-3" → "1").
-   * Falls back to explicit parentId, then undefined.
+   * Falls back to explicit parentId, then to the invocation span ID.
    */
   private resolveParentId(id: string, parentId?: string): string {
+    if (parentId) {
+      return ensureHashedId(parentId);
+    }
     const lastDash = id.lastIndexOf("-");
     if (lastDash > 0) {
       const inferredParentId = id.substring(0, lastDash);
-      if (
-        inferredParentId !== id &&
-        this.operationContexts.has(inferredParentId)
-      ) {
-        return inferredParentId;
-      }
+      return ensureHashedId(inferredParentId);
     }
-    if (parentId && this.operationContexts.has(parentId)) {
-      return parentId;
-    }
-    return this.INVOCATION_SPAN_ID;
+    return this.invocationSpan?.spanContext().spanId ?? this.INVOCATION_SPAN_ID;
   }
 
   /**
-   * Resolves the parent context for a given operation.
-   * First tries to infer the parent from the operation ID structure (e.g., "1-3" → parent "1").
-   * Falls back to explicit ParentId lookup, then to invocation context.
+   * Resolves the parent context for a given operation, returning an existing
+   * span's context or creating a placeholder context if it's missing.
+   *
+   * Uses resolveParentId to determine the logical parent, then looks up the
+   * corresponding Context. If the parent ID points to a known operation that
+   * has a stored context, that context is returned directly. Otherwise, a
+   * placeholder non-recording span is created with the correct span ID and
+   * registered so that child spans are properly nested in the trace.
    */
-  private getParentContext(id: string, parentId?: string): Context {
-    const resolved = this.resolveParentId(id, parentId);
-    if (resolved) {
-      return this.operationContexts.get(resolved) ?? this.invocationContext;
+  private resolveParentContext(info: OperationInfo): Context {
+    const parentId = this.resolveParentId(info.Id, info.ParentId);
+
+    // Check if we already have a context for this parent
+    const existingCtx = this.operationContexts.get(parentId);
+    if (existingCtx) {
+      return existingCtx;
     }
-    return this.invocationContext;
+
+    // Fall back to the invocation context if the parent is the invocation span
+    if (
+      parentId === this.INVOCATION_SPAN_ID ||
+      parentId === this.invocationSpan?.spanContext().spanId
+    ) {
+      return this.invocationContext;
+    }
+
+    // Parent span is missing — create a placeholder non-recording span so the
+    // hierarchy is preserved without going through the tracer's startSpan.
+    const traceId =
+      this.invocationSpan?.spanContext().traceId ??
+      this.idGenerator.generateTraceId();
+    const placeholderSpan = trace.wrapSpanContext({
+      traceId,
+      spanId: ensureHashedId(parentId),
+      traceFlags: TraceFlags.SAMPLED,
+    });
+    const placeholderCtx = trace.setSpan(
+      this.invocationContext,
+      placeholderSpan,
+    );
+    this.setSpan(parentId, placeholderSpan);
+    this.setContext(parentId, placeholderCtx);
+    return placeholderCtx;
   }
 
   onExecutionStart(info: InvocationInfo): void {
@@ -200,7 +230,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   onOperationStart(info: OperationInfo): void {
     if (!this.sampled) return;
     const operationType = this.mapOperationType(info);
-    const parentCtx = this.getParentContext(info.Id, info.ParentId);
+    const parentCtx = this.resolveParentContext(info);
     this.idGenerator.setNextSpanOperationId(info.Id);
     const span = this.tracer.startSpan(
       info.Name ?? operationType,
@@ -233,6 +263,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     }
     span.end(info.EndTimestamp);
     this.deleteSpan(info.Id);
+    this.deleteContext(info.Id);
     const parentId = this.resolveParentId(info.Id, info.ParentId);
     this.activeSpan = this.operationSpans.get(parentId) ?? this.invocationSpan;
     if (this.activeSpan) {
@@ -250,7 +281,8 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     // Attempt spans nest under their operation span
     const parentCtx =
       this.operationContexts.get(info.Id) ??
-      this.getParentContext(info.Id, info.ParentId);
+      this.operationContexts.get(ensureHashedId(info.Id)) ??
+      this.invocationContext;
     this.idGenerator.setNextSpanOperationId(key);
     const attemptSpan = this.tracer.startSpan(
       info.Name ?? operationType,
@@ -300,6 +332,9 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     this.invocationSpan?.end();
     this.invocationSpan = undefined;
     this.activeSpan = undefined;
+    // Clear per-invocation state to prevent leaks across warm Lambda reuses
+    this.operationSpans.clear();
+    this.operationContexts.clear();
     // Flush before Lambda freeze
     if (this.provider && "forceFlush" in this.provider) {
       await (this.provider as { forceFlush: () => Promise<void> }).forceFlush();

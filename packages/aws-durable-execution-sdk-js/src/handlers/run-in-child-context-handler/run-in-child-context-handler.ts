@@ -28,10 +28,7 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
-import {
-  DurableInstrumentationPlugin,
-  OperationInfo,
-} from "../../types/plugin";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
   backfillOperationInfo,
   toOperationInfo,
@@ -113,13 +110,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     });
 
     const stepData = context.getStepData(entityId);
-    const opInfo = {
-      Id: entityId,
-      Name: name,
-      Type: OperationType.CONTEXT,
-      SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
-      ParentId: parentId,
-    };
 
     // Validate replay consistency
     validateReplayConsistency(
@@ -162,29 +152,17 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           createChildContext,
         );
 
-        const isVirtual = options?.virtualContext === true;
-        if (!isVirtual) {
-          checkAndUpdateReplayMode?.();
-
-          const skipPluginCalls =
-            getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-          if (skipPluginCalls) {
-            log(
-              "⏭️",
-              "Child context in full replay mode, skipping plugin calls:",
-              {
-                entityId,
-              },
-            );
-          }
-
-          if (!skipPluginCalls) {
-            const operationInfo = toOperationInfo(currentStepData);
-            backfillOperationInfo(operationInfo, opInfo);
-            plugin.onOperationStart?.(operationInfo);
-            plugin.onOperationEnd?.(operationInfo);
-          }
-        }
+        const opInfo = {
+          Id: entityId,
+          Name: name,
+          Type: OperationType.CONTEXT,
+          SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+          ParentId: parentId,
+        };
+        const operationInfo = toOperationInfo(currentStepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        plugin.onOperationStart?.(operationInfo);
+        plugin.onOperationEnd?.(operationInfo);
 
         return result;
       }
@@ -333,7 +311,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     Name: name,
     Type: OperationType.CONTEXT,
     SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
-    ParentId: isVirtual ? parentId : entityId,
+    ParentId: parentId,
   };
 
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
@@ -427,12 +405,6 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         Name: name,
       });
 
-      const currentStepData = context.getStepData(entityId);
-      const onOperationEndInfo = toOperationInfo(currentStepData);
-      backfillOperationInfo(onOperationEndInfo, opInfo);
-      plugin.onOperationStart?.(onOperationEndInfo);
-      plugin.onOperationEnd?.(onOperationEndInfo);
-
       log("✅", "Child context completed successfully:", {
         entityId,
         name,
@@ -443,6 +415,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         name,
       });
     }
+
+    const currentStepData = context.getStepData(entityId);
+    const onOperationEndInfo = toOperationInfo(currentStepData);
+    backfillOperationInfo(onOperationEndInfo, opInfo);
+    plugin.onOperationStart?.(onOperationEndInfo);
+    plugin.onOperationEnd?.(onOperationEndInfo);
 
     return result;
   } catch (error) {
@@ -475,16 +453,15 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         Error: createErrorObjectFromError(error),
         Name: name,
       });
-
-      const currentStepData = context.getStepData(entityId);
-      const onOperationEndInfo = toOperationInfo(currentStepData);
-      backfillOperationInfo(onOperationEndInfo, opInfo);
-      plugin.onOperationStart?.(onOperationEndInfo);
-      plugin.onOperationEnd?.({
-        ...onOperationEndInfo,
-        error: reconstructedError,
-      });
     }
+    const currentStepData = context.getStepData(entityId);
+    const onOperationEndInfo = toOperationInfo(currentStepData);
+    backfillOperationInfo(onOperationEndInfo, opInfo);
+    plugin.onOperationStart?.(onOperationEndInfo);
+    plugin.onOperationEnd?.({
+      ...onOperationEndInfo,
+      error: reconstructedError,
+    });
 
     // Use errorMapper if provided, otherwise wrap in ChildContextError
     if (errorMapper) {
