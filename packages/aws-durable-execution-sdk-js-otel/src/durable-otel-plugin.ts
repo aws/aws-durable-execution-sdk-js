@@ -296,6 +296,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
       parentCtx,
     );
     this.setSpan(key, attemptSpan);
+    this.setContext(key, trace.setSpan(parentCtx, attemptSpan));
     this.activeSpan = attemptSpan;
   }
 

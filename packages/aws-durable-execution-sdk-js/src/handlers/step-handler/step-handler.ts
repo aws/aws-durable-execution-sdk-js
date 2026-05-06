@@ -357,6 +357,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           result = await runWithContext(
             stepId,
@@ -394,15 +395,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationStart?.(attemptEndInfo);
-          attemptEndInfo.StartTimestamp = attemptEndInfo.EndTimestamp;
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
           plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
@@ -464,14 +457,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationStart?.(attemptEndInfo);
-            plugin.onOperationAttemptStart?.({
-              ...attemptEndInfo,
-              StartTimestamp: attemptEndInfo.EndTimestamp,
-            });
-            plugin.onOperationAttemptEnd?.({
-              ...attemptEndInfo,
-              StartTimestamp: attemptEndInfo.EndTimestamp,
-            });
+            plugin.onOperationAttemptEnd?.(attemptEndInfo);
             plugin.onOperationEnd?.({
               ...attemptEndInfo,
               error: error instanceof Error ? error : new Error(String(error)),
@@ -507,14 +493,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.RETRY_WAITING,
