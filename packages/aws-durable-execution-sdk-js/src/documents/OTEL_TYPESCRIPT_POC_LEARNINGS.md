@@ -53,7 +53,7 @@ This is solved by the customIdGenerator. You have to ensure that the id's genera
 
 ### Auto instrumentation API calls are not nested properly
 
-This is due to the location of the hooks for onOperationStart, onOperationEnd, onOperationAttemptStart and onOperationAttemptEnd. In order to ensure they are called at-most-once, I've had to bunch the "start" and "end" together and backfill the timestamps. This doesn't work well wit hthe auto instrumentation layer since when the API calls are actually performed, the parent span is often wrong as it's not updated properly.
+This is due to the usage of `startSpan()` instead of `startActiveSpan` which has forced us to manage the span parent-child relationships manually. In addition, for the opentelemetry-js library, there's no method which allows us to manually update a particular span or context to be "active". See [here](https://github.com/open-telemetry/opentelemetry-js/issues/3558). This doesn't work well with the auto instrumentation layer since when the API calls are actually performed, the parent span is often wrong as it's not updated.
 
 Solution: I'm introducing 3 new hooks which wrap the invocation, the step attempts and the run-in-child-context. The name of these hooks are up for debate but at the moment, I've named them onInvocation, onOperationAttempt, onOperation. This allows our typescript code to utiliza the recommended `context.with(ctx,fn)` pattern which allows us to correctly update the parent context for those autoinstrumented API call spans.
 Commit: https://github.com/aws/aws-durable-execution-sdk-js/commit/8f9fd307874701307c8dae5d6c283335e99cb83e
