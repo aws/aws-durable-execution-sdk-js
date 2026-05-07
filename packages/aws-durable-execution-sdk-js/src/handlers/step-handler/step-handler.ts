@@ -359,10 +359,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
           backfillOperationInfo(attemptInfo, opInfo);
           plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
+          const stepFn = () => fn(stepContext);
           result = await runWithContext(
             stepId,
             parentId,
-            () => fn(stepContext),
+            plugin.onOperationAttempt
+              ? () => plugin.onOperationAttempt!(attemptInfo, stepFn)
+              : stepFn,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
           );

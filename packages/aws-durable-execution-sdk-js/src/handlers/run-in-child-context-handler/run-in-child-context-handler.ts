@@ -278,7 +278,6 @@ export const handleCompletedChildContext = async <
       undefined,
       entityId, // parentId
     );
-
     return await runWithContext(entityId, entityId, () =>
       fn(durableChildContext),
     );
@@ -362,10 +361,13 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
   try {
     // Execute the child context function with context tracking
+    const childContextFn = () => fn(durableChildContext);
     const result = await runWithContext(
       entityId,
       parentId,
-      () => fn(durableChildContext),
+      plugin.onOperation
+        ? () => plugin.onOperation!(opInfo, childContextFn)
+        : childContextFn,
       undefined,
       childReplayMode,
     );

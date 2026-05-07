@@ -1,5 +1,6 @@
 import {
   trace,
+  context as otelContext,
   ROOT_CONTEXT,
   Span,
   SpanStatusCode,
@@ -113,6 +114,48 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   /**
+   * Resolves the OpenTelemetry Context for a given operation ID.
+   * Returns the stored context if the operation is already tracked, the
+   * invocation context if the ID matches the invocation span, or creates
+   * a placeholder non-recording span so that downstream spans are properly
+   * nested in the trace.
+   */
+  resolveContext(operationId: string): Context {
+    const hashedId = ensureHashedId(operationId);
+
+    // Check if we already have a context for this operation
+    const existingCtx = this.operationContexts.get(hashedId);
+    if (existingCtx) {
+      return existingCtx;
+    }
+
+    // Check if the operation ID matches the invocation span
+    if (
+      hashedId === this.INVOCATION_SPAN_ID ||
+      hashedId === this.invocationSpan?.spanContext().spanId
+    ) {
+      return this.invocationContext;
+    }
+
+    // Create a placeholder non-recording span so the hierarchy is preserved
+    const traceId =
+      this.invocationSpan?.spanContext().traceId ??
+      this.idGenerator.generateTraceId();
+    const placeholderSpan = trace.wrapSpanContext({
+      traceId,
+      spanId: hashedId,
+      traceFlags: TraceFlags.SAMPLED,
+    });
+    const placeholderCtx = trace.setSpan(
+      this.invocationContext,
+      placeholderSpan,
+    );
+    this.setSpan(operationId, placeholderSpan);
+    this.setContext(operationId, placeholderCtx);
+    return placeholderCtx;
+  }
+
+  /**
    * Resolves the parent operation ID for a given operation.
    * Used by onOperationEnd/onOperationAttemptEnd to restore the active span.
    * First tries to infer from the ID structure (e.g., "1-3" → "1").
@@ -178,6 +221,11 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   onExecutionStart(info: InvocationInfo): void {
     this.sampled = shouldSampleExecution(info.executionArn, this.samplingRate);
+  }
+
+  onInvocation<T>(info: InvocationInfo, fn: () => T): T {
+    if (!this.sampled) return fn();
+    return otelContext.with(this.invocationContext, fn);
   }
 
   onInvocationStart(info: InvocationInfo): void {
@@ -250,6 +298,12 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     this.activeSpan = span;
   }
 
+  onOperation<T>(info: OperationInfo, fn: () => T): T {
+    if (!this.sampled) return fn();
+    const spanContext = this.resolveContext(info.Id);
+    return otelContext.with(spanContext, fn);
+  }
+
   onOperationEnd(info: OperationInfo & { error?: Error }): void {
     if (!this.sampled) return;
     const span = this.operationSpans.get(ensureHashedId(info.Id));
@@ -300,6 +354,13 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     this.activeSpan = attemptSpan;
   }
 
+  onOperationAttempt<T>(info: AttemptInfo, fn: () => T): T {
+    if (!this.sampled) return fn();
+    const key = `${info.Id}-${info.Attempt}`;
+    const spanContext = this.resolveContext(key);
+    return otelContext.with(spanContext, fn);
+  }
+
   onOperationAttemptEnd(info: AttemptEndInfo): void {
     if (!this.sampled) return;
     const key = `${info.Id}-${info.Attempt}`;
@@ -344,8 +405,8 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
-    const span = this.activeSpan;
-    if (!span?.isRecording()) return undefined;
+    const span = trace.getActiveSpan() ?? this.activeSpan;
+    if (!span) return undefined;
     const ctx = span.spanContext();
     return { traceId: ctx.traceId, spanId: ctx.spanId };
   }

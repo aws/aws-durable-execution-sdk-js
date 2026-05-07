@@ -13,6 +13,29 @@ export function createPluginRunner(
 ): DurableInstrumentationPlugin {
   if (plugins.length === 0) return {};
 
+  const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
+    method: K,
+    info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
+    fn: () => any,
+  ) => {
+    const chain = plugins.reduceRight(
+      (next, plugin) => () => {
+        try {
+          const hookFn = plugin[method] as any;
+          if (hookFn) {
+            return hookFn.call(plugin, info, next);
+          }
+          return next();
+        } catch {
+          return next();
+        }
+      },
+      fn,
+    );
+
+    return chain();
+  };
+
   const run = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
@@ -49,9 +72,15 @@ export function createPluginRunner(
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
     onInvocationEnd: async (info: InvocationInfo) =>
       runAwait("onInvocationEnd", info),
+    onInvocation: <T>(info: InvocationInfo, fn: () => T): T =>
+      runAsCallback("onInvocation", info, fn),
+    onOperation: <T>(info: OperationInfo, fn: () => T): T =>
+      runAsCallback("onOperation", info, fn),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
     onOperationEnd: (info: OperationInfo & { error?: Error }) =>
       run("onOperationEnd", info),
+    onOperationAttempt: <T>(info: AttemptInfo, fn: () => T): T =>
+      runAsCallback("onOperationAttempt", info, fn),
     onOperationAttemptStart: (info: AttemptInfo) =>
       run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info: AttemptEndInfo) =>

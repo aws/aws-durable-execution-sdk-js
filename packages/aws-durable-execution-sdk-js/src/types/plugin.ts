@@ -52,11 +52,14 @@ export interface DurableInstrumentationPlugin {
   onExecutionEnd?(info: ExecutionEndInfo): void;
   onInvocationStart?(info: InvocationInfo): void;
   onInvocationEnd?(info: InvocationInfo): void;
+  onInvocation?<T>(info: InvocationInfo, fn: () => T): T;
   onOperationStart?(info: OperationInfo): void;
   onOperationEnd?(info: OperationInfo & { error?: Error }): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
+  onOperationAttempt?<T>(info: AttemptInfo, fn: () => T): T;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
   onOperationChange?(info: OperationChangeInfo): void;
+  onOperation?<T>(info: OperationInfo, fn: () => T): T;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
 }
 
