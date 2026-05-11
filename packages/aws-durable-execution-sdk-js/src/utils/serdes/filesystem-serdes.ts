@@ -24,7 +24,9 @@ export enum FileSystemSerdesMode {
 }
 
 /** @internal */
-type FileSystemEnvelope = { data: string } | { file: string };
+type FileSystemEnvelope =
+  | { data: string }
+  | { file: string; preview?: Record<string, unknown> };
 
 async function writeToFile(
   basePath: string,
@@ -49,7 +51,24 @@ export interface FileSystemSerdesConfig {
    * Controls when data is written to the filesystem.
    * @defaultValue `FileSystemSerdesMode.ALWAYS`
    */
-  mode?: FileSystemSerdesMode;
+  storageMode?: FileSystemSerdesMode;
+  /**
+   * Optional function that generates a preview object from the value.
+   * When provided, the preview is stored inline in the checkpoint envelope
+   * alongside the file pointer, making data visible in the console and API
+   * without reading the full file.
+   *
+   * @example
+   * ```typescript
+   * createFileSystemSerdes("/mnt/s3", {
+   *   generatePreview: (value) => ({
+   *     id: (value as any).id,
+   *     status: (value as any).status,
+   *   }),
+   * });
+   * ```
+   */
+  generatePreview?: (value: unknown) => Record<string, unknown> | undefined;
 }
 
 /**
@@ -76,7 +95,7 @@ export interface FileSystemSerdesConfig {
  *
  * // Only overflow to filesystem when payload exceeds ~256KB
  * context.configureSerdes({
- *   defaultSerdes: createFileSystemSerdes("/mnt/s3", { mode: FileSystemSerdesMode.OVERFLOW }),
+ *   defaultSerdes: createFileSystemSerdes("/mnt/s3", { storageMode: FileSystemSerdesMode.OVERFLOW }),
  * });
  * ```
  *
@@ -86,7 +105,7 @@ export function createFileSystemSerdes(
   basePath: string,
   config: FileSystemSerdesConfig = {},
 ): AnySerdes {
-  const mode = config.mode ?? FileSystemSerdesMode.ALWAYS;
+  const storageMode = config.storageMode ?? FileSystemSerdesMode.ALWAYS;
   return {
     serialize: async (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,20 +114,26 @@ export function createFileSystemSerdes(
     ): Promise<string | undefined> => {
       if (value === undefined) return undefined;
 
-      if (mode === FileSystemSerdesMode.ALWAYS) {
+      if (storageMode === FileSystemSerdesMode.ALWAYS) {
         const filePath = await writeToFile(basePath, value, context);
-        const envelope: FileSystemEnvelope = { file: filePath };
+        const preview = config.generatePreview?.(value);
+        const envelope: FileSystemEnvelope = preview
+          ? { file: filePath, preview }
+          : { file: filePath };
         return JSON.stringify(envelope);
       }
 
       // OVERFLOW mode: serialize inline first, overflow to file if too large
       const inlineJson = JSON.stringify(value);
-      const envelope: FileSystemEnvelope =
-        Buffer.byteLength(inlineJson, "utf-8") > OVERFLOW_THRESHOLD_BYTES
-          ? { file: await writeToFile(basePath, value, context) }
-          : { data: inlineJson };
-
-      return JSON.stringify(envelope);
+      if (Buffer.byteLength(inlineJson, "utf-8") > OVERFLOW_THRESHOLD_BYTES) {
+        const filePath = await writeToFile(basePath, value, context);
+        const preview = config.generatePreview?.(value);
+        const envelope: FileSystemEnvelope = preview
+          ? { file: filePath, preview }
+          : { file: filePath };
+        return JSON.stringify(envelope);
+      }
+      return JSON.stringify({ data: inlineJson } as FileSystemEnvelope);
     },
 
     deserialize: async (
