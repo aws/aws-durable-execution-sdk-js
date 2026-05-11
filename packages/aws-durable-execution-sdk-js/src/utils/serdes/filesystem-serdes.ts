@@ -322,7 +322,10 @@ export function buildPreview(
  *
  * @public
  */
-export function createFileSystemSerdes(): AnySerdes {
+export function createFileSystemSerdes(
+  basePath: string,
+  config: FileSystemSerdesConfig = {},
+): AnySerdes {
   const storageMode = config.storageMode ?? FileSystemSerdesMode.ALWAYS;
   return {
     serialize: async (
