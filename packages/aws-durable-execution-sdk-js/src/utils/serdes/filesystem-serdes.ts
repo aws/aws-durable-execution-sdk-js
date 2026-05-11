@@ -121,13 +121,6 @@ export interface FileSystemSerdesConfig {
   preview?: PreviewConfig;
 }
 
-/**
- * Creates a Serdes that stores serialized values on the filesystem.
- *
- * Designed for use with Lambda functions that mount an Amazon S3 bucket as a
- * filesystem via S3 Files, enabling durable, shared state across invocations
- * and parallel function instances without checkpoint size constraints.
- *
 /** @internal */
 type FileSystemEnvelope =
   | { data: string }
