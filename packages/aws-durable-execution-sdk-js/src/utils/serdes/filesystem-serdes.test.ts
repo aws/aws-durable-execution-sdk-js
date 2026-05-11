@@ -156,6 +156,19 @@ describe("buildPreview", () => {
     expect(result).toHaveProperty("id", "123");
   });
 
+  it("mask: applies to fields nested inside arrays", () => {
+    const result = buildPreview(
+      { items: [{ secret: "xyz" }, { secret: "abc" }] },
+      {
+        mode: PreviewMode.INCLUDE_ALL,
+        mask: [{ name: "secret" }],
+      },
+    );
+    // Array structure is not preserved in preview — fields from array elements
+    // are merged into a plain object at the array's path
+    expect((result?.["items"] as any)?.secret).toBe("***");
+  });
+
   it("mask: uses custom maskString", () => {
     const result = buildPreview(value, {
       mode: PreviewMode.INCLUDE_ALL,

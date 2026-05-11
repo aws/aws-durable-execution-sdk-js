@@ -183,6 +183,15 @@ export function buildPreview(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function collect(obj: any, pathPrefix: string): void {
     if (obj === null || typeof obj !== "object") return;
+
+    // Recurse into arrays transparently (indices are not part of the path)
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        collect(item, pathPrefix);
+      }
+      return;
+    }
+
     for (const key of Object.keys(obj)) {
       if (DANGEROUS_KEYS.has(key)) continue;
       const path = pathPrefix ? `${pathPrefix}.${key}` : key;
@@ -196,13 +205,7 @@ export function buildPreview(
             : isMatched(path, config.include)));
 
       if (!visible) {
-        if (
-          obj[key] !== null &&
-          typeof obj[key] === "object" &&
-          !Array.isArray(obj[key])
-        ) {
-          collect(obj[key], path);
-        }
+        collect(obj[key], path);
         continue;
       }
 
@@ -211,16 +214,12 @@ export function buildPreview(
         continue;
       }
 
-      if (
-        obj[key] !== null &&
-        typeof obj[key] === "object" &&
-        !Array.isArray(obj[key])
-      ) {
+      // Recurse into objects/arrays; push scalars directly
+      if (obj[key] !== null && typeof obj[key] === "object") {
         collect(obj[key], path);
-        continue;
+      } else {
+        pairs.push([path, obj[key]]);
       }
-
-      pairs.push([path, obj[key]]);
     }
   }
 
