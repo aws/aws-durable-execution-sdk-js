@@ -115,10 +115,35 @@ export interface FileSystemSerdesConfig {
    */
   storageMode?: FileSystemSerdesMode;
   /**
-   * When set, a preview of the value is stored inline in the checkpoint
-   * envelope alongside the file pointer.
+   * Optional function that generates a preview object from the value.
+   * When provided, the preview is stored inline in the checkpoint envelope
+   * alongside the file pointer, making data visible in the console and API
+   * without reading the full file.
+   *
+   * Use {@link buildPreview} with a {@link PreviewConfig} for the built-in
+   * field selection logic, or provide your own implementation.
+   *
+   * @example
+   * ```typescript
+   * // Using the built-in buildPreview helper
+   * createFileSystemSerdes("/mnt/s3", {
+   *   generatePreview: (value) => buildPreview(value, {
+   *     mode: PreviewMode.EXCLUDE_ALL,
+   *     include: [{ name: "id" }, { name: "status" }],
+   *     mask: [{ name: "email" }],
+   *   }),
+   * });
+   *
+   * // Custom implementation
+   * createFileSystemSerdes("/mnt/s3", {
+   *   generatePreview: (value) => ({
+   *     id: (value as any).id,
+   *     summary: `Order ${(value as any).id}`,
+   *   }),
+   * });
+   * ```
    */
-  preview?: PreviewConfig;
+  generatePreview?: (value: unknown) => Record<string, unknown> | undefined;
 }
 
 /** @internal */
@@ -330,9 +355,7 @@ export function createFileSystemSerdes(
 
       if (storageMode === FileSystemSerdesMode.ALWAYS) {
         const filePath = await writeToFile(basePath, value, context);
-        const preview = config.preview
-          ? buildPreview(value, config.preview)
-          : undefined;
+        const preview = config.generatePreview?.(value);
         const envelope: FileSystemEnvelope = preview
           ? { file: filePath, preview }
           : { file: filePath };
@@ -343,9 +366,7 @@ export function createFileSystemSerdes(
       const inlineJson = JSON.stringify(value);
       if (Buffer.byteLength(inlineJson, "utf-8") > OVERFLOW_THRESHOLD_BYTES) {
         const filePath = await writeToFile(basePath, value, context);
-        const preview = config.preview
-          ? buildPreview(value, config.preview)
-          : undefined;
+        const preview = config.generatePreview?.(value);
         const envelope: FileSystemEnvelope = preview
           ? { file: filePath, preview }
           : { file: filePath };

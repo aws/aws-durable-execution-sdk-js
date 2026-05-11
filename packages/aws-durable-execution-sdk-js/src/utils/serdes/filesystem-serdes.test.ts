@@ -249,11 +249,12 @@ describe("buildPreview", () => {
 describe("createFileSystemSerdes with preview", () => {
   it("stores preview in envelope alongside file pointer", async () => {
     const serdes = createFileSystemSerdes(BASE_PATH, {
-      preview: {
-        mode: PreviewMode.EXCLUDE_ALL,
-        include: [{ name: "id" }],
-        mask: [{ name: "secret" }],
-      },
+      generatePreview: (value) =>
+        buildPreview(value, {
+          mode: PreviewMode.EXCLUDE_ALL,
+          include: [{ name: "id" }],
+          mask: [{ name: "secret" }],
+        }),
     });
 
     const value = { id: "abc", secret: "s3cr3t", other: "ignored" };
@@ -284,10 +285,11 @@ describe("createFileSystemSerdes with preview", () => {
   it("OVERFLOW mode: includes preview when payload overflows to file", async () => {
     const serdes = createFileSystemSerdes(BASE_PATH, {
       storageMode: FileSystemSerdesMode.OVERFLOW,
-      preview: {
-        mode: PreviewMode.EXCLUDE_ALL,
-        include: [{ name: "id" }],
-      },
+      generatePreview: (value) =>
+        buildPreview(value, {
+          mode: PreviewMode.EXCLUDE_ALL,
+          include: [{ name: "id" }],
+        }),
     });
 
     const value = { id: "abc", data: "x".repeat(256 * 1024) };
@@ -301,7 +303,8 @@ describe("createFileSystemSerdes with preview", () => {
   it("OVERFLOW mode: no preview for inline payloads", async () => {
     const serdes = createFileSystemSerdes(BASE_PATH, {
       storageMode: FileSystemSerdesMode.OVERFLOW,
-      preview: { mode: PreviewMode.INCLUDE_ALL },
+      generatePreview: (value) =>
+        buildPreview(value, { mode: PreviewMode.INCLUDE_ALL }),
     });
 
     const value = { id: "abc" }; // small — stays inline
