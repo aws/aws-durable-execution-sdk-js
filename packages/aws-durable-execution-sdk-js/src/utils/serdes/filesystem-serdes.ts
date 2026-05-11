@@ -194,6 +194,9 @@ export function buildPreview(
 
     for (const key of Object.keys(obj)) {
       if (DANGEROUS_KEYS.has(key)) continue;
+      // Skip keys containing dots — they're indistinguishable from nested paths
+      // in the dot-notation path system used by preview field matching and rebuild.
+      if (key.includes(".")) continue;
       const path = pathPrefix ? `${pathPrefix}.${key}` : key;
       const masked = isMatched(path, config.mask);
       const excluded = isMatched(path, config.exclude);
@@ -311,12 +314,15 @@ export function buildPreview(
  * });
  * ```
  *
+ * Limitations:
+ * - Field names containing dots are not supported in preview field selectors.
+ *   A dot in a field name is indistinguishable from a path separator.
+ * - Array structure is not preserved in preview output — fields from array
+ *   elements are merged into a plain object at the array's path.
+ *
  * @public
  */
-export function createFileSystemSerdes(
-  basePath: string,
-  config: FileSystemSerdesConfig = {},
-): AnySerdes {
+export function createFileSystemSerdes(): AnySerdes {
   const storageMode = config.storageMode ?? FileSystemSerdesMode.ALWAYS;
   return {
     serialize: async (
