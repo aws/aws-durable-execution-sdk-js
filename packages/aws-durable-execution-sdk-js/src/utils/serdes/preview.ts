@@ -93,6 +93,9 @@ function isMatched(path: string, fields: PreviewField[] | undefined): boolean {
  * Limitations:
  * - Field names containing dots are not supported (indistinguishable from path separators)
  * - Array structure is not preserved — fields from array elements are merged into a plain object
+ * - When array elements have heterogeneous shapes at the same field path, later elements
+ *   overwrite earlier primitives in the preview (e.g. `[{ user: "arb" }, { user: { email: "x" } }]`
+ *   produces `{ user: { email: "x" } }` — `"arb"` is lost)
  *
  * @example
  * ```typescript
