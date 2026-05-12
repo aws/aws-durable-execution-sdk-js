@@ -12,6 +12,7 @@ import {
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import {
   AlwaysOnSampler,
+  BatchSpanProcessor,
   ConsoleSpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
@@ -35,10 +36,7 @@ const idGenerator = new DeterministicIdGenerator();
 
 const provider = new NodeTracerProvider({
   idGenerator,
-  spanProcessors: [
-    new SimpleSpanProcessor(exporter),
-    new SimpleSpanProcessor(new ConsoleSpanExporter()),
-  ],
+  spanProcessors: [new BatchSpanProcessor(exporter)],
   sampler: new AlwaysOnSampler(),
 });
 

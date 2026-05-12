@@ -18,12 +18,7 @@ const idGenerator =
   new durable_execution_sdk_js_otel_1.DeterministicIdGenerator();
 const provider = new sdk_trace_node_1.NodeTracerProvider({
   idGenerator,
-  spanProcessors: [
-    new sdk_trace_base_1.SimpleSpanProcessor(exporter),
-    new sdk_trace_base_1.SimpleSpanProcessor(
-      new sdk_trace_base_1.ConsoleSpanExporter(),
-    ),
-  ],
+  spanProcessors: [new sdk_trace_base_1.BatchSpanProcessor(exporter)],
   sampler: new sdk_trace_base_1.AlwaysOnSampler(),
 });
 provider.register({
