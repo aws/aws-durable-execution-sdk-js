@@ -28,12 +28,18 @@ withDurableExecution(handler)
 └── Lambda invocation 1  (first invocation)
 │   ├── onExecutionStart(...)        ← once, only on first invocation
 │   ├── onInvocationStart(...)
-│   ├── onOperationStart(...)
-│   │   ├── onOperationAttemptStart(...)
-│   │   └── onOperationAttemptEnd(...)   outcome: 'retrying' → retry timer, then next attempt
-│   │   ├── onOperationAttemptStart(...)
-│   │   └── onOperationAttemptEnd(...)   outcome: 'succeeded' | 'failed'
-│   ├── onOperationEnd(...)
+│   │   ├── onInvocation(fn())
+│   │   │   ├── onOperationStart(...)
+│   │   │   │   ├── onOperationAttemptStart(...)
+│   │   │   │   ├── onOperationAttempt(fn())
+│   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'retrying' → retry timer, then next attempt
+│   │   │   │   ├── onOperationAttemptStart(...)
+│   │   │   │   ├── onOperationAttempt(fn())
+│   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'succeeded' | 'failed'
+│   │   │   ├── onOperationEnd(...)
+│   │   │   ├── onOperationStart(...)
+│   │   │   │   ├── onOperation(fn())
+│   │   │   ├── onOperationEnd(...)
 │   └── onInvocationEnd(...)         ← Lambda is about to freeze or return
 │
 └── Lambda invocation N  (execution completes)
@@ -115,10 +121,13 @@ export interface OperationChangeInfo extends InvocationInfo {
 export interface DurableInstrumentationPlugin {
   onExecutionStart?(info: InvocationInfo): void;
   onExecutionEnd?(info: ExecutionEndInfo): void;
+  onInvocation?(info: InvocationInfo): void;
   onInvocationStart?(info: InvocationInfo): void;
   onInvocationEnd?(info: InvocationInfo): void;
+  onOperation?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
   onOperationEnd?(info: OperationInfo & { error?: Error }): void;
+  onOperationAttempt?(info: AttemptInfo): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
   /**
@@ -153,13 +162,36 @@ export function createPluginRunner(
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
   ) => plugins.forEach((p) => (p[method] as any)?.(info));
 
+    const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
+        method: K,
+        info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
+        fn: () => any,
+      ) => {
+        const chain = plugins.reduceRight(
+          (next, plugin) => () => {
+            try {
+              const hookFn = plugin[method] as any;
+              if (hookFn) {
+                return hookFn.call(plugin, info, next);
+              }
+              return next();
+            } catch {
+              return next();
+            }
+          },
+          fn,
+        );
+
   return {
     onExecutionStart: (info) => run("onExecutionStart", info),
     onExecutionEnd: (info) => run("onExecutionEnd", info),
+    onInvocation: (info) => runAsCallback("onInvocation", info),
     onInvocationStart: (info) => run("onInvocationStart", info),
     onInvocationEnd: (info) => run("onInvocationEnd", info),
+    onOperation: (info) => runAsCallback("onOperation", info),
     onOperationStart: (info) => run("onOperationStart", info),
     onOperationEnd: (info) => run("onOperationEnd", info),
+    onOperationAttempt: (info) => runAsCallback("onOperationAttempt", info),
     onOperationAttemptStart: (info) => run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info) => run("onOperationAttemptEnd", info),
     onOperationChange: (info) => run("onOperationChange", info),
@@ -220,7 +252,7 @@ Lambda invocation entry
 ├── plugins.onExecutionStart(...)     ← only on first invocation
 ├── plugins.onInvocationStart(...)
 ├── try {
-│     runHandler(...)
+│     plugins.onInvocation(runHandler(...))
 │     on terminal result → plugins.onExecutionEnd(...)
 │   } finally {
 └──   plugins.onInvocationEnd(...)    ← always, even on freeze
@@ -230,10 +262,17 @@ Lambda invocation entry
 ### Inside each handler
 
 ```
-step-handler / wait-handler / etc.
+step-handler / wait-for-condition-handler
 ├── plugins.onOperationStart(...)
 │   ├── plugins.onOperationAttemptStart(...)
-│   ├── [execute fn()]
+│   ├── plugins.onOperationAttempt(fn())
 │   └── plugins.onOperationAttemptEnd(...)  outcome: 'succeeded' | 'failed' | 'retrying'
+└── plugins.onOperationEnd(...)
+```
+
+```
+wait-handler / invoke-handler / run-in-child-context-handler
+├── plugins.onOperationStart(...)
+│   ├── plugins.onOperation(fn())
 └── plugins.onOperationEnd(...)
 ```
