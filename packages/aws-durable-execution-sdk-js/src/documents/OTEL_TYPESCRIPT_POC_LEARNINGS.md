@@ -10,22 +10,6 @@ Feature request on otel side: https://github.com/open-telemetry/opentelemetry-sp
 
 Solution: we create the span in onOperationEnd and backfill both the startTime and endTime for the operation within the span attributes.
 
-#### must use AlwaysOnSampler() to export spans across invocations which might not have parents.
-
-```
-const exporter = new OTLPTraceExporter({
-  url: "http://localhost:4318/v1/traces",
-});
-
-const provider = new NodeTracerProvider({
-  idGenerator: new AWSXRayIdGenerator(),
-  spanProcessors: [new SimpleSpanProcessor(exporter)],
-  sampler: new AlwaysOnSampler(),
-});
-
-provider.register({ propagator: new AWSXRayPropagator() });
-```
-
 ### Operations with nested attempts across invocations can be imported as a single span but there is an issue with "Operation" span duplication
 
 For each "Attempt" span, we wish to nest under the parent "Operation" span. However, if there are multiple attempts, the onOperationStart and onOperationEnd hook may be triggered multiple times until the "Attempt" succeeds or the step fails due to running out of attempts.
