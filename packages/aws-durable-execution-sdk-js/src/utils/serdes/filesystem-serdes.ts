@@ -132,11 +132,11 @@ async function writeToFile(
  * // With preview: show id and masked email in checkpoint
  * context.configureSerdes({
  *   defaultSerdes: createFileSystemSerdes("/mnt/s3", {
- *     preview: {
+ *     generatePreview: (value) => buildPreview(value, {
  *       mode: PreviewMode.EXCLUDE_ALL,
  *       include: [{ name: "id" }, { name: "status" }],
  *       mask: [{ name: "email" }],
- *     },
+ *     }),
  *   }),
  * });
  * ```
