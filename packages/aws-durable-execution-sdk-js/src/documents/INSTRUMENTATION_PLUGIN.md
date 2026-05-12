@@ -31,10 +31,10 @@ withDurableExecution(handler)
 │   │   ├── onInvocation(fn())
 │   │   │   ├── onOperationStart(...)
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   ├── onOperationAttempt(fn())
+│   │   │   │   │   ├── onOperationAttempt(fn())
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'retrying' → retry timer, then next attempt
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   ├── onOperationAttempt(fn())
+│   │   │   │   │   ├── onOperationAttempt(fn())
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'succeeded' | 'failed'
 │   │   │   ├── onOperationEnd(...)
 │   │   │   ├── onOperationStart(...)
