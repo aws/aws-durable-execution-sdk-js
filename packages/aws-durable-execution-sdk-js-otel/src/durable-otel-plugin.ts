@@ -264,7 +264,13 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     );
   }
 
-  onOperationStart(info: OperationInfo): void {
+  onOperation<T>(info: OperationInfo, fn: () => T): T {
+    if (!this.sampled) return fn();
+    const spanContext = this.resolveContext(info.Id);
+    return otelContext.with(spanContext, fn);
+  }
+
+  onOperationEnd(info: OperationInfo & { error?: Error }): void {
     if (!this.sampled) return;
     const operationType = this.mapOperationType(info);
     const parentCtx = this.resolveParentContext(info.Id, info.ParentId);
@@ -289,17 +295,6 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     );
     this.setSpan(info.Id, span);
     this.setContext(info.Id, trace.setSpan(parentCtx, span));
-  }
-
-  onOperation<T>(info: OperationInfo, fn: () => T): T {
-    if (!this.sampled) return fn();
-    const spanContext = this.resolveContext(info.Id);
-    return otelContext.with(spanContext, fn);
-  }
-
-  onOperationEnd(info: OperationInfo & { error?: Error }): void {
-    if (!this.sampled) return;
-    const span = this.operationSpans.get(ensureHashedId(info.Id));
     if (!span) return;
     if (info.error) {
       span.setStatus({

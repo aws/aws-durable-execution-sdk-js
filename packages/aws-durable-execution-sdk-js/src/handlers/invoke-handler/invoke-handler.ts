@@ -142,7 +142,6 @@ export const createInvokeHandler = (
             stepData.StepDetails?.Attempt,
           );
           backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
           plugin.onOperationEnd?.(attemptInfo);
         }
 
@@ -189,7 +188,6 @@ export const createInvokeHandler = (
             stepData.StepDetails?.Attempt,
           );
           backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
           plugin.onOperationEnd?.(attemptInfo);
         }
 
@@ -221,6 +219,10 @@ export const createInvokeHandler = (
             ...(config?.tenantId && { TenantId: config.tenantId }),
           },
         });
+        const stepData = context.getStepData(stepId);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        plugin.onOperationStart?.(operationInfo);
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -295,7 +297,6 @@ export const createInvokeHandler = (
         );
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
         plugin.onOperationEnd?.(operationInfo);
 
         const invokeDetails = stepData.ChainedInvokeDetails;
@@ -316,7 +317,6 @@ export const createInvokeHandler = (
       const invokeError = stepData?.ChainedInvokeDetails?.Error;
       const operationInfo = toOperationInfo(stepData);
       backfillOperationInfo(operationInfo, opInfo);
-      plugin.onOperationStart?.(operationInfo);
       plugin.onOperationEnd?.({
         ...operationInfo,
         error: invokeError?.ErrorMessage

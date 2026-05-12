@@ -33,7 +33,6 @@ describe("DurableOtelPlugin", () => {
     expect(typeof plugin.onExecutionEnd).toBe("function");
     expect(typeof plugin.onInvocationStart).toBe("function");
     expect(typeof plugin.onInvocationEnd).toBe("function");
-    expect(typeof plugin.onOperationStart).toBe("function");
     expect(typeof plugin.onOperationEnd).toBe("function");
     expect(typeof plugin.onOperationAttemptStart).toBe("function");
     expect(typeof plugin.onOperationAttemptEnd).toBe("function");
@@ -44,7 +43,6 @@ describe("DurableOtelPlugin", () => {
     const plugin = new DurableOtelPlugin({ samplingRate: 0.0 });
     plugin.onExecutionStart(invocationInfo);
     plugin.onInvocationStart(invocationInfo);
-    plugin.onOperationStart(operationInfo);
     plugin.onOperationEnd(operationInfo);
   });
 
@@ -52,7 +50,6 @@ describe("DurableOtelPlugin", () => {
     const plugin = new DurableOtelPlugin({ samplingRate: 1.0 });
     plugin.onExecutionStart(invocationInfo);
     plugin.onInvocationStart(invocationInfo);
-    plugin.onOperationStart(operationInfo);
 
     const attemptInfo: AttemptInfo = { ...operationInfo, Attempt: 1 };
     plugin.onOperationAttemptStart(attemptInfo);

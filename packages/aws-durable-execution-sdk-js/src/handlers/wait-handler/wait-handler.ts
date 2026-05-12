@@ -17,6 +17,7 @@ import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 import { toOperationInfo } from "../../utils/operation/operation";
+import { start } from "node:repl";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -107,7 +108,6 @@ export const createWaitHandler = (
         isCompleted = true;
         if (!skipPluginCalls) {
           const checkPointedOpInfo = toOperationInfo(stepData);
-          plugin.onOperationStart?.(checkPointedOpInfo);
           plugin.onOperationEnd?.(checkPointedOpInfo);
         }
         return;
@@ -126,6 +126,9 @@ export const createWaitHandler = (
             WaitSeconds: actualSeconds,
           },
         });
+        stepData = context.getStepData(stepId);
+        const startWaitOperationInfo = toOperationInfo(stepData);
+        plugin.onOperationStart?.(startWaitOperationInfo);
       }
 
       // Refresh stepData after checkpoint
@@ -185,6 +188,10 @@ export const createWaitHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
+
+        const waitEndOpInfo = toOperationInfo(stepData);
+        plugin.onOperationEnd?.(waitEndOpInfo);
+
         return;
       }
 

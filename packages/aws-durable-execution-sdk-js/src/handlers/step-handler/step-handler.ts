@@ -324,15 +324,26 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Type: OperationType.STEP,
               Name: name,
             });
+            stepData = context.getStepData(stepId);
+            const operationInfo = toOperationInfo(stepData);
+            backfillOperationInfo(operationInfo, opInfo);
+            plugin.onOperationStart?.(operationInfo);
           } else {
-            checkpoint.checkpoint(stepId, {
-              Id: stepId,
-              ParentId: parentId,
-              Action: OperationAction.START,
-              SubType: OperationSubType.STEP,
-              Type: OperationType.STEP,
-              Name: name,
-            });
+            checkpoint
+              .checkpoint(stepId, {
+                Id: stepId,
+                ParentId: parentId,
+                Action: OperationAction.START,
+                SubType: OperationSubType.STEP,
+                Type: OperationType.STEP,
+                Name: name,
+              })
+              .then(() => {
+                stepData = context.getStepData(stepId);
+                const operationInfo = toOperationInfo(stepData);
+                backfillOperationInfo(operationInfo, opInfo);
+                plugin.onOperationStart?.(operationInfo);
+              });
           }
         }
 
@@ -397,7 +408,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationStart?.(attemptEndInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
           plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
@@ -459,7 +469,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
               },
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
-            plugin.onOperationStart?.(attemptEndInfo);
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
             plugin.onOperationEnd?.({
               ...attemptEndInfo,

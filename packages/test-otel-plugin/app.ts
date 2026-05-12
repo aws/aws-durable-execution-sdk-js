@@ -185,31 +185,31 @@ const durableHandler = withDurableExecution(
       return response.MessageId;
     });
 
-    const parallelWaitsResults = await context.parallel([
-      // Branch 1: Returns "basketball"
-      async (ctx: DurableContext) => {
-        await ctx.wait("wait-sport-step-1", { seconds: 5 });
-        const result = await ctx.step("sport-step-1", async () => {
-          return "basketball";
-        });
-        await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
-        return result;
-      },
+    // const parallelWaitsResults = await context.parallel([
+    //   // Branch 1: Returns "basketball"
+    //   async (ctx: DurableContext) => {
+    //     await ctx.wait("wait-sport-step-1", { seconds: 5 });
+    //     const result = await ctx.step("sport-step-1", async () => {
+    //       return "basketball";
+    //     });
+    //     await ctx.wait("wait-sport-step-1-2", { seconds: 5 });
+    //     return result;
+    //   },
 
-      // Branch 2: Returns "football"
-      async (ctx: DurableContext) => {
-        await ctx.wait("wait-sport-step-2", { seconds: 10 });
-        const result = await ctx.step("sport-step-2", async () => {
-          return "football";
-        });
-        const result2 = await ctx.step("sport-step-2-1", async () => {
-          return "soccer";
-        });
-        return result;
-      },
-    ]);
+    //   // Branch 2: Returns "football"
+    //   async (ctx: DurableContext) => {
+    //     await ctx.wait("wait-sport-step-2", { seconds: 10 });
+    //     const result = await ctx.step("sport-step-2", async () => {
+    //       return "football";
+    //     });
+    //     const result2 = await ctx.step("sport-step-2-1", async () => {
+    //       return "soccer";
+    //     });
+    //     return result;
+    //   },
+    // ]);
 
-    const mapWaitInput = [1, 2, 3];
+    const mapWaitInput = [1, 2];
     const mapWaitResults = await context.map(
       "map-numbers-wait",
       mapWaitInput,
@@ -235,7 +235,7 @@ const durableHandler = withDurableExecution(
       stepRetryResult,
       waitForConditionStep,
       sqsMessageId,
-      parallelWaitsResults,
+      // parallelWaitsResults,
       mapWaitResults,
     };
   },

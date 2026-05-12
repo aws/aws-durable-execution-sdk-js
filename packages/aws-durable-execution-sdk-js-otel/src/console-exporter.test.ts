@@ -77,7 +77,6 @@ describe("DurableOtelPlugin with ConsoleSpanExporter", () => {
       SubType: "WAIT",
       StartTimestamp: new Date(),
     };
-    plugin.onOperationStart(waitInfo);
     plugin.onOperationEnd(waitInfo);
 
     // End invocation
@@ -156,7 +155,6 @@ describe("DurableOtelPlugin with ConsoleSpanExporter", () => {
       SubType: "PARALLEL",
       StartTimestamp: new Date(),
     };
-    plugin.onOperationStart(parallelInfo);
 
     // Parallel branch 1: step email (only attempt hooks)
     const emailStep: OperationInfo = {
@@ -201,7 +199,6 @@ describe("DurableOtelPlugin with ConsoleSpanExporter", () => {
       SubType: "CHAINED_INVOKE",
       StartTimestamp: new Date(),
     };
-    plugin.onOperationStart(invokeInfo);
     plugin.onOperationEnd(invokeInfo);
 
     await plugin.onInvocationEnd(invocationInfo);

@@ -266,14 +266,21 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
         // Checkpoint START if not already started
         if (stepData?.Status !== OperationStatus.STARTED) {
-          checkpoint.checkpoint(stepId, {
-            Id: stepId,
-            ParentId: parentId,
-            Action: OperationAction.START,
-            SubType: OperationSubType.WAIT_FOR_CONDITION,
-            Type: OperationType.STEP,
-            Name: name,
-          });
+          checkpoint
+            .checkpoint(stepId, {
+              Id: stepId,
+              ParentId: parentId,
+              Action: OperationAction.START,
+              SubType: OperationSubType.WAIT_FOR_CONDITION,
+              Type: OperationType.STEP,
+              Name: name,
+            })
+            .then(() => {
+              stepData = context.getStepData(stepId);
+              const attemptInfo = toAttemptInfo(stepData, currentAttempt);
+              backfillOperationInfo(attemptInfo, opInfo);
+              plugin.onOperationStart?.(attemptInfo);
+            });
         }
 
         try {
@@ -299,6 +306,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
           const checkFunc = () => check(currentState, waitForConditionContext);
+
+          plugin.onOperationAttemptStart?.(attemptInfo);
 
           const newState: T = await runWithContext(
             stepId,
@@ -351,11 +360,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               },
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
-            plugin.onOperationStart?.(attemptEndInfo);
-            plugin.onOperationAttemptStart?.({
-              ...attemptEndInfo,
-              StartTimestamp: attemptEndInfo.EndTimestamp,
-            });
             plugin.onOperationAttemptEnd?.({
               ...attemptEndInfo,
               StartTimestamp: attemptEndInfo.EndTimestamp,
@@ -391,10 +395,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
           plugin.onOperationAttemptEnd?.({
             ...attemptEndInfo,
             StartTimestamp: attemptEndInfo.EndTimestamp,
@@ -442,11 +442,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationStart?.(attemptEndInfo);
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
           plugin.onOperationAttemptEnd?.({
             ...attemptEndInfo,
             StartTimestamp: attemptEndInfo.EndTimestamp,
