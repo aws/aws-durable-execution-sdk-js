@@ -265,7 +265,7 @@ Lambda invocation entry
 step-handler / wait-for-condition-handler
 ├── plugins.onOperationStart(...)
 │   ├── plugins.onOperationAttemptStart(...)
-│   ├── plugins.onOperationAttempt(fn())
+│   ├── plugins.onOperationAttempt(...)
 │   └── plugins.onOperationAttemptEnd(...)  outcome: 'succeeded' | 'failed' | 'retrying'
 └── plugins.onOperationEnd(...)
 ```
@@ -273,6 +273,6 @@ step-handler / wait-for-condition-handler
 ```
 wait-handler / invoke-handler / run-in-child-context-handler
 ├── plugins.onOperationStart(...)
-│   ├── plugins.onOperation(fn())
+│   ├── plugins.onOperation(...)
 └── plugins.onOperationEnd(...)
 ```
