@@ -28,17 +28,17 @@ withDurableExecution(handler)
 └── Lambda invocation 1  (first invocation)
 │   ├── onExecutionStart(...)        ← once, only on first invocation
 │   ├── onInvocationStart(...)
-│   │   ├── onInvocation(fn())
+│   │   ├── onInvocation(...)
 │   │   │   ├── onOperationStart(...)
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   │   ├── onOperationAttempt(fn())
+│   │   │   │   │   ├── onOperationAttempt(...)
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'retrying' → retry timer, then next attempt
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   │   ├── onOperationAttempt(fn())
+│   │   │   │   │   ├── onOperationAttempt(...)
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'succeeded' | 'failed'
 │   │   │   ├── onOperationEnd(...)
 │   │   │   ├── onOperationStart(...)
-│   │   │   │   ├── onOperation(fn())
+│   │   │   │   ├── onOperation(...)
 │   │   │   ├── onOperationEnd(...)
 │   └── onInvocationEnd(...)         ← Lambda is about to freeze or return
 │
@@ -121,13 +121,13 @@ export interface OperationChangeInfo extends InvocationInfo {
 export interface DurableInstrumentationPlugin {
   onExecutionStart?(info: InvocationInfo): void;
   onExecutionEnd?(info: ExecutionEndInfo): void;
-  onInvocation?(info: InvocationInfo): void;
+  onInvocation?(info: InvocationInfo, fn: () => T): void;
   onInvocationStart?(info: InvocationInfo): void;
   onInvocationEnd?(info: InvocationInfo): void;
-  onOperation?(info: OperationInfo): void;
+  onOperation?(info: OperationInfo, fn: () => T): void;
   onOperationStart?(info: OperationInfo): void;
   onOperationEnd?(info: OperationInfo & { error?: Error }): void;
-  onOperationAttempt?(info: AttemptInfo): void;
+  onOperationAttempt?(info: AttemptInfo, fn: () => T): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
   /**
@@ -185,13 +185,13 @@ export function createPluginRunner(
   return {
     onExecutionStart: (info) => run("onExecutionStart", info),
     onExecutionEnd: (info) => run("onExecutionEnd", info),
-    onInvocation: (info) => runAsCallback("onInvocation", info),
+    onInvocation: (info, fn) => runAsCallback("onInvocation", info, fn),
     onInvocationStart: (info) => run("onInvocationStart", info),
     onInvocationEnd: (info) => run("onInvocationEnd", info),
-    onOperation: (info) => runAsCallback("onOperation", info),
+    onOperation: (info, fn) => runAsCallback("onOperation", info, fn),
     onOperationStart: (info) => run("onOperationStart", info),
     onOperationEnd: (info) => run("onOperationEnd", info),
-    onOperationAttempt: (info) => runAsCallback("onOperationAttempt", info),
+    onOperationAttempt: (info, fn) => runAsCallback("onOperationAttempt", info, fn),
     onOperationAttemptStart: (info) => run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info) => run("onOperationAttemptEnd", info),
     onOperationChange: (info) => run("onOperationChange", info),
