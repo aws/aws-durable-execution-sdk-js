@@ -21,11 +21,11 @@ Solution: Only export the Operation and Attempt span for the very last attempt.
 I did not explicitly test the links but the "branches" of the map and parallel are naturally a child of the root map or parallel
 operation span. The way our language SDK creates run-in-child-context operations naturally suits using child spans representing the map or parallel branches. There is no use for the links in our case.
 Links are more useful when spans are in different traces or when the relationship is non-hierarchical. We don't have that
-issue here.
+issue in CloudWatch. I've added the links as a backup though.
 
 The main issue is that if we want onOperationStart and onOperationEnd hooks to only be called at most once. AND we wish to use these hooks to represent map and parallel operations as spans, then it's difficult to create the branches of the map and parallel under a single parent span. The completions of each branch may be spread across invocations which makes visualization difficult.
 
-I am investigating whether it's possible to create a placeholder span that's not exported to tracing backend but that we can track in our plugin. When the parent context completes, the span is actually exported and the child spans are then populated inside the parent span.
+We use a nonRecordingSpan as a the parent to a child span/operation which completes prior to it's parent span/operation. The nonRecordingSpan only has information regarding the traceId and the spanId, non of its attributes. It's mainly used to trace back the parent once the actual parent is exported to the observability backend.
 
 ### Wait operation duplication issues
 
