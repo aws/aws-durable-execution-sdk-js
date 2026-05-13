@@ -31,14 +31,14 @@ withDurableExecution(handler)
 │   │   ├── onInvocation(...)
 │   │   │   ├── onOperationStart(...)
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   │   ├── onOperationAttempt(...)
+│   │   │   │   │   ├── wrapOperationAttempt(...)
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'retrying' → retry timer, then next attempt
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   │   ├── onOperationAttempt(...)
+│   │   │   │   │   ├── wrapOperationAttempt(...)
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'succeeded' | 'failed'
 │   │   │   ├── onOperationEnd(...)
 │   │   │   ├── onOperationStart(...)
-│   │   │   │   ├── onOperation(...)
+│   │   │   │   ├── wrapOperation(...)
 │   │   │   ├── onOperationEnd(...)
 │   └── onInvocationEnd(...)         ← Lambda is about to freeze or return
 │
@@ -56,6 +56,7 @@ withDurableExecution(handler)
 - `onOperationStart/End` bracket the full lifetime of the operation across all attempts
 - `onOperationAttemptStart/End` bracket each individual attempt
 - `onInvocationEnd` is the correct place for flushing spans/metrics before Lambda freezes
+- wrapOperation and wrapOperationAttempt are currently not used together. wrapOperation is currently only used to wrap operations executing code which don't have an attempt concept (run-in-child-context). wrapOperationAttempt does the same for operations which have built in retry attempts such as steps and wait-for-condition.
 
 ---
 
@@ -121,13 +122,13 @@ export interface OperationChangeInfo extends InvocationInfo {
 export interface DurableInstrumentationPlugin {
   onExecutionStart?(info: InvocationInfo): void;
   onExecutionEnd?(info: ExecutionEndInfo): void;
-  onInvocation?(info: InvocationInfo, fn: () => T): void;
+  wrapInvocation?(info: InvocationInfo, fn: () => T): void;
   onInvocationStart?(info: InvocationInfo): void;
   onInvocationEnd?(info: InvocationInfo): void;
-  onOperation?(info: OperationInfo, fn: () => T): void;
+  wrapOperation?(info: OperationInfo, fn: () => T): void;
   onOperationStart?(info: OperationInfo): void;
   onOperationEnd?(info: OperationInfo & { error?: Error }): void;
-  onOperationAttempt?(info: AttemptInfo, fn: () => T): void;
+  wrapOperationAttempt?(info: AttemptInfo, fn: () => T): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
   /**
@@ -185,13 +186,13 @@ export function createPluginRunner(
   return {
     onExecutionStart: (info) => run("onExecutionStart", info),
     onExecutionEnd: (info) => run("onExecutionEnd", info),
-    onInvocation: (info, fn) => runAsCallback("onInvocation", info, fn),
+    wrapInvocation: (info, fn) => runAsCallback("onInvocation", info, fn),
     onInvocationStart: (info) => run("onInvocationStart", info),
     onInvocationEnd: (info) => run("onInvocationEnd", info),
-    onOperation: (info, fn) => runAsCallback("onOperation", info, fn),
+    wrapOperation: (info, fn) => runAsCallback("onOperation", info, fn),
     onOperationStart: (info) => run("onOperationStart", info),
     onOperationEnd: (info) => run("onOperationEnd", info),
-    onOperationAttempt: (info, fn) => runAsCallback("onOperationAttempt", info, fn),
+    wrapOperationAttempt: (info, fn) => runAsCallback("onOperationAttempt", info, fn),
     onOperationAttemptStart: (info) => run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info) => run("onOperationAttemptEnd", info),
     onOperationChange: (info) => run("onOperationChange", info),
@@ -252,7 +253,7 @@ Lambda invocation entry
 ├── plugins.onExecutionStart(...)     ← only on first invocation
 ├── plugins.onInvocationStart(...)
 ├── try {
-│     plugins.onInvocation(runHandler(...))
+│     plugins.wrapInvocation(runHandler(...))
 │     on terminal result → plugins.onExecutionEnd(...)
 │   } finally {
 └──   plugins.onInvocationEnd(...)    ← always, even on freeze
@@ -265,7 +266,7 @@ Lambda invocation entry
 step-handler / wait-for-condition-handler
 ├── plugins.onOperationStart(...)
 │   ├── plugins.onOperationAttemptStart(...)
-│   ├── plugins.onOperationAttempt(...)
+│   ├── plugins.wrapOperationAttempt(...)
 │   └── plugins.onOperationAttemptEnd(...)  outcome: 'succeeded' | 'failed' | 'retrying'
 └── plugins.onOperationEnd(...)
 ```
@@ -273,6 +274,6 @@ step-handler / wait-for-condition-handler
 ```
 wait-handler / invoke-handler / run-in-child-context-handler
 ├── plugins.onOperationStart(...)
-│   ├── plugins.onOperation(...)
+│   ├── plugins.wrapOperation(...)
 └── plugins.onOperationEnd(...)
 ```
