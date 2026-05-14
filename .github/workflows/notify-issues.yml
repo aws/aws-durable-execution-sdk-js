@@ -1,0 +1,23 @@
+name: Notify Slack - Issues
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send issue notification to Slack
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL_ISSUE }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "action": "${{ github.event.action }}",
+              "issue_url": "${{ github.event.issue.html_url }}",
+              "package_name": "${{ github.repository }}"
+            }
