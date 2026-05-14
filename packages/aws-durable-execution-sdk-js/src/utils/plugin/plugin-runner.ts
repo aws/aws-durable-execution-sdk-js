@@ -72,15 +72,15 @@ export function createPluginRunner(
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
     onInvocationEnd: async (info: InvocationInfo) =>
       runAwait("onInvocationEnd", info),
-    onInvocation: <T>(info: InvocationInfo, fn: () => T): T =>
-      runAsCallback("onInvocation", info, fn),
-    onOperation: <T>(info: OperationInfo, fn: () => T): T =>
-      runAsCallback("onOperation", info, fn),
+    wrapInvocation: <T>(info: InvocationInfo, fn: () => T): T =>
+      runAsCallback("wrapInvocation", info, fn),
+    wrapOperation: <T>(info: OperationInfo, fn: () => T): T =>
+      runAsCallback("wrapOperation", info, fn),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
     onOperationEnd: (info: OperationInfo & { error?: Error }) =>
       run("onOperationEnd", info),
-    onOperationAttempt: <T>(info: AttemptInfo, fn: () => T): T =>
-      runAsCallback("onOperationAttempt", info, fn),
+    wrapOperationAttempt: <T>(info: AttemptInfo, fn: () => T): T =>
+      runAsCallback("wrapOperationAttempt", info, fn),
     onOperationAttemptStart: (info: AttemptInfo) =>
       run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info: AttemptEndInfo) =>

@@ -93,17 +93,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "WaitForCondition already completed:", { stepId });
-        checkAndUpdateReplayMode?.();
-
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log(
-            "⏭️",
-            "WaitForCondition in full replay mode, skipping plugin calls:",
-            { stepId },
-          );
-        }
 
         checkpoint.markOperationState(
           stepId,
@@ -118,27 +107,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           },
         );
-
-        if (!skipPluginCalls) {
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.SUCCEEDED,
-            {
-              attempt: stepData.StepDetails?.Attempt,
-            },
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationStart?.(attemptEndInfo);
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationEnd?.(attemptEndInfo);
-        }
 
         return await safeDeserialize(
           serdes,
@@ -152,18 +120,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
       // Check if already failed
       if (stepData?.Status === OperationStatus.FAILED) {
-        checkAndUpdateReplayMode?.();
-
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log(
-            "⏭️",
-            "WaitForCondition (failed) in full replay mode, skipping plugin calls:",
-            { stepId },
-          );
-        }
-
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -177,27 +133,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           },
         );
-
-        if (!skipPluginCalls) {
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.FAILED,
-            {
-              attempt: stepData.StepDetails?.Attempt,
-            },
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationStart?.(attemptEndInfo);
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationEnd?.(attemptEndInfo);
-        }
 
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(
@@ -312,8 +247,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const newState: T = await runWithContext(
             stepId,
             parentId,
-            plugin.onOperationAttempt
-              ? () => plugin.onOperationAttempt!(attemptInfo, checkFunc)
+            plugin.wrapOperationAttempt
+              ? () => plugin.wrapOperationAttempt!(attemptInfo, checkFunc)
               : checkFunc,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,

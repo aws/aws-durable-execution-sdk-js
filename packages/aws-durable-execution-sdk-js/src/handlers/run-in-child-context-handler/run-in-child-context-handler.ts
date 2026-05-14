@@ -176,7 +176,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           };
           const operationInfo = toOperationInfo(currentStepData);
           backfillOperationInfo(operationInfo, opInfo);
-          plugin.onOperationStart?.(operationInfo);
           plugin.onOperationEnd?.(operationInfo);
         }
 
@@ -374,8 +373,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     const result = await runWithContext(
       entityId,
       parentId,
-      plugin.onOperation
-        ? () => plugin.onOperation!(opInfo, childContextFn)
+      plugin.wrapOperation
+        ? () => plugin.wrapOperation!(opInfo, childContextFn)
         : childContextFn,
       undefined,
       childReplayMode,

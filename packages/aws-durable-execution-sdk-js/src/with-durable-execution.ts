@@ -336,7 +336,7 @@ async function runHandler<
     };
 
   return (
-    plugin.onInvocation?.(invocationInfo, executeInvocation) ??
+    plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
     executeInvocation()
   );
 }

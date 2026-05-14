@@ -212,7 +212,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     this.sampled = shouldSampleExecution(info.executionArn, this.samplingRate);
   }
 
-  onInvocation<T>(info: InvocationInfo, fn: () => T): T {
+  wrapInvocation<T>(info: InvocationInfo, fn: () => T): T {
     if (!this.sampled) return fn();
     return otelContext.with(this.invocationContext, fn);
   }
@@ -264,7 +264,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     );
   }
 
-  onOperation<T>(info: OperationInfo, fn: () => T): T {
+  wrapOperation<T>(info: OperationInfo, fn: () => T): T {
     if (!this.sampled) return fn();
     const spanContext = this.resolveContext(info.Id);
     return otelContext.with(spanContext, fn);
@@ -338,7 +338,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     this.setContext(key, trace.setSpan(parentCtx, attemptSpan));
   }
 
-  onOperationAttempt<T>(info: AttemptInfo, fn: () => T): T {
+  wrapOperationAttempt<T>(info: AttemptInfo, fn: () => T): T {
     if (!this.sampled) return fn();
     const key = `${info.Id}-${info.Attempt}`;
     const spanContext = this.resolveContext(key);

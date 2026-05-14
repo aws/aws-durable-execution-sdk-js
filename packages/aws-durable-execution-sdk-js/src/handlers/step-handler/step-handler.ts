@@ -102,19 +102,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Step already completed:", { stepId });
-        checkAndUpdateReplayMode?.();
-
-        // After checkAndUpdateReplayMode(), check if we're still in ReplayMode.
-        // If still in ReplayMode, there are more operations to replay, meaning this
-        // step's plugin events were already emitted in a previous invocation.
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log("⏭️", "Step in full replay mode, skipping plugin calls:", {
-            stepId,
-          });
-        }
-
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -128,27 +115,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
-
-        if (!skipPluginCalls) {
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.SUCCEEDED,
-            {
-              attempt: stepData.StepDetails?.Attempt,
-            },
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationStart?.(attemptEndInfo);
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationEnd?.(attemptEndInfo);
-        }
 
         return await safeDeserialize(
           serdes,
@@ -162,20 +128,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
       // Check if already failed
       if (stepData?.Status === OperationStatus.FAILED) {
-        checkAndUpdateReplayMode?.();
-
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log(
-            "⏭️",
-            "Step (failed) in full replay mode, skipping plugin calls:",
-            {
-              stepId,
-            },
-          );
-        }
-
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -189,27 +141,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
-
-        if (!skipPluginCalls) {
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.FAILED,
-            {
-              attempt: stepData.StepDetails?.Attempt,
-            },
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationStart?.(attemptEndInfo);
-          plugin.onOperationAttemptStart?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationEnd?.(attemptEndInfo);
-        }
 
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(
@@ -374,8 +305,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
           result = await runWithContext(
             stepId,
             parentId,
-            plugin.onOperationAttempt
-              ? () => plugin.onOperationAttempt!(attemptInfo, stepFn)
+            plugin.wrapOperationAttempt
+              ? () => plugin.wrapOperationAttempt!(attemptInfo, stepFn)
               : stepFn,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
