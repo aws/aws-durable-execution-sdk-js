@@ -8,7 +8,7 @@ for package_dir in packages/*; do
     cd "$package_dir";
     echo "Publishing package in $package_dir";
     if [ "$PRERELEASE" = "true" ]; then
-      npm publish --access public --tag prerelease;
+      npm publish --access public --tag beta;
     else
       npm publish --access public;
     fi
