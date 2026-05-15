@@ -47,7 +47,7 @@ export const createCallbackPromise = <T>(
         const attemptInfo = toOperationInfo(stepData);
         backfillOperationInfo(attemptInfo, opInfo);
         plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationEnd?.(attemptInfo);
+        plugin.onOperationFirstEnd?.(attemptInfo);
       }
 
       const callbackData = stepData.CallbackDetails;
@@ -93,7 +93,7 @@ export const createCallbackPromise = <T>(
     const attemptInfo = toOperationInfo(stepData);
     backfillOperationInfo(attemptInfo, opInfo);
     plugin.onOperationStart?.(attemptInfo);
-    plugin.onOperationEnd?.({
+    plugin.onOperationFirstEnd?.({
       ...attemptInfo,
       error: callbackError,
     });

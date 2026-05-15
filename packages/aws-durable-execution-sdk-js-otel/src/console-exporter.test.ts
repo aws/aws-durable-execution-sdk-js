@@ -77,7 +77,7 @@ describe("DurableOtelPlugin with ConsoleSpanExporter", () => {
       SubType: "WAIT",
       StartTimestamp: new Date(),
     };
-    plugin.onOperationEnd(waitInfo);
+    plugin.onOperationFirstEnd(waitInfo);
 
     // End invocation
     await plugin.onInvocationEnd(invocationInfo);
@@ -189,7 +189,7 @@ describe("DurableOtelPlugin with ConsoleSpanExporter", () => {
     });
 
     // End parallel
-    plugin.onOperationEnd(parallelInfo);
+    plugin.onOperationFirstEnd(parallelInfo);
 
     // Invoke operation
     const invokeInfo: OperationInfo = {
@@ -199,7 +199,7 @@ describe("DurableOtelPlugin with ConsoleSpanExporter", () => {
       SubType: "CHAINED_INVOKE",
       StartTimestamp: new Date(),
     };
-    plugin.onOperationEnd(invokeInfo);
+    plugin.onOperationFirstEnd(invokeInfo);
 
     await plugin.onInvocationEnd(invocationInfo);
 

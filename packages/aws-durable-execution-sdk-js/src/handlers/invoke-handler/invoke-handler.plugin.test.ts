@@ -44,7 +44,7 @@ describe("InvokeHandler - plugin hooks", () => {
     } as any;
     mockPlugin = {
       onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
+      onOperationFirstEnd: jest.fn(),
       onOperationAttemptStart: jest.fn(),
       onOperationAttemptEnd: jest.fn(),
     };
@@ -77,8 +77,8 @@ describe("InvokeHandler - plugin hooks", () => {
         outcome: AttemptEndInfoOutcome.SUCCEEDED,
       }),
     );
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
       expect.not.objectContaining({ error: expect.anything() }),
     );
   });
@@ -110,7 +110,7 @@ describe("InvokeHandler - plugin hooks", () => {
         outcome: AttemptEndInfoOutcome.FAILED,
       }),
     );
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should skip plugin calls in full replay mode on replay succeeded", async () => {
@@ -134,7 +134,7 @@ describe("InvokeHandler - plugin hooks", () => {
     expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationAttemptStart).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationAttemptEnd).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationEnd).not.toHaveBeenCalled();
+    expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
   });
 
   it("should skip plugin calls in full replay mode on replay failed", async () => {
@@ -160,7 +160,7 @@ describe("InvokeHandler - plugin hooks", () => {
     expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationAttemptStart).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationAttemptEnd).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationEnd).not.toHaveBeenCalled();
+    expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
   });
 
   it("should call plugin hooks on phase 2 succeeded", async () => {
@@ -183,7 +183,7 @@ describe("InvokeHandler - plugin hooks", () => {
     await handler("test-function", { test: "data" });
 
     // Phase 1: onOperationStart + onOperationAttemptStart
-    // Phase 2: onOperationAttemptEnd + onOperationEnd
+    // Phase 2: onOperationAttemptEnd + onOperationFirstEnd
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
@@ -192,7 +192,7 @@ describe("InvokeHandler - plugin hooks", () => {
         outcome: AttemptEndInfoOutcome.SUCCEEDED,
       }),
     );
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should call plugin hooks with error on phase 2 failed", async () => {
@@ -225,8 +225,8 @@ describe("InvokeHandler - plugin hooks", () => {
         error: expect.any(Error),
       }),
     );
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
       expect.objectContaining({ error: expect.any(Error) }),
     );
   });

@@ -55,8 +55,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
   logger: Logger,
   parentId?: string,
   plugin: DurableInstrumentationPlugin = {},
-  checkAndUpdateReplayMode?: () => void,
-  getDurableExecutionMode?: () => DurableExecutionMode,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -258,7 +256,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             stepData = context.getStepData(stepId);
             const operationInfo = toOperationInfo(stepData);
             backfillOperationInfo(operationInfo, opInfo);
-            plugin.onOperationStart?.(operationInfo);
+            plugin.onOperationFirstStart?.(operationInfo);
           } else {
             checkpoint
               .checkpoint(stepId, {
@@ -273,9 +271,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepData = context.getStepData(stepId);
                 const operationInfo = toOperationInfo(stepData);
                 backfillOperationInfo(operationInfo, opInfo);
-                plugin.onOperationStart?.(operationInfo);
+                plugin.onOperationFirstStart?.(operationInfo);
               });
           }
+        } else {
+          const operationInfo = toOperationInfo(stepData);
+          backfillOperationInfo(operationInfo, opInfo);
+          plugin.onOperationStart?.(operationInfo);
         }
 
         try {
@@ -340,7 +342,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationEnd?.(attemptEndInfo);
+          plugin.onOperationFirstEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
@@ -401,7 +403,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
-            plugin.onOperationEnd?.({
+            plugin.onOperationFirstEnd?.({
               ...attemptEndInfo,
               error: error instanceof Error ? error : new Error(String(error)),
             });

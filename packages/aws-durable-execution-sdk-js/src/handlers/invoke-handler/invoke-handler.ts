@@ -142,7 +142,7 @@ export const createInvokeHandler = (
             stepData.StepDetails?.Attempt,
           );
           backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationFirstEnd?.(attemptInfo);
         }
 
         isCompleted = true;
@@ -188,7 +188,8 @@ export const createInvokeHandler = (
             stepData.StepDetails?.Attempt,
           );
           backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationStart?.(attemptInfo);
+          plugin.onOperationFirstEnd?.(attemptInfo);
         }
 
         isCompleted = true;
@@ -220,6 +221,10 @@ export const createInvokeHandler = (
           },
         });
         const stepData = context.getStepData(stepId);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        plugin.onOperationFirstStart?.(operationInfo);
+      } else {
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
         plugin.onOperationStart?.(operationInfo);
@@ -297,7 +302,7 @@ export const createInvokeHandler = (
         );
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationEnd?.(operationInfo);
+        plugin.onOperationFirstEnd?.(operationInfo);
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
@@ -317,7 +322,7 @@ export const createInvokeHandler = (
       const invokeError = stepData?.ChainedInvokeDetails?.Error;
       const operationInfo = toOperationInfo(stepData);
       backfillOperationInfo(operationInfo, opInfo);
-      plugin.onOperationEnd?.({
+      plugin.onOperationFirstEnd?.({
         ...operationInfo,
         error: invokeError?.ErrorMessage
           ? new Error(invokeError.ErrorMessage)

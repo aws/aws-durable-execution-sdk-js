@@ -70,19 +70,21 @@ export function createPluginRunner(
     onExecutionEnd: async (info: ExecutionEndInfo) =>
       runAwait("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
-    onInvocationEnd: async (info: InvocationInfo) =>
-      runAwait("onInvocationEnd", info),
     wrapInvocation: <T>(info: InvocationInfo, fn: () => T): T =>
       runAsCallback("wrapInvocation", info, fn),
+    onInvocationEnd: async (info: InvocationInfo) =>
+      runAwait("onInvocationEnd", info),
+    onOperationFirstStart: (info: OperationInfo) =>
+      run("onOperationFirstStart", info),
+    onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
     wrapOperation: <T>(info: OperationInfo, fn: () => T): T =>
       runAsCallback("wrapOperation", info, fn),
-    onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
-    onOperationEnd: (info: OperationInfo & { error?: Error }) =>
-      run("onOperationEnd", info),
-    wrapOperationAttempt: <T>(info: AttemptInfo, fn: () => T): T =>
-      runAsCallback("wrapOperationAttempt", info, fn),
+    onOperationFirstEnd: (info: OperationInfo & { error?: Error }) =>
+      run("onOperationFirstEnd", info),
     onOperationAttemptStart: (info: AttemptInfo) =>
       run("onOperationAttemptStart", info),
+    wrapOperationAttempt: <T>(info: AttemptInfo, fn: () => T): T =>
+      runAsCallback("wrapOperationAttempt", info, fn),
     onOperationAttemptEnd: (info: AttemptEndInfo) =>
       run("onOperationAttemptEnd", info),
     onOperationChange: (info: OperationChangeInfo) =>

@@ -35,7 +35,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     createStepId = jest.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
     mockPlugin = {
       onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
+      onOperationFirstEnd: jest.fn(),
     };
     mockGetLogger = jest.fn().mockReturnValue({
       log: jest.fn(),
@@ -49,7 +49,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     });
   });
 
-  it("should call onOperationStart and onOperationEnd on successful execution", async () => {
+  it("should call onOperationStart and onOperationFirstEnd on successful execution", async () => {
     const handler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
@@ -65,13 +65,13 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
       expect.not.objectContaining({ error: expect.anything() }),
     );
   });
 
-  it("should call onOperationEnd with error on failed execution", async () => {
+  it("should call onOperationFirstEnd with error on failed execution", async () => {
     const handler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
@@ -90,8 +90,8 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     ).rejects.toThrow("child failed");
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
       expect.objectContaining({ error: expect.any(Error) }),
     );
   });

@@ -33,7 +33,7 @@ describe("DurableOtelPlugin", () => {
     expect(typeof plugin.onExecutionEnd).toBe("function");
     expect(typeof plugin.onInvocationStart).toBe("function");
     expect(typeof plugin.onInvocationEnd).toBe("function");
-    expect(typeof plugin.onOperationEnd).toBe("function");
+    expect(typeof plugin.onOperationFirstEnd).toBe("function");
     expect(typeof plugin.onOperationAttemptStart).toBe("function");
     expect(typeof plugin.onOperationAttemptEnd).toBe("function");
     expect(typeof plugin.enrichLogContext).toBe("function");
@@ -43,7 +43,7 @@ describe("DurableOtelPlugin", () => {
     const plugin = new DurableOtelPlugin({ samplingRate: 0.0 });
     plugin.onExecutionStart(invocationInfo);
     plugin.onInvocationStart(invocationInfo);
-    plugin.onOperationEnd(operationInfo);
+    plugin.onOperationFirstEnd(operationInfo);
   });
 
   it("should not throw during full lifecycle when sampled in", () => {
@@ -59,7 +59,7 @@ describe("DurableOtelPlugin", () => {
       outcome: AttemptEndInfoOutcome.SUCCEEDED,
     };
     plugin.onOperationAttemptEnd(attemptEndInfo);
-    plugin.onOperationEnd(operationInfo);
+    plugin.onOperationFirstEnd(operationInfo);
   });
 
   it("enrichLogContext returns undefined when no active span", () => {

@@ -30,11 +30,11 @@ describe("Wait Handler - plugin hooks", () => {
     createStepId = jest.fn().mockReturnValue("test-step-id");
     mockPlugin = {
       onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
+      onOperationFirstEnd: jest.fn(),
     };
   });
 
-  it("should call onOperationStart and onOperationEnd on replay succeeded", async () => {
+  it("should call onOperationStart and onOperationFirstEnd on replay succeeded", async () => {
     const stepData = (mockContext as any)._stepData;
     stepData[hashId("test-step-id")] = {
       Id: "test-step-id",
@@ -56,10 +56,10 @@ describe("Wait Handler - plugin hooks", () => {
     await handler("test-wait", { seconds: 1 });
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
-  it("should call onOperationEnd on phase 2 succeeded", async () => {
+  it("should call onOperationFirstEnd on phase 2 succeeded", async () => {
     // Phase 1: not completed, checkpoint START
     // Phase 2: waitForStatusChange resolves, then SUCCEEDED
     (mockContext.getStepData as jest.Mock)
@@ -82,7 +82,7 @@ describe("Wait Handler - plugin hooks", () => {
     await handler("test-wait", { seconds: 1 });
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should not throw when plugin hooks are undefined", async () => {

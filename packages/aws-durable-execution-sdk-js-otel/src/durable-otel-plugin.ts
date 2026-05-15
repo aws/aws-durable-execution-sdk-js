@@ -175,7 +175,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
 
   /**
    * Resolves the parent operation ID for a given operation.
-   * Used by onOperationEnd/onOperationAttemptEnd to restore the active span.
+   * Used by onOperationFirstEnd/onOperationAttemptEnd to restore the active span.
    * First tries to infer from the ID structure (e.g., "1-3" → "1").
    * Falls back to explicit parentId, then to the invocation span ID.
    */
@@ -270,7 +270,7 @@ export class DurableOtelPlugin implements DurableInstrumentationPlugin {
     return otelContext.with(spanContext, fn);
   }
 
-  onOperationEnd(info: OperationInfo & { error?: Error }): void {
+  onOperationFirstEnd(info: OperationInfo & { error?: Error }): void {
     if (!this.sampled) return;
     const operationType = this.mapOperationType(info);
     const parentCtx = this.resolveParentContext(info.Id, info.ParentId);

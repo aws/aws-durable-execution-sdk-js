@@ -39,7 +39,7 @@ describe("Callback Handler - plugin hooks", () => {
     checkAndUpdateReplayMode = jest.fn();
     mockPlugin = {
       onOperationStart: jest.fn(),
-      onOperationEnd: jest.fn(),
+      onOperationFirstEnd: jest.fn(),
     };
     mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
@@ -67,8 +67,8 @@ describe("Callback Handler - plugin hooks", () => {
     await handler<string>("test-callback");
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
       expect.not.objectContaining({ error: expect.anything() }),
     );
   });
@@ -98,7 +98,7 @@ describe("Callback Handler - plugin hooks", () => {
     await expect(promise).rejects.toThrow();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should call all plugin hooks on replay timed out", async () => {
@@ -126,7 +126,7 @@ describe("Callback Handler - plugin hooks", () => {
     await expect(promise).rejects.toThrow();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should skip plugin calls in full replay mode on replay succeeded", async () => {
@@ -153,7 +153,7 @@ describe("Callback Handler - plugin hooks", () => {
     await handler<string>("test-callback");
 
     expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationEnd).not.toHaveBeenCalled();
+    expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
   });
 
   it("should skip plugin calls in full replay mode on replay failed", async () => {
@@ -182,7 +182,7 @@ describe("Callback Handler - plugin hooks", () => {
     await expect(promise).rejects.toThrow();
 
     expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationEnd).not.toHaveBeenCalled();
+    expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
   });
 
   it("should call plugin hooks for new callback (phase 1 start)", async () => {

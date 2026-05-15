@@ -53,10 +53,11 @@ withDurableExecution(handler)
 
 - An **operation** is the logical unit (one step = one operation, regardless of retries)
 - An **attempt** is one execution of the operation's function body
-- `onOperationStart/End` bracket the full lifetime of the operation across all attempts
+- `onOperationFirstStart/onOperationStart/onOperationFirstEnd` bracket the full lifetime of the operation across all attempts
 - `onOperationAttemptStart/End` bracket each individual attempt
 - `onInvocationEnd` is the correct place for flushing spans/metrics before Lambda freezes
-- wrapOperation and wrapOperationAttempt are currently not used together. wrapOperation is currently only used to wrap operations executing code which don't have an attempt concept (run-in-child-context). wrapOperationAttempt does the same for operations which have built in retry attempts such as steps and wait-for-condition.
+- wrapOperation and wrapOperationAttempt are currently not used together. wrapOperation is currently only used to wrap operations executing code which don't have an attempt concept (run-in-child-context). wrapOperationAttempt does the same for operations which have built in retry attempts such as steps and wait-for-condition. Functionally, they are the same as they
+  wrap customer defined code.
 
 ---
 
@@ -126,8 +127,9 @@ export interface DurableInstrumentationPlugin {
   onInvocationStart?(info: InvocationInfo): void;
   onInvocationEnd?(info: InvocationInfo): void;
   wrapOperation?(info: OperationInfo, fn: () => T): void;
+  onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
-  onOperationEnd?(info: OperationInfo & { error?: Error }): void;
+  onOperationFirstEnd?(info: OperationInfo & { error?: Error }): void;
   wrapOperationAttempt?(info: AttemptInfo, fn: () => T): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
@@ -190,8 +192,9 @@ export function createPluginRunner(
     onInvocationStart: (info) => run("onInvocationStart", info),
     onInvocationEnd: (info) => run("onInvocationEnd", info),
     wrapOperation: (info, fn) => runAsCallback("onOperation", info, fn),
+    onOperationFirstStart: (info) => run("onOperationFirstStart", info),
     onOperationStart: (info) => run("onOperationStart", info),
-    onOperationEnd: (info) => run("onOperationEnd", info),
+    onOperationFirstEnd: (info) => run("onOperationFirstEnd", info),
     wrapOperationAttempt: (info, fn) => runAsCallback("onOperationAttempt", info, fn),
     onOperationAttemptStart: (info) => run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info) => run("onOperationAttemptEnd", info),
@@ -264,16 +267,16 @@ Lambda invocation entry
 
 ```
 step-handler / wait-for-condition-handler
-├── plugins.onOperationStart(...)
+├── plugins.onOperationFirstStart(...) / plugins.onOperationStart(...)
 │   ├── plugins.onOperationAttemptStart(...)
 │   ├── plugins.wrapOperationAttempt(...)
 │   └── plugins.onOperationAttemptEnd(...)  outcome: 'succeeded' | 'failed' | 'retrying'
-└── plugins.onOperationEnd(...)
+└── plugins.onFirstOperationEnd(...)
 ```
 
 ```
 wait-handler / invoke-handler / run-in-child-context-handler
-├── plugins.onOperationStart(...)
+├── plugins.onOperationFirstStart(...) / plugins.onOperationStart(...)
 │   ├── plugins.wrapOperation(...)
-└── plugins.onOperationEnd(...)
+└── plugins.onFirstOperationEnd(...)
 ```

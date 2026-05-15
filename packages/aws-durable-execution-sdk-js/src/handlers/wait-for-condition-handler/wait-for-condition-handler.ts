@@ -38,6 +38,7 @@ import {
   toAttemptInfo,
   toAttemptEndInfo,
   backfillOperationInfo,
+  toOperationInfo,
 } from "../../utils/operation/operation";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
@@ -47,8 +48,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   logger: Logger,
   parentId: string | undefined,
   plugin: DurableInstrumentationPlugin = {},
-  checkAndUpdateReplayMode?: () => void,
-  getDurableExecutionMode?: () => DurableExecutionMode,
 ) => {
   return <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T, Logger>,
@@ -214,8 +213,12 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               stepData = context.getStepData(stepId);
               const attemptInfo = toAttemptInfo(stepData, currentAttempt);
               backfillOperationInfo(attemptInfo, opInfo);
-              plugin.onOperationStart?.(attemptInfo);
+              plugin.onOperationFirstStart?.(attemptInfo);
             });
+        } else {
+          const operationInfo = toOperationInfo(stepData);
+          backfillOperationInfo(operationInfo, opInfo);
+          plugin.onOperationStart?.(operationInfo);
         }
 
         try {
@@ -299,7 +302,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               ...attemptEndInfo,
               StartTimestamp: attemptEndInfo.EndTimestamp,
             });
-            plugin.onOperationEnd?.(attemptEndInfo);
+            plugin.onOperationFirstEnd?.(attemptEndInfo);
             checkpoint.markOperationState(
               stepId,
               OperationLifecycleState.COMPLETED,
@@ -381,7 +384,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             ...attemptEndInfo,
             StartTimestamp: attemptEndInfo.EndTimestamp,
           });
-          plugin.onOperationEnd?.({
+          plugin.onOperationFirstEnd?.({
             ...attemptEndInfo,
             error: error instanceof Error ? error : new Error(String(error)),
           });

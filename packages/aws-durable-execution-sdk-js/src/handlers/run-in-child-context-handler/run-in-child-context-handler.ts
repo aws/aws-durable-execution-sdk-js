@@ -81,8 +81,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   ) => DurableContext<Logger>,
   parentId?: string,
   plugin: DurableInstrumentationPlugin = {},
-  checkAndUpdateReplayMode?: () => void,
-  getDurableExecutionMode?: () => DurableExecutionMode,
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,
@@ -151,33 +149,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           getParentLogger,
           createChildContext,
         );
-
-        checkAndUpdateReplayMode?.();
-
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log(
-            "⏭️",
-            "Step (complete: Succeeded||Failed) in full replay mode, skipping plugin calls:",
-            {
-              entityId,
-            },
-          );
-        }
-
-        if (!skipPluginCalls) {
-          const opInfo = {
-            Id: entityId,
-            Name: name,
-            Type: OperationType.CONTEXT,
-            SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
-            ParentId: parentId,
-          };
-          const operationInfo = toOperationInfo(currentStepData);
-          backfillOperationInfo(operationInfo, opInfo);
-          plugin.onOperationEnd?.(operationInfo);
-        }
 
         return result;
       }
@@ -344,7 +315,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         const stepData = context.getStepData(entityId);
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
+        plugin.onOperationFirstStart?.(operationInfo);
       });
   } else {
     plugin.onOperationStart?.(opInfo);
@@ -433,9 +404,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         })
         .then(() => {
           const currentStepData = context.getStepData(entityId);
-          const onOperationEndInfo = toOperationInfo(currentStepData);
-          backfillOperationInfo(onOperationEndInfo, opInfo);
-          plugin.onOperationEnd?.(onOperationEndInfo);
+          const onOperationFirstEndInfo = toOperationInfo(currentStepData);
+          backfillOperationInfo(onOperationFirstEndInfo, opInfo);
+          plugin.onOperationFirstEnd?.(onOperationFirstEndInfo);
         });
 
       log("✅", "Child context completed successfully:", {
@@ -447,7 +418,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
       });
-      plugin.onOperationEnd?.(opInfo);
+      plugin.onOperationFirstEnd?.(opInfo);
     }
 
     return result;
@@ -484,15 +455,15 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         })
         .then(() => {
           const currentStepData = context.getStepData(entityId);
-          const onOperationEndInfo = toOperationInfo(currentStepData);
-          backfillOperationInfo(onOperationEndInfo, opInfo);
-          plugin.onOperationEnd?.({
-            ...onOperationEndInfo,
+          const onOperationFirstEndInfo = toOperationInfo(currentStepData);
+          backfillOperationInfo(onOperationFirstEndInfo, opInfo);
+          plugin.onOperationFirstEnd?.({
+            ...onOperationFirstEndInfo,
             error: reconstructedError,
           });
         });
     } else {
-      plugin.onOperationEnd?.({
+      plugin.onOperationFirstEnd?.({
         ...opInfo,
         error: reconstructedError,
       });

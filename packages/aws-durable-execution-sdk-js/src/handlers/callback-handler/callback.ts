@@ -121,7 +121,7 @@ export const createCallback = (
           );
           backfillOperationInfo(attemptInfo, opInfo);
           plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationFirstEnd?.(attemptInfo);
         }
 
         isCompleted = true;
@@ -167,7 +167,7 @@ export const createCallback = (
           );
           backfillOperationInfo(attemptInfo, opInfo);
           plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationEnd?.(attemptInfo);
+          plugin.onOperationFirstEnd?.(attemptInfo);
         }
 
         isCompleted = true;

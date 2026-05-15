@@ -285,8 +285,6 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         this.durableExecution.plugin,
-        this.checkAndUpdateReplayMode.bind(this),
-        () => this.durableExecutionMode,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -363,8 +361,6 @@ export class DurableContextImpl<
           ),
         this._parentId,
         this.durableExecution.plugin,
-        this.checkAndUpdateReplayMode.bind(this),
-        () => this.durableExecutionMode,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
@@ -492,8 +488,6 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         this.durableExecution.plugin,
-        this.checkAndUpdateReplayMode.bind(this),
-        () => this.durableExecutionMode,
       );
 
       return typeof nameOrCheckFunc === "string" ||
