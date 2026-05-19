@@ -62,7 +62,12 @@ export {
   createFileSystemSerdes,
   FileSystemSerdesMode,
   FileSystemSerdesConfig,
+  FieldMatchMode,
+  PreviewMode,
+  PreviewField,
+  PreviewConfig,
 } from "./utils/serdes/filesystem-serdes";
+export { buildPreview } from "./utils/serdes/preview";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
   createWaitStrategy,
