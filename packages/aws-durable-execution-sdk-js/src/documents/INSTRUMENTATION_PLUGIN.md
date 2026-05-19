@@ -180,8 +180,6 @@ export function createPluginRunner(
                 return hookFn.call(plugin, info, next);
               }
               return next();
-            } catch {
-              return next();
             }
           },
           fn,
