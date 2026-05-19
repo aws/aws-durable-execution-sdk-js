@@ -171,6 +171,44 @@ describe("TimerScheduler", () => {
       expect(scheduler.hasScheduledFunction()).toBe(false);
     });
 
+    it("should keep hasScheduledFunction true while the fired function is still running", async () => {
+      let resolveInvocation: (() => void) | undefined;
+      const invocationPromise = new Promise<void>((resolve) => {
+        resolveInvocation = resolve;
+      });
+      const mockFn = jest.fn().mockReturnValue(invocationPromise);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(mockFn, mockOnError);
+
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockFn).toHaveBeenCalledTimes(1);
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      resolveInvocation!();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
+    it("should keep hasScheduledFunction true while the fired function is still running even on rejection", async () => {
+      let rejectInvocation: ((err: unknown) => void) | undefined;
+      const invocationPromise = new Promise<void>((_resolve, reject) => {
+        rejectInvocation = reject;
+      });
+      const mockFn = jest.fn().mockReturnValue(invocationPromise);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(mockFn, mockOnError);
+
+      await jest.advanceTimersByTimeAsync(0);
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      rejectInvocation!(new Error("Test error"));
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockOnError).toHaveBeenCalledTimes(1);
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
     it("should call onError when the scheduled function throws an error", async () => {
       const error = new Error("Test error");
       const mockFn = jest.fn().mockRejectedValue(error);
