@@ -55,10 +55,10 @@ export interface DurableInstrumentationPlugin {
   onInvocationEnd?(info: InvocationInfo): void;
   onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
-  wrapOperation?<T>(info: OperationInfo, fn: () => T): T;
+  wrapChildContextFn?<T>(info: OperationInfo, fn: () => T): T;
   onOperationFirstEnd?(info: OperationInfo & { error?: Error }): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
-  wrapOperationAttempt?<T>(info: AttemptInfo, fn: () => T): T;
+  wrapOperationAttemptFn?<T>(info: AttemptInfo, fn: () => T): T;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
   onOperationChange?(info: OperationChangeInfo): void;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;

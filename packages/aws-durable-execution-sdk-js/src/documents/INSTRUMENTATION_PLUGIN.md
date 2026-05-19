@@ -31,14 +31,16 @@ withDurableExecution(handler)
 │   │   ├── onInvocation(...)
 │   │   │   ├── onOperationStart(...)
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   │   ├── wrapOperationAttempt(...)
+│   │   │   │   │   ├── wrapOperationAttemptFn(...)
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'retrying' → retry timer, then next attempt
 │   │   │   │   ├── onOperationAttemptStart(...)
-│   │   │   │   │   ├── wrapOperationAttempt(...)
+│   │   │   │   │   ├── wrapOperationAttemptFn(...)
 │   │   │   │   └── onOperationAttemptEnd(...)   outcome: 'succeeded' | 'failed'
 │   │   │   ├── onOperationEnd(...)
 │   │   │   ├── onOperationStart(...)
-│   │   │   │   ├── wrapOperation(...)
+│   │   │   ├── onOperationEnd(...)
+│   │   │   ├── onOperationStart(...)
+│   │   │   │   ├── wrapChildContextFn(...)
 │   │   │   ├── onOperationEnd(...)
 │   └── onInvocationEnd(...)         ← Lambda is about to freeze or return
 │
@@ -56,7 +58,7 @@ withDurableExecution(handler)
 - `onOperationFirstStart/onOperationStart/onOperationFirstEnd` bracket the full lifetime of the operation across all attempts
 - `onOperationAttemptStart/End` bracket each individual attempt
 - `onInvocationEnd` is the correct place for flushing spans/metrics before Lambda freezes
-- wrapOperation and wrapOperationAttempt are currently not used together. wrapOperation is currently only used to wrap operations executing code which don't have an attempt concept (run-in-child-context). wrapOperationAttempt does the same for operations which have built in retry attempts such as steps and wait-for-condition. Functionally, they are the same as they
+- wrapChildContextFn and wrapOperationAttemptFn are currently not used together. wrapChildContextFn is currently only used to wrap operations executing code which don't have an attempt concept (run-in-child-context). wrapOperationAttemptFn does the same for operations which have built in retry attempts such as steps and wait-for-condition. Functionally, they are the same as they
   wrap customer defined code.
 
 ---
@@ -126,11 +128,11 @@ export interface DurableInstrumentationPlugin {
   wrapInvocation?(info: InvocationInfo, fn: () => T): void;
   onInvocationStart?(info: InvocationInfo): void;
   onInvocationEnd?(info: InvocationInfo): void;
-  wrapOperation?(info: OperationInfo, fn: () => T): void;
+  wrapChildContextFn?(info: OperationInfo, fn: () => T): void;
   onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
   onOperationFirstEnd?(info: OperationInfo & { error?: Error }): void;
-  wrapOperationAttempt?(info: AttemptInfo, fn: () => T): void;
+  wrapOperationAttemptFn?(info: AttemptInfo, fn: () => T): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
   /**
@@ -191,11 +193,11 @@ export function createPluginRunner(
     wrapInvocation: (info, fn) => runAsCallback("onInvocation", info, fn),
     onInvocationStart: (info) => run("onInvocationStart", info),
     onInvocationEnd: (info) => run("onInvocationEnd", info),
-    wrapOperation: (info, fn) => runAsCallback("onOperation", info, fn),
+    wrapChildContextFn: (info, fn) => runAsCallback("onOperation", info, fn),
     onOperationFirstStart: (info) => run("onOperationFirstStart", info),
     onOperationStart: (info) => run("onOperationStart", info),
     onOperationFirstEnd: (info) => run("onOperationFirstEnd", info),
-    wrapOperationAttempt: (info, fn) => runAsCallback("onOperationAttempt", info, fn),
+    wrapOperationAttemptFn: (info, fn) => runAsCallback("onOperationAttempt", info, fn),
     onOperationAttemptStart: (info) => run("onOperationAttemptStart", info),
     onOperationAttemptEnd: (info) => run("onOperationAttemptEnd", info),
     onOperationChange: (info) => run("onOperationChange", info),
@@ -269,7 +271,7 @@ Lambda invocation entry
 step-handler / wait-for-condition-handler
 ├── plugins.onOperationFirstStart(...) / plugins.onOperationStart(...)
 │   ├── plugins.onOperationAttemptStart(...)
-│   ├── plugins.wrapOperationAttempt(...)
+│   ├── plugins.wrapOperationAttemptFn(...)
 │   └── plugins.onOperationAttemptEnd(...)  outcome: 'succeeded' | 'failed' | 'retrying'
 └── plugins.onFirstOperationEnd(...)
 ```
@@ -277,6 +279,6 @@ step-handler / wait-for-condition-handler
 ```
 wait-handler / invoke-handler / run-in-child-context-handler
 ├── plugins.onOperationFirstStart(...) / plugins.onOperationStart(...)
-│   ├── plugins.wrapOperation(...)
+│   ├── plugins.wrapChildContextFn(...) // only in run-in-child-context-handler
 └── plugins.onFirstOperationEnd(...)
 ```

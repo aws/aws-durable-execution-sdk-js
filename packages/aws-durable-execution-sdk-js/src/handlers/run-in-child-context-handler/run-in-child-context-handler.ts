@@ -344,8 +344,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     const result = await runWithContext(
       entityId,
       parentId,
-      plugin.wrapOperation
-        ? () => plugin.wrapOperation!(opInfo, childContextFn)
+      plugin.wrapChildContextFn
+        ? () => plugin.wrapChildContextFn!(opInfo, childContextFn)
         : childContextFn,
       undefined,
       childReplayMode,

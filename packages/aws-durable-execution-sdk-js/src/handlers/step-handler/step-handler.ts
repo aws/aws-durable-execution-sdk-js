@@ -307,8 +307,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
           result = await runWithContext(
             stepId,
             parentId,
-            plugin.wrapOperationAttempt
-              ? () => plugin.wrapOperationAttempt!(attemptInfo, stepFn)
+            plugin.wrapOperationAttemptFn
+              ? () => plugin.wrapOperationAttemptFn!(attemptInfo, stepFn)
               : stepFn,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,

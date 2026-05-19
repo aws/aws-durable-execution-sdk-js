@@ -74,14 +74,14 @@ export function createPluginRunner(
     onOperationFirstStart: (info: OperationInfo) =>
       run("onOperationFirstStart", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
-    wrapOperation: <T>(info: OperationInfo, fn: () => T): T =>
-      runAsCallback("wrapOperation", info, fn),
+    wrapChildContextFn: <T>(info: OperationInfo, fn: () => T): T =>
+      runAsCallback("wrapChildContextFn", info, fn),
     onOperationFirstEnd: (info: OperationInfo & { error?: Error }) =>
       run("onOperationFirstEnd", info),
     onOperationAttemptStart: (info: AttemptInfo) =>
       run("onOperationAttemptStart", info),
-    wrapOperationAttempt: <T>(info: AttemptInfo, fn: () => T): T =>
-      runAsCallback("wrapOperationAttempt", info, fn),
+    wrapOperationAttemptFn: <T>(info: AttemptInfo, fn: () => T): T =>
+      runAsCallback("wrapOperationAttemptFn", info, fn),
     onOperationAttemptEnd: (info: AttemptEndInfo) =>
       run("onOperationAttemptEnd", info),
     onOperationChange: (info: OperationChangeInfo) =>

@@ -250,8 +250,8 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const newState: T = await runWithContext(
             stepId,
             parentId,
-            plugin.wrapOperationAttempt
-              ? () => plugin.wrapOperationAttempt!(attemptInfo, checkFunc)
+            plugin.wrapOperationAttemptFn
+              ? () => plugin.wrapOperationAttemptFn!(attemptInfo, checkFunc)
               : checkFunc,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
