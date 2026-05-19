@@ -20,15 +20,12 @@ export function createPluginRunner(
   ) => {
     const chain = plugins.reduceRight(
       (next, plugin) => () => {
-        try {
-          const hookFn = plugin[method] as any;
-          if (hookFn) {
-            return hookFn.call(plugin, info, next);
-          }
-          return next();
-        } catch {
-          return next();
+        const hookFn = plugin[method] as any;
+        if (hookFn) {
+          return hookFn.call(plugin, info, next);
         }
+        return next();
+        // we don't catch errors for customer fn execution so that they can propagate to the handler as before
       },
       fn,
     );
