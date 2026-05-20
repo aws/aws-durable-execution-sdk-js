@@ -190,63 +190,57 @@ describe("createPluginRunner", () => {
     });
   });
 
-  describe("awaited hooks (runAwait)", () => {
-    it("calls onExecutionEnd on all plugins sequentially", async () => {
-      const callOrder: string[] = [];
-      const plugin1: DurableInstrumentationPlugin = {
-        onExecutionEnd: async () => {
-          callOrder.push("plugin1");
-        },
+  describe("onExecutionEnd and onInvocationEnd hooks (run)", () => {
+    it("calls onExecutionEnd on all plugins", () => {
+      const plugin1: jest.Mocked<DurableInstrumentationPlugin> = {
+        onExecutionEnd: jest.fn(),
       };
-      const plugin2: DurableInstrumentationPlugin = {
-        onExecutionEnd: async () => {
-          callOrder.push("plugin2");
-        },
+      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
+        onExecutionEnd: jest.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
-      await runner.onExecutionEnd!(executionEndInfo);
+      runner.onExecutionEnd!(executionEndInfo);
 
-      expect(callOrder).toEqual(["plugin1", "plugin2"]);
+      expect(plugin1.onExecutionEnd).toHaveBeenCalledWith(executionEndInfo);
+      expect(plugin2.onExecutionEnd).toHaveBeenCalledWith(executionEndInfo);
     });
 
-    it("calls onInvocationEnd on all plugins", async () => {
+    it("calls onInvocationEnd on all plugins", () => {
       const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onInvocationEnd: jest.fn().mockResolvedValue(undefined),
+        onInvocationEnd: jest.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
-      await runner.onInvocationEnd!(invocationInfo);
+      runner.onInvocationEnd!(invocationInfo);
 
       expect(plugin.onInvocationEnd).toHaveBeenCalledWith(invocationInfo);
     });
 
-    it("swallows errors from async plugins and continues to next", async () => {
+    it("swallows errors from plugins and continues to next", () => {
       const plugin1: DurableInstrumentationPlugin = {
-        onExecutionEnd: async () => {
+        onExecutionEnd: () => {
           throw new Error("plugin1 failed");
         },
       };
       const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onExecutionEnd: jest.fn().mockResolvedValue(undefined),
+        onExecutionEnd: jest.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
 
-      await expect(
-        runner.onExecutionEnd!(executionEndInfo),
-      ).resolves.toBeUndefined();
+      expect(() => runner.onExecutionEnd!(executionEndInfo)).not.toThrow();
       expect(plugin2.onExecutionEnd).toHaveBeenCalledWith(executionEndInfo);
     });
 
-    it("skips plugins that do not implement the awaited hook", async () => {
+    it("skips plugins that do not implement the hook", () => {
       const plugin1: DurableInstrumentationPlugin = {};
       const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onExecutionEnd: jest.fn().mockResolvedValue(undefined),
+        onExecutionEnd: jest.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
-      await runner.onExecutionEnd!(executionEndInfo);
+      runner.onExecutionEnd!(executionEndInfo);
 
       expect(plugin2.onExecutionEnd).toHaveBeenCalledWith(executionEndInfo);
     });
@@ -466,7 +460,7 @@ describe("createPluginRunner", () => {
   });
 
   describe("multiple plugins integration", () => {
-    it("all hooks are called on all plugins for a full lifecycle", async () => {
+    it("all hooks are called on all plugins for a full lifecycle", () => {
       const plugin1 = {
         onExecutionStart: jest.fn(),
         onInvocationStart: jest.fn(),
@@ -512,8 +506,8 @@ describe("createPluginRunner", () => {
       runner.onOperationAttemptEnd!(attemptEndInfo);
       runner.onOperationFirstEnd!(operationInfo);
       runner.onOperationChange!(operationChangeInfo);
-      await runner.onExecutionEnd!(executionEndInfo);
-      await runner.onInvocationEnd!(invocationInfo);
+      runner.onExecutionEnd!(executionEndInfo);
+      runner.onInvocationEnd!(invocationInfo);
       const logCtx = runner.enrichLogContext!();
 
       // Verify all hooks called on both plugins

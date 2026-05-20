@@ -49,28 +49,13 @@ export function createPluginRunner(
       }
     });
 
-  const runAwait = async <K extends keyof DurableInstrumentationPlugin>(
-    method: K,
-    info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
-  ) => {
-    for (const p of plugins) {
-      try {
-        await (p[method] as any)?.(info);
-      } catch {
-        // Plugin errors must never affect SDK execution
-      }
-    }
-  };
-
   return {
     onExecutionStart: (info: InvocationInfo) => run("onExecutionStart", info),
-    onExecutionEnd: async (info: ExecutionEndInfo) =>
-      runAwait("onExecutionEnd", info),
+    onExecutionEnd: (info: ExecutionEndInfo) => run("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
     wrapInvocation: <T>(info: InvocationInfo, fn: () => T): T =>
       runAsCallback("wrapInvocation", info, fn),
-    onInvocationEnd: async (info: InvocationInfo) =>
-      runAwait("onInvocationEnd", info),
+    onInvocationEnd: (info: InvocationInfo) => run("onInvocationEnd", info),
     onOperationFirstStart: (info: OperationInfo) =>
       run("onOperationFirstStart", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
