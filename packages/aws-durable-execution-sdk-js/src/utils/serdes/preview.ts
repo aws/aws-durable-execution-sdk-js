@@ -109,7 +109,7 @@ function isMatched(path: string, fields: PreviewField[] | undefined): boolean {
  *
  * @public
  */
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildPreview(
   value: any,
   config: PreviewConfig,
