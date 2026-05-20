@@ -63,17 +63,3 @@ export interface DurableInstrumentationPlugin {
   onOperationChange?(info: OperationChangeInfo): void;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
 }
-
-export function shouldSampleExecution(
-  executionArn: string,
-  samplingRate: number,
-): boolean {
-  if (samplingRate >= 1.0) return true;
-  if (samplingRate <= 0.0) return false;
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < executionArn.length; i++) {
-    hash ^= executionArn.charCodeAt(i);
-    hash = (hash * 0x01000193) >>> 0;
-  }
-  return hash / 0xffffffff < samplingRate;
-}

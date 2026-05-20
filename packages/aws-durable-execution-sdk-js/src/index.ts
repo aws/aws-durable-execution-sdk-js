@@ -90,5 +90,4 @@ export {
   AttemptInfo,
   AttemptEndInfo,
   AttemptEndInfoOutcome,
-  shouldSampleExecution,
 } from "./types/plugin";
