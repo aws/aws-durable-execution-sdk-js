@@ -21,7 +21,7 @@ import { dirname } from "node:path";
 const runtimeDir = process.env.LAMBDA_RUNTIME_DIR || "/var/runtime";
 
 // Check if this code is running from a bundle in Lambda runtime
-// Use environment variables and file path detection for comprehensive coverage
+// Use file path detection to determine if running in Lambda runtime directory
 function isInLambdaRuntime(): boolean {
   try {
     // Check if we're in a Jest test environment first
@@ -33,19 +33,7 @@ function isInLambdaRuntime(): boolean {
       return false;
     }
 
-    // Check for Lambda runtime environment variables
-    if (typeof process !== "undefined" && process.env) {
-      const hasLambdaRuntime =
-        process.env.AWS_LAMBDA_RUNTIME_API ||
-        process.env.LAMBDA_RUNTIME_DIR ||
-        process.env._LAMBDA_RUNTIME_LOAD_TIME;
-
-      if (hasLambdaRuntime) {
-        return true;
-      }
-    }
-
-    // File path detection for more reliable detection
+    // File path detection for reliable detection
     let currentFilePath: string | undefined;
 
     // CJS: use __filename if available
