@@ -15,6 +15,9 @@
 *.tsbuildinfo
 .rollup.cache
 */.rollup.cache
+*.d.ts.map
+*.d.ts
+*.tgz
 
 # VS Code
 .vscode/
