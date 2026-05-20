@@ -81,3 +81,14 @@ export { createLinearRetryStrategy } from "./utils/retry/linear-retry-strategy/l
 export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
 export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
+export {
+  DurableInstrumentationPlugin,
+  InvocationInfo,
+  ExecutionEndInfo,
+  OperationChangeInfo,
+  OperationInfo,
+  AttemptInfo,
+  AttemptEndInfo,
+  AttemptEndInfoOutcome,
+  shouldSampleExecution,
+} from "./types/plugin";
