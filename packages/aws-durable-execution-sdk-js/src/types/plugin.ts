@@ -3,7 +3,7 @@ import { Operation } from "@aws-sdk/client-lambda";
 /**
  * Information about a durable operation.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationInfo {
   Id: string;
@@ -18,7 +18,7 @@ export interface OperationInfo {
 /**
  * Information about an operation attempt.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface AttemptInfo extends OperationInfo {
   Attempt: number;
@@ -27,7 +27,7 @@ export interface AttemptInfo extends OperationInfo {
 /**
  * Possible outcomes for an operation attempt.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This enum is experimental and may be changed or removed in future releases.
  */
 export enum AttemptEndInfoOutcome {
   SUCCEEDED = "succeeded",
@@ -38,7 +38,7 @@ export enum AttemptEndInfoOutcome {
 /**
  * Information provided when an operation attempt ends.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface AttemptEndInfo extends AttemptInfo {
   outcome:
@@ -52,7 +52,7 @@ export interface AttemptEndInfo extends AttemptInfo {
 /**
  * Information about a durable execution invocation.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationInfo {
   requestId: string;
@@ -62,7 +62,7 @@ export interface InvocationInfo {
 /**
  * Information provided when a durable execution ends.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface ExecutionEndInfo extends InvocationInfo {
   status: "SUCCEEDED" | "FAILED";
@@ -75,7 +75,7 @@ export interface ExecutionEndInfo extends InvocationInfo {
 /**
  * Information provided when operations change during execution.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationChangeInfo extends InvocationInfo {
   updatedOperations: Record<string, Operation>;
@@ -85,7 +85,7 @@ export interface OperationChangeInfo extends InvocationInfo {
 /**
  * Plugin interface for instrumenting durable execution lifecycle events.
  *
- * @experimental This function is experimental and may be changed or removed in future releases.
+ * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DurableInstrumentationPlugin {
   onExecutionStart?(info: InvocationInfo): void;

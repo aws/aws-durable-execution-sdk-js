@@ -6,6 +6,11 @@ import {
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
 
+/**
+ * Converts an Operation to an OperationInfo.
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
 export function toOperationInfo(operation?: Operation): OperationInfo {
   return {
     Id: operation?.Id ?? "",
@@ -18,6 +23,11 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
   };
 }
 
+/**
+ * Converts an Operation to an AttemptInfo.
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
 export function toAttemptInfo(
   operation?: Operation,
   attempt?: number,
@@ -28,6 +38,11 @@ export function toAttemptInfo(
   };
 }
 
+/**
+ * Converts an Operation to an AttemptEndInfo with the given outcome.
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
 export function toAttemptEndInfo(
   operation: Operation | undefined,
   outcome: AttemptEndInfoOutcome,
@@ -48,6 +63,8 @@ export function toAttemptEndInfo(
 /**
  * Backfills missing fields on an OperationInfo (or subtype) with the provided defaults.
  * Only sets a field if it's not already present (undefined or empty string).
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function backfillOperationInfo<T extends OperationInfo>(
   info: T,
