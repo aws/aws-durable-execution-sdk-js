@@ -23,6 +23,25 @@ export function createPluginRunner(
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
     fn: () => any,
   ) => {
+    let fnError: { error: unknown } | undefined;
+
+    // Wrap the original fn to capture any error it throws
+    const guardedFn = () => {
+      try {
+        const result = fn();
+        if (result && typeof result.then === "function") {
+          return result.catch((err: unknown) => {
+            fnError = { error: err };
+            throw err; // re-throw so plugins still see it
+          });
+        }
+        return result;
+      } catch (err) {
+        fnError = { error: err };
+        throw err; // re-throw so plugins still see it
+      }
+    };
+
     const chain = plugins.reduceRight(
       (next, plugin) => () => {
         const hookFn = plugin[method] as any;
@@ -30,12 +49,23 @@ export function createPluginRunner(
           return hookFn.call(plugin, info, next);
         }
         return next();
-        // we don't catch errors for customer fn execution so that they can propagate to the handler as before
       },
-      fn,
+      guardedFn,
     );
 
-    return chain();
+    const result = chain();
+
+    // If the result is async, ensure fn errors are re-thrown even if swallowed by a plugin
+    if (result && typeof result.then === "function") {
+      return result.then((val: any) => {
+        if (fnError) throw fnError.error;
+        return val;
+      });
+    }
+
+    // Sync path: if fn threw but the chain swallowed it, re-throw
+    if (fnError) throw fnError.error;
+    return result;
   };
 
   const run = <K extends keyof DurableInstrumentationPlugin>(

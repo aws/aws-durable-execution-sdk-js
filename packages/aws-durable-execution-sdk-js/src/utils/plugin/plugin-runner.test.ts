@@ -383,6 +383,109 @@ describe("createPluginRunner", () => {
       expect(result).toBe("short-circuited");
       expect(fn).not.toHaveBeenCalled();
     });
+
+    it("re-throws sync error from fn even if a plugin swallows it", () => {
+      const originalError = new Error("customer fn error");
+      const plugin: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: (_info, fn) => {
+          try {
+            return fn();
+          } catch {
+            // Plugin swallows the error
+            return "swallowed" as any;
+          }
+        },
+      };
+
+      const runner = createPluginRunner([plugin]);
+
+      expect(() =>
+        runner.wrapOperationAttemptFn!(attemptInfo, () => {
+          throw originalError;
+        }),
+      ).toThrow(originalError);
+    });
+
+    it("re-throws async error from fn even if a plugin swallows it", async () => {
+      const originalError = new Error("async customer fn error");
+      const plugin: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: (_info, fn) => {
+          try {
+            const result = fn();
+            if (result && typeof (result as any).catch === "function") {
+              return (result as any).catch(() => "swallowed");
+            }
+            return result;
+          } catch {
+            return "swallowed" as any;
+          }
+        },
+      };
+
+      const runner = createPluginRunner([plugin]);
+
+      await expect(
+        runner.wrapOperationAttemptFn!(attemptInfo, () =>
+          Promise.reject(originalError),
+        ),
+      ).rejects.toThrow(originalError);
+    });
+
+    it("re-throws fn error even when multiple plugins try to swallow it", () => {
+      const originalError = new Error("must not be lost");
+      const swallowingPlugin: DurableInstrumentationPlugin = {
+        wrapInvocation: (_info, fn) => {
+          try {
+            return fn();
+          } catch {
+            return "swallowed" as any;
+          }
+        },
+      };
+
+      const runner = createPluginRunner([swallowingPlugin, swallowingPlugin]);
+
+      expect(() =>
+        runner.wrapInvocation!(invocationInfo, () => {
+          throw originalError;
+        }),
+      ).toThrow(originalError);
+    });
+
+    it("re-throws fn error through wrapChildContextFn when plugin swallows it", () => {
+      const originalError = new Error("child context fn error");
+      const plugin: DurableInstrumentationPlugin = {
+        wrapChildContextFn: (_info, fn) => {
+          try {
+            return fn();
+          } catch {
+            return "swallowed" as any;
+          }
+        },
+      };
+
+      const runner = createPluginRunner([plugin]);
+
+      expect(() =>
+        runner.wrapChildContextFn!(operationInfo, () => {
+          throw originalError;
+        }),
+      ).toThrow(originalError);
+    });
+
+    it("does not interfere when fn succeeds and plugin behaves correctly", () => {
+      const plugin: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: (_info, fn) => fn(),
+      };
+
+      const runner = createPluginRunner([plugin]);
+      const result = runner.wrapOperationAttemptFn!(
+        attemptInfo,
+        () => "success",
+      );
+
+      expect(result).toBe("success");
+    });
   });
 
   describe("enrichLogContext", () => {
