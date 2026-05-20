@@ -18,34 +18,41 @@
 const runtimeDir = process.env.LAMBDA_RUNTIME_DIR || "/var/runtime";
 
 // Check if this code is running from a bundle in Lambda runtime
-// Use environment variables and stack trace analysis
+// Use simple environment-based detection without import.meta
 function isInLambdaRuntime(): boolean {
   try {
-    // Check if we're in Lambda environment
-    const isLambda =
-      process.env.AWS_LAMBDA_FUNCTION_NAME ||
-      process.env.LAMBDA_RUNTIME_DIR ||
-      process.env._HANDLER;
+    // Check if we're in a Jest test environment first
+    if (
+      typeof process !== "undefined" &&
+      process.env &&
+      process.env.NODE_ENV === "test"
+    ) {
+      return false;
+    }
 
-    if (isLambda) {
-      // Check if the runtime directory environment variable points to /var/runtime
-      // This indicates we're using the runtime-bundled version
-      if (
-        process.env.LAMBDA_RUNTIME_DIR &&
-        process.env.LAMBDA_RUNTIME_DIR.startsWith("/var/runtime")
-      ) {
-        return true;
-      }
+    // Check for Lambda runtime environment variables
+    if (typeof process !== "undefined" && process.env) {
+      // Lambda runtime sets these environment variables
+      const hasLambdaRuntime =
+        process.env.AWS_LAMBDA_RUNTIME_API ||
+        process.env.LAMBDA_RUNTIME_DIR ||
+        process.env._LAMBDA_RUNTIME_LOAD_TIME;
 
-      // Check stack trace for runtime paths as fallback
-      const stack = new Error().stack || "";
-      if (stack.includes("/var/runtime")) {
+      if (hasLambdaRuntime) {
         return true;
       }
     }
-  } catch {}
 
-  return false;
+    // Fallback: check if __filename is in /var/runtime (CJS only)
+    if (typeof __filename !== "undefined") {
+      return __filename.startsWith(runtimeDir);
+    }
+
+    // For ESM without import.meta, we can't reliably detect, so assume false
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 const isRuntimeBundled = isInLambdaRuntime();
