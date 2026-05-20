@@ -78,6 +78,7 @@ type FileSystemEnvelope =
   | { data: string }
   | { file: string; preview?: Record<string, unknown> };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function writeToFile(
   basePath: string,
   value: any,
