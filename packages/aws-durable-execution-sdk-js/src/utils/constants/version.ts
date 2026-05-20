@@ -40,9 +40,9 @@ function isInLambdaRuntime(): boolean {
     if (typeof __filename !== "undefined") {
       currentFilePath = __filename;
     } else {
-      // ESM: use import.meta.url only if not in Jest
+      // ESM: use import.meta.url
       try {
-        // Use Function constructor to avoid Jest parsing import.meta
+        // Use Function constructor to avoid TypeScript compilation errors in Jest
         const getImportMeta = new Function("return import.meta");
         const importMeta = getImportMeta();
         if (importMeta && importMeta.url) {
