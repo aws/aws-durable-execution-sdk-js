@@ -39,10 +39,7 @@ function isInLambdaRuntime(): boolean {
     // CJS: use __filename if available
     if (typeof __filename !== "undefined") {
       currentFilePath = __filename;
-    } else if (
-      typeof process === "undefined" ||
-      process.env.NODE_ENV !== "test"
-    ) {
+    } else {
       // ESM: use import.meta.url only if not in Jest
       try {
         // Use Function constructor to avoid Jest parsing import.meta
