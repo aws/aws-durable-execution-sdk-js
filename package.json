@@ -8,9 +8,9 @@
   "type": "module",
   "scripts": {
     "install-all": "npm install && npm install --workspaces",
-    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing && npm run test -w packages/aws-durable-execution-sdk-js-otel && npm run test -w packages/aws-durable-execution-sdk-js-examples && npm run test -w packages/aws-durable-execution-sdk-js-eslint-plugin",
+    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing && npm run test -w packages/aws-durable-execution-sdk-js-examples && npm run test -w packages/aws-durable-execution-sdk-js-eslint-plugin",
     "test:integration": "node .github/workflows/scripts/integration-test/integration-test.js",
-    "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing && npm run build -w packages/aws-durable-execution-sdk-js-otel && npm run build -w packages/aws-durable-execution-sdk-js-examples && npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin",
+    "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing && npm run build -w packages/aws-durable-execution-sdk-js-examples && npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin",
     "postpublish": "git restore .",
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
     "prepare": "husky install",
@@ -69,7 +69,6 @@
   "private": true,
   "dependencies": {
     "@aws/durable-execution-sdk-js": "^2.0.0-alpha.1",
-    "@aws/durable-execution-sdk-js-otel": "^1.0.0",
     "@aws/durable-execution-sdk-js-testing": "^1.1.1"
   }
 }
