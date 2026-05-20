@@ -137,6 +137,8 @@ export interface DurableExecutionConfig {
    *   plugins: [myTracingPlugin]
    * });
    * ```
+   *
+   * @experimental This parameter is experimental and may be changed or removed in future releases.
    */
   plugins?: DurableInstrumentationPlugin[];
 }

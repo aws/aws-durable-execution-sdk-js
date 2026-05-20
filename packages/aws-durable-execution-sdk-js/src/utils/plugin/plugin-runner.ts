@@ -8,6 +8,11 @@ import {
   OperationInfo,
 } from "../../types/plugin";
 
+/**
+ * Creates a composite plugin runner that dispatches lifecycle events to all registered plugins.
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
 export function createPluginRunner(
   plugins: DurableInstrumentationPlugin[],
 ): DurableInstrumentationPlugin {
