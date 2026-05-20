@@ -15,10 +15,13 @@
  * @internal
  */
 
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+
 const runtimeDir = process.env.LAMBDA_RUNTIME_DIR || "/var/runtime";
 
 // Check if this code is running from a bundle in Lambda runtime
-// Use simple environment-based detection without import.meta
+// Use environment variables and file path detection for comprehensive coverage
 function isInLambdaRuntime(): boolean {
   try {
     // Check if we're in a Jest test environment first
@@ -32,7 +35,6 @@ function isInLambdaRuntime(): boolean {
 
     // Check for Lambda runtime environment variables
     if (typeof process !== "undefined" && process.env) {
-      // Lambda runtime sets these environment variables
       const hasLambdaRuntime =
         process.env.AWS_LAMBDA_RUNTIME_API ||
         process.env.LAMBDA_RUNTIME_DIR ||
@@ -43,12 +45,34 @@ function isInLambdaRuntime(): boolean {
       }
     }
 
-    // Fallback: check if __filename is in /var/runtime (CJS only)
+    // File path detection for more reliable detection
+    let currentFilePath: string | undefined;
+
+    // CJS: use __filename if available
     if (typeof __filename !== "undefined") {
-      return __filename.startsWith(runtimeDir);
+      currentFilePath = __filename;
+    } else if (
+      typeof process === "undefined" ||
+      process.env.NODE_ENV !== "test"
+    ) {
+      // ESM: use import.meta.url only if not in Jest
+      try {
+        // Use Function constructor to avoid Jest parsing import.meta
+        const getImportMeta = new Function("return import.meta");
+        const importMeta = getImportMeta();
+        if (importMeta && importMeta.url) {
+          currentFilePath = fileURLToPath(importMeta.url);
+        }
+      } catch {
+        // Fallback if import.meta is not available
+      }
     }
 
-    // For ESM without import.meta, we can't reliably detect, so assume false
+    if (currentFilePath) {
+      const libraryDirectory = dirname(currentFilePath);
+      return libraryDirectory.startsWith(runtimeDir);
+    }
+
     return false;
   } catch {
     return false;
