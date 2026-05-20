@@ -60,7 +60,12 @@ describe("Step Handler - plugin hooks", () => {
     mockPlugin = {
       onOperationAttemptStart: jest.fn(),
       onOperationAttemptEnd: jest.fn(),
+      wrapOperationAttemptFn: jest.fn(),
     };
+
+    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => fn(),
+    );
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
       JSON.stringify(value),
@@ -78,6 +83,7 @@ describe("Step Handler - plugin hooks", () => {
       createStepId,
       createDefaultLogger(),
       undefined,
+      undefined,
       mockPlugin,
     );
 
@@ -88,6 +94,12 @@ describe("Step Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledWith(
       expect.objectContaining({ Attempt: 1 }),
+    );
+
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
+      expect.objectContaining({ Attempt: 1 }),
+      expect.any(Function),
     );
 
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
@@ -108,6 +120,7 @@ describe("Step Handler - plugin hooks", () => {
       createStepId,
       createDefaultLogger(),
       undefined,
+      undefined,
       mockPlugin,
     );
 
@@ -120,6 +133,11 @@ describe("Step Handler - plugin hooks", () => {
     ).rejects.toThrow();
 
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
+      expect.objectContaining({ Attempt: 1 }),
+      expect.any(Function),
+    );
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -147,6 +165,7 @@ describe("Step Handler - plugin hooks", () => {
       createStepId,
       createDefaultLogger(),
       undefined,
+      undefined,
       mockPlugin,
     );
 
@@ -162,7 +181,20 @@ describe("Step Handler - plugin hooks", () => {
     // First attempt: start + retrying end
     // Second attempt: start + succeeded end
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(2);
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(2);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(2);
+
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ Attempt: 1 }),
+      expect.any(Function),
+    );
+
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ Attempt: 1 }),
+      expect.any(Function),
+    );
 
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenNthCalledWith(
       1,
@@ -181,6 +213,38 @@ describe("Step Handler - plugin hooks", () => {
     );
   });
 
+  it("should propagate errors thrown within wrapOperationAttemptFn", async () => {
+    const wrapError = new Error("wrapOperationAttemptFn exploded");
+
+    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => {
+        fn();
+        throw wrapError;
+      },
+    );
+
+    const stepHandler = createStepHandler(
+      mockContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      createDefaultLogger(),
+      undefined,
+      undefined,
+      mockPlugin,
+    );
+
+    const stepFn = jest.fn().mockResolvedValue("result");
+
+    await expect(
+      stepHandler("my-step", stepFn, {
+        retryStrategy: () => ({ shouldRetry: false }),
+      }),
+    ).rejects.toThrow("wrapOperationAttemptFn exploded");
+
+    expect(stepFn).toHaveBeenCalled();
+  });
+
   it("should not throw when plugin hooks are undefined", async () => {
     const emptyPlugin: DurableInstrumentationPlugin = {};
 
@@ -190,6 +254,7 @@ describe("Step Handler - plugin hooks", () => {
       mockParentContext,
       createStepId,
       createDefaultLogger(),
+      undefined,
       undefined,
       emptyPlugin,
     );

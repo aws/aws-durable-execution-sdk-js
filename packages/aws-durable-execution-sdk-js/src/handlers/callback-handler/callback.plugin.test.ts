@@ -61,6 +61,7 @@ describe("Callback Handler - plugin hooks", () => {
       createStepId,
       checkAndUpdateReplayMode,
       undefined,
+      undefined,
       mockPlugin,
     );
 
@@ -90,6 +91,7 @@ describe("Callback Handler - plugin hooks", () => {
       createStepId,
       checkAndUpdateReplayMode,
       undefined,
+      undefined,
       mockPlugin,
     );
 
@@ -117,6 +119,7 @@ describe("Callback Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       checkAndUpdateReplayMode,
+      undefined,
       undefined,
       mockPlugin,
     );
@@ -146,6 +149,7 @@ describe("Callback Handler - plugin hooks", () => {
       createStepId,
       checkAndUpdateReplayMode,
       undefined,
+      undefined,
       mockPlugin,
       () => DurableExecutionMode.ReplayMode,
     );
@@ -172,6 +176,7 @@ describe("Callback Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       checkAndUpdateReplayMode,
+      undefined,
       undefined,
       mockPlugin,
       () => DurableExecutionMode.ReplayMode,
@@ -214,6 +219,7 @@ describe("Callback Handler - plugin hooks", () => {
       createStepId,
       checkAndUpdateReplayMode,
       undefined,
+      undefined,
       mockPlugin,
     );
 
@@ -241,6 +247,7 @@ describe("Callback Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       checkAndUpdateReplayMode,
+      undefined,
       undefined,
       {},
     );

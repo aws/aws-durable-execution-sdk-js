@@ -62,6 +62,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     mockPlugin = {
       onOperationAttemptStart: jest.fn(),
       onOperationAttemptEnd: jest.fn(),
+      wrapOperationAttemptFn: jest.fn(),
     };
 
     mockSafeSerialize.mockImplementation(async (_serdes, value) =>
@@ -77,11 +78,16 @@ describe("WaitForCondition Handler - plugin hooks", () => {
   });
 
   it("should call onOperationAttemptStart and onOperationAttemptEnd with succeeded on condition met", async () => {
+    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => fn(),
+    );
+
     const handler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
+      undefined,
       undefined,
       mockPlugin,
     );
@@ -101,6 +107,12 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       expect.objectContaining({ Attempt: 1 }),
     );
 
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
+      expect.objectContaining({ Attempt: 1 }),
+      expect.any(Function),
+    );
+
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -112,27 +124,43 @@ describe("WaitForCondition Handler - plugin hooks", () => {
 
   it("should call onOperationAttemptEnd with failed when check throws", async () => {
     const checkError = new Error("check blew up");
+
+    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => fn(),
+    );
+
+    mockRunWithContext.mockImplementationOnce(
+      async (_stepId, _parentId, fn) => {
+        return await fn();
+      },
+    );
+
     const handler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
       undefined,
+      undefined,
       mockPlugin,
     );
 
-    mockRunWithContext.mockRejectedValueOnce(checkError as never);
-
-    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> =
-      jest.fn();
+    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      .fn()
+      .mockRejectedValue(checkError);
     const config: WaitForConditionConfig<string> = {
       waitStrategy: () => ({ shouldContinue: false }),
       initialState: "start",
     };
 
-    await expect(handler(checkFunc, config)).rejects.toThrow();
+    await expect(handler("my-condition", checkFunc, config)).rejects.toThrow();
 
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
+      expect.objectContaining({ Attempt: 1 }),
+      expect.any(Function),
+    );
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -149,6 +177,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
+      undefined,
       undefined,
       mockPlugin,
     );
@@ -195,6 +224,47 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     );
   });
 
+  it("should propagate errors thrown within wrapOperationAttemptFn", async () => {
+    const wrapError = new Error("wrapOperationAttemptFn exploded");
+
+    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => {
+        fn();
+        throw wrapError;
+      },
+    );
+
+    mockRunWithContext.mockImplementationOnce(
+      async (_stepId, _parentId, fn) => {
+        return await fn();
+      },
+    );
+
+    const handler = createWaitForConditionHandler(
+      mockContext,
+      mockCheckpoint,
+      createStepId,
+      createDefaultLogger(),
+      undefined,
+      undefined,
+      mockPlugin,
+    );
+
+    const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+      .fn()
+      .mockResolvedValue("done");
+    const config: WaitForConditionConfig<string> = {
+      waitStrategy: () => ({ shouldContinue: false }),
+      initialState: "start",
+    };
+
+    await expect(handler("my-condition", checkFunc, config)).rejects.toThrow(
+      "wrapOperationAttemptFn exploded",
+    );
+
+    expect(checkFunc).toHaveBeenCalled();
+  });
+
   it("should not throw when plugin hooks are undefined", async () => {
     const emptyPlugin: DurableInstrumentationPlugin = {};
 
@@ -203,6 +273,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       mockCheckpoint,
       createStepId,
       createDefaultLogger(),
+      undefined,
       undefined,
       emptyPlugin,
     );

@@ -64,6 +64,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       jest.fn(),
+      undefined,
       mockPlugin,
     );
 
@@ -97,6 +98,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       jest.fn(),
+      undefined,
       mockPlugin,
     );
 
@@ -125,6 +127,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       jest.fn(),
+      undefined,
       mockPlugin,
       () => DurableExecutionMode.ReplayMode,
     );
@@ -151,6 +154,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       jest.fn(),
+      undefined,
       mockPlugin,
       () => DurableExecutionMode.ReplayMode,
     );
@@ -177,6 +181,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       jest.fn(),
+      undefined,
       mockPlugin,
     );
 
@@ -211,6 +216,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       jest.fn(),
+      undefined,
       mockPlugin,
     );
 
@@ -243,6 +249,7 @@ describe("InvokeHandler - plugin hooks", () => {
       mockCreateStepId,
       undefined,
       jest.fn(),
+      undefined,
       {},
     );
 
