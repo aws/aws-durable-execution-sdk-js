@@ -509,7 +509,7 @@ describe("DurableContext", () => {
 
       // New invoke handler uses centralized termination, no hasRunningOperations parameter
       // Verify it was called with the new signature (context, checkpoint, createStepId, parentId, checkAndUpdateReplayMode, plugin, getDurableExecutionMode)
-      expect(createInvokeHandler.mock.calls[0].length).toBe(7);
+      expect(createInvokeHandler.mock.calls[0].length).toBe(8);
     });
 
     it("should call map handler", async () => {

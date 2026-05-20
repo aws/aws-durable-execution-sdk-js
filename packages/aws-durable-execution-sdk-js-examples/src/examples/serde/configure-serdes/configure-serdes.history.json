@@ -1,0 +1,113 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "f0d8a401-ccd7-4049-b05b-3eabac4421ed",
+    "EventTimestamp": "2026-04-29T05:31:13.179Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"orderId\":\"ORD-001\",\"amount\":99.99}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "create-order",
+    "EventTimestamp": "2026-04-29T05:31:13.185Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "create-order",
+    "EventTimestamp": "2026-04-29T05:31:13.185Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":\"ORD-001\",\"amount\":99.99,\"status\":\"pending\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-04-29T05:31:13.192Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-04-29T05:31:14.192Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-04-29T05:31:13.214Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-04-29T05:31:13.179Z",
+      "EndTimestamp": "2026-04-29T05:31:13.214Z",
+      "Error": {},
+      "RequestId": "c6e18a4e-4c91-457a-a76f-e0179afdc2eb"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-04-29T05:31:14.189Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "process-order",
+    "EventTimestamp": "2026-04-29T05:31:14.191Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "process-order",
+    "EventTimestamp": "2026-04-29T05:31:14.191Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":\"ORD-001\",\"amount\":99.99,\"status\":\"processed\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-04-29T05:31:14.191Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-04-29T05:31:14.189Z",
+      "EndTimestamp": "2026-04-29T05:31:14.191Z",
+      "Error": {},
+      "RequestId": "dc68347e-1325-4f41-b73e-21f77009b807"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "f0d8a401-ccd7-4049-b05b-3eabac4421ed",
+    "EventTimestamp": "2026-04-29T05:31:14.192Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"summary\":\"Order ORD-001: $99.99 (processed)\",\"id\":\"ORD-001\",\"amount\":99.99,\"status\":\"processed\"}"
+      }
+    }
+  }
+]

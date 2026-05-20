@@ -1,5 +1,6 @@
 import { Context } from "aws-lambda";
 import { LoggerConfig } from "./logger";
+import { SerdesConfig } from "../utils/serdes/serdes";
 import { StepFunc, StepConfig } from "./step";
 import { ChildFunc, ChildConfig } from "./child-context";
 import { InvokeConfig } from "./invoke";
@@ -848,4 +849,27 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    * ```
    */
   configureLogger(config: LoggerConfig<TLogger>): void;
+
+  /**
+   * Configures default serdes behavior for all operations on this context.
+   *
+   * - `defaultSerdes` applies to: step, runInChildContext, invoke, waitForCondition
+   * - `defaultCallbackDeserializer` applies to: createCallback, waitForCallback.
+   *   If omitted, callbacks always use the built-in passthrough (raw string) deserializer,
+   *   regardless of whether defaultSerdes is set. Must be set explicitly to opt-in.
+   *
+   * Per-operation `serdes` options always take precedence over these defaults.
+   *
+   * @param config - Serdes configuration options
+   * @example
+   * ```typescript
+   * // Only steps use filesystem serdes; callbacks keep the default passthrough
+   * context.configureSerdes({ defaultSerdes: createFileSystemSerdes("/mnt/s3") });
+   *
+   * // Opt-in: both steps and callbacks use filesystem serdes
+   * const fsSerdes = createFileSystemSerdes("/mnt/s3");
+   * context.configureSerdes({ defaultSerdes: fsSerdes, defaultCallbackDeserializer: fsSerdes });
+   * ```
+   */
+  configureSerdes(config: SerdesConfig): void;
 }

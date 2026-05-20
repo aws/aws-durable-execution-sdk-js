@@ -45,6 +45,40 @@ export interface Serdes<T> {
 }
 
 /**
+ * Serdes typed for arbitrary values. Used internally where the concrete type is unknown.
+ * @internal
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnySerdes = Serdes<any>;
+
+/**
+ * Deserialize-only Serdes typed for arbitrary values. Used for callback deserializers.
+ * @internal
+ */
+export type AnySerdesDeserializer = Pick<AnySerdes, "deserialize">;
+
+/**
+ * Configuration for default serdes behavior on a DurableContext.
+ *
+ * @public
+ */
+export interface SerdesConfig {
+  /**
+   * Default serdes used for step, runInChildContext, invoke, and waitForCondition results.
+   * Falls back to the built-in JSON serdes if not provided.
+   */
+  defaultSerdes?: AnySerdes;
+
+  /**
+   * Default deserializer used for createCallback and waitForCallback results.
+   * If not provided, falls back to the built-in passthrough (raw string) deserializer,
+   * regardless of whether defaultSerdes is set.
+   * Must be set explicitly to use a custom deserializer for callbacks.
+   */
+  defaultCallbackDeserializer?: AnySerdesDeserializer;
+}
+
+/**
  * Default Serdes implementation using JSON.stringify and JSON.parse
  * Wrapped in Promise.resolve() to maintain async interface compatibility
  * Ignores context parameter since it uses inline JSON serialization

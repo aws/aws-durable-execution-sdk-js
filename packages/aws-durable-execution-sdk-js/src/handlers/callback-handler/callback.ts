@@ -10,7 +10,7 @@ import {
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { Serdes } from "../../utils/serdes/serdes";
+import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
@@ -39,6 +39,8 @@ export const createCallback = (
   createStepId: () => string,
   checkAndUpdateReplayMode: () => void,
   parentId?: string,
+
+  getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
   plugin: DurableInstrumentationPlugin = {},
   getDurableExecutionMode?: () => DurableExecutionMode,
 ) => {
@@ -57,7 +59,11 @@ export const createCallback = (
     }
 
     const stepId = createStepId();
-    const serdes = config?.serdes || createPassThroughSerdes<T>();
+    const serdes =
+      config?.serdes ||
+      (getDefaultCallbackDeserializer
+        ? getDefaultCallbackDeserializer()
+        : createPassThroughSerdes<T>());
 
     const opInfo: OperationInfo = {
       Id: stepId,

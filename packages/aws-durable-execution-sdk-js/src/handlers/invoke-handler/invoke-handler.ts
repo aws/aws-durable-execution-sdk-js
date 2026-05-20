@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -37,6 +37,8 @@ export const createInvokeHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
+
+  getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
   getDurableExecutionMode?: () => DurableExecutionMode,
 ): {
@@ -199,7 +201,8 @@ export const createInvokeHandler = (
       // Start invoke if not already started
       if (!stepData) {
         const serializedPayload = await safeSerialize(
-          config?.payloadSerdes || defaultSerdes,
+          config?.payloadSerdes ||
+            (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
           input,
           stepId,
           name,
@@ -260,7 +263,8 @@ export const createInvokeHandler = (
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
           const invokeDetails = stepData.ChainedInvokeDetails;
           return await safeDeserialize(
-            config?.resultSerdes || defaultSerdes,
+            config?.resultSerdes ||
+              (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
             invokeDetails?.Result,
             stepId,
             name,
@@ -306,7 +310,8 @@ export const createInvokeHandler = (
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
-          config?.resultSerdes || defaultSerdes,
+          config?.resultSerdes ||
+            (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
           invokeDetails?.Result,
           stepId,
           name,

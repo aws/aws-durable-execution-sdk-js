@@ -15,13 +15,15 @@ import {
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { BatchResultImpl, restoreBatchResult } from "./batch-result";
-import { defaultSerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 
 export class ConcurrencyController<Logger extends DurableLogger> {
   constructor(
     private readonly operationName: string,
     private readonly skipNextOperation: () => void,
+
+    private readonly getDefaultSerdes?: () => AnySerdes,
   ) {}
 
   private isChildEntityCompleted(
@@ -109,7 +111,9 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
         if (summaryPayload) {
           try {
-            const serdes = config.serdes || defaultSerdes;
+            const serdes =
+              config.serdes ||
+              (this.getDefaultSerdes ? this.getDefaultSerdes() : defaultSerdes);
             const parsedSummary = await serdes.deserialize(summaryPayload, {
               entityId: entityId,
               durableExecutionArn: executionContext.durableExecutionArn,
@@ -484,6 +488,8 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
   skipNextOperation: () => void,
+
+  getDefaultSerdes?: () => AnySerdes,
 ) => {
   return <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
@@ -551,6 +557,7 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
         const concurrencyController = new ConcurrencyController<Logger>(
           "concurrent-execution",
           skipNextOperation,
+          getDefaultSerdes,
         );
 
         // Access durableExecutionMode from the context - it's set by runInChildContext

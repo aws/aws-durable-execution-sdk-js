@@ -14,6 +14,7 @@ import {
   CheckpointUnrecoverableInvocationError,
   CheckpointUnrecoverableExecutionError,
 } from "../../errors/checkpoint-errors/checkpoint-errors";
+import { isNonRetryableCustomerError } from "../../errors/non-retryable-errors";
 import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
 import {
@@ -252,6 +253,15 @@ export class CheckpointManager implements Checkpoint {
       );
     }
 
+    // For example: KMS errors from Lambda arrive as 502 errors. These indicate customer-caused
+    // KMS key misconfiguration and should not be retried — treat as execution error.
+    if (isNonRetryableCustomerError(error)) {
+      return new CheckpointUnrecoverableExecutionError(
+        `Checkpoint failed: ${errorMessage}`,
+        originalError,
+      );
+    }
+
     return new CheckpointUnrecoverableInvocationError(
       `Checkpoint failed: ${errorMessage}`,
       originalError,
@@ -347,6 +357,11 @@ export class CheckpointManager implements Checkpoint {
       } else {
         // Queue is empty and processing is done - notify all waiting promises
         this.notifyQueueCompletion();
+        // Re-evaluate termination now that the queue is empty, unless
+        // a termination cooldown is already in progress.
+        if (!this.terminationTimer) {
+          this.checkAndTerminate();
+        }
       }
     }
   }

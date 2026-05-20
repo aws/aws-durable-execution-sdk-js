@@ -13,15 +13,16 @@ import {
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { createPassThroughSerdes } from "../callback-handler/callback";
+import { AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import {
   ChildContextError,
   CallbackSubmitterError,
 } from "../../errors/durable-error/durable-error";
-
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   getNextStepId: () => string,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
+  getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
 ) => {
   return <T>(
     nameOrSubmitter: string | undefined | WaitForCallbackSubmitterFunc<Logger>,
@@ -78,13 +79,19 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       const childFunction = async (
         childCtx: DurableContext<Logger>,
       ): Promise<string> => {
-        // Convert WaitForCallbackConfig to CreateCallbackConfig
-        const createCallbackConfig: CreateCallbackConfig | undefined = config
-          ? {
-              timeout: config.timeout,
-              heartbeatTimeout: config.heartbeatTimeout,
-            }
-          : undefined;
+        // Convert WaitForCallbackConfig to CreateCallbackConfig.
+        // When a defaultCallbackDeserializer is configured, force passthrough serdes
+        // on the inner createCallback so the raw string is preserved for phase 2.
+        const createCallbackConfig: CreateCallbackConfig | undefined =
+          config || getDefaultCallbackDeserializer
+            ? {
+                timeout: config?.timeout,
+                heartbeatTimeout: config?.heartbeatTimeout,
+                ...(getDefaultCallbackDeserializer && {
+                  serdes: createPassThroughSerdes(),
+                }),
+              }
+            : undefined;
 
         // Create callback and get the promise + callbackId
         const [callbackPromise, callbackId] =
@@ -131,6 +138,13 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
       return {
         result: await runInChildContext(name, childFunction, {
           subType: OperationSubType.WAIT_FOR_CALLBACK,
+          // When a defaultCallbackDeserializer is configured, use passthrough serdes
+          // so the raw callback string is preserved through the runInChildContext
+          // round-trip and phase 2 can apply the deserializer exactly once.
+          // Without this, defaultSerdes (JSON) would add an extra encode/decode layer.
+          ...(getDefaultCallbackDeserializer && {
+            serdes: createPassThroughSerdes(),
+          }),
           errorMapper: (originalError) => {
             // Pass through callback errors directly (both timeout and failure)
             if (
@@ -164,7 +178,10 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
 
       // Always deserialize the result since it's a string
       return (await safeDeserialize(
-        config?.serdes ?? createPassThroughSerdes(),
+        config?.serdes ??
+          (getDefaultCallbackDeserializer
+            ? getDefaultCallbackDeserializer()
+            : createPassThroughSerdes()),
         result,
         stepId,
         name,

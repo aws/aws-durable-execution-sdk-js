@@ -2,6 +2,8 @@ import {
   DurableLogData,
   withDurableExecution,
   DurableLogger,
+  DurableContext,
+  DurableLoggingContext,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 import { Logger, LogLevel } from "@aws-lambda-powertools/logger";
@@ -9,10 +11,6 @@ import {
   LogItemExtraInput,
   LogItemMessage,
 } from "@aws-lambda-powertools/logger/types";
-import {
-  DurableContext,
-  DurableLoggingContext,
-} from "../../../../../aws-durable-execution-sdk-js/dist-types/types";
 
 export const config: ExampleConfig = {
   name: "Powertools Logger",

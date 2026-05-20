@@ -7,6 +7,7 @@ import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
+import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import { TerminationReason } from "./termination-manager/types";
 
 import {
@@ -440,17 +441,29 @@ export const withDurableExecution = <
     context: Context,
   ): Promise<DurableExecutionInvocationOutput> => {
     validateDurableExecutionEvent(event);
-    const { executionContext, durableExecutionMode, checkpointToken } =
-      await initializeExecutionContext(event, context, config?.client);
-    const plugin = createPluginRunner(config?.plugins ?? []);
-    return runHandler(
-      event,
-      context,
-      executionContext,
-      durableExecutionMode,
-      checkpointToken,
-      handler,
-      plugin,
-    );
+    try {
+      const { executionContext, durableExecutionMode, checkpointToken } =
+        await initializeExecutionContext(event, context, config?.client);
+      const plugin = createPluginRunner(config?.plugins ?? []);
+      return await runHandler(
+        event,
+        context,
+        executionContext,
+        durableExecutionMode,
+        checkpointToken,
+        handler,
+        plugin,
+      );
+    } catch (error) {
+      // Non-retryable customer errors (e.g., KMS key misconfiguration) should
+      // fail the execution immediately rather than retrying the invocation.
+      if (isNonRetryableCustomerError(error)) {
+        return {
+          Status: InvocationStatus.FAILED,
+          Error: createErrorObjectFromError(error),
+        };
+      }
+      throw error;
+    }
   };
 };

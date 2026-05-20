@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -34,8 +34,7 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 
-// Checkpoint size limit in bytes (256KB)
-const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
+import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
 export const determineChildReplayMode = (
   context: ExecutionContext,
@@ -80,6 +79,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+
+  getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
@@ -148,6 +149,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           options,
           getParentLogger,
           createChildContext,
+          getDefaultSerdes,
         );
 
         return result;
@@ -165,6 +167,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         getParentLogger,
         createChildContext,
         parentId,
+        getDefaultSerdes,
         plugin,
       );
     })()
@@ -206,8 +209,11 @@ export const handleCompletedChildContext = async <
     checkpointToken: string | undefined,
     parentId?: string,
   ) => DurableContext<Logger>,
+
+  getDefaultSerdes?: () => AnySerdes,
 ): Promise<T> => {
-  const serdes = options?.serdes || defaultSerdes;
+  const serdes =
+    options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
@@ -286,9 +292,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+
+  getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
 ): Promise<T> => {
-  const serdes = options?.serdes || defaultSerdes;
+  const serdes =
+    options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const isVirtual = options?.virtualContext === true;
   const opInfo = {
@@ -367,7 +376,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
     if (
       serializedResult &&
-      Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT
+      Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT_BYTES
     ) {
       replayChildren = true;
 
@@ -382,7 +391,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
         payloadSize: Buffer.byteLength(serializedResult, "utf8"),
-        limit: CHECKPOINT_SIZE_LIMIT,
+        limit: CHECKPOINT_SIZE_LIMIT_BYTES,
       });
     }
 
