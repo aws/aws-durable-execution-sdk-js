@@ -45,7 +45,11 @@ function isInLambdaRuntime(): boolean {
         // Use Function constructor to avoid TypeScript compilation errors in Jest
         const getImportMeta = new Function("return import.meta");
         const importMeta = getImportMeta();
-        if (importMeta && importMeta.url) {
+        if (
+          importMeta &&
+          importMeta.url &&
+          typeof importMeta.url === "string"
+        ) {
           currentFilePath = fileURLToPath(importMeta.url);
         }
       } catch {
