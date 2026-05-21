@@ -57,13 +57,14 @@ function isInLambdaRuntime(): boolean {
       }
     }
 
-    if (currentFilePath) {
+    if (currentFilePath && typeof currentFilePath === "string") {
       const libraryDirectory = dirname(currentFilePath);
       return libraryDirectory.startsWith(runtimeDir);
     }
 
     return false;
   } catch {
+    // Always return false on any error - better to assume not in Lambda than to break
     return false;
   }
 }
