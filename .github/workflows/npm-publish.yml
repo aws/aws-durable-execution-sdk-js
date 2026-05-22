@@ -2,6 +2,10 @@
 # For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
 
 name: npm publish
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 on:
