@@ -3,6 +3,7 @@
 
 name: npm publish
 permissions:
+  id-token: write # Required for OIDC
   contents: read
 on:
   release:
@@ -16,7 +17,7 @@ jobs:
           ref: ${{ github.event.release.target_commitish }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run build
@@ -28,3 +29,11 @@ jobs:
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  notify-release:
+    needs: [npm-publish]
+    uses: ./.github/workflows/notify-release.yml
+    with:
+      tag_name: ${{ github.event.release.tag_name }}
+      release_url: ${{ github.event.release.html_url }}
+    secrets: inherit
