@@ -1,0 +1,13 @@
+{
+  "name": "cjs-integration-test",
+  "version": "1.0.0",
+  "description": "CJS integration test to verify external CommonJS compatibility",
+  "type": "commonjs",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "workspace:*"
+  }
+}
