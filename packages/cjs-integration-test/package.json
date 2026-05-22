@@ -8,6 +8,6 @@
     "test": "node test.js"
   },
   "dependencies": {
-    "@aws/durable-execution-sdk-js": "workspace:*"
+    "@aws/durable-execution-sdk-js": "file:../aws-durable-execution-sdk-js"
   }
 }
