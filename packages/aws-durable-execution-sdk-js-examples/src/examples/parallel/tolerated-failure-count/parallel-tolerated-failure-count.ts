@@ -71,6 +71,7 @@ export const handler = withDurableExecution(
       totalCount: results.totalCount,
       completionReason: results.completionReason,
       hasFailure: results.hasFailure,
+      errors: results.getErrors().map((error) => error.message),
     };
   },
 );

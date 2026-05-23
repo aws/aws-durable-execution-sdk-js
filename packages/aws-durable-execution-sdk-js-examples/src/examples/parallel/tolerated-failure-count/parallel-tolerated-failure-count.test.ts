@@ -15,6 +15,7 @@ createTests({
       expect(result.completionReason).toBe("ALL_COMPLETED");
       expect(result.hasFailure).toBe(true);
       expect(result.totalCount).toBe(5);
+      expect(result.errors).toEqual(["Branch 2 failed", "Branch 4 failed"]);
 
       // Verify individual branch statuses
       [
