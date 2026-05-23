@@ -8,6 +8,9 @@ on:
     branches: ["main", "v1.x"]
   pull_request:
     branches: ["main", "v1.x"]
+  pull_request_target:
+    types: [labeled, unlabeled]
+    branches: ["main", "v1.x"]
 
 permissions:
   contents: read # This is required for actions/checkout
@@ -95,7 +98,7 @@ jobs:
 
   # Always succeed for external PRs to allow merging
   external-pr-status:
-    if: github.event.pull_request.head.repo.full_name != github.repository
+    if: github.event.pull_request.head.repo.full_name != github.repository && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
     runs-on: ubuntu-latest
     steps:
       - name: External PR Status
