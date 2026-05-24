@@ -98,7 +98,7 @@ jobs:
 
   # Always succeed for external PRs to allow merging
   external-pr-status:
-    if: github.event.pull_request.head.repo.full_name != github.repository && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+    if: github.event.pull_request.head.repo.full_name != github.repository && github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - name: External PR Status
