@@ -17,7 +17,7 @@ permissions:
 
 # Cancel when pull request is updated
 concurrency:
-  group: ${{ github.head_ref || github.ref_name || github.run_id }}
+  group: ${{ github.event_name }}-${{ github.head_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 
 jobs:
