@@ -39,7 +39,7 @@ createTests({
         // can detect it via err.cause?.name === "StepInterruptedError".
         expect(result.causeName).toBe("StepInterruptedError");
 
-        assertEventSignatures(execution);
+        assertEventSignatures(execution, "interrupted");
       }, 180_000);
       return;
     }
@@ -63,7 +63,7 @@ createTests({
       expect(result.status).toBe("succeeded");
       expect(result.result).toBe("step-completed");
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, "smoke");
     });
   },
 });
