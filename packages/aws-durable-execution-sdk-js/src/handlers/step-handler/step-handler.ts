@@ -187,7 +187,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
               },
             },
           );
-          throw error;
+          throw DurableOperationError.fromErrorObject(
+            createErrorObjectFromError(error),
+          );
         }
 
         await checkpoint.checkpoint(stepId, {
