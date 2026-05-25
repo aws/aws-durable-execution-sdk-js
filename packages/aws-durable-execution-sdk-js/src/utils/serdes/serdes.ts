@@ -219,8 +219,6 @@ export function createClassSerdes<T extends object>(
  * - Getters/setters are not preserved
  * - Nested class instances lose their prototype
  *
- * For classes with Date properties, use createClassSerdesWithDates instead.
- *
  * @beta
  */
 export function createClassSerdesWithDates<T extends object>(
