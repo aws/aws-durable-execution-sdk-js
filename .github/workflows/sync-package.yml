@@ -2,6 +2,7 @@ name: Sync package
 
 env:
   AWS_REGION: "us-west-2"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 # permission can be added at job level or workflow level
 permissions:

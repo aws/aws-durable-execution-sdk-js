@@ -67,7 +67,7 @@ describe.each(["cjs", "mjs"])(
 
         expect(exitCode).toBe(1);
         expect(stdout).toBe("");
-        expect(stderr).toMatchSnapshot();
+        expect(stderr).toContain("Error: File not found: nonexistent-file.js");
       });
 
       it("should error when handler export not found", () => {

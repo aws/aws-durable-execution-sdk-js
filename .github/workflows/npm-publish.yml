@@ -2,7 +2,12 @@
 # For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
 
 name: npm publish
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
+  id-token: write # Required for OIDC
   contents: read
 on:
   release:
@@ -16,7 +21,7 @@ jobs:
           ref: ${{ github.event.release.target_commitish }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run build
@@ -26,8 +31,6 @@ jobs:
       - name: iterate and publish
         run: ./.github/workflows/iterate-publish-npm.sh ${{ github.event.release.prerelease && 'true' || 'false' }}
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   notify-release:
     needs: [npm-publish]
