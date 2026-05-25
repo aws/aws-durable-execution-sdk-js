@@ -13,28 +13,16 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    try {
-      const result = await context.step(
-        "InterruptedStep",
-        async () => {
-          // Simulate a long-running operation that gets interrupted
-          await new Promise((resolve) => setTimeout(resolve, 10000)); // 10 seconds
-          return "This should not complete";
-        },
-        {
-          semantics: StepSemantics.AtMostOncePerRetry,
-          retryStrategy: () => ({ shouldRetry: false }),
-        },
-      );
-      return { success: true, result };
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          name: (error as Error).name,
-          message: (error as Error).message,
-        },
-      };
-    }
+    const result = await context.step(
+      "ErrorStep",
+      async () => {
+        throw new Error("Test error for shouldRetry false");
+      },
+      {
+        semantics: StepSemantics.AtMostOncePerRetry,
+        retryStrategy: () => ({ shouldRetry: false }),
+      },
+    );
+    return { success: true, result };
   },
 );
