@@ -31,8 +31,8 @@ export const handler = withDurableExecution(
       return {
         success: false,
         error: {
-          name: error.name,
-          message: error.message,
+          name: (error as Error).name,
+          message: (error as Error).message,
         },
       };
     }

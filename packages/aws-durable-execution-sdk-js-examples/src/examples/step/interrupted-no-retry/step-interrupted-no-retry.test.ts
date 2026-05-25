@@ -1,63 +1,46 @@
-import {
-  LocalDurableTestRunner,
-  OperationType,
-  OperationStatus,
-} from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./step-interrupted-no-retry";
+import { createTests } from "../../../utils/test-helper";
 
-beforeAll(() =>
-  LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
-);
-afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+createTests({
+  handler,
+  localRunnerConfig: {
+    skipTime: true,
+  },
+  tests: (runner, { assertEventSignatures }) => {
+    it("should handle interrupted step with shouldRetry:false without crashing", async () => {
+      const execution = await runner.run();
 
-describe("Step Interrupted No Retry", () => {
-  const durableTestRunner = new LocalDurableTestRunner({
-    handlerFunction: handler,
-  });
+      // Should not crash and should return error response
+      expect(execution.getError()).toBeDefined();
 
-  it("should handle interrupted step with shouldRetry:false without crashing", async () => {
-    // Set up the test runner with interrupted step history
-    const testRunnerWithHistory = new LocalDurableTestRunner({
-      handlerFunction: handler,
-      historyEvents: [
-        {
-          Id: "1",
-          Type: OperationType.STEP,
-          SubType: "STEP",
-          Status: OperationStatus.STARTED,
-          Name: "InterruptedStep",
-          StepDetails: {
-            Attempt: 0,
-          },
-        },
-      ],
+      const error = execution.getError();
+      expect(error?.errorType).toBe("DurableOperationError");
+      // The error message should indicate the step was interrupted
+      expect(error?.errorMessage).toContain("Step was interrupted");
+
+      assertEventSignatures(execution);
     });
 
-    const execution = await testRunnerWithHistory.run();
+    it("should complete successfully on first run without interruption", async () => {
+      // Mock setTimeout to resolve immediately for testing
+      const originalSetTimeout = global.setTimeout;
+      global.setTimeout = ((callback: () => void) => {
+        callback();
+        return 1 as any;
+      }) as any;
 
-    // Should not crash and should return error response
-    expect(execution.getError()).toBeDefined();
-    expect(execution.getError()?.errorType).toBe("DurableOperationError");
-    expect(execution.getError()?.errorMessage).toContain("interruption");
-  });
+      try {
+        const execution = await runner.run();
 
-  it("should complete successfully on first run without interruption", async () => {
-    // Mock setTimeout to resolve immediately for testing
-    const originalSetTimeout = global.setTimeout;
-    global.setTimeout = ((callback: () => void) => {
-      callback();
-      return 1 as any;
-    }) as any;
+        expect(execution.getResult()).toEqual({
+          success: true,
+          result: "This should not complete",
+        });
 
-    try {
-      const execution = await durableTestRunner.run();
-
-      expect(execution.getResult()).toEqual({
-        success: true,
-        result: "This should not complete",
-      });
-    } finally {
-      global.setTimeout = originalSetTimeout;
-    }
-  });
+        assertEventSignatures(execution, "success");
+      } finally {
+        global.setTimeout = originalSetTimeout;
+      }
+    });
+  },
 });
