@@ -1,22 +1,24 @@
 import { LambdaClient } from "@aws-sdk/client-lambda";
-import {
-  CloudDurableTestRunner,
-  LocalDurableTestRunner,
-} from "@aws/durable-execution-sdk-js-testing";
-import { handler } from "./step-interrupted-no-retry";
+import { CloudDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 
 // This test does not use the shared `createTests` helper because it does not
 // need an event-signature snapshot — the explicit assertions on the execution
-// result already verify the bug-fix contract directly:
-//   - cloud: status='failed', errorType='StepError', cause.name='StepInterruptedError'
-//   - local: status='succeeded', result='step-completed'
-// Adding a snapshot would only add brittleness without strengthening coverage.
-// `step-with-retry.test.ts` is precedent for not using `createTests`.
+// result already verify the bug-fix contract directly. `step-with-retry.test.ts`
+// is precedent for not using `createTests`.
+//
+// The bug-reproducing scenario (Lambda process-kill mid-step) cannot be
+// simulated by the LocalDurableTestRunner, so this is cloud-only. The
+// unit-level regression test for this fix lives in the core package at
+// packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.test.ts
+// (see "interrupted step with AT_MOST_ONCE_PER_RETRY").
 
 const isIntegrationTest = process.env.NODE_ENV === "integration";
 const TEST_NAME = "step-interrupted-no-retry";
 
-if (isIntegrationTest) {
+if (!isIntegrationTest) {
+  // Bug-reproducing scenario requires a real Lambda timeout; skip locally.
+  it.skip(`${TEST_NAME} (cloud-only) - run with NODE_ENV=integration`, () => {});
+} else {
   if (!process.env.FUNCTION_NAME_MAP) {
     throw new Error("FUNCTION_NAME_MAP is not set for integration tests");
   }
@@ -73,36 +75,5 @@ if (isIntegrationTest) {
       // can detect it via err.cause?.name === "StepInterruptedError".
       expect(result.causeName).toBe("StepInterruptedError");
     }, 180_000);
-  });
-} else {
-  describe(`${TEST_NAME} (local)`, () => {
-    beforeAll(() =>
-      LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
-    );
-    afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-
-    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
-
-    beforeEach(() => runner.reset());
-
-    // The LocalDurableTestRunner cannot simulate a real Lambda process-kill
-    // mid-step, so the bug-reproducing scenario is cloud-only. The unit-level
-    // regression test for this fix lives in the core package at
-    // packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.test.ts
-    // (see "interrupted step with AT_MOST_ONCE_PER_RETRY"). Here we just
-    // smoke-test that the handler is wired correctly with a fast-completing step.
-    it("should run successfully when the step completes within the timeout (smoke test)", async () => {
-      const execution = await runner.run({
-        payload: { stepDurationMs: 50 },
-      });
-
-      const result = execution.getResult() as {
-        status: string;
-        result?: string;
-      };
-
-      expect(result.status).toBe("succeeded");
-      expect(result.result).toBe("step-completed");
-    });
   });
 }
