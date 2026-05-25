@@ -14,6 +14,10 @@ export const config: ExampleConfig = {
     ExecutionTimeout: 60,
     RetentionPeriodInDays: 7,
   },
+  // Short per-invocation Lambda timeout so the long-running step is reliably
+  // killed mid-execution. The overall durable ExecutionTimeout (60s) is still
+  // long enough for the replay invocation to record the failure and return.
+  lambdaTimeoutSeconds: 5,
 };
 
 /**

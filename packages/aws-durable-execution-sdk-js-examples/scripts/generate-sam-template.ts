@@ -17,14 +17,6 @@ const EXAMPLE_CONFIGS: Record<string, any> = {
       },
     ],
   },
-  // Short Lambda timeout (well under DurableConfig.ExecutionTimeout) so the step
-  // body, which sleeps for ~30s, is killed mid-execution. This reproduces the
-  // StepInterruptedError + shouldRetry:false replay path end-to-end.
-  "StepInterruptedNoRetry-22x-NodeJS-Local": {
-    memorySize: 128,
-    timeout: 5,
-    policies: [],
-  },
 };
 
 // Default configuration for Lambda functions
@@ -63,7 +55,7 @@ function createFunctionResource(
       Runtime: "nodejs22.x",
       Architectures: ["x86_64"],
       MemorySize: config.memorySize,
-      Timeout: config.timeout,
+      Timeout: catalog.lambdaTimeoutSeconds ?? config.timeout,
       Role: { "Fn::GetAtt": ["DurableFunctionRole", "Arn"] },
       DurableConfig: catalog.durableConfig,
       Environment: {

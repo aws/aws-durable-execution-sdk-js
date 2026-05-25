@@ -283,7 +283,7 @@ async function createFunction(
           ExecutionTimeout: exampleConfig.durableConfig.ExecutionTimeout,
         }
       : undefined,
-    Timeout: 60,
+    Timeout: exampleConfig.lambdaTimeoutSeconds ?? 60,
     MemorySize: useCapacityProvider ? 2048 : 128,
     Environment: {
       Variables: env.LAMBDA_ENDPOINT
@@ -352,6 +352,7 @@ async function updateFunction(
   const updateEnvParams: UpdateFunctionConfigurationCommandInput = {
     FunctionName: functionName,
     Runtime: runtime,
+    Timeout: exampleConfig.lambdaTimeoutSeconds ?? 60,
     Environment: {
       Variables: env.LAMBDA_ENDPOINT
         ? {
