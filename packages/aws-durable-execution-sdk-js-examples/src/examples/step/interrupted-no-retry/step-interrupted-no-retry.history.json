@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "interrupted-execution-id",
-    "EventTimestamp": "2025-12-03T22:59:52.607Z",
+    "Id": "213da369-af72-406b-b9fc-56e34e6b6d18",
+    "EventTimestamp": "2026-05-25T00:26:33.773Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -14,9 +14,9 @@
     "EventType": "StepStarted",
     "SubType": "Step",
     "EventId": 2,
-    "Id": "7331ddef44fce68c",
+    "Id": "c4ca4238a0b92382",
     "Name": "InterruptedStep",
-    "EventTimestamp": "2025-12-03T22:59:52.610Z",
+    "EventTimestamp": "2026-05-25T00:26:33.777Z",
     "StepStartedDetails": {}
   }
 ]

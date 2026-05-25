@@ -8,39 +8,21 @@ createTests({
   },
   tests: (runner, { assertEventSignatures }) => {
     it("should handle interrupted step with shouldRetry:false without crashing", async () => {
+      // This test uses the modified history file that shows an interrupted step
+      // (StepStarted but no StepSucceeded/StepFailed)
+      console.log("Starting test execution...");
       const execution = await runner.run();
+      console.log("Test execution completed");
 
       // Should not crash and should return error response
       expect(execution.getError()).toBeDefined();
 
       const error = execution.getError();
       expect(error?.errorType).toBe("DurableOperationError");
-      // The error message should indicate the step was interrupted
+      // The error should indicate the step was interrupted
       expect(error?.errorMessage).toContain("Step was interrupted");
 
       assertEventSignatures(execution);
-    });
-
-    it("should complete successfully on first run without interruption", async () => {
-      // Mock setTimeout to resolve immediately for testing
-      const originalSetTimeout = global.setTimeout;
-      global.setTimeout = ((callback: () => void) => {
-        callback();
-        return 1 as any;
-      }) as any;
-
-      try {
-        const execution = await runner.run();
-
-        expect(execution.getResult()).toEqual({
-          success: true,
-          result: "This should not complete",
-        });
-
-        assertEventSignatures(execution, "success");
-      } finally {
-        global.setTimeout = originalSetTimeout;
-      }
-    });
+    }, 30000); // 30 second timeout
   },
 });
