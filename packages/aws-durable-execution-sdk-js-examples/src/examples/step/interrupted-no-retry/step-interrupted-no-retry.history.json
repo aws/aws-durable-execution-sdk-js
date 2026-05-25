@@ -1,0 +1,71 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "f7ed104b-a229-40b1-8a45-2dad98a2e975",
+    "EventTimestamp": "2026-05-25T01:06:49.840Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "ErrorStep",
+    "EventTimestamp": "2026-05-25T01:06:49.845Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "ErrorStep",
+    "EventTimestamp": "2026-05-25T01:06:49.847Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Test error for shouldRetry false",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-05-25T01:06:49.848Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-05-25T01:06:49.840Z",
+      "EndTimestamp": "2026-05-25T01:06:49.848Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Test error for shouldRetry false"
+        }
+      },
+      "RequestId": "fe6e044b-c247-45cb-8307-ce9c0c52af07"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 5,
+    "Id": "f7ed104b-a229-40b1-8a45-2dad98a2e975",
+    "EventTimestamp": "2026-05-25T01:06:49.848Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Test error for shouldRetry false"
+        }
+      }
+    }
+  }
+]
