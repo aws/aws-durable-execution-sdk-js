@@ -40,6 +40,17 @@ export interface TestDefinition<ResultType> {
   tests: TestCallback<ResultType>;
   invocationType?: InvocationType;
   localRunnerConfig?: LocalDurableTestRunnerSetupParameters;
+  /**
+   * When `true`, the framework will not require {@link TestHelper.assertEventSignatures}
+   * to be called from the test body. Use this for tests that already make direct,
+   * explicit assertions on the execution result and where a snapshot of emitted
+   * event types would only add brittleness without strengthening coverage (for
+   * example, cloud-only failure-path tests where the exact event sequence is
+   * hard to predict deterministically).
+   *
+   * @defaultValue false
+   */
+  skipEventSignatures?: boolean;
 }
 
 export interface EventSignatureConfig {
@@ -238,7 +249,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
   };
 
   afterAll(() => {
-    if (!calledAssertEventSignature) {
+    if (!testDef.skipEventSignatures && !calledAssertEventSignature) {
       throw new Error(
         `assertEventSignature was not called for test ${parsedFunctionName}`,
       );
