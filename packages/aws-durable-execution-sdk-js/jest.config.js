@@ -10,6 +10,16 @@ module.exports = {
   transform: {
     "^.+\\.ts$": "ts-jest",
   },
+  // Map the real version module to a hand-rolled stub so ts-jest never
+  // has to compile the real file's `import.meta.url` reference (which
+  // it would reject with TS1343 because Jest forces module: commonjs).
+  // The stub provides the same exports — SDK_NAME and SDK_VERSION —
+  // suitable for tests that only need to read them.
+  moduleNameMapper: {
+    "^./version$": "<rootDir>/src/utils/constants/__mocks__/version.ts",
+    "^../utils/constants/version$":
+      "<rootDir>/src/utils/constants/__mocks__/version.ts",
+  },
   moduleFileExtensions: ["ts", "js", "json", "node"],
   collectCoverage: true,
   coverageDirectory: "coverage/library",
