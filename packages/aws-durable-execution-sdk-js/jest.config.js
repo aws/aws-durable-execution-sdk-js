@@ -41,6 +41,7 @@ module.exports = {
     "!src/testing/**", // Exclude all testing utilities from library coverage
     "!src/index.ts", // Exclude barrel export file from coverage
     "!src/run-durable.ts", // Exclude temporary file from coverage
+    "!src/utils/constants/version.ts", // Exclude version.ts since it's mocked and uses import.meta
   ],
   // Set environment variables for tests
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
