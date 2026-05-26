@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "install-all": "npm install && npm install --workspaces",
-    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing && npm run test -w packages/aws-durable-execution-sdk-js-examples && npm run test -w packages/aws-durable-execution-sdk-js-eslint-plugin && npm run test -w packages/cjs-integration-test",
+    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing && npm run test -w packages/aws-durable-execution-sdk-js-examples && npm run test -w packages/aws-durable-execution-sdk-js-eslint-plugin && npm run test -w packages/cjs-integration-test && npm run test -w packages/esm-integration-test && npm run test -w packages/cdk-bundling-integration-test",
     "test:integration": "act -W .github/workflows/integration-tests.yml --secret-file .secrets --artifact-server-path /tmp/artifacts --container-architecture linux/amd64",
     "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing && npm run build -w packages/aws-durable-execution-sdk-js-examples && npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin",
     "postpublish": "git restore .",
@@ -34,7 +34,6 @@
     "@eslint/compat": "^1.3.0",
     "@eslint/js": "^9.29.0",
     "@microsoft/api-documenter": "^7.28.1",
-    "@rollup/plugin-esm-shim": "^0.1.8",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-typescript": "^12.1.4",
     "@tsconfig/node20": "^20.1.5",
