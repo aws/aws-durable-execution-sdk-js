@@ -872,6 +872,9 @@ describe("CheckpointManager", () => {
         ...mockOperation,
         operation: {
           ...mockOperation.operation,
+          ParentId: undefined,
+          Name: undefined,
+          SubType: undefined,
           CallbackDetails: {
             CallbackId: expect.any(String),
           },
