@@ -2,7 +2,6 @@
 
 import typescript from "@rollup/plugin-typescript";
 import json from "@rollup/plugin-json";
-import esmShim from "@rollup/plugin-esm-shim";
 import replace from "@rollup/plugin-replace";
 
 const plugins = [json()];
@@ -72,7 +71,6 @@ export function createBuildOptions(options, mode, packageJson) {
           exclude: ["**/__tests__/**/*"],
         }),
         ...inputPlugins,
-        esmShim(),
       ],
       output: {
         ...commonOutputOptions,
