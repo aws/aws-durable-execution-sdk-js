@@ -2,6 +2,7 @@
 
 import typescript from "@rollup/plugin-typescript";
 import json from "@rollup/plugin-json";
+import esmShim from "@rollup/plugin-esm-shim";
 import replace from "@rollup/plugin-replace";
 
 const plugins = [json()];
@@ -17,9 +18,17 @@ const commonOutputOptions = {
  * @param {import('rollup').RollupOptions} options
  * @param {string | undefined} mode
  * @param {Record<string, unknown>} packageJson
+ * @param {{ esmShim?: boolean }} [extraOptions] Per-package overrides.
+ *   - `esmShim`: opt into `@rollup/plugin-esm-shim`, which injects a
+ *     top-level banner into the ESM dist that synthesises
+ *     `__filename` / `__dirname` / `require` from `import.meta.url`.
+ *     Only safe for packages whose ESM dist is consumed directly by
+ *     Node (not re-bundled into CJS by downstream toolchains like
+ *     esbuild — see PR fix(sdk): remove esm-shim banner from ESM
+ *     dist for context).
  * @returns {import('rollup').RollupOptions}
  */
-export function createBuildOptions(options, mode, packageJson) {
+export function createBuildOptions(options, mode, packageJson, extraOptions) {
   if (mode !== "esm" && mode !== "cjs") {
     throw new Error(`Invalid mode ${mode}`);
   }
@@ -71,6 +80,7 @@ export function createBuildOptions(options, mode, packageJson) {
           exclude: ["**/__tests__/**/*"],
         }),
         ...inputPlugins,
+        ...(extraOptions?.esmShim ? [esmShim()] : []),
       ],
       output: {
         ...commonOutputOptions,

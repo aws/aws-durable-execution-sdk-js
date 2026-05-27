@@ -41,6 +41,14 @@ module.exports = {
     "!src/testing/**", // Exclude all testing utilities from library coverage
     "!src/index.ts", // Exclude barrel export file from coverage
     "!src/run-durable.ts", // Exclude temporary file from coverage
+    // version.ts uses `import.meta.url` at module scope, which
+    // ts-jest cannot compile (Jest forces module: commonjs). Jest
+    // tests substitute a manual mock via moduleNameMapper, so the
+    // real module is never loaded during tests — but coverage
+    // instrumentation walks the real source file and trips the
+    // ts-jest TS1343 error. The detection logic is exercised
+    // end-to-end by packages/lambda-runtime-detection-integration-test.
+    "!src/utils/constants/version.ts",
   ],
   // Set environment variables for tests
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
