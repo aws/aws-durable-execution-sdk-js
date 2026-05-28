@@ -7,10 +7,12 @@ import { Operation } from "@aws-sdk/client-lambda";
  */
 export interface OperationInfo {
   Id: string;
+  HashId: string;
   Name?: string;
   Type: string;
   SubType?: string;
   ParentId?: string;
+  HashParentId?: string;
   StartTimestamp?: Date;
   EndTimestamp?: Date;
 }
