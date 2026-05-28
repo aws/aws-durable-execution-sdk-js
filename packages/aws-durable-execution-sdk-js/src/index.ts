@@ -87,6 +87,7 @@ export {
   ExecutionEndInfo,
   OperationChangeInfo,
   OperationInfo,
+  OperationEndInfo,
   AttemptInfo,
   AttemptEndInfo,
   AttemptEndInfoOutcome,

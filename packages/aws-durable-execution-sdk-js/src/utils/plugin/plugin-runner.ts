@@ -5,6 +5,7 @@ import {
   ExecutionEndInfo,
   InvocationInfo,
   OperationChangeInfo,
+  OperationEndInfo,
   OperationInfo,
 } from "../../types/plugin";
 
@@ -20,8 +21,7 @@ export function createPluginRunner(
 
   type CustomerFnResult = any;
   type CallbackResult = any;
-  type SimpleCallback = () => CallbackResult;
-  type WrapperHookFn = (info: PluginInfo, fn: SimpleCallback) => CallbackResult;
+  type CustomerFn = () => CustomerFnResult;
   type PluginInfo =
     | OperationInfo
     | InvocationInfo
@@ -30,13 +30,16 @@ export function createPluginRunner(
     | AttemptInfo
     | OperationChangeInfo
     | undefined;
-  type DataCallback = (info: PluginInfo) => CallbackResult;
-  type PluginHookFn = SimpleCallback | DataCallback;
+  type PluginWrapperHookFn = (
+    info: PluginInfo,
+    fn: CustomerFnResult,
+  ) => CallbackResult;
+  type PluginHookFn = (info: PluginInfo) => CallbackResult;
 
   const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
-    fn: () => CustomerFnResult,
+    fn: CustomerFn,
   ) => {
     let fnError: { error: unknown } | undefined;
 
@@ -59,7 +62,7 @@ export function createPluginRunner(
 
     const chain = plugins.reduceRight(
       (next, plugin) => () => {
-        const hookFn = plugin[method] as WrapperHookFn;
+        const hookFn = plugin[method] as PluginWrapperHookFn;
         if (hookFn) {
           return hookFn.call(plugin, info, next);
         }
@@ -102,20 +105,24 @@ export function createPluginRunner(
   return {
     onExecutionEnd: (info: ExecutionEndInfo) => run("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
-    wrapInvocation: <T>(info: InvocationInfo, fn: () => T): T =>
+    wrapInvocation: (info: InvocationInfo, fn: CustomerFn): CustomerFnResult =>
       runAsCallback("wrapInvocation", info, fn),
     onInvocationEnd: (info: InvocationInfo) => run("onInvocationEnd", info),
     onOperationFirstStart: (info: OperationInfo) =>
       run("onOperationFirstStart", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
-    wrapChildContextFn: <T>(info: OperationInfo, fn: () => T): T =>
-      runAsCallback("wrapChildContextFn", info, fn),
-    onOperationFirstEnd: (info: OperationInfo & { error?: Error }) =>
+    wrapChildContextFn: (
+      info: OperationInfo,
+      fn: CustomerFn,
+    ): CustomerFnResult => runAsCallback("wrapChildContextFn", info, fn),
+    onOperationFirstEnd: (info: OperationEndInfo) =>
       run("onOperationFirstEnd", info),
     onOperationAttemptStart: (info: AttemptInfo) =>
       run("onOperationAttemptStart", info),
-    wrapOperationAttemptFn: <T>(info: AttemptInfo, fn: () => T): T =>
-      runAsCallback("wrapOperationAttemptFn", info, fn),
+    wrapOperationAttemptFn: (
+      info: AttemptInfo,
+      fn: CustomerFn,
+    ): CustomerFnResult => runAsCallback("wrapOperationAttemptFn", info, fn),
     onOperationAttemptEnd: (info: AttemptEndInfo) =>
       run("onOperationAttemptEnd", info),
     onOperationChange: (info: OperationChangeInfo) =>
