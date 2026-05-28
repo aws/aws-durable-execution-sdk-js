@@ -20,7 +20,7 @@ export function createPluginRunner(
 
   type CustomerFnResult = any;
   type CallbackResult = any;
-  type SimpleCallback = () => CustomerFnResult;
+  type SimpleCallback = () => CallbackResult;
   type WrapperHookFn = (info: PluginInfo, fn: SimpleCallback) => CallbackResult;
   type PluginInfo =
     | OperationInfo
