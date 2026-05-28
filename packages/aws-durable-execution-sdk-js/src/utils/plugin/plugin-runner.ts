@@ -17,7 +17,10 @@ export function createPluginRunner(
   plugins: DurableInstrumentationPlugin[],
 ): DurableInstrumentationPlugin {
   if (plugins.length === 0) return {};
-
+  type WrapperHookFn = (info: any, fn: () => any) => any;
+  type SimpleCallback = () => any;
+  type DataCallback = (info: any) => any;
+  type PluginHookFn = SimpleCallback | DataCallback;
   const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
@@ -44,7 +47,7 @@ export function createPluginRunner(
 
     const chain = plugins.reduceRight(
       (next, plugin) => () => {
-        const hookFn = plugin[method] as any;
+        const hookFn = plugin[method] as WrapperHookFn;
         if (hookFn) {
           return hookFn.call(plugin, info, next);
         }
@@ -74,7 +77,7 @@ export function createPluginRunner(
   ) =>
     plugins.forEach((p) => {
       try {
-        const result = (p[method] as any)?.(info);
+        const result = (p[method] as PluginHookFn)?.(info);
         // Fire-and-forget — never block the SDK on plugin async work
         if (result && typeof result.catch === "function") {
           result.catch(() => {});
@@ -85,7 +88,6 @@ export function createPluginRunner(
     });
 
   return {
-    onExecutionStart: (info: InvocationInfo) => run("onExecutionStart", info),
     onExecutionEnd: (info: ExecutionEndInfo) => run("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
     wrapInvocation: <T>(info: InvocationInfo, fn: () => T): T =>

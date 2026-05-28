@@ -14,6 +14,7 @@ describe("createPluginRunner", () => {
   const invocationInfo: InvocationInfo = {
     requestId: "req-1",
     executionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
+    isFirstInvocation: true,
   };
 
   const operationInfo: OperationInfo = {
@@ -54,21 +55,6 @@ describe("createPluginRunner", () => {
   });
 
   describe("fire-and-forget hooks (run)", () => {
-    it("calls onExecutionStart on all plugins", () => {
-      const plugin1: jest.Mocked<DurableInstrumentationPlugin> = {
-        onExecutionStart: jest.fn(),
-      };
-      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onExecutionStart: jest.fn(),
-      };
-
-      const runner = createPluginRunner([plugin1, plugin2]);
-      runner.onExecutionStart!(invocationInfo);
-
-      expect(plugin1.onExecutionStart).toHaveBeenCalledWith(invocationInfo);
-      expect(plugin2.onExecutionStart).toHaveBeenCalledWith(invocationInfo);
-    });
-
     it("calls onInvocationStart on all plugins", () => {
       const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
         onInvocationStart: jest.fn(),
@@ -151,18 +137,18 @@ describe("createPluginRunner", () => {
 
     it("swallows synchronous errors from plugins", () => {
       const throwingPlugin: DurableInstrumentationPlugin = {
-        onExecutionStart: () => {
+        onInvocationStart: () => {
           throw new Error("sync plugin error");
         },
       };
       const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onExecutionStart: jest.fn(),
+        onInvocationStart: jest.fn(),
       };
 
       const runner = createPluginRunner([throwingPlugin, plugin2]);
 
-      expect(() => runner.onExecutionStart!(invocationInfo)).not.toThrow();
-      expect(plugin2.onExecutionStart).toHaveBeenCalledWith(invocationInfo);
+      expect(() => runner.onInvocationStart!(invocationInfo)).not.toThrow();
+      expect(plugin2.onInvocationStart).toHaveBeenCalledWith(invocationInfo);
     });
 
     it("swallows async errors from plugins (fire-and-forget)", () => {
@@ -180,13 +166,13 @@ describe("createPluginRunner", () => {
     it("skips plugins that do not implement the hook", () => {
       const plugin1: DurableInstrumentationPlugin = {};
       const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
-        onExecutionStart: jest.fn(),
+        onInvocationStart: jest.fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
-      runner.onExecutionStart!(invocationInfo);
+      runner.onInvocationStart!(invocationInfo);
 
-      expect(plugin2.onExecutionStart).toHaveBeenCalledWith(invocationInfo);
+      expect(plugin2.onInvocationStart).toHaveBeenCalledWith(invocationInfo);
     });
   });
 
@@ -565,7 +551,6 @@ describe("createPluginRunner", () => {
   describe("multiple plugins integration", () => {
     it("all hooks are called on all plugins for a full lifecycle", () => {
       const plugin1 = {
-        onExecutionStart: jest.fn(),
         onInvocationStart: jest.fn(),
         wrapInvocation: jest.fn((_info: any, fn: () => any) => fn()),
         onOperationFirstStart: jest.fn(),
@@ -581,7 +566,6 @@ describe("createPluginRunner", () => {
       } as unknown as jest.Mocked<DurableInstrumentationPlugin>;
 
       const plugin2 = {
-        onExecutionStart: jest.fn(),
         onInvocationStart: jest.fn(),
         wrapInvocation: jest.fn((_info: any, fn: () => any) => fn()),
         onOperationFirstStart: jest.fn(),
@@ -599,7 +583,6 @@ describe("createPluginRunner", () => {
       const runner = createPluginRunner([plugin1, plugin2]);
 
       // Simulate a full lifecycle
-      runner.onExecutionStart!(invocationInfo);
       runner.onInvocationStart!(invocationInfo);
       runner.wrapInvocation!(invocationInfo, () => "invocation-result");
       runner.onOperationFirstStart!(operationInfo);
@@ -614,8 +597,6 @@ describe("createPluginRunner", () => {
       const logCtx = runner.enrichLogContext!();
 
       // Verify all hooks called on both plugins
-      expect(plugin1.onExecutionStart).toHaveBeenCalledTimes(1);
-      expect(plugin2.onExecutionStart).toHaveBeenCalledTimes(1);
       expect(plugin1.onInvocationStart).toHaveBeenCalledTimes(1);
       expect(plugin2.onInvocationStart).toHaveBeenCalledTimes(1);
       expect(plugin1.wrapInvocation).toHaveBeenCalledTimes(1);

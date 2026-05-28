@@ -57,6 +57,7 @@ export interface AttemptEndInfo extends AttemptInfo {
 export interface InvocationInfo {
   requestId: string;
   executionArn: string;
+  isFirstInvocation: boolean;
 }
 
 /**
@@ -88,7 +89,6 @@ export interface OperationChangeInfo extends InvocationInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DurableInstrumentationPlugin {
-  onExecutionStart?(info: InvocationInfo): void;
   onExecutionEnd?(info: ExecutionEndInfo): void;
   onInvocationStart?(info: InvocationInfo): void;
   wrapInvocation?<T>(info: InvocationInfo, fn: () => T): T;
