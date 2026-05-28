@@ -17,14 +17,26 @@ export function createPluginRunner(
   plugins: DurableInstrumentationPlugin[],
 ): DurableInstrumentationPlugin {
   if (plugins.length === 0) return {};
-  type WrapperHookFn = (info: any, fn: () => any) => any;
-  type SimpleCallback = () => any;
-  type DataCallback = (info: any) => any;
+
+  type CustomerFnResult = any;
+  type CallbackResult = any;
+  type SimpleCallback = () => CustomerFnResult;
+  type WrapperHookFn = (info: PluginInfo, fn: SimpleCallback) => CallbackResult;
+  type PluginInfo =
+    | OperationInfo
+    | InvocationInfo
+    | ExecutionEndInfo
+    | AttemptEndInfo
+    | AttemptInfo
+    | OperationChangeInfo
+    | undefined;
+  type DataCallback = (info: PluginInfo) => CallbackResult;
   type PluginHookFn = SimpleCallback | DataCallback;
+
   const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
-    fn: () => any,
+    fn: () => CustomerFnResult,
   ) => {
     let fnError: { error: unknown } | undefined;
 
@@ -60,7 +72,7 @@ export function createPluginRunner(
 
     // If the result is async, ensure fn errors are re-thrown even if swallowed by a plugin
     if (result && typeof result.then === "function") {
-      return result.then((val: any) => {
+      return result.then((val: CustomerFnResult) => {
         if (fnError) throw fnError.error;
         return val;
       });
@@ -77,7 +89,7 @@ export function createPluginRunner(
   ) =>
     plugins.forEach((p) => {
       try {
-        const result = (p[method] as PluginHookFn)?.(info);
+        const result = (p[method] as PluginHookFn)?.(info as PluginInfo);
         // Fire-and-forget — never block the SDK on plugin async work
         if (result && typeof result.catch === "function") {
           result.catch(() => {});
