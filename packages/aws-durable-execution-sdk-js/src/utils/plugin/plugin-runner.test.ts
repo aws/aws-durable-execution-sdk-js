@@ -19,6 +19,7 @@ describe("createPluginRunner", () => {
 
   const operationInfo: OperationInfo = {
     Id: "op-1",
+    HashedId: "op-1-hash",
     Name: "my-step",
     Type: "STEP",
   };

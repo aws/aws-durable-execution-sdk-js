@@ -24,6 +24,7 @@ export function createPluginRunner(
   type CustomerFn = () => CustomerFnResult;
   type PluginInfo =
     | OperationInfo
+    | OperationEndInfo
     | InvocationInfo
     | ExecutionEndInfo
     | AttemptEndInfo

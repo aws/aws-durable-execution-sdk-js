@@ -5,6 +5,7 @@ import {
   AttemptEndInfo,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
+import { hashId } from "../step-id-utils/step-id-utils";
 
 /**
  * Converts an Operation to an OperationInfo.
@@ -14,10 +15,14 @@ import {
 export function toOperationInfo(operation?: Operation): OperationInfo {
   return {
     Id: operation?.Id ?? "",
+    HashedId: hashId(operation?.Id ?? ""),
     Name: operation?.Name,
     Type: operation?.Type ?? "",
     SubType: operation?.SubType,
     ParentId: operation?.ParentId,
+    HashedParentId: operation?.ParentId
+      ? hashId(operation.ParentId)
+      : undefined,
     StartTimestamp: operation?.StartTimestamp,
     EndTimestamp: operation?.EndTimestamp,
   };
@@ -71,10 +76,15 @@ export function backfillOperationInfo<T extends OperationInfo>(
   defaults: Partial<OperationInfo>,
 ): T {
   info.Id = defaults.Id ?? "";
+  info.HashedId = defaults.HashedId ?? hashId(info.Id);
   if (!info.Type) info.Type = defaults.Type ?? "";
   if (!info.SubType) info.SubType = defaults.SubType;
   if (!info.Name) info.Name = defaults.Name;
   if (!info.ParentId) info.ParentId = defaults.ParentId;
+  if (!info.HashedParentId)
+    info.HashedParentId =
+      defaults.HashedParentId ??
+      (info.ParentId ? hashId(info.ParentId) : undefined);
   if (!info.StartTimestamp) info.StartTimestamp = defaults.StartTimestamp;
   if (!info.EndTimestamp) info.EndTimestamp = defaults.EndTimestamp;
   return info;
