@@ -7,7 +7,26 @@ import {
   OperationChangeInfo,
   OperationEndInfo,
   OperationInfo,
+  CustomerFnResult,
+  CustomerFn,
 } from "../../types/plugin";
+
+type CallbackResult = unknown;
+type CallbackFn = () => CallbackResult;
+type PluginInfo =
+  | OperationInfo
+  | OperationEndInfo
+  | InvocationInfo
+  | ExecutionEndInfo
+  | AttemptEndInfo
+  | AttemptInfo
+  | OperationChangeInfo
+  | undefined;
+type PluginWrapperHookFn = (
+  info: PluginInfo,
+  fn: CustomerFnResult,
+) => CallbackResult;
+type PluginHookFn = (info: PluginInfo) => CallbackResult;
 
 /**
  * Creates a composite plugin runner that dispatches lifecycle events to all registered plugins.
@@ -19,24 +38,6 @@ export function createPluginRunner(
 ): DurableInstrumentationPlugin {
   if (plugins.length === 0) return {};
 
-  type CustomerFnResult = any;
-  type CallbackResult = any;
-  type CustomerFn = () => CustomerFnResult;
-  type PluginInfo =
-    | OperationInfo
-    | OperationEndInfo
-    | InvocationInfo
-    | ExecutionEndInfo
-    | AttemptEndInfo
-    | AttemptInfo
-    | OperationChangeInfo
-    | undefined;
-  type PluginWrapperHookFn = (
-    info: PluginInfo,
-    fn: CustomerFnResult,
-  ) => CallbackResult;
-  type PluginHookFn = (info: PluginInfo) => CallbackResult;
-
   const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
@@ -47,9 +48,12 @@ export function createPluginRunner(
     // Wrap the original fn to capture any error it throws
     const guardedFn = () => {
       try {
-        const result = fn();
-        if (result && typeof result.then === "function") {
-          return result.catch((err: unknown) => {
+        const result: CustomerFnResult = fn();
+        if (
+          result != null &&
+          typeof (result as Promise<unknown>).then === "function"
+        ) {
+          return (result as Promise<unknown>).catch((err: unknown) => {
             fnError = { error: err };
             throw err; // re-throw so plugins still see it
           });
@@ -61,7 +65,7 @@ export function createPluginRunner(
       }
     };
 
-    const chain = plugins.reduceRight(
+    const chain: CallbackFn = plugins.reduceRight(
       (next, plugin) => () => {
         const hookFn = plugin[method] as PluginWrapperHookFn;
         if (hookFn) {
@@ -72,11 +76,14 @@ export function createPluginRunner(
       guardedFn,
     );
 
-    const result = chain();
+    const result: CallbackResult = chain();
 
     // If the result is async, ensure fn errors are re-thrown even if swallowed by a plugin
-    if (result && typeof result.then === "function") {
-      return result.then((val: CustomerFnResult) => {
+    if (
+      result != null &&
+      typeof (result as PromiseLike<unknown>).then === "function"
+    ) {
+      return (result as PromiseLike<unknown>).then((val: CustomerFnResult) => {
         if (fnError) throw fnError.error;
         return val;
       });
@@ -95,8 +102,11 @@ export function createPluginRunner(
       try {
         const result = (p[method] as PluginHookFn)?.(info as PluginInfo);
         // Fire-and-forget — never block the SDK on plugin async work
-        if (result && typeof result.catch === "function") {
-          result.catch(() => {});
+        if (
+          result != null &&
+          typeof (result as Promise<unknown>).then === "function"
+        ) {
+          (result as Promise<unknown>).catch(() => {});
         }
       } catch {
         // Sync errors also swallowed

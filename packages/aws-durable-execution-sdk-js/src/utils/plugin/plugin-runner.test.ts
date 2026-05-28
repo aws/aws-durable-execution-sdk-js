@@ -236,7 +236,7 @@ describe("createPluginRunner", () => {
   describe("callback-wrapping hooks (runAsCallback)", () => {
     it("wrapInvocation calls fn through the plugin chain", () => {
       const plugin: DurableInstrumentationPlugin = {
-        wrapInvocation: (_info, fn) => fn(),
+        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -249,7 +249,7 @@ describe("createPluginRunner", () => {
       const callOrder: string[] = [];
 
       const plugin1: DurableInstrumentationPlugin = {
-        wrapInvocation: (_info, fn) => {
+        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => {
           callOrder.push("plugin1-before");
           const result = fn();
           callOrder.push("plugin1-after");
@@ -257,7 +257,7 @@ describe("createPluginRunner", () => {
         },
       };
       const plugin2: DurableInstrumentationPlugin = {
-        wrapInvocation: (_info, fn) => {
+        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => {
           callOrder.push("plugin2-before");
           const result = fn();
           callOrder.push("plugin2-after");
@@ -284,7 +284,7 @@ describe("createPluginRunner", () => {
 
     it("wrapChildContextFn calls fn through the plugin chain", () => {
       const plugin: DurableInstrumentationPlugin = {
-        wrapChildContextFn: (_info, fn) => fn(),
+        wrapChildContextFn: <T>(_info: OperationInfo, fn: () => T): T => fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -295,7 +295,7 @@ describe("createPluginRunner", () => {
 
     it("wrapOperationAttemptFn calls fn through the plugin chain", () => {
       const plugin: DurableInstrumentationPlugin = {
-        wrapOperationAttemptFn: (_info, fn) => fn(),
+        wrapOperationAttemptFn: <T>(_info: AttemptInfo, fn: () => T): T => fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -307,7 +307,7 @@ describe("createPluginRunner", () => {
     it("wrapInvocation skips plugins that do not implement it", () => {
       const plugin1: DurableInstrumentationPlugin = {};
       const plugin2: DurableInstrumentationPlugin = {
-        wrapInvocation: (_info, fn) => fn(),
+        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
@@ -318,7 +318,7 @@ describe("createPluginRunner", () => {
 
     it("wrapInvocation propagates errors from the wrapped fn", () => {
       const plugin: DurableInstrumentationPlugin = {
-        wrapInvocation: (_info, fn) => fn(),
+        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -462,7 +462,7 @@ describe("createPluginRunner", () => {
 
     it("does not interfere when fn succeeds and plugin behaves correctly", () => {
       const plugin: DurableInstrumentationPlugin = {
-        wrapOperationAttemptFn: (_info, fn) => fn(),
+        wrapOperationAttemptFn: <T>(_info: AttemptInfo, fn: () => T): T => fn(),
       };
 
       const runner = createPluginRunner([plugin]);

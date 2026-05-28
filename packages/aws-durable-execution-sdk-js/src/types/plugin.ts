@@ -102,15 +102,23 @@ export interface OperationChangeInfo extends InvocationInfo {
 export interface DurableInstrumentationPlugin {
   onExecutionEnd?(info: ExecutionEndInfo): void;
   onInvocationStart?(info: InvocationInfo): void;
-  wrapInvocation?<T>(info: InvocationInfo, fn: () => T): T;
+  wrapInvocation?(info: InvocationInfo, fn: CustomerFn): CustomerFnResult;
   onInvocationEnd?(info: InvocationInfo): void;
   onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
-  wrapChildContextFn?<T>(info: OperationInfo, fn: () => T): T;
+  wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
   onOperationFirstEnd?(info: OperationEndInfo): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
-  wrapOperationAttemptFn?<T>(info: AttemptInfo, fn: () => T): T;
+  wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
   onOperationChange?(info: OperationChangeInfo): void;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
 }
+
+/**
+ * Internal type aliases used by the plugin.
+ *
+ * @experimental These types are experimental and may be changed or removed in future releases.
+ */
+export type CustomerFnResult = unknown;
+export type CustomerFn = () => CustomerFnResult;
