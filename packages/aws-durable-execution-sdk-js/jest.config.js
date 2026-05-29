@@ -10,6 +10,16 @@ module.exports = {
   transform: {
     "^.+\\.ts$": "ts-jest",
   },
+  // Map the real version module to a hand-rolled stub so ts-jest never
+  // has to compile the real file's `import.meta.url` reference (which
+  // it would reject with TS1343 because Jest forces module: commonjs).
+  // The stub provides the same exports — SDK_NAME and SDK_VERSION —
+  // suitable for tests that only need to read them.
+  moduleNameMapper: {
+    "^./version$": "<rootDir>/src/utils/constants/__mocks__/version.ts",
+    "^../utils/constants/version$":
+      "<rootDir>/src/utils/constants/__mocks__/version.ts",
+  },
   moduleFileExtensions: ["ts", "js", "json", "node"],
   collectCoverage: true,
   coverageDirectory: "coverage/library",
@@ -31,6 +41,14 @@ module.exports = {
     "!src/testing/**", // Exclude all testing utilities from library coverage
     "!src/index.ts", // Exclude barrel export file from coverage
     "!src/run-durable.ts", // Exclude temporary file from coverage
+    // version.ts uses `import.meta.url` at module scope, which
+    // ts-jest cannot compile (Jest forces module: commonjs). Jest
+    // tests substitute a manual mock via moduleNameMapper, so the
+    // real module is never loaded during tests — but coverage
+    // instrumentation walks the real source file and trips the
+    // ts-jest TS1343 error. The detection logic is exercised
+    // end-to-end by packages/lambda-runtime-detection-integration-test.
+    "!src/utils/constants/version.ts",
   ],
   // Set environment variables for tests
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],

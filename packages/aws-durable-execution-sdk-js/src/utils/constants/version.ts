@@ -20,45 +20,33 @@ import { dirname } from "node:path";
 
 const runtimeDir = process.env.LAMBDA_RUNTIME_DIR || "/var/runtime";
 
+// Capture this module's path at module scope. `import.meta.url` is
+// per-module and is only resolvable in true ESM contexts, so it must
+// be referenced at top level — not from inside a function, and not
+// via `new Function("return import.meta")` or `eval(...)` (both run
+// their body in non-module scope, where `import.meta` is undefined).
+// In CJS the rollup output makes `__filename` a normal binding, so
+// the typeof guard takes that branch.
+//
+// The Jest unit tests never run this file directly: a manual mock
+// at `__mocks__/version.ts` substitutes a hardcoded SDK_VERSION,
+// which sidesteps ts-jest's TS1343 ("import.meta is only allowed
+// when module is es2020+") error during CJS test compilation.
+let moduleFilePath: string | undefined;
+if (typeof __filename !== "undefined") {
+  moduleFilePath = __filename;
+} else if (typeof import.meta?.url === "string") {
+  moduleFilePath = fileURLToPath(import.meta.url);
+}
+
 // Check if this code is running from a bundle in Lambda runtime
 // Use file path detection to determine if running in Lambda runtime directory
 function isInLambdaRuntime(): boolean {
   try {
-    // Check if we're in a Jest test environment first
-    if (
-      typeof process !== "undefined" &&
-      process.env &&
-      process.env.NODE_ENV === "test"
-    ) {
+    if (!moduleFilePath) {
       return false;
     }
-
-    // File path detection for reliable detection
-    let currentFilePath: string | undefined;
-
-    // CJS: use __filename if available
-    if (typeof __filename !== "undefined") {
-      currentFilePath = __filename;
-    } else {
-      // ESM: use import.meta.url
-      try {
-        // Use Function constructor to avoid TypeScript compilation errors in Jest
-        const getImportMeta = new Function("return import.meta");
-        const importMeta = getImportMeta();
-        if (importMeta && importMeta.url) {
-          currentFilePath = fileURLToPath(importMeta.url);
-        }
-      } catch {
-        // Fallback if import.meta is not available
-      }
-    }
-
-    if (currentFilePath) {
-      const libraryDirectory = dirname(currentFilePath);
-      return libraryDirectory.startsWith(runtimeDir);
-    }
-
-    return false;
+    return dirname(moduleFilePath).startsWith(runtimeDir);
   } catch {
     return false;
   }

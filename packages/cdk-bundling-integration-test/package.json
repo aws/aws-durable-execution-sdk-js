@@ -1,0 +1,14 @@
+{
+  "name": "cdk-bundling-integration-test",
+  "version": "1.0.0",
+  "description": "Integration test that bundles a Lambda handler with the same esbuild flags AWS CDK NodejsFunction uses (OutputFormat.CJS) and verifies the bundle loads without crashing module init",
+  "type": "module",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "*",
+    "esbuild": "^0.25.10"
+  }
+}
