@@ -523,6 +523,44 @@ async function main(): Promise<void> {
             useCapacityProvider,
             selectedRuntime,
           );
+
+          // Wait for newly created function to become active
+          if (!useCapacityProvider) {
+            console.log("Waiting for function to enter active state");
+            await runWithRetry(
+              async () => {
+                return getCurrentConfiguration(lambdaClient, functionName);
+              },
+              (currentConfiguration) => {
+                if (
+                  currentConfiguration.LastUpdateStatus ===
+                    LastUpdateStatus.Failed ||
+                  currentConfiguration.State === State.Failed
+                ) {
+                  throw new Error(
+                    `Function ${functionName} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
+                  );
+                }
+
+                if (
+                  currentConfiguration.State !== State.Active ||
+                  currentConfiguration.LastUpdateStatus ===
+                    LastUpdateStatus.InProgress
+                ) {
+                  return {
+                    shouldRetry: true,
+                    reason: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
+                  };
+                }
+
+                return {
+                  shouldRetry: false,
+                  reason: "Function is now active",
+                };
+              },
+              60,
+            );
+          }
         }
 
         if (useCapacityProvider) {
@@ -566,9 +604,14 @@ async function main(): Promise<void> {
                       LastUpdateStatus.Failed ||
                     currentConfiguration.State === State.Failed
                   ) {
+                    const reason =
+                      currentConfiguration.LastUpdateStatusReason ??
+                      currentConfiguration.StateReason ??
+                      "";
                     if (
                       currentConfiguration.LastUpdateStatusReasonCode ===
-                      LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
+                        LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded ||
+                      reason.includes("maxVCpuCount limit")
                     ) {
                       return {
                         shouldRetry: false,
@@ -577,7 +620,7 @@ async function main(): Promise<void> {
                     }
 
                     throw new Error(
-                      `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
+                      `Function ${functionWithQualifier} failed to enter successful state. ${reason}`,
                     );
                   }
 
@@ -600,10 +643,14 @@ async function main(): Promise<void> {
                 900,
               );
 
-              if (
-                result.LastUpdateStatusReasonCode !==
-                LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
-              ) {
+              const isCapacityLimitExceeded =
+                result.LastUpdateStatusReasonCode ===
+                  LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded ||
+                (result.LastUpdateStatusReason ?? "").includes(
+                  "maxVCpuCount limit",
+                );
+
+              if (!isCapacityLimitExceeded) {
                 console.log("Setting function scaling config");
                 await lambdaClient.send(
                   new PutFunctionScalingConfigCommand({
