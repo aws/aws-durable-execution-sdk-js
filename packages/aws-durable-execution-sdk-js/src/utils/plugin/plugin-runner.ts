@@ -42,11 +42,11 @@ export function createPluginRunner(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
     fn: CustomerFn,
-  ) => {
+  ): CustomerFnResult => {
     let fnError: { error: unknown } | undefined;
 
     // Wrap the original fn to capture any error it throws
-    const guardedFn = () => {
+    const guardedFn: CallbackResult | CustomerFnResult = () => {
       try {
         const result: CustomerFnResult = fn();
         if (
@@ -65,7 +65,7 @@ export function createPluginRunner(
       }
     };
 
-    const chain: CallbackFn = plugins.reduceRight(
+    const chain: CallbackFn = plugins.reduceRight<CallbackFn>(
       (next, plugin) => () => {
         const hookFn = plugin[method] as PluginWrapperHookFn;
         if (hookFn) {
@@ -73,7 +73,7 @@ export function createPluginRunner(
         }
         return next();
       },
-      guardedFn,
+      guardedFn as CallbackFn,
     );
 
     const result: CallbackResult = chain();
@@ -97,7 +97,7 @@ export function createPluginRunner(
   const run = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
-  ) =>
+  ): void =>
     plugins.forEach((p) => {
       try {
         const result = (p[method] as PluginHookFn)?.(info as PluginInfo);
