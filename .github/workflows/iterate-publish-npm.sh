@@ -10,7 +10,7 @@ for package_dir in packages/*; do
     if [ "$PRERELEASE" = "true" ]; then
       npm publish --access public --tag beta;
     else
-      npm publish --access public --tag v1x;
+      npm publish --access public;
     fi
     cd ../..;
   fi
