@@ -25,7 +25,7 @@ jobs:
       - name: Make script executable
         run: chmod +x ./.github/workflows/iterate-publish-npm.sh
       - name: iterate and publish
-        run: ./.github/workflows/iterate-publish-npm.sh
+        run: ./.github/workflows/iterate-publish-npm.sh ${{ github.event.release.prerelease && 'true' || 'false' }}
         shell: bash
 
   notify-release:
