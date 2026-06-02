@@ -18,6 +18,9 @@
 *.tsbuildinfo
 .rollup.cache
 */.rollup.cache
+*.d.ts.map
+*.d.ts
+*.tgz
 
 # npm pack artifacts
 *.d.ts

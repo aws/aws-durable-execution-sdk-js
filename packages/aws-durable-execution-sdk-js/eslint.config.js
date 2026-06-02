@@ -56,6 +56,17 @@ module.exports = [
     },
   },
   {
+    // Jest's manual-mocks directory has a fixed `__mocks__` name —
+    // exempt it from the kebab-case rule.
+    files: ["src/**/__mocks__/**/*.ts"],
+    plugins: {
+      "filename-convention": filenameConvention,
+    },
+    rules: {
+      "filename-convention/kebab-case": "off",
+    },
+  },
+  {
     ignores: ["dist/**/*", "node_modules/**/*"],
   },
 ];

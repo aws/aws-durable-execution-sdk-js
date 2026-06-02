@@ -55,7 +55,7 @@ function createFunctionResource(
       Runtime: "nodejs22.x",
       Architectures: ["x86_64"],
       MemorySize: config.memorySize,
-      Timeout: config.timeout,
+      Timeout: catalog.lambdaTimeoutSeconds ?? config.timeout,
       Role: { "Fn::GetAtt": ["DurableFunctionRole", "Arn"] },
       DurableConfig: catalog.durableConfig,
       Environment: {

@@ -2,7 +2,8 @@
 
 import { Context } from "aws-lambda";
 import { withDurableExecution } from "./with-durable-execution";
-import { resolve } from "path";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 import { DurableExecutionInvocationInput } from "./types";
 
 // Set verbose mode for local testing
@@ -58,8 +59,13 @@ if (!handlerPath) {
   process.exit(1);
 }
 
-// Convert relative path to absolute
-const projectRoot = resolve(__dirname, ".."); // Go up one level from src
+// Convert relative path to absolute. Source the current module's
+// directory from `import.meta.url` (the rollup CJS output rewrites
+// this to use `__filename`/`__dirname`, so the same expression works
+// in both module systems without relying on `@rollup/plugin-esm-shim`
+// to inject a synthetic `__dirname` into the ESM dist).
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(moduleDir, ".."); // Go up one level from src
 const absolutePath = resolve(projectRoot, handlerPath);
 
 // Run the handler with optional invocationId
