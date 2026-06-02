@@ -2,10 +2,7 @@ import { createInvokeHandler } from "./invoke-handler";
 import { ExecutionContext, DurableExecutionMode } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import {
-  DurableInstrumentationPlugin,
-  AttemptEndInfoOutcome,
-} from "../../types/plugin";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -43,6 +40,7 @@ describe("InvokeHandler - plugin hooks", () => {
       durableExecutionArn: "test-arn",
     } as any;
     mockPlugin = {
+      onOperationFirstStart: jest.fn(),
       onOperationStart: jest.fn(),
       onOperationFirstEnd: jest.fn(),
       onOperationAttemptStart: jest.fn(),
@@ -52,7 +50,7 @@ describe("InvokeHandler - plugin hooks", () => {
     mockSafeDeserialize.mockResolvedValue({ result: "success" });
   });
 
-  it("should call all plugin hooks on replay succeeded", async () => {
+  it("should call onOperationFirstEnd on replay succeeded", async () => {
     (mockContext.getStepData as jest.Mock).mockReturnValue({
       Status: OperationStatus.SUCCEEDED,
       ChainedInvokeDetails: { Result: '{"result":"success"}' },
@@ -70,21 +68,10 @@ describe("InvokeHandler - plugin hooks", () => {
 
     await handler("test-function", { test: "data" });
 
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: AttemptEndInfoOutcome.SUCCEEDED,
-      }),
-    );
     expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
-      expect.not.objectContaining({ error: expect.anything() }),
-    );
   });
 
-  it("should call all plugin hooks with error on replay failed", async () => {
+  it("should call onOperationStart and onOperationFirstEnd on replay failed", async () => {
     (mockContext.getStepData as jest.Mock).mockReturnValue({
       Status: OperationStatus.FAILED,
       ChainedInvokeDetails: {
@@ -105,13 +92,6 @@ describe("InvokeHandler - plugin hooks", () => {
     await expect(handler("test-function", { test: "data" })).rejects.toThrow();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: AttemptEndInfoOutcome.FAILED,
-      }),
-    );
     expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
@@ -134,9 +114,8 @@ describe("InvokeHandler - plugin hooks", () => {
 
     await handler("test-function", { test: "data" });
 
+    expect(mockPlugin.onOperationFirstStart).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationAttemptStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationAttemptEnd).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
   });
 
@@ -161,16 +140,17 @@ describe("InvokeHandler - plugin hooks", () => {
 
     await expect(handler("test-function", { test: "data" })).rejects.toThrow();
 
+    expect(mockPlugin.onOperationFirstStart).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationAttemptStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationAttemptEnd).not.toHaveBeenCalled();
     expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
   });
 
   it("should call plugin hooks on phase 2 succeeded", async () => {
     (mockContext.getStepData as jest.Mock)
-      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(undefined) // phase 1: no existing step data → triggers checkpoint
+      .mockReturnValueOnce(undefined) // phase 1: getStepData after checkpoint (for toOperationInfo)
       .mockReturnValueOnce({
+        // phase 2: after waitForStatusChange
         Status: OperationStatus.SUCCEEDED,
         ChainedInvokeDetails: { Result: '{"result":"success"}' },
       });
@@ -187,23 +167,18 @@ describe("InvokeHandler - plugin hooks", () => {
 
     await handler("test-function", { test: "data" });
 
-    // Phase 1: onOperationStart + onOperationAttemptStart
-    // Phase 2: onOperationAttemptEnd + onOperationFirstEnd
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: AttemptEndInfoOutcome.SUCCEEDED,
-      }),
-    );
+    // Phase 1: onOperationFirstStart (new invoke started)
+    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
+    // Phase 2: onOperationFirstEnd (invoke completed)
     expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should call plugin hooks with error on phase 2 failed", async () => {
     (mockContext.getStepData as jest.Mock)
-      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(undefined) // phase 1: no existing step data → triggers checkpoint
+      .mockReturnValueOnce(undefined) // phase 1: getStepData after checkpoint (for toOperationInfo)
       .mockReturnValueOnce({
+        // phase 2: after waitForStatusChange
         Status: OperationStatus.FAILED,
         ChainedInvokeDetails: {
           Error: { ErrorMessage: "invoke failed" },
@@ -222,15 +197,7 @@ describe("InvokeHandler - plugin hooks", () => {
 
     await expect(handler("test-function", { test: "data" })).rejects.toThrow();
 
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outcome: AttemptEndInfoOutcome.FAILED,
-        error: expect.any(Error),
-      }),
-    );
+    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
       expect.objectContaining({ error: expect.any(Error) }),

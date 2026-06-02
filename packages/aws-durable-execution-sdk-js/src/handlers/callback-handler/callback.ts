@@ -25,6 +25,7 @@ import {
 } from "../../types/plugin";
 import {
   toAttemptInfo,
+  toOperationInfo,
   backfillOperationInfo,
 } from "../../utils/operation/operation";
 
@@ -201,6 +202,13 @@ export const createCallback = (
 
         // Refresh stepData after checkpoint
         stepData = context.getStepData(stepId);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        plugin.onOperationFirstStart?.(operationInfo);
+      } else {
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        plugin.onOperationStart?.(operationInfo);
       }
 
       // Mark as IDLE_NOT_AWAITED

@@ -317,7 +317,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           const stepFn = () => fn(stepContext);
-          result = await runWithContext(
+          result = (await runWithContext(
             stepId,
             parentId,
             plugin.wrapOperationAttemptFn
@@ -325,7 +325,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               : stepFn,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
-          );
+          )) as T;
 
           const serializedResult = await safeSerialize(
             serdes,

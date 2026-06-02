@@ -8,7 +8,7 @@ import { DurableExecutionInvocationOutput } from "./core";
  */
 export interface OperationInfo {
   Id: string;
-  HashedId: string;
+  HashedId?: string;
   Name?: string;
   Type: string;
   SubType?: string;

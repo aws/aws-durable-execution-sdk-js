@@ -250,7 +250,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
           plugin.onOperationAttemptStart?.(attemptInfo);
 
-          const newState: T = await runWithContext(
+          const newState: T = (await runWithContext(
             stepId,
             parentId,
             plugin.wrapOperationAttemptFn
@@ -258,7 +258,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               : checkFunc,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
-          );
+          )) as T;
 
           const serializedState = await safeSerialize(
             serdes,

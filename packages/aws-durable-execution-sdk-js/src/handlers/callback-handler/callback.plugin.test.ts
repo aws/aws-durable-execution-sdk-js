@@ -38,6 +38,7 @@ describe("Callback Handler - plugin hooks", () => {
     createStepId = jest.fn().mockReturnValue("test-callback-id");
     checkAndUpdateReplayMode = jest.fn();
     mockPlugin = {
+      onOperationFirstStart: jest.fn(),
       onOperationStart: jest.fn(),
       onOperationFirstEnd: jest.fn(),
     };
@@ -227,8 +228,8 @@ describe("Callback Handler - plugin hooks", () => {
     const [, callbackId] = await result;
 
     expect(callbackId).toBe("new-cb-123");
-    // Phase 1 fires onOperationStart
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    // Phase 1 fires onOperationFirstStart for new callback
+    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
   });
 
   it("should not throw when plugin hooks are undefined", async () => {

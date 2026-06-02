@@ -29,6 +29,7 @@ describe("Wait Handler - plugin hooks", () => {
     } as any;
     createStepId = jest.fn().mockReturnValue("test-step-id");
     mockPlugin = {
+      onOperationFirstStart: jest.fn(),
       onOperationStart: jest.fn(),
       onOperationFirstEnd: jest.fn(),
     };
@@ -64,7 +65,8 @@ describe("Wait Handler - plugin hooks", () => {
     // Phase 2: waitForStatusChange resolves, then SUCCEEDED
     (mockContext.getStepData as jest.Mock)
       .mockReturnValueOnce(null) // phase 1 initial check
-      .mockReturnValueOnce(null) // after checkpoint refresh
+      .mockReturnValueOnce(null) // after checkpoint (inside !stepData branch)
+      .mockReturnValueOnce(null) // refresh stepData after checkpoint
       .mockReturnValueOnce({
         // phase 2 after waitForStatusChange
         Status: OperationStatus.SUCCEEDED,
@@ -81,7 +83,7 @@ describe("Wait Handler - plugin hooks", () => {
 
     await handler("test-wait", { seconds: 1 });
 
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
   });
 

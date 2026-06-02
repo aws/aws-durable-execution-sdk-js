@@ -199,9 +199,11 @@ describe("InvokeHandler", () => {
 
     it("should wait for status change when operation is still in progress", async () => {
       // Phase 1: first check (null)
+      // Phase 1: after checkpoint (getStepData for toOperationInfo)
       // Phase 2: after waitForStatusChange (SUCCEEDED)
       (mockContext.getStepData as jest.Mock)
         .mockReturnValueOnce(null) // Phase 1 - initial check, triggers checkpoint
+        .mockReturnValueOnce(undefined) // Phase 1 - after checkpoint (for toOperationInfo)
         .mockReturnValueOnce({
           Status: OperationStatus.SUCCEEDED,
           ChainedInvokeDetails: { Result: '{"result":"success"}' },

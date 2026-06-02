@@ -350,7 +350,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   try {
     // Execute the child context function with context tracking
     const childContextFn = () => fn(durableChildContext);
-    const result = await runWithContext(
+    const result = (await runWithContext(
       entityId,
       parentId,
       plugin.wrapChildContextFn
@@ -358,7 +358,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         : childContextFn,
       undefined,
       childReplayMode,
-    );
+    )) as T;
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
