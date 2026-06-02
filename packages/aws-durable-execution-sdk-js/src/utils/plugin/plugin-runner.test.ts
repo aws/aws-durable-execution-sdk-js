@@ -9,6 +9,15 @@ import {
   OperationChangeInfo,
   AttemptEndInfo,
 } from "../../types/plugin";
+import {
+  DurableExecutionInvocationOutput,
+  InvocationStatus,
+} from "../../types/core";
+
+const succeededOutput: DurableExecutionInvocationOutput = {
+  Status: InvocationStatus.SUCCEEDED,
+  Result: "test-result",
+};
 
 describe("createPluginRunner", () => {
   const invocationInfo: InvocationInfo = {
@@ -234,22 +243,24 @@ describe("createPluginRunner", () => {
   });
 
   describe("callback-wrapping hooks (runAsCallback)", () => {
-    it("wrapInvocation calls fn through the plugin chain", () => {
+    it("wrapInvocation calls fn through the plugin chain", async () => {
       const plugin: DurableInstrumentationPlugin = {
-        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => fn(),
+        wrapInvocation: (_info, fn) => fn(),
       };
 
       const runner = createPluginRunner([plugin]);
-      const result = runner.wrapInvocation!(invocationInfo, () => "hello");
+      const result = await runner.wrapInvocation!(invocationInfo, () =>
+        Promise.resolve(succeededOutput),
+      );
 
-      expect(result).toBe("hello");
+      expect(result).toEqual(succeededOutput);
     });
 
-    it("wrapInvocation chains multiple plugins in right-to-left order", () => {
+    it("wrapInvocation chains multiple plugins in right-to-left order", async () => {
       const callOrder: string[] = [];
 
       const plugin1: DurableInstrumentationPlugin = {
-        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => {
+        wrapInvocation: (_info, fn) => {
           callOrder.push("plugin1-before");
           const result = fn();
           callOrder.push("plugin1-after");
@@ -257,7 +268,7 @@ describe("createPluginRunner", () => {
         },
       };
       const plugin2: DurableInstrumentationPlugin = {
-        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => {
+        wrapInvocation: (_info, fn) => {
           callOrder.push("plugin2-before");
           const result = fn();
           callOrder.push("plugin2-after");
@@ -266,12 +277,12 @@ describe("createPluginRunner", () => {
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
-      const result = runner.wrapInvocation!(invocationInfo, () => {
+      const result = await runner.wrapInvocation!(invocationInfo, () => {
         callOrder.push("fn");
-        return "result";
+        return Promise.resolve(succeededOutput);
       });
 
-      expect(result).toBe("result");
+      expect(result).toEqual(succeededOutput);
       // plugin1 wraps plugin2 which wraps fn (reduceRight)
       expect(callOrder).toEqual([
         "plugin1-before",
@@ -304,21 +315,23 @@ describe("createPluginRunner", () => {
       expect(result).toBe("done");
     });
 
-    it("wrapInvocation skips plugins that do not implement it", () => {
+    it("wrapInvocation skips plugins that do not implement it", async () => {
       const plugin1: DurableInstrumentationPlugin = {};
       const plugin2: DurableInstrumentationPlugin = {
-        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => fn(),
+        wrapInvocation: (_info, fn) => fn(),
       };
 
       const runner = createPluginRunner([plugin1, plugin2]);
-      const result = runner.wrapInvocation!(invocationInfo, () => "value");
+      const result = await runner.wrapInvocation!(invocationInfo, () =>
+        Promise.resolve(succeededOutput),
+      );
 
-      expect(result).toBe("value");
+      expect(result).toEqual(succeededOutput);
     });
 
     it("wrapInvocation propagates errors from the wrapped fn", () => {
       const plugin: DurableInstrumentationPlugin = {
-        wrapInvocation: <T>(_info: InvocationInfo, fn: () => T): T => fn(),
+        wrapInvocation: (_info, fn) => fn(),
       };
 
       const runner = createPluginRunner([plugin]);
@@ -330,7 +343,7 @@ describe("createPluginRunner", () => {
       ).toThrow("fn error");
     });
 
-    it("wrapInvocation propagates errors from a plugin", () => {
+    it("wrapInvocation swallows plugin errors and falls back to fn", async () => {
       const plugin: DurableInstrumentationPlugin = {
         wrapInvocation: () => {
           throw new Error("plugin error");
@@ -338,36 +351,49 @@ describe("createPluginRunner", () => {
       };
 
       const runner = createPluginRunner([plugin]);
+      const result = await runner.wrapInvocation!(invocationInfo, () =>
+        Promise.resolve(succeededOutput),
+      );
 
-      expect(() =>
-        runner.wrapInvocation!(invocationInfo, () => "value"),
-      ).toThrow("plugin error");
+      expect(result).toEqual(succeededOutput);
     });
 
-    it("wrapInvocation allows plugin to modify the return value", () => {
-      const plugin = {
-        wrapInvocation: (_info: any, fn: () => any) => {
-          const result = fn();
-          return `modified-${result}`;
+    it("wrapInvocation allows plugin to modify the return value", async () => {
+      const modifiedOutput: DurableExecutionInvocationOutput = {
+        Status: InvocationStatus.SUCCEEDED,
+        Result: "modified-result",
+      };
+      const plugin: DurableInstrumentationPlugin = {
+        wrapInvocation: async (_info, fn) => {
+          await fn();
+          return modifiedOutput;
         },
-      } as DurableInstrumentationPlugin;
+      };
 
       const runner = createPluginRunner([plugin]);
-      const result = runner.wrapInvocation!(invocationInfo, () => "original");
+      const result = await runner.wrapInvocation!(invocationInfo, () =>
+        Promise.resolve(succeededOutput),
+      );
 
-      expect(result).toBe("modified-original");
+      expect(result).toEqual(modifiedOutput);
     });
 
-    it("wrapInvocation allows plugin to short-circuit without calling fn", () => {
-      const fn = jest.fn().mockReturnValue("should not be called");
-      const plugin = {
-        wrapInvocation: () => "short-circuited",
-      } as unknown as DurableInstrumentationPlugin;
+    it("wrapInvocation allows plugin to short-circuit without calling fn", async () => {
+      const shortCircuitOutput: DurableExecutionInvocationOutput = {
+        Status: InvocationStatus.SUCCEEDED,
+        Result: "short-circuited",
+      };
+      const fn = jest
+        .fn<Promise<DurableExecutionInvocationOutput>, []>()
+        .mockResolvedValue(succeededOutput);
+      const plugin: DurableInstrumentationPlugin = {
+        wrapInvocation: () => Promise.resolve(shortCircuitOutput),
+      };
 
       const runner = createPluginRunner([plugin]);
-      const result = runner.wrapInvocation!(invocationInfo, fn);
+      const result = await runner.wrapInvocation!(invocationInfo, fn);
 
-      expect(result).toBe("short-circuited");
+      expect(result).toEqual(shortCircuitOutput);
       expect(fn).not.toHaveBeenCalled();
     });
 
@@ -418,25 +444,25 @@ describe("createPluginRunner", () => {
       ).rejects.toThrow(originalError);
     });
 
-    it("re-throws fn error even when multiple plugins try to swallow it", () => {
+    it("re-throws fn error even when multiple plugins try to swallow it", async () => {
       const originalError = new Error("must not be lost");
       const swallowingPlugin: DurableInstrumentationPlugin = {
         wrapInvocation: (_info, fn) => {
           try {
             return fn();
           } catch {
-            return "swallowed" as any;
+            return Promise.resolve(succeededOutput);
           }
         },
       };
 
       const runner = createPluginRunner([swallowingPlugin, swallowingPlugin]);
 
-      expect(() =>
+      await expect(
         runner.wrapInvocation!(invocationInfo, () => {
           throw originalError;
         }),
-      ).toThrow(originalError);
+      ).rejects.toThrow(originalError);
     });
 
     it("re-throws fn error through wrapChildContextFn when plugin swallows it", () => {
@@ -550,10 +576,15 @@ describe("createPluginRunner", () => {
   });
 
   describe("multiple plugins integration", () => {
-    it("all hooks are called on all plugins for a full lifecycle", () => {
+    it("all hooks are called on all plugins for a full lifecycle", async () => {
       const plugin1 = {
         onInvocationStart: jest.fn(),
-        wrapInvocation: jest.fn((_info: any, fn: () => any) => fn()),
+        wrapInvocation: jest.fn(
+          (
+            _info: InvocationInfo,
+            fn: () => Promise<DurableExecutionInvocationOutput>,
+          ) => fn(),
+        ),
         onOperationFirstStart: jest.fn(),
         onOperationStart: jest.fn(),
         onOperationAttemptStart: jest.fn(),
@@ -568,7 +599,12 @@ describe("createPluginRunner", () => {
 
       const plugin2 = {
         onInvocationStart: jest.fn(),
-        wrapInvocation: jest.fn((_info: any, fn: () => any) => fn()),
+        wrapInvocation: jest.fn(
+          (
+            _info: InvocationInfo,
+            fn: () => Promise<DurableExecutionInvocationOutput>,
+          ) => fn(),
+        ),
         onOperationFirstStart: jest.fn(),
         onOperationStart: jest.fn(),
         onOperationAttemptStart: jest.fn(),
@@ -585,7 +621,9 @@ describe("createPluginRunner", () => {
 
       // Simulate a full lifecycle
       runner.onInvocationStart!(invocationInfo);
-      runner.wrapInvocation!(invocationInfo, () => "invocation-result");
+      await runner.wrapInvocation!(invocationInfo, () =>
+        Promise.resolve(succeededOutput),
+      );
       runner.onOperationFirstStart!(operationInfo);
       runner.onOperationStart!(operationInfo);
       runner.onOperationAttemptStart!(attemptInfo);

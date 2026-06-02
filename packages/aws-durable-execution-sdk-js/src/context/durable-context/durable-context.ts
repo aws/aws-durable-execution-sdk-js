@@ -62,10 +62,12 @@ import {
   AnySerdes,
   AnySerdesDeserializer,
 } from "../../utils/serdes/serdes";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
   stepDataEmitter: EventEmitter;
+  plugin: DurableInstrumentationPlugin;
   setTerminating(): void;
 }
 
