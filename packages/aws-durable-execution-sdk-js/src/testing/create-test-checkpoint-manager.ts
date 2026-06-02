@@ -17,5 +17,7 @@ export const createTestCheckpointManager = (
     emitter,
     logger,
     new Set<string>(),
+    {},
+    "",
   );
 };
