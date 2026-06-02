@@ -10,6 +10,7 @@ import {
   CustomerFnResult,
   CustomerFn,
 } from "../../types/plugin";
+import { DurableExecutionInvocationOutput } from "../../types/core";
 
 type CallbackResult = unknown;
 type CallbackFn = () => CallbackResult;
@@ -44,20 +45,26 @@ export function createPluginRunner(
     fn: CustomerFn,
   ): CustomerFnResult => {
     let fnError: { error: unknown } | undefined;
+    let fnCalled = false;
+    let fnResult: CustomerFnResult;
 
-    // Wrap the original fn to capture any error it throws
+    // Wrap the original fn to capture any error it throws and prevent double-calls
     const guardedFn: CallbackResult | CustomerFnResult = () => {
+      if (fnCalled) return fnResult;
+      fnCalled = true;
       try {
         const result: CustomerFnResult = fn();
         if (
           result != null &&
           typeof (result as Promise<unknown>).then === "function"
         ) {
-          return (result as Promise<unknown>).catch((err: unknown) => {
+          fnResult = (result as Promise<unknown>).catch((err: unknown) => {
             fnError = { error: err };
             throw err; // re-throw so plugins still see it
           });
+          return fnResult;
         }
+        fnResult = result;
         return result;
       } catch (err) {
         fnError = { error: err };
@@ -69,14 +76,27 @@ export function createPluginRunner(
       (next, plugin) => () => {
         const hookFn = plugin[method] as PluginWrapperHookFn;
         if (hookFn) {
-          return hookFn.call(plugin, info, next);
+          try {
+            return hookFn.call(plugin, info, next);
+          } catch {
+            // Plugin errors are swallowed — fall through to the inner fn
+            return next();
+          }
         }
         return next();
       },
       guardedFn as CallbackFn,
     );
 
-    const result: CallbackResult = chain();
+    let result: CallbackResult;
+    try {
+      result = chain();
+    } catch (err) {
+      // If the chain threw synchronously, check if it was from the customer fn
+      if (fnError) throw fnError.error;
+      // Otherwise it's a plugin error that escaped — swallow and call fn directly
+      result = (guardedFn as CallbackFn)();
+    }
 
     // If the result is async, ensure fn errors are re-thrown even if swallowed by a plugin
     if (
@@ -116,8 +136,15 @@ export function createPluginRunner(
   return {
     onExecutionEnd: (info: ExecutionEndInfo) => run("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
-    wrapInvocation: (info: InvocationInfo, fn: CustomerFn): CustomerFnResult =>
-      runAsCallback("wrapInvocation", info, fn),
+    wrapInvocation: (
+      info: InvocationInfo,
+      fn: () => Promise<DurableExecutionInvocationOutput>,
+    ): Promise<DurableExecutionInvocationOutput> =>
+      runAsCallback(
+        "wrapInvocation",
+        info,
+        fn,
+      ) as Promise<DurableExecutionInvocationOutput>,
     onInvocationEnd: (info: InvocationInfo) => run("onInvocationEnd", info),
     onOperationFirstStart: (info: OperationInfo) =>
       run("onOperationFirstStart", info),

@@ -56,30 +56,26 @@ describe("plugin hooks", () => {
 
   beforeEach(() => {
     plugin = {
-      onExecutionStart: jest.fn(),
       onExecutionEnd: jest.fn(),
       onInvocationStart: jest.fn(),
       onInvocationEnd: jest.fn(),
     };
   });
 
-  it("calls onExecutionStart and onInvocationStart on first invocation", async () => {
+  it("calls onInvocationStart with isFirstInvocation=true on first invocation", async () => {
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
       plugins: [plugin],
     });
     await handler(mockEvent, mockContext);
 
-    expect(plugin.onExecutionStart).toHaveBeenCalledWith({
-      requestId: "req-123",
-      executionArn: "arn:test",
-    });
     expect(plugin.onInvocationStart).toHaveBeenCalledWith({
       requestId: "req-123",
       executionArn: "arn:test",
+      isFirstInvocation: true,
     });
   });
 
-  it("does not call onExecutionStart on replay invocations", async () => {
+  it("calls onInvocationStart without isFirstInvocation on replay invocations", async () => {
     (initializeExecutionContext as jest.Mock).mockResolvedValue({
       executionContext: mockExecutionContext,
       checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
@@ -91,8 +87,11 @@ describe("plugin hooks", () => {
     });
     await handler(mockEvent, mockContext);
 
-    expect(plugin.onExecutionStart).not.toHaveBeenCalled();
-    expect(plugin.onInvocationStart).toHaveBeenCalled();
+    expect(plugin.onInvocationStart).toHaveBeenCalledWith({
+      requestId: "req-123",
+      executionArn: "arn:test",
+      isFirstInvocation: false,
+    });
   });
 
   it("calls onInvocationEnd in finally — even when handler throws", async () => {
@@ -105,6 +104,7 @@ describe("plugin hooks", () => {
     expect(plugin.onInvocationEnd).toHaveBeenCalledWith({
       requestId: "req-123",
       executionArn: "arn:test",
+      isFirstInvocation: true,
     });
   });
 
@@ -160,10 +160,10 @@ describe("plugin hooks", () => {
       onInvocationStart: () => {
         throw new Error("plugin bug");
       },
-      onInvocationEnd: () => {
+      wrapInvocation: () => {
         throw new Error("plugin bug");
       },
-      onExecutionStart: () => {
+      onInvocationEnd: () => {
         throw new Error("plugin bug");
       },
       onExecutionEnd: () => {
@@ -198,24 +198,5 @@ describe("plugin hooks", () => {
       traceId: "abc",
       spanId: "xyz",
     });
-  });
-});
-
-describe("shouldSampleExecution", () => {
-  const { shouldSampleExecution } = jest.requireActual("./types/plugin");
-
-  it("always returns true when rate is 1.0", () => {
-    expect(shouldSampleExecution("arn:test", 1.0)).toBe(true);
-  });
-
-  it("always returns false when rate is 0.0", () => {
-    expect(shouldSampleExecution("arn:test", 0.0)).toBe(false);
-  });
-
-  it("is deterministic — same arn always gives same result", () => {
-    const arn = "arn:aws:lambda:us-east-1:123:function:my-fn:1/exec/abc";
-    const result = shouldSampleExecution(arn, 0.5);
-    expect(shouldSampleExecution(arn, 0.5)).toBe(result);
-    expect(shouldSampleExecution(arn, 0.5)).toBe(result);
   });
 });

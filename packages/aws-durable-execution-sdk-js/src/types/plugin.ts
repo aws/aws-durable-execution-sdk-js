@@ -1,4 +1,5 @@
 import { Operation } from "@aws-sdk/client-lambda";
+import { DurableExecutionInvocationOutput } from "./core";
 
 /**
  * Information about a durable operation.
@@ -61,13 +62,22 @@ export interface AttemptEndInfo extends AttemptInfo {
 }
 
 /**
- * Information about a durable execution invocation.
+ * Base information identifying a durable execution invoke.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface InvocationInfo {
+export interface InvocationBaseInfo {
   requestId: string;
   executionArn: string;
+}
+
+/**
+ * Information about a durable execution invocation, including whether it is
+ * the first invocation (execution mode) or a subsequent replay.
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface InvocationInfo extends InvocationBaseInfo {
   isFirstInvocation: boolean;
 }
 
@@ -76,7 +86,7 @@ export interface InvocationInfo {
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface ExecutionEndInfo extends InvocationInfo {
+export interface ExecutionEndInfo extends InvocationBaseInfo {
   status: "SUCCEEDED" | "FAILED";
   executionResult?: unknown;
   executionError?: Error;
@@ -89,7 +99,7 @@ export interface ExecutionEndInfo extends InvocationInfo {
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface OperationChangeInfo extends InvocationInfo {
+export interface OperationChangeInfo extends InvocationBaseInfo {
   updatedOperations: Record<string, Operation>;
   operations: Record<string, Operation>;
 }
@@ -102,7 +112,10 @@ export interface OperationChangeInfo extends InvocationInfo {
 export interface DurableInstrumentationPlugin {
   onExecutionEnd?(info: ExecutionEndInfo): void;
   onInvocationStart?(info: InvocationInfo): void;
-  wrapInvocation?(info: InvocationInfo, fn: CustomerFn): CustomerFnResult;
+  wrapInvocation?(
+    info: InvocationInfo,
+    fn: () => Promise<DurableExecutionInvocationOutput>,
+  ): Promise<DurableExecutionInvocationOutput>;
   onInvocationEnd?(info: InvocationInfo): void;
   onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;

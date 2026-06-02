@@ -28,7 +28,7 @@ import {
   DurableLambdaHandler,
 } from "./types/durable-execution";
 import { createPluginRunner } from "./utils/plugin/plugin-runner";
-import { DurableInstrumentationPlugin } from "./types/plugin";
+import { DurableInstrumentationPlugin, InvocationInfo } from "./types/plugin";
 
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
@@ -63,14 +63,12 @@ async function runHandler<
     executionContext.requestId,
   );
 
-  const invocationInfo = {
+  const invocationInfo: InvocationInfo = {
     requestId: executionContext.requestId,
     executionArn: executionContext.durableExecutionArn,
+    isFirstInvocation:
+      durableExecutionMode === DurableExecutionMode.ExecutionMode,
   };
-
-  if (durableExecutionMode === DurableExecutionMode.ExecutionMode) {
-    plugin.onExecutionStart?.(invocationInfo);
-  }
   plugin.onInvocationStart?.(invocationInfo);
 
   // Set the checkpoint terminating callback on the termination manager
