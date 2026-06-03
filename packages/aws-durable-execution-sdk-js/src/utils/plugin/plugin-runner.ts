@@ -2,7 +2,7 @@ import {
   DurableInstrumentationPlugin,
   AttemptEndInfo,
   AttemptInfo,
-  ExecutionEndInfo,
+  InvocationEndInfo,
   InvocationInfo,
   OperationChangeInfo,
   OperationEndInfo,
@@ -18,7 +18,7 @@ type PluginInfo =
   | OperationInfo
   | OperationEndInfo
   | InvocationInfo
-  | ExecutionEndInfo
+  | InvocationEndInfo
   | AttemptEndInfo
   | AttemptInfo
   | OperationChangeInfo
@@ -134,7 +134,6 @@ export function createPluginRunner(
     });
 
   return {
-    onExecutionEnd: (info: ExecutionEndInfo) => run("onExecutionEnd", info),
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
     wrapInvocation: (
       info: InvocationInfo,
@@ -145,7 +144,7 @@ export function createPluginRunner(
         info,
         fn,
       ) as Promise<DurableExecutionInvocationOutput>,
-    onInvocationEnd: (info: InvocationInfo) => run("onInvocationEnd", info),
+    onInvocationEnd: (info: InvocationEndInfo) => run("onInvocationEnd", info),
     onOperationFirstStart: (info: OperationInfo) =>
       run("onOperationFirstStart", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),

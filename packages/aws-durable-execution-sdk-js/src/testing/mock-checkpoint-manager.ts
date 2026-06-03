@@ -3,6 +3,7 @@ import { OperationUpdate } from "@aws-sdk/client-lambda";
 import { DurableExecutionClient } from "../types/durable-execution";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { DurableLogger } from "../types/durable-logger";
+import { DurableInstrumentationPlugin } from "../types/plugin";
 import { EventEmitter } from "events";
 
 export class MockCheckpointManager extends CheckpointManager {
@@ -24,6 +25,8 @@ export class MockCheckpointManager extends CheckpointManager {
       {} as EventEmitter,
       {} as DurableLogger,
       new Set<string>(),
+      {} as DurableInstrumentationPlugin,
+      "mock-request-id",
     );
   }
 

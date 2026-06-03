@@ -1,12 +1,12 @@
 .idea
 /node_modules
-*/node_modules
+**/node_modules 
 /build
-*/build
+**/build
 /dist
 */dist
 /coverage
-*/coverage
+**/coverage
 *.iml
 .aws-sam/*
 *.zip
@@ -14,7 +14,7 @@
 .eslintcache
 *.tsbuildinfo
 .rollup.cache
-*/.rollup.cache
+**/.rollup.cache
 *.d.ts.map
 *.d.ts
 *.tgz

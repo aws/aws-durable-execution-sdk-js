@@ -28,7 +28,11 @@ import {
   DurableLambdaHandler,
 } from "./types/durable-execution";
 import { createPluginRunner } from "./utils/plugin/plugin-runner";
-import { DurableInstrumentationPlugin, InvocationInfo } from "./types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  InvocationInfo,
+  PluginInvocationStatus,
+} from "./types/plugin";
 
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
@@ -63,10 +67,11 @@ async function runHandler<
     executionContext.requestId,
   );
 
-  const invocationInfo : InvocationInfo = {
+  const invocationInfo: InvocationInfo = {
     requestId: executionContext.requestId,
     executionArn: executionContext.durableExecutionArn,
-    isFirstInvocation: durableExecutionMode === DurableExecutionMode.ExecutionMode,
+    isFirstInvocation:
+      durableExecutionMode === DurableExecutionMode.ExecutionMode,
   };
   plugin.onInvocationStart?.(invocationInfo);
 
@@ -187,11 +192,12 @@ async function runHandler<
               result.error || new Error(result.message),
             ),
           };
-          await plugin.onExecutionEnd?.({
+          plugin.onInvocationEnd?.({
             ...invocationInfo,
-            status: "FAILED",
+            status: PluginInvocationStatus.FAILED,
             executionInput: customerHandlerEvent,
             executionError: result.error || new Error(result.message),
+            executionResult: undefined,
             operations: executionContext._stepData,
           });
           return response;
@@ -199,6 +205,15 @@ async function runHandler<
 
         if (resultType === "termination") {
           log("🛑", "Returning termination response");
+
+          plugin.onInvocationEnd?.({
+            ...invocationInfo,
+            status: PluginInvocationStatus.PENDING,
+            executionInput: customerHandlerEvent,
+            executionResult: undefined,
+            executionError: undefined,
+            operations: executionContext._stepData,
+          });
 
           return {
             Status: InvocationStatus.PENDING,
@@ -246,11 +261,12 @@ async function runHandler<
               // Continue anyway - the checkpoint will be retried on next invocation
             }
 
-            await plugin.onExecutionEnd?.({
+            plugin.onInvocationEnd?.({
               ...invocationInfo,
-              status: "SUCCEEDED",
+              status: PluginInvocationStatus.SUCCEEDED,
               executionInput: customerHandlerEvent,
               executionResult: result,
+              executionError: undefined,
               operations: executionContext._stepData,
             });
 
@@ -279,11 +295,12 @@ async function runHandler<
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
-        plugin.onExecutionEnd?.({
+        plugin.onInvocationEnd?.({
           ...invocationInfo,
-          status: "SUCCEEDED",
+          status: PluginInvocationStatus.SUCCEEDED,
           executionInput: customerHandlerEvent,
           executionResult: result,
+          executionError: undefined,
           operations: executionContext._stepData,
         });
 
@@ -300,6 +317,14 @@ async function runHandler<
             "🛑",
             "Unrecoverable invocation error - terminating Lambda execution",
           );
+          plugin.onInvocationEnd?.({
+            ...invocationInfo,
+            status: PluginInvocationStatus.RETRYING,
+            executionInput: customerHandlerEvent,
+            executionError: error,
+            executionResult: undefined,
+            operations: executionContext._stepData,
+          });
           throw error; // Re-throw the error to terminate Lambda execution
         }
 
@@ -315,12 +340,13 @@ async function runHandler<
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
-        plugin.onExecutionEnd?.({
+        plugin.onInvocationEnd?.({
           ...invocationInfo,
-          status: "FAILED",
+          status: PluginInvocationStatus.FAILED,
           executionInput: customerHandlerEvent,
           executionError:
             error instanceof Error ? error : new Error(String(error)),
+          executionResult: undefined,
           operations: executionContext._stepData,
         });
 
@@ -328,13 +354,13 @@ async function runHandler<
           Status: InvocationStatus.FAILED,
           Error: createErrorObjectFromError(error),
         };
-      } finally {
-        await plugin.onInvocationEnd?.(invocationInfo);
       }
     };
 
-  return (plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
-    executeInvocation());
+  return (
+    plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
+    executeInvocation()
+  );
 }
 
 /**
