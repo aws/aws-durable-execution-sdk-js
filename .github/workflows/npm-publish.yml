@@ -28,6 +28,7 @@ jobs:
       - name: iterate and publish
         run: ./.github/workflows/iterate-publish-npm.sh ${{ github.event.release.prerelease && 'true' || 'false' }}
         shell: bash
+        timeout-minutes: 2
 
   notify-release:
     needs: [npm-publish]

@@ -1,0 +1,49 @@
+name: Test Pre-release Version Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/iterate-publish-npm.sh'
+      - '.github/workflows/npm-publish.yml'
+  workflow_dispatch:
+
+jobs:
+  test-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Create test package with pre-release version
+        run: |
+          mkdir -p test-packages/test-package
+          cd test-packages/test-package
+          cat > package.json << 'EOF'
+          {
+            "name": "test-package",
+            "version": "1.0.0-alpha.1"
+          }
+          EOF
+
+      - name: Test validation blocks pre-release to latest
+        run: |
+          cd test-packages/test-package
+          if ../../.github/workflows/iterate-publish-npm.sh false; then
+            echo "ERROR: Script should have failed for pre-release version with latest tag"
+            exit 1
+          else
+            echo "SUCCESS: Script correctly blocked pre-release version"
+          fi
+
+      - name: Test validation allows pre-release to beta
+        run: |
+          cd test-packages/test-package
+          # This should pass (we're not actually publishing, just validating)
+          if ! ../../.github/workflows/iterate-publish-npm.sh true; then
+            echo "ERROR: Script should allow pre-release version with beta tag"
+            exit 1
+          else
+            echo "SUCCESS: Script correctly allows pre-release with beta tag"
+          fi
