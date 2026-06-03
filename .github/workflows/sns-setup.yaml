@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SNS topic for npm publish alerts'
+
+Resources:
+  NpmPublishAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: npm-publish-alerts
+      DisplayName: 'NPM Publish Alerts'
+      
+  # Subscribe to Amazon Paging (replace with actual paging endpoint)
+  PagingSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref NpmPublishAlertTopic
+      Endpoint: page-your-oncall-alias@amazon.com
+
+  # IAM role for GitHub Actions
+  GitHubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GitHubActionsNpmPublishRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+              StringLike:
+                'token.actions.githubusercontent.com:sub': 'repo:aws/aws-durable-execution-sdk-js:*'
+      Policies:
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref NpmPublishAlertTopic
+
+Outputs:
+  TopicArn:
+    Description: 'SNS Topic ARN for npm publish alerts'
+    Value: !Ref NpmPublishAlertTopic
+    Export:
+      Name: NpmPublishAlertTopicArn
+      
+  RoleArn:
+    Description: 'IAM Role ARN for GitHub Actions'
+    Value: !GetAtt GitHubActionsRole.Arn

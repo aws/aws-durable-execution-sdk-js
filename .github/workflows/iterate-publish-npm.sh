@@ -102,12 +102,30 @@ rollback_and_alert() {
     npm dist-tag add "$package_name@$previous_stable" latest || echo "Failed to rollback"
   fi
   
-  # Alert (using GitHub Actions if available, otherwise echo)
+  # Alert via multiple channels
+  local alert_message="CRITICAL: Package $package_name version $bad_version has incorrect dist-tags. Attempted rollback to $previous_stable"
+  
+  # GitHub Actions annotation
   if [ -n "${GITHUB_ACTIONS:-}" ]; then
-    echo "::error::CRITICAL: Package $package_name version $bad_version has incorrect dist-tags. Attempted rollback to $previous_stable"
-  else
-    echo "🚨 ALERT: Package $package_name version $bad_version has incorrect dist-tags!"
+    echo "::error::$alert_message"
   fi
+  
+  # SNS alert (if AWS credentials and topic available)
+  if [ -n "${AWS_SNS_TOPIC_ARN:-}" ] && command -v aws >/dev/null 2>&1; then
+    aws sns publish \
+      --topic-arn "$AWS_SNS_TOPIC_ARN" \
+      --message "$alert_message" \
+      --subject "NPM Publish Verification Failed" \
+      --message-attributes "severity={\"DataType\":\"String\",\"StringValue\":\"CRITICAL\"}" \
+      2>/dev/null || echo "SNS alert failed"
+  fi
+  
+  # Direct page alert (if page alias configured)
+  if [ -n "${ONCALL_PAGE_ALIAS:-}" ]; then
+    echo "$alert_message" | mail -s "NPM Publish Alert" "page-${ONCALL_PAGE_ALIAS}@amazon.com" 2>/dev/null || echo "Page alert failed"
+  fi
+  
+  echo "🚨 ALERT: $alert_message"
 }
 
 for package_dir in packages/*; do
