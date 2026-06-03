@@ -227,15 +227,7 @@ describe("plugin hooks", () => {
   });
 });
 
-describe("Feature: invocation-status-plugin-hook, Property 1: Successful invocation produces correct InvocationEndInfo", () => {
-  /**
-   * **Validates: Requirements 2.4, 3.2**
-   *
-   * For any handler that returns a value successfully, onInvocationEnd
-   * SHALL be called with status equal to PluginInvocationStatus.SUCCEEDED,
-   * executionResult equal to the handler's return value, and executionError
-   * equal to undefined.
-   */
+describe("onInvocationEnd receives correct InvocationEndInfo on success", () => {
   it.each([
     { desc: "string result", returnValue: "hello world" },
     { desc: "number result", returnValue: 42 },
@@ -274,15 +266,7 @@ describe("Feature: invocation-status-plugin-hook, Property 1: Successful invocat
   );
 });
 
-describe("Feature: invocation-status-plugin-hook, Property 7: RETRYING never appears in Lambda response output", () => {
-  /**
-   * **Validates: Requirements 6.1, 6.2, 6.3, 6.4**
-   *
-   * For any invocation outcome, the DurableExecutionInvocationOutput.Status
-   * returned to the Lambda runtime SHALL be one of InvocationStatus.SUCCEEDED,
-   * InvocationStatus.FAILED, or InvocationStatus.PENDING (from core.ts),
-   * and SHALL never contain the value "RETRYING".
-   */
+describe("RETRYING never appears in Lambda response output", () => {
   const validStatuses = [
     InvocationStatus.SUCCEEDED,
     InvocationStatus.FAILED,
@@ -331,15 +315,7 @@ describe("Feature: invocation-status-plugin-hook, Property 7: RETRYING never app
   );
 });
 
-describe("Feature: invocation-status-plugin-hook, Property 2: Failed invocation produces correct InvocationEndInfo", () => {
-  /**
-   * **Validates: Requirements 2.5, 3.3**
-   *
-   * For any handler that throws a non-unrecoverable error, onInvocationEnd
-   * SHALL be called with status equal to PluginInvocationStatus.FAILED,
-   * executionError set to the thrown Error instance, and executionResult
-   * equal to undefined.
-   */
+describe("onInvocationEnd receives correct InvocationEndInfo on failure", () => {
   it.each([
     { desc: "simple error", errorMessage: "handler failed" },
     { desc: "empty message", errorMessage: "" },

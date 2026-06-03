@@ -618,16 +618,7 @@ describe("createPluginRunner", () => {
     });
   });
 
-  describe("Feature: invocation-status-plugin-hook, Property 6: Plugin error isolation in onInvocationEnd", () => {
-    /**
-     * **Validates: Requirements 5.1, 5.2, 5.3, 5.4**
-     *
-     * For any set of registered plugins where one or more plugins throw synchronous errors
-     * or return rejected promises from onInvocationEnd, all subsequent plugins SHALL still
-     * receive their onInvocationEnd call, and the DurableExecutionInvocationOutput returned
-     * by the SDK SHALL be identical to the output determined before onInvocationEnd dispatch.
-     */
-
+  describe("plugin error isolation in onInvocationEnd", () => {
     const sampleEndInfo: InvocationEndInfo = {
       requestId: "req-isolation",
       executionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
