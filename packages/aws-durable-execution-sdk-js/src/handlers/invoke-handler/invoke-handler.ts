@@ -3,7 +3,6 @@ import {
   InvokeConfig,
   OperationSubType,
   DurablePromise,
-  DurableExecutionMode,
   OperationLifecycleState,
 } from "../../types";
 import { InvokeError } from "../../errors/durable-error/durable-error";
@@ -20,13 +19,9 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import {
-  DurableInstrumentationPlugin,
-  AttemptEndInfoOutcome,
-} from "../../types/plugin";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
   toAttemptInfo,
-  toAttemptEndInfo,
   backfillOperationInfo,
   toOperationInfo,
 } from "../../utils/operation/operation";
@@ -40,7 +35,6 @@ export const createInvokeHandler = (
 
   getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
-  getDurableExecutionMode?: () => DurableExecutionMode,
 ): {
   <I, O>(
     funcId: string,
@@ -116,14 +110,6 @@ export const createInvokeHandler = (
         log("⏭️", "Invoke already completed:", { stepId });
         checkAndUpdateReplayMode?.();
 
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log("⏭️", "Invoke in full replay mode, skipping plugin calls:", {
-            stepId,
-          });
-        }
-
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -138,14 +124,12 @@ export const createInvokeHandler = (
           },
         );
 
-        if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationFirstEnd?.(attemptInfo);
-        }
+        const attemptInfo = toAttemptInfo(
+          stepData,
+          stepData.StepDetails?.Attempt,
+        );
+        backfillOperationInfo(attemptInfo, opInfo);
+        plugin.onOperationFirstEnd?.(attemptInfo);
 
         isCompleted = true;
         return;
@@ -160,16 +144,6 @@ export const createInvokeHandler = (
         log("❌", "Invoke already failed:", { stepId });
         checkAndUpdateReplayMode?.();
 
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log(
-            "⏭️",
-            "Invoke (failed) in full replay mode, skipping plugin calls:",
-            { stepId },
-          );
-        }
-
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -184,15 +158,13 @@ export const createInvokeHandler = (
           },
         );
 
-        if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationFirstEnd?.(attemptInfo);
-        }
+        const attemptInfo = toAttemptInfo(
+          stepData,
+          stepData.StepDetails?.Attempt,
+        );
+        backfillOperationInfo(attemptInfo, opInfo);
+        plugin.onOperationStart?.(attemptInfo);
+        plugin.onOperationFirstEnd?.(attemptInfo);
 
         isCompleted = true;
         return;

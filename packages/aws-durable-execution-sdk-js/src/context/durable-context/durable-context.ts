@@ -337,7 +337,6 @@ export class DurableContextImpl<
         this.checkAndUpdateReplayMode.bind(this),
         () => this._defaultSerdes,
         this.durableExecution.plugin,
-        () => this.durableExecutionMode,
       );
       return invokeHandler<I, O>(
         ...([
@@ -420,7 +419,6 @@ export class DurableContextImpl<
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
         this.durableExecution.plugin,
-        () => this.durableExecutionMode,
       );
       return typeof nameOrDuration === "string"
         ? waitHandler(nameOrDuration, maybeDuration!)
@@ -484,7 +482,6 @@ export class DurableContextImpl<
         this._parentId,
         () => this._defaultCallbackDeserializer,
         this.durableExecution.plugin,
-        () => this.durableExecutionMode,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });

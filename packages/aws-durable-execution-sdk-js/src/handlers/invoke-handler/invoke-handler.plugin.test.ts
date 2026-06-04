@@ -1,5 +1,5 @@
 import { createInvokeHandler } from "./invoke-handler";
-import { ExecutionContext, DurableExecutionMode } from "../../types";
+import { ExecutionContext } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
@@ -93,56 +93,6 @@ describe("InvokeHandler - plugin hooks", () => {
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
-  });
-
-  it("should skip plugin calls in full replay mode on replay succeeded", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
-      Status: OperationStatus.SUCCEEDED,
-      ChainedInvokeDetails: { Result: '{"result":"success"}' },
-    });
-
-    const handler = createInvokeHandler(
-      mockContext,
-      mockCheckpoint,
-      mockCreateStepId,
-      undefined,
-      jest.fn(),
-      undefined,
-      mockPlugin,
-      () => DurableExecutionMode.ReplayMode,
-    );
-
-    await handler("test-function", { test: "data" });
-
-    expect(mockPlugin.onOperationFirstStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
-  });
-
-  it("should skip plugin calls in full replay mode on replay failed", async () => {
-    (mockContext.getStepData as jest.Mock).mockReturnValue({
-      Status: OperationStatus.FAILED,
-      ChainedInvokeDetails: {
-        Error: { ErrorMessage: "invoke failed" },
-      },
-    });
-
-    const handler = createInvokeHandler(
-      mockContext,
-      mockCheckpoint,
-      mockCreateStepId,
-      undefined,
-      jest.fn(),
-      undefined,
-      mockPlugin,
-      () => DurableExecutionMode.ReplayMode,
-    );
-
-    await expect(handler("test-function", { test: "data" })).rejects.toThrow();
-
-    expect(mockPlugin.onOperationFirstStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationStart).not.toHaveBeenCalled();
-    expect(mockPlugin.onOperationFirstEnd).not.toHaveBeenCalled();
   });
 
   it("should call plugin hooks on phase 2 succeeded", async () => {

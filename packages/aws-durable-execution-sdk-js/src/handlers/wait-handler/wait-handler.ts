@@ -3,7 +3,6 @@ import {
   OperationSubType,
   Duration,
   OperationLifecycleState,
-  DurableExecutionMode,
 } from "../../types";
 import {
   OperationStatus,
@@ -23,7 +22,6 @@ import {
   backfillOperationInfo,
   toOperationInfo,
 } from "../../utils/operation/operation";
-import { start } from "node:repl";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -32,7 +30,6 @@ export const createWaitHandler = (
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
   plugin: DurableInstrumentationPlugin = {},
-  getDurableExecutionMode?: () => DurableExecutionMode,
 ): {
   (name: string, duration: Duration): DurablePromise<void>;
   (duration: Duration): DurablePromise<void>;
@@ -51,12 +48,6 @@ export const createWaitHandler = (
 
     // Phase 1: Start wait operation
     let isCompleted = false;
-    // Track whether to skip plugin calls (onOperationStart/onOperationFirstEnd) on replay.
-    // If we're still in ReplayMode after checkAndUpdateReplayMode(), there are more
-    // operations to replay after this wait, meaning this wait's plugin events were
-    // already emitted in a previous invocation. We only fire them on the first
-    // invocation where the wait completes (transition to ExecutionMode).
-    let skipPluginCalls = false;
 
     const phase1Promise = (async (): Promise<void> => {
       log("⏲️", "Wait phase 1:", {
@@ -91,18 +82,6 @@ export const createWaitHandler = (
         log("⏭️", "Wait already completed:", { stepId });
         checkAndUpdateReplayMode?.();
 
-        // After checkAndUpdateReplayMode(), check if we're still in ReplayMode.
-        // If still in ReplayMode, there are more operations to replay, meaning this
-        // wait was completed in a previous invocation and its plugin events were
-        // already emitted then.
-        const currentMode = getDurableExecutionMode?.();
-        if (currentMode === DurableExecutionMode.ReplayMode) {
-          skipPluginCalls = true;
-          log("⏭️", "Wait in full replay mode, skipping plugin calls:", {
-            stepId,
-          });
-        }
-
         // Mark as completed
         checkpoint.markOperationState(
           stepId,
@@ -119,11 +98,9 @@ export const createWaitHandler = (
         );
 
         isCompleted = true;
-        if (!skipPluginCalls) {
-          const checkPointedOpInfo = toOperationInfo(stepData);
-          plugin.onOperationStart?.(checkPointedOpInfo);
-          plugin.onOperationFirstEnd?.(checkPointedOpInfo);
-        }
+        const checkPointedOpInfo = toOperationInfo(stepData);
+        plugin.onOperationStart?.(checkPointedOpInfo);
+        plugin.onOperationFirstEnd?.(checkPointedOpInfo);
         return;
       }
 

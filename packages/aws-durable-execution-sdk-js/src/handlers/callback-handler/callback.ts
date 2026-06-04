@@ -4,7 +4,6 @@ import {
   CreateCallbackResult,
   OperationSubType,
   DurablePromise,
-  DurableExecutionMode,
   OperationLifecycleState,
 } from "../../types";
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
@@ -43,7 +42,6 @@ export const createCallback = (
 
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
   plugin: DurableInstrumentationPlugin = {},
-  getDurableExecutionMode?: () => DurableExecutionMode,
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -99,14 +97,6 @@ export const createCallback = (
         log("⏭️", "Callback already completed:", { stepId });
         checkAndUpdateReplayMode();
 
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log("⏭️", "Callback in full replay mode, skipping plugin calls:", {
-            stepId,
-          });
-        }
-
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -121,15 +111,13 @@ export const createCallback = (
           },
         );
 
-        if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationFirstEnd?.(attemptInfo);
-        }
+        const attemptInfo = toAttemptInfo(
+          stepData,
+          stepData.StepDetails?.Attempt,
+        );
+        backfillOperationInfo(attemptInfo, opInfo);
+        plugin.onOperationStart?.(attemptInfo);
+        plugin.onOperationFirstEnd?.(attemptInfo);
 
         isCompleted = true;
         return;
@@ -143,16 +131,6 @@ export const createCallback = (
         log("❌", "Callback already failed:", { stepId });
         checkAndUpdateReplayMode();
 
-        const skipPluginCalls =
-          getDurableExecutionMode?.() === DurableExecutionMode.ReplayMode;
-        if (skipPluginCalls) {
-          log(
-            "⏭️",
-            "Callback (failed) in full replay mode, skipping plugin calls:",
-            { stepId },
-          );
-        }
-
         checkpoint.markOperationState(
           stepId,
           OperationLifecycleState.COMPLETED,
@@ -167,15 +145,13 @@ export const createCallback = (
           },
         );
 
-        if (!skipPluginCalls) {
-          const attemptInfo = toAttemptInfo(
-            stepData,
-            stepData.StepDetails?.Attempt,
-          );
-          backfillOperationInfo(attemptInfo, opInfo);
-          plugin.onOperationStart?.(attemptInfo);
-          plugin.onOperationFirstEnd?.(attemptInfo);
-        }
+        const attemptInfo = toAttemptInfo(
+          stepData,
+          stepData.StepDetails?.Attempt,
+        );
+        backfillOperationInfo(attemptInfo, opInfo);
+        plugin.onOperationStart?.(attemptInfo);
+        plugin.onOperationFirstEnd?.(attemptInfo);
 
         isCompleted = true;
         return;
