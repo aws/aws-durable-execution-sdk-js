@@ -335,6 +335,7 @@ export class DurableContextImpl<
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
       return invokeHandler<I, O>(
         ...([
