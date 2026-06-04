@@ -1,0 +1,108 @@
+name: Test NPM Publish Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/iterate-publish-npm.sh'
+      - '.github/workflows/npm-publish.yml'
+      - '.github/workflows/scripts/test-publish/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-validation-logic:
+    name: Test validation and verification logic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Setup mock npm and test packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Setup mock npm
+          mkdir -p "$RUNNER_TEMP/mock-bin"
+          ln -s "$GITHUB_WORKSPACE/.github/workflows/scripts/test-publish/mock-npm.js" \
+                "$RUNNER_TEMP/mock-bin/npm"
+          : > "$RUNNER_TEMP/npm-args.log"
+          
+          # Create test packages
+          mkdir -p packages/test-stable packages/test-prerelease packages/test-other
+          
+          # Stable package (should go to latest)
+          cat > packages/test-stable/package.json << 'EOF'
+          {"name": "test-stable", "version": "2.0.0"}
+          EOF
+          
+          # Pre-release package (should go to beta)  
+          cat > packages/test-prerelease/package.json << 'EOF'
+          {"name": "test-prerelease", "version": "2.1.0-alpha.1"}
+          EOF
+          
+          # Another stable package
+          cat > packages/test-other/package.json << 'EOF'
+          {"name": "test-other", "version": "1.5.0"}
+          EOF
+          
+          {
+            echo "NPM_LOG=$RUNNER_TEMP/npm-args.log"
+            echo "ASSERT_RESULT_PATH=$RUNNER_TEMP/assert-result.json"
+          } >> "$GITHUB_ENV"
+
+      - name: Test prerelease validation (should use beta tag)
+        shell: bash
+        run: |
+          # Modify script to only process our test packages
+          sed -i 's/packages\/aws-durable-execution-sdk-js[^"]*//g' .github/workflows/iterate-publish-npm.sh
+          sed -i 's/\|\| "$package_dir" == "[^"]*"//g' .github/workflows/iterate-publish-npm.sh
+          sed -i 's/== "packages\/[^"]*" \|\|/== "packages\/test-stable" ||/g' .github/workflows/iterate-publish-npm.sh
+          sed -i 's/== "packages\/test-stable" ||.*/== "packages\/test-stable" || "$package_dir" == "packages\/test-prerelease" || "$package_dir" == "packages\/test-other" ]]; then/' .github/workflows/iterate-publish-npm.sh
+          
+          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
+            bash .github/workflows/iterate-publish-npm.sh true
+
+      - name: Verify prerelease used beta tag
+        shell: bash
+        run: |
+          # Check that prerelease package used --tag beta
+          if ! grep -q '["'"'"']publish["'"'"'].*["'"'"']--tag["'"'"'].*["'"'"']beta["'"'"']' "$NPM_LOG"; then
+            echo "ERROR: Prerelease should use --tag beta"
+            cat "$NPM_LOG"
+            exit 1
+          fi
+          echo "✓ Prerelease correctly used --tag beta"
+
+      - name: Test stable validation (should use latest tag)  
+        shell: bash
+        run: |
+          : > "$NPM_LOG"  # Clear log
+          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
+            bash .github/workflows/iterate-publish-npm.sh false
+
+      - name: Verify stable used latest tag
+        shell: bash
+        run: |
+          # Check that stable packages used --tag latest
+          if ! grep -q '["'"'"']publish["'"'"'].*["'"'"']--tag["'"'"'].*["'"'"']latest["'"'"']' "$NPM_LOG"; then
+            echo "ERROR: Stable releases should use --tag latest"
+            cat "$NPM_LOG"
+            exit 1
+          fi
+          echo "✓ Stable releases correctly used --tag latest"
+
+      - name: Verify dist-tags verification ran
+        shell: bash
+        run: |
+          # Check that npm view dist-tags was called (verification logic)
+          if ! grep -q '["'"'"']view["'"'"'].*["'"'"']dist-tags["'"'"']' "$NPM_LOG"; then
+            echo "ERROR: Post-publish verification should call npm view dist-tags"
+            cat "$NPM_LOG"
+            exit 1
+          fi
+          echo "✓ Post-publish verification ran correctly"

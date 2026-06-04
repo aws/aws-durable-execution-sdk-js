@@ -67,6 +67,7 @@ jobs:
         # so this test does not depend on the file mode.
         run: |
           PATH="$RUNNER_TEMP/mock-bin:$PATH" \
+          SKIP_DIST_TAG_VERIFY=1 \
             bash .github/workflows/iterate-publish-npm.sh true
 
       - name: Assert every invocation used a non-latest --tag

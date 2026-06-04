@@ -108,8 +108,8 @@ for package_dir in packages/*; do
       EXPECTED_TAG="latest"
     fi
     
-    # Verify dist-tags after publish (skip in test mode)
-    if [ "$FAILED" -eq 0 ] && [ -z "${NPM_LOG:-}" ]; then
+    # Verify dist-tags after publish (unless explicitly skipped)
+    if [ "$FAILED" -eq 0 ] && [ "${SKIP_DIST_TAG_VERIFY:-}" != "1" ]; then
       verify_and_rollback "$PACKAGE_NAME" "$VERSION" "$EXPECTED_TAG" || FAILED=1
     fi
     

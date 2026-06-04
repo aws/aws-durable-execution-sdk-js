@@ -63,6 +63,12 @@ const invocations = lines.map((line, idx) => {
   }
 
   const tagIdx = args.indexOf("--tag");
+  
+  // Only check npm publish commands for --tag requirement
+  if (args[0] !== "publish") {
+    return { index, args, tag: null, result: "ok", reason: "not a publish command" };
+  }
+  
   if (tagIdx === -1) {
     return { index, args, tag: null, result: "fail", reason: "missing --tag" };
   }
