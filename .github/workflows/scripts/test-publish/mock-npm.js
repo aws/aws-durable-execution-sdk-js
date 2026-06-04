@@ -29,6 +29,10 @@ if (args[0] === "view" && args.includes("dist-tags") && args.includes("--json"))
     // Simulate tag mismatch - latest points to wrong version
     const mockResponse = { latest: "1.0.0", beta: "2.0.0" };
     console.log(JSON.stringify(mockResponse));
+  } else if (packageName === "test-verify-pass") {
+    // Simulate correct tags - latest should match the version we're testing (1.0.0)
+    const mockResponse = { latest: "1.0.0", beta: "0.9.0-beta.1" };
+    console.log(JSON.stringify(mockResponse));
   } else if (packageName === "@aws/durable-execution-sdk-js") {
     // This package has prerelease version 2.0.0-alpha.1, should go to beta
     // So latest should NOT equal our version (verification should pass)
