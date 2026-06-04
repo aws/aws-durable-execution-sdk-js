@@ -103,30 +103,20 @@ jobs:
         run: |
           # Create test packages with different scenarios
           mkdir -p packages/test-verify-pass packages/test-verify-fail
+          echo '{"name": "test-verify-pass", "version": "1.0.0"}' > packages/test-verify-pass/package.json
+          echo '{"name": "test-verify-fail", "version": "2.0.0"}' > packages/test-verify-fail/package.json
           
-          # Package that should pass verification (stable version)
-          cat > packages/test-verify-pass/package.json << 'EOF'
-          {"name": "test-verify-pass", "version": "1.0.0"}
-          EOF
-          
-          # Package that should fail verification (version mismatch simulation)
-          cat > packages/test-verify-fail/package.json << 'EOF'
-          {"name": "test-verify-fail", "version": "2.0.0"}
-          EOF
-          
-          # Test verification with mock that returns correct tags
+          # Source functions
           source .github/workflows/iterate-publish-npm.sh
-          cd packages/test-verify-pass
           
-          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
-          TEST_MODE=1 \
-          verify_and_rollback "test-verify-pass" "1.0.0" "latest"
+          # Test 1: Verification should pass for matching tags
+          cd packages/test-verify-pass
+          PATH="$RUNNER_TEMP/mock-bin:$PATH" TEST_MODE=1 verify_and_rollback "test-verify-pass" "1.0.0" "latest"
           echo "✓ Verification passed for matching tags"
           
-          # Test verification failure scenario
+          # Test 2: Verification should fail for mismatched tags
           cd ../test-verify-fail
-          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
-          TEST_MODE=1 \
+          PATH="$RUNNER_TEMP/mock-bin:$PATH" TEST_MODE=1 
           if verify_and_rollback "test-verify-fail" "2.0.0" "latest"; then
             echo "ERROR: Verification should fail for mismatched tags"
             exit 1
