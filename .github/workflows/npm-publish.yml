@@ -4,7 +4,7 @@
 name: npm publish
 
 permissions:
-  id-token: write # Required for OIDC and AWS
+  id-token: write # Required for OIDC
   contents: read
 on:
   release:
@@ -28,7 +28,6 @@ jobs:
       - name: iterate and publish
         run: ./.github/workflows/iterate-publish-npm.sh ${{ github.event.release.prerelease && 'true' || 'false' }}
         shell: bash
-        timeout-minutes: 4
 
   notify-release:
     needs: [npm-publish]
