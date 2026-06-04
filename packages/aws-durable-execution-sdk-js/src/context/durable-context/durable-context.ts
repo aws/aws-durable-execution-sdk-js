@@ -415,6 +415,7 @@ export class DurableContextImpl<
         this.createStepId.bind(this),
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
+        this.durableExecution.plugin,
       );
       return typeof nameOrDuration === "string"
         ? waitHandler(nameOrDuration, maybeDuration!)
