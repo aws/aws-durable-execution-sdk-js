@@ -34,7 +34,15 @@ jobs:
         run: |
           cd test-packages/test-package
           chmod +x ../../.github/workflows/iterate-publish-npm.sh
-          if ../../.github/workflows/iterate-publish-npm.sh false; then
+          
+          # Source the script to access the check_prerelease_version function
+          source ../../.github/workflows/iterate-publish-npm.sh
+          
+          # Set PRERELEASE to false (latest tag)
+          PRERELEASE=false
+          
+          # Test should fail (exit 1) for pre-release version to latest
+          if check_prerelease_version "1.0.0-alpha.1" "test-package"; then
             echo "ERROR: Script should have failed for pre-release version with latest tag"
             exit 1
           else
@@ -44,10 +52,17 @@ jobs:
       - name: Test validation allows pre-release to beta
         run: |
           cd test-packages/test-package
-          # This should pass (we're not actually publishing, just validating)
-          if ! ../../.github/workflows/iterate-publish-npm.sh true; then
+          
+          # Source the script to access the check_prerelease_version function
+          source ../../.github/workflows/iterate-publish-npm.sh
+          
+          # Set PRERELEASE to true (beta tag)
+          PRERELEASE=true
+          
+          # Test should pass (exit 0) for pre-release version to beta
+          if check_prerelease_version "1.0.0-alpha.1" "test-package"; then
+            echo "SUCCESS: Script correctly allows pre-release with beta tag"
+          else
             echo "ERROR: Script should allow pre-release version with beta tag"
             exit 1
-          else
-            echo "SUCCESS: Script correctly allows pre-release with beta tag"
           fi
