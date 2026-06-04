@@ -64,7 +64,18 @@ verify_and_rollback() {
       else
         echo "Beta version $version incorrectly tagged as latest"
       fi
-      rollback_and_alert "$package_name" "$version"
+      
+      # Alert but don't automatically rollback - could be temporary NPM issue
+      local alert_message="CRITICAL: Package $package_name version $version has incorrect dist-tags after publish. Manual verification needed."
+      
+      # GitHub Actions annotation
+      if [ -n "${GITHUB_ACTIONS:-}" ]; then
+        echo "::error::$alert_message"
+      fi
+      
+      echo "🚨 ALERT: $alert_message"
+      echo "ℹ️  This may be a temporary NPM registry issue. Manual investigation recommended."
+      
       return 1
     fi
     
@@ -75,45 +86,6 @@ verify_and_rollback() {
   done
 }
 
-# Function to rollback and alert
-rollback_and_alert() {
-  local package_name=$1
-  local bad_version=$2
-  
-  echo "🚨 ROLLBACK: Attempting to restore previous stable version as latest..."
-  
-  # Get all versions and find the previous stable one (excluding the bad version)
-  local versions=$(npm view "$package_name" versions --json 2>/dev/null || echo "[]")
-  local previous_stable=$(echo "$versions" | node -p "
-    const versions = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
-    const stable = versions
-      .filter(v => !v.includes('-') && v !== '$bad_version')
-      .sort((a,b) => {
-        const aParts = a.split('.').map(Number);
-        const bParts = b.split('.').map(Number);
-        for (let i = 0; i < 3; i++) {
-          if (aParts[i] !== bParts[i]) return bParts[i] - aParts[i];
-        }
-        return 0;
-      });
-    stable[0] || 'none';
-  ")
-  
-  if [ "$previous_stable" != "none" ]; then
-    echo "Restoring $previous_stable as latest..."
-    npm dist-tag add "$package_name@$previous_stable" latest || echo "Failed to rollback"
-  fi
-  
-  # Alert
-  local alert_message="CRITICAL: Package $package_name version $bad_version has incorrect dist-tags. Attempted rollback to $previous_stable"
-  
-  # GitHub Actions annotation
-  if [ -n "${GITHUB_ACTIONS:-}" ]; then
-    echo "::error::$alert_message"
-  fi
-  
-  echo "🚨 ALERT: $alert_message"
-}
 
 for package_dir in packages/*; do
   if [ -d "$package_dir" ] && [[ "$package_dir" == "packages/aws-durable-execution-sdk-js-testing" || "$package_dir" == "packages/aws-durable-execution-sdk-js" || "$package_dir" == "packages/aws-durable-execution-sdk-js-eslint-plugin" ]]; then
