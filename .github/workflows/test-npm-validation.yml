@@ -124,9 +124,26 @@ jobs:
             echo "✓ Verification correctly detected tag mismatch"
           fi
 
-      - name: Test end-to-end with verification enabled
+      - name: Test end-to-end with verification enabled (prerelease)
         shell: bash
         run: |
           # Test WITHOUT SKIP_DIST_TAG_VERIFY to exercise verification path
+          # PRERELEASE=true: prerelease versions go to beta, stable versions go to latest
           PATH="$RUNNER_TEMP/mock-bin:$PATH" \
             bash .github/workflows/iterate-publish-npm.sh true
+
+      - name: Test end-to-end with verification enabled (stable release)  
+        shell: bash
+        run: |
+          # Test stable release scenario where all packages go to latest
+          # PRERELEASE=false: all versions go to latest (but prerelease versions should be blocked)
+          : > "$NPM_LOG"  # Clear log
+          
+          # This should fail because we have prerelease version in @aws/durable-execution-sdk-js
+          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
+          if bash .github/workflows/iterate-publish-npm.sh false; then
+            echo "ERROR: Should have failed due to prerelease version with latest tag"
+            exit 1
+          else
+            echo "✓ Correctly blocked prerelease version from latest tag"
+          fi
