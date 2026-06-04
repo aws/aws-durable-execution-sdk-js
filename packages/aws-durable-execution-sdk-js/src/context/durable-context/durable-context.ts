@@ -395,6 +395,7 @@ export class DurableContextImpl<
         },
         this._parentId,
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
