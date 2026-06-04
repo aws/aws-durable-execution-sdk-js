@@ -30,6 +30,7 @@ jobs:
       - name: Test validation blocks pre-release to latest
         run: |
           cd test-packages/test-package
+          chmod +x ../../.github/workflows/iterate-publish-npm.sh
           if ../../.github/workflows/iterate-publish-npm.sh false; then
             echo "ERROR: Script should have failed for pre-release version with latest tag"
             exit 1
