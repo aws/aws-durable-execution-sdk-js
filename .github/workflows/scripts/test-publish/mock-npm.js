@@ -29,12 +29,17 @@ if (args[0] === "view" && args.includes("dist-tags") && args.includes("--json"))
     // Simulate tag mismatch - latest points to wrong version
     const mockResponse = { latest: "1.0.0", beta: "2.0.0" };
     console.log(JSON.stringify(mockResponse));
+  } else if (packageName === "@aws/durable-execution-sdk-js") {
+    // This package has prerelease version 2.0.0-alpha.1, should go to beta
+    // So latest should NOT equal our version (verification should pass)
+    const mockResponse = { latest: "1.9.0", beta: "2.0.0-alpha.1" };
+    console.log(JSON.stringify(mockResponse));
   } else {
-    // Default: simulate correct tags for other packages
-    // For prerelease packages, latest should be stable, beta should be prerelease
-    const mockResponse = packageName.includes("prerelease") 
-      ? { latest: "1.0.0", beta: packageName.includes("alpha") ? "2.1.0-alpha.1" : "2.0.0-beta.1" }
-      : { latest: packageName === "@aws/durable-execution-sdk-js" ? "2.0.0-alpha.1" : "1.0.0" };
+    // eslint-plugin (1.0.0) and testing (1.1.1) are stable versions
+    // Even with PRERELEASE=true flag, stable versions go to latest
+    // So latest should equal our version (verification should pass)
+    const version = packageName.includes("eslint") ? "1.0.0" : "1.1.1";
+    const mockResponse = { latest: version, beta: "0.9.0-beta.1" };
     console.log(JSON.stringify(mockResponse));
   }
 } else if (args[0] === "view" && args.includes("versions") && args.includes("--json")) {
