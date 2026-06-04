@@ -80,7 +80,11 @@ verify_and_rollback() {
       echo "🚨 ALERT: $alert_message"
       echo "ℹ️  This may be a temporary NPM registry issue. Manual investigation recommended."
       
-      return 1
+      if [ "${TEST_MODE:-}" = "1" ]; then
+        return 1
+      else
+        return 1
+      fi
     fi
     
     echo "Registry not updated yet, waiting ${delay}s before retry..."
@@ -94,31 +98,33 @@ verify_and_rollback() {
 main() {
   for package_dir in packages/*; do
     if [ -d "$package_dir" ] && [[ "$package_dir" == "packages/aws-durable-execution-sdk-js-testing" || "$package_dir" == "packages/aws-durable-execution-sdk-js" || "$package_dir" == "packages/aws-durable-execution-sdk-js-eslint-plugin" ]]; then
-      echo "Publishing package in $package_dir";
-      cd "$package_dir";
+      echo "Publishing package in $package_dir"
       
-      # Extract version and package name for validation
-      VERSION=$(node -p "require('./package.json').version")
-      PACKAGE_NAME=$(node -p "require('./package.json').name")
-      
-      # Validate pre-release version against tag
-      check_prerelease_version "$VERSION" "$PACKAGE_NAME"
-      
-      # Publish
-      if [ "$PRERELEASE" = "true" ]; then
-        npm publish --access public --tag beta || FAILED=1
-        EXPECTED_TAG="beta"
-      else
-        npm publish --access public --tag latest || FAILED=1
-        EXPECTED_TAG="latest"
-      fi
-      
-      # Verify dist-tags after publish (unless explicitly skipped)
-      if [ "$FAILED" -eq 0 ] && [ "${SKIP_DIST_TAG_VERIFY:-}" != "1" ]; then
-        verify_and_rollback "$PACKAGE_NAME" "$VERSION" "$EXPECTED_TAG" || FAILED=1
-      fi
-      
-      cd ../..;
+      # Use subshell to safely change directory
+      ( 
+        cd "$package_dir" || exit 1
+        
+        # Extract version and package name for validation
+        VERSION=$(node -p "require('./package.json').version")
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        
+        # Validate pre-release version against tag
+        check_prerelease_version "$VERSION" "$PACKAGE_NAME"
+        
+        # Publish
+        if [ "$PRERELEASE" = "true" ]; then
+          npm publish --access public --tag beta || exit 1
+          EXPECTED_TAG="beta"
+        else
+          npm publish --access public --tag latest || exit 1
+          EXPECTED_TAG="latest"
+        fi
+        
+        # Verify dist-tags after publish (unless explicitly skipped)
+        if [ "${SKIP_DIST_TAG_VERIFY:-}" != "1" ]; then
+          verify_and_rollback "$PACKAGE_NAME" "$VERSION" "$EXPECTED_TAG" || exit 1
+        fi
+      ) || FAILED=1
     fi
   done
 

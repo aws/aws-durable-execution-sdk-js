@@ -23,13 +23,20 @@ appendFileSync(logPath, JSON.stringify(args) + "\n");
 // Handle npm view commands for dist-tags verification
 if (args[0] === "view" && args.includes("dist-tags") && args.includes("--json")) {
   const packageName = args[1];
-  // Mock response: return dist-tags that match what we expect
-  // For testing, assume the tags are correct (latest points to non-prerelease)
-  const mockResponse = {
-    latest: "2.0.0",
-    beta: "2.1.0-beta.1"
-  };
-  console.log(JSON.stringify(mockResponse));
+  
+  // Simulate different scenarios based on package name
+  if (packageName === "test-verify-fail") {
+    // Simulate tag mismatch - latest points to wrong version
+    const mockResponse = { latest: "1.0.0", beta: "2.0.0" };
+    console.log(JSON.stringify(mockResponse));
+  } else {
+    // Default: simulate correct tags for other packages
+    // For prerelease packages, latest should be stable, beta should be prerelease
+    const mockResponse = packageName.includes("prerelease") 
+      ? { latest: "1.0.0", beta: packageName.includes("alpha") ? "2.1.0-alpha.1" : "2.0.0-beta.1" }
+      : { latest: packageName === "@aws/durable-execution-sdk-js" ? "2.0.0-alpha.1" : "1.0.0" };
+    console.log(JSON.stringify(mockResponse));
+  }
 } else if (args[0] === "view" && args.includes("versions") && args.includes("--json")) {
   // Mock versions list for rollback testing
   const mockVersions = ["1.0.0", "1.1.0", "2.0.0", "2.1.0-beta.1"];

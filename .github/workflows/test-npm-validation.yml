@@ -98,10 +98,45 @@ jobs:
             exit 1
           fi
 
-      - name: Test end-to-end publish flow
-        shell: bash  
+      - name: Test dist-tags verification logic
+        shell: bash
         run: |
-          # Test the actual publish commands with mocks
+          # Create test packages with different scenarios
+          mkdir -p packages/test-verify-pass packages/test-verify-fail
+          
+          # Package that should pass verification (stable version)
+          cat > packages/test-verify-pass/package.json << 'EOF'
+          {"name": "test-verify-pass", "version": "1.0.0"}
+          EOF
+          
+          # Package that should fail verification (version mismatch simulation)
+          cat > packages/test-verify-fail/package.json << 'EOF'
+          {"name": "test-verify-fail", "version": "2.0.0"}
+          EOF
+          
+          # Test verification with mock that returns correct tags
+          source .github/workflows/iterate-publish-npm.sh
+          cd packages/test-verify-pass
+          
           PATH="$RUNNER_TEMP/mock-bin:$PATH" \
-          SKIP_DIST_TAG_VERIFY=1 \
+          TEST_MODE=1 \
+          verify_and_rollback "test-verify-pass" "1.0.0" "latest"
+          echo "✓ Verification passed for matching tags"
+          
+          # Test verification failure scenario
+          cd ../test-verify-fail
+          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
+          TEST_MODE=1 \
+          if verify_and_rollback "test-verify-fail" "2.0.0" "latest"; then
+            echo "ERROR: Verification should fail for mismatched tags"
+            exit 1
+          else
+            echo "✓ Verification correctly detected tag mismatch"
+          fi
+
+      - name: Test end-to-end with verification enabled
+        shell: bash
+        run: |
+          # Test WITHOUT SKIP_DIST_TAG_VERIFY to exercise verification path
+          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
             bash .github/workflows/iterate-publish-npm.sh true
