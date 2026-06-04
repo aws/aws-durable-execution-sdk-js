@@ -130,7 +130,7 @@ for package_dir in packages/*; do
       npm publish --access public --tag beta || FAILED=1
       EXPECTED_TAG="beta"
     else
-      npm publish --access public || FAILED=1
+      npm publish --access public --tag latest || FAILED=1
       EXPECTED_TAG="latest"
     fi
     
