@@ -1,0 +1,168 @@
+import { createRunInChildContextHandler } from "./run-in-child-context-handler";
+import { ExecutionContext } from "../../types";
+import { getStepData } from "../../utils/step-id-utils/step-id-utils";
+import {
+  createMockCheckpoint,
+  CheckpointFunction,
+} from "../../testing/mock-checkpoint";
+import { TEST_CONSTANTS } from "../../testing/test-constants";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+
+jest.mock("../../utils/logger/logger");
+
+const flushMicrotasks = () =>
+  new Promise<void>((resolve) => setImmediate(resolve));
+
+describe("RunInChildContext Handler - plugin hooks", () => {
+  let mockExecutionContext: jest.Mocked<ExecutionContext>;
+  let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
+  let mockParentContext: any;
+  let createStepId: jest.Mock;
+  let mockPlugin: jest.Mocked<DurableInstrumentationPlugin>;
+  let mockGetLogger: jest.Mock;
+  let mockCreateChildContext: jest.Mock;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockExecutionContext = {
+      _stepData: {},
+      terminationManager: { terminate: jest.fn() },
+      getStepData: jest.fn((stepId: string) => {
+        return getStepData(mockExecutionContext._stepData, stepId);
+      }),
+    } as unknown as jest.Mocked<ExecutionContext>;
+    mockCheckpoint = createMockCheckpoint();
+    mockParentContext = { awsRequestId: "mock-request-id" };
+    createStepId = jest.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
+    mockPlugin = {
+      onOperationFirstStart: jest.fn(),
+      onOperationStart: jest.fn(),
+      onOperationFirstEnd: jest.fn(),
+      wrapChildContextFn: jest.fn(),
+    };
+
+    (mockPlugin.wrapChildContextFn as jest.Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => fn(),
+    );
+    mockGetLogger = jest.fn().mockReturnValue({
+      log: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    });
+    mockCreateChildContext = jest.fn().mockReturnValue({
+      _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID,
+    });
+  });
+
+  it("should call onOperationFirstStart, wrapChildContextFn, and onOperationFirstEnd on successful execution", async () => {
+    const handler = createRunInChildContextHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockGetLogger,
+      mockCreateChildContext,
+      "parent-123",
+      undefined,
+      mockPlugin,
+    );
+
+    const childFn = jest.fn().mockResolvedValue("result");
+    await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
+    await flushMicrotasks();
+
+    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledWith(
+      expect.objectContaining({ Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME }),
+      expect.any(Function),
+    );
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
+      expect.not.objectContaining({ error: expect.anything() }),
+    );
+  });
+
+  it("should call wrapChildContextFn and onOperationFirstEnd with error on failed execution", async () => {
+    const handler = createRunInChildContextHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockGetLogger,
+      mockCreateChildContext,
+      "parent-123",
+      undefined,
+      mockPlugin,
+    );
+
+    const childFn = jest.fn().mockRejectedValue(new Error("child failed"));
+
+    await expect(
+      handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
+    ).rejects.toThrow("child failed");
+    await flushMicrotasks();
+
+    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledWith(
+      expect.objectContaining({ Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME }),
+      expect.any(Function),
+    );
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
+  });
+
+  it("should propagate errors thrown within wrapChildContextFn", async () => {
+    const wrapError = new Error("wrapChildContextFn exploded");
+
+    (mockPlugin.wrapChildContextFn as jest.Mock).mockImplementation(
+      (info, fn) => {
+        fn();
+        throw wrapError;
+      },
+    );
+
+    const handler = createRunInChildContextHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockGetLogger,
+      mockCreateChildContext,
+      "parent-123",
+      undefined,
+      mockPlugin,
+    );
+
+    const childFn = jest.fn().mockResolvedValue("result");
+
+    await expect(
+      handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
+    ).rejects.toThrow("wrapChildContextFn exploded");
+
+    expect(childFn).toHaveBeenCalled();
+  });
+
+  it("should not throw when plugin hooks are undefined", async () => {
+    const handler = createRunInChildContextHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      mockGetLogger,
+      mockCreateChildContext,
+      "parent-123",
+      undefined,
+      {},
+    );
+
+    const childFn = jest.fn().mockResolvedValue("result");
+    const result = await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
+    expect(result).toBe("result");
+  });
+});
