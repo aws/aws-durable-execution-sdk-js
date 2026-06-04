@@ -14,7 +14,11 @@ check_prerelease_version() {
     if [ "$PRERELEASE" != "true" ]; then
       echo "ERROR: Package '$package_name' has pre-release version '$version' but would publish to 'latest' tag"
       echo "Versions with suffixes cannot be published to the 'latest' tag"
-      exit 1
+      if [ "${TEST_MODE:-}" = "1" ]; then
+        return 1
+      else
+        exit 1
+      fi
     fi
   fi
 }
@@ -87,37 +91,44 @@ verify_and_rollback() {
 }
 
 
-for package_dir in packages/*; do
-  if [ -d "$package_dir" ] && [[ "$package_dir" == "packages/aws-durable-execution-sdk-js-testing" || "$package_dir" == "packages/aws-durable-execution-sdk-js" || "$package_dir" == "packages/aws-durable-execution-sdk-js-eslint-plugin" ]]; then
-    echo "Publishing package in $package_dir";
-    cd "$package_dir";
-    
-    # Extract version and package name for validation
-    VERSION=$(node -p "require('./package.json').version")
-    PACKAGE_NAME=$(node -p "require('./package.json').name")
-    
-    # Validate pre-release version against tag
-    check_prerelease_version "$VERSION" "$PACKAGE_NAME"
-    
-    # Publish
-    if [ "$PRERELEASE" = "true" ]; then
-      npm publish --access public --tag beta || FAILED=1
-      EXPECTED_TAG="beta"
-    else
-      npm publish --access public --tag latest || FAILED=1
-      EXPECTED_TAG="latest"
+main() {
+  for package_dir in packages/*; do
+    if [ -d "$package_dir" ] && [[ "$package_dir" == "packages/aws-durable-execution-sdk-js-testing" || "$package_dir" == "packages/aws-durable-execution-sdk-js" || "$package_dir" == "packages/aws-durable-execution-sdk-js-eslint-plugin" ]]; then
+      echo "Publishing package in $package_dir";
+      cd "$package_dir";
+      
+      # Extract version and package name for validation
+      VERSION=$(node -p "require('./package.json').version")
+      PACKAGE_NAME=$(node -p "require('./package.json').name")
+      
+      # Validate pre-release version against tag
+      check_prerelease_version "$VERSION" "$PACKAGE_NAME"
+      
+      # Publish
+      if [ "$PRERELEASE" = "true" ]; then
+        npm publish --access public --tag beta || FAILED=1
+        EXPECTED_TAG="beta"
+      else
+        npm publish --access public --tag latest || FAILED=1
+        EXPECTED_TAG="latest"
+      fi
+      
+      # Verify dist-tags after publish (unless explicitly skipped)
+      if [ "$FAILED" -eq 0 ] && [ "${SKIP_DIST_TAG_VERIFY:-}" != "1" ]; then
+        verify_and_rollback "$PACKAGE_NAME" "$VERSION" "$EXPECTED_TAG" || FAILED=1
+      fi
+      
+      cd ../..;
     fi
-    
-    # Verify dist-tags after publish (unless explicitly skipped)
-    if [ "$FAILED" -eq 0 ] && [ "${SKIP_DIST_TAG_VERIFY:-}" != "1" ]; then
-      verify_and_rollback "$PACKAGE_NAME" "$VERSION" "$EXPECTED_TAG" || FAILED=1
-    fi
-    
-    cd ../..;
-  fi
-done
+  done
 
-if [ "$FAILED" -ne 0 ]; then
-  echo "ERROR: One or more packages failed to publish or verify"
-  exit 1
+  if [ "$FAILED" -ne 0 ]; then
+    echo "ERROR: One or more packages failed to publish or verify"
+    exit 1
+  fi
+}
+
+# Only run main function if script is executed directly (not sourced)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
 fi
