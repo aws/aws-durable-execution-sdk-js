@@ -82,18 +82,20 @@ rollback_and_alert() {
   
   echo "🚨 ROLLBACK: Attempting to restore previous stable version as latest..."
   
-  # Get all versions and find the previous stable one
+  # Get all versions and find the previous stable one (excluding the bad version)
   local versions=$(npm view "$package_name" versions --json 2>/dev/null || echo "[]")
   local previous_stable=$(echo "$versions" | node -p "
     const versions = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
-    const stable = versions.filter(v => !v.includes('-')).sort((a,b) => {
-      const aParts = a.split('.').map(Number);
-      const bParts = b.split('.').map(Number);
-      for (let i = 0; i < 3; i++) {
-        if (aParts[i] !== bParts[i]) return bParts[i] - aParts[i];
-      }
-      return 0;
-    });
+    const stable = versions
+      .filter(v => !v.includes('-') && v !== '$bad_version')
+      .sort((a,b) => {
+        const aParts = a.split('.').map(Number);
+        const bParts = b.split('.').map(Number);
+        for (let i = 0; i < 3; i++) {
+          if (aParts[i] !== bParts[i]) return bParts[i] - aParts[i];
+        }
+        return 0;
+      });
     stable[0] || 'none';
   ")
   
