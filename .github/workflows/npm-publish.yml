@@ -20,11 +20,6 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
       - run: npm ci
       - run: npm run build
       - run: npm run test
@@ -33,10 +28,7 @@ jobs:
       - name: iterate and publish
         run: ./.github/workflows/iterate-publish-npm.sh ${{ github.event.release.prerelease && 'true' || 'false' }}
         shell: bash
-        timeout-minutes: 2
-        env:
-          AWS_SNS_TOPIC_ARN: ${{ secrets.AWS_SNS_TOPIC_ARN }}
-          ONCALL_PAGE_ALIAS: ${{ secrets.ONCALL_PAGE_ALIAS }}
+        timeout-minutes: 4
 
   notify-release:
     needs: [npm-publish]
