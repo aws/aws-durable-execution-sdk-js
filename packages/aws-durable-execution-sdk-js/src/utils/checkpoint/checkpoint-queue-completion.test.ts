@@ -30,6 +30,8 @@ describe("CheckpointManager Queue Completion", () => {
       mockEmitter,
       mockLogger,
       new Set<string>(),
+      {},
+      "",
     );
   });
 

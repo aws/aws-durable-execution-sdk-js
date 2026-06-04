@@ -84,7 +84,8 @@ export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execu
 export {
   DurableInstrumentationPlugin,
   InvocationInfo,
-  ExecutionEndInfo,
+  InvocationEndInfo,
+  PluginInvocationStatus,
   OperationChangeInfo,
   OperationInfo,
   OperationEndInfo,

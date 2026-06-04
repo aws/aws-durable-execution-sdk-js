@@ -75,8 +75,8 @@ export class CheckpointManager implements Checkpoint {
     private stepDataEmitter: EventEmitter,
     private logger: DurableLogger,
     private finishedAncestors: Set<string>,
-    private plugin: DurableInstrumentationPlugin = {},
-    private requestId: string = "",
+    private plugin: DurableInstrumentationPlugin,
+    private requestId: string,
   ) {
     this.currentTaskToken = initialTaskToken;
   }

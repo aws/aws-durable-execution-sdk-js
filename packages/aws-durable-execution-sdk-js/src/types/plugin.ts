@@ -2,6 +2,22 @@ import { Operation } from "@aws-sdk/client-lambda";
 import { DurableExecutionInvocationOutput } from "./core";
 
 /**
+ * Status enumeration for plugin invocation end hooks.
+ *
+ * This enum is separate from the core InvocationStatus and provides
+ * richer status information for plugin authors, including a RETRYING
+ * state that indicates the Lambda runtime will automatically retry.
+ *
+ * @experimental This enum is experimental and may be changed or removed in future releases.
+ */
+export enum PluginInvocationStatus {
+  SUCCEEDED = "SUCCEEDED",
+  FAILED = "FAILED",
+  PENDING = "PENDING",
+  RETRYING = "RETRYING",
+}
+
+/**
  * Information about a durable operation.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
@@ -82,12 +98,13 @@ export interface InvocationInfo extends InvocationBaseInfo {
 }
 
 /**
- * Information provided when a durable execution ends.
+ * Information provided when a durable execution invocation ends, including
+ * the invocation status and contextual details about the outcome.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface ExecutionEndInfo extends InvocationBaseInfo {
-  status: "SUCCEEDED" | "FAILED";
+export interface InvocationEndInfo extends InvocationInfo {
+  status: PluginInvocationStatus;
   executionResult?: unknown;
   executionError?: Error;
   executionInput: unknown;
@@ -110,13 +127,12 @@ export interface OperationChangeInfo extends InvocationBaseInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DurableInstrumentationPlugin {
-  onExecutionEnd?(info: ExecutionEndInfo): void;
   onInvocationStart?(info: InvocationInfo): void;
   wrapInvocation?(
     info: InvocationInfo,
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput>;
-  onInvocationEnd?(info: InvocationInfo): void;
+  onInvocationEnd?(info: InvocationEndInfo): void;
   onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
