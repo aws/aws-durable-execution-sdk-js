@@ -31,10 +31,10 @@ verify_and_rollback() {
   
   echo "Verifying dist-tags for $package_name..."
   
-  # Retry logic for npm registry propagation
-  local max_attempts=6
+  # Retry logic for npm registry propagation (configurable for testing)
+  local max_attempts=${DIST_TAG_VERIFY_MAX_ATTEMPTS:-6}
   local attempt=1
-  local delay=5
+  local delay=${DIST_TAG_VERIFY_BASE_DELAY:-5}
   
   while [ $attempt -le $max_attempts ]; do
     echo "Attempt $attempt/$max_attempts: Checking dist-tags..."

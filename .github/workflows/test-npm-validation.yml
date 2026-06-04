@@ -100,6 +100,9 @@ jobs:
 
       - name: Test dist-tags verification logic
         shell: bash
+        env:
+          DIST_TAG_VERIFY_MAX_ATTEMPTS: 2
+          DIST_TAG_VERIFY_BASE_DELAY: 1
         run: |
           # Create test packages with different scenarios
           mkdir -p packages/test-verify-pass packages/test-verify-fail
@@ -126,6 +129,9 @@ jobs:
 
       - name: Test end-to-end with verification enabled (prerelease)
         shell: bash
+        env:
+          DIST_TAG_VERIFY_MAX_ATTEMPTS: 2
+          DIST_TAG_VERIFY_BASE_DELAY: 1
         run: |
           # Test WITHOUT SKIP_DIST_TAG_VERIFY to exercise verification path
           # PRERELEASE=true: prerelease versions go to beta, stable versions go to latest
@@ -134,6 +140,9 @@ jobs:
 
       - name: Test end-to-end with verification enabled (stable release)  
         shell: bash
+        env:
+          DIST_TAG_VERIFY_MAX_ATTEMPTS: 2
+          DIST_TAG_VERIFY_BASE_DELAY: 1
         run: |
           # Test stable release scenario where all packages go to latest
           # PRERELEASE=false: all versions go to latest (but prerelease versions should be blocked)
