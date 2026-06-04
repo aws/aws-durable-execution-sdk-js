@@ -35,6 +35,17 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
+import {
+  DurableInstrumentationPlugin,
+  AttemptEndInfoOutcome,
+  CustomerFnResult,
+} from "../../types/plugin";
+import {
+  toAttemptEndInfo,
+  toAttemptInfo,
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -45,6 +56,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
   parentId?: string,
 
   getDefaultSerdes?: () => AnySerdes,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -81,6 +93,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
         context,
       );
 
+      const opInfo = {
+        Id: stepId,
+        Name: name,
+        Type: OperationType.STEP,
+        SubType: OperationSubType.STEP,
+        ParentId: parentId,
+      };
+
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Step already completed:", { stepId });
@@ -97,6 +117,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
+
         return await safeDeserialize(
           serdes,
           stepData.StepDetails?.Result,
@@ -122,6 +143,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           },
         );
+
         if (stepData.StepDetails?.Error) {
           throw DurableOperationError.fromErrorObject(
             stepData.StepDetails.Error,
@@ -244,21 +266,36 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Type: OperationType.STEP,
               Name: name,
             });
+            stepData = context.getStepData(stepId);
+            const operationInfo = toOperationInfo(stepData);
+            backfillOperationInfo(operationInfo, opInfo);
+            plugin.onOperationFirstStart?.(operationInfo);
           } else {
-            checkpoint.checkpoint(stepId, {
-              Id: stepId,
-              ParentId: parentId,
-              Action: OperationAction.START,
-              SubType: OperationSubType.STEP,
-              Type: OperationType.STEP,
-              Name: name,
-            });
+            checkpoint
+              .checkpoint(stepId, {
+                Id: stepId,
+                ParentId: parentId,
+                Action: OperationAction.START,
+                SubType: OperationSubType.STEP,
+                Type: OperationType.STEP,
+                Name: name,
+              })
+              .then(() => {
+                stepData = context.getStepData(stepId);
+                const operationInfo = toOperationInfo(stepData);
+                backfillOperationInfo(operationInfo, opInfo);
+                plugin.onOperationFirstStart?.(operationInfo);
+              });
           }
+        } else {
+          const operationInfo = toOperationInfo(stepData);
+          backfillOperationInfo(operationInfo, opInfo);
+          plugin.onOperationStart?.(operationInfo);
         }
 
         try {
           stepData = context.getStepData(stepId);
-          const currentAttempt = stepData?.StepDetails?.Attempt || 0;
+          const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
           const stepContext: StepContext<Logger> = { logger };
 
           // Mark operation as EXECUTING
@@ -275,15 +312,21 @@ export const createStepHandler = <Logger extends DurableLogger>(
               },
             },
           );
-
+          const attemptInfo = toAttemptInfo(stepData, currentAttempt);
+          backfillOperationInfo(attemptInfo, opInfo);
+          plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
-          result = await runWithContext(
+          const stepFn = (): Promise<T> => fn(stepContext);
+          result = (await runWithContext(
             stepId,
             parentId,
-            () => fn(stepContext),
-            currentAttempt + 1,
+            plugin.wrapOperationAttemptFn
+              ? (): CustomerFnResult =>
+                  plugin.wrapOperationAttemptFn!(attemptInfo, stepFn)
+              : stepFn,
+            currentAttempt,
             DurableExecutionMode.ExecutionMode,
-          );
+          )) as T;
 
           const serializedResult = await safeSerialize(
             serdes,
@@ -303,7 +346,17 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Payload: serializedResult,
             Name: name,
           });
-
+          stepData = context.getStepData(stepId);
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.SUCCEEDED,
+            {
+              attempt: currentAttempt,
+            },
+          );
+          backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
+          plugin.onOperationFirstEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
@@ -352,11 +405,30 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               OperationLifecycleState.COMPLETED,
             );
+            stepData = context.getStepData(stepId);
+            const attemptEndInfo = toAttemptEndInfo(
+              stepData,
+              AttemptEndInfoOutcome.FAILED,
+              {
+                attempt: currentAttempt,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              },
+            );
+            backfillOperationInfo(attemptEndInfo, opInfo);
+            plugin.onOperationAttemptEnd?.(attemptEndInfo);
+            plugin.onOperationFirstEnd?.({
+              ...attemptEndInfo,
+              error: error instanceof Error ? error : new Error(String(error)),
+            });
             throw DurableOperationError.fromErrorObject(
               createErrorObjectFromError(error),
             );
           }
 
+          const nextAttemptDelaySeconds = retryDecision.delay
+            ? durationToSeconds(retryDecision.delay)
+            : 1;
           await checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
@@ -366,12 +438,21 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Error: createErrorObjectFromError(error),
             Name: name,
             StepOptions: {
-              NextAttemptDelaySeconds: retryDecision.delay
-                ? durationToSeconds(retryDecision.delay)
-                : 1,
+              NextAttemptDelaySeconds: nextAttemptDelaySeconds,
             },
           });
-
+          stepData = context.getStepData(stepId);
+          const attemptEndInfo = toAttemptEndInfo(
+            stepData,
+            AttemptEndInfoOutcome.RETRYING,
+            {
+              attempt: currentAttempt,
+              error: error instanceof Error ? error : new Error(String(error)),
+              nextAttemptDelaySeconds,
+            },
+          );
+          backfillOperationInfo(attemptEndInfo, opInfo);
+          plugin.onOperationAttemptEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.RETRY_WAITING,
