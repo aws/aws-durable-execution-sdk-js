@@ -62,7 +62,12 @@ export {
   createFileSystemSerdes,
   FileSystemSerdesMode,
   FileSystemSerdesConfig,
+  FieldMatchMode,
+  PreviewMode,
+  PreviewField,
+  PreviewConfig,
 } from "./utils/serdes/filesystem-serdes";
+export { buildPreview } from "./utils/serdes/preview";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
   createWaitStrategy,
@@ -76,3 +81,15 @@ export { createLinearRetryStrategy } from "./utils/retry/linear-retry-strategy/l
 export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
 export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
+export {
+  DurableInstrumentationPlugin,
+  InvocationInfo,
+  InvocationEndInfo,
+  PluginInvocationStatus,
+  OperationChangeInfo,
+  OperationInfo,
+  OperationEndInfo,
+  AttemptInfo,
+  AttemptEndInfo,
+  AttemptEndInfoOutcome,
+} from "./types/plugin";

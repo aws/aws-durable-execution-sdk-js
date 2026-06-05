@@ -38,6 +38,8 @@ describe("CheckpointManager - Centralized Termination", () => {
       mockStepDataEmitter,
       {} as any,
       new Set<string>(),
+      {},
+      "",
     );
   });
 

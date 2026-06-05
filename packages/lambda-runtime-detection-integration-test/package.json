@@ -1,0 +1,13 @@
+{
+  "name": "lambda-runtime-detection-integration-test",
+  "version": "1.0.0",
+  "description": "Integration test that verifies isInLambdaRuntime() correctly detects whether the SDK is running from inside the Lambda runtime directory, in both CJS and ESM module contexts",
+  "type": "module",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "*"
+  }
+}

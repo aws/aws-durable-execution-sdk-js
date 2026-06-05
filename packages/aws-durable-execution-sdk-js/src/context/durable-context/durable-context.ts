@@ -62,16 +62,24 @@ import {
   AnySerdes,
   AnySerdesDeserializer,
 } from "../../utils/serdes/serdes";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
   stepDataEmitter: EventEmitter;
+  plugin: DurableInstrumentationPlugin;
   setTerminating(): void;
 }
+
+export const DURABLE_CONTEXT_BRAND = Symbol.for(
+  "@aws/durable-execution-sdk-js/durable-context",
+);
 
 export class DurableContextImpl<
   Logger extends DurableLogger,
 > implements DurableContext<Logger> {
+  readonly [DURABLE_CONTEXT_BRAND] = true;
+
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
   private durableLogger: Logger;
@@ -92,6 +100,10 @@ export class DurableContextImpl<
   public readonly executionContext: {
     readonly durableExecutionArn: string;
   };
+
+  get [Symbol.toStringTag](): string {
+    return "DurableContext";
+  }
 
   constructor(
     private _executionContext: ExecutionContext,

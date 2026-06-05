@@ -1,0 +1,104 @@
+title: "[Major Release]: "
+labels: ["major-release", "breaking-change"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to propose a major version release. Major releases include breaking changes
+        that require careful planning, communication, and migration support.
+
+  - type: input
+    id: proposed-version
+    attributes:
+      label: Proposed Version Number
+      description: The target major version number for this release
+      placeholder: "e.g., 2.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: breaking-changes
+    attributes:
+      label: Description of the Breaking Changes
+      description: List all breaking changes included in this release with clear before/after examples
+      placeholder: |
+        1. **Change**: Description of the breaking change
+           - Before: `old_api()`
+           - After: `new_api()`
+
+        2. **Change**: Description of the breaking change
+           - Before: ...
+           - After: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: justification
+    attributes:
+      label: Justification for the Changes
+      description: Explain why these breaking changes are necessary and what problems they solve
+      placeholder: |
+        - Why can't this be done in a backward-compatible way?
+        - What user pain points or technical debt does this address?
+        - What benefits do users gain from upgrading?
+    validations:
+      required: true
+
+  - type: textarea
+    id: consuming-code-changes
+    attributes:
+      label: Changes Needed in Consuming Code
+      description: Describe what consumers of this SDK need to change in their code to adopt the new version
+      placeholder: |
+        - Step-by-step migration instructions
+        - Code examples showing required changes
+        - Any tooling or codemods available to assist migration
+    validations:
+      required: true
+
+  - type: textarea
+    id: inflight-impact
+    attributes:
+      label: Impact to In-flight Executions
+      description: Describe how this release affects durable executions that are currently in progress
+      placeholder: |
+        - Can in-flight executions continue running after upgrade?
+        - Is there a required draining period?
+        - Are checkpointed states compatible across versions?
+        - What happens to executions that are suspended (waiting)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Explored
+      description: Describe alternative approaches that were considered and why they were not chosen
+      placeholder: |
+        1. **Alternative**: Description
+           - Pros: ...
+           - Cons: ...
+           - Why rejected: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: deprecation-changes
+    attributes:
+      label: Deprecation Changes Required for Previous Versions
+      description: Describe deprecation notices, warnings, or shims that should be added to the current major version before this release
+      placeholder: |
+        - What deprecation warnings should be added to the current release?
+        - What is the proposed deprecation timeline?
+        - Are there compatibility shims or adapters to ease migration?
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, timeline considerations, or references
+      placeholder: Additional information...
+    validations:
+      required: false

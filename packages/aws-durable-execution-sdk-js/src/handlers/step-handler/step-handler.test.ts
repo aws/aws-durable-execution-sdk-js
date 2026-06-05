@@ -294,4 +294,140 @@ describe("Step Handler", () => {
     expect(result).toBe("result");
     expect(stepFn).toHaveBeenCalled();
   });
+
+  // Regression for https://github.com/aws/aws-durable-execution-sdk-js/pull/569 (issue #529).
+  // When a step with AT_MOST_ONCE_PER_RETRY semantics is interrupted (e.g. Lambda timeout
+  // before the step completes) and the user's retryStrategy returns shouldRetry: false,
+  // the next replay enters the "interrupted-step" branch. This branch must:
+  //   1. Pass `metadata` to markOperationState so the checkpoint manager doesn't crash
+  //      with "metadata required on first call for <stepId>".
+  //   2. Throw a StepError to the user (DurableOperationError contract), not
+  //      StepInterruptedError. StepInterruptedError is an internal sentinel used as the
+  //      input to retryStrategy; the cause chain preserves it for inspection.
+  describe("interrupted step with AT_MOST_ONCE_PER_RETRY", () => {
+    const setupInterruptedStep = (stepId: string) => {
+      const hashedStepId = hashId(stepId);
+      (mockContext as any)._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.STARTED,
+        StepDetails: { Attempt: 0 },
+      };
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
+    };
+
+    it("should pass metadata to markOperationState when retryStrategy returns shouldRetry: false (no crash on fresh replay)", async () => {
+      setupInterruptedStep("step-1");
+
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+
+      const stepFn = jest.fn().mockResolvedValue("never-runs");
+
+      await expect(
+        stepHandler("test-step", stepFn, {
+          semantics: StepSemantics.AtMostOncePerRetry,
+          retryStrategy: () => ({ shouldRetry: false }),
+        }),
+      ).rejects.toBeDefined();
+
+      // The fix: COMPLETED must be marked WITH metadata, otherwise the checkpoint
+      // manager throws "metadata required on first call" on a cold replay where
+      // the operations map is empty.
+      expect(mockCheckpoint.markOperationState).toHaveBeenCalledWith(
+        "step-1",
+        OperationLifecycleState.COMPLETED,
+        {
+          metadata: {
+            stepId: "step-1",
+            name: "test-step",
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+            parentId: undefined,
+          },
+        },
+      );
+
+      // Step body must NOT be re-executed under AT_MOST_ONCE_PER_RETRY.
+      expect(stepFn).not.toHaveBeenCalled();
+
+      // Failure must be checkpointed.
+      expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith(
+        "step-1",
+        expect.objectContaining({
+          Action: "FAIL",
+          Type: OperationType.STEP,
+          SubType: OperationSubType.STEP,
+        }),
+      );
+    });
+
+    it("should throw a StepError (not StepInterruptedError) to the handler, preserving the cause", async () => {
+      setupInterruptedStep("step-1");
+
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+
+      const stepFn = jest.fn().mockResolvedValue("never-runs");
+
+      let caught: unknown;
+      try {
+        await stepHandler("test-step", stepFn, {
+          semantics: StepSemantics.AtMostOncePerRetry,
+          retryStrategy: () => ({ shouldRetry: false }),
+        });
+      } catch (err) {
+        caught = err;
+      }
+
+      // Public contract: handlers always receive a DurableOperationError subclass
+      // (StepError for step failures). StepInterruptedError is an internal sentinel
+      // passed only to retryStrategy.
+      expect(caught).toBeDefined();
+      const err = caught as Error & { cause?: Error; errorType?: string };
+      expect(err.name).toBe("StepError");
+      expect(err.errorType).toBe("StepError");
+      // The cause chain preserves the original interruption signal so users can
+      // detect it via err.cause?.name === "StepInterruptedError" if they need to.
+      expect(err.cause?.name).toBe("StepInterruptedError");
+    });
+
+    it("should call retryStrategy with a StepInterruptedError instance", async () => {
+      setupInterruptedStep("step-1");
+
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+
+      const retryStrategy = jest.fn().mockReturnValue({ shouldRetry: false });
+
+      await expect(
+        stepHandler("test-step", jest.fn(), {
+          semantics: StepSemantics.AtMostOncePerRetry,
+          retryStrategy,
+        }),
+      ).rejects.toBeDefined();
+
+      expect(retryStrategy).toHaveBeenCalledTimes(1);
+      const [errorArg, attempt] = retryStrategy.mock.calls[0];
+      expect(errorArg).toBeInstanceOf(Error);
+      expect((errorArg as Error).name).toBe("StepInterruptedError");
+      expect(typeof attempt).toBe("number");
+    });
+  });
 });

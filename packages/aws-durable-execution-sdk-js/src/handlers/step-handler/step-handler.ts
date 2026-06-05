@@ -177,6 +177,15 @@ export const createStepHandler = <Logger extends DurableLogger>(
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
+            {
+              metadata: {
+                stepId,
+                name,
+                type: OperationType.STEP,
+                subType: OperationSubType.STEP,
+                parentId,
+              },
+            },
           );
           throw DurableOperationError.fromErrorObject(
             createErrorObjectFromError(error),
