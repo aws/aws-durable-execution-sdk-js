@@ -322,6 +322,69 @@ describe("TimerScheduler", () => {
     });
   });
 
+  describe("in-flight tracking during updateCheckpoint", () => {
+    it("should keep hasScheduledFunction true while updateCheckpoint is in flight", async () => {
+      let resolveCheckpoint: (() => void) | undefined;
+      const checkpointPromise = new Promise<void>((resolve) => {
+        resolveCheckpoint = resolve;
+      });
+      const mockStartInvocation = jest.fn().mockResolvedValue(undefined);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(
+        mockStartInvocation,
+        mockOnError,
+        undefined,
+        () => checkpointPromise,
+      );
+
+      // Fire the timer
+      await jest.advanceTimersByTimeAsync(0);
+
+      // updateCheckpoint is in flight, startInvocation hasn't started yet
+      expect(mockStartInvocation).not.toHaveBeenCalled();
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      // Resolve updateCheckpoint → startInvocation begins → timer deleted
+      resolveCheckpoint!();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(mockStartInvocation).toHaveBeenCalledTimes(1);
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
+    it("should keep hasScheduledFunction true during updateCheckpoint even on checkpoint rejection", async () => {
+      let rejectCheckpoint: ((err: unknown) => void) | undefined;
+      const checkpointPromise = new Promise<void>((_resolve, reject) => {
+        rejectCheckpoint = reject;
+      });
+      const mockStartInvocation = jest.fn().mockResolvedValue(undefined);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(
+        mockStartInvocation,
+        mockOnError,
+        undefined,
+        () => checkpointPromise,
+      );
+
+      await jest.advanceTimersByTimeAsync(0);
+
+      // updateCheckpoint is in flight
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      // Reject updateCheckpoint
+      rejectCheckpoint!(new Error("checkpoint failed"));
+      await jest.advanceTimersByTimeAsync(0);
+
+      // onError should be called, startInvocation should NOT be called
+      expect(mockOnError).toHaveBeenCalledTimes(1);
+      expect(mockStartInvocation).not.toHaveBeenCalled();
+      // Timer should be cleaned up even on rejection (no leak)
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+  });
+
   describe("updateCheckpoint functionality", () => {
     it("should work correctly when updateCheckpoint is not provided", async () => {
       const mockFn = jest.fn().mockResolvedValue(undefined);
