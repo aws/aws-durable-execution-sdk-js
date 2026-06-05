@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 // @ts-check
 //
-// Mock `npm` for the test-publish-tags workflow.
+// Mock `npm` for the test-publish workflows.
 //
 // Records each invocation as a JSON array of args, one per line, in $NPM_LOG.
-// Also handles `npm view` commands to mock dist-tags for verification testing.
+// Also answers `npm view <pkg> dist-tags --json` so the post-publish
+// verification path (verify_dist_tags) can be exercised without touching the
+// real registry.
+//
+// Verification now asserts dist_tags[expectedTag] === publishedVersion for
+// both `latest` and `beta`. To make the happy path pass regardless of which
+// tag a package was published to, real packages report BOTH tags pointing at
+// the package's actual version. Dedicated test packages model explicit
+// pass/mismatch scenarios.
 //
 // Wire up by symlinking this file as `npm` in a directory at the front of
 // PATH and exporting NPM_LOG=<path> before invoking the script under test.
 
-import { appendFileSync } from "fs";
+import { appendFileSync, readFileSync } from "fs";
 
 const logPath = process.env.NPM_LOG;
 if (!logPath) {
@@ -20,34 +28,42 @@ if (!logPath) {
 const args = process.argv.slice(2);
 appendFileSync(logPath, JSON.stringify(args) + "\n");
 
-// Handle npm view commands for dist-tags verification
+// Map of real package names to their directory, used to read the actual
+// version so the mock stays correct as versions change.
+const PACKAGE_DIRS = {
+  "@aws/durable-execution-sdk-js": "packages/aws-durable-execution-sdk-js",
+  "@aws/durable-execution-sdk-js-testing":
+    "packages/aws-durable-execution-sdk-js-testing",
+  "@aws/durable-execution-sdk-js-eslint-plugin":
+    "packages/aws-durable-execution-sdk-js-eslint-plugin",
+};
+
+function readVersion(dir) {
+  return JSON.parse(readFileSync(`${dir}/package.json`, "utf8")).version;
+}
+
 if (args[0] === "view" && args.includes("dist-tags") && args.includes("--json")) {
   const packageName = args[1];
-  
-  // Simulate different scenarios based on package name
+
   if (packageName === "test-verify-fail") {
-    // Simulate tag mismatch - latest points to wrong version (different from what we expect)
-    const mockResponse = { latest: "1.0.0", beta: "2.0.0" };
-    console.log(JSON.stringify(mockResponse));
+    // The version under test is 2.0.0, but neither tag points to it -> the
+    // verification must FAIL for both latest and beta expectations.
+    console.log(JSON.stringify({ latest: "1.0.0", beta: "1.0.0" }));
   } else if (packageName === "test-verify-pass") {
-    // Simulate correct tags - latest should match the version we're testing
-    const mockResponse = { latest: "1.0.0", beta: "0.9.0-beta.1" };
-    console.log(JSON.stringify(mockResponse));
-  } else if (packageName.startsWith("@aws/durable-execution-sdk-js")) {
-    // For real AWS packages: the e2e test that reaches verification runs with
-    // PRERELEASE=true, so ALL packages are published with --tag beta and
-    // EXPECTED_TAG=beta. Beta verification asserts `latest != publishedVersion`.
-    // Return a sentinel old `latest` that can never equal a real version, so
-    // beta verification passes regardless of the current package versions.
-    const mockResponse = { latest: "0.0.0", beta: "0.0.0-beta.0" };
-    console.log(JSON.stringify(mockResponse));
+    // The version under test is 1.0.0 and both tags point to it -> PASS.
+    console.log(JSON.stringify({ latest: "1.0.0", beta: "1.0.0" }));
+  } else if (PACKAGE_DIRS[packageName]) {
+    // Real packages: report both tags at the package's actual version so the
+    // happy path passes whether the package was published to latest or beta.
+    let version = "0.0.0";
+    try {
+      version = readVersion(PACKAGE_DIRS[packageName]);
+    } catch {
+      // fall back to sentinel
+    }
+    console.log(JSON.stringify({ latest: version, beta: version }));
   } else {
-    // Default fallback for unknown packages
-    const mockResponse = { latest: "1.0.0", beta: "0.9.0-beta.1" };
-    console.log(JSON.stringify(mockResponse));
+    // Unknown package fallback.
+    console.log(JSON.stringify({ latest: "0.0.0", beta: "0.0.0" }));
   }
-} else if (args[0] === "view" && args.includes("versions") && args.includes("--json")) {
-  // Mock versions list for rollback testing
-  const mockVersions = ["1.0.0", "1.1.0", "2.0.0", "2.1.0-beta.1"];
-  console.log(JSON.stringify(mockVersions));
 }

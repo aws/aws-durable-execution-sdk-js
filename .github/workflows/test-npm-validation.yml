@@ -68,7 +68,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           
-          TEST_MODE=1 PRERELEASE=false
+          PRERELEASE=false
           if check_prerelease_version "$VERSION" "$PACKAGE_NAME"; then
             echo "ERROR: Pre-release to latest should fail"
             exit 1
@@ -77,7 +77,7 @@ jobs:
           fi
           
           # Test 2: Pre-release to beta should pass
-          TEST_MODE=1 PRERELEASE=true
+          PRERELEASE=true
           if check_prerelease_version "$VERSION" "$PACKAGE_NAME"; then
             echo "✓ Pre-release correctly allowed to beta tag"  
           else
@@ -90,7 +90,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           
-          TEST_MODE=1 PRERELEASE=false
+          PRERELEASE=false
           if check_prerelease_version "$VERSION" "$PACKAGE_NAME"; then
             echo "✓ Stable version correctly allowed to latest tag"
           else
@@ -104,23 +104,28 @@ jobs:
           DIST_TAG_VERIFY_MAX_ATTEMPTS: 2
           DIST_TAG_VERIFY_BASE_DELAY: 1
         run: |
-          # Create test packages with different scenarios
+          # Create test packages with different scenarios.
+          # The mock reports both latest and beta = 1.0.0 for these names.
           mkdir -p packages/test-verify-pass packages/test-verify-fail
           echo '{"name": "test-verify-pass", "version": "1.0.0"}' > packages/test-verify-pass/package.json
           echo '{"name": "test-verify-fail", "version": "2.0.0"}' > packages/test-verify-fail/package.json
 
-          # Source functions and set up mock + test mode for all calls below
+          # Source functions and put the mock npm on PATH for all calls below.
           source .github/workflows/iterate-publish-npm.sh
           export PATH="$RUNNER_TEMP/mock-bin:$PATH"
-          export TEST_MODE=1
 
-          # Test 1: Verification should pass when latest matches the published version
-          ( cd packages/test-verify-pass && verify_and_rollback "test-verify-pass" "1.0.0" "latest" )
-          echo "✓ Verification passed for matching tags"
+          # Test 1: latest verification passes when latest == version
+          ( cd packages/test-verify-pass && verify_dist_tags "test-verify-pass" "1.0.0" "latest" )
+          echo "✓ latest verification passed for matching tag"
 
-          # Test 2: Verification should fail when latest does not match
-          if ( cd packages/test-verify-fail && verify_and_rollback "test-verify-fail" "2.0.0" "latest" ); then
-            echo "ERROR: Verification should fail for mismatched tags"
+          # Test 2: beta verification passes when beta == version
+          # (guards against the bug where beta only checked latest != version)
+          ( cd packages/test-verify-pass && verify_dist_tags "test-verify-pass" "1.0.0" "beta" )
+          echo "✓ beta verification passed when beta tag matches version"
+
+          # Test 3: verification fails when the expected tag does not match
+          if ( cd packages/test-verify-fail && verify_dist_tags "test-verify-fail" "2.0.0" "latest" ); then
+            echo "ERROR: Verification should fail for mismatched tag"
             exit 1
           else
             echo "✓ Verification correctly detected tag mismatch"
