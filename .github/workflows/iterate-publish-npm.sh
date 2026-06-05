@@ -65,7 +65,11 @@ for dir in "${PACKAGES[@]}"; do
     exit 1
   fi
 
-  decision=$(node "$DECIDE" "$version" "$packument")
+  if ! decision=$(node "$DECIDE" "$version" "$packument"); then
+    echo "ERROR: could not decide a dist-tag for $name@$version (invalid version in package.json?)."
+    echo "       Aborting before any publish (nothing was published)."
+    exit 1
+  fi
   case "$decision" in
     reject)
       echo "ERROR: $name@$version violates the release policy (a prerelease must be greater than the current 'latest')."
