@@ -108,19 +108,18 @@ jobs:
           mkdir -p packages/test-verify-pass packages/test-verify-fail
           echo '{"name": "test-verify-pass", "version": "1.0.0"}' > packages/test-verify-pass/package.json
           echo '{"name": "test-verify-fail", "version": "2.0.0"}' > packages/test-verify-fail/package.json
-          
-          # Source functions
+
+          # Source functions and set up mock + test mode for all calls below
           source .github/workflows/iterate-publish-npm.sh
-          
-          # Test 1: Verification should pass for matching tags
-          cd packages/test-verify-pass
-          PATH="$RUNNER_TEMP/mock-bin:$PATH" TEST_MODE=1 verify_and_rollback "test-verify-pass" "1.0.0" "latest"
+          export PATH="$RUNNER_TEMP/mock-bin:$PATH"
+          export TEST_MODE=1
+
+          # Test 1: Verification should pass when latest matches the published version
+          ( cd packages/test-verify-pass && verify_and_rollback "test-verify-pass" "1.0.0" "latest" )
           echo "✓ Verification passed for matching tags"
-          
-          # Test 2: Verification should fail for mismatched tags
-          cd ../test-verify-fail
-          PATH="$RUNNER_TEMP/mock-bin:$PATH" TEST_MODE=1 
-          if verify_and_rollback "test-verify-fail" "2.0.0" "latest"; then
+
+          # Test 2: Verification should fail when latest does not match
+          if ( cd packages/test-verify-fail && verify_and_rollback "test-verify-fail" "2.0.0" "latest" ); then
             echo "ERROR: Verification should fail for mismatched tags"
             exit 1
           else
@@ -140,17 +139,15 @@ jobs:
 
       - name: Test end-to-end with verification enabled (stable release)  
         shell: bash
-        env:
-          DIST_TAG_VERIFY_MAX_ATTEMPTS: 2
-          DIST_TAG_VERIFY_BASE_DELAY: 1
         run: |
-          # Test stable release scenario where all packages go to latest
-          # PRERELEASE=false: all versions go to latest (but prerelease versions should be blocked)
+          # Test stable release scenario: a prerelease version must be blocked
+          # from the 'latest' tag at the pre-publish check.
           : > "$NPM_LOG"  # Clear log
-          
-          # This should fail because we have prerelease version in @aws/durable-execution-sdk-js
-          PATH="$RUNNER_TEMP/mock-bin:$PATH" \
-          if bash .github/workflows/iterate-publish-npm.sh false; then
+          export PATH="$RUNNER_TEMP/mock-bin:$PATH"
+
+          # Skip dist-tag verification so the ONLY possible failure cause is the
+          # pre-publish prerelease check (verification is covered by other steps).
+          if SKIP_DIST_TAG_VERIFY=1 bash .github/workflows/iterate-publish-npm.sh false; then
             echo "ERROR: Should have failed due to prerelease version with latest tag"
             exit 1
           else
