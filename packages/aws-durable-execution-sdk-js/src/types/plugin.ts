@@ -20,18 +20,21 @@ export enum PluginInvocationStatus {
 /**
  * Information about a durable operation.
  *
+ * `Id` and `ParentId` are always hashed values as returned by the checkpoint response.
+ * `getParent` returns the parent operation's `OperationInfo` (looked up from stepData)
+ * or `undefined` if no parent exists or the parent is not found.
+ *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationInfo {
   Id: string;
-  HashedId?: string;
   Name?: string;
   Type: string;
   SubType?: string;
   ParentId?: string;
-  HashedParentId?: string;
   StartTimestamp?: Date;
   EndTimestamp?: Date;
+  getParent?: () => OperationInfo | undefined;
 }
 
 /**
@@ -50,31 +53,6 @@ export interface OperationEndInfo extends OperationInfo {
  */
 export interface AttemptInfo extends OperationInfo {
   Attempt: number;
-}
-
-/**
- * Possible outcomes for an operation attempt.
- *
- * @experimental This enum is experimental and may be changed or removed in future releases.
- */
-export enum AttemptEndInfoOutcome {
-  SUCCEEDED = "succeeded",
-  FAILED = "failed",
-  RETRYING = "retrying",
-}
-
-/**
- * Information provided when an operation attempt ends.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
- */
-export interface AttemptEndInfo extends AttemptInfo {
-  outcome:
-    | AttemptEndInfoOutcome.SUCCEEDED
-    | AttemptEndInfoOutcome.FAILED
-    | AttemptEndInfoOutcome.RETRYING;
-  error?: Error;
-  nextAttemptDelaySeconds?: number;
 }
 
 /**
@@ -133,13 +111,10 @@ export interface DurableInstrumentationPlugin {
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput>;
   onInvocationEnd?(info: InvocationEndInfo): void;
-  onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
-  onOperationFirstEnd?(info: OperationEndInfo): void;
-  onOperationAttemptStart?(info: AttemptInfo): void;
+  onOperationEnd?(info: OperationEndInfo): void;
   wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
-  onOperationAttemptEnd?(info: AttemptEndInfo): void;
   onOperationChange?(info: OperationChangeInfo): void;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
 }

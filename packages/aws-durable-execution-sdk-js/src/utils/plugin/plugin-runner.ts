@@ -1,6 +1,5 @@
 import {
   DurableInstrumentationPlugin,
-  AttemptEndInfo,
   AttemptInfo,
   InvocationEndInfo,
   InvocationInfo,
@@ -19,7 +18,6 @@ type PluginInfo =
   | OperationEndInfo
   | InvocationInfo
   | InvocationEndInfo
-  | AttemptEndInfo
   | AttemptInfo
   | OperationChangeInfo
   | undefined;
@@ -145,23 +143,16 @@ export function createPluginRunner(
         fn,
       ) as Promise<DurableExecutionInvocationOutput>,
     onInvocationEnd: (info: InvocationEndInfo) => run("onInvocationEnd", info),
-    onOperationFirstStart: (info: OperationInfo) =>
-      run("onOperationFirstStart", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
     wrapChildContextFn: (
       info: OperationInfo,
       fn: CustomerFn,
     ): CustomerFnResult => runAsCallback("wrapChildContextFn", info, fn),
-    onOperationFirstEnd: (info: OperationEndInfo) =>
-      run("onOperationFirstEnd", info),
-    onOperationAttemptStart: (info: AttemptInfo) =>
-      run("onOperationAttemptStart", info),
+    onOperationEnd: (info: OperationEndInfo) => run("onOperationEnd", info),
     wrapOperationAttemptFn: (
       info: AttemptInfo,
       fn: CustomerFn,
     ): CustomerFnResult => runAsCallback("wrapOperationAttemptFn", info, fn),
-    onOperationAttemptEnd: (info: AttemptEndInfo) =>
-      run("onOperationAttemptEnd", info),
     onOperationChange: (info: OperationChangeInfo) =>
       run("onOperationChange", info),
     enrichLogContext: () =>

@@ -90,6 +90,4 @@ export {
   OperationInfo,
   OperationEndInfo,
   AttemptInfo,
-  AttemptEndInfo,
-  AttemptEndInfoOutcome,
 } from "./types/plugin";

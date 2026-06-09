@@ -69,6 +69,13 @@ export interface DurableExecutionInvocationInput {
      */
     NextMarker?: string | undefined;
   };
+
+  /**
+   * Optional array of operation IDs that were updated between invocations.
+   * When present, the SDK dispatches inter-invocation hooks only for listed operations.
+   * When absent, no inter-invocation hooks are dispatched.
+   */
+  updatedOperationIds?: string[];
 }
 
 /**

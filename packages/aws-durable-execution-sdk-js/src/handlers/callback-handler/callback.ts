@@ -18,15 +18,6 @@ import {
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
-import {
-  DurableInstrumentationPlugin,
-  OperationInfo,
-} from "../../types/plugin";
-import {
-  toAttemptInfo,
-  toOperationInfo,
-  backfillOperationInfo,
-} from "../../utils/operation/operation";
 
 export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -41,7 +32,6 @@ export const createCallback = (
   parentId?: string,
 
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
-  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -63,14 +53,6 @@ export const createCallback = (
       (getDefaultCallbackDeserializer
         ? getDefaultCallbackDeserializer()
         : createPassThroughSerdes<T>());
-
-    const opInfo: OperationInfo = {
-      Id: stepId,
-      Name: name,
-      Type: OperationType.CALLBACK,
-      SubType: OperationSubType.CALLBACK,
-      ParentId: parentId,
-    };
 
     // Phase 1: Setup and checkpoint
     let isCompleted = false;
@@ -111,14 +93,6 @@ export const createCallback = (
           },
         );
 
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
-
         isCompleted = true;
         return;
       }
@@ -145,14 +119,6 @@ export const createCallback = (
           },
         );
 
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
-
         isCompleted = true;
         return;
       }
@@ -175,16 +141,6 @@ export const createCallback = (
               : undefined,
           },
         });
-
-        // Refresh stepData after checkpoint
-        stepData = context.getStepData(stepId);
-        const operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
-      } else {
-        const operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -291,8 +247,6 @@ export const createCallback = (
         name,
         serdes,
         checkAndUpdateReplayMode,
-        plugin,
-        opInfo,
       );
 
       log("✅", "Callback created:", { stepId, name, callbackId });

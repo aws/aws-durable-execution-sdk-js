@@ -14,14 +14,6 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
-import {
-  DurableInstrumentationPlugin,
-  OperationInfo,
-} from "../../types/plugin";
-import {
-  backfillOperationInfo,
-  toOperationInfo,
-} from "../../utils/operation/operation";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -29,7 +21,6 @@ export const createWaitHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
-  plugin: DurableInstrumentationPlugin = {},
 ): {
   (name: string, duration: Duration): DurablePromise<void>;
   (duration: Duration): DurablePromise<void>;
@@ -57,13 +48,6 @@ export const createWaitHandler = (
       });
 
       let stepData = context.getStepData(stepId);
-      var opInfo: OperationInfo = {
-        Id: stepId,
-        ParentId: parentId,
-        SubType: OperationSubType.WAIT,
-        Type: OperationType.WAIT,
-        Name: actualName,
-      };
 
       // Validate replay consistency
       validateReplayConsistency(
@@ -98,14 +82,10 @@ export const createWaitHandler = (
         );
 
         isCompleted = true;
-        const checkPointedOpInfo = toOperationInfo(stepData);
-        plugin.onOperationStart?.(checkPointedOpInfo);
-        plugin.onOperationFirstEnd?.(checkPointedOpInfo);
         return;
       }
 
       // Start wait if not already started
-      var operationInfo;
       if (!stepData) {
         await checkpoint.checkpoint(stepId, {
           Id: stepId,
@@ -118,14 +98,6 @@ export const createWaitHandler = (
             WaitSeconds: actualSeconds,
           },
         });
-        stepData = context.getStepData(stepId);
-        operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
-      } else {
-        operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
       }
 
       // Refresh stepData after checkpoint
@@ -159,8 +131,6 @@ export const createWaitHandler = (
       await phase1Promise;
 
       // If already completed in phase 1, skip phase 2.
-      // Plugin calls were already handled in phase 1 (both onOperationStart
-      // and onOperationFirstEnd), so nothing more to do here.
       if (isCompleted) {
         return;
       }
@@ -185,9 +155,6 @@ export const createWaitHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
-
-        const waitEndOpInfo = toOperationInfo(stepData);
-        plugin.onOperationFirstEnd?.(waitEndOpInfo);
 
         return;
       }

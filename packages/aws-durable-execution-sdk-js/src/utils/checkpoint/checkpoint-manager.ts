@@ -26,7 +26,11 @@ import {
   OperationMetadata,
 } from "../../types/operation-lifecycle";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  OperationInfo as PluginOperationInfo,
+  OperationEndInfo,
+} from "../../types/plugin";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -423,6 +427,14 @@ export class CheckpointManager implements Checkpoint {
       operationIds: operations.map((op) => op.Id).filter(Boolean),
     });
 
+    // Snapshot previous state for comparison
+    const previousStepData: Record<string, Operation> = {};
+    for (const operation of operations) {
+      if (operation.Id && this.stepData[operation.Id]) {
+        previousStepData[operation.Id] = this.stepData[operation.Id];
+      }
+    }
+
     const updatedOperations: Record<string, Operation> = {};
 
     operations.forEach((operation) => {
@@ -445,6 +457,7 @@ export class CheckpointManager implements Checkpoint {
       }
     });
 
+    // Fire onOperationChange
     if (Object.keys(updatedOperations).length > 0) {
       this.plugin.onOperationChange?.({
         requestId: this.requestId,
@@ -454,10 +467,106 @@ export class CheckpointManager implements Checkpoint {
       });
     }
 
+    // Fire operation-specific hooks
+    this.dispatchOperationHooks(previousStepData, operations);
+
     log("✅", "StepData update completed:", {
       totalStepDataEntries: Object.keys(this.stepData).length,
     });
   }
+  /**
+   * Derives PluginOperationInfo from a checkpoint response Operation record.
+   * Note: Id and ParentId are always hashed values as returned by the checkpoint response.
+   */
+  private toOperationInfoFromOperation(
+    operation: Operation,
+  ): PluginOperationInfo {
+    return {
+      Id: operation.Id ?? "",
+      Name: operation.Name,
+      Type: operation.Type ?? "",
+      SubType: operation.SubType,
+      ParentId: operation.ParentId,
+      StartTimestamp: operation.StartTimestamp,
+      EndTimestamp: operation.EndTimestamp,
+      getParent: (): PluginOperationInfo | undefined => {
+        if (!operation.ParentId) return undefined;
+        const parentOp = this.stepData[operation.ParentId];
+        if (!parentOp) return undefined;
+        return this.toOperationInfoFromOperation(parentOp);
+      },
+    };
+  }
+
+  /**
+   * Derives OperationEndInfo from a checkpoint response Operation record.
+   */
+  private toOperationEndInfoFromOperation(
+    operation: Operation,
+  ): OperationEndInfo {
+    const info = this.toOperationInfoFromOperation(operation);
+    const error = this.extractErrorFromOperation(operation);
+    return { ...info, error };
+  }
+
+  /**
+   * Checks if the given status is a terminal operation status.
+   */
+  private isTerminalStatus(status?: string): boolean {
+    return (
+      status != null && TERMINAL_STATUSES.includes(status as OperationStatus)
+    );
+  }
+
+  /**
+   * Dispatches operation-level hooks based on state transitions detected
+   * in the checkpoint response. Called after stepData is updated.
+   */
+  private dispatchOperationHooks(
+    previousStepData: Record<string, Operation>,
+    updatedOperations: Operation[],
+  ): void {
+    for (const operation of updatedOperations) {
+      if (!operation.Id) continue;
+
+      const previousOp = previousStepData[operation.Id];
+      const newStatus = operation.Status;
+
+      // Detect onOperationStart: new operation with STARTED status
+      if (!previousOp && newStatus === OperationStatus.STARTED) {
+        this.plugin.onOperationStart?.(
+          this.toOperationInfoFromOperation(operation),
+        );
+      }
+
+      // Detect onOperationEnd: transition to terminal status
+      if (
+        this.isTerminalStatus(newStatus) &&
+        !this.isTerminalStatus(previousOp?.Status)
+      ) {
+        this.plugin.onOperationEnd?.(
+          this.toOperationEndInfoFromOperation(operation),
+        );
+      }
+    }
+  }
+
+  /**
+   * Extracts an Error from an operation's error details when the operation has FAILED status.
+   */
+  private extractErrorFromOperation(operation: Operation): Error | undefined {
+    if (operation.Status === OperationStatus.FAILED) {
+      const errorData =
+        operation.StepDetails?.Error ||
+        operation.ChainedInvokeDetails?.Error ||
+        operation.CallbackDetails?.Error;
+      if (errorData?.ErrorMessage) {
+        return new Error(errorData.ErrorMessage);
+      }
+    }
+    return undefined;
+  }
+
   private resolveWaitingOperation(hashedStepId: string): void {
     // Find operation by hashed ID in our operations map
     for (const [stepId, op] of this.operations.entries()) {

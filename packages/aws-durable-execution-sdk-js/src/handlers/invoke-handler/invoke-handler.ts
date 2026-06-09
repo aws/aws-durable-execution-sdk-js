@@ -19,12 +19,6 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
-import {
-  toAttemptInfo,
-  backfillOperationInfo,
-  toOperationInfo,
-} from "../../utils/operation/operation";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -32,9 +26,7 @@ export const createInvokeHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
-
   getDefaultSerdes?: () => AnySerdes,
-  plugin: DurableInstrumentationPlugin = {},
 ): {
   <I, O>(
     funcId: string,
@@ -77,14 +69,6 @@ export const createInvokeHandler = (
 
     const stepId = createStepId();
 
-    const opInfo = {
-      Id: stepId,
-      Name: name,
-      Type: OperationType.CHAINED_INVOKE,
-      SubType: OperationSubType.CHAINED_INVOKE,
-      ParentId: parentId,
-    };
-
     // Phase 1: Start invoke operation
     let isCompleted = false;
 
@@ -124,13 +108,6 @@ export const createInvokeHandler = (
           },
         );
 
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
-
         isCompleted = true;
         return;
       }
@@ -157,14 +134,6 @@ export const createInvokeHandler = (
             },
           },
         );
-
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
 
         isCompleted = true;
         return;
@@ -195,14 +164,6 @@ export const createInvokeHandler = (
             ...(config?.tenantId && { TenantId: config.tenantId }),
           },
         });
-        const stepData = context.getStepData(stepId);
-        const operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
-      } else {
-        const operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -276,9 +237,6 @@ export const createInvokeHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
-        const operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstEnd?.(operationInfo);
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
@@ -297,14 +255,6 @@ export const createInvokeHandler = (
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
       const invokeError = stepData?.ChainedInvokeDetails?.Error;
-      const operationInfo = toOperationInfo(stepData);
-      backfillOperationInfo(operationInfo, opInfo);
-      plugin.onOperationFirstEnd?.({
-        ...operationInfo,
-        error: invokeError?.ErrorMessage
-          ? new Error(invokeError.ErrorMessage)
-          : new Error("Invoke failed"),
-      });
 
       if (invokeError) {
         throw new InvokeError(

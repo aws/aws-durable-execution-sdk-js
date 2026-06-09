@@ -463,9 +463,14 @@ export const withDurableExecution = <
   ): Promise<DurableExecutionInvocationOutput> => {
     validateDurableExecutionEvent(event);
     try {
-      const { executionContext, durableExecutionMode, checkpointToken } =
-        await initializeExecutionContext(event, context, config?.client);
       const plugin = createPluginRunner(config?.plugins ?? []);
+      const { executionContext, durableExecutionMode, checkpointToken } =
+        await initializeExecutionContext(
+          event,
+          context,
+          config?.client,
+          plugin,
+        );
       return await runHandler(
         event,
         context,

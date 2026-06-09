@@ -3,10 +3,7 @@ import { ExecutionContext } from "../../types";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import {
-  DurableInstrumentationPlugin,
-  AttemptEndInfoOutcome,
-} from "../../types/plugin";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -58,8 +55,6 @@ describe("Step Handler - plugin hooks", () => {
     createStepId = (): string => `step-${++stepIdCounter}`;
 
     mockPlugin = {
-      onOperationAttemptStart: jest.fn(),
-      onOperationAttemptEnd: jest.fn(),
       wrapOperationAttemptFn: jest.fn(),
     };
 
@@ -75,7 +70,7 @@ describe("Step Handler - plugin hooks", () => {
     );
   });
 
-  it("should call onOperationAttemptStart and onOperationAttemptEnd with succeeded outcome on success", async () => {
+  it("should call wrapOperationAttemptFn with correct AttemptInfo on success", async () => {
     const stepHandler = createStepHandler(
       mockContext,
       mockCheckpoint,
@@ -91,27 +86,14 @@ describe("Step Handler - plugin hooks", () => {
 
     await stepHandler("my-step", stepFn);
 
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledWith(
-      expect.objectContaining({ Attempt: 1 }),
-    );
-
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
       expect.objectContaining({ Attempt: 1 }),
       expect.any(Function),
     );
-
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        Attempt: 1,
-        outcome: AttemptEndInfoOutcome.SUCCEEDED,
-      }),
-    );
   });
 
-  it("should call onOperationAttemptEnd with failed outcome when step fails without retry", async () => {
+  it("should call wrapOperationAttemptFn when step fails without retry", async () => {
     const stepError = new Error("step blew up");
     const stepHandler = createStepHandler(
       mockContext,
@@ -132,23 +114,14 @@ describe("Step Handler - plugin hooks", () => {
       }),
     ).rejects.toThrow();
 
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
       expect.objectContaining({ Attempt: 1 }),
       expect.any(Function),
     );
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        Attempt: 1,
-        outcome: AttemptEndInfoOutcome.FAILED,
-        error: stepError,
-      }),
-    );
   });
 
-  it("should call onOperationAttemptEnd with retrying outcome when step fails and will retry", async () => {
+  it("should call wrapOperationAttemptFn on each retry attempt", async () => {
     let callCount = 0;
     const stepFn = jest.fn().mockImplementation(async () => {
       callCount++;
@@ -178,11 +151,7 @@ describe("Step Handler - plugin hooks", () => {
 
     expect(result).toBe("recovered");
 
-    // First attempt: start + retrying end
-    // Second attempt: start + succeeded end
-    expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(2);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(2);
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(2);
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenNthCalledWith(
       1,
@@ -194,22 +163,6 @@ describe("Step Handler - plugin hooks", () => {
       2,
       expect.objectContaining({ Attempt: 1 }),
       expect.any(Function),
-    );
-
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        outcome: AttemptEndInfoOutcome.RETRYING,
-        error: expect.any(Error),
-        nextAttemptDelaySeconds: 0,
-      }),
-    );
-
-    expect(mockPlugin.onOperationAttemptEnd).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        outcome: AttemptEndInfoOutcome.SUCCEEDED,
-      }),
     );
   });
 

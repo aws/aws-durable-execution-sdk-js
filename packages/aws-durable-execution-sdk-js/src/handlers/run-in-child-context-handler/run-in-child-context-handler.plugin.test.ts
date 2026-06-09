@@ -35,9 +35,8 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     mockParentContext = { awsRequestId: "mock-request-id" };
     createStepId = jest.fn().mockReturnValue(TEST_CONSTANTS.CHILD_CONTEXT_ID);
     mockPlugin = {
-      onOperationFirstStart: jest.fn(),
       onOperationStart: jest.fn(),
-      onOperationFirstEnd: jest.fn(),
+      onOperationEnd: jest.fn(),
       wrapChildContextFn: jest.fn(),
     };
 
@@ -56,7 +55,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     });
   });
 
-  it("should call onOperationFirstStart, wrapChildContextFn, and onOperationFirstEnd on successful execution", async () => {
+  it("should call onOperationStart, wrapChildContextFn, and onOperationEnd on successful execution", async () => {
     const handler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
@@ -73,19 +72,19 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
     await flushMicrotasks();
 
-    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledWith(
       expect.objectContaining({ Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME }),
       expect.any(Function),
     );
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
       expect.not.objectContaining({ error: expect.anything() }),
     );
   });
 
-  it("should call wrapChildContextFn and onOperationFirstEnd with error on failed execution", async () => {
+  it("should call wrapChildContextFn and onOperationEnd with error on failed execution", async () => {
     const handler = createRunInChildContextHandler(
       mockExecutionContext,
       mockCheckpoint,
@@ -105,14 +104,14 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     ).rejects.toThrow("child failed");
     await flushMicrotasks();
 
-    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledWith(
       expect.objectContaining({ Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME }),
       expect.any(Function),
     );
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
       expect.objectContaining({ error: expect.any(Error) }),
     );
   });

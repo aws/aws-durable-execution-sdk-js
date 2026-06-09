@@ -1,10 +1,9 @@
 import { createCallbackPromise } from "./callback-promise";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "@aws-sdk/client-lambda";
 import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
-import { OperationInfo } from "../../types/plugin";
 
 jest.mock("../../errors/serdes-errors/serdes-errors");
 jest.mock("../../utils/logger/logger");
@@ -17,7 +16,6 @@ describe("createCallbackPromise", () => {
   let mockContext: ExecutionContext;
   let mockCheckpoint: Checkpoint;
   let mockCheckAndUpdateReplayMode: jest.Mock;
-  let defaultOpInfo: OperationInfo;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -37,12 +35,6 @@ describe("createCallbackPromise", () => {
     } as any;
 
     mockCheckAndUpdateReplayMode = jest.fn();
-
-    defaultOpInfo = {
-      Id: "test-step-id",
-      Name: "test-step",
-      Type: OperationType.CALLBACK,
-    };
   });
 
   it("should handle succeeded callback with callback ID", async () => {
@@ -66,8 +58,6 @@ describe("createCallbackPromise", () => {
       "test-step",
       mockSerdes,
       mockCheckAndUpdateReplayMode,
-      {},
-      defaultOpInfo,
     );
 
     const result = await promise;
@@ -108,8 +98,6 @@ describe("createCallbackPromise", () => {
       "test-step",
       { deserialize: jest.fn() },
       mockCheckAndUpdateReplayMode,
-      {},
-      defaultOpInfo,
     );
 
     await expect(promise).rejects.toThrow(CallbackError);
@@ -139,8 +127,6 @@ describe("createCallbackPromise", () => {
       "test-step",
       { deserialize: jest.fn() },
       mockCheckAndUpdateReplayMode,
-      {},
-      defaultOpInfo,
     );
 
     await expect(promise).rejects.toThrow(CallbackError);
@@ -174,8 +160,6 @@ describe("createCallbackPromise", () => {
       "test-step",
       { deserialize: jest.fn() },
       mockCheckAndUpdateReplayMode,
-      {},
-      defaultOpInfo,
     );
 
     await expect(promise).rejects.toThrow(CallbackError);
@@ -196,8 +180,6 @@ describe("createCallbackPromise", () => {
       "test-step",
       { deserialize: jest.fn() },
       mockCheckAndUpdateReplayMode,
-      {},
-      defaultOpInfo,
     );
 
     await expect(promise).rejects.toThrow(CallbackError);

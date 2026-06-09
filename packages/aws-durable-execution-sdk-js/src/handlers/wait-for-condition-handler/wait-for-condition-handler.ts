@@ -31,14 +31,11 @@ import {
 import { DurableLogger } from "../../types/durable-logger";
 import {
   DurableInstrumentationPlugin,
-  AttemptEndInfoOutcome,
   OperationInfo,
 } from "../../types/plugin";
 import {
   toAttemptInfo,
-  toAttemptEndInfo,
   backfillOperationInfo,
-  toOperationInfo,
 } from "../../utils/operation/operation";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
@@ -214,14 +211,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             })
             .then(() => {
               stepData = context.getStepData(stepId);
-              const attemptInfo = toAttemptInfo(stepData, currentAttempt);
-              backfillOperationInfo(attemptInfo, opInfo);
-              plugin.onOperationFirstStart?.(attemptInfo);
             });
-        } else {
-          const operationInfo = toOperationInfo(stepData);
-          backfillOperationInfo(operationInfo, opInfo);
-          plugin.onOperationStart?.(operationInfo);
         }
 
         try {
@@ -247,8 +237,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
           const checkFunc = () => check(currentState, waitForConditionContext);
-
-          plugin.onOperationAttemptStart?.(attemptInfo);
 
           const newState: T = (await runWithContext(
             stepId,
@@ -292,20 +280,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               Payload: serializedState,
               Name: name,
             });
-            stepData = context.getStepData(stepId);
-            const attemptEndInfo = toAttemptEndInfo(
-              stepData,
-              AttemptEndInfoOutcome.SUCCEEDED,
-              {
-                attempt: currentAttempt,
-              },
-            );
-            backfillOperationInfo(attemptEndInfo, opInfo);
-            plugin.onOperationAttemptEnd?.({
-              ...attemptEndInfo,
-              StartTimestamp: attemptEndInfo.EndTimestamp,
-            });
-            plugin.onOperationFirstEnd?.(attemptEndInfo);
             checkpoint.markOperationState(
               stepId,
               OperationLifecycleState.COMPLETED,
@@ -325,20 +299,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             StepOptions: {
               NextAttemptDelaySeconds: nextAttemptDelaySeconds,
             },
-          });
-          stepData = context.getStepData(stepId);
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.RETRYING,
-            {
-              attempt: currentAttempt,
-              nextAttemptDelaySeconds,
-            },
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
           });
 
           checkpoint.markOperationState(
@@ -373,24 +333,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             stepId,
             OperationLifecycleState.COMPLETED,
           );
-          stepData = context.getStepData(stepId);
-          const attemptEndInfo = toAttemptEndInfo(
-            stepData,
-            AttemptEndInfoOutcome.FAILED,
-            {
-              attempt: currentAttempt,
-              error: error instanceof Error ? error : new Error(String(error)),
-            },
-          );
-          backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.({
-            ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
-          });
-          plugin.onOperationFirstEnd?.({
-            ...attemptEndInfo,
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
           throw DurableOperationError.fromErrorObject(
             createErrorObjectFromError(error),
           );

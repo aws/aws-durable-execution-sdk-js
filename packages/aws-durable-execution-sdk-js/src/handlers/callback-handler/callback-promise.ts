@@ -9,14 +9,6 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Serdes } from "../../utils/serdes/serdes";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import {
-  DurableInstrumentationPlugin,
-  OperationInfo,
-} from "../../types/plugin";
-import {
-  backfillOperationInfo,
-  toOperationInfo,
-} from "../../utils/operation/operation";
 
 export const createCallbackPromise = <T>(
   context: ExecutionContext,
@@ -25,8 +17,6 @@ export const createCallbackPromise = <T>(
   stepName: string | undefined,
   serdes: Omit<Serdes<T>, "serialize">,
   checkAndUpdateReplayMode: () => void,
-  plugin: DurableInstrumentationPlugin = {},
-  opInfo: OperationInfo,
 ): DurablePromise<T> => {
   return new DurablePromise(async (): Promise<T> => {
     log("🔄", "Callback promise phase 2:", { stepId, stepName });
@@ -42,13 +32,6 @@ export const createCallbackPromise = <T>(
       checkAndUpdateReplayMode();
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
-
-      if (opInfo) {
-        const attemptInfo = toOperationInfo(stepData);
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
-      }
 
       const callbackData = stepData.CallbackDetails;
       if (!callbackData) {
@@ -89,14 +72,6 @@ export const createCallbackPromise = <T>(
           );
         })()
       : new CallbackError("Callback failed");
-
-    const attemptInfo = toOperationInfo(stepData);
-    backfillOperationInfo(attemptInfo, opInfo);
-    plugin.onOperationStart?.(attemptInfo);
-    plugin.onOperationFirstEnd?.({
-      ...attemptInfo,
-      error: callbackError,
-    });
 
     throw callbackError;
   });

@@ -324,7 +324,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         const stepData = context.getStepData(entityId);
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
+        plugin.onOperationStart?.(operationInfo);
       });
   } else {
     plugin.onOperationStart?.(opInfo);
@@ -413,9 +413,9 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         })
         .then(() => {
           const currentStepData = context.getStepData(entityId);
-          const onOperationFirstEndInfo = toOperationInfo(currentStepData);
-          backfillOperationInfo(onOperationFirstEndInfo, opInfo);
-          plugin.onOperationFirstEnd?.(onOperationFirstEndInfo);
+          const onOperationEndInfo = toOperationInfo(currentStepData);
+          backfillOperationInfo(onOperationEndInfo, opInfo);
+          plugin.onOperationEnd?.(onOperationEndInfo);
         });
 
       log("✅", "Child context completed successfully:", {
@@ -427,7 +427,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
       });
-      plugin.onOperationFirstEnd?.(opInfo);
+      plugin.onOperationEnd?.(opInfo);
     }
 
     return result;
@@ -464,15 +464,15 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         })
         .then(() => {
           const currentStepData = context.getStepData(entityId);
-          const onOperationFirstEndInfo = toOperationInfo(currentStepData);
-          backfillOperationInfo(onOperationFirstEndInfo, opInfo);
-          plugin.onOperationFirstEnd?.({
-            ...onOperationFirstEndInfo,
+          const onOperationEndInfo = toOperationInfo(currentStepData);
+          backfillOperationInfo(onOperationEndInfo, opInfo);
+          plugin.onOperationEnd?.({
+            ...onOperationEndInfo,
             error: reconstructedError,
           });
         });
     } else {
-      plugin.onOperationFirstEnd?.({
+      plugin.onOperationEnd?.({
         ...opInfo,
         error: reconstructedError,
       });
