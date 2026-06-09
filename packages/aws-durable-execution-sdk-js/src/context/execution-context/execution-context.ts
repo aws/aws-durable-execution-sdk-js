@@ -17,6 +17,10 @@ import { Context } from "aws-lambda";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  toOperationInfo,
+  extractErrorFromOperation,
+} from "../../utils/operation/operation";
 
 const TERMINAL_STATUSES: OperationStatus[] = [
   OperationStatus.SUCCEEDED,
@@ -105,35 +109,10 @@ export const initializeExecutionContext = async (
 
       const status = operation.Status;
       if (status && TERMINAL_STATUSES.includes(status as OperationStatus)) {
-        const error =
-          operation.Status === OperationStatus.FAILED
-            ? new Error(
-                operation.StepDetails?.Error?.ErrorMessage ??
-                  operation.ChainedInvokeDetails?.Error?.ErrorMessage ??
-                  operation.CallbackDetails?.Error?.ErrorMessage ??
-                  "Operation failed",
-              )
-            : undefined;
-        plugin.onOperationEnd?.({
-          Id: operation.Id ?? "",
-          Name: operation.Name,
-          Type: operation.Type ?? "",
-          SubType: operation.SubType,
-          ParentId: operation.ParentId,
-          StartTimestamp: operation.StartTimestamp,
-          EndTimestamp: operation.EndTimestamp,
-          error,
-        });
+        const error = extractErrorFromOperation(operation);
+        plugin.onOperationEnd?.({ ...toOperationInfo(operation), error });
       } else if (status === OperationStatus.STARTED) {
-        plugin.onOperationStart?.({
-          Id: operation.Id ?? "",
-          Name: operation.Name,
-          Type: operation.Type ?? "",
-          SubType: operation.SubType,
-          ParentId: operation.ParentId,
-          StartTimestamp: operation.StartTimestamp,
-          EndTimestamp: operation.EndTimestamp,
-        });
+        plugin.onOperationStart?.(toOperationInfo(operation));
       }
       // Skip PENDING or other non-actionable statuses
     }

@@ -26,11 +26,11 @@ import {
   OperationMetadata,
 } from "../../types/operation-lifecycle";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
-  DurableInstrumentationPlugin,
-  OperationInfo as PluginOperationInfo,
-  OperationEndInfo as PluginOperationEndInfo,
-} from "../../types/plugin";
+  toOperationInfo,
+  extractErrorFromOperation,
+} from "../operation/operation";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -809,59 +809,12 @@ export class CheckpointManager implements Checkpoint {
   // ===== Hook Dispatch Helpers =====
 
   /**
-   * Derives PluginOperationInfo from a checkpoint response Operation record.
-   * Id and ParentId are always hashed values as returned by the checkpoint response.
-   */
-  private toOperationInfoFromOperation(
-    operation: Operation,
-  ): PluginOperationInfo {
-    return {
-      Id: operation.Id ?? "",
-      Name: operation.Name,
-      Type: operation.Type ?? "",
-      SubType: operation.SubType,
-      ParentId: operation.ParentId,
-      StartTimestamp: operation.StartTimestamp,
-      EndTimestamp: operation.EndTimestamp,
-    };
-  }
-
-  /**
-   * Derives PluginOperationEndInfo from a checkpoint response Operation record,
-   * including error extraction when the status is FAILED.
-   */
-  private toOperationEndInfoFromOperation(
-    operation: Operation,
-  ): PluginOperationEndInfo {
-    const info = this.toOperationInfoFromOperation(operation);
-    const error = this.extractErrorFromOperation(operation);
-    return { ...info, error };
-  }
-
-  /**
    * Checks if the given status is a terminal status.
    */
   private isTerminalStatus(status?: string): boolean {
     return (
       status != null && TERMINAL_STATUSES.includes(status as OperationStatus)
     );
-  }
-
-  /**
-   * Extracts an Error from the operation's detail fields when the status is FAILED.
-   * Checks StepDetails, ChainedInvokeDetails, and CallbackDetails for error data.
-   */
-  private extractErrorFromOperation(operation: Operation): Error | undefined {
-    if (operation.Status === OperationStatus.FAILED) {
-      const errorData =
-        operation.StepDetails?.Error ??
-        operation.ChainedInvokeDetails?.Error ??
-        operation.CallbackDetails?.Error;
-      if (errorData?.ErrorMessage) {
-        return new Error(errorData.ErrorMessage);
-      }
-    }
-    return undefined;
   }
 
   /**
@@ -883,9 +836,7 @@ export class CheckpointManager implements Checkpoint {
 
       // Detect onOperationStart: new operation with STARTED status
       if (!previousOp && newStatus === OperationStatus.STARTED) {
-        this.plugin.onOperationStart?.(
-          this.toOperationInfoFromOperation(operation),
-        );
+        this.plugin.onOperationStart?.(toOperationInfo(operation));
       }
 
       // Detect onOperationEnd: transition to terminal status
@@ -893,9 +844,8 @@ export class CheckpointManager implements Checkpoint {
         this.isTerminalStatus(newStatus) &&
         !this.isTerminalStatus(previousOp?.Status)
       ) {
-        this.plugin.onOperationEnd?.(
-          this.toOperationEndInfoFromOperation(operation),
-        );
+        const error = extractErrorFromOperation(operation);
+        this.plugin.onOperationEnd?.({ ...toOperationInfo(operation), error });
       }
     }
   }

@@ -293,11 +293,11 @@ export const createStepHandler = <Logger extends DurableLogger>(
             stepId,
             parentId,
             plugin?.wrapOperationAttemptFn
-              ? () =>
+              ? (): Promise<T> | T =>
                   plugin.wrapOperationAttemptFn!(attemptInfo, () =>
                     fn(stepContext),
                   ) as Promise<T> | T
-              : () => fn(stepContext),
+              : (): Promise<T> | T => fn(stepContext),
             currentAttempt + 1,
             DurableExecutionMode.ExecutionMode,
           );

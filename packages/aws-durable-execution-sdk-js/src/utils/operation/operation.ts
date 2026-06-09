@@ -1,4 +1,4 @@
-import { Operation } from "@aws-sdk/client-lambda";
+import { Operation, OperationStatus } from "@aws-sdk/client-lambda";
 import { OperationInfo, AttemptInfo } from "../../types/plugin";
 
 /**
@@ -34,23 +34,23 @@ export function toAttemptInfo(
     Attempt: attempt ?? (operation?.StepDetails?.Attempt || 0),
   };
 }
-
 /**
- * Backfills missing fields on an OperationInfo (or subtype) with the provided defaults.
- * Only sets a field if it's not already present (undefined or empty string).
+ * Extracts an Error from the operation's detail fields when the status is FAILED.
+ * Checks StepDetails, ChainedInvokeDetails, and CallbackDetails for error data.
  *
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
-export function backfillOperationInfo<T extends OperationInfo>(
-  info: T,
-  defaults: Partial<OperationInfo>,
-): T {
-  info.Id = defaults.Id ?? "";
-  if (!info.Type) info.Type = defaults.Type ?? "";
-  if (!info.SubType) info.SubType = defaults.SubType;
-  if (!info.Name) info.Name = defaults.Name;
-  if (!info.ParentId) info.ParentId = defaults.ParentId;
-  if (!info.StartTimestamp) info.StartTimestamp = defaults.StartTimestamp;
-  if (!info.EndTimestamp) info.EndTimestamp = defaults.EndTimestamp;
-  return info;
+export function extractErrorFromOperation(
+  operation: Operation,
+): Error | undefined {
+  if (operation.Status === OperationStatus.FAILED) {
+    const errorData =
+      operation.StepDetails?.Error ??
+      operation.ChainedInvokeDetails?.Error ??
+      operation.CallbackDetails?.Error;
+    if (errorData?.ErrorMessage) {
+      return new Error(errorData.ErrorMessage);
+    }
+  }
+  return undefined;
 }

@@ -226,11 +226,12 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             stepId,
             parentId,
             plugin?.wrapOperationAttemptFn
-              ? () =>
+              ? (): Promise<T> | T =>
                   plugin.wrapOperationAttemptFn!(attemptInfo, () =>
                     check(currentState, waitForConditionContext),
                   ) as Promise<T> | T
-              : () => check(currentState, waitForConditionContext),
+              : (): Promise<T> | T =>
+                  check(currentState, waitForConditionContext),
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
           );

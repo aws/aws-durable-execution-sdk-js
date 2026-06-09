@@ -29,6 +29,7 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
 import {
+  CustomerFnResult,
   DurableInstrumentationPlugin,
   OperationInfo,
 } from "../../types/plugin";
@@ -345,11 +346,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       entityId,
       parentId,
       plugin?.wrapChildContextFn
-        ? () =>
+        ? (): CustomerFnResult =>
             plugin.wrapChildContextFn!(operationInfo, () =>
               fn(durableChildContext),
             )
-        : () => fn(durableChildContext),
+        : (): Promise<T> | T => fn(durableChildContext),
       undefined,
       childReplayMode,
     )) as T;
