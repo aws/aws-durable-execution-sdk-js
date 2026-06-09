@@ -26,7 +26,11 @@ import {
   OperationMetadata,
 } from "../../types/operation-lifecycle";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  OperationInfo as PluginOperationInfo,
+  OperationEndInfo as PluginOperationEndInfo,
+} from "../../types/plugin";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -423,6 +427,14 @@ export class CheckpointManager implements Checkpoint {
       operationIds: operations.map((op) => op.Id).filter(Boolean),
     });
 
+    // Snapshot previous state for comparison (used by dispatchOperationHooks)
+    const previousStepData: Record<string, Operation> = {};
+    for (const operation of operations) {
+      if (operation.Id && this.stepData[operation.Id]) {
+        previousStepData[operation.Id] = this.stepData[operation.Id];
+      }
+    }
+
     const updatedOperations: Record<string, Operation> = {};
 
     operations.forEach((operation) => {
@@ -453,6 +465,9 @@ export class CheckpointManager implements Checkpoint {
         operations: this.stepData,
       });
     }
+
+    // Fire operation-specific hooks based on state transitions
+    this.dispatchOperationHooks(previousStepData, operations);
 
     log("✅", "StepData update completed:", {
       totalStepDataEntries: Object.keys(this.stepData).length,
@@ -789,6 +804,100 @@ export class CheckpointManager implements Checkpoint {
     }
 
     return TerminationReason.CALLBACK_PENDING;
+  }
+
+  // ===== Hook Dispatch Helpers =====
+
+  /**
+   * Derives PluginOperationInfo from a checkpoint response Operation record.
+   * Id and ParentId are always hashed values as returned by the checkpoint response.
+   */
+  private toOperationInfoFromOperation(
+    operation: Operation,
+  ): PluginOperationInfo {
+    return {
+      Id: operation.Id ?? "",
+      Name: operation.Name,
+      Type: operation.Type ?? "",
+      SubType: operation.SubType,
+      ParentId: operation.ParentId,
+      StartTimestamp: operation.StartTimestamp,
+      EndTimestamp: operation.EndTimestamp,
+    };
+  }
+
+  /**
+   * Derives PluginOperationEndInfo from a checkpoint response Operation record,
+   * including error extraction when the status is FAILED.
+   */
+  private toOperationEndInfoFromOperation(
+    operation: Operation,
+  ): PluginOperationEndInfo {
+    const info = this.toOperationInfoFromOperation(operation);
+    const error = this.extractErrorFromOperation(operation);
+    return { ...info, error };
+  }
+
+  /**
+   * Checks if the given status is a terminal status.
+   */
+  private isTerminalStatus(status?: string): boolean {
+    return (
+      status != null && TERMINAL_STATUSES.includes(status as OperationStatus)
+    );
+  }
+
+  /**
+   * Extracts an Error from the operation's detail fields when the status is FAILED.
+   * Checks StepDetails, ChainedInvokeDetails, and CallbackDetails for error data.
+   */
+  private extractErrorFromOperation(operation: Operation): Error | undefined {
+    if (operation.Status === OperationStatus.FAILED) {
+      const errorData =
+        operation.StepDetails?.Error ??
+        operation.ChainedInvokeDetails?.Error ??
+        operation.CallbackDetails?.Error;
+      if (errorData?.ErrorMessage) {
+        return new Error(errorData.ErrorMessage);
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Dispatches operation-level hooks based on state transitions detected
+   * in the checkpoint response. Called after stepData is updated.
+   *
+   * No error wrapping needed — the composite plugin from createPluginRunner
+   * already swallows sync errors and attaches .catch() to async results.
+   */
+  private dispatchOperationHooks(
+    previousStepData: Record<string, Operation>,
+    updatedOperations: Operation[],
+  ): void {
+    for (const operation of updatedOperations) {
+      if (!operation.Id) continue;
+
+      const previousOp = previousStepData[operation.Id];
+      const newStatus = operation.Status;
+
+      // Detect onOperationStart: new operation with STARTED status
+      if (!previousOp && newStatus === OperationStatus.STARTED) {
+        this.plugin.onOperationStart?.(
+          this.toOperationInfoFromOperation(operation),
+        );
+      }
+
+      // Detect onOperationEnd: transition to terminal status
+      if (
+        this.isTerminalStatus(newStatus) &&
+        !this.isTerminalStatus(previousOp?.Status)
+      ) {
+        this.plugin.onOperationEnd?.(
+          this.toOperationEndInfoFromOperation(operation),
+        );
+      }
+    }
   }
 
   private startTimerWithPolling(stepId: string, endTimestamp?: Date): void {

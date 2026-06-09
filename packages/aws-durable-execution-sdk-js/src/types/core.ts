@@ -69,6 +69,20 @@ export interface DurableExecutionInvocationInput {
      */
     NextMarker?: string | undefined;
   };
+
+  /**
+   * Optional array of operation IDs that were updated between invocations.
+   *
+   * When present, the SDK dispatches inter-invocation plugin hooks (`onOperationStart`,
+   * `onOperationEnd`) only for the operations whose IDs appear in this array.
+   * When absent or undefined, no inter-invocation hooks are dispatched.
+   *
+   * Operations may update between invocations due to external events such as:
+   * - A wait timer expiring
+   * - A callback being received
+   * - A chained invoke completing on the backend
+   */
+  updatedOperationIds?: string[];
 }
 
 /**

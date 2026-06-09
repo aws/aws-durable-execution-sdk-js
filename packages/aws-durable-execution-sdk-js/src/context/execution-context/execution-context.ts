@@ -1,4 +1,8 @@
-import { LambdaClient, Operation } from "@aws-sdk/client-lambda";
+import {
+  LambdaClient,
+  Operation,
+  OperationStatus,
+} from "@aws-sdk/client-lambda";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   DurableExecutionInvocationInput,
@@ -12,11 +16,21 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Context } from "aws-lambda";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+
+const TERMINAL_STATUSES: OperationStatus[] = [
+  OperationStatus.SUCCEEDED,
+  OperationStatus.CANCELLED,
+  OperationStatus.FAILED,
+  OperationStatus.STOPPED,
+  OperationStatus.TIMED_OUT,
+];
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
   context: Context,
   lambdaClient?: LambdaClient,
+  plugin?: DurableInstrumentationPlugin,
 ): Promise<{
   executionContext: ExecutionContext;
   durableExecutionMode: DurableExecutionMode;
@@ -78,6 +92,52 @@ export const initializeExecutionContext = async (
   );
 
   log("📝", "Loaded step data:", stepData);
+
+  // Dispatch inter-invocation hooks for operations that updated between invocations
+  if (
+    event.updatedOperationIds &&
+    event.updatedOperationIds.length > 0 &&
+    plugin
+  ) {
+    for (const operationId of event.updatedOperationIds) {
+      const operation = stepData[operationId];
+      if (!operation) continue;
+
+      const status = operation.Status;
+      if (status && TERMINAL_STATUSES.includes(status as OperationStatus)) {
+        const error =
+          operation.Status === OperationStatus.FAILED
+            ? new Error(
+                operation.StepDetails?.Error?.ErrorMessage ??
+                  operation.ChainedInvokeDetails?.Error?.ErrorMessage ??
+                  operation.CallbackDetails?.Error?.ErrorMessage ??
+                  "Operation failed",
+              )
+            : undefined;
+        plugin.onOperationEnd?.({
+          Id: operation.Id ?? "",
+          Name: operation.Name,
+          Type: operation.Type ?? "",
+          SubType: operation.SubType,
+          ParentId: operation.ParentId,
+          StartTimestamp: operation.StartTimestamp,
+          EndTimestamp: operation.EndTimestamp,
+          error,
+        });
+      } else if (status === OperationStatus.STARTED) {
+        plugin.onOperationStart?.({
+          Id: operation.Id ?? "",
+          Name: operation.Name,
+          Type: operation.Type ?? "",
+          SubType: operation.SubType,
+          ParentId: operation.ParentId,
+          StartTimestamp: operation.StartTimestamp,
+          EndTimestamp: operation.EndTimestamp,
+        });
+      }
+      // Skip PENDING or other non-actionable statuses
+    }
+  }
 
   return {
     executionContext: {

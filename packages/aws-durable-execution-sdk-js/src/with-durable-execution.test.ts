@@ -541,11 +541,12 @@ describe("withDurableExecution", () => {
     const wrappedHandler = withDurableExecution(mockHandler, config);
     await wrappedHandler(mockEvent, mockContext);
 
-    // Verify that initializeExecutionContext was called with the client parameter
+    // Verify that initializeExecutionContext was called with the client parameter and plugin
     expect(initializeExecutionContext).toHaveBeenCalledWith(
       mockEvent,
       mockContext,
       mockClient,
+      expect.any(Object),
     );
     expect(mockHandler).toHaveBeenCalledWith(
       mockCustomerHandlerEvent,

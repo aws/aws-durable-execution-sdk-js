@@ -29,6 +29,8 @@ import {
   WaitForConditionError,
 } from "../../errors/durable-error/durable-error";
 import { DurableLogger } from "../../types/durable-logger";
+import { AttemptInfo, DurableInstrumentationPlugin } from "../../types/plugin";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -38,6 +40,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   parentId: string | undefined,
 
   getDefaultSerdes?: () => AnySerdes,
+  plugin?: DurableInstrumentationPlugin,
 ) => {
   return <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T, Logger>,
@@ -210,10 +213,24 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
 
+          const attemptInfo: AttemptInfo = {
+            Id: hashId(stepId),
+            Name: name,
+            Type: OperationType.STEP,
+            SubType: OperationSubType.WAIT_FOR_CONDITION,
+            ParentId: parentId ? hashId(parentId) : undefined,
+            Attempt: currentAttempt,
+          };
+
           const newState: T = await runWithContext(
             stepId,
             parentId,
-            () => check(currentState, waitForConditionContext),
+            plugin?.wrapOperationAttemptFn
+              ? () =>
+                  plugin.wrapOperationAttemptFn!(attemptInfo, () =>
+                    check(currentState, waitForConditionContext),
+                  ) as Promise<T> | T
+              : () => check(currentState, waitForConditionContext),
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
           );

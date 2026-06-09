@@ -35,6 +35,8 @@ import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
+import { AttemptInfo, DurableInstrumentationPlugin } from "../../types/plugin";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -45,6 +47,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
   parentId?: string,
 
   getDefaultSerdes?: () => AnySerdes,
+  plugin?: DurableInstrumentationPlugin,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -276,11 +279,25 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
 
+          const attemptInfo: AttemptInfo = {
+            Id: hashId(stepId),
+            Name: name,
+            Type: OperationType.STEP,
+            SubType: OperationSubType.STEP,
+            ParentId: parentId ? hashId(parentId) : undefined,
+            Attempt: currentAttempt + 1,
+          };
+
           let result: T;
           result = await runWithContext(
             stepId,
             parentId,
-            () => fn(stepContext),
+            plugin?.wrapOperationAttemptFn
+              ? () =>
+                  plugin.wrapOperationAttemptFn!(attemptInfo, () =>
+                    fn(stepContext),
+                  ) as Promise<T> | T
+              : () => fn(stepContext),
             currentAttempt + 1,
             DurableExecutionMode.ExecutionMode,
           );

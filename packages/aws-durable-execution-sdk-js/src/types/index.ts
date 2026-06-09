@@ -20,6 +20,4 @@ export {
   PluginInvocationStatus,
   OperationChangeInfo,
   AttemptInfo,
-  AttemptEndInfo,
-  AttemptEndInfoOutcome,
 } from "./plugin";

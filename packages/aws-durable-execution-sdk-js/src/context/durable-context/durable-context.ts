@@ -310,6 +310,7 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -394,6 +395,7 @@ export class DurableContextImpl<
         },
         this._parentId,
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
@@ -534,6 +536,7 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
 
       return typeof nameOrCheckFunc === "string" ||

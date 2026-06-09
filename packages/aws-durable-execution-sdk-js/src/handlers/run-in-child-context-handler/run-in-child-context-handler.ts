@@ -28,6 +28,11 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
+import {
+  DurableInstrumentationPlugin,
+  OperationInfo,
+} from "../../types/plugin";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
@@ -76,6 +81,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   parentId?: string,
 
   getDefaultSerdes?: () => AnySerdes,
+  plugin?: DurableInstrumentationPlugin,
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,
@@ -160,6 +166,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         createChildContext,
         parentId,
         getDefaultSerdes,
+        plugin,
       );
     })()
       .then((result) => {
@@ -286,6 +293,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   parentId?: string,
 
   getDefaultSerdes?: () => AnySerdes,
+  plugin?: DurableInstrumentationPlugin,
 ): Promise<T> => {
   const serdes =
     options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
@@ -323,14 +331,28 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   );
 
   try {
+    // Construct OperationInfo for wrapChildContextFn
+    const operationInfo: OperationInfo = {
+      Id: hashId(entityId),
+      Name: name,
+      Type: OperationType.CONTEXT,
+      SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+      ParentId: parentId ? hashId(parentId) : undefined,
+    };
+
     // Execute the child context function with context tracking
-    const result = await runWithContext(
+    const result = (await runWithContext(
       entityId,
       parentId,
-      () => fn(durableChildContext),
+      plugin?.wrapChildContextFn
+        ? () =>
+            plugin.wrapChildContextFn!(operationInfo, () =>
+              fn(durableChildContext),
+            )
+        : () => fn(durableChildContext),
       undefined,
       childReplayMode,
-    );
+    )) as T;
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
