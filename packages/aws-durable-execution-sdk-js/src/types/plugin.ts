@@ -60,7 +60,7 @@ export interface AttemptInfo extends OperationInfo {
  */
 export interface InvocationBaseInfo {
   requestId: string;
-  executionArn: string;
+  durableExecutionArn: string;
 }
 
 /**

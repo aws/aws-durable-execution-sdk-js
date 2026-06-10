@@ -21,7 +21,7 @@ const succeededOutput: DurableExecutionInvocationOutput = {
 describe("createPluginRunner", () => {
   const invocationInfo: InvocationInfo = {
     requestId: "req-1",
-    executionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
+    durableExecutionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
     isFirstInvocation: true,
   };
 
@@ -580,7 +580,8 @@ describe("createPluginRunner", () => {
   describe("plugin error isolation in onInvocationEnd", () => {
     const sampleEndInfo: InvocationEndInfo = {
       requestId: "req-isolation",
-      executionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
+      durableExecutionArn:
+        "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
       isFirstInvocation: true,
       status: PluginInvocationStatus.SUCCEEDED,
       executionResult: { data: "test" },

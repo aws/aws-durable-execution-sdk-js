@@ -69,7 +69,7 @@ async function runHandler<
 
   const invocationInfo: InvocationInfo = {
     requestId: executionContext.requestId,
-    executionArn: executionContext.durableExecutionArn,
+    durableExecutionArn: executionContext.durableExecutionArn,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
   };

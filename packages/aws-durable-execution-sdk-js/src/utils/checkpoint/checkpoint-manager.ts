@@ -460,7 +460,7 @@ export class CheckpointManager implements Checkpoint {
     if (Object.keys(updatedOperations).length > 0) {
       this.plugin.onOperationChange?.({
         requestId: this.requestId,
-        executionArn: this.durableExecutionArn,
+        durableExecutionArn: this.durableExecutionArn,
         updatedOperations,
         operations: this.stepData,
       });

@@ -76,7 +76,7 @@ describe("plugin hooks", () => {
 
     expect(plugin.onInvocationStart).toHaveBeenCalledWith({
       requestId: "req-123",
-      executionArn: "arn:test",
+      durableExecutionArn: "arn:test",
       isFirstInvocation: true,
     });
   });
@@ -95,7 +95,7 @@ describe("plugin hooks", () => {
 
     expect(plugin.onInvocationStart).toHaveBeenCalledWith({
       requestId: "req-123",
-      executionArn: "arn:test",
+      durableExecutionArn: "arn:test",
       isFirstInvocation: false,
     });
   });
@@ -110,7 +110,7 @@ describe("plugin hooks", () => {
     expect(plugin.onInvocationEnd).toHaveBeenCalledWith(
       expect.objectContaining({
         requestId: "req-123",
-        executionArn: "arn:test",
+        durableExecutionArn: "arn:test",
         isFirstInvocation: true,
         status: PluginInvocationStatus.SUCCEEDED,
         executionResult: result,
@@ -131,7 +131,7 @@ describe("plugin hooks", () => {
     expect(plugin.onInvocationEnd).toHaveBeenCalledWith(
       expect.objectContaining({
         requestId: "req-123",
-        executionArn: "arn:test",
+        durableExecutionArn: "arn:test",
         isFirstInvocation: true,
         status: PluginInvocationStatus.FAILED,
         executionError: error,
