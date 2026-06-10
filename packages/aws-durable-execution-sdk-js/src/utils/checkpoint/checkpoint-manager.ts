@@ -427,19 +427,12 @@ export class CheckpointManager implements Checkpoint {
       operationIds: operations.map((op) => op.Id).filter(Boolean),
     });
 
-    // Snapshot previous state for comparison (used by dispatchOperationHooks)
-    const previousStepData: Record<string, Operation> = {};
-    for (const operation of operations) {
-      if (operation.Id && this.stepData[operation.Id]) {
-        previousStepData[operation.Id] = this.stepData[operation.Id];
-      }
-    }
-
     const updatedOperations: Record<string, Operation> = {};
+    const previousStatuses: Record<string, OperationStatus | undefined> = {};
 
     operations.forEach((operation) => {
       if (operation.Id) {
-        // Check if status changed
+        // Capture previous status before update
         const oldStatus = this.stepData[operation.Id]?.Status;
         const newStatus = operation.Status;
 
@@ -453,21 +446,13 @@ export class CheckpointManager implements Checkpoint {
         if (oldStatus !== newStatus) {
           this.resolveWaitingOperation(operation.Id);
           updatedOperations[operation.Id] = operation;
+          previousStatuses[operation.Id] = oldStatus;
         }
       }
     });
 
-    if (Object.keys(updatedOperations).length > 0) {
-      this.plugin.onOperationChange?.({
-        requestId: this.requestId,
-        durableExecutionArn: this.durableExecutionArn,
-        updatedOperations,
-        operations: this.stepData,
-      });
-    }
-
-    // Fire operation-specific hooks based on state transitions
-    this.dispatchOperationHooks(previousStepData, operations);
+    // Fire all plugin hooks for operations whose status changed
+    this.dispatchOperationHooks(updatedOperations, previousStatuses);
 
     log("✅", "StepData update completed:", {
       totalStepDataEntries: Object.keys(this.stepData).length,
@@ -818,31 +803,40 @@ export class CheckpointManager implements Checkpoint {
   }
 
   /**
-   * Dispatches operation-level hooks based on state transitions detected
-   * in the checkpoint response. Called after stepData is updated.
+   * Dispatches all plugin hooks for operations whose status changed.
+   * Includes onOperationChange, onOperationStart, and onOperationEnd.
    *
    * No error wrapping needed — the composite plugin from createPluginRunner
    * already swallows sync errors and attaches .catch() to async results.
    */
   private dispatchOperationHooks(
-    previousStepData: Record<string, Operation>,
-    updatedOperations: Operation[],
+    updatedOperations: Record<string, Operation>,
+    previousStatuses: Record<string, OperationStatus | undefined>,
   ): void {
-    for (const operation of updatedOperations) {
-      if (!operation.Id) continue;
+    if (Object.keys(updatedOperations).length === 0) return;
 
-      const previousOp = previousStepData[operation.Id];
+    // Fire onOperationChange for all status-changed operations
+    this.plugin.onOperationChange?.({
+      requestId: this.requestId,
+      durableExecutionArn: this.durableExecutionArn,
+      updatedOperations,
+      operations: this.stepData,
+    });
+
+    // Fire operation-specific hooks based on state transitions
+    for (const [id, operation] of Object.entries(updatedOperations)) {
+      const previousStatus = previousStatuses[id];
       const newStatus = operation.Status;
 
-      // Detect onOperationStart: new operation with STARTED status
-      if (!previousOp && newStatus === OperationStatus.STARTED) {
+      // Detect onOperationStart: new operation with STARTED status (no previous status)
+      if (!previousStatus && newStatus === OperationStatus.STARTED) {
         this.plugin.onOperationStart?.(toOperationInfo(operation));
       }
 
       // Detect onOperationEnd: transition to terminal status
       if (
         this.isTerminalStatus(newStatus) &&
-        !this.isTerminalStatus(previousOp?.Status)
+        !this.isTerminalStatus(previousStatus)
       ) {
         const error = extractErrorFromOperation(operation);
         this.plugin.onOperationEnd?.({ ...toOperationInfo(operation), error });
