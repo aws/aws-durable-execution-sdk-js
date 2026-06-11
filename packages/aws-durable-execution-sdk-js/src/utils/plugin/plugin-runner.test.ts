@@ -23,6 +23,7 @@ describe("createPluginRunner", () => {
     requestId: "req-1",
     durableExecutionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
     isFirstInvocation: true,
+    operations: {},
   };
 
   const operationInfo: OperationInfo = {

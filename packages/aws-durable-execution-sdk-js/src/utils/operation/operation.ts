@@ -1,5 +1,10 @@
 import { Operation, OperationStatus } from "@aws-sdk/client-lambda";
-import { OperationInfo, AttemptInfo } from "../../types/plugin";
+import {
+  OperationInfo,
+  AttemptInfo,
+  AttemptEndInfo,
+  AttemptEndInfoOutcome,
+} from "../../types/plugin";
 
 /**
  * Converts an Operation to an OperationInfo.
@@ -15,9 +20,30 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
     Type: operation?.Type ?? "",
     SubType: operation?.SubType,
     ParentId: operation?.ParentId,
+    Status: operation?.Status,
     StartTimestamp: operation?.StartTimestamp,
     EndTimestamp: operation?.EndTimestamp,
+    Result:
+      operation?.StepDetails?.Result ??
+      operation?.CallbackDetails?.Result ??
+      operation?.ContextDetails?.Result ??
+      operation?.ChainedInvokeDetails?.Result,
   };
+}
+
+/**
+ * Converts a Record of Operations to a Record of OperationInfo.
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
+export function toOperationInfoMap(
+  operations: Record<string, Operation>,
+): Record<string, OperationInfo> {
+  const result: Record<string, OperationInfo> = {};
+  for (const [key, op] of Object.entries(operations)) {
+    result[key] = toOperationInfo(op);
+  }
+  return result;
 }
 
 /**

@@ -1,4 +1,3 @@
-import { Operation } from "@aws-sdk/client-lambda";
 import { DurableExecutionInvocationOutput } from "./core";
 
 /**
@@ -31,8 +30,10 @@ export interface OperationInfo {
   Type: string;
   SubType?: string;
   ParentId?: string;
+  Status?: string;
   StartTimestamp?: Date;
   EndTimestamp?: Date;
+  Result?: string;
 }
 
 /**
@@ -71,6 +72,7 @@ export interface InvocationBaseInfo {
  */
 export interface InvocationInfo extends InvocationBaseInfo {
   isFirstInvocation: boolean;
+  operations: Record<string, OperationInfo>;
 }
 
 /**
@@ -84,7 +86,7 @@ export interface InvocationEndInfo extends InvocationInfo {
   executionResult?: unknown;
   executionError?: Error;
   executionInput: unknown;
-  operations: Record<string, Operation>;
+  operations: Record<string, OperationInfo>;
 }
 
 /**
@@ -93,8 +95,8 @@ export interface InvocationEndInfo extends InvocationInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationChangeInfo extends InvocationBaseInfo {
-  updatedOperations: Record<string, Operation>;
-  operations: Record<string, Operation>;
+  updatedOperations: Record<string, OperationInfo>;
+  operations: Record<string, OperationInfo>;
 }
 
 /**
