@@ -25,11 +25,11 @@ describe("createPluginRunner", () => {
     requestId: "req-1",
     executionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
     isFirstInvocation: true,
+    operations: {},
   };
 
   const operationInfo: OperationInfo = {
     Id: "op-1",
-    HashedId: "op-1-hash",
     Name: "my-step",
     Type: "STEP",
   };
