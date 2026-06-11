@@ -628,6 +628,110 @@ describe("runInChildContext with custom serdes", () => {
     });
   });
 
+  test("should apply serdes round-trip for small payloads (under checkpoint limit)", async () => {
+    const asymmetricSerdes = {
+      serialize: async (
+        value: string | undefined,
+      ): Promise<string | undefined> =>
+        value === undefined ? undefined : value.toUpperCase(),
+      deserialize: async (
+        data: string | undefined,
+      ): Promise<string | undefined> => data,
+    };
+
+    const childFunction = jest.fn().mockResolvedValue("hello");
+
+    const result = await runInChildContext("serdes-child", childFunction, {
+      serdes: asymmetricSerdes,
+    });
+
+    expect(result).toBe("HELLO");
+  });
+
+  test("should checkpoint the serialized value for small payloads", async () => {
+    const asymmetricSerdes = {
+      serialize: async (
+        value: string | undefined,
+      ): Promise<string | undefined> =>
+        value === undefined ? undefined : value.toUpperCase(),
+      deserialize: async (
+        data: string | undefined,
+      ): Promise<string | undefined> => data,
+    };
+
+    const childFunction = jest.fn().mockResolvedValue("hello");
+
+    await runInChildContext("serdes-child", childFunction, {
+      serdes: asymmetricSerdes,
+    });
+
+    expect(mockCheckpoint).toHaveBeenNthCalledWith(2, "test-step-id", {
+      Id: "test-step-id",
+      ParentId: "parent-step-123",
+      Action: OperationAction.SUCCEED,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Type: OperationType.CONTEXT,
+      Payload: "HELLO",
+      Name: "serdes-child",
+      ContextOptions: undefined,
+    });
+  });
+
+  test("should return raw result for virtual context (no checkpoint, no replay)", async () => {
+    // Virtual contexts never checkpoint so there's no replay path to match.
+    // Return the raw result without serialize/deserialize overhead.
+    const asymmetricSerdes = {
+      serialize: async (
+        value: string | undefined,
+      ): Promise<string | undefined> =>
+        value === undefined ? undefined : value.toUpperCase(),
+      deserialize: async (
+        data: string | undefined,
+      ): Promise<string | undefined> => data,
+    };
+
+    const childFunction = jest.fn().mockResolvedValue("hello");
+
+    const result = await runInChildContext(
+      "virtual-serdes-child",
+      childFunction,
+      {
+        serdes: asymmetricSerdes,
+        virtualContext: true,
+      },
+    );
+
+    // Raw result returned — no round-trip needed for virtual contexts.
+    expect(result).toBe("hello");
+    // Virtual contexts do not checkpoint.
+    expect(mockCheckpoint).not.toHaveBeenCalled();
+  });
+
+  test("should skip serdes round-trip for large payloads (over checkpoint limit)", async () => {
+    // Large payloads trigger ReplayChildren — replay re-executes the function
+    // rather than deserializing the checkpoint. First-run returns raw result.
+    const asymmetricSerdes = {
+      serialize: async (
+        value: string | undefined,
+      ): Promise<string | undefined> =>
+        value === undefined ? undefined : value.toUpperCase(),
+      deserialize: async (
+        data: string | undefined,
+      ): Promise<string | undefined> => data,
+    };
+
+    // 300KB string exceeds the 256KB checkpoint limit.
+    const largeValue = "x".repeat(300 * 1024);
+    const childFunction = jest.fn().mockResolvedValue(largeValue);
+
+    const result = await runInChildContext("large-payload", childFunction, {
+      serdes: asymmetricSerdes,
+    });
+
+    // Result is returned raw — NOT uppercased — because replay re-executes.
+    expect(result).toBe(largeValue);
+  });
+
   test("should deserialize completed child context result with custom serdes", async () => {
     const customSerdes = createClassSerdesWithDates(TestResult, ["timestamp"]);
     const testResult = new TestResult("cached-value", new Date("2023-01-01"));

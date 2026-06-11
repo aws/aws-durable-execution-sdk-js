@@ -6,6 +6,79 @@ import {
 } from "../../errors/durable-error/durable-error";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
+/**
+ * Durable error type names that can be reconstructed into their concrete
+ * {@link DurableOperationError} subclass (preserving `errorType`).
+ */
+const KNOWN_DURABLE_ERROR_TYPES = new Set([
+  "StepError",
+  "CallbackError",
+  "CallbackTimeoutError",
+  "CallbackSubmitterError",
+  "InvokeError",
+  "ChildContextError",
+  "PromiseCombinatorError",
+  "WaitForConditionError",
+]);
+
+/**
+ * Wire representation of a batch item error. Extends the standard
+ * {@link ErrorObject} with a nested `Cause` so the original error (type and
+ * message) is preserved across the serialize/deserialize round-trip. The base
+ * {@link ErrorObject} format has no field for the cause, so it would otherwise
+ * be dropped and rebuilt as a generic error.
+ */
+interface SerializedBatchError extends ErrorObject {
+  Cause?: SerializedBatchError;
+}
+
+/** Serialize an Error (and its cause chain) into a SerializedBatchError. */
+function serializeBatchError(
+  error: Error | undefined,
+): SerializedBatchError | undefined {
+  if (!error) {
+    return undefined;
+  }
+
+  const serialized: SerializedBatchError =
+    error instanceof DurableOperationError
+      ? error.toErrorObject()
+      : { ErrorType: error.name, ErrorMessage: error.message };
+
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    serialized.Cause = serializeBatchError(cause);
+  }
+
+  return serialized;
+}
+
+/** Reconstruct an Error (and its cause chain) from a SerializedBatchError. */
+function reconstructBatchError(errorObject: SerializedBatchError): Error {
+  let error: Error;
+  if (
+    errorObject.ErrorType &&
+    KNOWN_DURABLE_ERROR_TYPES.has(errorObject.ErrorType)
+  ) {
+    error = DurableOperationError.fromErrorObject(errorObject);
+  } else {
+    error = new Error(errorObject.ErrorMessage);
+    error.name = errorObject.ErrorType || "Error";
+    error.stack = errorObject.StackTrace?.join("\n");
+  }
+
+  // Override the cause with the reconstructed original error when present so
+  // the cause's type and message survive (fromErrorObject otherwise synthesizes
+  // a generic cause from the top-level fields).
+  if (errorObject.Cause) {
+    (error as { cause?: Error }).cause = reconstructBatchError(
+      errorObject.Cause,
+    );
+  }
+
+  return error;
+}
+
 export class BatchResultImpl<R> implements BatchResult<R> {
   constructor(
     public readonly all: Array<BatchItem<R>>,
@@ -118,8 +191,8 @@ export function restoreBatchResult<R>(data: unknown): BatchResult<R> {
         ...item,
         result: item.result as R,
         error: item.error
-          ? (DurableOperationError.fromErrorObject(
-              item.error,
+          ? (reconstructBatchError(
+              item.error as SerializedBatchError,
             ) as ChildContextError)
           : undefined,
       }),
@@ -149,8 +222,8 @@ export function createBatchResultSerdes<R>(): Serdes<BatchResult<R>> {
         all: value.all.map((item) => ({
           ...item,
           error:
-            item.error instanceof DurableOperationError
-              ? item.error.toErrorObject()
+            item.error instanceof Error
+              ? serializeBatchError(item.error)
               : undefined,
         })),
         completionReason: value.completionReason,
