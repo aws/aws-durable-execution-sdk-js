@@ -28,6 +28,7 @@ import {
   DurableLambdaHandler,
 } from "./types/durable-execution";
 import { createPluginRunner } from "./utils/plugin/plugin-runner";
+import { toOperationInfoMap } from "./utils/operation/operation";
 import {
   DurableInstrumentationPlugin,
   InvocationInfo,
@@ -72,6 +73,7 @@ async function runHandler<
     executionArn: executionContext.durableExecutionArn,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
+    operations: toOperationInfoMap(executionContext._stepData),
   };
   plugin.onInvocationStart?.(invocationInfo);
 
@@ -198,7 +200,7 @@ async function runHandler<
             executionInput: customerHandlerEvent,
             executionError: result.error || new Error(result.message),
             executionResult: undefined,
-            operations: executionContext._stepData,
+            operations: toOperationInfoMap(executionContext._stepData),
           });
           return response;
         }
@@ -212,7 +214,7 @@ async function runHandler<
             executionInput: customerHandlerEvent,
             executionResult: undefined,
             executionError: undefined,
-            operations: executionContext._stepData,
+            operations: toOperationInfoMap(executionContext._stepData),
           });
 
           return {
@@ -267,7 +269,7 @@ async function runHandler<
               executionInput: customerHandlerEvent,
               executionResult: result,
               executionError: undefined,
-              operations: executionContext._stepData,
+              operations: toOperationInfoMap(executionContext._stepData),
             });
 
             // Return a response indicating the result was checkpointed
@@ -301,7 +303,7 @@ async function runHandler<
           executionInput: customerHandlerEvent,
           executionResult: result,
           executionError: undefined,
-          operations: executionContext._stepData,
+          operations: toOperationInfoMap(executionContext._stepData),
         });
 
         return {
@@ -323,7 +325,7 @@ async function runHandler<
             executionInput: customerHandlerEvent,
             executionError: error,
             executionResult: undefined,
-            operations: executionContext._stepData,
+            operations: toOperationInfoMap(executionContext._stepData),
           });
           throw error; // Re-throw the error to terminate Lambda execution
         }
@@ -347,7 +349,7 @@ async function runHandler<
           executionError:
             error instanceof Error ? error : new Error(String(error)),
           executionResult: undefined,
-          operations: executionContext._stepData,
+          operations: toOperationInfoMap(executionContext._stepData),
         });
 
         return {
