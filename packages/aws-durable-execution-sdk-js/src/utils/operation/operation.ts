@@ -61,7 +61,8 @@ export function toAttemptInfo(
   };
 }
 /**
- * Extracts an Error from the operation's detail fields when the status is FAILED.
+ * Extracts an Error from the operation's detail fields when the status is
+ * FAILED, STOPPED, or TIMED_OUT.
  * Checks StepDetails, ChainedInvokeDetails, and CallbackDetails for error data.
  *
  * @experimental This function is experimental and may be changed or removed in future releases.
@@ -69,7 +70,11 @@ export function toAttemptInfo(
 export function extractErrorFromOperation(
   operation: Operation,
 ): Error | undefined {
-  if (operation.Status === OperationStatus.FAILED) {
+  if (
+    operation.Status === OperationStatus.FAILED ||
+    operation.Status === OperationStatus.STOPPED ||
+    operation.Status === OperationStatus.TIMED_OUT
+  ) {
     const errorData =
       operation.StepDetails?.Error ??
       operation.ChainedInvokeDetails?.Error ??

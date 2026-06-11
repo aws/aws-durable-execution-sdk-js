@@ -9,7 +9,6 @@ import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";
-import { toOperationInfoMap } from "../operation/operation";
 import { EventEmitter } from "events";
 import {
   CheckpointUnrecoverableInvocationError,
@@ -30,6 +29,7 @@ import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
   toOperationInfo,
+  toOperationInfoMap,
   extractErrorFromOperation,
 } from "../operation/operation";
 
@@ -819,9 +819,9 @@ export class CheckpointManager implements Checkpoint {
     // Fire onOperationChange for all status-changed operations
     this.plugin.onOperationChange?.({
       requestId: this.requestId,
-        executionArn: this.durableExecutionArn,
-        updatedOperations: toOperationInfoMap(updatedOperations),
-        operations: toOperationInfoMap(this.stepData),
+      durableExecutionArn: this.durableExecutionArn,
+      updatedOperations: toOperationInfoMap(updatedOperations),
+      operations: toOperationInfoMap(this.stepData),
     });
 
     // Fire operation-specific hooks based on state transitions
