@@ -1,5 +1,11 @@
-import type { Operation } from "@aws-sdk/client-lambda";
-import type { WorkflowInsightConfig } from "./types";
+import type {
+  DurableInstrumentationPlugin,
+  InvocationInfo,
+  InvocationEndInfo,
+  OperationChangeInfo,
+  OperationInfo,
+} from "@aws/durable-execution-sdk-js";
+import type { WorkflowInsightConfig, OperationRecord } from "./types";
 
 export type {
   InsightExporter,
@@ -10,35 +16,33 @@ export type {
   OperationOverride,
 } from "./types";
 
-/**
- * Minimal plugin interface types matching @aws/durable-execution-sdk-js.
- * These will be replaced by direct imports once the SDK publishes its types.
- */
-interface InvocationInfo {
-  requestId: string;
-  executionArn: string;
-  isFirstInvocation: boolean;
+function toOperationRecord(op: OperationInfo): OperationRecord {
+  const startTime = op.StartTimestamp?.toISOString();
+  const endTime = op.EndTimestamp?.toISOString();
+  const durationMs =
+    op.StartTimestamp && op.EndTimestamp
+      ? op.EndTimestamp.getTime() - op.StartTimestamp.getTime()
+      : undefined;
+
+  return {
+    id: op.Id,
+    name: op.Name,
+    type: op.Type,
+    subType: op.SubType,
+    parentId: op.ParentId,
+    status: op.Status ?? "UNKNOWN",
+    startTime,
+    endTime,
+    durationMs,
+  };
 }
 
-interface InvocationEndInfo extends InvocationInfo {
-  status: string;
-  executionResult?: unknown;
-  executionError?: Error;
-  executionInput: unknown;
-  operations: Record<string, Operation>;
-}
-
-interface OperationChangeInfo {
-  requestId: string;
-  executionArn: string;
-  updatedOperations: Record<string, Operation>;
-  operations: Record<string, Operation>;
-}
-
-interface DurableInstrumentationPlugin {
-  onInvocationStart?(info: InvocationInfo): void;
-  onInvocationEnd?(info: InvocationEndInfo): void;
-  onOperationChange?(info: OperationChangeInfo): void;
+function buildOperationRecords(
+  operations: Record<string, OperationInfo>,
+): OperationRecord[] {
+  return Object.values(operations)
+    .filter((op) => op.Name)
+    .map(toOperationRecord);
 }
 
 /**
@@ -48,17 +52,19 @@ interface DurableInstrumentationPlugin {
 export function workflowInsight(
   _config: WorkflowInsightConfig,
 ): DurableInstrumentationPlugin {
+  let operationRecords: OperationRecord[] = [];
+
   return {
-    onInvocationStart(_info: InvocationInfo): void {
-      // TODO: initialize record state, apply sampling decision
+    onInvocationStart(info: InvocationInfo): void {
+      operationRecords = buildOperationRecords(info.operations);
     },
 
-    onInvocationEnd(_info: InvocationEndInfo): void {
-      // TODO: build final record, call exporters
+    onInvocationEnd(info: InvocationEndInfo): void {
+      operationRecords = buildOperationRecords(info.operations);
     },
 
-    onOperationChange(_info: OperationChangeInfo): void {
-      // TODO: update record state, emit if in-progress mode
+    onOperationChange(info: OperationChangeInfo): void {
+      operationRecords = buildOperationRecords(info.operations);
     },
   };
 }
