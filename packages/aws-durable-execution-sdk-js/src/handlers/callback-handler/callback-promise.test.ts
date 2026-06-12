@@ -39,10 +39,10 @@ describe("createCallbackPromise", () => {
     mockCheckAndUpdateReplayMode = jest.fn();
 
     defaultOpInfo = {
-      Id: "test-step-id",
-      HashedId: "hashed-test-step-id",
-      Name: "test-step",
-      Type: OperationType.CALLBACK,
+      id: "test-step-id",
+      name: "test-step",
+      type: OperationType.CALLBACK,
+      isReplay: false,
     };
   });
 

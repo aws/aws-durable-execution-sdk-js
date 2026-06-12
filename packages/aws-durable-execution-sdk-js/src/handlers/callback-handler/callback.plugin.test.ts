@@ -38,9 +38,8 @@ describe("Callback Handler - plugin hooks", () => {
     createStepId = jest.fn().mockReturnValue("test-callback-id");
     checkAndUpdateReplayMode = jest.fn();
     mockPlugin = {
-      onOperationFirstStart: jest.fn(),
       onOperationStart: jest.fn(),
-      onOperationFirstEnd: jest.fn(),
+      onOperationEnd: jest.fn(),
     };
     mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
@@ -69,8 +68,8 @@ describe("Callback Handler - plugin hooks", () => {
     await handler<string>("test-callback");
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledWith(
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
       expect.not.objectContaining({ error: expect.anything() }),
     );
   });
@@ -101,7 +100,7 @@ describe("Callback Handler - plugin hooks", () => {
     await expect(promise).rejects.toThrow();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should call all plugin hooks on replay timed out", async () => {
@@ -130,7 +129,7 @@ describe("Callback Handler - plugin hooks", () => {
     await expect(promise).rejects.toThrow();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
-    expect(mockPlugin.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
   });
 
   it("should call plugin hooks for new callback (phase 1 start)", async () => {
@@ -170,8 +169,8 @@ describe("Callback Handler - plugin hooks", () => {
     const [, callbackId] = await result;
 
     expect(callbackId).toBe("new-cb-123");
-    // Phase 1 fires onOperationFirstStart for new callback
-    expect(mockPlugin.onOperationFirstStart).toHaveBeenCalledTimes(1);
+    // Phase 1 fires onOperationStart for new callback
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
   });
 
   it("should not throw when plugin hooks are undefined", async () => {

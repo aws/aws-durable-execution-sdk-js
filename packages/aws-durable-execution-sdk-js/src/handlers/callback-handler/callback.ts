@@ -62,11 +62,11 @@ export const createCallback = (
         : createPassThroughSerdes<T>());
 
     const opInfo = {
-      Id: stepId,
-      Name: name,
-      Type: OperationType.CALLBACK,
-      SubType: OperationSubType.CALLBACK,
-      ParentId: parentId,
+      id: stepId,
+      name: name,
+      type: OperationType.CALLBACK,
+      subType: OperationSubType.CALLBACK,
+      parentId: parentId,
     };
 
     // Phase 1: Setup and checkpoint
@@ -113,8 +113,8 @@ export const createCallback = (
           stepData.StepDetails?.Attempt,
         );
         backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
+        plugin.onOperationStart?.({ ...attemptInfo, isReplay: true });
+        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
 
         isCompleted = true;
         return;
@@ -147,8 +147,8 @@ export const createCallback = (
           stepData.StepDetails?.Attempt,
         );
         backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
+        plugin.onOperationStart?.({ ...attemptInfo, isReplay: true });
+        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
 
         isCompleted = true;
         return;
@@ -177,11 +177,11 @@ export const createCallback = (
         stepData = context.getStepData(stepId);
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
+        plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
       } else {
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
+        plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Mark as IDLE_NOT_AWAITED
