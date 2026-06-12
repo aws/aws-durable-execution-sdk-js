@@ -75,7 +75,7 @@ async function runHandler<
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     operations: toOperationInfoMap(executionContext._stepData),
   };
-  plugin.onInvocationStart?.(invocationInfo);
+  await plugin.onInvocationStart?.(invocationInfo);
 
   // Set the checkpoint terminating callback on the termination manager
   executionContext.terminationManager.setCheckpointTerminatingCallback(() => {

@@ -66,7 +66,7 @@ describe("createPluginRunner", () => {
     });
   });
 
-  describe("fire-and-forget hooks (run)", () => {
+  describe("lifecycle hooks (awaited via run)", () => {
     it("calls onInvocationStart on all plugins", () => {
       const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
         onInvocationStart: jest.fn(),
@@ -163,7 +163,7 @@ describe("createPluginRunner", () => {
       expect(plugin2.onInvocationStart).toHaveBeenCalledWith(invocationInfo);
     });
 
-    it("swallows async errors from plugins (fire-and-forget)", () => {
+    it("swallows async errors from plugins", () => {
       const asyncThrowingPlugin: DurableInstrumentationPlugin = {
         onOperationStart: () => {
           return Promise.reject(new Error("async plugin error")) as any;
@@ -173,6 +173,31 @@ describe("createPluginRunner", () => {
       const runner = createPluginRunner([asyncThrowingPlugin]);
 
       expect(() => runner.onOperationStart!(operationInfo)).not.toThrow();
+    });
+
+    it("awaits async work from a non-end hook before resolving", async () => {
+      let resolveHook: (() => void) | undefined;
+      let hookCompleted = false;
+      const plugin: DurableInstrumentationPlugin = {
+        onOperationStart: () =>
+          new Promise<void>((resolve) => {
+            resolveHook = () => {
+              hookCompleted = true;
+              resolve();
+            };
+          }),
+      };
+
+      const runner = createPluginRunner([plugin]);
+      const pending = runner.onOperationStart!(operationInfo) as Promise<void>;
+
+      // The hook has not resolved yet, so the runner promise must still be pending
+      expect(hookCompleted).toBe(false);
+
+      resolveHook!();
+      await pending;
+
+      expect(hookCompleted).toBe(true);
     });
 
     it("skips plugins that do not implement the hook", () => {
