@@ -55,11 +55,11 @@ export const createWaitHandler = (
 
       let stepData = context.getStepData(stepId);
       var opInfo = {
-        Id: stepId,
-        ParentId: parentId,
-        SubType: OperationSubType.WAIT,
-        Type: OperationType.WAIT,
-        Name: actualName,
+        id: stepId,
+        parentId: parentId,
+        subType: OperationSubType.WAIT,
+        type: OperationType.WAIT,
+        name: actualName,
       };
 
       // Validate replay consistency
@@ -96,8 +96,8 @@ export const createWaitHandler = (
 
         isCompleted = true;
         const checkPointedOpInfo = toOperationInfo(stepData);
-        plugin.onOperationStart?.(checkPointedOpInfo);
-        plugin.onOperationFirstEnd?.(checkPointedOpInfo);
+        plugin.onOperationStart?.({ ...checkPointedOpInfo, isReplay: true });
+        plugin.onOperationEnd?.({ ...checkPointedOpInfo, isReplay: true });
         return;
       }
 
@@ -118,11 +118,11 @@ export const createWaitHandler = (
         stepData = context.getStepData(stepId);
         operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
+        plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
       } else {
         operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
+        plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Refresh stepData after checkpoint
@@ -184,7 +184,7 @@ export const createWaitHandler = (
         );
 
         const waitEndOpInfo = toOperationInfo(stepData);
-        plugin.onOperationFirstEnd?.(waitEndOpInfo);
+        plugin.onOperationEnd?.({ ...waitEndOpInfo, isReplay: false });
 
         return;
       }
