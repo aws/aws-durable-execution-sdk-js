@@ -284,6 +284,75 @@ describe("createPluginRunner", () => {
 
       expect(plugin2.onInvocationEnd).toHaveBeenCalledWith(invocationEndInfo);
     });
+
+    it("returns a promise that resolves only after async plugin work completes", async () => {
+      let resolveHook: (() => void) | undefined;
+      let hookCompleted = false;
+      const plugin: DurableInstrumentationPlugin = {
+        onInvocationEnd: () =>
+          new Promise<void>((resolve) => {
+            resolveHook = () => {
+              hookCompleted = true;
+              resolve();
+            };
+          }),
+      };
+
+      const runner = createPluginRunner([plugin]);
+      const pending = runner.onInvocationEnd!(
+        invocationEndInfo,
+      ) as Promise<void>;
+
+      // The hook has not resolved yet, so the runner promise must still be pending
+      expect(hookCompleted).toBe(false);
+
+      resolveHook!();
+      await pending;
+
+      expect(hookCompleted).toBe(true);
+    });
+
+    it("awaits all plugins before resolving", async () => {
+      const order: string[] = [];
+      const makePlugin = (
+        name: string,
+        delay: number,
+      ): DurableInstrumentationPlugin => ({
+        onInvocationEnd: () =>
+          new Promise<void>((resolve) =>
+            setTimeout(() => {
+              order.push(name);
+              resolve();
+            }, delay),
+          ),
+      });
+
+      const runner = createPluginRunner([
+        makePlugin("slow", 20),
+        makePlugin("fast", 5),
+      ]);
+
+      await runner.onInvocationEnd!(invocationEndInfo);
+
+      // Both plugins ran and the runner waited for the slowest one
+      expect(order).toEqual(["fast", "slow"]);
+    });
+
+    it("does not reject when a plugin returns a rejected promise", async () => {
+      const rejectingPlugin: DurableInstrumentationPlugin = {
+        onInvocationEnd: () => Promise.reject(new Error("async plugin error")),
+      };
+      const plugin2: jest.Mocked<DurableInstrumentationPlugin> = {
+        onInvocationEnd: jest.fn(),
+      };
+
+      const runner = createPluginRunner([rejectingPlugin, plugin2]);
+
+      await expect(
+        runner.onInvocationEnd!(invocationEndInfo),
+      ).resolves.toBeUndefined();
+      expect(plugin2.onInvocationEnd).toHaveBeenCalledWith(invocationEndInfo);
+    });
   });
 
   describe("callback-wrapping hooks (runAsCallback)", () => {

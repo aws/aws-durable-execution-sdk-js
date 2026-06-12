@@ -194,7 +194,7 @@ async function runHandler<
               result.error || new Error(result.message),
             ),
           };
-          plugin.onInvocationEnd?.({
+          await plugin.onInvocationEnd?.({
             ...invocationInfo,
             status: PluginInvocationStatus.FAILED,
             executionInput: customerHandlerEvent,
@@ -208,7 +208,7 @@ async function runHandler<
         if (resultType === "termination") {
           log("🛑", "Returning termination response");
 
-          plugin.onInvocationEnd?.({
+          await plugin.onInvocationEnd?.({
             ...invocationInfo,
             status: PluginInvocationStatus.PENDING,
             executionInput: customerHandlerEvent,
@@ -263,7 +263,7 @@ async function runHandler<
               // Continue anyway - the checkpoint will be retried on next invocation
             }
 
-            plugin.onInvocationEnd?.({
+            await plugin.onInvocationEnd?.({
               ...invocationInfo,
               status: PluginInvocationStatus.SUCCEEDED,
               executionInput: customerHandlerEvent,
@@ -297,7 +297,7 @@ async function runHandler<
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
-        plugin.onInvocationEnd?.({
+        await plugin.onInvocationEnd?.({
           ...invocationInfo,
           status: PluginInvocationStatus.SUCCEEDED,
           executionInput: customerHandlerEvent,
@@ -319,7 +319,7 @@ async function runHandler<
             "🛑",
             "Unrecoverable invocation error - terminating Lambda execution",
           );
-          plugin.onInvocationEnd?.({
+          await plugin.onInvocationEnd?.({
             ...invocationInfo,
             status: PluginInvocationStatus.RETRYING,
             executionInput: customerHandlerEvent,
@@ -342,7 +342,7 @@ async function runHandler<
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
-        plugin.onInvocationEnd?.({
+        await plugin.onInvocationEnd?.({
           ...invocationInfo,
           status: PluginInvocationStatus.FAILED,
           executionInput: customerHandlerEvent,

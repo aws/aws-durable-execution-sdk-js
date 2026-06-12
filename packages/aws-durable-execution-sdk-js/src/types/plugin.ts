@@ -133,7 +133,24 @@ export interface DurableInstrumentationPlugin {
     info: InvocationInfo,
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput>;
-  onInvocationEnd?(info: InvocationEndInfo): void;
+  /**
+   * Called once when a durable execution invocation ends, with the final
+   * status and outcome details.
+   *
+   * Unlike the fire-and-forget operation hooks, the SDK **awaits** this hook
+   * before returning the Lambda response. This guarantees the hook runs to
+   * completion before the Lambda environment is frozen or torn down.
+   *
+   * @remarks
+   * Because the SDK awaits this hook, any time spent here directly increases
+   * the wall-clock duration of the current Lambda invocation.
+   * Errors thrown (or rejected promises) are swallowed by the SDK
+   * and never affect the execution outcome.
+   *
+   * @param info - Details about the completed invocation, including status,
+   * result or error, input, and operations.
+   */
+  onInvocationEnd?(info: InvocationEndInfo): void | Promise<void>;
   onOperationStart?(info: OperationInfo): void;
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
   onOperationEnd?(info: OperationEndInfo): void;

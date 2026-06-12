@@ -25,6 +25,14 @@ const mockEvent: DurableExecutionInvocationInput = {
   InitialExecutionState: { Operations: [], NextMarker: "" },
 };
 const mockContext = {} as Context;
+// Flush the microtask queue without advancing fake timers, so we can observe
+// whether a promise is still pending after all currently-scheduled
+// microtasks have run.
+const flushMicrotasks = async (): Promise<void> => {
+  for (let i = 0; i < 50; i++) {
+    await Promise.resolve();
+  }
+};
 const mockTerminationManager = {
   getTerminationPromise: jest.fn(),
   terminate: jest.fn(),
@@ -152,6 +160,81 @@ describe("plugin hooks", () => {
     await handler(mockEvent, mockContext);
 
     expect(plugin.onInvocationEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for an async onInvocationEnd to complete before the handler resolves", async () => {
+    // Gate the hook so the test controls exactly when it finishes. If the SDK
+    // awaits onInvocationEnd, the handler stays pending until we release the
+    // gate. If it were fire-and-forget, the handler would resolve early.
+    let releaseHook!: () => void;
+    const hookGate = new Promise<void>((resolve) => {
+      releaseHook = resolve;
+    });
+    let hookCompleted = false;
+    const asyncPlugin: DurableInstrumentationPlugin = {
+      onInvocationEnd: async () => {
+        await hookGate;
+        hookCompleted = true;
+      },
+    };
+
+    const handler = withDurableExecution(
+      jest.fn().mockResolvedValue({ ok: true }),
+      { plugins: [asyncPlugin] },
+    );
+
+    let handlerResolved = false;
+    const handlerPromise = handler(mockEvent, mockContext).then((r) => {
+      handlerResolved = true;
+      return r;
+    });
+
+    // Flush all pending microtasks; the handler must remain blocked on the hook
+    await flushMicrotasks();
+    expect(hookCompleted).toBe(false);
+    expect(handlerResolved).toBe(false);
+
+    // Release the hook; only now may the handler resolve
+    releaseHook();
+    await handlerPromise;
+
+    expect(hookCompleted).toBe(true);
+    expect(handlerResolved).toBe(true);
+  });
+
+  it("waits for async onInvocationEnd even when the handler throws", async () => {
+    let releaseHook!: () => void;
+    const hookGate = new Promise<void>((resolve) => {
+      releaseHook = resolve;
+    });
+    let hookCompleted = false;
+    const asyncPlugin: DurableInstrumentationPlugin = {
+      onInvocationEnd: async () => {
+        await hookGate;
+        hookCompleted = true;
+      },
+    };
+
+    const handler = withDurableExecution(
+      jest.fn().mockRejectedValue(new Error("handler error")),
+      { plugins: [asyncPlugin] },
+    );
+
+    let handlerResolved = false;
+    const handlerPromise = handler(mockEvent, mockContext).then((r) => {
+      handlerResolved = true;
+      return r;
+    });
+
+    await flushMicrotasks();
+    expect(hookCompleted).toBe(false);
+    expect(handlerResolved).toBe(false);
+
+    releaseHook();
+    await handlerPromise;
+
+    expect(hookCompleted).toBe(true);
+    expect(handlerResolved).toBe(true);
   });
 
   it("fans out hooks to multiple plugins", async () => {

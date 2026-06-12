@@ -133,6 +133,30 @@ export function createPluginRunner(
       }
     });
 
+  /**
+   * Like `run`, but awaits any promises returned by the plugin hooks so the
+   * SDK can guarantee the hook has completed before proceeding (e.g. before
+   * returning the Lambda response). Plugin errors — synchronous or
+   * asynchronous — are swallowed so a misbehaving plugin never affects SDK
+   * execution. Hooks are invoked on all plugins concurrently.
+   */
+  const runAwaitable = async <K extends keyof DurableInstrumentationPlugin>(
+    method: K,
+    info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
+  ): Promise<void> => {
+    await Promise.allSettled(
+      plugins.map(async (p) => {
+        const result = (p[method] as PluginHookFn)?.(info as PluginInfo);
+        if (
+          result != null &&
+          typeof (result as Promise<unknown>).then === "function"
+        ) {
+          await result;
+        }
+      }),
+    );
+  };
+
   return {
     onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
     wrapInvocation: (
@@ -144,7 +168,8 @@ export function createPluginRunner(
         info,
         fn,
       ) as Promise<DurableExecutionInvocationOutput>,
-    onInvocationEnd: (info: InvocationEndInfo) => run("onInvocationEnd", info),
+    onInvocationEnd: (info: InvocationEndInfo): Promise<void> =>
+      runAwaitable("onInvocationEnd", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
     wrapChildContextFn: (
       info: OperationInfo,
