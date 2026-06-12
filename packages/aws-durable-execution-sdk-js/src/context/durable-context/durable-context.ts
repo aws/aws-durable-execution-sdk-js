@@ -310,6 +310,7 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -504,7 +505,7 @@ export class DurableContextImpl<
         // deserializer. The default is createPassThroughSerdes() which matches
         // the original behavior, so no injection is needed in that case.
         this._customCallbackDeserializerSet
-          ? () => this._defaultCallbackDeserializer
+          ? (): AnySerdesDeserializer => this._defaultCallbackDeserializer
           : undefined,
       );
       return waitForCallbackHandler(
