@@ -268,7 +268,10 @@ export const createStepHandler = <Logger extends DurableLogger>(
             stepData = context.getStepData(stepId);
             const operationInfo = toOperationInfo(stepData);
             backfillOperationInfo(operationInfo, opInfo);
-            plugin.onOperationFirstStart?.(operationInfo);
+            plugin.onOperationStart?.({
+              ...operationInfo,
+              isReplay: false,
+            });
           } else {
             checkpoint
               .checkpoint(stepId, {
@@ -283,13 +286,16 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepData = context.getStepData(stepId);
                 const operationInfo = toOperationInfo(stepData);
                 backfillOperationInfo(operationInfo, opInfo);
-                plugin.onOperationFirstStart?.(operationInfo);
+                plugin.onOperationStart?.({
+                  ...operationInfo,
+                  isReplay: false,
+                });
               });
           }
         } else {
           const operationInfo = toOperationInfo(stepData);
           backfillOperationInfo(operationInfo, opInfo);
-          plugin.onOperationStart?.(operationInfo);
+          plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
         }
 
         try {
@@ -355,7 +361,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationFirstEnd?.(attemptEndInfo);
+          plugin.onOperationEnd?.({ ...attemptEndInfo, isReplay: false });
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
@@ -416,8 +422,9 @@ export const createStepHandler = <Logger extends DurableLogger>(
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
-            plugin.onOperationFirstEnd?.({
+            plugin.onOperationEnd?.({
               ...attemptEndInfo,
+              isReplay: false,
               error: error instanceof Error ? error : new Error(String(error)),
             });
             throw DurableOperationError.fromErrorObject(

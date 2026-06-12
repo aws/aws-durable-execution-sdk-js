@@ -31,6 +31,7 @@ export interface OperationInfo {
   startTimestamp?: Date;
   endTimestamp?: Date;
   result?: string;
+  isReplay: boolean;
 }
 
 /**
@@ -133,10 +134,9 @@ export interface DurableInstrumentationPlugin {
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput>;
   onInvocationEnd?(info: InvocationEndInfo): void;
-  onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
-  onOperationFirstEnd?(info: OperationEndInfo): void;
+  onOperationEnd?(info: OperationEndInfo): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;
