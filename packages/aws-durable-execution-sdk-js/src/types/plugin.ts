@@ -1,4 +1,3 @@
-import { Operation } from "@aws-sdk/client-lambda";
 import { DurableExecutionInvocationOutput } from "./core";
 
 /**
@@ -23,15 +22,16 @@ export enum PluginInvocationStatus {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationInfo {
-  Id: string;
-  HashedId: string;
-  Name?: string;
-  Type: string;
-  SubType?: string;
-  ParentId?: string;
-  HashedParentId?: string;
-  StartTimestamp?: Date;
-  EndTimestamp?: Date;
+  id: string;
+  name?: string;
+  type: string;
+  subType?: string;
+  parentId?: string;
+  status?: string;
+  startTimestamp?: Date;
+  endTimestamp?: Date;
+  result?: string;
+  isReplay: boolean;
 }
 
 /**
@@ -49,7 +49,7 @@ export interface OperationEndInfo extends OperationInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface AttemptInfo extends OperationInfo {
-  Attempt: number;
+  attempt: number;
 }
 
 /**
@@ -95,6 +95,7 @@ export interface InvocationBaseInfo {
  */
 export interface InvocationInfo extends InvocationBaseInfo {
   isFirstInvocation: boolean;
+  operations: Record<string, OperationInfo>;
 }
 
 /**
@@ -108,7 +109,7 @@ export interface InvocationEndInfo extends InvocationInfo {
   executionResult?: unknown;
   executionError?: Error;
   executionInput: unknown;
-  operations: Record<string, Operation>;
+  operations: Record<string, OperationInfo>;
 }
 
 /**
@@ -117,8 +118,8 @@ export interface InvocationEndInfo extends InvocationInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationChangeInfo extends InvocationBaseInfo {
-  updatedOperations: Record<string, Operation>;
-  operations: Record<string, Operation>;
+  updatedOperations: Record<string, OperationInfo>;
+  operations: Record<string, OperationInfo>;
 }
 
 /**
@@ -133,10 +134,9 @@ export interface DurableInstrumentationPlugin {
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput>;
   onInvocationEnd?(info: InvocationEndInfo): void;
-  onOperationFirstStart?(info: OperationInfo): void;
   onOperationStart?(info: OperationInfo): void;
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
-  onOperationFirstEnd?(info: OperationEndInfo): void;
+  onOperationEnd?(info: OperationEndInfo): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;

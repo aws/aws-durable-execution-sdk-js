@@ -25,18 +25,19 @@ describe("createPluginRunner", () => {
     requestId: "req-1",
     executionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
     isFirstInvocation: true,
+    operations: {},
   };
 
   const operationInfo: OperationInfo = {
-    Id: "op-1",
-    HashedId: "op-1-hash",
-    Name: "my-step",
-    Type: "STEP",
+    id: "op-1",
+    name: "my-step",
+    type: "STEP",
+    isReplay: false,
   };
 
   const attemptInfo: AttemptInfo = {
     ...operationInfo,
-    Attempt: 1,
+    attempt: 1,
   };
 
   const attemptEndInfo: AttemptEndInfo = {
@@ -77,15 +78,15 @@ describe("createPluginRunner", () => {
       expect(plugin.onInvocationStart).toHaveBeenCalledWith(invocationInfo);
     });
 
-    it("calls onOperationFirstStart on all plugins", () => {
+    it("calls onOperationStart on all plugins", () => {
       const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationFirstStart: jest.fn(),
+        onOperationStart: jest.fn(),
       };
 
       const runner = createPluginRunner([plugin]);
-      runner.onOperationFirstStart!(operationInfo);
+      runner.onOperationStart!(operationInfo);
 
-      expect(plugin.onOperationFirstStart).toHaveBeenCalledWith(operationInfo);
+      expect(plugin.onOperationStart).toHaveBeenCalledWith(operationInfo);
     });
 
     it("calls onOperationStart on all plugins", () => {
@@ -99,16 +100,16 @@ describe("createPluginRunner", () => {
       expect(plugin.onOperationStart).toHaveBeenCalledWith(operationInfo);
     });
 
-    it("calls onOperationFirstEnd on all plugins", () => {
+    it("calls onOperationEnd on all plugins", () => {
       const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
-        onOperationFirstEnd: jest.fn(),
+        onOperationEnd: jest.fn(),
       };
       const infoWithError = { ...operationInfo, error: new Error("oops") };
 
       const runner = createPluginRunner([plugin]);
-      runner.onOperationFirstEnd!(infoWithError);
+      runner.onOperationEnd!(infoWithError);
 
-      expect(plugin.onOperationFirstEnd).toHaveBeenCalledWith(infoWithError);
+      expect(plugin.onOperationEnd).toHaveBeenCalledWith(infoWithError);
     });
 
     it("calls onOperationAttemptStart on all plugins", () => {
@@ -764,12 +765,11 @@ describe("createPluginRunner", () => {
             fn: () => Promise<DurableExecutionInvocationOutput>,
           ) => fn(),
         ),
-        onOperationFirstStart: jest.fn(),
         onOperationStart: jest.fn(),
         onOperationAttemptStart: jest.fn(),
         wrapOperationAttemptFn: jest.fn((_info: any, fn: () => any) => fn()),
         onOperationAttemptEnd: jest.fn(),
-        onOperationFirstEnd: jest.fn(),
+        onOperationEnd: jest.fn(),
         onOperationChange: jest.fn(),
         onInvocationEnd: jest.fn().mockResolvedValue(undefined),
         enrichLogContext: jest.fn().mockReturnValue({ p1: "v1" }),
@@ -783,12 +783,11 @@ describe("createPluginRunner", () => {
             fn: () => Promise<DurableExecutionInvocationOutput>,
           ) => fn(),
         ),
-        onOperationFirstStart: jest.fn(),
         onOperationStart: jest.fn(),
         onOperationAttemptStart: jest.fn(),
         wrapOperationAttemptFn: jest.fn((_info: any, fn: () => any) => fn()),
         onOperationAttemptEnd: jest.fn(),
-        onOperationFirstEnd: jest.fn(),
+        onOperationEnd: jest.fn(),
         onOperationChange: jest.fn(),
         onInvocationEnd: jest.fn().mockResolvedValue(undefined),
         enrichLogContext: jest.fn().mockReturnValue({ p2: "v2" }),
@@ -801,12 +800,11 @@ describe("createPluginRunner", () => {
       await runner.wrapInvocation!(invocationInfo, () =>
         Promise.resolve(succeededOutput),
       );
-      runner.onOperationFirstStart!(operationInfo);
       runner.onOperationStart!(operationInfo);
       runner.onOperationAttemptStart!(attemptInfo);
       runner.wrapOperationAttemptFn!(attemptInfo, () => "attempt-result");
       runner.onOperationAttemptEnd!(attemptEndInfo);
-      runner.onOperationFirstEnd!(operationInfo);
+      runner.onOperationEnd!(operationInfo);
       runner.onOperationChange!(operationChangeInfo);
       runner.onInvocationEnd!(invocationEndInfo);
       const logCtx = runner.enrichLogContext!();
@@ -816,8 +814,6 @@ describe("createPluginRunner", () => {
       expect(plugin2.onInvocationStart).toHaveBeenCalledTimes(1);
       expect(plugin1.wrapInvocation).toHaveBeenCalledTimes(1);
       expect(plugin2.wrapInvocation).toHaveBeenCalledTimes(1);
-      expect(plugin1.onOperationFirstStart).toHaveBeenCalledTimes(1);
-      expect(plugin2.onOperationFirstStart).toHaveBeenCalledTimes(1);
       expect(plugin1.onOperationStart).toHaveBeenCalledTimes(1);
       expect(plugin2.onOperationStart).toHaveBeenCalledTimes(1);
       expect(plugin1.onOperationAttemptStart).toHaveBeenCalledTimes(1);
@@ -826,8 +822,8 @@ describe("createPluginRunner", () => {
       expect(plugin2.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
       expect(plugin1.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
       expect(plugin2.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
-      expect(plugin1.onOperationFirstEnd).toHaveBeenCalledTimes(1);
-      expect(plugin2.onOperationFirstEnd).toHaveBeenCalledTimes(1);
+      expect(plugin1.onOperationEnd).toHaveBeenCalledTimes(1);
+      expect(plugin2.onOperationEnd).toHaveBeenCalledTimes(1);
       expect(plugin1.onOperationChange).toHaveBeenCalledTimes(1);
       expect(plugin2.onOperationChange).toHaveBeenCalledTimes(1);
       expect(plugin1.onInvocationEnd).toHaveBeenCalledTimes(1);

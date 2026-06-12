@@ -84,11 +84,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       let stepData = context.getStepData(stepId);
 
       const opInfo = {
-        Id: stepId,
-        Name: name,
-        Type: OperationType.STEP,
-        SubType: OperationSubType.WAIT_FOR_CONDITION,
-        ParentId: parentId,
+        id: stepId,
+        name: name,
+        type: OperationType.STEP,
+        subType: OperationSubType.WAIT_FOR_CONDITION,
+        parentId: parentId,
       };
 
       // Check if already completed
@@ -213,14 +213,17 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             })
             .then(() => {
               stepData = context.getStepData(stepId);
-              const attemptInfo = toAttemptInfo(stepData, currentAttempt);
-              backfillOperationInfo(attemptInfo, opInfo);
-              plugin.onOperationFirstStart?.(attemptInfo);
+              const operationInfo = toOperationInfo(stepData);
+              backfillOperationInfo(operationInfo, opInfo);
+              plugin.onOperationStart?.({
+                ...operationInfo,
+                isReplay: false,
+              });
             });
         } else {
           const operationInfo = toOperationInfo(stepData);
           backfillOperationInfo(operationInfo, opInfo);
-          plugin.onOperationStart?.(operationInfo);
+          plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
         }
 
         try {
@@ -302,9 +305,12 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationAttemptEnd?.({
               ...attemptEndInfo,
-              StartTimestamp: attemptEndInfo.EndTimestamp,
+              startTimestamp: attemptEndInfo.endTimestamp,
             });
-            plugin.onOperationFirstEnd?.(attemptEndInfo);
+            plugin.onOperationEnd?.({
+              ...attemptEndInfo,
+              isReplay: false,
+            });
             checkpoint.markOperationState(
               stepId,
               OperationLifecycleState.COMPLETED,
@@ -337,7 +343,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.({
             ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
+            startTimestamp: attemptEndInfo.endTimestamp,
           });
 
           checkpoint.markOperationState(
@@ -384,10 +390,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.({
             ...attemptEndInfo,
-            StartTimestamp: attemptEndInfo.EndTimestamp,
+            startTimestamp: attemptEndInfo.endTimestamp,
           });
-          plugin.onOperationFirstEnd?.({
+          plugin.onOperationEnd?.({
             ...attemptEndInfo,
+            isReplay: false,
             error: error instanceof Error ? error : new Error(String(error)),
           });
           throw DurableOperationError.fromErrorObject(
