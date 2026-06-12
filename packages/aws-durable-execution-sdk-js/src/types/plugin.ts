@@ -31,6 +31,7 @@ export interface OperationInfo {
   startTimestamp?: Date;
   endTimestamp?: Date;
   result?: string;
+  error?: Error;
   /** True when this is the very first time the operation starts (not a replay). */
   isFirstStart?: boolean;
 }
@@ -40,9 +41,7 @@ export interface OperationInfo {
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface OperationEndInfo extends OperationInfo {
-  error?: Error;
-}
+export interface OperationEndInfo extends OperationInfo {}
 
 /**
  * Information about an operation attempt.
