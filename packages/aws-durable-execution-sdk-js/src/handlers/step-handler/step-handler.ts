@@ -268,7 +268,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
             stepData = context.getStepData(stepId);
             const operationInfo = toOperationInfo(stepData);
             backfillOperationInfo(operationInfo, opInfo);
-            plugin.onOperationFirstStart?.(operationInfo);
+            operationInfo.isFirstStart = true;
+            plugin.onOperationStart?.(operationInfo);
           } else {
             checkpoint
               .checkpoint(stepId, {
@@ -283,12 +284,14 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepData = context.getStepData(stepId);
                 const operationInfo = toOperationInfo(stepData);
                 backfillOperationInfo(operationInfo, opInfo);
-                plugin.onOperationFirstStart?.(operationInfo);
+                operationInfo.isFirstStart = true;
+                plugin.onOperationStart?.(operationInfo);
               });
           }
         } else {
           const operationInfo = toOperationInfo(stepData);
           backfillOperationInfo(operationInfo, opInfo);
+          operationInfo.isFirstStart = false;
           plugin.onOperationStart?.(operationInfo);
         }
 
@@ -355,7 +358,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
           plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          plugin.onOperationFirstEnd?.(attemptEndInfo);
+          plugin.onOperationEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
@@ -416,7 +419,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
             plugin.onOperationAttemptEnd?.(attemptEndInfo);
-            plugin.onOperationFirstEnd?.({
+            plugin.onOperationEnd?.({
               ...attemptEndInfo,
               error: error instanceof Error ? error : new Error(String(error)),
             });
