@@ -9,6 +9,7 @@ import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";
+import { toOperationInfoMap } from "../operation/operation";
 import { EventEmitter } from "events";
 import {
   CheckpointUnrecoverableInvocationError,
@@ -445,12 +446,15 @@ export class CheckpointManager implements Checkpoint {
       }
     });
 
-    if (Object.keys(updatedOperations).length > 0) {
-      this.plugin.onOperationChange?.({
+    if (
+      Object.keys(updatedOperations).length > 0 &&
+      this.plugin.onOperationChange
+    ) {
+      this.plugin.onOperationChange({
         requestId: this.requestId,
         executionArn: this.durableExecutionArn,
-        updatedOperations,
-        operations: this.stepData,
+        updatedOperations: toOperationInfoMap(updatedOperations),
+        operations: toOperationInfoMap(this.stepData),
       });
     }
 

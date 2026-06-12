@@ -145,15 +145,12 @@ export function createPluginRunner(
         fn,
       ) as Promise<DurableExecutionInvocationOutput>,
     onInvocationEnd: (info: InvocationEndInfo) => run("onInvocationEnd", info),
-    onOperationFirstStart: (info: OperationInfo) =>
-      run("onOperationFirstStart", info),
     onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
     wrapChildContextFn: (
       info: OperationInfo,
       fn: CustomerFn,
     ): CustomerFnResult => runAsCallback("wrapChildContextFn", info, fn),
-    onOperationFirstEnd: (info: OperationEndInfo) =>
-      run("onOperationFirstEnd", info),
+    onOperationEnd: (info: OperationEndInfo) => run("onOperationEnd", info),
     onOperationAttemptStart: (info: AttemptInfo) =>
       run("onOperationAttemptStart", info),
     wrapOperationAttemptFn: (

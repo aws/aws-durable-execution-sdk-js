@@ -26,7 +26,10 @@ jobs:
       - name: Make script executable
         run: chmod +x ./.github/workflows/iterate-publish-npm.sh
       - name: iterate and publish
-        run: ./.github/workflows/iterate-publish-npm.sh ${{ github.event.release.prerelease && 'true' || 'false' }}
+        # The dist-tag is derived from each package's version (see
+        # iterate-publish-npm.sh), so the GitHub Release prerelease flag is
+        # intentionally not passed.
+        run: ./.github/workflows/iterate-publish-npm.sh
         shell: bash
 
   notify-release:
