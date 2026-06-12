@@ -26,6 +26,7 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
       operation?.CallbackDetails?.Result ??
       operation?.ContextDetails?.Result ??
       operation?.ChainedInvokeDetails?.Result,
+    isReplay: false,
   };
 }
 
