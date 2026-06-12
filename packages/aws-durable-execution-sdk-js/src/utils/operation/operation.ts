@@ -5,7 +5,6 @@ import {
   AttemptEndInfo,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
-import { hashId } from "../step-id-utils/step-id-utils";
 
 /**
  * Converts an Operation to an OperationInfo.
@@ -14,18 +13,36 @@ import { hashId } from "../step-id-utils/step-id-utils";
  */
 export function toOperationInfo(operation?: Operation): OperationInfo {
   return {
-    Id: operation?.Id ?? "",
-    HashedId: hashId(operation?.Id ?? ""),
-    Name: operation?.Name,
-    Type: operation?.Type ?? "",
-    SubType: operation?.SubType,
-    ParentId: operation?.ParentId,
-    HashedParentId: operation?.ParentId
-      ? hashId(operation.ParentId)
-      : undefined,
-    StartTimestamp: operation?.StartTimestamp,
-    EndTimestamp: operation?.EndTimestamp,
+    id: operation?.Id ?? "",
+    name: operation?.Name,
+    type: operation?.Type ?? "",
+    subType: operation?.SubType,
+    parentId: operation?.ParentId,
+    status: operation?.Status,
+    startTimestamp: operation?.StartTimestamp,
+    endTimestamp: operation?.EndTimestamp,
+    result:
+      operation?.StepDetails?.Result ??
+      operation?.CallbackDetails?.Result ??
+      operation?.ContextDetails?.Result ??
+      operation?.ChainedInvokeDetails?.Result,
+    isReplay: false,
   };
+}
+
+/**
+ * Converts a Record of Operations to a Record of OperationInfo.
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
+export function toOperationInfoMap(
+  operations: Record<string, Operation>,
+): Record<string, OperationInfo> {
+  const result: Record<string, OperationInfo> = {};
+  for (const [key, op] of Object.entries(operations)) {
+    result[key] = toOperationInfo(op);
+  }
+  return result;
 }
 
 /**
@@ -39,7 +56,7 @@ export function toAttemptInfo(
 ): AttemptInfo {
   return {
     ...toOperationInfo(operation),
-    Attempt: attempt ?? (operation?.StepDetails?.Attempt || 0),
+    attempt: attempt ?? (operation?.StepDetails?.Attempt || 0),
   };
 }
 
@@ -75,17 +92,12 @@ export function backfillOperationInfo<T extends OperationInfo>(
   info: T,
   defaults: Partial<OperationInfo>,
 ): T {
-  info.Id = defaults.Id ?? "";
-  info.HashedId = defaults.HashedId ?? hashId(info.Id);
-  if (!info.Type) info.Type = defaults.Type ?? "";
-  if (!info.SubType) info.SubType = defaults.SubType;
-  if (!info.Name) info.Name = defaults.Name;
-  if (!info.ParentId) info.ParentId = defaults.ParentId;
-  if (!info.HashedParentId)
-    info.HashedParentId =
-      defaults.HashedParentId ??
-      (info.ParentId ? hashId(info.ParentId) : undefined);
-  if (!info.StartTimestamp) info.StartTimestamp = defaults.StartTimestamp;
-  if (!info.EndTimestamp) info.EndTimestamp = defaults.EndTimestamp;
+  info.id = defaults.id ?? "";
+  if (!info.type) info.type = defaults.type ?? "";
+  if (!info.subType) info.subType = defaults.subType;
+  if (!info.name) info.name = defaults.name;
+  if (!info.parentId) info.parentId = defaults.parentId;
+  if (!info.startTimestamp) info.startTimestamp = defaults.startTimestamp;
+  if (!info.endTimestamp) info.endTimestamp = defaults.endTimestamp;
   return info;
 }
