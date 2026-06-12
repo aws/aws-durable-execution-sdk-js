@@ -55,15 +55,15 @@ export function workflowInsight(
   let operationRecords: OperationRecord[] = [];
 
   return {
-    onInvocationStart(info: InvocationInfo): void {
+    async onInvocationStart(info: InvocationInfo): Promise<void> {
       operationRecords = buildOperationRecords(info.operations);
     },
 
-    onInvocationEnd(info: InvocationEndInfo): void {
+    async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
       operationRecords = buildOperationRecords(info.operations);
     },
 
-    onOperationChange(info: OperationChangeInfo): void {
+    async onOperationChange(info: OperationChangeInfo): Promise<void> {
       operationRecords = buildOperationRecords(info.operations);
     },
   };
