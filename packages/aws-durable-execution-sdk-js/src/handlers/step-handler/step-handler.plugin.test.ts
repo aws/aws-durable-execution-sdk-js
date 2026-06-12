@@ -93,19 +93,19 @@ describe("Step Handler - plugin hooks", () => {
 
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledWith(
-      expect.objectContaining({ Attempt: 1 }),
+      expect.objectContaining({ attempt: 1 }),
     );
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
-      expect.objectContaining({ Attempt: 1 }),
+      expect.objectContaining({ attempt: 1 }),
       expect.any(Function),
     );
 
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
-        Attempt: 1,
+        attempt: 1,
         outcome: AttemptEndInfoOutcome.SUCCEEDED,
       }),
     );
@@ -135,13 +135,13 @@ describe("Step Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
-      expect.objectContaining({ Attempt: 1 }),
+      expect.objectContaining({ attempt: 1 }),
       expect.any(Function),
     );
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
-        Attempt: 1,
+        attempt: 1,
         outcome: AttemptEndInfoOutcome.FAILED,
         error: stepError,
       }),
@@ -186,13 +186,13 @@ describe("Step Handler - plugin hooks", () => {
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ Attempt: 1 }),
+      expect.objectContaining({ attempt: 1 }),
       expect.any(Function),
     );
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ Attempt: 1 }),
+      expect.objectContaining({ attempt: 1 }),
       expect.any(Function),
     );
 

@@ -54,7 +54,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
   createStepId: () => string,
   logger: Logger,
   parentId?: string,
-
   getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
 ) => {
@@ -94,11 +93,11 @@ export const createStepHandler = <Logger extends DurableLogger>(
       );
 
       const opInfo = {
-        Id: stepId,
-        Name: name,
-        Type: OperationType.STEP,
-        SubType: OperationSubType.STEP,
-        ParentId: parentId,
+        id: stepId,
+        name: name,
+        type: OperationType.STEP,
+        subType: OperationSubType.STEP,
+        parentId: parentId,
       };
 
       // Check if already completed
