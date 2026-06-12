@@ -78,11 +78,11 @@ export const createInvokeHandler = (
     const stepId = createStepId();
 
     const opInfo = {
-      Id: stepId,
-      Name: name,
-      Type: OperationType.CHAINED_INVOKE,
-      SubType: OperationSubType.CHAINED_INVOKE,
-      ParentId: parentId,
+      id: stepId,
+      name: name,
+      type: OperationType.CHAINED_INVOKE,
+      subType: OperationSubType.CHAINED_INVOKE,
+      parentId: parentId,
     };
 
     // Phase 1: Start invoke operation
@@ -129,7 +129,7 @@ export const createInvokeHandler = (
           stepData.StepDetails?.Attempt,
         );
         backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
+        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
 
         isCompleted = true;
         return;
@@ -163,8 +163,8 @@ export const createInvokeHandler = (
           stepData.StepDetails?.Attempt,
         );
         backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.(attemptInfo);
-        plugin.onOperationFirstEnd?.(attemptInfo);
+        plugin.onOperationStart?.({ ...attemptInfo, isReplay: true });
+        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
 
         isCompleted = true;
         return;
@@ -198,11 +198,11 @@ export const createInvokeHandler = (
         const stepData = context.getStepData(stepId);
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
+        plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
       } else {
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.(operationInfo);
+        plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -278,7 +278,7 @@ export const createInvokeHandler = (
         );
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstEnd?.(operationInfo);
+        plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
@@ -299,8 +299,9 @@ export const createInvokeHandler = (
       const invokeError = stepData?.ChainedInvokeDetails?.Error;
       const operationInfo = toOperationInfo(stepData);
       backfillOperationInfo(operationInfo, opInfo);
-      plugin.onOperationFirstEnd?.({
+      plugin.onOperationEnd?.({
         ...operationInfo,
+        isReplay: false,
         error: invokeError?.ErrorMessage
           ? new Error(invokeError.ErrorMessage)
           : new Error("Invoke failed"),
