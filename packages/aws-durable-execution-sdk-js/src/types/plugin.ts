@@ -37,13 +37,6 @@ export interface OperationInfo {
 }
 
 /**
- * Information provided when a durable operation ends.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
- */
-export interface OperationEndInfo extends OperationInfo {}
-
-/**
  * Information about an operation attempt.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
@@ -136,7 +129,7 @@ export interface DurableInstrumentationPlugin {
   onInvocationEnd?(info: InvocationEndInfo): void;
   onOperationStart?(info: OperationInfo): void;
   wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
-  onOperationEnd?(info: OperationEndInfo): void;
+  onOperationEnd?(info: OperationInfo): void;
   onOperationAttemptStart?(info: AttemptInfo): void;
   wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
   onOperationAttemptEnd?(info: AttemptEndInfo): void;

@@ -5,7 +5,6 @@ import {
   InvocationEndInfo,
   InvocationInfo,
   OperationChangeInfo,
-  OperationEndInfo,
   OperationInfo,
   CustomerFnResult,
   CustomerFn,
@@ -16,7 +15,6 @@ type CallbackResult = unknown;
 type CallbackFn = () => CallbackResult;
 type PluginInfo =
   | OperationInfo
-  | OperationEndInfo
   | InvocationInfo
   | InvocationEndInfo
   | AttemptEndInfo
@@ -150,7 +148,7 @@ export function createPluginRunner(
       info: OperationInfo,
       fn: CustomerFn,
     ): CustomerFnResult => runAsCallback("wrapChildContextFn", info, fn),
-    onOperationEnd: (info: OperationEndInfo) => run("onOperationEnd", info),
+    onOperationEnd: (info: OperationInfo) => run("onOperationEnd", info),
     onOperationAttemptStart: (info: AttemptInfo) =>
       run("onOperationAttemptStart", info),
     wrapOperationAttemptFn: (

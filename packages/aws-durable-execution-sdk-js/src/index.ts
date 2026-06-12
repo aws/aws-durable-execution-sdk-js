@@ -88,7 +88,6 @@ export {
   PluginInvocationStatus,
   OperationChangeInfo,
   OperationInfo,
-  OperationEndInfo,
   AttemptInfo,
   AttemptEndInfo,
   AttemptEndInfoOutcome,
