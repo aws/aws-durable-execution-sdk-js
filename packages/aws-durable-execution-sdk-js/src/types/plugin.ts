@@ -22,15 +22,15 @@ export enum PluginInvocationStatus {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationInfo {
-  Id: string;
-  Name?: string;
-  Type: string;
-  SubType?: string;
-  ParentId?: string;
-  Status?: string;
-  StartTimestamp?: Date;
-  EndTimestamp?: Date;
-  Result?: string;
+  id: string;
+  name?: string;
+  type: string;
+  subType?: string;
+  parentId?: string;
+  status?: string;
+  startTimestamp?: Date;
+  endTimestamp?: Date;
+  result?: string;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface OperationEndInfo extends OperationInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface AttemptInfo extends OperationInfo {
-  Attempt: number;
+  attempt: number;
 }
 
 /**

@@ -29,14 +29,14 @@ describe("createPluginRunner", () => {
   };
 
   const operationInfo: OperationInfo = {
-    Id: "op-1",
-    Name: "my-step",
-    Type: "STEP",
+    id: "op-1",
+    name: "my-step",
+    type: "STEP",
   };
 
   const attemptInfo: AttemptInfo = {
     ...operationInfo,
-    Attempt: 1,
+    attempt: 1,
   };
 
   const attemptEndInfo: AttemptEndInfo = {

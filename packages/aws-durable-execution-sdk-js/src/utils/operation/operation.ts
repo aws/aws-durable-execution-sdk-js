@@ -13,15 +13,15 @@ import {
  */
 export function toOperationInfo(operation?: Operation): OperationInfo {
   return {
-    Id: operation?.Id ?? "",
-    Name: operation?.Name,
-    Type: operation?.Type ?? "",
-    SubType: operation?.SubType,
-    ParentId: operation?.ParentId,
-    Status: operation?.Status,
-    StartTimestamp: operation?.StartTimestamp,
-    EndTimestamp: operation?.EndTimestamp,
-    Result:
+    id: operation?.Id ?? "",
+    name: operation?.Name,
+    type: operation?.Type ?? "",
+    subType: operation?.SubType,
+    parentId: operation?.ParentId,
+    status: operation?.Status,
+    startTimestamp: operation?.StartTimestamp,
+    endTimestamp: operation?.EndTimestamp,
+    result:
       operation?.StepDetails?.Result ??
       operation?.CallbackDetails?.Result ??
       operation?.ContextDetails?.Result ??
@@ -55,7 +55,7 @@ export function toAttemptInfo(
 ): AttemptInfo {
   return {
     ...toOperationInfo(operation),
-    Attempt: attempt ?? (operation?.StepDetails?.Attempt || 0),
+    attempt: attempt ?? (operation?.StepDetails?.Attempt || 0),
   };
 }
 
@@ -91,12 +91,12 @@ export function backfillOperationInfo<T extends OperationInfo>(
   info: T,
   defaults: Partial<OperationInfo>,
 ): T {
-  info.Id = defaults.Id ?? "";
-  if (!info.Type) info.Type = defaults.Type ?? "";
-  if (!info.SubType) info.SubType = defaults.SubType;
-  if (!info.Name) info.Name = defaults.Name;
-  if (!info.ParentId) info.ParentId = defaults.ParentId;
-  if (!info.StartTimestamp) info.StartTimestamp = defaults.StartTimestamp;
-  if (!info.EndTimestamp) info.EndTimestamp = defaults.EndTimestamp;
+  info.id = defaults.id ?? "";
+  if (!info.type) info.type = defaults.type ?? "";
+  if (!info.subType) info.subType = defaults.subType;
+  if (!info.name) info.name = defaults.name;
+  if (!info.parentId) info.parentId = defaults.parentId;
+  if (!info.startTimestamp) info.startTimestamp = defaults.startTimestamp;
+  if (!info.endTimestamp) info.endTimestamp = defaults.endTimestamp;
   return info;
 }
