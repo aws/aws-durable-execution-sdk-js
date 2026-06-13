@@ -114,27 +114,39 @@ export function createPluginRunner(
     return result;
   };
 
-  const run = <K extends keyof DurableInstrumentationPlugin>(
+  /**
+   * Invokes `method` on every plugin and awaits any promises they return, so
+   * the SDK can guarantee the hook has completed before proceeding past the
+   * corresponding lifecycle point (e.g. before running the next operation or
+   * returning the Lambda response). Plugin errors — synchronous or
+   * asynchronous — are swallowed so a misbehaving plugin never affects SDK
+   * execution. Hooks are invoked on all plugins concurrently and the runner
+   * waits for all of them to settle.
+   *
+   * Plugins that want fire-and-forget behaviour can start their work and
+   * return without awaiting it; see {@link DurableInstrumentationPlugin} for
+   * the caveats of doing so in Lambda.
+   */
+  const run = async <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
-  ): void =>
-    plugins.forEach((p) => {
-      try {
+  ): Promise<void> => {
+    await Promise.allSettled(
+      plugins.map(async (p) => {
         const result = (p[method] as PluginHookFn)?.(info as PluginInfo);
-        // Fire-and-forget — never block the SDK on plugin async work
         if (
           result != null &&
           typeof (result as Promise<unknown>).then === "function"
         ) {
-          (result as Promise<unknown>).catch(() => {});
+          await result;
         }
-      } catch {
-        // Sync errors also swallowed
-      }
-    });
+      }),
+    );
+  };
 
   return {
-    onInvocationStart: (info: InvocationInfo) => run("onInvocationStart", info),
+    onInvocationStart: (info: InvocationInfo): Promise<void> =>
+      run("onInvocationStart", info),
     wrapInvocation: (
       info: InvocationInfo,
       fn: () => Promise<DurableExecutionInvocationOutput>,
@@ -144,22 +156,25 @@ export function createPluginRunner(
         info,
         fn,
       ) as Promise<DurableExecutionInvocationOutput>,
-    onInvocationEnd: (info: InvocationEndInfo) => run("onInvocationEnd", info),
-    onOperationStart: (info: OperationInfo) => run("onOperationStart", info),
+    onInvocationEnd: (info: InvocationEndInfo): Promise<void> =>
+      run("onInvocationEnd", info),
+    onOperationStart: (info: OperationInfo): Promise<void> =>
+      run("onOperationStart", info),
     wrapChildContextFn: (
       info: OperationInfo,
       fn: CustomerFn,
     ): CustomerFnResult => runAsCallback("wrapChildContextFn", info, fn),
-    onOperationEnd: (info: OperationEndInfo) => run("onOperationEnd", info),
-    onOperationAttemptStart: (info: AttemptInfo) =>
+    onOperationEnd: (info: OperationEndInfo): Promise<void> =>
+      run("onOperationEnd", info),
+    onOperationAttemptStart: (info: AttemptInfo): Promise<void> =>
       run("onOperationAttemptStart", info),
     wrapOperationAttemptFn: (
       info: AttemptInfo,
       fn: CustomerFn,
     ): CustomerFnResult => runAsCallback("wrapOperationAttemptFn", info, fn),
-    onOperationAttemptEnd: (info: AttemptEndInfo) =>
+    onOperationAttemptEnd: (info: AttemptEndInfo): Promise<void> =>
       run("onOperationAttemptEnd", info),
-    onOperationChange: (info: OperationChangeInfo) =>
+    onOperationChange: (info: OperationChangeInfo): Promise<void> =>
       run("onOperationChange", info),
     enrichLogContext: () =>
       plugins.reduce(
