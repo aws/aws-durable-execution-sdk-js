@@ -147,8 +147,8 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
 
     expect(executionOrder).toEqual([
       "promise-created",
-      "check-executed",
       "after-handler-call",
+      "check-executed",
       "before-await",
       "after-await",
     ]);
