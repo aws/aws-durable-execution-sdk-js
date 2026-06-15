@@ -28,6 +28,7 @@ describe("Callback Handler - plugin hooks", () => {
       _stepData: {},
       terminationManager: { terminate: jest.fn() },
       durableExecutionArn: "test-arn",
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
     mockCheckpoint = {
       checkpoint: jest.fn().mockResolvedValue(undefined),
