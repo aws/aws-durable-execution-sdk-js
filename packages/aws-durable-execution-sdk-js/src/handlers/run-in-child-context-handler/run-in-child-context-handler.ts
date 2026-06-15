@@ -417,7 +417,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       await plugin.onOperationEnd?.({
         ...opInfo,
         status: OperationStatus.SUCCEEDED,
-        isReplay: false,
+        isReplay: true,
       });
 
       log("✅", "Child context completed successfully:", {
