@@ -83,6 +83,7 @@ describe("CheckpointManager", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
     } satisfies ExecutionContext;
@@ -753,6 +754,7 @@ describe("deleteCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData1, stepId);
       }),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
     } satisfies ExecutionContext;
@@ -767,6 +769,7 @@ describe("deleteCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData2, stepId);
       }),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
     } satisfies ExecutionContext;
@@ -1033,6 +1036,7 @@ describe("createCheckpointHandler", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(stepData, stepId);
       }),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
     } satisfies ExecutionContext;
