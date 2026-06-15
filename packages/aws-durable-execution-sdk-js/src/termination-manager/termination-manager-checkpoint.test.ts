@@ -57,6 +57,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       tenantId: "",
       pendingCompletions: new Set(),
       getStepData: jest.fn(),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } satisfies ExecutionContext;
 
     mockLogger = createDefaultLogger(mockContext);

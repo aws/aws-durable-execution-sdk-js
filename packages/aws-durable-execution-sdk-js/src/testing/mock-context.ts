@@ -30,6 +30,7 @@ export const createMockExecutionContext = (
     getStepData: jest.fn((stepId: string) => {
       return getStepDataUtil(defaultMockContext._stepData, stepId);
     }),
+    isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     ...overrides,
   } as unknown as jest.Mocked<ExecutionContext>;
 

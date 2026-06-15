@@ -92,6 +92,7 @@ describe("Run In Child Context Integration Tests", () => {
       getStepData: jest.fn((stepId: string) => {
         return getStepData(mockExecutionContext._stepData, stepId);
       }),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
     } satisfies ExecutionContext;

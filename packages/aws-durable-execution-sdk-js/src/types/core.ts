@@ -42,6 +42,20 @@ export interface DurableExecutionInvocationInput {
   CheckpointToken: string;
 
   /**
+   * Operation IDs (hashed) that were updated between the previous invocation and this one.
+   *
+   * These are operations whose status changed externally (e.g., a wait timer expired,
+   * a callback was received, or a chained invoke completed) since the last checkpoint.
+   * This allows the SDK to distinguish between:
+   * - First-time observation of a completion (isReplay: false for onOperationEnd)
+   * - Replayed observation of a previously seen completion (isReplay: true for onOperationEnd)
+   *
+   * When undefined (e.g., first invocation), all pre-existing completed operations are
+   * treated as replay.
+   */
+  UpdatedOperationIds?: string[];
+
+  /**
    * Execution state including operation history and pagination information.
    *
    * Contains the full context needed to resume execution including:
@@ -327,4 +341,14 @@ export interface ExecutionContext {
   tenantId: string | undefined;
   pendingCompletions: Set<string>; // Track stepIds with pending SUCCEED/FAIL
   getStepData(stepId: string): Operation | undefined;
+
+  /**
+   * Check if an operation (by hashed ID) was updated between the previous invocation
+   * and this one. This indicates the operation's status changed externally (e.g., a wait
+   * expired, callback received, or chained invoke completed) since the last checkpoint.
+   *
+   * Returns true if the operation ID is in the UpdatedOperationIds from the invocation input.
+   * Returns false if UpdatedOperationIds is not present (first invocation) or the ID is not listed.
+   */
+  isOperationUpdatedBetweenInvocation(hashedOperationId: string): boolean;
 }
