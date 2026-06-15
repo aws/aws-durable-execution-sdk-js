@@ -318,9 +318,6 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Type: OperationType.CONTEXT,
       Name: name,
     });
-    const stepData = context.getStepData(entityId);
-    const operationInfo = toOperationInfo(stepData);
-    backfillOperationInfo(operationInfo, opInfo);
     await plugin.onOperationStart?.({
       ...opInfo,
       status: OperationStatus.STARTED,
@@ -414,8 +411,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
         Name: name,
       });
+      const currentStepData = context.getStepData(entityId);
+      const onOperationEndInfo = toOperationInfo(currentStepData);
+      backfillOperationInfo(onOperationEndInfo, opInfo);
       await plugin.onOperationEnd?.({
-        ...opInfo,
+        ...onOperationEndInfo,
         status: OperationStatus.SUCCEEDED,
         isReplay: false,
       });
