@@ -112,10 +112,6 @@ export const createCallback = (
         backfillOperationInfo(operationInfo, opInfo);
         const isUpdatedBetweenInvocation =
           context.isOperationUpdatedBetweenInvocation(opInfo.id);
-        await plugin.onOperationStart?.({
-          ...operationInfo,
-          isReplay: !isUpdatedBetweenInvocation,
-        });
         await plugin.onOperationEnd?.({
           ...operationInfo,
           isReplay: !isUpdatedBetweenInvocation,
@@ -151,10 +147,6 @@ export const createCallback = (
         backfillOperationInfo(operationInfo, opInfo);
         const isUpdatedBetweenInvocation =
           context.isOperationUpdatedBetweenInvocation(opInfo.id);
-        await plugin.onOperationStart?.({
-          ...operationInfo,
-          isReplay: !isUpdatedBetweenInvocation,
-        });
         await plugin.onOperationEnd?.({
           ...operationInfo,
           isReplay: !isUpdatedBetweenInvocation,

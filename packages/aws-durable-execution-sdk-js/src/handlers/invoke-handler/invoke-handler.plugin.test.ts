@@ -69,6 +69,9 @@ describe("InvokeHandler - plugin hooks", () => {
     await handler("test-function", { test: "data" });
 
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: true }),
+    );
   });
 
   it("should call onOperationStart and onOperationEnd on replay failed", async () => {
@@ -93,6 +96,9 @@ describe("InvokeHandler - plugin hooks", () => {
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(0);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: true }),
+    );
   });
 
   it("should call plugin hooks on phase 2 succeeded", async () => {
@@ -119,8 +125,14 @@ describe("InvokeHandler - plugin hooks", () => {
 
     // Phase 1: onOperationStart (new invoke started)
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
     // Phase 2: onOperationEnd (invoke completed)
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
   });
 
   it("should call plugin hooks with error on phase 2 failed", async () => {
@@ -148,9 +160,12 @@ describe("InvokeHandler - plugin hooks", () => {
     await expect(handler("test-function", { test: "data" })).rejects.toThrow();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.any(Error) }),
+      expect.objectContaining({ isReplay: false, error: expect.any(Error) }),
     );
   });
 
