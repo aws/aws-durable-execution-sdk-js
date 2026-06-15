@@ -92,7 +92,7 @@ export function backfillOperationInfo<T extends OperationInfo>(
   info: T,
   defaults: Partial<OperationInfo>,
 ): T {
-  info.id = defaults.id ?? "";
+  if (!info.id) info.id = defaults.id ?? "";
   if (!info.type) info.type = defaults.type ?? "";
   if (!info.subType) info.subType = defaults.subType;
   if (!info.name) info.name = defaults.name;
