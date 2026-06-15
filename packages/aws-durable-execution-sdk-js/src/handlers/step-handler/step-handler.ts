@@ -46,6 +46,7 @@ import {
   backfillOperationInfo,
   toOperationInfo,
 } from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -93,11 +94,11 @@ export const createStepHandler = <Logger extends DurableLogger>(
       );
 
       const opInfo = {
-        id: stepId,
+        id: hashId(stepId),
         name: name,
         type: OperationType.STEP,
         subType: OperationSubType.STEP,
-        parentId: parentId,
+        parentId: parentId ? hashId(parentId) : undefined,
       };
 
       // Check if already completed
@@ -273,24 +274,21 @@ export const createStepHandler = <Logger extends DurableLogger>(
               isReplay: false,
             });
           } else {
-            checkpoint
-              .checkpoint(stepId, {
-                Id: stepId,
-                ParentId: parentId,
-                Action: OperationAction.START,
-                SubType: OperationSubType.STEP,
-                Type: OperationType.STEP,
-                Name: name,
-              })
-              .then(async () => {
-                stepData = context.getStepData(stepId);
-                const operationInfo = toOperationInfo(stepData);
-                backfillOperationInfo(operationInfo, opInfo);
-                await plugin.onOperationStart?.({
-                  ...operationInfo,
-                  isReplay: false,
-                });
-              });
+            checkpoint.checkpoint(stepId, {
+              Id: stepId,
+              ParentId: parentId,
+              Action: OperationAction.START,
+              SubType: OperationSubType.STEP,
+              Type: OperationType.STEP,
+              Name: name,
+            });
+            const operationInfo = toOperationInfo(stepData);
+            backfillOperationInfo(operationInfo, opInfo);
+            await plugin.onOperationStart?.({
+              ...opInfo,
+              status: OperationStatus.STARTED,
+              isReplay: false,
+            });
           }
         } else {
           const operationInfo = toOperationInfo(stepData);

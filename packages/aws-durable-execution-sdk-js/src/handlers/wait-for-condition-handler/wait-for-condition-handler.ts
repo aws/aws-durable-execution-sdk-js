@@ -39,6 +39,7 @@ import {
   backfillOperationInfo,
   toOperationInfo,
 } from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -84,11 +85,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       let stepData = context.getStepData(stepId);
 
       const opInfo = {
-        id: stepId,
+        id: hashId(stepId),
         name: name,
         type: OperationType.STEP,
         subType: OperationSubType.WAIT_FOR_CONDITION,
-        parentId: parentId,
+        parentId: parentId ? hashId(parentId) : undefined,
       };
 
       // Check if already completed
@@ -202,28 +203,25 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
         // Checkpoint START if not already started
         if (stepData?.Status !== OperationStatus.STARTED) {
-          checkpoint
-            .checkpoint(stepId, {
-              Id: stepId,
-              ParentId: parentId,
-              Action: OperationAction.START,
-              SubType: OperationSubType.WAIT_FOR_CONDITION,
-              Type: OperationType.STEP,
-              Name: name,
-            })
-            .then(() => {
-              stepData = context.getStepData(stepId);
-              const operationInfo = toOperationInfo(stepData);
-              backfillOperationInfo(operationInfo, opInfo);
-              plugin.onOperationStart?.({
-                ...operationInfo,
-                isReplay: false,
-              });
-            });
+          checkpoint.checkpoint(stepId, {
+            Id: stepId,
+            ParentId: parentId,
+            Action: OperationAction.START,
+            SubType: OperationSubType.WAIT_FOR_CONDITION,
+            Type: OperationType.STEP,
+            Name: name,
+          });
+          const operationInfo = toOperationInfo(stepData);
+          backfillOperationInfo(operationInfo, opInfo);
+          await plugin.onOperationStart?.({
+            ...opInfo,
+            status: OperationStatus.STARTED,
+            isReplay: false,
+          });
         } else {
           const operationInfo = toOperationInfo(stepData);
           backfillOperationInfo(operationInfo, opInfo);
-          plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
+          await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
         }
 
         try {
@@ -303,11 +301,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               },
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
-            plugin.onOperationAttemptEnd?.({
+            await plugin.onOperationAttemptEnd?.({
               ...attemptEndInfo,
               startTimestamp: attemptEndInfo.endTimestamp,
             });
-            plugin.onOperationEnd?.({
+            await plugin.onOperationEnd?.({
               ...attemptEndInfo,
               isReplay: false,
             });
@@ -341,7 +339,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.({
+          await plugin.onOperationAttemptEnd?.({
             ...attemptEndInfo,
             startTimestamp: attemptEndInfo.endTimestamp,
           });
@@ -388,11 +386,11 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
-          plugin.onOperationAttemptEnd?.({
+          await plugin.onOperationAttemptEnd?.({
             ...attemptEndInfo,
             startTimestamp: attemptEndInfo.endTimestamp,
           });
-          plugin.onOperationEnd?.({
+          await plugin.onOperationEnd?.({
             ...attemptEndInfo,
             isReplay: false,
             error: error instanceof Error ? error : new Error(String(error)),
