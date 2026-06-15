@@ -302,35 +302,34 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   const errorMapper = options?.errorMapper;
   const isVirtual = options?.virtualContext === true;
   const opInfo = {
-    Id: entityId,
-    HashedId: hashId(entityId),
-    Name: name,
-    Type: OperationType.CONTEXT,
-    SubType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
-    ParentId: parentId,
-    HashedParentId: parentId ? hashId(parentId) : undefined,
+    id: hashId(entityId),
+    name: name,
+    type: OperationType.CONTEXT,
+    subType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+    parentId: parentId ? hashId(parentId) : undefined,
   };
 
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
     const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-    checkpoint
-      .checkpoint(entityId, {
-        Id: entityId,
-        ParentId: parentId,
-        Action: OperationAction.START,
-        SubType: subType,
-        Type: OperationType.CONTEXT,
-        Name: name,
-      })
-      .then(() => {
-        const stepData = context.getStepData(entityId);
-        const operationInfo = toOperationInfo(stepData);
-        backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationFirstStart?.(operationInfo);
-      });
+    checkpoint.checkpoint(entityId, {
+      Id: entityId,
+      ParentId: parentId,
+      Action: OperationAction.START,
+      SubType: subType,
+      Type: OperationType.CONTEXT,
+      Name: name,
+    });
+    const stepData = context.getStepData(entityId);
+    const operationInfo = toOperationInfo(stepData);
+    backfillOperationInfo(operationInfo, opInfo);
+    await plugin.onOperationStart?.({
+      ...opInfo,
+      status: OperationStatus.STARTED,
+      isReplay: false,
+    });
   } else {
-    plugin.onOperationStart?.(opInfo);
+    await plugin.onOperationStart?.({ ...opInfo, isReplay: true });
   }
 
   const childReplayMode = determineChildReplayMode(context, entityId);
@@ -353,11 +352,15 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   try {
     // Execute the child context function with context tracking
     const childContextFn = () => fn(durableChildContext);
+    const wrapInfo = {
+      ...opInfo,
+      isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
+    };
     const result = (await runWithContext(
       entityId,
       parentId,
       plugin.wrapChildContextFn
-        ? () => plugin.wrapChildContextFn!(opInfo, childContextFn)
+        ? () => plugin.wrapChildContextFn!(wrapInfo, childContextFn)
         : childContextFn,
       undefined,
       childReplayMode,
@@ -403,23 +406,20 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       checkpoint.markAncestorFinished(entityId);
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint
-        .checkpoint(entityId, {
-          Id: entityId,
-          ParentId: parentId,
-          Action: OperationAction.SUCCEED,
-          SubType: subType,
-          Type: OperationType.CONTEXT,
-          Payload: payloadToCheckpoint,
-          ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
-          Name: name,
-        })
-        .then(() => {
-          const currentStepData = context.getStepData(entityId);
-          const onOperationFirstEndInfo = toOperationInfo(currentStepData);
-          backfillOperationInfo(onOperationFirstEndInfo, opInfo);
-          plugin.onOperationFirstEnd?.(onOperationFirstEndInfo);
-        });
+      await checkpoint.checkpoint(entityId, {
+        Id: entityId,
+        ParentId: parentId,
+        Action: OperationAction.SUCCEED,
+        SubType: subType,
+        Type: OperationType.CONTEXT,
+        Payload: payloadToCheckpoint,
+        ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
+        Name: name,
+      });
+      const currentStepData = context.getStepData(entityId);
+      const onOperationEndInfo = toOperationInfo(currentStepData);
+      backfillOperationInfo(onOperationEndInfo, opInfo);
+      await plugin.onOperationEnd?.({ ...onOperationEndInfo, isReplay: false });
 
       log("✅", "Child context completed successfully:", {
         entityId,
@@ -430,7 +430,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
       });
-      plugin.onOperationFirstEnd?.(opInfo);
+      await plugin.onOperationEnd?.({ ...opInfo, isReplay: false });
     }
 
     return result;
@@ -455,28 +455,27 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       checkpoint.markAncestorFinished(entityId);
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      checkpoint
-        .checkpoint(entityId, {
-          Id: entityId,
-          ParentId: parentId,
-          Action: OperationAction.FAIL,
-          SubType: subType,
-          Type: OperationType.CONTEXT,
-          Error: createErrorObjectFromError(error),
-          Name: name,
-        })
-        .then(() => {
-          const currentStepData = context.getStepData(entityId);
-          const onOperationFirstEndInfo = toOperationInfo(currentStepData);
-          backfillOperationInfo(onOperationFirstEndInfo, opInfo);
-          plugin.onOperationFirstEnd?.({
-            ...onOperationFirstEndInfo,
-            error: reconstructedError,
-          });
-        });
+      await checkpoint.checkpoint(entityId, {
+        Id: entityId,
+        ParentId: parentId,
+        Action: OperationAction.FAIL,
+        SubType: subType,
+        Type: OperationType.CONTEXT,
+        Error: createErrorObjectFromError(error),
+        Name: name,
+      });
+      const currentStepData = context.getStepData(entityId);
+      const onOperationEndInfo = toOperationInfo(currentStepData);
+      backfillOperationInfo(onOperationEndInfo, opInfo);
+      await plugin.onOperationEnd?.({
+        ...onOperationEndInfo,
+        isReplay: false,
+        error: reconstructedError,
+      });
     } else {
-      plugin.onOperationFirstEnd?.({
+      await plugin.onOperationEnd?.({
         ...opInfo,
+        isReplay: false,
         error: reconstructedError,
       });
     }
