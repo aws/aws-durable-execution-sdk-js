@@ -480,6 +480,7 @@ export class DurableContextImpl<
         this.checkAndUpdateReplayMode.bind(this),
         this._parentId,
         () => this._defaultCallbackDeserializer,
+        this.durableExecution.plugin,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });
