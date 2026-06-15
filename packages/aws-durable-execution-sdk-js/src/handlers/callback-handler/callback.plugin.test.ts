@@ -45,7 +45,7 @@ describe("Callback Handler - plugin hooks", () => {
     mockSafeDeserialize.mockResolvedValue("deserialized-result");
   });
 
-  it("should call all plugin hooks on replay succeeded", async () => {
+  it("should call onOperationEnd on replay succeeded", async () => {
     const hashedStepId = hashId("test-callback-id");
     (mockContext as any)._stepData[hashedStepId] = {
       Id: hashedStepId,
@@ -78,7 +78,7 @@ describe("Callback Handler - plugin hooks", () => {
     );
   });
 
-  it("should call all plugin hooks on replay failed", async () => {
+  it("should call onOperationEnd on replay failed", async () => {
     const hashedStepId = hashId("test-callback-id");
     (mockContext as any)._stepData[hashedStepId] = {
       Id: hashedStepId,
@@ -110,7 +110,7 @@ describe("Callback Handler - plugin hooks", () => {
     );
   });
 
-  it("should call all plugin hooks on replay timed out", async () => {
+  it("should call onOperationEnd on replay timed out", async () => {
     const hashedStepId = hashId("test-callback-id");
     (mockContext as any)._stepData[hashedStepId] = {
       Id: hashedStepId,
@@ -142,7 +142,7 @@ describe("Callback Handler - plugin hooks", () => {
     );
   });
 
-  it("should call plugin hooks for new callback (phase 1 start)", async () => {
+  it("should call onOperationStart for new callback (phase 1 start)", async () => {
     (mockContext.getStepData as jest.Mock).mockReturnValueOnce(null);
 
     (mockCheckpoint.checkpoint as jest.Mock).mockImplementation(
