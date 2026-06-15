@@ -38,6 +38,7 @@ describe("InvokeHandler - plugin hooks", () => {
       getStepData: jest.fn().mockReturnValue(undefined),
       terminationManager: { terminate: jest.fn() },
       durableExecutionArn: "test-arn",
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
     mockPlugin = {
       onOperationStart: jest.fn(),
