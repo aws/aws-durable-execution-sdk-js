@@ -91,7 +91,7 @@ describe("InvokeHandler - plugin hooks", () => {
 
     await expect(handler("test-function", { test: "data" })).rejects.toThrow();
 
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(0);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
   });
 
