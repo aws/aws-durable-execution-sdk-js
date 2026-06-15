@@ -19,6 +19,7 @@ import {
   backfillOperationInfo,
   toOperationInfo,
 } from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -42,6 +43,14 @@ export const createWaitHandler = (
     const actualDuration = isNameFirst ? duration! : nameOrDuration;
     const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();
+
+    const opInfo = {
+      id: hashId(stepId),
+      name: actualName,
+      type: OperationType.WAIT,
+      subType: OperationSubType.WAIT,
+      parentId: parentId ? hashId(parentId) : undefined,
+    };
 
     // Phase 1: Start wait operation
     let isCompleted = false;
@@ -94,6 +103,19 @@ export const createWaitHandler = (
           },
         );
 
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationStart?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+
         isCompleted = true;
         const checkPointedOpInfo = toOperationInfo(stepData);
         plugin.onOperationStart?.({ ...checkPointedOpInfo, isReplay: true });
@@ -116,13 +138,13 @@ export const createWaitHandler = (
           },
         });
         stepData = context.getStepData(stepId);
-        operationInfo = toOperationInfo(stepData);
+        const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
       } else {
-        operationInfo = toOperationInfo(stepData);
+        const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Refresh stepData after checkpoint
@@ -183,8 +205,9 @@ export const createWaitHandler = (
           OperationLifecycleState.COMPLETED,
         );
 
-        const waitEndOpInfo = toOperationInfo(stepData);
-        plugin.onOperationEnd?.({ ...waitEndOpInfo, isReplay: false });
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
         return;
       }

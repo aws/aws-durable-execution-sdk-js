@@ -336,6 +336,7 @@ export class DurableContextImpl<
         this._parentId,
         this.checkAndUpdateReplayMode.bind(this),
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
       return invokeHandler<I, O>(
         ...([
@@ -480,6 +481,7 @@ export class DurableContextImpl<
         this.checkAndUpdateReplayMode.bind(this),
         this._parentId,
         () => this._defaultCallbackDeserializer,
+        this.durableExecution.plugin,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });
