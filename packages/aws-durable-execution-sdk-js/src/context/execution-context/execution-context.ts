@@ -79,6 +79,9 @@ export const initializeExecutionContext = async (
 
   log("📝", "Loaded step data:", stepData);
 
+  // Build the set of operation IDs that were updated between invocations
+  const updatedOperationIds = new Set<string>(event.UpdatedOperationIds || []);
+
   return {
     executionContext: {
       durableExecutionClient,
@@ -89,6 +92,9 @@ export const initializeExecutionContext = async (
       pendingCompletions: new Set<string>(),
       getStepData(stepId: string): Operation | undefined {
         return getStepDataUtil(stepData, stepId);
+      },
+      isOperationUpdatedBetweenInvocation(hashedOperationId: string): boolean {
+        return updatedOperationIds.has(hashedOperationId);
       },
       tenantId: context.tenantId,
       requestId: context.awsRequestId,

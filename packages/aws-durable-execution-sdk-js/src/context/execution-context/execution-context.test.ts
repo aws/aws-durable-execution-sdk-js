@@ -142,6 +142,7 @@ describe("initializeExecutionContext", () => {
         durableExecutionArn: mockDurableExecutionArn,
         pendingCompletions: expect.any(Set),
         getStepData: expect.any(Function),
+        isOperationUpdatedBetweenInvocation: expect.any(Function),
         tenantId: mockLambdaContext.tenantId,
         requestId: mockLambdaContext.awsRequestId,
       },

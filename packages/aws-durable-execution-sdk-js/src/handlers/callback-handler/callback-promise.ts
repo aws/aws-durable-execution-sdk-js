@@ -26,7 +26,7 @@ export const createCallbackPromise = <T>(
   serdes: Omit<Serdes<T>, "serialize">,
   checkAndUpdateReplayMode: () => void,
   plugin: DurableInstrumentationPlugin = {},
-  opInfo: Partial<OperationInfo>,
+  opInfo: Partial<OperationInfo> = {},
 ): DurablePromise<T> => {
   return new DurablePromise(async (): Promise<T> => {
     log("🔄", "Callback promise phase 2:", { stepId, stepName });
@@ -43,11 +43,9 @@ export const createCallbackPromise = <T>(
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
 
-      if (opInfo) {
-        const attemptInfo = toOperationInfo(stepData);
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: false });
-      }
+      const operationInfo = toOperationInfo(stepData);
+      backfillOperationInfo(operationInfo, opInfo);
+      await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
       const callbackData = stepData.CallbackDetails;
       if (!callbackData) {
@@ -89,10 +87,10 @@ export const createCallbackPromise = <T>(
         })()
       : new CallbackError("Callback failed");
 
-    const attemptInfo = toOperationInfo(stepData);
-    backfillOperationInfo(attemptInfo, opInfo);
-    plugin.onOperationEnd?.({
-      ...attemptInfo,
+    const operationInfo = toOperationInfo(stepData);
+    backfillOperationInfo(operationInfo, opInfo);
+    await plugin.onOperationEnd?.({
+      ...operationInfo,
       isReplay: false,
       error: callbackError,
     });

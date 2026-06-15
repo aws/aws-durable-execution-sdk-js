@@ -20,10 +20,10 @@ import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
-  toAttemptInfo,
-  toOperationInfo,
   backfillOperationInfo,
+  toOperationInfo,
 } from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -62,11 +62,11 @@ export const createCallback = (
         : createPassThroughSerdes<T>());
 
     const opInfo = {
-      id: stepId,
+      id: hashId(stepId),
       name: name,
       type: OperationType.CALLBACK,
       subType: OperationSubType.CALLBACK,
-      parentId: parentId,
+      parentId: parentId ? hashId(parentId) : undefined,
     };
 
     // Phase 1: Setup and checkpoint
@@ -108,13 +108,18 @@ export const createCallback = (
           },
         );
 
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.({ ...attemptInfo, isReplay: true });
-        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationStart?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
 
         isCompleted = true;
         return;
@@ -142,13 +147,18 @@ export const createCallback = (
           },
         );
 
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.({ ...attemptInfo, isReplay: true });
-        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationStart?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
 
         isCompleted = true;
         return;
@@ -177,11 +187,11 @@ export const createCallback = (
         stepData = context.getStepData(stepId);
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
       } else {
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Mark as IDLE_NOT_AWAITED

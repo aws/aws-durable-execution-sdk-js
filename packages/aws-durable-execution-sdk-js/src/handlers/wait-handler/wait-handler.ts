@@ -14,6 +14,12 @@ import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { DurablePromise } from "../../types/durable-promise";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createWaitHandler = (
   context: ExecutionContext,
@@ -21,6 +27,7 @@ export const createWaitHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
+  plugin: DurableInstrumentationPlugin = {},
 ): {
   (name: string, duration: Duration): DurablePromise<void>;
   (duration: Duration): DurablePromise<void>;
@@ -36,6 +43,14 @@ export const createWaitHandler = (
     const actualDuration = isNameFirst ? duration! : nameOrDuration;
     const actualSeconds = durationToSeconds(actualDuration);
     const stepId = createStepId();
+
+    const opInfo = {
+      id: hashId(stepId),
+      name: actualName,
+      type: OperationType.WAIT,
+      subType: OperationSubType.WAIT,
+      parentId: parentId ? hashId(parentId) : undefined,
+    };
 
     // Phase 1: Start wait operation
     let isCompleted = false;
@@ -81,6 +96,19 @@ export const createWaitHandler = (
           },
         );
 
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationStart?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+
         isCompleted = true;
         return;
       }
@@ -98,6 +126,14 @@ export const createWaitHandler = (
             WaitSeconds: actualSeconds,
           },
         });
+        stepData = context.getStepData(stepId);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
+      } else {
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Refresh stepData after checkpoint
@@ -155,6 +191,11 @@ export const createWaitHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
+
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
+
         return;
       }
 
