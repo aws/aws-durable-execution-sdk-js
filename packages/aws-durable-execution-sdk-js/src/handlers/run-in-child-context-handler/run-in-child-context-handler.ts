@@ -141,7 +141,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         // Mark this run-in-child-context as finished to prevent descendant operations
         checkpoint.markAncestorFinished(entityId);
 
-        const result = await handleCompletedChildContext(
+        return handleCompletedChildContext(
           context,
           parentContext,
           entityId,
@@ -152,8 +152,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           createChildContext,
           getDefaultSerdes,
         );
-
-        return result;
       }
 
       // Execute if not completed
