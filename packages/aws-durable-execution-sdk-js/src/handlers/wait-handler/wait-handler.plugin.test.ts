@@ -35,7 +35,7 @@ describe("Wait Handler - plugin hooks", () => {
     };
   });
 
-  it("should call onOperationStart and onOperationEnd on replay succeeded", async () => {
+  it("should call onOperationEnd on replay succeeded", async () => {
     const stepData = (mockContext as any)._stepData;
     stepData[hashId("test-step-id")] = {
       Id: "test-step-id",
@@ -56,8 +56,11 @@ describe("Wait Handler - plugin hooks", () => {
 
     await handler("test-wait", { seconds: 1 });
 
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(0);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: true }),
+    );
   });
 
   it("should call onOperationEnd on phase 2 succeeded", async () => {
@@ -84,7 +87,13 @@ describe("Wait Handler - plugin hooks", () => {
     await handler("test-wait", { seconds: 1 });
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
   });
 
   it("should not throw when plugin hooks are undefined", async () => {
