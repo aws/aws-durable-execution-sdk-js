@@ -536,6 +536,7 @@ export class DurableContextImpl<
         this.durableLogger,
         this._parentId,
         () => this._defaultSerdes,
+        this.durableExecution.plugin,
       );
 
       return typeof nameOrCheckFunc === "string" ||
