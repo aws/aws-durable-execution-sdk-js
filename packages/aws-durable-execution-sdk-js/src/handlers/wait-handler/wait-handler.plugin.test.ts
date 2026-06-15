@@ -20,6 +20,7 @@ describe("Wait Handler - plugin hooks", () => {
       _stepData: {},
       durableExecutionArn: "test-arn",
       terminationManager: { terminate: jest.fn() },
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
     mockCheckpoint = {
       checkpoint: jest.fn().mockResolvedValue(undefined),
