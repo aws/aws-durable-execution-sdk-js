@@ -181,7 +181,7 @@ describe("createPluginRunner", () => {
       const plugin: DurableInstrumentationPlugin = {
         onOperationStart: () =>
           new Promise<void>((resolve) => {
-            resolveHook = () => {
+            resolveHook = (): void => {
               hookCompleted = true;
               resolve();
             };
@@ -316,7 +316,7 @@ describe("createPluginRunner", () => {
       const plugin: DurableInstrumentationPlugin = {
         onInvocationEnd: () =>
           new Promise<void>((resolve) => {
-            resolveHook = () => {
+            resolveHook = (): void => {
               hookCompleted = true;
               resolve();
             };
