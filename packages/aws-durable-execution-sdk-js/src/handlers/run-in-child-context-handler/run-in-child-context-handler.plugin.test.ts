@@ -164,4 +164,142 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     const result = await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
     expect(result).toBe("result");
   });
+
+  describe("virtual context - isReplay flag", () => {
+    it("should call onOperationStart with isReplay true for virtual context", async () => {
+      const handler = createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        mockGetLogger,
+        mockCreateChildContext,
+        "parent-123",
+        undefined,
+        mockPlugin,
+      );
+
+      const childFn = jest.fn().mockResolvedValue("result");
+      await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
+        virtualContext: true,
+      });
+      await flushMicrotasks();
+
+      expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+      expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+        expect.objectContaining({ isReplay: true }),
+      );
+    });
+
+    it("should call onOperationEnd with isReplay true for virtual context on success", async () => {
+      const handler = createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        mockGetLogger,
+        mockCreateChildContext,
+        "parent-123",
+        undefined,
+        mockPlugin,
+      );
+
+      const childFn = jest.fn().mockResolvedValue("result");
+      await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
+        virtualContext: true,
+      });
+      await flushMicrotasks();
+
+      expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+      expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+        expect.objectContaining({ isReplay: true }),
+      );
+    });
+
+    it("should call onOperationEnd with isReplay true for virtual context on failure", async () => {
+      const handler = createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        mockGetLogger,
+        mockCreateChildContext,
+        "parent-123",
+        undefined,
+        mockPlugin,
+      );
+
+      const childFn = jest.fn().mockRejectedValue(new Error("child failed"));
+
+      await expect(
+        handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
+          virtualContext: true,
+        }),
+      ).rejects.toThrow("child failed");
+      await flushMicrotasks();
+
+      expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+      expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isReplay: true,
+          error: expect.any(Error),
+        }),
+      );
+    });
+
+    it("should call both onOperationStart and onOperationEnd with isReplay true for virtual context regardless of step data", async () => {
+      // Simulate step data already existing (e.g. a retry scenario)
+      mockExecutionContext._stepData[TEST_CONSTANTS.CHILD_CONTEXT_ID] = {
+        Status: "STARTED",
+      } as any;
+
+      const handler = createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        mockGetLogger,
+        mockCreateChildContext,
+        "parent-123",
+        undefined,
+        mockPlugin,
+      );
+
+      const childFn = jest.fn().mockResolvedValue("result");
+      await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn, {
+        virtualContext: true,
+      });
+      await flushMicrotasks();
+
+      expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+        expect.objectContaining({ isReplay: true }),
+      );
+      expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+        expect.objectContaining({ isReplay: true }),
+      );
+    });
+
+    it("should NOT call onOperationStart with isReplay true for non-virtual context on first execution", async () => {
+      const handler = createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        mockGetLogger,
+        mockCreateChildContext,
+        "parent-123",
+        undefined,
+        mockPlugin,
+      );
+
+      const childFn = jest.fn().mockResolvedValue("result");
+      await handler(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
+      await flushMicrotasks();
+
+      expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+      expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+        expect.objectContaining({ isReplay: false }),
+      );
+    });
+  });
 });

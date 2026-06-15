@@ -417,7 +417,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       await plugin.onOperationEnd?.({
         ...opInfo,
         status: OperationStatus.SUCCEEDED,
-        isReplay: true,
+        isReplay: false,
       });
 
       log("✅", "Child context completed successfully:", {
@@ -429,7 +429,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
       });
-      await plugin.onOperationEnd?.({ ...opInfo, isReplay: false });
+      await plugin.onOperationEnd?.({ ...opInfo, isReplay: true });
     }
 
     return result;
@@ -475,7 +475,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     } else {
       await plugin.onOperationEnd?.({
         ...opInfo,
-        isReplay: false,
+        isReplay: true,
         error: reconstructedError,
       });
     }
