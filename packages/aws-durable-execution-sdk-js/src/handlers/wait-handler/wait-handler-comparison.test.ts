@@ -17,6 +17,7 @@ describe("Wait Handler Tests", () => {
       durableExecutionArn: "test-arn",
       requestId: "test-request",
       tenantId: "test-tenant",
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
 
     checkpoint = {
