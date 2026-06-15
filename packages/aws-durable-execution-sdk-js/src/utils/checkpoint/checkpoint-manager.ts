@@ -412,13 +412,15 @@ export class CheckpointManager implements Checkpoint {
     }
 
     if (response.NewExecutionState?.Operations) {
-      this.updateStepDataFromCheckpointResponse(
+      await this.updateStepDataFromCheckpointResponse(
         response.NewExecutionState.Operations,
       );
     }
   }
 
-  private updateStepDataFromCheckpointResponse(operations: Operation[]): void {
+  private async updateStepDataFromCheckpointResponse(
+    operations: Operation[],
+  ): Promise<void> {
     log("🔄", "Updating stepData from checkpoint response:", {
       operationCount: operations.length,
       operationIds: operations.map((op) => op.Id).filter(Boolean),
@@ -450,7 +452,7 @@ export class CheckpointManager implements Checkpoint {
       Object.keys(updatedOperations).length > 0 &&
       this.plugin.onOperationChange
     ) {
-      this.plugin.onOperationChange({
+      await this.plugin.onOperationChange({
         requestId: this.requestId,
         executionArn: this.durableExecutionArn,
         updatedOperations: toOperationInfoMap(updatedOperations),

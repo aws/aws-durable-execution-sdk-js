@@ -305,7 +305,7 @@ describe("Step Handler", () => {
   //      StepInterruptedError. StepInterruptedError is an internal sentinel used as the
   //      input to retryStrategy; the cause chain preserves it for inspection.
   describe("interrupted step with AT_MOST_ONCE_PER_RETRY", () => {
-    const setupInterruptedStep = (stepId: string) => {
+    const setupInterruptedStep = (stepId: string): void => {
       const hashedStepId = hashId(stepId);
       (mockContext as any)._stepData[hashedStepId] = {
         Id: hashedStepId,
