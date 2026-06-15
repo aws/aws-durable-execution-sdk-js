@@ -21,10 +21,10 @@ import {
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 import {
-  toAttemptInfo,
   backfillOperationInfo,
   toOperationInfo,
 } from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -78,11 +78,11 @@ export const createInvokeHandler = (
     const stepId = createStepId();
 
     const opInfo = {
-      id: stepId,
+      id: hashId(stepId),
       name: name,
       type: OperationType.CHAINED_INVOKE,
       subType: OperationSubType.CHAINED_INVOKE,
-      parentId: parentId,
+      parentId: parentId ? hashId(parentId) : undefined,
     };
 
     // Phase 1: Start invoke operation
@@ -124,12 +124,18 @@ export const createInvokeHandler = (
           },
         );
 
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationStart?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
 
         isCompleted = true;
         return;
@@ -158,13 +164,18 @@ export const createInvokeHandler = (
           },
         );
 
-        const attemptInfo = toAttemptInfo(
-          stepData,
-          stepData.StepDetails?.Attempt,
-        );
-        backfillOperationInfo(attemptInfo, opInfo);
-        plugin.onOperationStart?.({ ...attemptInfo, isReplay: true });
-        plugin.onOperationEnd?.({ ...attemptInfo, isReplay: true });
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationStart?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
 
         isCompleted = true;
         return;
@@ -195,14 +206,14 @@ export const createInvokeHandler = (
             ...(config?.tenantId && { TenantId: config.tenantId }),
           },
         });
-        const stepData = context.getStepData(stepId);
+        stepData = context.getStepData(stepId);
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
       } else {
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -278,7 +289,7 @@ export const createInvokeHandler = (
         );
         const operationInfo = toOperationInfo(stepData);
         backfillOperationInfo(operationInfo, opInfo);
-        plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
+        await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
@@ -296,10 +307,11 @@ export const createInvokeHandler = (
       log("❌", "Invoke failed:", { stepId, status: stepData?.Status });
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+
       const invokeError = stepData?.ChainedInvokeDetails?.Error;
       const operationInfo = toOperationInfo(stepData);
       backfillOperationInfo(operationInfo, opInfo);
-      plugin.onOperationEnd?.({
+      await plugin.onOperationEnd?.({
         ...operationInfo,
         isReplay: false,
         error: invokeError?.ErrorMessage

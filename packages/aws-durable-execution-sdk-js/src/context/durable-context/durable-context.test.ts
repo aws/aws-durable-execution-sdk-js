@@ -16,6 +16,7 @@ describe("DurableContext executionContext property", () => {
       tenantId: undefined,
       pendingCompletions: new Set(),
       getStepData: jest.fn(),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     };
 
     const mockLambdaContext: Context = {

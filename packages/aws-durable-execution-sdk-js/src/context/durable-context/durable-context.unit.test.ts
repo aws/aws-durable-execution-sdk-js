@@ -540,7 +540,7 @@ describe("DurableContext", () => {
       await context.invoke("func", {});
 
       // New invoke handler uses centralized termination, no hasRunningOperations parameter
-      // Verify it was called with the new signature (context, checkpoint, createStepId, parentId, checkAndUpdateReplayMode, plugin)
+      // Verify it was called with the new signature (context, checkpoint, createStepId, parentId, checkAndUpdateReplayMode, getDefaultSerdes, plugin)
       expect(createInvokeHandler.mock.calls[0].length).toBe(7);
     });
 

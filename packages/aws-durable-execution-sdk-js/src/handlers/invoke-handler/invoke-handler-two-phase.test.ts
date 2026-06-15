@@ -36,6 +36,7 @@ describe("Invoke Handler Two-Phase Execution", () => {
         terminate: jest.fn(),
       },
       durableExecutionArn: "test-arn",
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
 
     mockCheckpoint = {

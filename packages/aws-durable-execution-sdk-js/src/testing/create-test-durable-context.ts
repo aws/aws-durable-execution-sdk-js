@@ -80,6 +80,9 @@ export function createTestDurableContext(options?: {
     getStepData(stepId: string): Operation | undefined {
       return getStepDataUtil(stepData, stepId);
     },
+    isOperationUpdatedBetweenInvocation(): boolean {
+      return false;
+    },
     requestId: "mock-request-id",
     tenantId: undefined,
   };

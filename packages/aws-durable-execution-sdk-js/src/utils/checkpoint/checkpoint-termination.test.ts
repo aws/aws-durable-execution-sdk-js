@@ -36,6 +36,7 @@ describe("CheckpointManager Termination Behavior", () => {
       terminationManager: new TerminationManager(),
       durableExecutionArn: "test-arn",
       getStepData: jest.fn(),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
       tenantId: "",
       pendingCompletions: new Set(),
