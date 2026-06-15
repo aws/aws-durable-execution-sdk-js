@@ -56,7 +56,7 @@ describe("Wait Handler - plugin hooks", () => {
 
     await handler("test-wait", { seconds: 1 });
 
-    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(2);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
   });
 
