@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js": "*",
-    "esbuild": "^0.25.10"
+    "esbuild": "^0.28.1"
   }
 }
