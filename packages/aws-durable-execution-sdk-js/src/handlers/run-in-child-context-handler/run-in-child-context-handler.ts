@@ -28,6 +28,12 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
@@ -76,6 +82,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   parentId?: string,
 
   getDefaultSerdes?: () => AnySerdes,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,
@@ -160,6 +167,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         createChildContext,
         parentId,
         getDefaultSerdes,
+        plugin,
       );
     })()
       .then((result) => {
@@ -245,7 +253,6 @@ export const handleCompletedChildContext = async <
       undefined,
       entityId, // parentId
     );
-
     return await runWithContext(entityId, entityId, () =>
       fn(durableChildContext),
     );
@@ -286,11 +293,19 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   parentId?: string,
 
   getDefaultSerdes?: () => AnySerdes,
+  plugin: DurableInstrumentationPlugin = {},
 ): Promise<T> => {
   const serdes =
     options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const isVirtual = options?.virtualContext === true;
+  const opInfo = {
+    id: hashId(entityId),
+    name: name,
+    type: OperationType.CONTEXT,
+    subType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+    parentId: parentId ? hashId(parentId) : undefined,
+  };
 
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
@@ -303,6 +318,13 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Type: OperationType.CONTEXT,
       Name: name,
     });
+    await plugin.onOperationStart?.({
+      ...opInfo,
+      status: OperationStatus.STARTED,
+      isReplay: false,
+    });
+  } else {
+    await plugin.onOperationStart?.({ ...opInfo, isReplay: true });
   }
 
   const childReplayMode = determineChildReplayMode(context, entityId);
@@ -318,19 +340,26 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // parentId: this parameter is used for checkpointing, and should point to
     // valid parentId tthat is already checkpointed.
     // If this runInChildContext is a virtual, then we will use the parentId  (the ancestor)
-    // But if this runInChildContext is a virtual, then it's entityId can be used
+    // But if this runInChildContext is not virtual, then it's entityId can be used
     isVirtual ? parentId : entityId,
   );
 
   try {
     // Execute the child context function with context tracking
-    const result = await runWithContext(
+    const childContextFn = () => fn(durableChildContext);
+    const wrapInfo = {
+      ...opInfo,
+      isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
+    };
+    const result = (await runWithContext(
       entityId,
       parentId,
-      () => fn(durableChildContext),
+      plugin.wrapChildContextFn
+        ? () => plugin.wrapChildContextFn!(wrapInfo, childContextFn)
+        : childContextFn,
       undefined,
       childReplayMode,
-    );
+    )) as T;
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
@@ -382,6 +411,14 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
         Name: name,
       });
+      const currentStepData = context.getStepData(entityId);
+      const onOperationEndInfo = toOperationInfo(currentStepData);
+      backfillOperationInfo(onOperationEndInfo, opInfo);
+      await plugin.onOperationEnd?.({
+        ...onOperationEndInfo,
+        status: OperationStatus.SUCCEEDED,
+        isReplay: false,
+      });
 
       log("✅", "Child context completed successfully:", {
         entityId,
@@ -392,6 +429,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
       });
+      await plugin.onOperationEnd?.({ ...opInfo, isReplay: true });
     }
 
     return result;
@@ -405,6 +443,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         error,
       },
     );
+
+    // Always wrap in ChildContextError for consistent error handling
+    const errorObject = createErrorObjectFromError(error);
+    const reconstructedError =
+      DurableOperationError.fromErrorObject(errorObject);
 
     // Mark this run-in-child-context as finished and checkpoint failure (only for non-virtual)
     if (!isVirtual) {
@@ -420,12 +463,22 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         Error: createErrorObjectFromError(error),
         Name: name,
       });
+      const currentStepData = context.getStepData(entityId);
+      const onOperationEndInfo = toOperationInfo(currentStepData);
+      backfillOperationInfo(onOperationEndInfo, opInfo);
+      await plugin.onOperationEnd?.({
+        ...onOperationEndInfo,
+        status: OperationStatus.FAILED,
+        isReplay: false,
+        error: reconstructedError,
+      });
+    } else {
+      await plugin.onOperationEnd?.({
+        ...opInfo,
+        isReplay: true,
+        error: reconstructedError,
+      });
     }
-
-    // Always wrap in ChildContextError for consistent error handling
-    const errorObject = createErrorObjectFromError(error);
-    const reconstructedError =
-      DurableOperationError.fromErrorObject(errorObject);
 
     // Use errorMapper if provided, otherwise wrap in ChildContextError
     if (errorMapper) {
