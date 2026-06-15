@@ -404,7 +404,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       checkpoint.markAncestorFinished(entityId);
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      await checkpoint.checkpoint(entityId, {
+      checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.SUCCEED,
@@ -414,10 +414,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
         Name: name,
       });
-      const currentStepData = context.getStepData(entityId);
-      const onOperationEndInfo = toOperationInfo(currentStepData);
-      backfillOperationInfo(onOperationEndInfo, opInfo);
-      await plugin.onOperationEnd?.({ ...onOperationEndInfo, isReplay: false });
+      await plugin.onOperationEnd?.({
+        ...opInfo,
+        status: OperationStatus.SUCCEEDED,
+        isReplay: false,
+      });
 
       log("✅", "Child context completed successfully:", {
         entityId,
@@ -453,7 +454,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       checkpoint.markAncestorFinished(entityId);
 
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
-      await checkpoint.checkpoint(entityId, {
+      checkpoint.checkpoint(entityId, {
         Id: entityId,
         ParentId: parentId,
         Action: OperationAction.FAIL,
@@ -467,6 +468,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       backfillOperationInfo(onOperationEndInfo, opInfo);
       await plugin.onOperationEnd?.({
         ...onOperationEndInfo,
+        status: OperationStatus.FAILED,
         isReplay: false,
         error: reconstructedError,
       });
