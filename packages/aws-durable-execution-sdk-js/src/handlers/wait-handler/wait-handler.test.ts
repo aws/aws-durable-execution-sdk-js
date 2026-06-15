@@ -21,6 +21,7 @@ describe("Wait Handler", () => {
       terminationManager: {
         terminate: jest.fn(),
       },
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
 
     mockCheckpoint = {
