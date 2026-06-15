@@ -418,7 +418,14 @@ describe("WaitForCondition Handler", () => {
           return null;
         }
         // Subsequent calls during retry cycles - simulate step data with increasing attempt number
-        const attemptNumber = Math.floor((getStepDataCallCount - 2) / 2);
+        // After the first execution, each retry cycle makes 3 getStepData calls:
+        //   1. top of executeCheckLogic (state retrieval)
+        //   2. after RETRY checkpoint (for attemptEndInfo)
+        //   3. after waitForRetryTimer in next iteration's top-of-loop
+        // The final succeed cycle makes 2 calls:
+        //   1. top of executeCheckLogic (state retrieval)
+        //   2. after SUCCEED checkpoint (for attemptEndInfo)
+        const attemptNumber = Math.floor((getStepDataCallCount - 2) / 3);
         return {
           Id: hashedStepId,
           Status: OperationStatus.READY,
