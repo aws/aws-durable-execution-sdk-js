@@ -9,6 +9,14 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { Serdes } from "../../utils/serdes/serdes";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import {
+  DurableInstrumentationPlugin,
+  OperationInfo,
+} from "../../types/plugin";
+import {
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
 
 export const createCallbackPromise = <T>(
   context: ExecutionContext,
@@ -17,6 +25,8 @@ export const createCallbackPromise = <T>(
   stepName: string | undefined,
   serdes: Omit<Serdes<T>, "serialize">,
   checkAndUpdateReplayMode: () => void,
+  plugin: DurableInstrumentationPlugin = {},
+  opInfo: Partial<OperationInfo> = {},
 ): DurablePromise<T> => {
   return new DurablePromise(async (): Promise<T> => {
     log("🔄", "Callback promise phase 2:", { stepId, stepName });
@@ -32,6 +42,10 @@ export const createCallbackPromise = <T>(
       checkAndUpdateReplayMode();
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+
+      const operationInfo = toOperationInfo(stepData);
+      backfillOperationInfo(operationInfo, opInfo);
+      await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
       const callbackData = stepData.CallbackDetails;
       if (!callbackData) {
@@ -60,17 +74,27 @@ export const createCallbackPromise = <T>(
     const callbackData = stepData?.CallbackDetails;
     const error = callbackData?.Error;
 
-    if (error) {
-      const cause = new Error(error.ErrorMessage);
-      cause.name = error.ErrorType || "Error";
-      cause.stack = error.StackTrace?.join("\n");
-      throw new CallbackError(
-        error.ErrorMessage || "Callback failed",
-        cause,
-        error.ErrorData,
-      );
-    }
+    const callbackError = error
+      ? (() => {
+          const cause = new Error(error.ErrorMessage);
+          cause.name = error.ErrorType || "Error";
+          cause.stack = error.StackTrace?.join("\n");
+          return new CallbackError(
+            error.ErrorMessage || "Callback failed",
+            cause,
+            error.ErrorData,
+          );
+        })()
+      : new CallbackError("Callback failed");
 
-    throw new CallbackError("Callback failed");
+    const operationInfo = toOperationInfo(stepData);
+    backfillOperationInfo(operationInfo, opInfo);
+    await plugin.onOperationEnd?.({
+      ...operationInfo,
+      isReplay: false,
+      error: callbackError,
+    });
+
+    throw callbackError;
   });
 };
