@@ -116,7 +116,7 @@ describe("Concurrent Execution Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         "test-name",
         expect.any(Function),
-        { subType: undefined },
+        { subType: undefined, serdes: expect.any(Object) },
       );
     });
 
@@ -135,7 +135,7 @@ describe("Concurrent Execution Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        { subType: undefined },
+        { subType: undefined, serdes: expect.any(Object) },
       );
     });
 
@@ -158,7 +158,7 @@ describe("Concurrent Execution Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        { subType: "TOP_TYPE" },
+        { subType: "TOP_TYPE", serdes: expect.any(Object) },
       );
     });
   });
@@ -227,7 +227,7 @@ describe("Concurrent Execution Handler", () => {
         expect(mockRunInChildContext).toHaveBeenCalledWith(
           nameParam,
           expect.any(Function),
-          { subType: expectedSubType },
+          { subType: expectedSubType, serdes: expect.any(Object) },
         );
       },
     );
@@ -361,7 +361,7 @@ describe("Concurrent Execution Handler", () => {
       expect(mockRunInChildContext).toHaveBeenCalledWith(
         undefined,
         expect.any(Function),
-        { subType: undefined },
+        { subType: undefined, serdes: expect.any(Object) },
       );
     });
 

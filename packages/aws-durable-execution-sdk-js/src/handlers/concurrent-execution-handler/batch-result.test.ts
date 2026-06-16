@@ -210,6 +210,42 @@ describe("BatchResult", () => {
       expect(failedItem.error.cause).toBeInstanceOf(Error);
     });
 
+    it("should preserve the original error type and message of the cause through serialization round-trip", async () => {
+      // ChildContextError wrapping a CallbackError, as produced by map/parallel
+      // when an item throws a durable error.
+      const callbackError = new CallbackError("Custom callback error message");
+      const childContextError = new ChildContextError(
+        callbackError.message,
+        callbackError,
+      );
+
+      const items: BatchItem<string>[] = [
+        { index: 0, error: childContextError, status: BatchItemStatus.FAILED },
+      ];
+      const batchResult = new BatchResultImpl(items, "ALL_COMPLETED");
+
+      const serdes = createBatchResultSerdes<string>();
+      const serialized = await serdes.serialize(batchResult, {
+        entityId: "test",
+        durableExecutionArn: "arn:test",
+      });
+      const restored = await serdes.deserialize(serialized, {
+        entityId: "test",
+        durableExecutionArn: "arn:test",
+      });
+
+      const failedItem = restored!.failed()[0];
+      // The wrapper type/message are preserved...
+      expect(failedItem.error.errorType).toBe("ChildContextError");
+      expect(failedItem.error.message).toBe("Custom callback error message");
+      // ...and so is the original cause's type and message (not flattened into
+      // a generic StepError("Unknown error")).
+      const cause = failedItem.error.cause as { errorType?: string } & Error;
+      expect(cause).toBeInstanceOf(Error);
+      expect(cause.errorType).toBe("CallbackError");
+      expect(cause.message).toBe("Custom callback error message");
+    });
+
     it("should return BatchResultImpl instance as-is when passed directly", () => {
       // Create a BatchResultImpl with a ChildContextError
       const customError = new CallbackError("Should be preserved");
