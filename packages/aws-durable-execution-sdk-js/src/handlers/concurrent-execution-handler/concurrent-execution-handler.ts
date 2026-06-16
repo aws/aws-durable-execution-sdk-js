@@ -14,7 +14,11 @@ import {
 } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
-import { BatchResultImpl, restoreBatchResult } from "./batch-result";
+import {
+  BatchResultImpl,
+  restoreBatchResult,
+  createBatchResultSerdes,
+} from "./batch-result";
 import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 
@@ -595,7 +599,8 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
       const result = await runInChildContext(name, executeOperation, {
         subType: config?.topLevelSubType,
         summaryGenerator: config?.summaryGenerator,
-        serdes: config?.serdes,
+        // Use BatchResult serdes to preserve Error types through serialization.
+        serdes: config?.serdes || createBatchResultSerdes(),
       });
 
       // Restore BatchResult methods if the result came from deserialized data

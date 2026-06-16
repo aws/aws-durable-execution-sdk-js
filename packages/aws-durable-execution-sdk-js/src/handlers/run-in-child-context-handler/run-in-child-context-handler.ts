@@ -253,15 +253,20 @@ export const handleCompletedChildContext = async <
       undefined,
       entityId, // parentId
     );
-    return await runWithContext(entityId, entityId, () =>
+
+    const replayedResult = await runWithContext(entityId, entityId, () =>
       fn(durableChildContext),
     );
+
+    // Large payloads: replay re-executes the child function, so return raw result.
+    return replayedResult;
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
     entityId,
   });
 
+  // Small payloads: replay deserializes the checkpoint, so match that here.
   return await safeDeserialize(
     serdes,
     result,
@@ -432,7 +437,21 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       await plugin.onOperationEnd?.({ ...opInfo, isReplay: true });
     }
 
-    return result;
+    // Large payloads: replay re-executes the child function, so return raw result.
+    // Virtual contexts: never checkpoint, so no replay path to match.
+    if (replayChildren || isVirtual) {
+      return result;
+    }
+
+    // Small payloads: replay deserializes the checkpoint, so match that here.
+    return await safeDeserialize(
+      serdes,
+      serializedResult,
+      entityId,
+      name,
+      context.terminationManager,
+      context.durableExecutionArn,
+    );
   } catch (error) {
     log(
       "❌",
