@@ -214,12 +214,11 @@ describe("DurableExecutionOtelPlugin", () => {
       await plugin.onOperationEnd(makeOperationEndInfo({ id: "op-abc" }));
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const expectedSpanId = deriveSpanIdFromOperationId("op-abc");
       const opSpan = findSpan("step");
       expect(opSpan).toBeDefined();
       // When using internal provider with DeterministicIdGenerator, span ID is deterministic.
       // With external provider, we verify the durable.operation.id attribute is set correctly.
-      expect(opSpan!.attributes["durable.operation.id"]).toBe(expectedSpanId);
+      expect(opSpan!.attributes["durable.operation.id"]).toBe("op-abc");
       // Non-replay spans should NOT have links (unlike replay spans)
       expect(opSpan!.links.length).toBe(0);
     });
@@ -834,9 +833,7 @@ describe("DurableExecutionOtelPlugin", () => {
       const opSpan = findSpan("my-wait");
       expect(opSpan).toBeDefined();
       expect(opSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
-      expect(opSpan!.attributes["durable.operation.id"]).toBe(
-        deriveSpanIdFromOperationId("op-attrs"),
-      );
+      expect(opSpan!.attributes["durable.operation.id"]).toBe("op-attrs");
       expect(opSpan!.attributes["durable.operation.type"]).toBe("wait");
       expect(opSpan!.attributes["durable.operation.name"]).toBe("my-wait");
     });

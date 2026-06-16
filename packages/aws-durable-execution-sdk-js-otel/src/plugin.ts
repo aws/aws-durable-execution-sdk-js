@@ -170,7 +170,7 @@ export class DurableExecutionOtelPlugin implements DurableInstrumentationPlugin 
 
     const attributes: Record<string, string> = {
       "durable.execution.arn": this.executionArn,
-      "durable.operation.id": deterministicSpanId,
+      "durable.operation.id": info.id,
       "durable.operation.type": info.type,
     };
     if (info.name) {
@@ -276,7 +276,7 @@ export class DurableExecutionOtelPlugin implements DurableInstrumentationPlugin 
 
       const attributes: Record<string, string> = {
         "durable.execution.arn": this.executionArn,
-        "durable.operation.id": deterministicSpanId,
+        "durable.operation.id": info.id,
         "durable.operation.type": info.type,
       };
       if (info.name) {
@@ -328,7 +328,7 @@ export class DurableExecutionOtelPlugin implements DurableInstrumentationPlugin 
 
     const attributes: Record<string, string | number> = {
       "durable.execution.arn": this.executionArn,
-      "durable.operation.id": deterministicSpanId,
+      "durable.operation.id": info.id,
       "durable.operation.type": info.type,
       "durable.operation.attempt": info.attempt,
     };
