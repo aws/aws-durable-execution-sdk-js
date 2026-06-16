@@ -40,6 +40,7 @@ describe("Callback Handler", () => {
         terminate: jest.fn(),
       },
       durableExecutionArn: "test-arn",
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
 
     mockCheckpoint = {

@@ -18,6 +18,12 @@ import {
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -32,6 +38,7 @@ export const createCallback = (
   parentId?: string,
 
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -53,6 +60,14 @@ export const createCallback = (
       (getDefaultCallbackDeserializer
         ? getDefaultCallbackDeserializer()
         : createPassThroughSerdes<T>());
+
+    const opInfo = {
+      id: hashId(stepId),
+      name: name,
+      type: OperationType.CALLBACK,
+      subType: OperationSubType.CALLBACK,
+      parentId: parentId ? hashId(parentId) : undefined,
+    };
 
     // Phase 1: Setup and checkpoint
     let isCompleted = false;
@@ -93,6 +108,15 @@ export const createCallback = (
           },
         );
 
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+
         isCompleted = true;
         return;
       }
@@ -103,6 +127,7 @@ export const createCallback = (
         stepData?.Status === OperationStatus.TIMED_OUT
       ) {
         log("❌", "Callback already failed:", { stepId });
+        checkAndUpdateReplayMode();
 
         checkpoint.markOperationState(
           stepId,
@@ -117,6 +142,15 @@ export const createCallback = (
             },
           },
         );
+
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
 
         isCompleted = true;
         return;
@@ -143,6 +177,13 @@ export const createCallback = (
 
         // Refresh stepData after checkpoint
         stepData = context.getStepData(stepId);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
+      } else {
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -249,6 +290,8 @@ export const createCallback = (
         name,
         serdes,
         checkAndUpdateReplayMode,
+        plugin,
+        opInfo,
       );
 
       log("✅", "Callback created:", { stepId, name, callbackId });
