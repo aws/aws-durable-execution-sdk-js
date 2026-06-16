@@ -5,6 +5,8 @@
 **/build
 /dist
 */dist
+**/dist
+**/dist-cjs
 /coverage
 **/coverage
 *.iml
