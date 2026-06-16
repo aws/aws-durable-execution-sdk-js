@@ -52,10 +52,8 @@
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": "*",
     "@opentelemetry/api": "^1.0.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
     "@opentelemetry/instrumentation": "^0.219.0",
     "@opentelemetry/instrumentation-aws-sdk": "^0.74.0",
-    "@opentelemetry/propagator-aws-xray": "^1.0.0",
     "@opentelemetry/sdk-trace-node": "^2.6.1"
   },
   "private": true
