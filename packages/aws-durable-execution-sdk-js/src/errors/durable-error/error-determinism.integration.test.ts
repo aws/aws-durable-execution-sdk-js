@@ -2,6 +2,7 @@ import {
   StepError,
   CallbackError,
   InvokeError,
+  PromiseCombinatorError,
   DurableOperationError,
 } from "./durable-error";
 import { ErrorObject } from "@aws-sdk/client-lambda";
@@ -162,6 +163,39 @@ describe("Error Determinism Integration Tests", () => {
         '{"functionName": "myFunction", "requestId": "abc-123"}',
       );
       expect(reconstructed.cause?.message).toBe("Lambda invocation failed");
+    });
+  });
+
+  describe("PromiseCombinatorError Determinism", () => {
+    it("should reconstruct PromiseCombinatorError from serialized ErrorObject", () => {
+      const errorObject: ErrorObject = {
+        ErrorType: "PromiseCombinatorError",
+        ErrorMessage: "All promises were rejected",
+        ErrorData: '{"failedCount": 3}',
+      };
+
+      const reconstructed = DurableOperationError.fromErrorObject(errorObject);
+
+      expect(reconstructed instanceof PromiseCombinatorError).toBe(true);
+      expect(reconstructed.errorType).toBe("PromiseCombinatorError");
+      expect(reconstructed.message).toBe("All promises were rejected");
+      expect(reconstructed.errorData).toBe('{"failedCount": 3}');
+    });
+
+    it("should preserve PromiseCombinatorError identity across serialize/deserialize", () => {
+      const original = new PromiseCombinatorError(
+        "All promises failed",
+        new Error("underlying cause"),
+        '{"count": 2}',
+      );
+
+      const serialized = original.toErrorObject();
+      expect(serialized.ErrorType).toBe("PromiseCombinatorError");
+
+      const deserialized = DurableOperationError.fromErrorObject(serialized);
+      expect(deserialized instanceof PromiseCombinatorError).toBe(true);
+      expect(deserialized.message).toBe("All promises failed");
+      expect(deserialized.errorData).toBe('{"count": 2}');
     });
   });
 
