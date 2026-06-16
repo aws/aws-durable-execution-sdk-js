@@ -47,6 +47,7 @@ export {
   InvokeError,
   ChildContextError,
   WaitForConditionError,
+  PromiseCombinatorError,
 } from "./errors/durable-error/durable-error";
 export {
   defaultSerdes,
