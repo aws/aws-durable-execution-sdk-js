@@ -93,12 +93,12 @@ describe("Step Handler - plugin hooks", () => {
 
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
     );
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
       expect.any(Function),
     );
 
@@ -106,6 +106,7 @@ describe("Step Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
         attempt: 1,
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.SUCCEEDED,
       }),
     );
@@ -135,13 +136,14 @@ describe("Step Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
       expect.any(Function),
     );
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
         attempt: 1,
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.FAILED,
         error: stepError,
       }),
@@ -186,19 +188,20 @@ describe("Step Handler - plugin hooks", () => {
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
       expect.any(Function),
     );
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
       expect.any(Function),
     );
 
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.RETRYING,
         error: expect.any(Error),
         nextAttemptDelaySeconds: 0,
@@ -208,6 +211,7 @@ describe("Step Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.SUCCEEDED,
       }),
     );

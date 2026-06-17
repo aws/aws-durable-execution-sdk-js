@@ -73,12 +73,21 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     await flushMicrotasks();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledWith(
-      expect.objectContaining({ name: TEST_CONSTANTS.CHILD_CONTEXT_NAME }),
+      expect.objectContaining({
+        name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        isReplay: false,
+      }),
       expect.any(Function),
     );
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
       expect.not.objectContaining({ error: expect.anything() }),
     );
@@ -105,14 +114,20 @@ describe("RunInChildContext Handler - plugin hooks", () => {
     await flushMicrotasks();
 
     expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledWith(
+      expect.objectContaining({ isReplay: false }),
+    );
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapChildContextFn).toHaveBeenCalledWith(
-      expect.objectContaining({ name: TEST_CONSTANTS.CHILD_CONTEXT_NAME }),
+      expect.objectContaining({
+        name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        isReplay: false,
+      }),
       expect.any(Function),
     );
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.any(Error) }),
+      expect.objectContaining({ isReplay: false, error: expect.any(Error) }),
     );
   });
 
