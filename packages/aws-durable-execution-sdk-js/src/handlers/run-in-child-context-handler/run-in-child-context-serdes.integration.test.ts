@@ -158,7 +158,7 @@ describe("runInChildContext serdes round-trip", () => {
     expect(succeedCheckpoint.data.Updates[0].Payload).toBe("HELLO");
   });
 
-  test("should return raw result for virtual contexts (no checkpoint, no replay)", async () => {
+  test("should round-trip result for virtual contexts (consistent with other modes)", async () => {
     const result = await durableContext.runInChildContext(
       "virtual-child",
       async (_childContext) => {
@@ -167,14 +167,15 @@ describe("runInChildContext serdes round-trip", () => {
       { serdes: uppercaseSerdes, virtualContext: true },
     );
 
-    // Virtual contexts never checkpoint, so no replay path exists.
-    // Return raw result without ser/des overhead.
-    expect(result).toBe("hello");
-    // Virtual contexts should not checkpoint
+    // Virtual contexts never checkpoint, but the returned value still passes
+    // through the serdes round-trip so behavior is consistent with the small-
+    // and large-payload modes. serialize("hello") = "HELLO", deserialize = id.
+    expect(result).toBe("HELLO");
+    // Virtual contexts should still not checkpoint
     expect(checkpointCalls).toHaveLength(0);
   });
 
-  test("should return raw result for large payloads (ReplayChildren mode)", async () => {
+  test("should round-trip result for large payloads (ReplayChildren mode)", async () => {
     const largeValue = "x".repeat(300 * 1024); // >256KB
 
     const result = await durableContext.runInChildContext(
@@ -185,9 +186,10 @@ describe("runInChildContext serdes round-trip", () => {
       { serdes: uppercaseSerdes },
     );
 
-    // Large payloads trigger ReplayChildren — replay re-executes the child function.
-    // First-run should return raw result to match that behavior.
-    expect(result).toBe(largeValue);
+    // Large payloads trigger ReplayChildren, but the returned value still
+    // passes through the serdes round-trip, consistent with the other modes.
+    // serialize uppercases, deserialize is identity.
+    expect(result).toBe(largeValue.toUpperCase());
   });
 
   test("should deserialize correctly on replay (completed child context)", async () => {
@@ -260,5 +262,36 @@ describe("runInChildContext serdes round-trip", () => {
     // Both should be identical
     expect(firstRunResult).toBe(replayResult);
     expect(firstRunResult).toBe("HELLO");
+  });
+
+  test("ReplayChildren replay applies the same serdes round-trip as first run", async () => {
+    // Simulate a completed large-payload child context (ReplayChildren mode):
+    // the checkpoint holds only a summary and replay re-executes the child fn.
+    mockExecutionContext._stepData = {
+      [hashId("1")]: {
+        Id: "1",
+        Type: OperationType.CONTEXT,
+        StartTimestamp: new Date(),
+        Status: OperationStatus.SUCCEEDED,
+        ContextDetails: {
+          Result: "[summary]",
+          ReplayChildren: true,
+        },
+      },
+    };
+
+    const result = await durableContext.runInChildContext(
+      "large-child",
+      async (_childContext) => {
+        // Re-executed on replay because ReplayChildren is set.
+        return "hello";
+      },
+      { serdes: uppercaseSerdes },
+    );
+
+    // Replay re-executes the fn (-> "hello") then round-trips:
+    // serialize("hello") = "HELLO", deserialize("HELLO") = "HELLO".
+    // Matches the first-run large-payload behavior.
+    expect(result).toBe("HELLO");
   });
 });
