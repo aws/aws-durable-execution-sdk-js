@@ -1,15 +1,11 @@
 /**
  * Bug Condition Exploration Test: Virtual Context Causes Premature ExecutionMode Transition
  *
- * **Validates: Requirements 1.1, 1.2, 1.3, 1.4**
- *
  * Root cause being tested:
  * `checkAndUpdateReplayMode()` runs during the virtual context's own `withDurableModeManagement` call.
  * It peeks at `_stepCounter + 1` which is the ID the virtual context will consume. Since virtual
  * contexts never checkpoint, no step data exists for that ID, and the mode transitions to
  * `ExecutionMode`. This causes `context.logger` between operations to emit duplicate logs on replay.
- *
- * EXPECTED: These tests FAIL on unfixed code — failure confirms the bug exists.
  */
 
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
