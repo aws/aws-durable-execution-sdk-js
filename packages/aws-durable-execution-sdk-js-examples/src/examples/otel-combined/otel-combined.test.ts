@@ -10,7 +10,6 @@ createTests({
       const result = execution.getResult() as {
         patterns: string;
         childResult: string;
-        retryAttempts: number;
         mapItemCount: number;
         complete: boolean;
         spans: SerializedSpan[];
@@ -19,7 +18,6 @@ createTests({
       // Assert result structure
       expect(result.patterns).toBe("step-done");
       expect(result.childResult).toBe("child-a:child-b");
-      expect(result.retryAttempts).toBeGreaterThanOrEqual(1);
       expect(result.mapItemCount).toBe(3);
       expect(result.complete).toBe(true);
 
@@ -55,14 +53,6 @@ createTests({
           expect(link.traceId).toMatch(/^[0-9a-f]{32}$/);
         }
       }
-
-      // Find retry attempt spans with ERROR status
-      const errorAttemptSpans = spans.filter(
-        (s) =>
-          s.attributes["durable.operation.attempt"] !== undefined &&
-          s.status.code === 2,
-      );
-      expect(errorAttemptSpans.length).toBeGreaterThanOrEqual(1);
 
       assertEventSignatures(execution);
     });

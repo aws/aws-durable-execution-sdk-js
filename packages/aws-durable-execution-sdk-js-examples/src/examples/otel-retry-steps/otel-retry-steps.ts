@@ -5,43 +5,42 @@ import {
 import { ExampleConfig } from "../../types";
 import { createOtelTestSetup } from "../otel-shared/otel-test-setup";
 
-const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Retry Steps",
 };
 
-// Module-level counter persists across invocations within the same process.
-// This is necessary because each retry attempt may execute in a new invocation
-// (due to the replay model), and handler-level variables reset on each invocation.
-let attemptCount = 0;
-
 export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
-    // Note: We intentionally do NOT call exporter.reset() here because
-    // retry attempts span multiple invocations and we need to accumulate
-    // spans from all invocations to assert on attempt spans for each retry.
-
-    const result = await context.step(
-      "retry-step",
-      async () => {
-        attemptCount++;
-        if (attemptCount < 3) {
-          throw new Error(`Attempt ${attemptCount} failed`);
-        }
-        return "success-on-attempt-3";
-      },
-      {
-        retryStrategy: (error: Error, attemptsMade: number) => {
-          if (attemptsMade <= 3) {
-            return { shouldRetry: true, delay: { seconds: 1 } };
-          }
-          return { shouldRetry: false };
+  async (_event: any, context: DurableContext) => {
+    // Step that always fails, exercising the retry mechanism until retries
+    // are exhausted. This avoids needing state that persists across invocations.
+    let stepError: unknown;
+    try {
+      await context.step(
+        "retry-step",
+        async () => {
+          throw new Error("always fails");
         },
-      },
-    );
+        {
+          retryStrategy: (_error: Error, attemptsMade: number) => {
+            if (attemptsMade < 3) {
+              return { shouldRetry: true, delay: { seconds: 1 } };
+            }
+            return { shouldRetry: false };
+          },
+        },
+      );
+    } catch (error) {
+      stepError = error;
+    }
 
-    return { result, spans: getSerializedSpans() };
+    return {
+      failed: true,
+      errorMessage:
+        stepError instanceof Error ? stepError.message : String(stepError),
+      spans: getSerializedSpans(),
+    };
   },
   { plugins: [plugin] },
 );

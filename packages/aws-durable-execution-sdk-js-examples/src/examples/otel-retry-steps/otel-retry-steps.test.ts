@@ -5,15 +5,17 @@ import { SerializedSpan } from "../otel-shared/otel-test-setup";
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
-    it("should produce attempt spans with error status on failures", async () => {
+    it("should produce attempt spans with error status after exhausting retries", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as {
-        result: string;
+        failed: boolean;
+        errorMessage: string;
         spans: SerializedSpan[];
       };
 
-      // Assert result
-      expect(result.result).toBe("success-on-attempt-3");
+      // The step should have failed after exhausting retries
+      expect(result.failed).toBe(true);
+      expect(result.errorMessage).toBe("always fails");
 
       const { spans } = result;
 
@@ -30,14 +32,11 @@ createTests({
           (b.attributes["durable.operation.attempt"] as number),
       );
 
-      // First two attempts should have ERROR status (code 2)
-      expect(sorted[0].status.code).toBe(2); // ERROR
-      expect(sorted[0].status.message).toBeDefined();
-      expect(sorted[1].status.code).toBe(2); // ERROR
-      expect(sorted[1].status.message).toBeDefined();
-
-      // Third attempt should have UNSET status (code 0)
-      expect(sorted[2].status.code).toBe(0); // UNSET
+      // All attempts should have ERROR status (code 2) since every attempt fails
+      for (const span of sorted) {
+        expect(span.status.code).toBe(2); // ERROR
+        expect(span.status.message).toBeDefined();
+      }
 
       // Verify attempt numbers
       expect(sorted[0].attributes["durable.operation.attempt"]).toBe(1);

@@ -5,7 +5,7 @@ import {
 import { ExampleConfig } from "../../types";
 import { createOtelTestSetup } from "../otel-shared/otel-test-setup";
 
-const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Combined",
@@ -13,9 +13,7 @@ export const config: ExampleConfig = {
 };
 
 export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
-    exporter.reset();
-
+  async (_event: any, context: DurableContext) => {
     // 1. Sequential step
     const stepResult = await context.step(
       "sequential-step",
@@ -35,28 +33,7 @@ export const handler = withDurableExecution(
       },
     );
 
-    // 4. Step with retry (fails once, succeeds on attempt 2)
-    let retryAttempts = 0;
-    await context.step(
-      "retry-step",
-      async () => {
-        retryAttempts++;
-        if (retryAttempts < 2) {
-          throw new Error(`Attempt ${retryAttempts} failed`);
-        }
-        return "retry-success";
-      },
-      {
-        retryStrategy: (error: Error, attemptsMade: number) => {
-          if (attemptsMade <= 2) {
-            return { shouldRetry: true, delay: { seconds: 1 } };
-          }
-          return { shouldRetry: false };
-        },
-      },
-    );
-
-    // 5. Map
+    // 4. Map
     const items = ["item-1", "item-2", "item-3"];
     const mapResults = await context.map(
       "map-items",
@@ -68,7 +45,7 @@ export const handler = withDurableExecution(
       },
     );
 
-    // 6. Parallel
+    // 5. Parallel
     await context.parallel("parallel-ops", [
       {
         name: "branch-1",
@@ -85,7 +62,6 @@ export const handler = withDurableExecution(
     return {
       patterns: stepResult,
       childResult,
-      retryAttempts,
       mapItemCount: mapResults.getResults().length,
       complete: true,
       spans: getSerializedSpans(),

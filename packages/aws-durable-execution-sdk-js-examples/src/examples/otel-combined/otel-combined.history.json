@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "36a9e003-e302-4389-b527-51a7ae995762",
-    "EventTimestamp": "2026-06-17T23:12:36.589Z",
+    "Id": "1c3c98cc-e0b9-4727-81df-894b634299e1",
+    "EventTimestamp": "2026-06-17T23:54:51.834Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "sequential-step",
-    "EventTimestamp": "2026-06-17T23:12:36.629Z",
+    "EventTimestamp": "2026-06-17T23:54:51.838Z",
     "StepStartedDetails": {}
   },
   {
@@ -25,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "sequential-step",
-    "EventTimestamp": "2026-06-17T23:12:36.630Z",
+    "EventTimestamp": "2026-06-17T23:54:51.839Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"step-done\""
@@ -39,32 +39,32 @@
     "EventId": 4,
     "Id": "c81e728d9d4c2f63",
     "Name": "short-wait",
-    "EventTimestamp": "2026-06-17T23:12:36.653Z",
+    "EventTimestamp": "2026-06-17T23:54:51.841Z",
     "WaitStartedDetails": {
       "Duration": 2,
-      "ScheduledEndTimestamp": "2026-06-17T23:12:38.653Z"
+      "ScheduledEndTimestamp": "2026-06-17T23:54:53.841Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-06-17T23:54:51.863Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T23:54:51.834Z",
+      "EndTimestamp": "2026-06-17T23:54:51.863Z",
+      "Error": {},
+      "RequestId": "3a6ffb26-1992-480d-97b2-1bdbdfd20228"
     }
   },
   {
     "EventType": "WaitSucceeded",
     "SubType": "Wait",
-    "EventId": 5,
+    "EventId": 6,
     "Id": "c81e728d9d4c2f63",
     "Name": "short-wait",
-    "EventTimestamp": "2026-06-17T23:12:36.654Z",
+    "EventTimestamp": "2026-06-17T23:54:53.842Z",
     "WaitSucceededDetails": {
       "Duration": 2
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 6,
-    "EventTimestamp": "2026-06-17T23:12:36.670Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-06-17T23:12:36.589Z",
-      "EndTimestamp": "2026-06-17T23:12:36.670Z",
-      "Error": {},
-      "RequestId": "bd074bbc-32db-4ac8-b5ea-ef2c3468eaa2"
     }
   },
   {
@@ -73,7 +73,7 @@
     "EventId": 7,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "child-ctx",
-    "EventTimestamp": "2026-06-17T23:12:36.713Z",
+    "EventTimestamp": "2026-06-17T23:54:53.846Z",
     "ContextStartedDetails": {}
   },
   {
@@ -82,7 +82,7 @@
     "EventId": 8,
     "Id": "c9e6e7b69f98f516",
     "Name": "child-step-1",
-    "EventTimestamp": "2026-06-17T23:12:36.713Z",
+    "EventTimestamp": "2026-06-17T23:54:53.846Z",
     "ParentId": "eccbc87e4b5ce2fe",
     "StepStartedDetails": {}
   },
@@ -92,7 +92,7 @@
     "EventId": 9,
     "Id": "c9e6e7b69f98f516",
     "Name": "child-step-1",
-    "EventTimestamp": "2026-06-17T23:12:36.713Z",
+    "EventTimestamp": "2026-06-17T23:54:53.846Z",
     "ParentId": "eccbc87e4b5ce2fe",
     "StepSucceededDetails": {
       "Result": {
@@ -107,7 +107,7 @@
     "EventId": 10,
     "Id": "b772d43b49bb57b5",
     "Name": "child-step-2",
-    "EventTimestamp": "2026-06-17T23:12:36.733Z",
+    "EventTimestamp": "2026-06-17T23:54:53.849Z",
     "ParentId": "eccbc87e4b5ce2fe",
     "StepStartedDetails": {}
   },
@@ -117,7 +117,7 @@
     "EventId": 11,
     "Id": "b772d43b49bb57b5",
     "Name": "child-step-2",
-    "EventTimestamp": "2026-06-17T23:12:36.733Z",
+    "EventTimestamp": "2026-06-17T23:54:53.849Z",
     "ParentId": "eccbc87e4b5ce2fe",
     "StepSucceededDetails": {
       "Result": {
@@ -132,7 +132,7 @@
     "EventId": 12,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "child-ctx",
-    "EventTimestamp": "2026-06-17T23:12:36.754Z",
+    "EventTimestamp": "2026-06-17T23:54:53.853Z",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "\"child-a:child-b\""
@@ -140,151 +140,97 @@
     }
   },
   {
-    "EventType": "StepStarted",
-    "SubType": "Step",
+    "EventType": "ContextStarted",
+    "SubType": "Map",
     "EventId": 13,
     "Id": "a87ff679a2f3e71d",
-    "Name": "retry-step",
-    "EventTimestamp": "2026-06-17T23:12:36.754Z",
-    "StepStartedDetails": {}
+    "Name": "map-items",
+    "EventTimestamp": "2026-06-17T23:54:53.853Z",
+    "ContextStartedDetails": {}
   },
   {
-    "EventType": "StepFailed",
-    "SubType": "Step",
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
     "EventId": 14,
-    "Id": "a87ff679a2f3e71d",
-    "Name": "retry-step",
-    "EventTimestamp": "2026-06-17T23:12:36.754Z",
-    "StepFailedDetails": {
-      "Error": {
-        "Payload": {
-          "ErrorMessage": "Attempt 1 failed",
-          "ErrorType": "Error"
-        }
-      },
-      "RetryDetails": {
-        "NextAttemptDelaySeconds": 1,
-        "CurrentAttempt": 1
-      }
-    }
+    "Id": "74bdefab9757a081",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-06-17T23:54:53.853Z",
+    "ParentId": "a87ff679a2f3e71d",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 15,
+    "Id": "2f5bb7747efda054",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-06-17T23:54:53.853Z",
+    "ParentId": "a87ff679a2f3e71d",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 16,
+    "Id": "4864dafb55d05d74",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-06-17T23:54:53.853Z",
+    "ParentId": "a87ff679a2f3e71d",
+    "ContextStartedDetails": {}
   },
   {
     "EventType": "StepStarted",
     "SubType": "Step",
-    "EventId": 15,
-    "Id": "a87ff679a2f3e71d",
-    "Name": "retry-step",
-    "EventTimestamp": "2026-06-17T23:12:36.823Z",
+    "EventId": 17,
+    "Id": "ec3805c75ba4921d",
+    "Name": "map-step-0",
+    "EventTimestamp": "2026-06-17T23:54:53.853Z",
+    "ParentId": "74bdefab9757a081",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 18,
+    "Id": "23197d0b00fdfb44",
+    "Name": "map-step-1",
+    "EventTimestamp": "2026-06-17T23:54:53.854Z",
+    "ParentId": "2f5bb7747efda054",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 19,
+    "Id": "89106acc4a33cc6b",
+    "Name": "map-step-2",
+    "EventTimestamp": "2026-06-17T23:54:53.854Z",
+    "ParentId": "4864dafb55d05d74",
     "StepStartedDetails": {}
   },
   {
     "EventType": "StepSucceeded",
     "SubType": "Step",
-    "EventId": 16,
-    "Id": "a87ff679a2f3e71d",
-    "Name": "retry-step",
-    "EventTimestamp": "2026-06-17T23:12:36.823Z",
+    "EventId": 20,
+    "Id": "ec3805c75ba4921d",
+    "Name": "map-step-0",
+    "EventTimestamp": "2026-06-17T23:54:53.854Z",
+    "ParentId": "74bdefab9757a081",
     "StepSucceededDetails": {
       "Result": {
-        "Payload": "\"retry-success\""
+        "Payload": "\"ITEM-1\""
       },
-      "RetryDetails": {
-        "CurrentAttempt": 1
-      }
+      "RetryDetails": {}
     }
   },
   {
-    "EventType": "ContextStarted",
-    "SubType": "Map",
-    "EventId": 17,
-    "Id": "e4da3b7fbbce2345",
-    "Name": "map-items",
-    "EventTimestamp": "2026-06-17T23:12:36.844Z",
-    "ContextStartedDetails": {}
-  },
-  {
-    "EventType": "ContextStarted",
-    "SubType": "MapIteration",
-    "EventId": 18,
-    "Id": "19a1de167122a18a",
-    "Name": "map-item-0",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "e4da3b7fbbce2345",
-    "ContextStartedDetails": {}
-  },
-  {
-    "EventType": "ContextStarted",
-    "SubType": "MapIteration",
-    "EventId": 19,
-    "Id": "dca19ffa163054fe",
-    "Name": "map-item-1",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "e4da3b7fbbce2345",
-    "ContextStartedDetails": {}
-  },
-  {
-    "EventType": "ContextStarted",
-    "SubType": "MapIteration",
-    "EventId": 20,
-    "Id": "0dd954ea204f19a1",
-    "Name": "map-item-2",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "e4da3b7fbbce2345",
-    "ContextStartedDetails": {}
-  },
-  {
-    "EventType": "StepStarted",
+    "EventType": "StepSucceeded",
     "SubType": "Step",
     "EventId": 21,
-    "Id": "e8afef1e62a03550",
-    "Name": "map-step-0",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "19a1de167122a18a",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepStarted",
-    "SubType": "Step",
-    "EventId": 22,
-    "Id": "c280c2e3604efb29",
+    "Id": "23197d0b00fdfb44",
     "Name": "map-step-1",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "dca19ffa163054fe",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepStarted",
-    "SubType": "Step",
-    "EventId": 23,
-    "Id": "75ea41fd3195a1e3",
-    "Name": "map-step-2",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "0dd954ea204f19a1",
-    "StepStartedDetails": {}
-  },
-  {
-    "EventType": "StepSucceeded",
-    "SubType": "Step",
-    "EventId": 24,
-    "Id": "e8afef1e62a03550",
-    "Name": "map-step-0",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "19a1de167122a18a",
-    "StepSucceededDetails": {
-      "Result": {
-        "Payload": "\"ITEM-1\""
-      },
-      "RetryDetails": {}
-    }
-  },
-  {
-    "EventType": "StepSucceeded",
-    "SubType": "Step",
-    "EventId": 25,
-    "Id": "c280c2e3604efb29",
-    "Name": "map-step-1",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "dca19ffa163054fe",
+    "EventTimestamp": "2026-06-17T23:54:53.854Z",
+    "ParentId": "2f5bb7747efda054",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"ITEM-2\""
@@ -295,11 +241,11 @@
   {
     "EventType": "StepSucceeded",
     "SubType": "Step",
-    "EventId": 26,
-    "Id": "75ea41fd3195a1e3",
+    "EventId": 22,
+    "Id": "89106acc4a33cc6b",
     "Name": "map-step-2",
-    "EventTimestamp": "2026-06-17T23:12:36.845Z",
-    "ParentId": "0dd954ea204f19a1",
+    "EventTimestamp": "2026-06-17T23:54:53.854Z",
+    "ParentId": "4864dafb55d05d74",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"ITEM-3\""
@@ -310,11 +256,11 @@
   {
     "EventType": "ContextSucceeded",
     "SubType": "MapIteration",
-    "EventId": 27,
-    "Id": "19a1de167122a18a",
+    "EventId": 23,
+    "Id": "74bdefab9757a081",
     "Name": "map-item-0",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "e4da3b7fbbce2345",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "a87ff679a2f3e71d",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "\"ITEM-1\""
@@ -324,11 +270,11 @@
   {
     "EventType": "ContextSucceeded",
     "SubType": "MapIteration",
-    "EventId": 28,
-    "Id": "dca19ffa163054fe",
+    "EventId": 24,
+    "Id": "2f5bb7747efda054",
     "Name": "map-item-1",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "e4da3b7fbbce2345",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "a87ff679a2f3e71d",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "\"ITEM-2\""
@@ -338,11 +284,11 @@
   {
     "EventType": "ContextSucceeded",
     "SubType": "MapIteration",
-    "EventId": 29,
-    "Id": "0dd954ea204f19a1",
+    "EventId": 25,
+    "Id": "4864dafb55d05d74",
     "Name": "map-item-2",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "e4da3b7fbbce2345",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "a87ff679a2f3e71d",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "\"ITEM-3\""
@@ -352,10 +298,10 @@
   {
     "EventType": "ContextSucceeded",
     "SubType": "Map",
-    "EventId": 30,
-    "Id": "e4da3b7fbbce2345",
+    "EventId": 26,
+    "Id": "a87ff679a2f3e71d",
     "Name": "map-items",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "{\"all\":[{\"result\":\"ITEM-1\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"result\":\"ITEM-2\",\"index\":1,\"status\":\"SUCCEEDED\"},{\"result\":\"ITEM-3\",\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
@@ -365,60 +311,60 @@
   {
     "EventType": "ContextStarted",
     "SubType": "Parallel",
-    "EventId": 31,
-    "Id": "1679091c5a880faf",
+    "EventId": 27,
+    "Id": "e4da3b7fbbce2345",
     "Name": "parallel-ops",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
     "ContextStartedDetails": {}
   },
   {
     "EventType": "ContextStarted",
     "SubType": "ParallelBranch",
-    "EventId": 32,
-    "Id": "0299c06aed970473",
+    "EventId": 28,
+    "Id": "19a1de167122a18a",
     "Name": "branch-1",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "1679091c5a880faf",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "e4da3b7fbbce2345",
     "ContextStartedDetails": {}
   },
   {
     "EventType": "ContextStarted",
     "SubType": "ParallelBranch",
-    "EventId": 33,
-    "Id": "17380ddb842e9843",
+    "EventId": 29,
+    "Id": "dca19ffa163054fe",
     "Name": "branch-2",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "1679091c5a880faf",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "e4da3b7fbbce2345",
     "ContextStartedDetails": {}
   },
   {
     "EventType": "StepStarted",
     "SubType": "Step",
-    "EventId": 34,
-    "Id": "73826548541e7798",
+    "EventId": 30,
+    "Id": "e8afef1e62a03550",
     "Name": "parallel-step-1",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "0299c06aed970473",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "19a1de167122a18a",
     "StepStartedDetails": {}
   },
   {
     "EventType": "StepStarted",
     "SubType": "Step",
-    "EventId": 35,
-    "Id": "d63f11555110a66a",
+    "EventId": 31,
+    "Id": "c280c2e3604efb29",
     "Name": "parallel-step-2",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "17380ddb842e9843",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "dca19ffa163054fe",
     "StepStartedDetails": {}
   },
   {
     "EventType": "StepSucceeded",
     "SubType": "Step",
-    "EventId": 36,
-    "Id": "73826548541e7798",
+    "EventId": 32,
+    "Id": "e8afef1e62a03550",
     "Name": "parallel-step-1",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "0299c06aed970473",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "19a1de167122a18a",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"p1\""
@@ -429,11 +375,11 @@
   {
     "EventType": "StepSucceeded",
     "SubType": "Step",
-    "EventId": 37,
-    "Id": "d63f11555110a66a",
+    "EventId": 33,
+    "Id": "c280c2e3604efb29",
     "Name": "parallel-step-2",
-    "EventTimestamp": "2026-06-17T23:12:36.865Z",
-    "ParentId": "17380ddb842e9843",
+    "EventTimestamp": "2026-06-17T23:54:53.857Z",
+    "ParentId": "dca19ffa163054fe",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"p2\""
@@ -444,11 +390,11 @@
   {
     "EventType": "ContextSucceeded",
     "SubType": "ParallelBranch",
-    "EventId": 38,
-    "Id": "0299c06aed970473",
+    "EventId": 34,
+    "Id": "19a1de167122a18a",
     "Name": "branch-1",
-    "EventTimestamp": "2026-06-17T23:12:36.885Z",
-    "ParentId": "1679091c5a880faf",
+    "EventTimestamp": "2026-06-17T23:54:53.861Z",
+    "ParentId": "e4da3b7fbbce2345",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "\"p1\""
@@ -458,11 +404,11 @@
   {
     "EventType": "ContextSucceeded",
     "SubType": "ParallelBranch",
-    "EventId": 39,
-    "Id": "17380ddb842e9843",
+    "EventId": 35,
+    "Id": "dca19ffa163054fe",
     "Name": "branch-2",
-    "EventTimestamp": "2026-06-17T23:12:36.885Z",
-    "ParentId": "1679091c5a880faf",
+    "EventTimestamp": "2026-06-17T23:54:53.861Z",
+    "ParentId": "e4da3b7fbbce2345",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "\"p2\""
@@ -472,10 +418,10 @@
   {
     "EventType": "ContextSucceeded",
     "SubType": "Parallel",
-    "EventId": 40,
-    "Id": "1679091c5a880faf",
+    "EventId": 36,
+    "Id": "e4da3b7fbbce2345",
     "Name": "parallel-ops",
-    "EventTimestamp": "2026-06-17T23:12:36.885Z",
+    "EventTimestamp": "2026-06-17T23:54:53.861Z",
     "ContextSucceededDetails": {
       "Result": {
         "Payload": "{\"all\":[{\"result\":\"p1\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"result\":\"p2\",\"index\":1,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
@@ -484,23 +430,23 @@
   },
   {
     "EventType": "InvocationCompleted",
-    "EventId": 41,
-    "EventTimestamp": "2026-06-17T23:12:36.905Z",
+    "EventId": 37,
+    "EventTimestamp": "2026-06-17T23:54:53.862Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-06-17T23:12:36.691Z",
-      "EndTimestamp": "2026-06-17T23:12:36.905Z",
+      "StartTimestamp": "2026-06-17T23:54:53.842Z",
+      "EndTimestamp": "2026-06-17T23:54:53.862Z",
       "Error": {},
-      "RequestId": "91c53489-c413-4d61-8b6f-fbf3f6800dc4"
+      "RequestId": "9a5b1a7c-baab-4934-a707-f7c31b1eefc4"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
-    "EventId": 42,
-    "Id": "36a9e003-e302-4389-b527-51a7ae995762",
-    "EventTimestamp": "2026-06-17T23:12:36.905Z",
+    "EventId": 38,
+    "Id": "1c3c98cc-e0b9-4727-81df-894b634299e1",
+    "EventTimestamp": "2026-06-17T23:54:53.862Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"patterns\":\"step-done\",\"childResult\":\"child-a:child-b\",\"retryAttempts\":2,\"mapItemCount\":3,\"complete\":true,\"spans\":[{\"name\":\"child-step-1\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"a5840699bb7653cb\",\"parentSpanId\":\"5d105c5fa0591668\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"c9e6e7b69f98f516\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"child-step-1\"},\"links\":[{\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"5d105c5fa0591668\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-step-1\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"5d105c5fa0591668\",\"parentSpanId\":\"6f473045cd95e6f6\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"c9e6e7b69f98f516\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"child-step-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-step-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"c0485ab44ba875a8\",\"parentSpanId\":\"6226ef5bbf6bfe9d\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"b772d43b49bb57b5\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"child-step-2\"},\"links\":[{\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"6226ef5bbf6bfe9d\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-step-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"6226ef5bbf6bfe9d\",\"parentSpanId\":\"6f473045cd95e6f6\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"b772d43b49bb57b5\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"child-step-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-ctx\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"6f473045cd95e6f6\",\"parentSpanId\":\"3eb24f7148649f75\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"child-ctx\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"retry-step\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"df015534d341905d\",\"parentSpanId\":\"d18f36efef0de843\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"a87ff679a2f3e71d\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"retry-step\"},\"links\":[{\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"d18f36efef0de843\"}],\"status\":{\"code\":2,\"message\":\"Attempt 1 failed\"},\"events\":[{\"name\":\"exception\",\"attributes\":{\"exception.type\":\"Error\",\"exception.message\":\"Attempt 1 failed\",\"exception.stacktrace\":\"Error: Attempt 1 failed\\n    at context.step.retryStrategy.shouldRetry (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/otel-combined/otel-combined.ts:51:17)\\n    at stepFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:322:44)\\n    at guardedFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:56:42)\\n    at NoopContextManager.with (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@opentelemetry/api/src/context/NoopContextManager.ts:20:15)\\n    at ContextAPI.with (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@opentelemetry/api/src/api/context.ts:68:42)\\n    at DurableExecutionOtelPlugin.wrapOperationAttemptFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-otel/src/plugin.ts:365:24)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:80:27\\n    at runAsCallback (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:93:16)\\n    at Object.wrapOperationAttemptFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:174:28)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:328:26\\n    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)\\n    at runWithContext (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/context-tracker/context-tracker.ts:26:28)\\n    at executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:323:27)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:255:14\"}}]},{\"name\":\"retry-step\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"92fe05d615ed9b00\",\"parentSpanId\":\"d18f36efef0de843\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"a87ff679a2f3e71d\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":2,\"durable.operation.name\":\"retry-step\"},\"links\":[{\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"d18f36efef0de843\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"retry-step\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"d18f36efef0de843\",\"parentSpanId\":\"3eb24f7148649f75\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"a87ff679a2f3e71d\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"retry-step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"2d2d17ac38172d3d\",\"parentSpanId\":\"9e677735dd7ee24f\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"75ea41fd3195a1e3\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"map-step-2\"},\"links\":[{\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"9e677735dd7ee24f\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-0\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"db0e76a1dedb046c\",\"parentSpanId\":\"82380a0409b70c1d\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"e8afef1e62a03550\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"map-step-0\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-1\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"8aa1326a8254ba81\",\"parentSpanId\":\"8f6bc7abd14d77c3\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"c280c2e3604efb29\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"map-step-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"9e677735dd7ee24f\",\"parentSpanId\":\"86710935057203c9\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"75ea41fd3195a1e3\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"map-step-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-item-0\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"82380a0409b70c1d\",\"parentSpanId\":\"3543fdec00c92c8d\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"19a1de167122a18a\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-item-0\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-item-1\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"8f6bc7abd14d77c3\",\"parentSpanId\":\"3543fdec00c92c8d\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"dca19ffa163054fe\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-item-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-item-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"86710935057203c9\",\"parentSpanId\":\"3543fdec00c92c8d\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"0dd954ea204f19a1\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-item-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-items\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"3543fdec00c92c8d\",\"parentSpanId\":\"3eb24f7148649f75\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"e4da3b7fbbce2345\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-items\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-step-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"9a12da4fed04c4bc\",\"parentSpanId\":\"4e0950a1f84b04cf\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"d63f11555110a66a\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"parallel-step-2\"},\"links\":[{\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"4e0950a1f84b04cf\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-step-1\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"cab98bc18e08e5e4\",\"parentSpanId\":\"1849be90b61deca7\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"73826548541e7798\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"parallel-step-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-step-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"4e0950a1f84b04cf\",\"parentSpanId\":\"2625d6d2400930fe\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"d63f11555110a66a\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"parallel-step-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"branch-1\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"1849be90b61deca7\",\"parentSpanId\":\"3acec2b866fe39aa\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"0299c06aed970473\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"branch-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"branch-2\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"2625d6d2400930fe\",\"parentSpanId\":\"3acec2b866fe39aa\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"17380ddb842e9843\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"branch-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-ops\",\"traceId\":\"24e1f539daeef6717c79b6aff49980eb\",\"spanId\":\"3acec2b866fe39aa\",\"parentSpanId\":\"3eb24f7148649f75\",\"attributes\":{\"durable.execution.arn\":\"a1a06c19-823b-477b-b3ca-7ec41203c72b\",\"durable.operation.id\":\"1679091c5a880faf\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"parallel-ops\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
+        "Payload": "{\"patterns\":\"step-done\",\"childResult\":\"child-a:child-b\",\"mapItemCount\":3,\"complete\":true,\"spans\":[{\"name\":\"sequential-step\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"4aff52b00d314006\",\"parentSpanId\":\"026806110351f2bf\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"sequential-step\"},\"links\":[{\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"026806110351f2bf\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"sequential-step\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"026806110351f2bf\",\"parentSpanId\":\"1ac6851a2ae448e6\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"sequential-step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"short-wait\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"20bb507a4917096c\",\"parentSpanId\":\"1ac6851a2ae448e6\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"WAIT\",\"durable.operation.name\":\"short-wait\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"1ac6851a2ae448e6\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-step-1\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"e9dcbe9ec5d1c436\",\"parentSpanId\":\"5d105c5fa0591668\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"c9e6e7b69f98f516\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"child-step-1\"},\"links\":[{\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"5d105c5fa0591668\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-step-1\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"5d105c5fa0591668\",\"parentSpanId\":\"6f473045cd95e6f6\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"c9e6e7b69f98f516\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"child-step-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-step-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"962f53070d4dccfe\",\"parentSpanId\":\"6226ef5bbf6bfe9d\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"b772d43b49bb57b5\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"child-step-2\"},\"links\":[{\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"6226ef5bbf6bfe9d\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-step-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"6226ef5bbf6bfe9d\",\"parentSpanId\":\"6f473045cd95e6f6\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"b772d43b49bb57b5\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"child-step-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-ctx\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"6f473045cd95e6f6\",\"parentSpanId\":\"37cbc1b3b72628dd\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"child-ctx\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"c0415c0c1ed8f8b4\",\"parentSpanId\":\"2561a251bdb1e2fb\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"89106acc4a33cc6b\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"map-step-2\"},\"links\":[{\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"2561a251bdb1e2fb\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-0\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"61f279e916cbd34e\",\"parentSpanId\":\"11fcda845c89fc72\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"ec3805c75ba4921d\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"map-step-0\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-1\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"ac93baa3d13179cf\",\"parentSpanId\":\"1ed3ce6722942a9e\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"23197d0b00fdfb44\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"map-step-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-step-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"2561a251bdb1e2fb\",\"parentSpanId\":\"30e3eb2ad94bccd3\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"89106acc4a33cc6b\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"map-step-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-item-0\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"11fcda845c89fc72\",\"parentSpanId\":\"d18f36efef0de843\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"74bdefab9757a081\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-item-0\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-item-1\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"1ed3ce6722942a9e\",\"parentSpanId\":\"d18f36efef0de843\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"2f5bb7747efda054\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-item-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-item-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"30e3eb2ad94bccd3\",\"parentSpanId\":\"d18f36efef0de843\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"4864dafb55d05d74\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-item-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"map-items\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"d18f36efef0de843\",\"parentSpanId\":\"37cbc1b3b72628dd\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"a87ff679a2f3e71d\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"map-items\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-step-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"8fef54ac8498658d\",\"parentSpanId\":\"8aa1326a8254ba81\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"c280c2e3604efb29\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"parallel-step-2\"},\"links\":[{\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"8aa1326a8254ba81\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-step-1\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"db0e76a1dedb046c\",\"parentSpanId\":\"82380a0409b70c1d\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"e8afef1e62a03550\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"parallel-step-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-step-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"8aa1326a8254ba81\",\"parentSpanId\":\"8f6bc7abd14d77c3\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"c280c2e3604efb29\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"parallel-step-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"branch-1\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"82380a0409b70c1d\",\"parentSpanId\":\"3543fdec00c92c8d\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"19a1de167122a18a\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"branch-1\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"branch-2\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"8f6bc7abd14d77c3\",\"parentSpanId\":\"3543fdec00c92c8d\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"dca19ffa163054fe\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"branch-2\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"parallel-ops\",\"traceId\":\"15f7f39303503ded97a4ab8706df76f2\",\"spanId\":\"3543fdec00c92c8d\",\"parentSpanId\":\"37cbc1b3b72628dd\",\"attributes\":{\"durable.execution.arn\":\"5f94b376-88c3-42a1-8f9c-03448a4de4f6\",\"durable.operation.id\":\"e4da3b7fbbce2345\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"parallel-ops\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
       }
     }
   }
