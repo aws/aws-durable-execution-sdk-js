@@ -1,0 +1,335 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "b75544b4-3b69-4fd5-b475-715f8412a7c7",
+    "EventTimestamp": "2026-06-17T22:08:58.473Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "outer-child",
+    "EventTimestamp": "2026-06-17T22:08:58.479Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "inner-child",
+    "EventTimestamp": "2026-06-17T22:08:58.479Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:08:58.479Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:08:58.479Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 2,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-06-17T22:08:58.502Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T22:08:58.473Z",
+      "EndTimestamp": "2026-06-17T22:08:58.502Z",
+      "Error": {},
+      "RequestId": "1fc1a044-acdb-459a-b8ec-3ee022a434a0"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:00.483Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:00.483Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 3,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-06-17T22:09:00.504Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T22:09:00.481Z",
+      "EndTimestamp": "2026-06-17T22:09:00.504Z",
+      "Error": {},
+      "RequestId": "121a7c17-ad54-4ccc-987f-1d9407c80dd1"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:03.488Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:03.488Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 14,
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 12,
+    "EventTimestamp": "2026-06-17T22:09:03.510Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T22:09:03.485Z",
+      "EndTimestamp": "2026-06-17T22:09:03.510Z",
+      "Error": {},
+      "RequestId": "0bba8e55-a8c9-47ba-a2bc-36daa015af69"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 13,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:17.491Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 14,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:17.491Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 3
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 15,
+    "EventTimestamp": "2026-06-17T22:09:17.512Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T22:09:17.489Z",
+      "EndTimestamp": "2026-06-17T22:09:17.512Z",
+      "Error": {},
+      "RequestId": "d46d80c9-8a8c-4b91-bec5-a96ec1bf377a"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 16,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:18.495Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 17,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:18.495Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 9,
+        "CurrentAttempt": 4
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 18,
+    "EventTimestamp": "2026-06-17T22:09:18.515Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T22:09:18.492Z",
+      "EndTimestamp": "2026-06-17T22:09:18.515Z",
+      "Error": {},
+      "RequestId": "0c9f4173-a871-449f-b789-cb1a5ca099d2"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 19,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:27.500Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 20,
+    "Id": "2f221a18eb863803",
+    "Name": "throw-with-error-data",
+    "EventTimestamp": "2026-06-17T22:09:27.500Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 5
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "RunInChildContext",
+    "EventId": 21,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "inner-child",
+    "EventTimestamp": "2026-06-17T22:09:27.502Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "RunInChildContext",
+    "EventId": 22,
+    "Id": "c4ca4238a0b92382",
+    "Name": "outer-child",
+    "EventTimestamp": "2026-06-17T22:09:27.502Z",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "ChildContextError",
+          "ErrorMessage": "cb failed",
+          "ErrorData": "{\"reason\":\"operator-cancelled\"}"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 23,
+    "EventTimestamp": "2026-06-17T22:09:27.503Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T22:09:27.496Z",
+      "EndTimestamp": "2026-06-17T22:09:27.503Z",
+      "Error": {},
+      "RequestId": "2eaf128e-bfc1-4786-b8e6-a0e498031006"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 24,
+    "Id": "b75544b4-3b69-4fd5-b475-715f8412a7c7",
+    "EventTimestamp": "2026-06-17T22:09:27.503Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"found\":true,\"errorData\":\"{\\\"reason\\\":\\\"operator-cancelled\\\"}\"}"
+      }
+    }
+  }
+]
