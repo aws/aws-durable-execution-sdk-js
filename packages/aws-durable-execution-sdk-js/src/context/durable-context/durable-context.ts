@@ -82,6 +82,7 @@ export class DurableContextImpl<
 
   private _stepPrefix?: string;
   private _stepCounter: number = 0;
+  private _virtualChildContextStepCounter: number = 0;
   private durableLogger: Logger;
   private modeAwareLoggingEnabled: boolean = true;
   private checkpoint: CheckpointManager;
@@ -217,8 +218,16 @@ export class DurableContextImpl<
     return durableContextLogger;
   }
 
-  private createStepId(): string {
+  private createStepId(isVirtual: boolean = false): string {
+    if (isVirtual) {
+      this._virtualChildContextStepCounter++;
+      const baseId = this._stepPrefix
+        ? `${this._stepPrefix}-${this._stepCounter}`
+        : `${this._stepCounter}`;
+      return `${baseId}.${this._virtualChildContextStepCounter}`;
+    }
     this._stepCounter++;
+    this._virtualChildContextStepCounter = 0; // Reset virtual counter when main advances
     return this._stepPrefix
       ? `${this._stepPrefix}-${this._stepCounter}`
       : `${this._stepCounter}`;

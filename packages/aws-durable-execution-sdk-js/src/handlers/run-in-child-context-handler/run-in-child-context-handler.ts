@@ -68,7 +68,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   checkpoint: Checkpoint,
   parentContext: Context,
-  createStepId: () => string,
+  createStepId: (isVirtual?: boolean) => string,
   getParentLogger: () => Logger,
   createChildContext: (
     executionContext: ExecutionContext,
@@ -102,7 +102,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       options = fnOrOptions as ChildConfig<T>;
     }
 
-    const entityId = createStepId();
+    const isVirtual = options?.virtualContext === true;
+    const entityId = createStepId(isVirtual);
 
     log("🔄", "Running child context:", {
       entityId,
