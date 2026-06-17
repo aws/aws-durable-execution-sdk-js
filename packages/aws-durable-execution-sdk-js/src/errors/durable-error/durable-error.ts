@@ -91,13 +91,29 @@ export abstract class DurableOperationError extends Error {
   }
 
   /**
-   * Convert to ErrorObject for serialization
+   * Convert to ErrorObject for serialization.
+   * When errorData is undefined, walks the cause chain to surface the first
+   * errorData found — prevents loss across runInChildContext boundaries.
    */
   toErrorObject(): ErrorObject {
+    let errorData = this.errorData;
+    if (errorData === undefined) {
+      let node: unknown = this.cause;
+      for (let i = 0; i < 10 && node; i++) {
+        if (
+          node instanceof DurableOperationError &&
+          typeof node.errorData === "string"
+        ) {
+          errorData = node.errorData;
+          break;
+        }
+        node = node instanceof Error ? node.cause : undefined;
+      }
+    }
     return {
       ErrorType: this.errorType,
       ErrorMessage: this.message,
-      ErrorData: this.errorData,
+      ErrorData: errorData,
       StackTrace: STORE_STACK_TRACES
         ? this.cause?.stack?.split(/\r?\n/) || this.stack?.split(/\r?\n/)
         : undefined,
