@@ -1,0 +1,140 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "c6f52298-e322-4302-9936-0a9bb0ea985c",
+    "EventTimestamp": "2026-06-17T23:07:29.207Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-step",
+    "EventTimestamp": "2026-06-17T23:07:29.213Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-step",
+    "EventTimestamp": "2026-06-17T23:07:29.213Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Attempt 1 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-06-17T23:07:29.276Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T23:07:29.207Z",
+      "EndTimestamp": "2026-06-17T23:07:29.276Z",
+      "Error": {},
+      "RequestId": "1a52c627-8a0d-487b-9fe5-5e3232dd32db"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-step",
+    "EventTimestamp": "2026-06-17T23:07:30.218Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-step",
+    "EventTimestamp": "2026-06-17T23:07:30.218Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Attempt 2 failed",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-06-17T23:07:30.242Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T23:07:30.216Z",
+      "EndTimestamp": "2026-06-17T23:07:30.242Z",
+      "Error": {},
+      "RequestId": "f1edc804-6698-4022-b852-ae02015cfe02"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-step",
+    "EventTimestamp": "2026-06-17T23:07:31.223Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "retry-step",
+    "EventTimestamp": "2026-06-17T23:07:31.223Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"success-on-attempt-3\""
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-06-17T23:07:31.225Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T23:07:31.220Z",
+      "EndTimestamp": "2026-06-17T23:07:31.225Z",
+      "Error": {},
+      "RequestId": "5e7e0303-f683-4574-b45d-88e8caef3de4"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "c6f52298-e322-4302-9936-0a9bb0ea985c",
+    "EventTimestamp": "2026-06-17T23:07:31.225Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"result\":\"success-on-attempt-3\",\"spans\":[{\"name\":\"retry-step\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"6a53a030d435ced7\",\"parentSpanId\":\"026806110351f2bf\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"retry-step\"},\"links\":[{\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"026806110351f2bf\"}],\"status\":{\"code\":2,\"message\":\"Attempt 1 failed\"},\"events\":[{\"name\":\"exception\",\"attributes\":{\"exception.type\":\"Error\",\"exception.message\":\"Attempt 1 failed\",\"exception.stacktrace\":\"Error: Attempt 1 failed\\n    at context.step.retryStrategy.shouldRetry (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/otel-retry-steps/otel-retry-steps.ts:30:17)\\n    at stepFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:322:44)\\n    at guardedFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:56:42)\\n    at NoopContextManager.with (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@opentelemetry/api/src/context/NoopContextManager.ts:20:15)\\n    at ContextAPI.with (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@opentelemetry/api/src/api/context.ts:68:42)\\n    at DurableExecutionOtelPlugin.wrapOperationAttemptFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-otel/src/plugin.ts:365:24)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:80:27\\n    at runAsCallback (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:93:16)\\n    at Object.wrapOperationAttemptFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:174:28)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:328:26\\n    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)\\n    at runWithContext (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/context-tracker/context-tracker.ts:26:28)\\n    at executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:323:27)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:255:14\"}}]},{\"name\":\"retry-step\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"026806110351f2bf\",\"parentSpanId\":\"36e33223a9840b92\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"retry-step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"36e33223a9840b92\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"retry-step\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"6b407825fa61b3a0\",\"parentSpanId\":\"026806110351f2bf\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":2,\"durable.operation.name\":\"retry-step\"},\"links\":[{\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"026806110351f2bf\"}],\"status\":{\"code\":2,\"message\":\"Attempt 2 failed\"},\"events\":[{\"name\":\"exception\",\"attributes\":{\"exception.type\":\"Error\",\"exception.message\":\"Attempt 2 failed\",\"exception.stacktrace\":\"Error: Attempt 2 failed\\n    at context.step.retryStrategy.shouldRetry (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/otel-retry-steps/otel-retry-steps.ts:30:17)\\n    at stepFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:322:44)\\n    at guardedFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:56:42)\\n    at NoopContextManager.with (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@opentelemetry/api/src/context/NoopContextManager.ts:20:15)\\n    at ContextAPI.with (/Users/hsilan/github/aws-durable-execution-sdk-js/node_modules/@opentelemetry/api/src/api/context.ts:68:42)\\n    at DurableExecutionOtelPlugin.wrapOperationAttemptFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-otel/src/plugin.ts:365:24)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:80:27\\n    at runAsCallback (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:93:16)\\n    at Object.wrapOperationAttemptFn (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts:174:28)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:328:26\\n    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)\\n    at runWithContext (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/context-tracker/context-tracker.ts:26:28)\\n    at executeStepLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:323:27)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/step-handler/step-handler.ts:255:14\"}}]},{\"name\":\"retry-step\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"026806110351f2bf\",\"parentSpanId\":\"45189a4ecfd0fa2c\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"retry-step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"45189a4ecfd0fa2c\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"retry-step\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"e307e1e9b7e9f1d3\",\"parentSpanId\":\"026806110351f2bf\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":3,\"durable.operation.name\":\"retry-step\"},\"links\":[{\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"026806110351f2bf\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"retry-step\",\"traceId\":\"555bdaf932e78c11d99314d30a0bd154\",\"spanId\":\"026806110351f2bf\",\"parentSpanId\":\"fcc3b2e3d26e79d7\",\"attributes\":{\"durable.execution.arn\":\"b3f6d763-2462-4db0-8fb0-17331b726ed3\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"retry-step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
+      }
+    }
+  }
+]
