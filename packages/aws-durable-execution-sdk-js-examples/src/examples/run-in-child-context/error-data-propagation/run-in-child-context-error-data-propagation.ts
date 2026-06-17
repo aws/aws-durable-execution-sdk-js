@@ -1,6 +1,5 @@
 import {
   CallbackError,
-  ChildContextError,
   DurableContext,
   DurableOperationError,
   withDurableExecution,
@@ -24,9 +23,15 @@ export const handler = withDurableExecution(
           await outerChild.runInChildContext(
             "inner-child",
             async (innerChild: DurableContext) => {
-              await innerChild.step("throw-with-error-data", async () => {
-                throw new CallbackError("cb failed", undefined, SENTINEL);
-              });
+              await innerChild.step(
+                "throw-with-error-data",
+                async () => {
+                  throw new CallbackError("cb failed", undefined, SENTINEL);
+                },
+                // Fail fast: skip retries so the test doesn't wait out the
+                // default retry window (important for cloud integ tests).
+                { retryStrategy: () => ({ shouldRetry: false }) },
+              );
             },
           );
         },
