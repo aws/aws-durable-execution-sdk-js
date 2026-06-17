@@ -147,7 +147,9 @@ export function buildPreview(
             : isMatched(path, config.include)));
 
       if (!visible) {
-        collect(obj[key], path);
+        if (!excluded) {
+          collect(obj[key], path);
+        }
         continue;
       }
 
