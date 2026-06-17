@@ -110,6 +110,39 @@ describe("createFileSystemSerdes", () => {
       expect(mockReadFile).toHaveBeenCalledWith(EXPECTED_FILE, "utf-8");
       expect(result).toEqual(value);
     });
+
+    it("should overflow to file when double-encoded envelope exceeds checkpoint limit (issue #624)", async () => {
+      // The OVERFLOW_THRESHOLD is 256*1024 - 1024 = 261120 bytes.
+      // We craft inlineJson that's just under this threshold but contains many
+      // backslashes/quotes so that JSON.stringify({data: inlineJson}) (which
+      // re-escapes them) blows past 256KB.
+      //
+      // Strategy: build a value whose JSON.stringify has lots of backslashes.
+      // Each \ in inlineJson becomes \\ in the envelope, doubling their contribution.
+      const OVERFLOW_THRESHOLD = 256 * 1024 - 1024; // 261120
+      // A string of backslashes: JSON.stringify({d:"\\..."}) produces {"d":"\\\\..."}
+      // So each backslash in the source string becomes 2 bytes (\\) in inlineJson.
+      // Then in the envelope, each \\ becomes \\\\ (4 bytes). So ratio is 2:1 for inflation.
+      // We want inlineJson ~ 255KB with ~50% being backslash escapes.
+      // Let's use ~130000 backslashes -> inlineJson has ~260000 bytes of \\ sequences
+      // plus ~7 bytes overhead for {"d":""}
+      const numBackslashes = Math.floor((OVERFLOW_THRESHOLD - 10) / 2); // ~130555
+      const value = { d: "\\".repeat(numBackslashes) };
+      const inlineJson = JSON.stringify(value);
+      const envelope = JSON.stringify({ data: inlineJson });
+
+      // Verify test setup: inlineJson is under threshold but envelope exceeds 256KB
+      expect(Buffer.byteLength(inlineJson, "utf-8")).toBeLessThanOrEqual(
+        OVERFLOW_THRESHOLD,
+      );
+      expect(Buffer.byteLength(envelope, "utf-8")).toBeGreaterThan(256 * 1024);
+
+      const result = await serdes.serialize(value, mockContext);
+
+      // The serialized result should overflow to file, not inline
+      expect(mockWriteFile).toHaveBeenCalled();
+      expect(JSON.parse(result!)).toEqual({ file: EXPECTED_FILE });
+    });
   });
 });
 
