@@ -2046,6 +2046,31 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  RunInChildContextErrorDataPropagation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RuninChildContext-ErrorDataPropagation-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: run-in-child-context-error-data-propagation.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   RunInChildContextLargeData:
     Type: AWS::Serverless::Function
     Properties:
