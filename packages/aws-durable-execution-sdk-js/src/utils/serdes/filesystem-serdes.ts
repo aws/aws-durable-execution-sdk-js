@@ -172,15 +172,18 @@ export function createFileSystemSerdes(
 
       // OVERFLOW mode: serialize inline first, overflow to file if too large
       const inlineJson = JSON.stringify(value);
-      if (Buffer.byteLength(inlineJson, "utf-8") > OVERFLOW_THRESHOLD_BYTES) {
+      const envelope = JSON.stringify({
+        data: inlineJson,
+      } as FileSystemEnvelope);
+      if (Buffer.byteLength(envelope, "utf-8") > OVERFLOW_THRESHOLD_BYTES) {
         const filePath = await writeToFile(basePath, value, context);
         const preview = config.generatePreview?.(value);
-        const envelope: FileSystemEnvelope = preview
+        const fileEnvelope: FileSystemEnvelope = preview
           ? { file: filePath, preview }
           : { file: filePath };
-        return JSON.stringify(envelope);
+        return JSON.stringify(fileEnvelope);
       }
-      return JSON.stringify({ data: inlineJson } as FileSystemEnvelope);
+      return envelope;
     },
 
     deserialize: async (
