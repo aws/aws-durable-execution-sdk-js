@@ -75,6 +75,12 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "PromiseCombinatorError":
+        return new PromiseCombinatorError(
+          errorObject.ErrorMessage || "Promise combinator failed",
+          cause,
+          errorObject.ErrorData,
+        );
       default:
         return new StepError(
           errorObject.ErrorMessage || "Unknown error",
