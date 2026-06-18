@@ -1,5 +1,10 @@
 import { RetryDecision, JitterStrategy, Duration } from "../../../types";
 import { durationToSeconds } from "../../duration/duration";
+import {
+  finalizeDelaySeconds,
+  isErrorRetryable,
+  resolveRetryableErrors,
+} from "../retry-common/retry-common";
 
 /**
  * Configuration options for creating a retry strategy
@@ -116,21 +121,6 @@ const DEFAULT_CONFIG: Required<RetryStrategyConfig> = {
   retryableErrorTypes: [],
 };
 
-const applyJitter = (delay: number, strategy: JitterStrategy): number => {
-  switch (strategy) {
-    case JitterStrategy.NONE:
-      return delay;
-    case JitterStrategy.FULL:
-      // Random between 0 and delay
-      return Math.random() * delay;
-    case JitterStrategy.HALF:
-      // Random between delay/2 and delay
-      return delay / 2 + Math.random() * (delay / 2);
-    default:
-      return delay;
-  }
-};
-
 /**
  * Creates a retry strategy function with exponential backoff and configurable jitter
  *
@@ -196,16 +186,16 @@ const applyJitter = (delay: number, strategy: JitterStrategy): number => {
  * @public
  */
 export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
-  // Only apply default retryableErrors if user didn't specify either filter
-  const shouldUseDefaultErrors =
-    config.retryableErrors === undefined &&
-    config.retryableErrorTypes === undefined;
+  const { retryableErrors, retryableErrorTypes } = resolveRetryableErrors(
+    config.retryableErrors,
+    config.retryableErrorTypes,
+  );
 
   const finalConfig: Required<RetryStrategyConfig> = {
     ...DEFAULT_CONFIG,
     ...config,
-    retryableErrors:
-      config.retryableErrors ?? (shouldUseDefaultErrors ? [/.*/] : []),
+    retryableErrors,
+    retryableErrorTypes,
   };
 
   return (error: Error, attemptsMade: number): RetryDecision => {
@@ -214,22 +204,14 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
       return { shouldRetry: false };
     }
 
-    // Check if error is retryable based on error message
-    const isRetryableErrorMessage = finalConfig.retryableErrors.some(
-      (pattern) => {
-        if (pattern instanceof RegExp) {
-          return pattern.test(error.message);
-        }
-        return error.message.includes(pattern);
-      },
-    );
-
-    // Check if error is retryable based on error type
-    const isRetryableErrorType = finalConfig.retryableErrorTypes.some(
-      (ErrorType) => error instanceof ErrorType,
-    );
-
-    if (!isRetryableErrorMessage && !isRetryableErrorType) {
+    // Check if error is retryable based on message patterns and/or types
+    if (
+      !isErrorRetryable(
+        error,
+        finalConfig.retryableErrors,
+        finalConfig.retryableErrorTypes,
+      )
+    ) {
       return { shouldRetry: false };
     }
 
@@ -242,11 +224,8 @@ export const createRetryStrategy = (config: RetryStrategyConfig = {}) => {
       maxDelaySeconds,
     );
 
-    // Apply jitter
-    const delayWithJitter = applyJitter(baseDelay, finalConfig.jitter);
-
-    // Ensure delay is an integer >= 1
-    const finalDelay = Math.max(1, Math.round(delayWithJitter));
+    // Apply jitter and normalize to an integer >= 1 second
+    const finalDelay = finalizeDelaySeconds(baseDelay, finalConfig.jitter);
 
     return { shouldRetry: true, delay: { seconds: finalDelay } };
   };
