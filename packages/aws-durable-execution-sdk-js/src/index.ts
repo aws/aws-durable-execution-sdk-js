@@ -42,6 +42,7 @@ export {
   DurableOperationError,
   StepError,
   CallbackError,
+  CallbackExternalError,
   CallbackTimeoutError,
   CallbackSubmitterError,
   InvokeError,

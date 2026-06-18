@@ -1,4 +1,10 @@
-import { CallbackError } from "../../errors/durable-error/durable-error";
+import {
+  CallbackError,
+  CallbackExternalError,
+  CallbackTimeoutError,
+  CallbackSubmitterError,
+  DurableOperationError,
+} from "../../errors/durable-error/durable-error";
 import { ErrorObject } from "@aws-sdk/client-lambda";
 
 describe("CallbackError", () => {
@@ -80,5 +86,63 @@ describe("CallbackError", () => {
       expect(error.cause!.name).toBe("Error");
       expect(error.cause!.stack).toBeUndefined();
     });
+  });
+});
+
+describe("Callback error hierarchy", () => {
+  it("CallbackExternalError should be a CallbackError", () => {
+    const error = new CallbackExternalError();
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(DurableOperationError);
+    expect(error).toBeInstanceOf(CallbackError);
+    expect(error).toBeInstanceOf(CallbackExternalError);
+    expect(error.name).toBe("CallbackExternalError");
+    expect(error.errorType).toBe("CallbackExternalError");
+    expect(error.message).toBe("Callback failed");
+  });
+
+  it("CallbackTimeoutError should be a CallbackError", () => {
+    const error = new CallbackTimeoutError();
+
+    expect(error).toBeInstanceOf(CallbackError);
+    expect(error).toBeInstanceOf(CallbackTimeoutError);
+    expect(error.errorType).toBe("CallbackTimeoutError");
+    expect(error.message).toBe("Callback timed out");
+  });
+
+  it("CallbackSubmitterError should be a CallbackError", () => {
+    const error = new CallbackSubmitterError();
+
+    expect(error).toBeInstanceOf(CallbackError);
+    expect(error).toBeInstanceOf(CallbackSubmitterError);
+    expect(error.errorType).toBe("CallbackSubmitterError");
+    expect(error.message).toBe("Callback submitter failed");
+  });
+
+  it("base CallbackError should not be an instance of its subclasses", () => {
+    const error = new CallbackError();
+
+    expect(error).toBeInstanceOf(CallbackError);
+    expect(error).not.toBeInstanceOf(CallbackExternalError);
+    expect(error).not.toBeInstanceOf(CallbackTimeoutError);
+    expect(error).not.toBeInstanceOf(CallbackSubmitterError);
+    expect(error.errorType).toBe("CallbackError");
+  });
+
+  it("should reconstruct CallbackExternalError from ErrorObject preserving the subtype", () => {
+    const errorObject: ErrorObject = {
+      ErrorType: "CallbackExternalError",
+      ErrorMessage: "External system reported failure",
+      ErrorData: "external-data",
+    };
+
+    const error = DurableOperationError.fromErrorObject(errorObject);
+
+    expect(error).toBeInstanceOf(CallbackExternalError);
+    expect(error).toBeInstanceOf(CallbackError);
+    expect(error.errorType).toBe("CallbackExternalError");
+    expect(error.message).toBe("External system reported failure");
+    expect(error.errorData).toBe("external-data");
   });
 });

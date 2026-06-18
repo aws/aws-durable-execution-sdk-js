@@ -1,7 +1,11 @@
 import { createCallbackPromise } from "./callback-promise";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { OperationStatus } from "@aws-sdk/client-lambda";
-import { CallbackError } from "../../errors/durable-error/durable-error";
+import {
+  CallbackError,
+  CallbackExternalError,
+  CallbackTimeoutError,
+} from "../../errors/durable-error/durable-error";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 
@@ -129,11 +133,12 @@ describe("createCallbackPromise", () => {
       mockCheckAndUpdateReplayMode,
     );
 
-    await expect(promise).rejects.toThrow(CallbackError);
+    await expect(promise).rejects.toThrow(CallbackExternalError);
 
     try {
       await promise;
     } catch (error) {
+      expect(error).toBeInstanceOf(CallbackExternalError);
       expect(error).toBeInstanceOf(CallbackError);
       expect((error as CallbackError).message).toBe("Custom error message");
       expect((error as CallbackError).cause?.name).toBe("CustomError");
@@ -162,7 +167,7 @@ describe("createCallbackPromise", () => {
       mockCheckAndUpdateReplayMode,
     );
 
-    await expect(promise).rejects.toThrow(CallbackError);
+    await expect(promise).rejects.toThrow(CallbackExternalError);
     await expect(promise).rejects.toThrow("Callback failed");
   });
 
@@ -182,7 +187,9 @@ describe("createCallbackPromise", () => {
       mockCheckAndUpdateReplayMode,
     );
 
+    await expect(promise).rejects.toThrow(CallbackTimeoutError);
+    await expect(promise).rejects.toThrow("Callback timed out");
+    // CallbackTimeoutError is part of the CallbackError hierarchy
     await expect(promise).rejects.toThrow(CallbackError);
-    await expect(promise).rejects.toThrow("Callback failed");
   });
 });

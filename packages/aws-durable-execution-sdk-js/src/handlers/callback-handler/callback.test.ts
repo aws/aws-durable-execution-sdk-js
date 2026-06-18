@@ -14,6 +14,7 @@ import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
+  CallbackExternalError,
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
 
@@ -282,7 +283,7 @@ describe("Callback Handler", () => {
     {
       status: OperationStatus.FAILED,
       statusName: "failed",
-      expectedErrorClass: CallbackError,
+      expectedErrorClass: CallbackExternalError,
       testData: {
         callbackId: "callback-failed-123",
         errorData: "Error data",
