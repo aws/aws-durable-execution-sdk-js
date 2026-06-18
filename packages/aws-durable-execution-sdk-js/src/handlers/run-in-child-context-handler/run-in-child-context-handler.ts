@@ -258,8 +258,25 @@ export const handleCompletedChildContext = async <
       fn(durableChildContext),
     );
 
-    // Large payloads: replay re-executes the child function, so return raw result.
-    return replayedResult;
+    // Large payloads re-execute the child function on replay, so apply the
+    // same serdes round-trip first-run uses, keeping the returned value
+    // consistent across first-run and replay.
+    const reserialized = await safeSerialize(
+      serdes,
+      replayedResult,
+      entityId,
+      stepName,
+      context.terminationManager,
+      context.durableExecutionArn,
+    );
+    return await safeDeserialize(
+      serdes,
+      reserialized,
+      entityId,
+      stepName,
+      context.terminationManager,
+      context.durableExecutionArn,
+    );
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
@@ -437,13 +454,13 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       await plugin.onOperationEnd?.({ ...opInfo, isReplay: true });
     }
 
-    // Large payloads: replay re-executes the child function, so return raw result.
-    // Virtual contexts: never checkpoint, so no replay path to match.
-    if (replayChildren || isVirtual) {
-      return result;
-    }
-
-    // Small payloads: replay deserializes the checkpoint, so match that here.
+    // Return deserialize(serialize(result)) in every mode (small payload,
+    // large payload / ReplayChildren, and virtual). This gives developers a
+    // single, predictable mental model: the value handed back from a child
+    // context has always passed through the serdes round-trip, regardless of
+    // payload size or whether the context is virtual. The corresponding replay
+    // paths (small: deserialize the checkpoint; large: re-execute then
+    // round-trip; virtual: re-execute then round-trip) produce the same value.
     return await safeDeserialize(
       serdes,
       serializedResult,

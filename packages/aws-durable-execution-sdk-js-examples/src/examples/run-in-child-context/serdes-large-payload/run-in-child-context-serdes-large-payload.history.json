@@ -1,0 +1,114 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "a8a0eb4f-9f40-4838-a792-def055a975c4",
+    "EventTimestamp": "2026-06-18T03:55:41.860Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "large-serdes-child",
+    "EventTimestamp": "2026-06-18T03:55:41.868Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "RunInChildContext",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "large-serdes-child",
+    "EventTimestamp": "2026-06-18T03:55:41.868Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": ""
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "capture-large-result",
+    "EventTimestamp": "2026-06-18T03:55:41.868Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "capture-large-result",
+    "EventTimestamp": "2026-06-18T03:55:41.868Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"prefix\":\"XXXXXXXXXX\",\"length\":307200,\"isUppercase\":true}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay-large",
+    "EventTimestamp": "2026-06-18T03:55:41.873Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-06-18T03:55:42.873Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-06-18T03:55:41.894Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T03:55:41.860Z",
+      "EndTimestamp": "2026-06-18T03:55:41.894Z",
+      "Error": {},
+      "RequestId": "da4c4f0b-5c11-45dc-8e31-b1ca82ac989a"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay-large",
+    "EventTimestamp": "2026-06-18T03:55:42.871Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-06-18T03:55:42.873Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T03:55:42.872Z",
+      "EndTimestamp": "2026-06-18T03:55:42.873Z",
+      "Error": {},
+      "RequestId": "cf4f9eea-289e-4e53-ba8d-91ace710e5bc"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "a8a0eb4f-9f40-4838-a792-def055a975c4",
+    "EventTimestamp": "2026-06-18T03:55:42.873Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"capturedOnFirstRun\":{\"prefix\":\"XXXXXXXXXX\",\"length\":307200,\"isUppercase\":true}}"
+      }
+    }
+  }
+]

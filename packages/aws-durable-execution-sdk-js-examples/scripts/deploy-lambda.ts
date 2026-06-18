@@ -174,6 +174,32 @@ async function checkFunctionExists(
   }
 }
 
+/**
+ * Detects Lambda control-plane throttling (TooManyRequestsException / HTTP 429,
+ * e.g. CallerRateLimitExceeded). The exception is not exported as a class by
+ * @aws-sdk/client-lambda, so match on the error name / status code instead.
+ */
+function isThrottlingError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const e = error as {
+    name?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+  return (
+    e.name === "TooManyRequestsException" || e.$metadata?.httpStatusCode === 429
+  );
+}
+
+/**
+ * Retries an operation on transient Lambda control-plane errors:
+ * - ResourceConflictException: another update is in progress; clears quickly,
+ *   so retry with a short fixed delay.
+ * - TooManyRequestsException (429): the account exceeded its control-plane API
+ *   rate. Bulk-deploying ~100+ functions across parallel runtime jobs can trip
+ *   this, so back off exponentially (with jitter) to let the limit recover.
+ */
 async function retryOnConflict<T>(
   operation: () => Promise<T>,
   maxRetries: number = 10,
@@ -182,14 +208,23 @@ async function retryOnConflict<T>(
     try {
       return await operation();
     } catch (error: unknown) {
-      if (
-        error instanceof ResourceConflictException &&
-        attempt < maxRetries - 1
-      ) {
+      const isConflict = error instanceof ResourceConflictException;
+      const isThrottle = isThrottlingError(error);
+      if ((isConflict || isThrottle) && attempt < maxRetries - 1) {
+        // Conflicts clear quickly; throttles need exponential backoff so the
+        // per-account control-plane rate limit has time to recover.
+        const baseDelayMs = isThrottle
+          ? Math.min(1000 * 2 ** attempt, 20000)
+          : 1000;
+        const delayMs = baseDelayMs + Math.floor(Math.random() * 250);
+        const label = isThrottle
+          ? "TooManyRequestsException (throttled)"
+          : "ResourceConflictException";
         console.warn(
-          `ResourceConflictException encountered: ${error.message}. Retrying ${attempt + 1}/${maxRetries} attempts`,
+          `${label} encountered: ${(error as Error).message}. ` +
+            `Retrying ${attempt + 1}/${maxRetries} attempts in ${delayMs}ms`,
         );
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
       throw error;
