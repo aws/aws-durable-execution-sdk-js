@@ -2,11 +2,13 @@ import { SerdesContext } from "./serdes";
 import {
   createFileSystemSerdes,
   FileSystemSerdesMode,
+  FileSystemPathEncoding,
   PreviewMode,
   FieldMatchMode,
   buildPreview,
 } from "./filesystem-serdes";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
+import { createHash } from "node:crypto";
 
 jest.mock("node:fs/promises", () => ({
   mkdir: jest.fn().mockResolvedValue(undefined),
@@ -142,6 +144,134 @@ describe("createFileSystemSerdes", () => {
       // The serialized result should overflow to file, not inline
       expect(mockWriteFile).toHaveBeenCalled();
       expect(JSON.parse(result!)).toEqual({ file: EXPECTED_FILE });
+    });
+  });
+});
+
+describe("createFileSystemSerdes path encoding", () => {
+  // An entity ID that is unsafe as a raw file name: a slash would create or
+  // escape directories, and "../" would traverse outside the per-execution dir.
+  const unsafeContext: SerdesContext = {
+    entityId: "../invoices/2026",
+    durableExecutionArn: TEST_CONSTANTS.DURABLE_EXECUTION_ARN,
+  };
+
+  // A realistic durable execution ARN:
+  // arn:aws:lambda:<region>:<account>:function:<fn>:<version>/durable-execution/<executionName>/<invocationId>
+  const FUNCTION_NAME = "payment-processor";
+  const EXECUTION_NAME = "045e664f-c7e6-4487-be17-30efc3c6880a";
+  const INVOCATION_ID = "d6a8ddb8-0286-39d6-89bd-8f13b33d4722";
+  const REALISTIC_ARN = `arn:aws:lambda:us-east-1:123456789012:function:${FUNCTION_NAME}:54/durable-execution/${EXECUTION_NAME}/${INVOCATION_ID}`;
+  const realisticContext: SerdesContext = {
+    entityId: TEST_CONSTANTS.STEP_ID,
+    durableExecutionArn: REALISTIC_ARN,
+  };
+
+  describe("URI encoding (default)", () => {
+    it("derives a compact directory from the ARN's function name, execution name and invocation id", async () => {
+      const serdes = createFileSystemSerdes(BASE_PATH);
+      const result = await serdes.serialize({ id: 1 }, realisticContext);
+
+      const expectedDir = `${BASE_PATH}/${FUNCTION_NAME}/${EXECUTION_NAME}/${INVOCATION_ID}`;
+      const expectedFile = `${expectedDir}/${TEST_CONSTANTS.STEP_ID}.json`;
+
+      expect(mockMkdir).toHaveBeenCalledWith(expectedDir, { recursive: true });
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        expectedFile,
+        JSON.stringify({ id: 1 }),
+        "utf-8",
+      );
+      // The whole ARN must NOT appear as a single encoded directory segment.
+      expect(expectedDir).not.toContain("%3A");
+      expect(JSON.parse(result!)).toEqual({ file: expectedFile });
+    });
+
+    it("falls back to encoding the whole ARN when it is not a durable-execution ARN", async () => {
+      const serdes = createFileSystemSerdes(BASE_PATH);
+      await serdes.serialize({ id: 1 }, mockContext);
+
+      // TEST ARN is not in the expected shape, so the whole ARN is encoded into
+      // a single directory segment (legacy layout) and the file name is unchanged.
+      expect(mockMkdir).toHaveBeenCalledWith(EXPECTED_DIR, { recursive: true });
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        EXPECTED_FILE,
+        JSON.stringify({ id: 1 }),
+        "utf-8",
+      );
+    });
+
+    it("encodes the entityId so an unsafe name stays a single flat file", async () => {
+      const serdes = createFileSystemSerdes(BASE_PATH);
+      const result = await serdes.serialize({ id: 1 }, unsafeContext);
+
+      const expectedFile = `${EXPECTED_DIR}/${encodeURIComponent(
+        unsafeContext.entityId,
+      )}.json`;
+
+      // The written path must be the flat encoded file directly under the
+      // ARN directory — no extra directories, no traversal.
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        expectedFile,
+        JSON.stringify({ id: 1 }),
+        "utf-8",
+      );
+      expect(expectedFile.startsWith(`${EXPECTED_DIR}/`)).toBe(true);
+      expect(expectedFile).not.toContain("/../");
+      expect(JSON.parse(result!)).toEqual({ file: expectedFile });
+    });
+
+    it("matches the legacy raw layout for IDs that need no encoding", async () => {
+      const serdes = createFileSystemSerdes(BASE_PATH);
+      await serdes.serialize({ id: 1 }, mockContext);
+
+      // STEP_ID has no special chars, so encodeURIComponent is a no-op and the
+      // on-disk path is unchanged from the pre-fix behavior.
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        EXPECTED_FILE,
+        JSON.stringify({ id: 1 }),
+        "utf-8",
+      );
+    });
+  });
+
+  describe("HASH encoding", () => {
+    const serdes = createFileSystemSerdes(BASE_PATH, {
+      pathEncoding: FileSystemPathEncoding.HASH,
+    });
+
+    const sha256 = (v: string): string =>
+      createHash("sha256").update(v).digest("hex");
+
+    it("hashes the whole ARN directory and the entityId file name", async () => {
+      const result = await serdes.serialize({ id: 1 }, realisticContext);
+
+      const expectedDir = `${BASE_PATH}/${sha256(REALISTIC_ARN)}`;
+      const expectedFile = `${expectedDir}/${sha256(
+        TEST_CONSTANTS.STEP_ID,
+      )}.json`;
+
+      expect(mockMkdir).toHaveBeenCalledWith(expectedDir, { recursive: true });
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        expectedFile,
+        JSON.stringify({ id: 1 }),
+        "utf-8",
+      );
+      expect(JSON.parse(result!)).toEqual({ file: expectedFile });
+    });
+
+    it("produces fixed-length (64 hex char) segment names", async () => {
+      await serdes.serialize(
+        { id: 1 },
+        {
+          entityId: "x".repeat(10_000),
+          durableExecutionArn: REALISTIC_ARN,
+        },
+      );
+
+      const writtenPath = mockWriteFile.mock.calls[0][0] as string;
+      const fileName = writtenPath.split("/").pop()!;
+      expect(fileName).toBe(`${sha256("x".repeat(10_000))}.json`);
+      expect(fileName.length).toBe(64 + ".json".length);
     });
   });
 });
