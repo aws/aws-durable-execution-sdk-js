@@ -1,5 +1,6 @@
 import {
   CallbackError,
+  CallbackExternalError,
   CallbackTimeoutError,
   DurableContext,
   withDurableExecution,
@@ -47,6 +48,7 @@ export const handler = withDurableExecution(
         },
         failureError: {
           isCallbackError: errors[1] instanceof CallbackError,
+          isCallbackExternalError: errors[1] instanceof CallbackExternalError,
           errorName: errors[1]?.constructor.name,
           errorMessage: errors[1]?.message,
         },

@@ -1,5 +1,6 @@
 import {
   CallbackError,
+  CallbackExternalError,
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
@@ -7,7 +8,8 @@ import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
   name: "Wait for Callback - Error Instance Failure",
-  description: "Verifies CallbackError instanceof check works across replays",
+  description:
+    "Verifies CallbackExternalError instanceof check works across replays",
 };
 
 export const handler = withDurableExecution(
@@ -28,6 +30,7 @@ export const handler = withDurableExecution(
 
     return await context.step("check-error-type", async () => ({
       isCallbackError: error instanceof CallbackError,
+      isCallbackExternalError: error instanceof CallbackExternalError,
       errorName: error?.constructor.name,
       errorMessage: error?.message,
     }));

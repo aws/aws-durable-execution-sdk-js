@@ -146,9 +146,10 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
             serdes: createPassThroughSerdes(),
           }),
           errorMapper: (originalError) => {
-            // Pass through callback errors directly (both timeout and failure)
+            // Pass through callback errors directly (timeout, external failure, base)
             if (
               originalError.errorType === "CallbackTimeoutError" ||
+              originalError.errorType === "CallbackExternalError" ||
               originalError.errorType === "CallbackError"
             ) {
               return originalError;
