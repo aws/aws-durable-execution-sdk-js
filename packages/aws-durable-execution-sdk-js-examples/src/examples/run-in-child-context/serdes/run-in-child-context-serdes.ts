@@ -1,10 +1,9 @@
 import {
   DurableContext,
   withDurableExecution,
-  Serdes,
-  SerdesContext,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
+import { uppercaseSerdes } from "../../shared/uppercase-serdes";
 
 export const config: ExampleConfig = {
   name: "Run in Child Context with Serdes",
@@ -12,27 +11,6 @@ export const config: ExampleConfig = {
     "Verifies runInChildContext with a custom serdes returns " +
     "deserialize(serialize(result)) on first run to match replay behavior " +
     "(small payload case).",
-};
-
-/**
- * Custom serdes that uppercases on serialize and returns as-is on deserialize.
- * This makes it trivial to detect whether the result went through ser/des:
- * - If the result is UPPERCASE, serialize ran and its output flowed back through
- *   deserialize (the full round-trip was applied).
- * - If the result is lowercase, the raw in-memory value was returned without
- *   the round-trip.
- *
- * Shared by the small-payload (this file), large-payload, and virtual-context
- * serdes examples so all three modes assert identical round-trip behavior.
- */
-export const uppercaseSerdes: Serdes<string> = {
-  serialize: async (value: string | undefined, _context: SerdesContext) => {
-    if (value === undefined) return undefined;
-    return value.toUpperCase();
-  },
-  deserialize: async (data: string | undefined, _context: SerdesContext) => {
-    return data;
-  },
 };
 
 /**

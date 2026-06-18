@@ -3,7 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { uppercaseSerdes } from "../serdes/run-in-child-context-serdes";
+import { uppercaseSerdes } from "../../shared/uppercase-serdes";
 
 export const config: ExampleConfig = {
   name: "Run in Child Context with Serdes - Large Payload",
