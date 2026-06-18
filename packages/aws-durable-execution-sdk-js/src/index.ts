@@ -63,6 +63,7 @@ export {
 export {
   createFileSystemSerdes,
   FileSystemSerdesMode,
+  FileSystemPathEncoding,
   FileSystemSerdesConfig,
   FieldMatchMode,
   PreviewMode,
