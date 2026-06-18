@@ -1,0 +1,115 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "e78aad8e-838a-4c99-ab05-d9f1cca5971a",
+    "EventTimestamp": "2026-06-17T23:41:05.627Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "\"hello\""
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "virtual-step",
+    "EventTimestamp": "2026-06-17T23:41:05.634Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "virtual-step",
+    "EventTimestamp": "2026-06-17T23:41:05.634Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"hello\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "capture-virtual-result",
+    "EventTimestamp": "2026-06-17T23:41:05.637Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "capture-virtual-result",
+    "EventTimestamp": "2026-06-17T23:41:05.637Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"HELLO\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay-virtual",
+    "EventTimestamp": "2026-06-17T23:41:05.640Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-06-17T23:41:06.640Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-06-17T23:41:05.662Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T23:41:05.627Z",
+      "EndTimestamp": "2026-06-17T23:41:05.662Z",
+      "Error": {},
+      "RequestId": "b18db219-1f7e-4ac2-b820-878a61ead6c9"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay-virtual",
+    "EventTimestamp": "2026-06-17T23:41:06.638Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-06-17T23:41:06.640Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-17T23:41:06.639Z",
+      "EndTimestamp": "2026-06-17T23:41:06.640Z",
+      "Error": {},
+      "RequestId": "240a4e34-21d8-474e-8a95-d20b2d7103c5"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "e78aad8e-838a-4c99-ab05-d9f1cca5971a",
+    "EventTimestamp": "2026-06-17T23:41:06.640Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"capturedOnFirstRun\":\"HELLO\"}"
+      }
+    }
+  }
+]

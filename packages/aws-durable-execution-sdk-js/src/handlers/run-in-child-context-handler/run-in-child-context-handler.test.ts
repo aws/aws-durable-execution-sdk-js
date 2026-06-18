@@ -677,9 +677,10 @@ describe("runInChildContext with custom serdes", () => {
     });
   });
 
-  test("should return raw result for virtual context (no checkpoint, no replay)", async () => {
-    // Virtual contexts never checkpoint so there's no replay path to match.
-    // Return the raw result without serialize/deserialize overhead.
+  test("should apply serdes round-trip for virtual context (consistent across modes)", async () => {
+    // Virtual contexts never checkpoint, but the returned value still passes
+    // through deserialize(serialize(result)) so behavior is consistent with the
+    // small- and large-payload modes.
     const asymmetricSerdes = {
       serialize: async (
         value: string | undefined,
@@ -701,15 +702,15 @@ describe("runInChildContext with custom serdes", () => {
       },
     );
 
-    // Raw result returned — no round-trip needed for virtual contexts.
-    expect(result).toBe("hello");
-    // Virtual contexts do not checkpoint.
+    // Round-trip applied: serialize("hello") = "HELLO", deserialize = identity.
+    expect(result).toBe("HELLO");
+    // Virtual contexts still do not checkpoint.
     expect(mockCheckpoint).not.toHaveBeenCalled();
   });
 
-  test("should skip serdes round-trip for large payloads (over checkpoint limit)", async () => {
-    // Large payloads trigger ReplayChildren — replay re-executes the function
-    // rather than deserializing the checkpoint. First-run returns raw result.
+  test("should apply serdes round-trip for large payloads (over checkpoint limit)", async () => {
+    // Large payloads trigger ReplayChildren, but the returned value still passes
+    // through deserialize(serialize(result)), consistent with the other modes.
     const asymmetricSerdes = {
       serialize: async (
         value: string | undefined,
@@ -728,8 +729,8 @@ describe("runInChildContext with custom serdes", () => {
       serdes: asymmetricSerdes,
     });
 
-    // Result is returned raw — NOT uppercased — because replay re-executes.
-    expect(result).toBe(largeValue);
+    // Round-trip applied: result is uppercased even though the payload is large.
+    expect(result).toBe(largeValue.toUpperCase());
   });
 
   test("should deserialize completed child context result with custom serdes", async () => {
