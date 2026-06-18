@@ -14,7 +14,8 @@ provider.register();
 
 export const config: ExampleConfig = {
   name: "OTel Log Enrichment",
-  durableConfig: null, // Exclude from catalog - local-only test
+  durableConfig: null,
+  localOnly: true,
 };
 
 export const handler = withDurableExecution(
