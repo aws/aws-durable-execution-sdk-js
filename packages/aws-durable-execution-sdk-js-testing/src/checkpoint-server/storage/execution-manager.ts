@@ -21,6 +21,12 @@ export interface InvocationResult {
   executionId: ExecutionId;
   invocationId: InvocationId;
   operationEvents: OperationEvents[];
+  /**
+   * Hashed operation IDs that were updated externally between invocations
+   * (e.g., wait timers expired, callbacks received, chained invokes completed).
+   * Passed as UpdatedOperationIds in the Lambda invocation input.
+   */
+  updatedOperationIds: string[];
 }
 
 export interface StartExecutionParams extends StartDurableExecutionRequest {
@@ -61,6 +67,7 @@ export class ExecutionManager {
       executionId,
       invocationId,
       operationEvents: [initialOperation],
+      updatedOperationIds: [],
     };
   }
 
@@ -84,9 +91,8 @@ export class ExecutionManager {
       );
     }
 
-    const operationEvents = checkpointStorage.startInvocation(
-      params.invocationId,
-    );
+    const { operationEvents, updatedOperationIds } =
+      checkpointStorage.startInvocation(params.invocationId);
 
     const checkpointToken = encodeCheckpointToken({
       executionId: params.executionId,
@@ -99,6 +105,7 @@ export class ExecutionManager {
       executionId: params.executionId,
       invocationId: params.invocationId,
       operationEvents,
+      updatedOperationIds,
     };
   }
 

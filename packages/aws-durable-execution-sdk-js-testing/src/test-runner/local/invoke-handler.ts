@@ -13,6 +13,7 @@ export interface HandlerParameters {
   durableExecutionArn: string;
   operations: Operation[];
   checkpointToken: string;
+  updatedOperationIds?: string[];
   contextValues?: Partial<Context>;
 }
 
@@ -35,7 +36,7 @@ export class InvokeHandler {
       logGroupName: "MyLogGroupName",
       logStreamName: "MyLogStreamName",
       getRemainingTimeInMillis: function (): number {
-        return 900_000
+        return 900_000;
       },
       done: function (): void {
         throw new Error("Function not implemented.");
@@ -79,6 +80,7 @@ export class InvokeHandler {
     const invocationInput: DurableExecutionInvocationInput = {
       CheckpointToken: parameters.checkpointToken,
       DurableExecutionArn: parameters.durableExecutionArn,
+      UpdatedOperationIds: parameters.updatedOperationIds,
       InitialExecutionState: {
         Operations: parameters.operations,
         NextMarker: "",

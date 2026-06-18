@@ -151,6 +151,7 @@ export class TestExecutionOrchestrator {
             operationEvents: initialOperationsEvents,
             checkpointToken,
             invocationId,
+            updatedOperationIds: [],
           }),
         (err) => {
           this.executionState.rejectWith(err);
@@ -581,7 +582,7 @@ export class TestExecutionOrchestrator {
       invocationParams?.invocationId ??
       this.invocationTracker.createInvocation();
 
-    const { checkpointToken, operationEvents } =
+    const { checkpointToken, operationEvents, updatedOperationIds } =
       invocationParams ??
       (await this.checkpointApi.startInvocation({
         executionId,
@@ -599,6 +600,7 @@ export class TestExecutionOrchestrator {
           durableExecutionArn: executionId,
           checkpointToken: checkpointToken,
           operations,
+          updatedOperationIds,
         },
       );
 

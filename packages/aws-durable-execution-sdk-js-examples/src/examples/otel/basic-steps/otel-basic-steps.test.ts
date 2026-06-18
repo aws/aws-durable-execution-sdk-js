@@ -1,7 +1,7 @@
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./otel-basic-steps";
-import { createTests } from "../../utils/test-helper";
-import { SerializedSpan } from "../otel-shared/otel-test-setup";
+import { createTests } from "../../../utils/test-helper";
+import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,

@@ -46,6 +46,7 @@ describe("execution handlers", () => {
         executionId: expect.any(String),
         invocationId: invocationId,
         operationEvents: expect.any(Array),
+        updatedOperationIds: expect.any(Array),
       });
     });
   });
@@ -84,6 +85,7 @@ describe("execution handlers", () => {
         executionId: createExecutionId("test-execution-id"),
         invocationId: expect.any(String),
         operationEvents: expect.any(Array),
+        updatedOperationIds: expect.any(Array),
       });
     });
 

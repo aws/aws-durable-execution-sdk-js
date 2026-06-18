@@ -29,6 +29,11 @@ export interface ExampleConfig {
     LambdaManagedInstancesCapacityProviderConfig,
     "CapacityProviderArn"
   >;
+  /**
+   * If true, this example is only run locally and is excluded from cloud deployment
+   * and integration tests. The example remains in the catalog for bundling purposes.
+   */
+  localOnly?: boolean;
 }
 
 export type ExamplesWithConfig = ExampleConfig & {

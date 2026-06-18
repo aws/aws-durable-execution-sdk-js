@@ -73,14 +73,23 @@ export class CheckpointManager {
     return this._isExecutionCompleted;
   }
 
-  startInvocation(invocationId: InvocationId) {
+  startInvocation(invocationId: InvocationId): {
+    operationEvents: OperationEvents[];
+    updatedOperationIds: string[];
+  } {
     this.invocationsMap.set(invocationId, new Date());
 
-    // For each invocation, there are no dirty operations since the client should know the
-    // state of every operation from all the operation data we pass
+    // Capture the IDs of operations that were updated externally between invocations
+    // (e.g., wait timers expired, callbacks received, chained invokes completed).
+    // These are passed as UpdatedOperationIds in the invocation input so the SDK can
+    // distinguish first-time observation (isReplay: false) from replayed completions.
+    const updatedOperationIds = Array.from(this.dirtyOperationIds);
     this.dirtyOperationIds.clear();
 
-    return Array.from(this.operationDataMap.values());
+    return {
+      operationEvents: Array.from(this.operationDataMap.values()),
+      updatedOperationIds,
+    };
   }
 
   completeInvocation(invocationId: InvocationId): {

@@ -1,5 +1,5 @@
 import { handler } from "./otel-log-enrichment";
-import { createTests } from "../../utils/test-helper";
+import { createTests } from "../../../utils/test-helper";
 
 createTests({
   handler,

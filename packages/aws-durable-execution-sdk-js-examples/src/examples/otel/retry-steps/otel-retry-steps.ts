@@ -2,8 +2,8 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExampleConfig } from "../../types";
-import { createOtelTestSetup } from "../otel-shared/otel-test-setup";
+import { ExampleConfig } from "../../../types";
+import { createOtelTestSetup } from "../shared/otel-test-setup";
 
 const { plugin, getSerializedSpans } = createOtelTestSetup();
 

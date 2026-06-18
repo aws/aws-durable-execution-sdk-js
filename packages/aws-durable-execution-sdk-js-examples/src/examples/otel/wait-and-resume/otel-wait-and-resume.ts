@@ -2,13 +2,15 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExampleConfig } from "../../types";
-import { createOtelTestSetup } from "../otel-shared/otel-test-setup";
+import { ExampleConfig } from "../../../types";
+import { createOtelTestSetup } from "../shared/otel-test-setup";
 
 const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Wait and Resume",
+  durableConfig: null,
+  localOnly: true,
 };
 
 export const handler = withDurableExecution(

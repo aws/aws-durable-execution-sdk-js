@@ -2,14 +2,15 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExampleConfig } from "../../types";
-import { createOtelTestSetup } from "../otel-shared/otel-test-setup";
+import { ExampleConfig } from "../../../types";
+import { createOtelTestSetup } from "../shared/otel-test-setup";
 
 const { plugin, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Combined",
-  durableConfig: { ExecutionTimeout: 120, RetentionPeriodInDays: 7 },
+  durableConfig: null,
+  localOnly: true,
 };
 
 export const handler = withDurableExecution(

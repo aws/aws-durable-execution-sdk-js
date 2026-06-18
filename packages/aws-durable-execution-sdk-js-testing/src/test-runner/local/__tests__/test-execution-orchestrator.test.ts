@@ -162,6 +162,7 @@ describe("TestExecutionOrchestrator", () => {
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
         invocationId: createInvocationId(),
+        updatedOperationIds: [],
       }),
       pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
       updateCheckpointData: jest.fn().mockResolvedValue(undefined),
@@ -170,6 +171,7 @@ describe("TestExecutionOrchestrator", () => {
         executionId: createExecutionId(),
         invocationId: createInvocationId(),
         operationEvents: [],
+        updatedOperationIds: [],
       }),
       completeInvocation: jest.fn().mockResolvedValue({
         EventType: "InvocationCompleted",
@@ -263,6 +265,7 @@ describe("TestExecutionOrchestrator", () => {
         durableExecutionArn: mockExecutionId,
         checkpointToken: mockCheckpointToken,
         operations: [mockOperationEvents[0].operation],
+        updatedOperationIds: [],
       });
       expect(result).toEqual({
         status: OperationStatus.SUCCEEDED,
@@ -327,6 +330,7 @@ describe("TestExecutionOrchestrator", () => {
           durableExecutionArn: mockExecutionId,
           checkpointToken: mockCheckpointToken,
           operations: [mockOperationEvents[0].operation],
+          updatedOperationIds: [],
         });
 
         expect(result).toEqual({
@@ -410,6 +414,7 @@ describe("TestExecutionOrchestrator", () => {
           durableExecutionArn: mockExecutionId,
           checkpointToken: mockCheckpointToken,
           operations: [mockOperationEvents[0].operation],
+          updatedOperationIds: [],
         });
 
         expect(result).toEqual({
@@ -478,6 +483,7 @@ describe("TestExecutionOrchestrator", () => {
           durableExecutionArn: mockExecutionId,
           checkpointToken: mockCheckpointToken,
           operations: [mockOperationEvents[0].operation],
+          updatedOperationIds: [],
         });
         expect(await resultPromise).toEqual({
           status: OperationStatus.SUCCEEDED,
@@ -542,6 +548,7 @@ describe("TestExecutionOrchestrator", () => {
           durableExecutionArn: mockExecutionId,
           checkpointToken: mockCheckpointToken,
           operations: [mockOperationEvents[0].operation],
+          updatedOperationIds: [],
         });
 
         resolvePolling!();
@@ -712,6 +719,7 @@ describe("TestExecutionOrchestrator", () => {
         durableExecutionArn: mockExecutionId,
         checkpointToken: mockCheckpointToken,
         operations: [mockOperationEvents[0].operation],
+        updatedOperationIds: [],
       });
 
       // The promise should not resolve immediately for PENDING status
@@ -1744,6 +1752,7 @@ describe("TestExecutionOrchestrator", () => {
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
         invocationId: invocationId,
+        updatedOperationIds: [],
       });
 
       let resolveInvoke:
@@ -1779,6 +1788,7 @@ describe("TestExecutionOrchestrator", () => {
           },
         ],
         invocationId: createInvocationId("new-invocation"),
+        updatedOperationIds: [],
       });
 
       const executePromise = orchestrator.executeHandler();
@@ -1819,6 +1829,7 @@ describe("TestExecutionOrchestrator", () => {
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
         invocationId: invocationId,
+        updatedOperationIds: [],
       });
 
       mockInvoke
@@ -1848,6 +1859,7 @@ describe("TestExecutionOrchestrator", () => {
         executionId: mockExecutionId,
         operationEvents: [],
         invocationId: createInvocationId("new-invocation"),
+        updatedOperationIds: [],
       });
 
       const executePromise = orchestrator.executeHandler();
@@ -1871,6 +1883,7 @@ describe("TestExecutionOrchestrator", () => {
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
         invocationId: invocationId,
+        updatedOperationIds: [],
       });
 
       // Mock first polling to return wait operation, then empty
@@ -1922,6 +1935,7 @@ describe("TestExecutionOrchestrator", () => {
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
         invocationId: invocationId,
+        updatedOperationIds: [],
       });
 
       // Mock first polling to return wait operation, then empty

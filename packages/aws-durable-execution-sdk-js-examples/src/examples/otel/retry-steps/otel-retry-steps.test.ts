@@ -1,6 +1,6 @@
 import { handler } from "./otel-retry-steps";
-import { createTests } from "../../utils/test-helper";
-import { SerializedSpan } from "../otel-shared/otel-test-setup";
+import { createTests } from "../../../utils/test-helper";
+import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
