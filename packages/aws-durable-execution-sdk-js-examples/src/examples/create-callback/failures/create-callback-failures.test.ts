@@ -29,7 +29,7 @@ createTests({
       // Expect the actual error message sent via sendCallbackFailure
       expect(result.getError()).toEqual({
         errorMessage: "External API failure",
-        errorType: "CallbackError",
+        errorType: "CallbackExternalError",
         stackTrace: undefined,
       });
 

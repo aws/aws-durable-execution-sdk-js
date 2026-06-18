@@ -104,12 +104,12 @@ describe("WaitForCondition Handler - plugin hooks", () => {
 
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
     );
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
       expect.any(Function),
     );
 
@@ -117,6 +117,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
         attempt: 1,
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.SUCCEEDED,
       }),
     );
@@ -158,13 +159,14 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledWith(
-      expect.objectContaining({ attempt: 1 }),
+      expect.objectContaining({ attempt: 1, isReplay: false }),
       expect.any(Function),
     );
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledWith(
       expect.objectContaining({
         attempt: 1,
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.FAILED,
         error: checkError,
       }),
@@ -211,6 +213,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.RETRYING,
         nextAttemptDelaySeconds: 5,
       }),
@@ -219,6 +222,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        isReplay: false,
         outcome: AttemptEndInfoOutcome.SUCCEEDED,
       }),
     );

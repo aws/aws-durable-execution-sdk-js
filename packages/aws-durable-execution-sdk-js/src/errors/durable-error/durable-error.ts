@@ -45,6 +45,12 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "CallbackExternalError":
+        return new CallbackExternalError(
+          errorObject.ErrorMessage || "Callback failed",
+          cause,
+          errorObject.ErrorData,
+        );
       case "CallbackTimeoutError":
         return new CallbackTimeoutError(
           errorObject.ErrorMessage || "Callback timed out",
@@ -91,13 +97,29 @@ export abstract class DurableOperationError extends Error {
   }
 
   /**
-   * Convert to ErrorObject for serialization
+   * Convert to ErrorObject for serialization.
+   * When errorData is undefined, walks the cause chain to surface the first
+   * errorData found — prevents loss across runInChildContext boundaries.
    */
   toErrorObject(): ErrorObject {
+    let errorData = this.errorData;
+    if (errorData === undefined) {
+      let node: unknown = this.cause;
+      for (let i = 0; i < 10 && node; i++) {
+        if (
+          node instanceof DurableOperationError &&
+          typeof node.errorData === "string"
+        ) {
+          errorData = node.errorData;
+          break;
+        }
+        node = node instanceof Error ? node.cause : undefined;
+      }
+    }
     return {
       ErrorType: this.errorType,
       ErrorMessage: this.message,
-      ErrorData: this.errorData,
+      ErrorData: errorData,
       StackTrace: STORE_STACK_TRACES
         ? this.cause?.stack?.split(/\r?\n/) || this.stack?.split(/\r?\n/)
         : undefined,
@@ -118,11 +140,39 @@ export class StepError extends DurableOperationError {
 }
 
 /**
- * Error thrown when a callback operation fails
+ * Base error for all callback operation failures.
+ *
+ * Acts as the parent class for the more specific callback errors, so callers
+ * can catch every callback-related failure with a single
+ * `instanceof CallbackError` check:
+ *
+ * ```
+ * CallbackError
+ *   +- CallbackExternalError   // external entity reported failure
+ *   +- CallbackTimeoutError    // callback timed out
+ *   +- CallbackSubmitterError  // submitter function failed
+ * ```
+ *
+ * It is also thrown directly for internal callback failures that do not fall
+ * into one of the more specific categories (e.g. a missing callback ID).
+ *
  * @public
  */
 export class CallbackError extends DurableOperationError {
-  readonly errorType = "CallbackError";
+  readonly errorType: string = "CallbackError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Callback failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when the external entity completes a callback with a failure
+ * (e.g. via SendDurableExecutionCallbackFailure) instead of a success.
+ * @public
+ */
+export class CallbackExternalError extends CallbackError {
+  readonly errorType = "CallbackExternalError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Callback failed", cause, errorData);
@@ -133,7 +183,7 @@ export class CallbackError extends DurableOperationError {
  * Error thrown when a callback operation times out
  * @public
  */
-export class CallbackTimeoutError extends DurableOperationError {
+export class CallbackTimeoutError extends CallbackError {
   readonly errorType = "CallbackTimeoutError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {
@@ -145,7 +195,7 @@ export class CallbackTimeoutError extends DurableOperationError {
  * Error thrown when a callback submitter fails
  * @public
  */
-export class CallbackSubmitterError extends DurableOperationError {
+export class CallbackSubmitterError extends CallbackError {
   readonly errorType = "CallbackSubmitterError";
 
   constructor(message?: string, cause?: Error, errorData?: string) {

@@ -13,6 +13,7 @@ import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 const KNOWN_DURABLE_ERROR_TYPES = new Set([
   "StepError",
   "CallbackError",
+  "CallbackExternalError",
   "CallbackTimeoutError",
   "CallbackSubmitterError",
   "InvokeError",

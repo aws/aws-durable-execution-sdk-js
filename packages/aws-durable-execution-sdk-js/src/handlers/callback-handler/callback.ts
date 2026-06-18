@@ -13,6 +13,7 @@ import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
+  CallbackExternalError,
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
@@ -242,7 +243,7 @@ export const createCallback = (
         const isTimeout = stepData?.Status === OperationStatus.TIMED_OUT;
 
         const callbackError = error
-          ? ((): CallbackError | CallbackTimeoutError => {
+          ? ((): CallbackError => {
               const cause = new Error(error.ErrorMessage);
               cause.name = error.ErrorType || "Error";
               cause.stack = error.StackTrace?.join("\n");
@@ -255,7 +256,7 @@ export const createCallback = (
                 );
               }
 
-              return new CallbackError(
+              return new CallbackExternalError(
                 error.ErrorMessage || "Callback failed",
                 cause,
                 error.ErrorData,
@@ -263,7 +264,7 @@ export const createCallback = (
             })()
           : isTimeout
             ? new CallbackTimeoutError("Callback timed out")
-            : new CallbackError("Callback failed");
+            : new CallbackExternalError("Callback failed");
 
         const rejectedPromise = new DurablePromise(async (): Promise<T> => {
           throw callbackError;
