@@ -25,15 +25,17 @@ export const config: ExampleConfig = {
  */
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
-    // 300KB string exceeds the 256KB CHECKPOINT_SIZE_LIMIT_BYTES.
-    const largeValue = "x".repeat(300 * 1024);
-
     const childResult = await context.runInChildContext(
       "large-serdes-child",
-      async (childContext: DurableContext) => {
-        return await childContext.step("large-step", async () => {
-          return largeValue;
-        });
+      async (_childContext: DurableContext) => {
+        // Return a >256KB payload directly from the child context body. This
+        // exceeds CHECKPOINT_SIZE_LIMIT_BYTES, so runInChildContext switches to
+        // ReplayChildren mode (persists a summary, re-executes on replay).
+        //
+        // NOTE: the large value must NOT come from an inner `step` — a step's
+        // output is checkpointed directly and cannot exceed 256KB. Only
+        // runInChildContext has the adaptive large-payload handling.
+        return "x".repeat(300 * 1024);
       },
       { serdes: uppercaseSerdes },
     );
