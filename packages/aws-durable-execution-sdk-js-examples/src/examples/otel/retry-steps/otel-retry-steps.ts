@@ -9,6 +9,7 @@ const { plugin, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Retry Steps",
+  localOnly: true,
 };
 
 export const handler = withDurableExecution(
