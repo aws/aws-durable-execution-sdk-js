@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { SerdesContext, AnySerdes } from "./serdes";
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../constants/constants";
 export {
@@ -31,6 +32,32 @@ export enum FileSystemSerdesMode {
 }
 
 /**
+ * Controls how the durable execution ARN and entity ID are turned into the
+ * on-disk directory and file names.
+ *
+ * - `URI`: The per-execution directory is a compact, human-navigable path built
+ *   from the ARN's function name, execution name and invocation id
+ *   (`<functionName>/<executionName>/<invocationId>`); the file name is the
+ *   entity ID encoded with `encodeURIComponent`. Names stay readable, but a very
+ *   long entity ID may exceed the filesystem's per-name length limit (commonly
+ *   255 bytes). If the ARN does not match the expected durable-execution shape,
+ *   the whole ARN is `encodeURIComponent`-encoded into a single directory
+ *   segment instead.
+ *
+ * - `HASH`: The ARN (directory) and entity ID (file name) are each replaced by
+ *   their SHA-256 hex digest. Names are a fixed length (64 chars) and always
+ *   filesystem-safe regardless of the characters or length of the original
+ *   value, at the cost of no longer being human-readable when browsing the
+ *   mount.
+ *
+ * @public
+ */
+export enum FileSystemPathEncoding {
+  URI = "URI",
+  HASH = "HASH",
+}
+
+/**
  * Configuration options for {@link createFileSystemSerdes}.
  *
  * @public
@@ -41,6 +68,17 @@ export interface FileSystemSerdesConfig {
    * @defaultValue `FileSystemSerdesMode.ALWAYS`
    */
   storageMode?: FileSystemSerdesMode;
+  /**
+   * Controls how the durable execution ARN (directory) and entity ID (file
+   * name) are encoded into path segments.
+   *
+   * Use `FileSystemPathEncoding.HASH` when entity IDs may contain characters
+   * that are unsafe in a file name (for example `/`) or may be long enough to
+   * exceed the filesystem's name-length limit.
+   *
+   * @defaultValue `FileSystemPathEncoding.URI`
+   */
+  pathEncoding?: FileSystemPathEncoding;
   /**
    * Optional function that generates a preview object from the value.
    * When provided, the preview is stored inline in the checkpoint envelope
@@ -78,15 +116,108 @@ type FileSystemEnvelope =
   | { data: string }
   | { file: string; preview?: Record<string, unknown> };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Encodes a path segment (the execution ARN or entity ID) into a name that is
+ * safe to use on the filesystem.
+ *
+ * @internal
+ */
+function encodeSegment(
+  value: string,
+  encoding: FileSystemPathEncoding,
+): string {
+  return encoding === FileSystemPathEncoding.HASH
+    ? createHash("sha256").update(value).digest("hex")
+    : encodeURIComponent(value);
+}
+
+/**
+ * The parts of a durable execution ARN that identify a single execution.
+ *
+ * These values are stable for the lifetime of an execution — they do not
+ * change across the multiple Lambda invocations (replays) of that execution —
+ * and are already filesystem-safe (function name charset plus UUIDs).
+ *
+ * @internal
+ */
+interface DurableExecutionArnParts {
+  functionName: string;
+  executionName: string;
+  invocationId: string;
+}
+
+/**
+ * Matches a durable execution ARN of the form:
+ *
+ *   arn:<partition>:lambda:<region>:<account>:function:<functionName>:<version>/durable-execution/<executionName>/<invocationId>
+ *
+ * @internal
+ */
+const DURABLE_EXECUTION_ARN_PATTERN =
+  /^arn:[^:]*:lambda:[^:]*:[^:]*:function:([^:/]+):[^:/]+\/durable-execution\/([^/]+)\/([^/]+)$/;
+
+/** @internal */
+function parseDurableExecutionArn(
+  arn: string,
+): DurableExecutionArnParts | undefined {
+  const match = DURABLE_EXECUTION_ARN_PATTERN.exec(arn);
+  if (!match) return undefined;
+  return {
+    functionName: match[1],
+    executionName: match[2],
+    invocationId: match[3],
+  };
+}
+
+/**
+ * Resolves the per-execution directory under `basePath`.
+ *
+ * In `URI` mode the directory is a compact, human-navigable path built from the
+ * execution's function name, execution name and invocation id (all stable for
+ * the lifetime of the execution and already filesystem-safe). If the ARN does
+ * not match the expected shape (for example a local/test ARN), the whole ARN is
+ * URI-encoded into a single segment instead.
+ *
+ * In `HASH` mode the whole ARN is hashed into a single fixed-length segment.
+ *
+ * @internal
+ */
+function resolveExecutionDir(
+  basePath: string,
+  arn: string,
+  pathEncoding: FileSystemPathEncoding,
+): string {
+  if (pathEncoding === FileSystemPathEncoding.URI) {
+    const parts = parseDurableExecutionArn(arn);
+    if (parts) {
+      return join(
+        basePath,
+        parts.functionName,
+        parts.executionName,
+        parts.invocationId,
+      );
+    }
+  }
+  return join(basePath, encodeSegment(arn, pathEncoding));
+}
+
 async function writeToFile(
   basePath: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   context: SerdesContext,
+  pathEncoding: FileSystemPathEncoding,
 ): Promise<string> {
-  const dir = join(basePath, encodeURIComponent(context.durableExecutionArn));
+  const dir = resolveExecutionDir(
+    basePath,
+    context.durableExecutionArn,
+    pathEncoding,
+  );
   await mkdir(dir, { recursive: true });
-  const filePath = join(dir, `${context.entityId}.json`);
+  const filePath = join(
+    dir,
+    `${encodeSegment(context.entityId, pathEncoding)}.json`,
+  );
   await writeFile(filePath, JSON.stringify(value), "utf-8");
   return filePath;
 }
@@ -153,6 +284,7 @@ export function createFileSystemSerdes(
   config: FileSystemSerdesConfig = {},
 ): AnySerdes {
   const storageMode = config.storageMode ?? FileSystemSerdesMode.ALWAYS;
+  const pathEncoding = config.pathEncoding ?? FileSystemPathEncoding.URI;
   return {
     serialize: async (
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,7 +294,12 @@ export function createFileSystemSerdes(
       if (value === undefined) return undefined;
 
       if (storageMode === FileSystemSerdesMode.ALWAYS) {
-        const filePath = await writeToFile(basePath, value, context);
+        const filePath = await writeToFile(
+          basePath,
+          value,
+          context,
+          pathEncoding,
+        );
         const preview = config.generatePreview?.(value);
         const envelope: FileSystemEnvelope = preview
           ? { file: filePath, preview }
@@ -176,7 +313,12 @@ export function createFileSystemSerdes(
         data: inlineJson,
       } as FileSystemEnvelope);
       if (Buffer.byteLength(envelope, "utf-8") > OVERFLOW_THRESHOLD_BYTES) {
-        const filePath = await writeToFile(basePath, value, context);
+        const filePath = await writeToFile(
+          basePath,
+          value,
+          context,
+          pathEncoding,
+        );
         const preview = config.generatePreview?.(value);
         const fileEnvelope: FileSystemEnvelope = preview
           ? { file: filePath, preview }
