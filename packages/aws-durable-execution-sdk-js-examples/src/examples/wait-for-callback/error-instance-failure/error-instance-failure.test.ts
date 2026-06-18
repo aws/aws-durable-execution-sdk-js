@@ -9,7 +9,7 @@ createTests({
   handler,
   invocationType: InvocationType.Event,
   tests: (runner, { assertEventSignatures }) => {
-    it("should catch CallbackError for callback failure", async () => {
+    it("should catch CallbackExternalError for callback failure", async () => {
       const executionPromise = runner.run({ payload: {} });
 
       const callback = runner.getOperationByIndex(0);
@@ -20,7 +20,8 @@ createTests({
       const errorCheck = result.getResult() as any;
 
       expect(errorCheck.isCallbackError).toBe(true);
-      expect(errorCheck.errorName).toBe("CallbackError");
+      expect(errorCheck.isCallbackExternalError).toBe(true);
+      expect(errorCheck.errorName).toBe("CallbackExternalError");
       expect(errorCheck.errorMessage).toBe("Callback failed");
 
       assertEventSignatures(result, "failure", {
