@@ -45,9 +45,15 @@ export const retryPresets = {
    * Linear retry strategy with fixed increment
    * - 6 total attempts (1 initial + 5 retries)
    * - Delays: 1s, 2s, 3s, 4s, 5s
+   * - Jitter: NONE (deterministic delays)
    * - Total max wait time: 15 seconds
    */
-  linear: createLinearRetryStrategy(6, 1, 1),
+  linear: createLinearRetryStrategy({
+    maxAttempts: 6,
+    initialDelay: { seconds: 1 },
+    increment: { seconds: 1 },
+    jitter: JitterStrategy.NONE,
+  }),
 
   /**
    * No retry strategy - fails immediately on first error
