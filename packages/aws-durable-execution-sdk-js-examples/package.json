@@ -58,6 +58,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.948.0",
+    "@aws-sdk/client-xray": "^3.948.0",
     "@aws/durable-execution-sdk-js-eslint-plugin": "*",
     "@eslint/js": "^9.23.0",
     "@rollup/plugin-commonjs": "^28.0.9",
