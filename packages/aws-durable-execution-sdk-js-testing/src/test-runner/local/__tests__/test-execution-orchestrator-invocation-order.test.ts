@@ -412,6 +412,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
                 executionId: mockExecutionId,
                 operationEvents: [],
                 invocationId: createInvocationId("delayed-invocation"),
+                updatedOperationIds: [],
               });
             };
           });
@@ -503,6 +504,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         checkpointToken: mockCheckpointToken,
         operationEvents: mockOperationEvents,
         invocationId: firstInvocationId,
+        updatedOperationIds: [],
       });
 
       jest.spyOn(checkpointApi, "startInvocation").mockResolvedValue({
@@ -510,6 +512,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
         executionId: mockExecutionId,
         invocationId: secondInvocationId,
         operationEvents: mockOperationEvents,
+        updatedOperationIds: [],
       });
 
       // Track multiple invocation completions

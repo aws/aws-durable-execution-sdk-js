@@ -1,0 +1,120 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "9bfa84f8-f1d8-4db3-a846-b98e0f237a2c",
+    "EventTimestamp": "2026-06-18T00:34:24.620Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"functionName\":\"otel-invoke-target\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "before-invoke",
+    "EventTimestamp": "2026-06-18T00:34:24.628Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "before-invoke",
+    "EventTimestamp": "2026-06-18T00:34:24.628Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"before-invoke-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ChainedInvokeStarted",
+    "SubType": "ChainedInvoke",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "invoke-target",
+    "EventTimestamp": "2026-06-18T00:34:24.631Z",
+    "ChainedInvokeStartedDetails": {
+      "FunctionName": "",
+      "Input": {
+        "Payload": ""
+      },
+      "DurableExecutionArn": ""
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-06-18T00:34:24.655Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:34:24.620Z",
+      "EndTimestamp": "2026-06-18T00:34:24.655Z",
+      "Error": {},
+      "RequestId": "f490bf14-09b8-4190-b0fe-6f20b035efa4"
+    }
+  },
+  {
+    "EventType": "ChainedInvokeSucceeded",
+    "SubType": "ChainedInvoke",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "invoke-target",
+    "EventTimestamp": "2026-06-18T00:34:24.736Z",
+    "ChainedInvokeSucceededDetails": {
+      "Result": {
+        "Payload": "{\"received\":\"invoke-payload\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "after-invoke",
+    "EventTimestamp": "2026-06-18T00:34:24.739Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "after-invoke",
+    "EventTimestamp": "2026-06-18T00:34:24.739Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"after-invoke-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-06-18T00:34:24.740Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:34:24.737Z",
+      "EndTimestamp": "2026-06-18T00:34:24.740Z",
+      "Error": {},
+      "RequestId": "8bad28f4-2191-4d37-96f3-50696eda0839"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "9bfa84f8-f1d8-4db3-a846-b98e0f237a2c",
+    "EventTimestamp": "2026-06-18T00:34:24.740Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"invokeResult\":{\"received\":\"invoke-payload\"},\"beforeInvoke\":\"before-invoke-value\",\"afterInvoke\":\"after-invoke-value\",\"spans\":[{\"name\":\"after-invoke\",\"traceId\":\"740eb22ac24be7fffcf405b389f21b40\",\"spanId\":\"c0b78ca62c431e85\",\"parentSpanId\":\"6f473045cd95e6f6\",\"attributes\":{\"durable.execution.arn\":\"3bbebdff-b63e-48c6-8810-7bc0ff21ed86\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"after-invoke\"},\"links\":[{\"traceId\":\"740eb22ac24be7fffcf405b389f21b40\",\"spanId\":\"6f473045cd95e6f6\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"after-invoke\",\"traceId\":\"740eb22ac24be7fffcf405b389f21b40\",\"spanId\":\"6f473045cd95e6f6\",\"parentSpanId\":\"429e9d8551bd0578\",\"attributes\":{\"durable.execution.arn\":\"3bbebdff-b63e-48c6-8810-7bc0ff21ed86\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"after-invoke\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
+      }
+    }
+  }
+]

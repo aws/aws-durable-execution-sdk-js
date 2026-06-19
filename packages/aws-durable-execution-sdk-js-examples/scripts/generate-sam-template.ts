@@ -153,12 +153,15 @@ function generateTemplate(skipVerboseLogging = false) {
   };
 
   // Generate resources for each example file
-  examplesCatalog.forEach((catalog: { name: string; handler: string }) => {
-    const resourceName = catalog.name.replace(/\s/g, "") + `-22x-NodeJS-Local`;
-    template.Resources[
-      toPascalCase(catalog.handler.slice(0, -".handler".length))
-    ] = createFunctionResource(resourceName, catalog, skipVerboseLogging);
-  });
+  examplesCatalog
+    .filter((catalog: { localOnly?: boolean }) => !catalog.localOnly)
+    .forEach((catalog: { name: string; handler: string }) => {
+      const resourceName =
+        catalog.name.replace(/\s/g, "") + `-22x-NodeJS-Local`;
+      template.Resources[
+        toPascalCase(catalog.handler.slice(0, -".handler".length))
+      ] = createFunctionResource(resourceName, catalog, skipVerboseLogging);
+    });
 
   return template;
 }

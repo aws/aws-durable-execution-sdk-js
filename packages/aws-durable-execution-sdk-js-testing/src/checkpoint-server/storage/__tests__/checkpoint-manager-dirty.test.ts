@@ -131,7 +131,8 @@ describe("CheckpointManager dirty operation tracking", () => {
         storage.registerUpdate(stepUpdate);
 
         const invocationId = createInvocationId("test-invocation");
-        const allOperations = storage.startInvocation(invocationId);
+        const { operationEvents: allOperations } =
+          storage.startInvocation(invocationId);
 
         expect(allOperations).toHaveLength(2);
         expect(allOperations.map((op) => op.operation.Id)).toContain(

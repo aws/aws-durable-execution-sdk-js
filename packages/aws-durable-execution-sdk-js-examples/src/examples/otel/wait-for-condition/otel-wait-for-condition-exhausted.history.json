@@ -1,0 +1,208 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "9e0f02f7-b1c5-4aa2-b7e7-a0187a2d3243",
+    "EventTimestamp": "2026-06-18T00:09:20.320Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"exhausted\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:20.324Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:20.324Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"counter\":1}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-06-18T00:09:20.347Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:09:20.320Z",
+      "EndTimestamp": "2026-06-18T00:09:20.347Z",
+      "Error": {},
+      "RequestId": "7b9e03e1-bf3b-4d16-b79f-9f573daa39ce"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:21.327Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:21.327Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"counter\":2}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-06-18T00:09:21.348Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:09:21.325Z",
+      "EndTimestamp": "2026-06-18T00:09:21.348Z",
+      "Error": {},
+      "RequestId": "9b756079-3ef1-44b7-9318-466f85f9f77b"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:22.329Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:22.329Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"counter\":3}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-06-18T00:09:22.352Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:09:22.328Z",
+      "EndTimestamp": "2026-06-18T00:09:22.352Z",
+      "Error": {},
+      "RequestId": "ffa782fa-a57d-4694-a8ac-fcf4b23b92e8"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 11,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:23.332Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 12,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:23.332Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"counter\":4}"
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 3
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-06-18T00:09:23.354Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:09:23.331Z",
+      "EndTimestamp": "2026-06-18T00:09:23.354Z",
+      "Error": {},
+      "RequestId": "84d09b1e-a10e-4fbf-b2d8-7e8323ea9838"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 14,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:24.336Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "WaitForCondition",
+    "EventId": 15,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:24.336Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "waitForCondition exceeded maximum attempts (5)",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 4
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 16,
+    "EventTimestamp": "2026-06-18T00:09:24.365Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:09:24.334Z",
+      "EndTimestamp": "2026-06-18T00:09:24.365Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "waitForCondition exceeded maximum attempts (5)"
+        }
+      },
+      "RequestId": "21f63b23-70b6-46c9-86fd-c19b3e2567b9"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 17,
+    "Id": "9e0f02f7-b1c5-4aa2-b7e7-a0187a2d3243",
+    "EventTimestamp": "2026-06-18T00:09:24.365Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "waitForCondition exceeded maximum attempts (5)"
+        }
+      }
+    }
+  }
+]
