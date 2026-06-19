@@ -95,6 +95,7 @@ export interface InvocationBaseInfo {
  */
 export interface InvocationInfo extends InvocationBaseInfo {
   isFirstInvocation: boolean;
+  executionInput: unknown;
   operations: Record<string, OperationInfo>;
 }
 
@@ -108,7 +109,6 @@ export interface InvocationEndInfo extends InvocationInfo {
   status: PluginInvocationStatus;
   executionResult?: unknown;
   executionError?: Error;
-  executionInput: unknown;
   operations: Record<string, OperationInfo>;
 }
 

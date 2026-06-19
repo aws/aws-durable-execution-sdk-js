@@ -68,11 +68,19 @@ async function runHandler<
     executionContext.requestId,
   );
 
+  // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
+  const initialExecutionEvent =
+    executionContext._stepData[Object.keys(executionContext._stepData)[0]];
+  const customerHandlerEvent = JSON.parse(
+    initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
+  );
+
   const invocationInfo: InvocationInfo = {
     requestId: executionContext.requestId,
     executionArn: executionContext.durableExecutionArn,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
+    executionInput: customerHandlerEvent,
     operations: toOperationInfoMap(executionContext._stepData),
   };
   await plugin.onInvocationStart?.(invocationInfo);
@@ -100,14 +108,6 @@ async function runHandler<
     ) as Logger,
     undefined,
     durableExecution,
-  );
-
-  // Extract customerHandlerEvent from the complete operations array (after pagination)
-  // This ensures we get the full payload even for large payloads that are paginated
-  const initialExecutionEvent =
-    executionContext._stepData[Object.keys(executionContext._stepData)[0]];
-  const customerHandlerEvent = JSON.parse(
-    initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
   );
 
   const executeInvocation =
