@@ -7,7 +7,7 @@ createTests({
     checkpointDelay: 100,
   },
   tests: (runner, { assertEventSignatures }) => {
-    it("should handle 100 iterations near checkpoint size limit", async () => {
+    it("should handle 25 iterations near checkpoint size limit", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as any;
 

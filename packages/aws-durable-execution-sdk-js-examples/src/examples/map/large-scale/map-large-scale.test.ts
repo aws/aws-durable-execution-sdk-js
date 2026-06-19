@@ -23,7 +23,14 @@ createTests({
       expect(result.summary.averageItemSize).toBeGreaterThan(100000); // ~100KB per item
       expect(result.summary.maxConcurrency).toBe(10);
 
-      assertEventSignatures(execution);
+      // The number of host re-invocations (InvocationCompleted events) is
+      // non-deterministic for a large map (50 items x 100KB) under cloud
+      // execution — it varies with checkpoint/suspend timing and load (seen
+      // as 3 vs 4 across runners). Allow a small tolerance, matching the other
+      // large/concurrent map tests, instead of pinning an exact count.
+      assertEventSignatures(execution, undefined, {
+        invocationCompletedDifference: 2,
+      });
     });
   },
 });
