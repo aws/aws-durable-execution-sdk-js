@@ -39,6 +39,7 @@ function makeInvocationInfo(
     requestId: TEST_REQUEST_ID,
     executionArn: TEST_ARN,
     isFirstInvocation: true,
+    executionInput: {},
     operations: {},
     ...overrides,
   };
@@ -51,6 +52,7 @@ function makeInvocationEndInfo(
     requestId: TEST_REQUEST_ID,
     executionArn: TEST_ARN,
     isFirstInvocation: true,
+    executionInput: {},
     operations: {},
     status: "SUCCEEDED" as any,
     executionResult: undefined,
