@@ -52,7 +52,7 @@ function makeInvocationEndInfo(
     requestId: TEST_REQUEST_ID,
     executionArn: TEST_ARN,
     isFirstInvocation: true,
-    executionInput: {},
+    executionInput: {}, // required by InvocationInfo (parent type)
     operations: {},
     status: "SUCCEEDED" as any,
     executionResult: undefined,
