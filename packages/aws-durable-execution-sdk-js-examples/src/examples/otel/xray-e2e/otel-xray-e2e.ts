@@ -48,6 +48,7 @@ export const handler = withDurableExecution(
 
     return {
       traceId,
+      xRayTraceId: xRayHeader,
       result: { step1, step2, childResult },
     };
   },
