@@ -2053,56 +2053,6 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
-  RunInChildContextSerdesLargePayload:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: RuninChildContextwithSerdes-LargePayload-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: run-in-child-context-serdes-large-payload.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Environment:
-        Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-    Metadata:
-      SkipBuild: "True"
-  RunInChildContextSerdesVirtual:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: RuninChildContextwithSerdes-Virtual-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: run-in-child-context-serdes-virtual.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Environment:
-        Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-    Metadata:
-      SkipBuild: "True"
   VirtualRunInChildContext:
     Type: AWS::Serverless::Function
     Properties:
