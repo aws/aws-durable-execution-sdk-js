@@ -57,7 +57,6 @@ function makeInvocationEndInfo(
     status: "SUCCEEDED" as any,
     executionResult: undefined,
     executionError: undefined,
-    executionInput: {},
     ...overrides,
   };
 }
