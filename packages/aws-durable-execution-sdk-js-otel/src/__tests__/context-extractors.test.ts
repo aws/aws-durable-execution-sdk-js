@@ -9,6 +9,7 @@ const baseInfo: InvocationInfo = {
   executionArn:
     "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST/exec/abc",
   isFirstInvocation: true,
+  executionInput: {},
   operations: {},
 };
 

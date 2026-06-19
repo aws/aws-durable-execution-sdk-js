@@ -86,6 +86,7 @@ describe("plugin hooks", () => {
       requestId: "req-123",
       executionArn: "arn:test",
       isFirstInvocation: true,
+      executionInput: expect.anything(),
       operations: expect.any(Object),
     });
   });
@@ -106,6 +107,7 @@ describe("plugin hooks", () => {
       requestId: "req-123",
       executionArn: "arn:test",
       isFirstInvocation: false,
+      executionInput: expect.anything(),
       operations: expect.any(Object),
     });
   });
