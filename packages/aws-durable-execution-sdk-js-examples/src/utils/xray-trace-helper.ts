@@ -1,8 +1,4 @@
-import {
-  XRayClient,
-  GetTraceSummariesCommand,
-  BatchGetTracesCommand,
-} from "@aws-sdk/client-xray";
+import { XRayClient, BatchGetTracesCommand } from "@aws-sdk/client-xray";
 
 export interface XRaySegment {
   id: string;
@@ -127,55 +123,39 @@ export async function fetchXRayTrace(
     }
 
     try {
-      // Calculate time filter: startTime = 5 minutes before poll start, endTime = current time
-      const filterStartTime = new Date(startTime - 5 * 60 * 1000);
-      const filterEndTime = new Date();
-
-      // Poll GetTraceSummaries to check if trace exists
-      const summariesResponse = await client.send(
-        new GetTraceSummariesCommand({
-          StartTime: filterStartTime,
-          EndTime: filterEndTime,
-          FilterExpression: `traceId = "${xrayTraceId}"`,
+      // Fetch trace directly via BatchGetTraces (no filter expression needed
+      // since we already have the trace ID)
+      const batchResponse = await client.send(
+        new BatchGetTracesCommand({
+          TraceIds: [xrayTraceId],
         }),
       );
 
-      const traceSummaries = summariesResponse.TraceSummaries ?? [];
+      const traces = batchResponse.Traces ?? [];
+      if (traces.length > 0) {
+        const traceData = traces[0];
+        const segments: XRaySegment[] = [];
 
-      if (traceSummaries.length > 0) {
-        // Trace found — fetch full segments via BatchGetTraces
-        const batchResponse = await client.send(
-          new BatchGetTracesCommand({
-            TraceIds: [xrayTraceId],
-          }),
-        );
-
-        const traces = batchResponse.Traces ?? [];
-        if (traces.length > 0) {
-          const traceData = traces[0];
-          const segments: XRaySegment[] = [];
-
-          for (const seg of traceData.Segments ?? []) {
-            if (seg.Document) {
-              const parsed = JSON.parse(seg.Document) as XRaySegment;
-              segments.push(...flattenSegments(parsed));
-            }
+        for (const seg of traceData.Segments ?? []) {
+          if (seg.Document) {
+            const parsed = JSON.parse(seg.Document) as XRaySegment;
+            segments.push(...flattenSegments(parsed));
           }
-
-          lastSegmentCount = segments.length;
-
-          // If expectedMinSegmentCount specified, check if we have enough
-          if (
-            expectedMinSegmentCount === undefined ||
-            segments.length >= expectedMinSegmentCount
-          ) {
-            return {
-              traceId: xrayTraceId,
-              segments,
-            };
-          }
-          // Not enough segments yet — continue polling
         }
+
+        lastSegmentCount = segments.length;
+
+        // If expectedMinSegmentCount specified, check if we have enough
+        if (
+          expectedMinSegmentCount === undefined ||
+          segments.length >= expectedMinSegmentCount
+        ) {
+          return {
+            traceId: xrayTraceId,
+            segments,
+          };
+        }
+        // Not enough segments yet — continue polling
       }
     } catch (error: unknown) {
       // Handle AccessDeniedException
@@ -186,7 +166,7 @@ export async function fetchXRayTrace(
       ) {
         throw new Error(
           `Access denied when querying X-Ray trace ${xrayTraceId}. ` +
-            `Ensure the test runner's IAM role has xray:GetTraceSummaries and xray:BatchGetTraces permissions.`,
+            `Ensure the test runner's IAM role has xray:BatchGetTraces permissions.`,
         );
       }
       // Re-throw other unexpected errors
