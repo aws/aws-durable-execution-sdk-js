@@ -2,10 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import {
-  DurableExecutionOtelPlugin,
-  deriveTraceIdFromXRayRoot,
-} from "@aws/durable-execution-sdk-js-otel";
+import { DurableExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import { ExampleConfig } from "../../../types";
 
 // No createOtelTestSetup — ADOT handles export at runtime
@@ -23,9 +20,6 @@ export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     // Derive trace ID from X-Ray header for test assertions
     const xRayHeader = process.env._X_AMZN_TRACE_ID;
-    const traceId = xRayHeader
-      ? deriveTraceIdFromXRayRoot(xRayHeader)
-      : undefined;
 
     // Exercise multiple operation types for X-Ray verification
     const step1 = await context.step("fetch-data", async () => "data-value");
@@ -47,8 +41,7 @@ export const handler = withDurableExecution(
     );
 
     return {
-      traceId,
-      xRayTraceId: xRayHeader,
+      xRayHeader,
       result: { step1, step2, childResult },
     };
   },

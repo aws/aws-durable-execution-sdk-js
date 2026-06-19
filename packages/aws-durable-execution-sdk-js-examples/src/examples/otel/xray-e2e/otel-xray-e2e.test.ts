@@ -9,6 +9,36 @@ import {
   assertSpanHierarchy,
 } from "../../../utils/xray-trace-helper";
 
+/**
+ * Parse the _X_AMZN_TRACE_ID header to extract the trace ID,
+ * using the same logic as xRayContextExtractor.
+ */
+function extractTraceIdFromXRayHeader(header: string): string | undefined {
+  const fields = new Map<string, string>();
+  for (const part of header.split(";")) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx > 0) {
+      const key = part.slice(0, eqIdx).trim();
+      const value = part.slice(eqIdx + 1).trim();
+      fields.set(key, value);
+    }
+  }
+
+  const root = fields.get("Root");
+  if (!root) {
+    return undefined;
+  }
+
+  const rootValue = root.startsWith("1-") ? root.slice(2) : root;
+  const traceId = rootValue.replace(/-/g, "").toLowerCase();
+
+  if (!/^[0-9a-f]{32}$/.test(traceId)) {
+    return undefined;
+  }
+
+  return traceId;
+}
+
 createTests({
   handler,
   tests: (runner, { assertEventSignatures, isCloud }) => {
@@ -17,7 +47,7 @@ createTests({
       expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
 
       const result = execution.getResult() as {
-        traceId: string | undefined;
+        xRayHeader: string | undefined;
         result: { step1: string; step2: string; childResult: string };
       };
 
@@ -28,11 +58,15 @@ createTests({
 
       // X-Ray assertions only in cloud mode
       if (isCloud) {
-        expect(result.traceId).toBeDefined();
-        expect(result.traceId).toMatch(/^[0-9a-f]{32}$/);
+        expect(result.xRayHeader).toBeDefined();
+
+        // Extract trace ID from the raw header using the same parsing as xRayContextExtractor
+        const traceId = extractTraceIdFromXRayHeader(result.xRayHeader!);
+        expect(traceId).toBeDefined();
+        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, result.traceId!, {
+        const trace = await fetchXRayTrace(xrayClient, traceId!, {
           expectedMinSegmentCount: 4,
           timeoutMs: 60000,
         });
@@ -51,7 +85,7 @@ createTests({
         });
 
         // Assert all segments share the same trace ID
-        const xrayTraceId = convertToXRayTraceId(result.traceId!);
+        const xrayTraceId = convertToXRayTraceId(traceId!);
         for (const segment of trace.segments) {
           expect(segment.trace_id).toBe(xrayTraceId);
         }
