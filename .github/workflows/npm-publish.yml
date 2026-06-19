@@ -29,6 +29,12 @@ jobs:
         # The dist-tag is derived from each package's version (see
         # iterate-publish-npm.sh), so the GitHub Release prerelease flag is
         # intentionally not passed.
+        env:
+          # Widen the post-publish dist-tag verification window to absorb npm
+          # registry/CDN propagation lag (default is 5 attempts x 10s = 50s,
+          # which can false-fail an otherwise-successful publish).
+          DIST_TAG_VERIFY_ATTEMPTS: "10"
+          DIST_TAG_VERIFY_DELAY: "15"
         run: ./.github/workflows/iterate-publish-npm.sh
         shell: bash
 
