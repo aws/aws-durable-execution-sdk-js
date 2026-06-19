@@ -111,7 +111,9 @@ for i in "${!P_DIR[@]}"; do
   delay=${DIST_TAG_VERIFY_DELAY:-10}
   ok=0
   for ((a = 1; a <= attempts; a++)); do
-    published=$(npm view "$name" "dist-tags.$tag" 2>/dev/null || echo "")
+    # --prefer-online bypasses npm's metadata cache (the pre-flight read above
+    # primes it with the OLD latest), so the verify sees fresh registry state.
+    published=$(npm view --prefer-online "$name" "dist-tags.$tag" 2>/dev/null || echo "")
     if [ "$published" = "$version" ]; then
       echo "OK: $name '$tag' -> $version confirmed"
       ok=1

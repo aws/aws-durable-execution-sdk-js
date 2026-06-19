@@ -21,7 +21,12 @@
 //   MOCK_VIEW_FAIL=1     -> `npm view` fails like a transient registry error
 //                           (no E404), so the script aborts instead of guessing
 
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 
 const args = process.argv.slice(2);
 if (process.env.NPM_LOG) {
@@ -46,20 +51,24 @@ if (args[0] === "view") {
     console.error("npm error code E500\nnpm error 500 Internal Server Error");
     process.exit(1);
   }
-  const name = args[1];
+  const name = args.slice(1).find((a) => !a.startsWith("-"));
   const reg = readReg();
   const entry = reg[name];
 
   if (!entry) {
     // Unknown package == never published.
-    console.error(`npm error code E404\nnpm error 404 '${name}' is not in this registry.`);
+    console.error(
+      `npm error code E404\nnpm error 404 '${name}' is not in this registry.`,
+    );
     process.exit(1);
   }
 
   if (args.includes("--json")) {
     const versions = {};
     for (const v of entry.versions || []) versions[v] = {};
-    console.log(JSON.stringify({ "dist-tags": entry.distTags || {}, versions }));
+    console.log(
+      JSON.stringify({ "dist-tags": entry.distTags || {}, versions }),
+    );
     process.exit(0);
   }
 
