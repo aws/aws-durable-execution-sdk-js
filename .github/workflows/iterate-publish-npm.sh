@@ -27,6 +27,7 @@ else
     "packages/aws-durable-execution-sdk-js"
     "packages/aws-durable-execution-sdk-js-testing"
     "packages/aws-durable-execution-sdk-js-eslint-plugin"
+    "packages/aws-durable-execution-sdk-js-otel"
   )
 fi
 
