@@ -1,5 +1,7 @@
 # AWS Durable Execution SDK - OpenTelemetry Plugin
 
+> **⚠️ Experimental Beta:** This plugin is currently in experimental beta. Functionality may change without notice between releases. It is not recommended for production workloads at this time.
+
 OpenTelemetry instrumentation plugin for AWS Durable Execution SDK. Emits distributed traces that correlate across multiple Lambda invocations of a single durable execution, producing deterministic span and trace IDs so that spans from different invocations are stitched into a single coherent trace.
 
 ## Features
