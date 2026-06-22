@@ -19,6 +19,7 @@ export interface FetchTraceOptions {
   timeoutMs?: number; // Default: 60000
   pollingIntervalMs?: number; // Default: 5000
   expectedMinSegmentCount?: number; // Continue polling until this many segments
+  expectedSpanNames?: string[]; // Continue polling until all named spans appear
 }
 
 const VALID_OTEL_TRACE_ID_PATTERN = /^[0-9a-f]{32}$/;
@@ -86,6 +87,7 @@ export async function fetchXRayTrace(
   let timeoutMs = options?.timeoutMs ?? 60000;
   const pollingIntervalMs = options?.pollingIntervalMs ?? 5000;
   const expectedMinSegmentCount = options?.expectedMinSegmentCount;
+  const expectedSpanNames = options?.expectedSpanNames;
 
   // In CI, enforce minimum 60s timeout
   const ciEnv = process.env.CI;
@@ -107,18 +109,24 @@ export async function fetchXRayTrace(
 
     // Check timeout
     if (elapsed >= timeoutMs) {
+      const details: string[] = [];
       if (
         expectedMinSegmentCount !== undefined &&
         lastSegmentCount > 0 &&
         lastSegmentCount < expectedMinSegmentCount
       ) {
-        throw new Error(
-          `Timed out after ${timeoutMs}ms waiting for X-Ray trace ${xrayTraceId}. ` +
-            `Expected at least ${expectedMinSegmentCount} segments but found ${lastSegmentCount}.`,
+        details.push(
+          `Expected at least ${expectedMinSegmentCount} segments but found ${lastSegmentCount}.`,
         );
       }
+      if (expectedSpanNames !== undefined && lastSegmentCount > 0) {
+        // We must have stored segments from the last attempt — can't access
+        // them here, so just note which names were expected
+        details.push(`Expected span names: [${expectedSpanNames.join(", ")}].`);
+      }
       throw new Error(
-        `Timed out after ${timeoutMs}ms waiting for X-Ray trace ${xrayTraceId}.`,
+        `Timed out after ${timeoutMs}ms waiting for X-Ray trace ${xrayTraceId}.` +
+          (details.length > 0 ? ` ${details.join(" ")}` : ""),
       );
     }
 
@@ -145,17 +153,23 @@ export async function fetchXRayTrace(
 
         lastSegmentCount = segments.length;
 
-        // If expectedMinSegmentCount specified, check if we have enough
-        if (
+        // Check if all polling conditions are met
+        const segmentCountMet =
           expectedMinSegmentCount === undefined ||
-          segments.length >= expectedMinSegmentCount
-        ) {
+          segments.length >= expectedMinSegmentCount;
+        const spanNamesMet =
+          expectedSpanNames === undefined ||
+          expectedSpanNames.every((name) =>
+            segments.some((seg) => seg.name === name),
+          );
+
+        if (segmentCountMet && spanNamesMet) {
           return {
             traceId: xrayTraceId,
             segments,
           };
         }
-        // Not enough segments yet — continue polling
+        // Not all conditions met yet — continue polling
       }
     } catch (error: unknown) {
       // Handle AccessDeniedException

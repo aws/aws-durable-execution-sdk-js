@@ -66,8 +66,15 @@ createTests({
         expect(traceId).toMatch(/^[0-9a-f]{32}$/);
 
         const xrayClient = new XRayClient({});
+        // Poll until all expected OTel spans have arrived in X-Ray
+        const expectedSpans = [
+          "fetch-data",
+          "process-data",
+          "child-operations",
+          "inner-step",
+        ];
         const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          expectedMinSegmentCount: 4,
+          expectedSpanNames: expectedSpans,
           timeoutMs: 60000,
         });
 
