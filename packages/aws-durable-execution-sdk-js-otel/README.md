@@ -11,19 +11,100 @@ OpenTelemetry instrumentation plugin for AWS Durable Execution SDK. Emits distri
 - **Configurable Sampling**: Control trace volume via environment variable or plugin options
 - **Self-Contained Setup**: No manual TracerProvider configuration required
 
-## Prerequisites
+## Installation
 
-### ADOT Lambda Layer
+```bash
+npm install @aws/durable-execution-sdk-js-otel
+```
+
+## Quick Start using Xray/CloudWatch Tracing
+
+1. Add the [ADOT Lambda Layer](#adot-lambda-layer) to your function and set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument`
+2. Enable [X-Ray Active Tracing](#aws-x-ray-active-tracing) on the function
+3. Pass `DurableExecutionOtelPlugin` to your handler's `plugins` array
+4. Add Xray Write Permissions
+
+### 1. ADOT Lambda Layer
 
 This plugin requires the [AWS Distro for OpenTelemetry (ADOT) Lambda layer](https://aws-otel.github.io/docs/getting-started/lambda) to export traces from your Lambda function.
 
-To find the latest ADOT layer ARN for your region:
+The layer ARN follows the format:
 
-1. Visit the [ADOT Lambda Layer ARNs](https://aws-otel.github.io/docs/getting-started/lambda#aws-lambda-layer-for-opentelemetry-arns) for the list of supported regions and layer ARNs
-2. The Node.js layer name follows the format: `AWSOpenTelemetryDistroJs`
-3. Add the layer ARN to your Lambda function configuration
+```
+arn:aws:lambda:<region>:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
+```
 
-### AWS X-Ray Active Tracing
+Refer to the [ADOT Lambda Layer ARNs](https://aws-otel.github.io/docs/getting-started/lambda/lambda-js-auto-instr#add-the-arn-of-the-adot-lambda-layer) page for the latest version number and supported regions.
+
+**AWS CLI:**
+
+```bash
+aws lambda update-function-configuration \
+  --function-name your-function-name \
+  --layers "arn:aws:lambda:us-east-1:615299751070:layer:AWSOpenTelemetryDistroJs:<version>"
+```
+
+You must also set the `AWS_LAMBDA_EXEC_WRAPPER` environment variable:
+
+```bash
+aws lambda update-function-configuration \
+  --function-name your-function-name \
+  --environment "Variables={AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument}"
+```
+
+> **Note:** Replace `us-east-1` with your function's region and `<version>` with the latest layer version from the ADOT docs.
+
+**CloudFormation / SAM:**
+
+```yaml
+MyFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
+    Environment:
+      Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+```
+
+For raw CloudFormation (`AWS::Lambda::Function`):
+
+```yaml
+MyFunction:
+  Type: AWS::Lambda::Function
+  Properties:
+    Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
+    Environment:
+      Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+```
+
+**CDK:**
+
+```typescript
+import * as lambda from "aws-cdk-lib/aws-lambda";
+
+const adotLayer = lambda.LayerVersion.fromLayerVersionArn(
+  this,
+  "AdotLayer",
+  `arn:aws:lambda:${this.region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>`,
+);
+
+const fn = new lambda.Function(this, "MyFunction", {
+  runtime: lambda.Runtime.NODEJS_22_X,
+  handler: "index.handler",
+  code: lambda.Code.fromAsset("lambda"),
+  layers: [adotLayer],
+  environment: {
+    AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
+  },
+});
+```
+
+> **Tip:** Pin the layer version to a specific number in production deployments to avoid unexpected behavior from automatic version changes.
+
+### 2. AWS X-Ray Active Tracing
 
 Enable active tracing on your Lambda function so the `_X_AMZN_TRACE_ID` environment variable is populated at invocation time. The plugin uses this header to derive deterministic trace IDs that remain consistent across all invocations of the same durable execution.
 
@@ -55,25 +136,7 @@ new lambda.Function(this, "MyFunction", {
 });
 ```
 
-## Installation
-
-```bash
-npm install @aws/durable-execution-sdk-js-otel
-```
-
-### Peer Dependencies
-
-This package requires the following peer dependencies:
-
-| Package                                  | Version    |
-| ---------------------------------------- | ---------- |
-| `@aws/durable-execution-sdk-js`          | `*`        |
-| `@opentelemetry/api`                     | `^1.0.0`   |
-| `@opentelemetry/instrumentation`         | `^0.219.0` |
-| `@opentelemetry/instrumentation-aws-sdk` | `^0.74.0`  |
-| `@opentelemetry/sdk-trace-node`          | `^2.6.1`   |
-
-## Quick Start
+### 3. In your Lambda handler (index.js)
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
@@ -99,6 +162,25 @@ export const handler = withDurableExecution(
 
 That's it. The plugin handles TracerProvider setup, deterministic ID generation, and span lifecycle internally.
 
+### 4. Grant Permissions
+
+The function's execution role needs the `AWSXRayDaemonWriteAccess` managed policy (or equivalent permissions) if using X-Ray as the tracing backend.
+
+### AWS Console
+
+See https://aws-otel.github.io/docs/getting-started/lambda#use-the-lambda-console.
+
+### Environment Variables for ADOT layer
+
+| Variable                      | Description                                                                                   | Default           |
+| ----------------------------- | --------------------------------------------------------------------------------------------- | ----------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint for the OTLP exporter (e.g., `http://localhost:4318` for the ADOT collector sidecar) | Set by ADOT layer |
+| `AWS_LAMBDA_EXEC_WRAPPER`     | Set to `/opt/otel-instrument` for the ADOT layer to instrument your function                  | —                 |
+| `OTEL_TRACES_SAMPLER`         | Sampler to use (e.g., `traceidratio` for ratio-based sampling)                                | `always_on`       |
+| `OTEL_TRACES_SAMPLER_ARG`     | Argument for the sampler (e.g., `0.3` to sample 30% of traces)                                | —                 |
+
+See the [ADOT sampling configuration](https://aws-otel.github.io/docs/getting-started/lambda#sampling-configuration) for more details.
+
 ## Configuration
 
 ### Plugin Options
@@ -108,13 +190,13 @@ import { DurableExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 const plugin = new DurableExecutionOtelPlugin({
   // Use a custom context extractor (default: xRayContextExtractor)
-  contextExtractor: xRayContextExtractor,
+  contextExtractor?: xRayContextExtractor,
 
   // Provide your own TracerProvider if you already have one configured
-  tracerProvider: myTracerProvider,
+  tracerProvider?: myTracerProvider,
 
   // Custom instrumentation scope name (default: "aws-durable-execution-sdk-js")
-  instrumentationName: "my-service",
+  instrumentationName?: "my-service",
 });
 ```
 
@@ -137,59 +219,6 @@ new DurableExecutionOtelPlugin({ contextExtractor: w3cClientContextExtractor });
 ```
 
 ## Lambda Setup
-
-### SAM template setup
-
-#### 1. Add the ADOT Layer
-
-Add the ADOT Lambda layer to your function. The layer provides the OpenTelemetry collector that exports traces to your configured backend.
-
-```yaml
-# SAM template example
-MyFunction:
-  Type: AWS::Serverless::Function
-  Properties:
-    Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
-```
-
-> **Note:** The layer ARN varies by region, account, and version. Refer to the [ADOT Lambda Layer ARNs](https://aws-otel.github.io/docs/getting-started/lambda#aws-lambda-layer-for-opentelemetry-arns) for the latest ARN in your region.
-
-#### 2. Set Environment Variables
-
-```yaml
-Environment:
-  Variables:
-    AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-```
-
-#### 3. Enable X-Ray Active Tracing
-
-```yaml
-TracingConfig:
-  Mode: Active
-```
-
-This ensures the `_X_AMZN_TRACE_ID` environment variable is set on every invocation. The durable execution backend propagates the same Root trace ID to every invocation, so all invocations of the same execution share one trace.
-
-#### 4. Grant Permissions
-
-The function's execution role needs the `AWSXRayDaemonWriteAccess` managed policy (or equivalent permissions) if using X-Ray as the tracing backend.
-
-### AWS Console
-
-See https://aws-otel.github.io/docs/getting-started/lambda#use-the-lambda-console.
-
-### Environment Variables for ADOT layer
-
-| Variable                      | Description                                                                                   | Default           |
-| ----------------------------- | --------------------------------------------------------------------------------------------- | ----------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint for the OTLP exporter (e.g., `http://localhost:4318` for the ADOT collector sidecar) | Set by ADOT layer |
-| `AWS_LAMBDA_EXEC_WRAPPER`     | Set to `/opt/otel-instrument` for the ADOT layer to instrument your function                  | —                 |
-| `OTEL_TRACES_SAMPLER`         | Sampler to use (e.g., `traceidratio` for ratio-based sampling)                                | `always_on`       |
-| `OTEL_TRACES_SAMPLER_ARG`     | Argument for the sampler (e.g., `0.3` to sample 30% of traces)                                | —                 |
-
-See the [ADOT sampling configuration](https://aws-otel.github.io/docs/getting-started/lambda#sampling-configuration) for more details.
 
 ## Verification
 
