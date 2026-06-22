@@ -16,10 +16,8 @@ export interface XRayTrace {
 }
 
 export interface FetchTraceOptions {
-  timeoutMs?: number; // Default: 60000
-  pollingIntervalMs?: number; // Default: 5000
-  expectedMinSegmentCount?: number; // Continue polling until this many segments
-  expectedSpanNames?: string[]; // Continue polling until all named spans appear
+  /** Initial delay before fetching the trace (ms). Default: 10000 */
+  delayMs?: number;
 }
 
 const VALID_OTEL_TRACE_ID_PATTERN = /^[0-9a-f]{32}$/;
@@ -66,16 +64,16 @@ function flattenSegments(segment: XRaySegment): XRaySegment[] {
 }
 
 /**
- * Fetches an X-Ray trace by OTel trace ID with polling for eventual consistency.
+ * Fetches an X-Ray trace by OTel trace ID.
  *
- * Polls GetTraceSummaries then BatchGetTraces until the trace is found
- * (with enough segments) or the timeout elapses.
+ * Waits for an initial delay (to allow X-Ray indexing), then calls
+ * BatchGetTraces once to retrieve the full trace.
  *
  * @param client - An XRayClient instance
  * @param otelTraceId - A 32-character lowercase hex OTel trace ID
- * @param options - Polling configuration options
+ * @param options - Configuration options
  * @returns The fetched XRayTrace with flattened segments
- * @throws Error on timeout, access denied, or invalid input
+ * @throws Error if trace not found, access denied, or invalid input
  */
 export async function fetchXRayTrace(
   client: XRayClient,
@@ -83,113 +81,47 @@ export async function fetchXRayTrace(
   options?: FetchTraceOptions,
 ): Promise<XRayTrace> {
   const xrayTraceId = convertToXRayTraceId(otelTraceId);
+  const delayMs = options?.delayMs ?? 10000;
 
-  let timeoutMs = options?.timeoutMs ?? 60000;
-  const pollingIntervalMs = options?.pollingIntervalMs ?? 5000;
-  const expectedMinSegmentCount = options?.expectedMinSegmentCount;
-  const expectedSpanNames = options?.expectedSpanNames;
-
-  // In CI, enforce minimum 60s timeout
-  const ciEnv = process.env.CI;
-  if (ciEnv && ciEnv !== "0" && ciEnv !== "false" && ciEnv !== "") {
-    timeoutMs = Math.max(timeoutMs, 60000);
-  }
-
-  const startTime = Date.now();
-  let attempt = 0;
-  let lastSegmentCount = 0;
-
-  while (true) {
-    attempt++;
-    const elapsed = Date.now() - startTime;
-
+  // Wait for X-Ray to index the trace
+  if (delayMs > 0) {
     console.debug(
-      `[xray-trace-helper] Attempt ${attempt}, elapsed ${elapsed}ms`,
+      `[xray-trace-helper] Waiting ${delayMs}ms for X-Ray indexing...`,
     );
-
-    // Check timeout
-    if (elapsed >= timeoutMs) {
-      const details: string[] = [];
-      if (
-        expectedMinSegmentCount !== undefined &&
-        lastSegmentCount > 0 &&
-        lastSegmentCount < expectedMinSegmentCount
-      ) {
-        details.push(
-          `Expected at least ${expectedMinSegmentCount} segments but found ${lastSegmentCount}.`,
-        );
-      }
-      if (expectedSpanNames !== undefined && lastSegmentCount > 0) {
-        // We must have stored segments from the last attempt — can't access
-        // them here, so just note which names were expected
-        details.push(`Expected span names: [${expectedSpanNames.join(", ")}].`);
-      }
-      throw new Error(
-        `Timed out after ${timeoutMs}ms waiting for X-Ray trace ${xrayTraceId}.` +
-          (details.length > 0 ? ` ${details.join(" ")}` : ""),
-      );
-    }
-
-    try {
-      // Fetch trace directly via BatchGetTraces (no filter expression needed
-      // since we already have the trace ID)
-      const batchResponse = await client.send(
-        new BatchGetTracesCommand({
-          TraceIds: [xrayTraceId],
-        }),
-      );
-
-      const traces = batchResponse.Traces ?? [];
-      if (traces.length > 0) {
-        const traceData = traces[0];
-        const segments: XRaySegment[] = [];
-
-        for (const seg of traceData.Segments ?? []) {
-          if (seg.Document) {
-            const parsed = JSON.parse(seg.Document) as XRaySegment;
-            segments.push(...flattenSegments(parsed));
-          }
-        }
-
-        lastSegmentCount = segments.length;
-
-        // Check if all polling conditions are met
-        const segmentCountMet =
-          expectedMinSegmentCount === undefined ||
-          segments.length >= expectedMinSegmentCount;
-        const spanNamesMet =
-          expectedSpanNames === undefined ||
-          expectedSpanNames.every((name) =>
-            segments.some((seg) => seg.name === name),
-          );
-
-        if (segmentCountMet && spanNamesMet) {
-          return {
-            traceId: xrayTraceId,
-            segments,
-          };
-        }
-        // Not all conditions met yet — continue polling
-      }
-    } catch (error: unknown) {
-      // Handle AccessDeniedException
-      if (
-        error instanceof Error &&
-        (error.name === "AccessDeniedException" ||
-          error.message.includes("AccessDeniedException"))
-      ) {
-        throw new Error(
-          `Access denied when querying X-Ray trace ${xrayTraceId}. ` +
-            `Ensure the test runner's IAM role has xray:BatchGetTraces permissions.`,
-        );
-      }
-      // Re-throw other unexpected errors
-      throw error;
-    }
-
-    // Wait before next poll attempt
-    await new Promise((resolve) => setTimeout(resolve, pollingIntervalMs));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
+
+  const batchResponse = await client.send(
+    new BatchGetTracesCommand({
+      TraceIds: [xrayTraceId],
+    }),
+  );
+
+  const traces = batchResponse.Traces ?? [];
+  if (traces.length === 0) {
+    throw new Error(
+      `X-Ray trace ${xrayTraceId} not found. It may not have been indexed yet.`,
+    );
+  }
+
+  const traceData = traces[0];
+  const segments: XRaySegment[] = [];
+
+  for (const seg of traceData.Segments ?? []) {
+    if (seg.Document) {
+      const parsed = JSON.parse(seg.Document) as XRaySegment;
+      segments.push(...flattenSegments(parsed));
+    }
+  }
+
+  console.debug(
+    `[xray-trace-helper] Fetched ${traceData.Segments?.length ?? 0} documents, ${segments.length} segments (flattened). Names: [${segments.map((s) => s.name).join(", ")}]`,
+  );
+
+  return {
+    traceId: xrayTraceId,
+    segments,
+  };
 }
 
 /**
