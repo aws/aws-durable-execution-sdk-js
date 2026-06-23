@@ -111,6 +111,8 @@ export async function fetchXRayTrace(
   for (const seg of traceData.Segments ?? []) {
     if (seg.Document) {
       const parsed = JSON.parse(seg.Document) as XRaySegment;
+      console.log(seg.Document);
+      console.log(parsed);
       segments.push(...flattenSegments(parsed));
     }
   }
