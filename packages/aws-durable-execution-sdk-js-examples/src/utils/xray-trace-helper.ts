@@ -57,6 +57,7 @@ function flattenSegments(segment: XRaySegment): XRaySegment[] {
   const result: XRaySegment[] = [segment];
   if (segment.subsegments && segment.subsegments.length > 0) {
     for (const subsegment of segment.subsegments) {
+      console.debug(subsegment);
       result.push(...flattenSegments(subsegment));
     }
   }
