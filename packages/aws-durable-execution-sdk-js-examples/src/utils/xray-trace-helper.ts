@@ -92,33 +92,40 @@ export async function fetchXRayTrace(
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
-  const batchResponse = await client.send(
-    new BatchGetTracesCommand({
-      TraceIds: [xrayTraceId],
-    }),
-  );
-
-  const traces = batchResponse.Traces ?? [];
-  if (traces.length === 0) {
-    throw new Error(
-      `X-Ray trace ${xrayTraceId} not found. It may not have been indexed yet.`,
-    );
-  }
-
-  const traceData = traces[0];
   const segments: XRaySegment[] = [];
+  let nextToken: string | undefined;
+  let totalDocuments = 0;
 
-  for (const seg of traceData.Segments ?? []) {
-    if (seg.Document) {
-      const parsed = JSON.parse(seg.Document) as XRaySegment;
-      console.log(seg.Document);
-      console.log(parsed);
-      segments.push(...flattenSegments(parsed));
+  do {
+    const batchResponse = await client.send(
+      new BatchGetTracesCommand({
+        TraceIds: [xrayTraceId],
+        NextToken: nextToken,
+      }),
+    );
+
+    const traces = batchResponse.Traces ?? [];
+    if (traces.length === 0 && segments.length === 0) {
+      throw new Error(
+        `X-Ray trace ${xrayTraceId} not found. It may not have been indexed yet.`,
+      );
     }
-  }
+
+    for (const traceData of traces) {
+      for (const seg of traceData.Segments ?? []) {
+        if (seg.Document) {
+          const parsed = JSON.parse(seg.Document) as XRaySegment;
+          segments.push(...flattenSegments(parsed));
+          totalDocuments++;
+        }
+      }
+    }
+
+    nextToken = batchResponse.NextToken;
+  } while (nextToken);
 
   console.debug(
-    `[xray-trace-helper] Fetched ${traceData.Segments?.length ?? 0} documents, ${segments.length} segments (flattened). Names: [${segments.map((s) => s.name).join(", ")}]`,
+    `[xray-trace-helper] Fetched ${totalDocuments} documents, ${segments.length} segments (flattened). Names: [${segments.map((s) => s.name).join(", ")}]`,
   );
 
   return {
