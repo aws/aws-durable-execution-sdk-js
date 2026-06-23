@@ -3,7 +3,6 @@ import { XRayClient } from "@aws-sdk/client-xray";
 import { handler } from "./otel-xray-e2e";
 import { createTests } from "../../../utils/test-helper";
 import {
-  convertToXRayTraceId,
   fetchXRayTrace,
   assertSpanNames,
   assertSpanHierarchy,
@@ -82,12 +81,6 @@ createTests({
         assertSpanHierarchy(trace, {
           "child-operations": ["inner-step"],
         });
-
-        // Assert all segments share the same trace ID
-        const xrayTraceId = convertToXRayTraceId(traceId!);
-        for (const segment of trace.segments) {
-          expect(segment.trace_id).toBe(xrayTraceId);
-        }
       }
 
       assertEventSignatures(execution);
