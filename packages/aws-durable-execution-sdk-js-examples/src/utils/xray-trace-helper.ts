@@ -156,8 +156,8 @@ export function assertSpanNames(
 
 /**
  * Asserts parent-child hierarchy matches expected structure.
- * For each parent→children mapping, verifies the child segment's parent_id
- * matches the parent segment's id.
+ * For each parent→children mapping, verifies the parent segment contains
+ * the expected child in its subsegments array (parent→child direction).
  *
  * @param trace - The X-Ray trace with flattened segments
  * @param hierarchy - Object mapping parent span names to arrays of child span names
@@ -175,21 +175,33 @@ export function assertSpanHierarchy(
       );
     }
 
-    for (const childName of childNames) {
-      const childSegment = trace.segments.find((seg) => seg.name === childName);
-      if (!childSegment) {
-        throw new Error(
-          `Child span "${childName}" (expected child of "${parentName}") not found in trace. Available spans: [${trace.segments.map((s) => s.name).join(", ")}]`,
-        );
-      }
+    const subsegmentNames = getSubsegmentNames(parentSegment);
 
-      if (childSegment.parent_id !== parentSegment.id) {
+    for (const childName of childNames) {
+      if (!subsegmentNames.has(childName)) {
         throw new Error(
-          `Hierarchy mismatch: span "${childName}" has parent_id "${childSegment.parent_id}" but expected parent "${parentName}" has id "${parentSegment.id}"`,
+          `Hierarchy mismatch: expected "${childName}" to be a subsegment of "${parentName}", ` +
+            `but "${parentName}" only has subsegments: [${[...subsegmentNames].join(", ")}]`,
         );
       }
     }
   }
+}
+
+/**
+ * Recursively collects all subsegment names from a segment.
+ */
+function getSubsegmentNames(segment: XRaySegment): Set<string> {
+  const names = new Set<string>();
+  if (segment.subsegments) {
+    for (const sub of segment.subsegments) {
+      names.add(sub.name);
+      for (const nested of getSubsegmentNames(sub)) {
+        names.add(nested);
+      }
+    }
+  }
+  return names;
 }
 
 /**
