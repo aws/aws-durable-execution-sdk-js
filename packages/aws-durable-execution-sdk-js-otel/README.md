@@ -33,7 +33,7 @@ This plugin requires the [AWS Distro for OpenTelemetry (ADOT) Lambda layer](http
 The layer ARN follows the format:
 
 ```
-arn:aws:lambda:<region>:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
+arn:aws:lambda:<region>:<awsAccountId>:layer:AWSOpenTelemetryDistroJs:<version>
 ```
 
 Refer to the [ADOT Lambda Layer ARNs](https://aws-otel.github.io/docs/getting-started/lambda#aws-lambda-layer-for-opentelemetry-arns) page for the latest version number and supported regions.
@@ -43,7 +43,7 @@ Refer to the [ADOT Lambda Layer ARNs](https://aws-otel.github.io/docs/getting-st
 ```bash
 aws lambda update-function-configuration \
   --function-name your-function-name \
-  --layers "arn:aws:lambda:us-east-1:615299751070:layer:AWSOpenTelemetryDistroJs:<version>"
+  --layers "arn:aws:lambda:<region>:<<awsAccountId>>:layer:AWSOpenTelemetryDistroJs:<version>"
 ```
 
 You must also set the `AWS_LAMBDA_EXEC_WRAPPER` environment variable:
@@ -54,7 +54,7 @@ aws lambda update-function-configuration \
   --environment "Variables={AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument}"
 ```
 
-> **Note:** Replace `us-east-1` with your function's region and `<version>` with the latest layer version from the ADOT docs.
+> **Note:** Replace `<region>`, `<awsAccountId>` `<version>` with the latest layer information from the ADOT docs.
 
 **CloudFormation / SAM:**
 
@@ -63,7 +63,7 @@ MyFunction:
   Type: AWS::Serverless::Function
   Properties:
     Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
+      - !Sub arn:aws:lambda:${AWS::Region}:<awsAccountId>:layer:AWSOpenTelemetryDistroJs:<version>
     Environment:
       Variables:
         AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
@@ -76,7 +76,7 @@ MyFunction:
   Type: AWS::Lambda::Function
   Properties:
     Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
+      - !Sub arn:aws:lambda:${AWS::Region}:<awsAccountId>:layer:AWSOpenTelemetryDistroJs:<version>
     Environment:
       Variables:
         AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
@@ -90,7 +90,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 const adotLayer = lambda.LayerVersion.fromLayerVersionArn(
   this,
   "AdotLayer",
-  `arn:aws:lambda:${this.region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>`,
+  `arn:aws:lambda:${this.region}:<awsAccountId>:layer:AWSOpenTelemetryDistroJs:<version>`,
 );
 
 const fn = new lambda.Function(this, "MyFunction", {
