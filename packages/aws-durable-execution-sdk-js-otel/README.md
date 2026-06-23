@@ -21,8 +21,8 @@ npm install @aws/durable-execution-sdk-js-otel
 
 ## Quick Start using Xray/CloudWatch Tracing
 
-1. Add the [ADOT Lambda Layer](#adot-lambda-layer) to your function and set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument`
-2. Enable [X-Ray Active Tracing](#aws-x-ray-active-tracing) on the function
+1. Add the ADOT Lambda Layer to your function and set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument`
+2. Enable X-Ray Active Tracing on the function
 3. Pass `DurableExecutionOtelPlugin` to your handler's `plugins` array
 4. Add Xray Write Permissions
 
@@ -36,7 +36,7 @@ The layer ARN follows the format:
 arn:aws:lambda:<region>:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
 ```
 
-Refer to the [ADOT Lambda Layer ARNs](https://aws-otel.github.io/docs/getting-started/lambda/lambda-js-auto-instr#add-the-arn-of-the-adot-lambda-layer) page for the latest version number and supported regions.
+Refer to the [ADOT Lambda Layer ARNs](https://aws-otel.github.io/docs/getting-started/lambda#aws-lambda-layer-for-opentelemetry-arns) page for the latest version number and supported regions.
 
 **AWS CLI:**
 
@@ -219,8 +219,6 @@ new DurableExecutionOtelPlugin({ contextExtractor: xRayContextExtractor });
 // W3C Trace Context via clientContext (requires backend propagation support (TODO))
 new DurableExecutionOtelPlugin({ contextExtractor: w3cClientContextExtractor });
 ```
-
-## Lambda Setup
 
 ## Verification
 
