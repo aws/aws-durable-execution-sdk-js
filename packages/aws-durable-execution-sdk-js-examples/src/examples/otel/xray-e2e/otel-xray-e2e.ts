@@ -14,6 +14,7 @@ export const config: ExampleConfig = {
     ExecutionTimeout: 120,
     RetentionPeriodInDays: 7,
   },
+  excludeRuntimes: ["24.x"],
 };
 
 export const handler = withDurableExecution(
