@@ -4,7 +4,7 @@ import {
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import { DurableExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 /**
  * Serialized representation of an OpenTelemetry span for test assertions.
@@ -25,7 +25,7 @@ export interface SerializedSpan {
 export interface OtelTestSetup {
   provider: NodeTracerProvider;
   exporter: InMemorySpanExporter;
-  plugin: DurableExecutionOtelPlugin;
+  plugin: OtelPlugin;
   getSerializedSpans(): SerializedSpan[];
   reset(): void;
 }
@@ -34,7 +34,7 @@ export interface OtelTestSetup {
  * Creates a shared OTel test infrastructure for integration test examples.
  *
  * Configures a NodeTracerProvider with a SimpleSpanProcessor backed by an
- * InMemorySpanExporter, and passes the provider to DurableExecutionOtelPlugin
+ * InMemorySpanExporter, and passes the provider to OtelPlugin
  * via the `tracerProvider` option.
  *
  * @returns An OtelTestSetup object containing the provider, exporter, plugin,
@@ -46,7 +46,7 @@ export function createOtelTestSetup(): OtelTestSetup {
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
-  const plugin = new DurableExecutionOtelPlugin({
+  const plugin = new OtelPlugin({
     tracerProvider: provider,
   });
 

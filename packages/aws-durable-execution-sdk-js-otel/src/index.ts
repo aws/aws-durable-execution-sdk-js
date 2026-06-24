@@ -1,8 +1,8 @@
 // Public exports for @aws/durable-execution-sdk-js-otel
 
 // Plugin
-export { DurableExecutionOtelPlugin } from "./plugin";
-export type { DurableExecutionOtelPluginConfig } from "./plugin";
+export { OtelPlugin } from "./plugin";
+export type { OtelPluginConfig } from "./plugin";
 
 // ID Generator
 export {

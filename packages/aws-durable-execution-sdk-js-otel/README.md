@@ -23,7 +23,7 @@ npm install @aws/durable-execution-sdk-js-otel
 
 1. Add the ADOT Lambda Layer to your function and set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument`
 2. Enable X-Ray Active Tracing on the function
-3. Pass `DurableExecutionOtelPlugin` to your handler's `plugins` array
+3. Pass `OtelPlugin` to your handler's `plugins` array
 4. Add Xray Write Permissions
 
 ### 1. ADOT Lambda Layer
@@ -142,7 +142,7 @@ new lambda.Function(this, "MyFunction", {
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { DurableExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 export const handler = withDurableExecution(
   async (event, context) => {
@@ -158,7 +158,7 @@ export const handler = withDurableExecution(
 
     return result;
   },
-  { plugins: [new DurableExecutionOtelPlugin()] },
+  { plugins: [new OtelPlugin()] },
 );
 ```
 
@@ -188,9 +188,9 @@ See the [ADOT sampling configuration](https://aws-otel.github.io/docs/getting-st
 ### Plugin Options
 
 ```typescript
-import { DurableExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
-const plugin = new DurableExecutionOtelPlugin({
+const plugin = new OtelPlugin({
   // Use a custom context extractor (default: xRayContextExtractor)
   contextExtractor?: xRayContextExtractor,
 
@@ -208,16 +208,16 @@ The plugin supports multiple strategies for extracting upstream trace context:
 
 ```typescript
 import {
-  DurableExecutionOtelPlugin,
+  OtelPlugin,
   xRayContextExtractor,
   w3cClientContextExtractor,
 } from "@aws/durable-execution-sdk-js-otel";
 
 // Default: X-Ray trace header (recommended for most Lambda deployments)
-new DurableExecutionOtelPlugin({ contextExtractor: xRayContextExtractor });
+new OtelPlugin({ contextExtractor: xRayContextExtractor });
 
 // W3C Trace Context via clientContext (requires backend propagation support (TODO))
-new DurableExecutionOtelPlugin({ contextExtractor: w3cClientContextExtractor });
+new OtelPlugin({ contextExtractor: w3cClientContextExtractor });
 ```
 
 ## Verification
@@ -248,12 +248,12 @@ After deploying your function with the plugin configured:
 
 ## API Reference
 
-### `DurableExecutionOtelPlugin`
+### `OtelPlugin`
 
 The main plugin class. Implements `DurableInstrumentationPlugin` from `@aws/durable-execution-sdk-js`.
 
 ```typescript
-new DurableExecutionOtelPlugin(config?: DurableExecutionOtelPluginConfig)
+new OtelPlugin(config?: OtelPluginConfig)
 ```
 
 ### `DeterministicIdGenerator`
