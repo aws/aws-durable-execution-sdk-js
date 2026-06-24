@@ -10,7 +10,7 @@ import {
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import { DurableExecutionOtelPlugin } from "../plugin";
+import { OtelPlugin } from "../plugin";
 import {
   DeterministicIdGenerator,
   deriveSpanIdFromOperationId,
@@ -26,7 +26,7 @@ import type {
 
 let exporter: InMemorySpanExporter;
 let provider: NodeTracerProvider;
-let plugin: DurableExecutionOtelPlugin;
+let plugin: OtelPlugin;
 
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
@@ -122,7 +122,7 @@ beforeEach(() => {
     idGenerator,
   });
   provider.register();
-  plugin = new DurableExecutionOtelPlugin({ tracerProvider: provider });
+  plugin = new OtelPlugin({ tracerProvider: provider });
 });
 
 afterEach(async () => {
@@ -134,7 +134,7 @@ afterEach(async () => {
   propagation.disable();
 });
 
-describe("DurableExecutionOtelPlugin", () => {
+describe("OtelPlugin", () => {
   describe("onInvocationStart", () => {
     it("creates an invocation span with durable.execution.arn attribute", async () => {
       const info = makeInvocationInfo();
