@@ -57,7 +57,6 @@ function flattenSegments(segment: XRaySegment): XRaySegment[] {
   const result: XRaySegment[] = [segment];
   if (segment.subsegments && segment.subsegments.length > 0) {
     for (const subsegment of segment.subsegments) {
-      console.debug(subsegment);
       result.push(...flattenSegments(subsegment));
     }
   }
@@ -86,15 +85,11 @@ export async function fetchXRayTrace(
 
   // Wait for X-Ray to index the trace
   if (delayMs > 0) {
-    console.debug(
-      `[xray-trace-helper] Waiting ${delayMs}ms for X-Ray indexing...`,
-    );
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
   const segments: XRaySegment[] = [];
   let nextToken: string | undefined;
-  let totalDocuments = 0;
 
   do {
     const batchResponse = await client.send(
@@ -116,17 +111,12 @@ export async function fetchXRayTrace(
         if (seg.Document) {
           const parsed = JSON.parse(seg.Document) as XRaySegment;
           segments.push(...flattenSegments(parsed));
-          totalDocuments++;
         }
       }
     }
 
     nextToken = batchResponse.NextToken;
   } while (nextToken);
-
-  console.debug(
-    `[xray-trace-helper] Fetched ${totalDocuments} documents, ${segments.length} segments (flattened). Names: [${segments.map((s) => s.name).join(", ")}]`,
-  );
 
   return {
     traceId: xrayTraceId,
