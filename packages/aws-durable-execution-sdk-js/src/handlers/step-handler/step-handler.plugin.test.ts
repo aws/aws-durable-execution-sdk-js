@@ -7,6 +7,8 @@ import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
+import { OperationStatus } from "@aws-sdk/client-lambda";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -267,5 +269,92 @@ describe("Step Handler - plugin hooks", () => {
 
     const result = await stepHandler("my-step", stepFn);
     expect(result).toBe("result");
+  });
+
+  it("should call onOperationStart with isReplay true on subsequent retry attempts", async () => {
+    const stepId = "step-1";
+    const hashedStepId = hashId(stepId);
+
+    // Track getStepData calls to return appropriate state at each point
+    // in the retry lifecycle.
+    // The default semantics is AtLeastOncePerRetry:
+    //   executeStepLogic call 1:
+    //     1. top of executeStepLogic: null (not started yet)
+    //     2. try block (computing currentAttempt): null (Attempt 0 → currentAttempt=1)
+    //     3. catch block (computing currentAttempt after error): null
+    //     4. after RETRY checkpoint: { Attempt: 1 }
+    //     5. for NextAttemptTimestamp: { Attempt: 1 }
+    //   waitForRetryTimer resolves, then executeStepLogic call 2:
+    //     6. top of executeStepLogic: { Attempt: 1, Status: PENDING } — not STARTED
+    //     7. try block (computing currentAttempt): { Attempt: 1 }
+    //     8. after SUCCEED checkpoint: { Status: SUCCEEDED, Attempt: 1 }
+    let getStepDataCallCount = 0;
+    (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+      getStepDataCallCount++;
+      if (getStepDataCallCount <= 3) {
+        return null;
+      }
+      if (getStepDataCallCount <= 7) {
+        return {
+          Id: hashedStepId,
+          Status: OperationStatus.PENDING,
+          StepDetails: {
+            Attempt: 1,
+          },
+        };
+      }
+      return {
+        Id: hashedStepId,
+        Status: OperationStatus.SUCCEEDED,
+        StepDetails: {
+          Attempt: 1,
+          Result: JSON.stringify("recovered"),
+        },
+      };
+    });
+
+    mockPlugin.onOperationStart = jest.fn();
+
+    let callCount = 0;
+    const stepFn = jest.fn().mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("transient failure");
+      }
+      return "recovered";
+    });
+
+    const stepHandler = createStepHandler(
+      mockContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      createDefaultLogger(),
+      undefined,
+      undefined,
+      mockPlugin,
+    );
+
+    const result = await stepHandler("my-step", stepFn, {
+      retryStrategy: (_error, attempt) => ({
+        shouldRetry: attempt < 3,
+        delay: { seconds: 0 },
+      }),
+    });
+
+    expect(result).toBe("recovered");
+
+    // onOperationStart should be called twice:
+    // 1st: isReplay false (first attempt, Attempt=0 from null)
+    // 2nd: isReplay true (retry attempt, Attempt=1)
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(2);
+    expect(mockPlugin.onOperationStart).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ isReplay: false }),
+    );
+    expect(mockPlugin.onOperationStart).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ isReplay: true }),
+    );
   });
 });

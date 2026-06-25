@@ -203,6 +203,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
         // Checkpoint START if not already started
         if (stepData?.Status !== OperationStatus.STARTED) {
+          const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
           checkpoint.checkpoint(stepId, {
             Id: stepId,
             ParentId: parentId,
@@ -216,7 +217,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           await plugin.onOperationStart?.({
             ...opInfo,
             status: OperationStatus.STARTED,
-            isReplay: false,
+            isReplay: isRetryAttempt,
           });
         } else {
           const operationInfo = toOperationInfo(stepData);

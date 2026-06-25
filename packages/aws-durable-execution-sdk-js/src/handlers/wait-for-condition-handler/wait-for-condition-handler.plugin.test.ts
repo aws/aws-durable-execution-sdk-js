@@ -11,6 +11,8 @@ import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
+import { OperationStatus } from "@aws-sdk/client-lambda";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -292,5 +294,82 @@ describe("WaitForCondition Handler - plugin hooks", () => {
 
     const result = await handler(checkFunc, config);
     expect(result).toBe("done");
+  });
+
+  it("should call onOperationStart with isReplay true on subsequent retry attempts", async () => {
+    const stepId = "step-1";
+    const hashedStepId = hashId(stepId);
+
+    // Simulate the getStepData progression:
+    // 1st call (top of executeCheckLogic, first attempt): null (not started)
+    // After RETRY checkpoint and re-entering executeCheckLogic via recursion:
+    // subsequent calls return data with Attempt: 1 and status STARTED
+    let getStepDataCallCount = 0;
+    (mockContext.getStepData as jest.Mock).mockImplementation(() => {
+      getStepDataCallCount++;
+      if (getStepDataCallCount <= 2) {
+        // First attempt: no step data
+        return null;
+      }
+      // After RETRY checkpoint: return data indicating a retry with Attempt: 1
+      // Status STARTED means the operation was already started (enters isReplay: true branch)
+      return {
+        Id: hashedStepId,
+        Status: OperationStatus.STARTED,
+        StepDetails: {
+          Attempt: 1,
+          Result: JSON.stringify("state-after-first-attempt"),
+        },
+      };
+    });
+
+    (mockPlugin.wrapOperationAttemptFn as jest.Mock).mockImplementation(
+      (_info: unknown, fn: () => unknown) => fn(),
+    );
+    mockPlugin.onOperationStart = jest.fn();
+
+    let checkCallCount = 0;
+    mockRunWithContext.mockImplementation(async (_stepId, _parentId, fn) => {
+      checkCallCount++;
+      return checkCallCount;
+    });
+
+    const handler = createWaitForConditionHandler(
+      mockContext,
+      mockCheckpoint,
+      createStepId,
+      createDefaultLogger(),
+      undefined,
+      undefined,
+      mockPlugin,
+    );
+
+    const checkFunc: WaitForConditionCheckFunc<number, DurableLogger> =
+      jest.fn();
+    const config: WaitForConditionConfig<number> = {
+      waitStrategy: jest
+        .fn()
+        .mockReturnValueOnce({
+          shouldContinue: true,
+          delay: { seconds: 5 },
+        })
+        .mockReturnValue({ shouldContinue: false }),
+      initialState: 0,
+    };
+
+    await handler("my-condition", checkFunc, config);
+
+    // onOperationStart should be called twice:
+    // 1st: isReplay false (first attempt, Attempt=0)
+    // 2nd: isReplay true (second attempt, status is STARTED so enters the else branch)
+    expect(mockPlugin.onOperationStart).toHaveBeenCalledTimes(2);
+    expect(mockPlugin.onOperationStart).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ isReplay: false }),
+    );
+    expect(mockPlugin.onOperationStart).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ isReplay: true }),
+    );
   });
 });
