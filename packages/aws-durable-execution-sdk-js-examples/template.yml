@@ -15,6 +15,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy
       Policies:
         - PolicyName: DurableExecutionPolicy
           PolicyDocument:
@@ -1296,6 +1297,35 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  OtelXrayE2e:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelXRayE2E-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-xray-e2e.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   ParallelBasic:

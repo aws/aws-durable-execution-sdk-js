@@ -34,6 +34,12 @@ export interface ExampleConfig {
    * and integration tests. The example remains in the catalog for bundling purposes.
    */
   localOnly?: boolean;
+  /**
+   * If provided, this example will be excluded from cloud deployment and integration
+   * tests for the specified runtimes. Use Node.js runtime version strings like "24.x".
+   * The example will still run locally and on other runtimes not listed here.
+   */
+  excludeRuntimes?: string[];
 }
 
 export type ExamplesWithConfig = ExampleConfig & {
