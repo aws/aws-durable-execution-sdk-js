@@ -58,9 +58,9 @@ export interface AttemptInfo extends OperationInfo {
  * @experimental This enum is experimental and may be changed or removed in future releases.
  */
 export enum AttemptEndInfoOutcome {
-  SUCCEEDED = "succeeded",
-  FAILED = "failed",
-  RETRYING = "retrying",
+  SUCCEEDED = "SUCCEEDED",
+  FAILED = "FAILED",
+  RETRYING = "RETRYING",
 }
 
 /**

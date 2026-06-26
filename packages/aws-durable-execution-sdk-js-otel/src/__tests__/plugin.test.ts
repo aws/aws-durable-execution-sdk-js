@@ -99,7 +99,7 @@ function makeAttemptEndInfo(
     type: "step",
     isReplay: false,
     attempt: 1,
-    outcome: "succeeded" as any,
+    outcome: "SUCCEEDED" as any,
     ...overrides,
   };
 }
@@ -504,6 +504,179 @@ describe("OtelPlugin", () => {
       // Span should be ended (it's in the exported list)
       expect(attemptSpan!.endTime).toBeDefined();
     });
+
+    it("attempt span name includes 'attempt <number>' postfix", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-name-fmt", name: "my-step", type: "step" }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-name-fmt",
+          name: "my-step",
+          type: "step",
+          attempt: 3,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({ id: "op-name-fmt", attempt: 3 }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-name-fmt", name: "my-step" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = getExportedSpans().find(
+        (s) => s.attributes["durable.operation.attempt"] === 3,
+      );
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.name).toBe("my-step attempt 3");
+    });
+
+    it("attempt span name uses type when no name provided", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-type-fmt", type: "step" }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-type-fmt", type: "step", attempt: 1 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({ id: "op-type-fmt", attempt: 1 }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-type-fmt", type: "step" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = getExportedSpans().find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-type-fmt" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.name).toBe("step attempt 1");
+    });
+
+    it("attempt span includes durable.attempt.outcome attribute on success", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-outcome-ok",
+          name: "outcome-step",
+          type: "step",
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-outcome-ok",
+          name: "outcome-step",
+          type: "step",
+          attempt: 1,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-outcome-ok",
+          attempt: 1,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-outcome-ok", name: "outcome-step" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = getExportedSpans().find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-outcome-ok" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("attempt span includes durable.attempt.outcome attribute on failure", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-outcome-fail",
+          name: "fail-step",
+          type: "step",
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-outcome-fail",
+          name: "fail-step",
+          type: "step",
+          attempt: 1,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-outcome-fail",
+          attempt: 1,
+          outcome: "FAILED" as any,
+          error: new Error("step failed"),
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-outcome-fail", name: "fail-step" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = getExportedSpans().find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-outcome-fail" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe("FAILED");
+    });
+
+    it("attempt span includes durable.attempt.outcome attribute on retrying", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-outcome-retry",
+          name: "retry-step",
+          type: "step",
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-outcome-retry",
+          name: "retry-step",
+          type: "step",
+          attempt: 1,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-outcome-retry",
+          attempt: 1,
+          outcome: "RETRYING" as any,
+          error: new Error("transient failure"),
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-outcome-retry", name: "retry-step" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = getExportedSpans().find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-outcome-retry" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe(
+        "RETRYING",
+      );
+    });
   });
 
   describe("Error handling", () => {
@@ -852,6 +1025,107 @@ describe("OtelPlugin", () => {
       const opSpan = findSpan("invoke");
       expect(opSpan).toBeDefined();
       expect(opSpan!.attributes["durable.operation.name"]).toBeUndefined();
+    });
+
+    it("operation span includes durable.operation.subtype when subType provided", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-subtype",
+          type: "WAIT",
+          name: "my-wait",
+          subType: "TIMER",
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-subtype",
+          type: "WAIT",
+          name: "my-wait",
+          subType: "TIMER",
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const opSpan = findSpan("my-wait");
+      expect(opSpan).toBeDefined();
+      expect(opSpan!.attributes["durable.operation.subtype"]).toBe("TIMER");
+    });
+
+    it("operation span omits durable.operation.subtype when no subType provided", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-nosub", type: "step", name: "plain-step" }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-nosub",
+          type: "step",
+          name: "plain-step",
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const opSpan = findSpan("plain-step");
+      expect(opSpan).toBeDefined();
+      expect(opSpan!.attributes["durable.operation.subtype"]).toBeUndefined();
+    });
+
+    it("continuation span includes durable.operation.subtype when subType provided", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-cont-sub",
+          type: "step",
+          name: "cont-step",
+          subType: "CONDITION_CHECK",
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const continuationSpan = findSpan("cont-step");
+      expect(continuationSpan).toBeDefined();
+      expect(continuationSpan!.attributes["durable.operation.subtype"]).toBe(
+        "CONDITION_CHECK",
+      );
+    });
+
+    it("attempt span includes durable.operation.subtype when subType provided", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-att-sub",
+          type: "step",
+          name: "sub-step",
+          subType: "CONDITION_CHECK",
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-att-sub",
+          type: "step",
+          name: "sub-step",
+          subType: "CONDITION_CHECK",
+          attempt: 1,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({ id: "op-att-sub", attempt: 1 }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-att-sub", name: "sub-step" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = getExportedSpans().find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-att-sub" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.attributes["durable.operation.subtype"]).toBe(
+        "CONDITION_CHECK",
+      );
     });
   });
 
