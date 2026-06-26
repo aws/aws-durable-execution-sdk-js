@@ -176,6 +176,9 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
     if (info.name) {
       attributes["durable.operation.name"] = info.name;
     }
+    if (info.subType) {
+      attributes["durable.operation.subtype"] = info.subType;
+    }
 
     let span: Span | undefined;
 
@@ -282,6 +285,9 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
       if (info.name) {
         attributes["durable.operation.name"] = info.name;
       }
+      if (info.subType) {
+        attributes["durable.operation.subtype"] = info.subType;
+      }
 
       const continuationSpan = this.tracer.startSpan(
         spanName,
@@ -313,7 +319,8 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
     const deterministicSpanId = deriveSpanIdFromOperationId(info.id);
-    const spanName = info.name ?? info.type;
+    const baseName = info.name ?? info.type;
+    const spanName = `${baseName} attempt ${info.attempt}`;
 
     // Find the parent Operation_Span for this operation
     const parentSpan = this.spanMap.get(info.id);
@@ -334,6 +341,9 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
     };
     if (info.name) {
       attributes["durable.operation.name"] = info.name;
+    }
+    if (info.subType) {
+      attributes["durable.operation.subtype"] = info.subType;
     }
 
     // Create Attempt_Span as child of Operation_Span with Link to deterministic span
@@ -367,6 +377,7 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
 
   async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
     if (this.attemptSpan) {
+      this.attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.error) {
         this.attemptSpan.setStatus({
           code: SpanStatusCode.ERROR,
