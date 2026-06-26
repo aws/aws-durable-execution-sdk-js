@@ -269,11 +269,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
             stepData = context.getStepData(stepId);
             const operationInfo = toOperationInfo(stepData);
             backfillOperationInfo(operationInfo, opInfo);
+            const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
             await plugin.onOperationStart?.({
               ...operationInfo,
-              isReplay: false,
+              isReplay: isRetryAttempt,
             });
           } else {
+            const isRetryAttempt = (stepData?.StepDetails?.Attempt || 0) >= 1;
             checkpoint.checkpoint(stepId, {
               Id: stepId,
               ParentId: parentId,
@@ -287,7 +289,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             await plugin.onOperationStart?.({
               ...opInfo,
               status: OperationStatus.STARTED,
-              isReplay: false,
+              isReplay: isRetryAttempt,
             });
           }
         } else {
