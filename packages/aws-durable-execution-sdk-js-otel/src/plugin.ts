@@ -403,6 +403,7 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
     return {
       traceId: spanContext.traceId,
       spanId: spanContext.spanId,
+      otelTraceSampled: (spanContext.traceFlags & 1) !== 0,
     };
   }
 }

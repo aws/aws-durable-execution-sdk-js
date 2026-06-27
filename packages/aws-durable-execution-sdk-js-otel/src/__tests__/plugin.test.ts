@@ -985,6 +985,7 @@ describe("OtelPlugin", () => {
       expect(logContext).toBeDefined();
       expect(logContext!.traceId).toMatch(/^[0-9a-f]{32}$/);
       expect(logContext!.spanId).toMatch(/^[0-9a-f]{16}$/);
+      expect(logContext!.otelTraceSampled).toBe(true);
     });
 
     it("returns undefined when no span is active", () => {

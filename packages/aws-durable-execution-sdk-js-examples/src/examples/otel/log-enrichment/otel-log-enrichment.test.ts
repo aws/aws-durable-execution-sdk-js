@@ -42,6 +42,7 @@ createTests({
           for (const log of jsonLogs) {
             expect(log.traceId).toMatch(/^[0-9a-f]{32}$/);
             expect(log.spanId).toMatch(/^[0-9a-f]{16}$/);
+            expect(log.otelTraceSampled).toBe(true);
           }
         }
 
