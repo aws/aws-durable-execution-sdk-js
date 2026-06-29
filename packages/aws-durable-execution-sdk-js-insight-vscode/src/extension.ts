@@ -290,7 +290,7 @@ class ExplorerPanel {
     const csp = [
       `default-src 'none'`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src 'nonce-${nonce}' 'unsafe-eval'`,
+      `script-src 'nonce-${nonce}'`,
       `font-src ${webview.cspSource}`,
       `img-src ${webview.cspSource} data: blob:`,
       `connect-src data: blob:`,
