@@ -1,0 +1,141 @@
+{
+  "name": "aws-durable-execution-sdk-js-insight-vscode",
+  "displayName": "Workflow Insight Explorer",
+  "description": "Query AWS Durable Execution Workflow Insight data from CloudWatch Logs using plain English.",
+  "version": "0.1.0-alpha.0",
+  "license": "Apache-2.0",
+  "publisher": "aws",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-insight-vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "Other"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "enabledApiProposals": [],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "workflowInsight.openExplorer",
+        "title": "Workflow Insight: Open Explorer"
+      }
+    ],
+    "configuration": {
+      "title": "Workflow Insight Explorer",
+      "properties": {
+        "workflowInsight.region": {
+          "type": "string",
+          "default": "",
+          "description": "AWS region of the CloudWatch log group (e.g. us-east-1). Falls back to AWS_REGION."
+        },
+        "workflowInsight.logGroupName": {
+          "type": "string",
+          "default": "",
+          "description": "CloudWatch log group that receives Workflow Insight records. With the default LambdaLogExporter this is the function's own log group, e.g. /aws/lambda/my-durable-fn. Comma-separate multiple groups."
+        },
+        "workflowInsight.destinationType": {
+          "type": "string",
+          "default": "cloudwatch-logs-exporter",
+          "enum": [
+            "cloudwatch-logs-exporter",
+            "lambda-log-exporter",
+            "dynamodb",
+            "aurora"
+          ],
+          "enumDescriptions": [
+            "Dedicated log group via CloudWatchLogsExporter — records are raw JSON, fields queryable directly",
+            "Function's own log group via LambdaLogExporter — records nested in Lambda JSON envelope (message field)",
+            "DynamoDB table via DynamoDBExporter — records queryable via PartiQL",
+            "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations"
+          ],
+          "description": "Where and how records are stored. Determines query engine and format."
+        },
+        "workflowInsight.dynamodbTableName": {
+          "type": "string",
+          "default": "",
+          "description": "DynamoDB table name (required when destinationType is 'dynamodb')."
+        },
+        "workflowInsight.auroraResourceArn": {
+          "type": "string",
+          "default": "",
+          "description": "Aurora cluster ARN (required when destinationType is 'aurora')."
+        },
+        "workflowInsight.auroraSecretArn": {
+          "type": "string",
+          "default": "",
+          "description": "Secrets Manager ARN for Aurora Data API auth (required when destinationType is 'aurora')."
+        },
+        "workflowInsight.auroraDatabase": {
+          "type": "string",
+          "default": "postgres",
+          "description": "Aurora database name."
+        },
+        "workflowInsight.auroraTable": {
+          "type": "string",
+          "default": "workflow_insight",
+          "description": "Aurora table name containing insight records."
+        },
+        "workflowInsight.awsProfile": {
+          "type": "string",
+          "default": "",
+          "description": "Named AWS profile to use. Leave empty to use the default credential provider chain (env, SSO, default profile)."
+        },
+        "workflowInsight.llmProvider": {
+          "type": "string",
+          "default": "bedrock",
+          "enum": [
+            "bedrock",
+            "copilot",
+            "local"
+          ],
+          "enumDescriptions": [
+            "Amazon Bedrock (Converse API) — requires AWS credentials and model access",
+            "GitHub Copilot (VS Code Language Model API) — requires Copilot subscription",
+            "Local LLM (Qwen2.5-Coder-3B) — runs offline, downloads model on first use (~2.2 GB)"
+          ],
+          "description": "Which LLM to use for converting questions to queries."
+        },
+        "workflowInsight.bedrockModelId": {
+          "type": "string",
+          "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+          "description": "Amazon Bedrock model id (or inference profile id) used to convert English to a Logs Insights query."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "cd webview-ui && npm run build && cd .. && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist media/webview.js media/webview.css"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.658.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.658.0",
+    "@aws-sdk/client-dynamodb": "^3.658.0",
+    "@aws-sdk/client-rds-data": "^3.658.0",
+    "@aws-sdk/credential-providers": "^3.658.0",
+    "@aws-sdk/util-dynamodb": "^3.658.0",
+    "node-llama-cpp": "^3.18.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.0",
+    "typescript": "~5.8.0"
+  }
+}

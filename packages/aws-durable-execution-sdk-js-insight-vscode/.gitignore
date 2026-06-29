@@ -1,0 +1,7 @@
+dist/
+media/webview.js
+media/webview.css
+node_modules/
+webview-ui/node_modules/
+*.vsix
+*.tsbuildinfo

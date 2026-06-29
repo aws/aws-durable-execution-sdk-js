@@ -65,7 +65,7 @@ export interface InsightExporter {
  * @experimental This interface is experimental and may change in future releases.
  */
 export interface WorkflowInsightConfig {
-  exporters: InsightExporter[];
+  exporters?: InsightExporter[];
   samplingRate?: number;
   emitMode?: "finished-only" | "in-progress";
   content?: ContentConfig;
@@ -97,6 +97,8 @@ export interface OperationRecord {
  * @experimental This interface is experimental and may change in future releases.
  */
 export interface WorkflowInsightRecord {
+  /** Fixed identifier to distinguish insight records from other log data. */
+  recordType: "WorkflowInsight";
   schemaVersion: "1.0";
   emittedAt: string;
   executionArn: string;
