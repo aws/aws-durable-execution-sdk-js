@@ -1,0 +1,121 @@
+# Workflow Insight Plugin — Remaining Tasks
+
+> Status legend: `[x]` done · `[~]` partially done · `[ ]` not started.
+> Scope source of truth: `plugin-contracts.md` (config, record shape, emit timing)
+> and `milestones.md` (POC scope).
+
+## Record Building
+
+- [x] Build the full `WorkflowInsightRecord` (identity fields: executionArn, functionName, region, accountId, etc.)
+- [x] Parse executionArn to extract functionName, qualifier, region, accountId
+- [x] Track execution status (map `PluginInvocationStatus` → RUNNING/SUCCEEDED/FAILED/PENDING)
+- [x] Capture execution input from `InvocationEndInfo.executionInput`
+- [x] Capture execution output from `InvocationEndInfo.executionResult`
+- [x] Capture execution error from `InvocationEndInfo.executionError`
+- [x] Compute execution `startTime` and `endTime`/`durationMs`
+- [x] Handle non-Date operation timestamps (runtime sends epoch ms numbers, not Date objects)
+- [ ] Emit operations in execution order (currently `Object.values` insertion order; sort by `startTime`)
+
+## Operation-Level Detail Capture
+
+> The `OperationRecord` contract includes `attempt`, per-operation `error`, and
+> (via content overrides) `result`. `OperationInfo` from `onOperationChange`
+> does not carry these — capturing them requires additional lifecycle hooks.
+
+- [ ] Capture per-operation `error` (wire `onOperationEnd`)
+- [ ] Capture per-operation `attempt` count (wire `onOperationAttemptEnd`)
+- [ ] Capture per-operation `result` (needed for `content.operations.overrides`)
+
+## Content Filtering
+
+- [ ] Apply `content.input` transform (boolean or function)
+- [ ] Apply `content.output` transform (boolean or function)
+- [ ] Apply `content.operations.overrides` — exclude operations and transform results
+- [ ] Apply `content.operations.includeErrors` setting
+
+## Sampling
+
+- [ ] Implement sampling decision (skip all work if not sampled)
+- [ ] Make the sampling decision **deterministic across replays** — a per-execution
+      decision based only on `isFirstInvocation` won't reproduce on replays;
+      derive it deterministically (e.g., hash of `executionArn`/`executionName`)
+
+## Emit Timing & Lifecycle
+
+- [x] Export on `onInvocationEnd`
+- [x] Export on `onOperationChange` for `in-progress` mode (gated by `emitMode`)
+- [x] Flush/await before returning via `wrapInvocation`
+- [x] Handle exporter errors gracefully (never fail the execution; `Promise.allSettled`)
+- [x] Coalesce overlapping exports — single in-flight export + latest-pending slot,
+      so intermediate in-progress updates are dropped (`ExportScheduler`)
+- [x] Drain the export queue in `wrapInvocation` so the final record is delivered
+- [ ] In `finished-only` mode, emit **only** on terminal `SUCCEEDED`/`FAILED`;
+      currently `onInvocationEnd` also schedules on `PENDING` (every wait/suspend)
+      and `RETRYING`
+- [ ] Replay-safe emission — avoid duplicate/redundant exports across replays
+      (in-progress mode re-fires `onOperationChange` for already-completed ops)
+
+## Record Size / Truncation
+
+> `InsightExporter.maxRecordSizeBytes` exists in the types but is never read.
+
+- [ ] Enforce `maxRecordSizeBytes` per exporter (contract default 256KB)
+- [ ] Truncate oversized records by dropping operation results starting from oldest
+
+## Exporters (first-party)
+
+- [x] `LambdaLogExporter` — stdout → function's own CloudWatch log group (zero IAM)
+- [x] `CloudWatchLogsExporter` — PutLogEvents to any log group, date-partitioned streams
+- [x] `S3Exporter` — PutObject with Hive partitioning, upsert by execution key
+- [x] `DynamoDBExporter` — PutItem, upsert or history via sort key
+- [x] `AuroraExporter` — RDS Data API (MySQL + PostgreSQL), SQL upsert
+- [x] `RedshiftExporter` — Redshift Data API, MERGE upsert
+- [x] `OpenSearchExporter` — Index API with SigV4/basic auth, upsert by \_id
+- [x] `FirehoseExporter` — PutRecord as NDJSON to Kinesis Firehose
+- [x] `EventBridgeExporter` — PutEvents for event-driven reactions
+- [x] `SQSExporter` — SendMessage with FIFO/dedup support
+- [x] `TimestreamExporter` — WriteRecords as multi-measure time-series
+- [x] `OTelExporter` — OTLP HTTP/JSON to any compatible backend
+- [x] `HttpExporter` — generic POST/PUT to any URL
+- [x] `FileExporter` — filesystem (EFS, S3 mount, /tmp) in ndjson or json mode
+
+## Testing
+
+- [ ] Unit tests for `toOperationRecord` and `buildOperationRecords`
+- [ ] Unit tests for record building (full WorkflowInsightRecord)
+- [ ] Unit tests for `ExportScheduler` (coalescing, no overlap, drain)
+- [ ] Unit tests for content filtering (input/output transforms, operation overrides)
+- [ ] Unit tests for sampling logic (including replay determinism)
+- [ ] Unit tests for each exporter (mock SDK clients, verify correct API calls)
+- [ ] Integration test with the testing SDK (end-to-end plugin lifecycle)
+- [x] Verified end-to-end on deployed Lambda (account 730758745077, `insight-demo-scheduled`)
+
+## Packaging & Docs
+
+- [x] `npm run build` passes locally (esm, cjs, types)
+- [ ] Add the insight package to root `package.json` build/test scripts
+- [ ] Wire the package into the root ESLint config (currently not linted)
+- [x] Package `README.md` — comprehensive docs with all exporters, config, examples
+- [ ] Add a runnable example under `aws-durable-execution-sdk-js-examples`
+
+## VS Code Extension (companion package)
+
+- [x] First revision: CloudWatch Logs Insights + Bedrock NL→query
+- [x] Settings UI (in-panel gear button)
+- [x] Auto-run (generate + run in one click)
+- [x] Time range inferred from question by Bedrock
+- [x] Self-correction loop (retry with error feedback on MalformedQueryException)
+- [x] TESTING.md step-by-step guide
+- [ ] Support additional query providers (S3/Athena, DynamoDB)
+- [ ] Model provider abstraction (local LLM option)
+- [ ] Query history and saved queries
+- [ ] CSV export
+
+## Known Limitations (document, not necessarily fix)
+
+- [x] Documented in README: best-effort delivery only
+- [ ] Document no coverage for backend-initiated events (`STOPPED`, `TIMED_OUT`);
+      customers must subscribe to EventBridge lifecycle events themselves
+- [ ] `RedshiftExporter` stores time fields as `VARCHAR(30)` — needs `::timestamptz`
+      casts in the MERGE SQL (same fix applied to AuroraExporter). Fix when adding
+      Redshift to the VS Code extension query providers.
