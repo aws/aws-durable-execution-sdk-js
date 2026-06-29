@@ -1,6 +1,7 @@
 import { Operation } from "@aws-sdk/client-lambda";
 import {
   OperationInfo,
+  PluginOperationStatus,
   AttemptInfo,
   AttemptEndInfo,
   AttemptEndInfoOutcome,
@@ -18,7 +19,7 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
     type: operation?.Type ?? "",
     subType: operation?.SubType,
     parentId: operation?.ParentId,
-    status: operation?.Status,
+    status: operation?.Status as PluginOperationStatus | undefined,
     startTimestamp: operation?.StartTimestamp,
     endTimestamp: operation?.EndTimestamp,
     result:

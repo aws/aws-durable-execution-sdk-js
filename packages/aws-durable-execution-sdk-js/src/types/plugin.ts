@@ -9,11 +9,30 @@ import { DurableExecutionInvocationOutput } from "./core";
  *
  * @experimental This enum is experimental and may be changed or removed in future releases.
  */
-export enum PluginInvocationStatus {
+export const enum PluginInvocationStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
   PENDING = "PENDING",
   RETRYING = "RETRYING",
+}
+
+/**
+ * Status values for durable operations.
+ *
+ * These represent the lifecycle states that an operation can be in
+ * during durable execution. 
+ *
+ * @experimental This enum is experimental and may be changed or removed in future releases.
+ */
+export const enum PluginOperationStatus {
+  STARTED = "STARTED",
+  READY = "READY",
+  PENDING = "PENDING",
+  SUCCEEDED = "SUCCEEDED",
+  FAILED = "FAILED",
+  TIMED_OUT = "TIMED_OUT",
+  STOPPED = "STOPPED",
+  CANCELLED = "CANCELLED",
 }
 
 /**
@@ -27,7 +46,7 @@ export interface OperationInfo {
   type: string;
   subType?: string;
   parentId?: string;
-  status?: string;
+  status?: PluginOperationStatus;
   startTimestamp?: Date;
   endTimestamp?: Date;
   result?: string;
@@ -57,7 +76,7 @@ export interface AttemptInfo extends OperationInfo {
  *
  * @experimental This enum is experimental and may be changed or removed in future releases.
  */
-export enum AttemptEndInfoOutcome {
+export const enum AttemptEndInfoOutcome {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
   RETRYING = "RETRYING",
