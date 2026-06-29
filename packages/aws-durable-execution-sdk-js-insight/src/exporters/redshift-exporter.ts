@@ -4,6 +4,16 @@ import {
 } from "@aws-sdk/client-redshift-data";
 import type { InsightExporter, WorkflowInsightRecord } from "../types";
 
+/** Validates a SQL identifier (table/schema name) to prevent injection. */
+function sanitizeIdentifier(name: string): string {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(
+      `Invalid SQL identifier: "${name}". Only letters, digits, and underscores are allowed.`,
+    );
+  }
+  return name;
+}
+
 /**
  * Configuration for the Redshift exporter.
  * @experimental This interface is experimental and may change in future releases.
@@ -75,8 +85,8 @@ export class RedshiftExporter implements InsightExporter {
       );
     }
     this.database = config.database;
-    this.table = config.table ?? "workflow_insight";
-    this.schema = config.schema ?? "public";
+    this.table = sanitizeIdentifier(config.table ?? "workflow_insight");
+    this.schema = sanitizeIdentifier(config.schema ?? "public");
     this.workgroupName = config.workgroupName;
     this.clusterIdentifier = config.clusterIdentifier;
     this.dbUser = config.dbUser;

@@ -4,6 +4,16 @@ import {
 } from "@aws-sdk/client-rds-data";
 import type { InsightExporter, WorkflowInsightRecord } from "../types";
 
+/** Validates a SQL identifier (table/schema name) to prevent injection. */
+function sanitizeIdentifier(name: string): string {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+    throw new Error(
+      `Invalid SQL identifier: "${name}". Only letters, digits, and underscores are allowed.`,
+    );
+  }
+  return name;
+}
+
 /**
  * Configuration for the Aurora exporter.
  * @experimental This interface is experimental and may change in future releases.
@@ -51,7 +61,7 @@ export class AuroraExporter implements InsightExporter {
     this.resourceArn = config.resourceArn;
     this.secretArn = config.secretArn;
     this.database = config.database;
-    this.table = config.table ?? "workflow_insight";
+    this.table = sanitizeIdentifier(config.table ?? "workflow_insight");
     this.engine = config.engine;
     this.client = new RDSDataClient(
       config.region ? { region: config.region } : {},
