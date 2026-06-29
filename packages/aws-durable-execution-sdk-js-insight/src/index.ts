@@ -254,9 +254,27 @@ export function workflowInsight(
   const emitMode = config.emitMode ?? "finished-only";
   const scheduler = new ExportScheduler(exporters);
 
-  let executionStartTime: Date | undefined;
-  let parsedArn: ParsedArn | undefined;
-  let cachedInput: unknown;
+  // Per-execution state, keyed by executionArn. Prevents warm-container bleed
+  // between executions and handles resume correctly.
+  interface ExecutionState {
+    startTime: Date;
+    parsedArn: ParsedArn;
+    cachedInput: unknown;
+  }
+  const execState = new Map<string, ExecutionState>();
+
+  function getState(executionArn: string): ExecutionState {
+    let state = execState.get(executionArn);
+    if (!state) {
+      state = {
+        startTime: new Date(),
+        parsedArn: parseExecutionArn(executionArn),
+        cachedInput: undefined,
+      };
+      execState.set(executionArn, state);
+    }
+    return state;
+  }
 
   const buildRecord = (args: {
     executionArn: string;
@@ -267,8 +285,9 @@ export function workflowInsight(
     output?: unknown;
     error?: Error;
   }): WorkflowInsightRecord => {
-    const arn = parsedArn ?? parseExecutionArn(args.executionArn);
-    const startTime = executionStartTime ?? args.endTime ?? new Date();
+    const state = getState(args.executionArn);
+    const arn = state.parsedArn;
+    const startTime = state.startTime;
     const durationMs = args.endTime
       ? args.endTime.getTime() - startTime.getTime()
       : undefined;
@@ -299,15 +318,13 @@ export function workflowInsight(
   };
 
   return {
-    onInvocationStart(info: InvocationInfo): void {
+    async onInvocationStart(info: InvocationInfo): Promise<void> {
+      const state = getState(info.executionArn);
       if (info.isFirstInvocation) {
-        executionStartTime = new Date();
+        state.startTime = new Date();
       }
-      parsedArn = parseExecutionArn(info.executionArn);
-      cachedInput = info.executionInput;
+      state.cachedInput = info.executionInput;
 
-      // Emit a RUNNING record immediately so the execution is visible in
-      // destinations from the start (and on every resume after wait/callback).
       if (emitMode === "in-progress") {
         scheduler.schedule(
           buildRecord({
@@ -336,9 +353,7 @@ export function workflowInsight(
       }
     },
 
-    onInvocationEnd(info: InvocationEndInfo): void {
-      // Terminal snapshot. Scheduling it supersedes any pending in-progress
-      // record, since the final record already reflects all updates.
+    async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
       scheduler.schedule(
         buildRecord({
           executionArn: info.executionArn,
@@ -350,18 +365,21 @@ export function workflowInsight(
           error: info.executionError,
         }),
       );
+      // Clear per-execution state to prevent warm-container bleed
+      execState.delete(info.executionArn);
     },
 
-    onOperationChange(info: OperationChangeInfo): void {
+    async onOperationChange(info: OperationChangeInfo): Promise<void> {
       if (emitMode !== "in-progress") {
         return;
       }
+      const state = getState(info.executionArn);
       scheduler.schedule(
         buildRecord({
           executionArn: info.executionArn,
           status: "RUNNING",
           operations: buildOperationRecords(info.operations),
-          input: cachedInput,
+          input: state.cachedInput,
         }),
       );
     },
