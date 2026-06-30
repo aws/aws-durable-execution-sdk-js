@@ -35,10 +35,77 @@
     "clean": "rm -rf dist dist-cjs dist-types"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": ">=2.0.0-alpha.1"
+    "@aws/durable-execution-sdk-js": ">=2.0.0-alpha.1",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0",
+    "@aws-sdk/client-rds-data": "^3.0.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.0.0",
+    "@aws-sdk/client-firehose": "^3.0.0",
+    "@aws-sdk/client-eventbridge": "^3.0.0",
+    "@aws-sdk/client-redshift-data": "^3.0.0",
+    "@aws-sdk/credential-provider-node": "^3.0.0",
+    "@smithy/signature-v4": "^4.0.0",
+    "@aws-crypto/sha256-js": "^5.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "@aws-sdk/client-timestream-write": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    },
+    "@aws-sdk/client-dynamodb": {
+      "optional": true
+    },
+    "@aws-sdk/util-dynamodb": {
+      "optional": true
+    },
+    "@aws-sdk/client-rds-data": {
+      "optional": true
+    },
+    "@aws-sdk/client-cloudwatch-logs": {
+      "optional": true
+    },
+    "@aws-sdk/client-firehose": {
+      "optional": true
+    },
+    "@aws-sdk/client-eventbridge": {
+      "optional": true
+    },
+    "@aws-sdk/client-redshift-data": {
+      "optional": true
+    },
+    "@aws-sdk/credential-provider-node": {
+      "optional": true
+    },
+    "@smithy/signature-v4": {
+      "optional": true
+    },
+    "@aws-crypto/sha256-js": {
+      "optional": true
+    },
+    "@aws-sdk/client-sqs": {
+      "optional": true
+    },
+    "@aws-sdk/client-timestream-write": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@aws/durable-execution-sdk-js": "*",
+    "@aws-sdk/client-s3": "^3.658.0",
+    "@aws-sdk/client-dynamodb": "^3.658.0",
+    "@aws-sdk/util-dynamodb": "^3.658.0",
+    "@aws-sdk/client-rds-data": "^3.658.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.658.0",
+    "@aws-sdk/client-firehose": "^3.658.0",
+    "@aws-sdk/client-eventbridge": "^3.658.0",
+    "@aws-sdk/client-redshift-data": "^3.658.0",
+    "@aws-sdk/credential-provider-node": "^3.658.0",
+    "@smithy/signature-v4": "^4.0.0",
+    "@aws-crypto/sha256-js": "^5.0.0",
+    "@aws-sdk/client-sqs": "^3.658.0",
+    "@aws-sdk/client-timestream-write": "^3.658.0",
     "concurrently": "^9.0.0",
     "rollup": "^4.0.0",
     "@rollup/plugin-typescript": "^12.0.0",
