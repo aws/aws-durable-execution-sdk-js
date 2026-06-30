@@ -28,7 +28,10 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
-import { DurableInstrumentationPlugin, PluginOperationStatus } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  PluginOperationStatus,
+} from "../../types/plugin";
 import {
   backfillOperationInfo,
   toOperationInfo,
