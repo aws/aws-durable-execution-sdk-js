@@ -28,7 +28,10 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  PluginOperationStatus,
+} from "../../types/plugin";
 import {
   backfillOperationInfo,
   toOperationInfo,
@@ -342,7 +345,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     });
     await plugin.onOperationStart?.({
       ...opInfo,
-      status: OperationStatus.STARTED,
+      status: PluginOperationStatus.STARTED,
       isReplay: false,
     });
   } else {
@@ -438,7 +441,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       backfillOperationInfo(onOperationEndInfo, opInfo);
       await plugin.onOperationEnd?.({
         ...onOperationEndInfo,
-        status: OperationStatus.SUCCEEDED,
+        status: PluginOperationStatus.SUCCEEDED,
         isReplay: false,
       });
 
@@ -504,7 +507,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       backfillOperationInfo(onOperationEndInfo, opInfo);
       await plugin.onOperationEnd?.({
         ...onOperationEndInfo,
-        status: OperationStatus.FAILED,
+        status: PluginOperationStatus.FAILED,
         isReplay: false,
         error: reconstructedError,
       });

@@ -32,6 +32,7 @@ import { DurableLogger } from "../../types/durable-logger";
 import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
+  PluginOperationStatus,
 } from "../../types/plugin";
 import {
   toAttemptInfo,
@@ -216,7 +217,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           backfillOperationInfo(operationInfo, opInfo);
           await plugin.onOperationStart?.({
             ...opInfo,
-            status: OperationStatus.STARTED,
+            status: PluginOperationStatus.STARTED,
             isReplay: isRetryAttempt,
           });
         } else {

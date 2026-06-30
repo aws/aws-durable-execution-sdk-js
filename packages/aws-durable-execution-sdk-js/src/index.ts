@@ -95,6 +95,7 @@ export {
   OperationChangeInfo,
   OperationInfo,
   OperationEndInfo,
+  PluginOperationStatus,
   AttemptInfo,
   AttemptEndInfo,
   AttemptEndInfoOutcome,

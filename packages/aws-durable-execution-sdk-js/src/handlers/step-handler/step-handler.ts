@@ -39,6 +39,7 @@ import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
   CustomerFnResult,
+  PluginOperationStatus,
 } from "../../types/plugin";
 import {
   toAttemptEndInfo,
@@ -288,7 +289,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             backfillOperationInfo(operationInfo, opInfo);
             await plugin.onOperationStart?.({
               ...opInfo,
-              status: OperationStatus.STARTED,
+              status: PluginOperationStatus.STARTED,
               isReplay: isRetryAttempt,
             });
           }
