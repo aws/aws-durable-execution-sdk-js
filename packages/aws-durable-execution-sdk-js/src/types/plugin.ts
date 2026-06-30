@@ -42,25 +42,6 @@ export type PluginOperationStatus =
   (typeof PluginOperationStatus)[keyof typeof PluginOperationStatus];
 
 /**
- * Status values for durable operations.
- *
- * These represent the lifecycle states that an operation can be in
- * during durable execution. 
- *
- * @experimental This enum is experimental and may be changed or removed in future releases.
- */
-export const enum PluginOperationStatus {
-  STARTED = "STARTED",
-  READY = "READY",
-  PENDING = "PENDING",
-  SUCCEEDED = "SUCCEEDED",
-  FAILED = "FAILED",
-  TIMED_OUT = "TIMED_OUT",
-  STOPPED = "STOPPED",
-  CANCELLED = "CANCELLED",
-}
-
-/**
  * Information about a durable operation.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
