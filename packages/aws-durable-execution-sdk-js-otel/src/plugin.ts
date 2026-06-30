@@ -153,7 +153,10 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
-    const deterministicSpanId = deriveSpanIdFromOperationId(info.id);
+    const deterministicSpanId = deriveSpanIdFromOperationId(
+      info.id,
+      this.executionArn,
+    );
     const spanName = info.name ?? info.type;
 
     // Resolve parent span: use parentId from map, or fall back to invocation span
@@ -240,7 +243,10 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    const deterministicSpanId = deriveSpanIdFromOperationId(info.id);
+    const deterministicSpanId = deriveSpanIdFromOperationId(
+      info.id,
+      this.executionArn,
+    );
 
     if (this.spanMap.has(info.id)) {
       // Operation was started in this invocation
@@ -318,7 +324,10 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
-    const deterministicSpanId = deriveSpanIdFromOperationId(info.id);
+    const deterministicSpanId = deriveSpanIdFromOperationId(
+      info.id,
+      this.executionArn,
+    );
     const baseName = info.name ?? info.type;
     const spanName = `${baseName} attempt ${info.attempt}`;
 

@@ -4,6 +4,7 @@ import {
   deriveTraceIdFromArn,
   deriveSpanIdFromOperationId,
 } from "../deterministic-id-generator";
+import * as fc from "fast-check";
 
 describe("DeterministicIdGenerator", () => {
   let generator: DeterministicIdGenerator;
@@ -143,27 +144,139 @@ describe("deriveTraceIdFromArn", () => {
 });
 
 describe("deriveSpanIdFromOperationId", () => {
+  const TEST_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:test-func:test-exec-1";
+
   it("produces a 16-char lowercase hex string", () => {
     const operationId = "step-1-fetch-user";
-    const result = deriveSpanIdFromOperationId(operationId);
+    const result = deriveSpanIdFromOperationId(operationId, TEST_ARN);
     expect(result).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it("is deterministic (same input always produces same output)", () => {
     const operationId = "step-1-fetch-user";
-    const result1 = deriveSpanIdFromOperationId(operationId);
-    const result2 = deriveSpanIdFromOperationId(operationId);
+    const result1 = deriveSpanIdFromOperationId(operationId, TEST_ARN);
+    const result2 = deriveSpanIdFromOperationId(operationId, TEST_ARN);
     expect(result1).toBe(result2);
   });
 
   it("produces different results for different operation IDs", () => {
-    const result1 = deriveSpanIdFromOperationId("op-1");
-    const result2 = deriveSpanIdFromOperationId("op-2");
+    const result1 = deriveSpanIdFromOperationId("op-1", TEST_ARN);
+    const result2 = deriveSpanIdFromOperationId("op-2", TEST_ARN);
     expect(result1).not.toBe(result2);
   });
 
   it("handles empty string", () => {
-    const result = deriveSpanIdFromOperationId("");
+    const result = deriveSpanIdFromOperationId("", TEST_ARN);
     expect(result).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("produces different span IDs for different execution ARNs with the same operation ID", () => {
+    const arn1 = "arn:aws:lambda:us-east-1:123456789012:function:func-a:exec-1";
+    const arn2 = "arn:aws:lambda:us-east-1:123456789012:function:func-b:exec-2";
+    const result1 = deriveSpanIdFromOperationId("op-1", arn1);
+    const result2 = deriveSpanIdFromOperationId("op-1", arn2);
+    expect(result1).not.toBe(result2);
+  });
+});
+
+/**
+ * Preservation Property Tests for deriveSpanIdFromOperationId
+ *
+ * These property-based tests capture the CORRECT behaviors that must be
+ * preserved both before and after the span ID collision fix.
+ *
+ * A fixed execution ARN is passed as the second argument to be compatible
+ * with both the current API (ignores extra arg) and future API (uses it).
+ *
+ * **Validates: Requirements 3.1, 3.2, 3.5**
+ */
+describe("deriveSpanIdFromOperationId - Preservation Properties", () => {
+  const FIXED_EXECUTION_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:test-function:test-exec-1";
+
+  it("Property: Idempotency - same inputs always produce the same span ID", () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 1 }), (operationId) => {
+        const result1 = deriveSpanIdFromOperationId(
+          operationId,
+          FIXED_EXECUTION_ARN,
+        );
+        const result2 = deriveSpanIdFromOperationId(
+          operationId,
+          FIXED_EXECUTION_ARN,
+        );
+        expect(result1).toBe(result2);
+      }),
+    );
+  });
+
+  it("Property: Format validity - output always matches /^[0-9a-f]{16}$/", () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 1 }), (operationId) => {
+        const result = deriveSpanIdFromOperationId(
+          operationId,
+          FIXED_EXECUTION_ARN,
+        );
+        expect(result).toMatch(/^[0-9a-f]{16}$/);
+      }),
+    );
+  });
+
+  it("Property: Uniqueness within execution - distinct operationIds produce distinct span IDs", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1 }),
+        fc.string({ minLength: 1 }),
+        (opId1, opId2) => {
+          fc.pre(opId1 !== opId2);
+          const result1 = deriveSpanIdFromOperationId(
+            opId1,
+            FIXED_EXECUTION_ARN,
+          );
+          const result2 = deriveSpanIdFromOperationId(
+            opId2,
+            FIXED_EXECUTION_ARN,
+          );
+          expect(result1).not.toBe(result2);
+        },
+      ),
+    );
+  });
+});
+
+describe("Bug Condition Exploration - Property-Based Tests", () => {
+  /**
+   * **Validates: Requirements 1.1, 1.3**
+   *
+   * Property 1: Bug Condition - Different Executions Produce Distinct Span IDs
+   *
+   * This test encodes the EXPECTED behavior: when two different execution ARNs
+   * call deriveSpanIdFromOperationId with the same operation ID, they should
+   * receive DIFFERENT span IDs.
+   *
+   * On UNFIXED code, this test WILL FAIL because the current function signature
+   * is deriveSpanIdFromOperationId(operationId: string) — it doesn't accept an
+   * execution ARN parameter at all, so the second argument is simply ignored
+   * and both calls produce the same result.
+   *
+   * EXPECTED TO FAIL — failure confirms the bug exists.
+   */
+  it("different execution ARNs with the same operation ID produce distinct span IDs", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1 }),
+        fc.string({ minLength: 1 }),
+        fc.string({ minLength: 1 }),
+        (arn1, arn2, opId) => {
+          fc.pre(arn1 !== arn2);
+
+          const result1 = (deriveSpanIdFromOperationId as Function)(opId, arn1);
+          const result2 = (deriveSpanIdFromOperationId as Function)(opId, arn2);
+
+          expect(result1).not.toBe(result2);
+        },
+      ),
+    );
   });
 });
