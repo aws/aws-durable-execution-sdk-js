@@ -1,11 +1,15 @@
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
-import { handler } from "./otel-basic-steps";
+import { handler, resetExporter } from "./otel-basic-steps";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
+    beforeEach(() => {
+      resetExporter();
+    });
+
     it("should produce correct spans for basic steps", async () => {
       const execution = await runner.run();
 

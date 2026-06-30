@@ -2,7 +2,7 @@ import {
   InvocationType,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
-import { handler } from "./otel-callback";
+import { handler, resetExporter } from "./otel-callback";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
@@ -10,6 +10,10 @@ createTests({
   handler,
   invocationType: InvocationType.Event,
   tests: (runner, { assertEventSignatures }) => {
+    beforeEach(() => {
+      resetExporter();
+    });
+
     it("should produce CALLBACK spans with continuation links", async () => {
       const executionPromise = runner.run();
 
@@ -30,7 +34,10 @@ createTests({
       expect(result.afterCallback).toBe("after-callback-value");
 
       const { spans } = result;
-      expect(spans.length).toBeGreaterThan(0);
+      // All spans across all invocations: before-callback (op + attempt),
+      // STEP (submitter op + attempt), CALLBACK, my-callback (CONTEXT), invocation,
+      // my-callback (continuation), after-callback (op + attempt) = 10 spans
+      expect(spans.length).toBe(10);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;

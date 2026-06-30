@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "9bfa84f8-f1d8-4db3-a846-b98e0f237a2c",
-    "EventTimestamp": "2026-06-18T00:34:24.620Z",
+    "Id": "ebff1dc7-bd7f-4373-bfcc-3e674f0e434b",
+    "EventTimestamp": "2026-06-30T20:53:30.701Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{\"functionName\":\"otel-invoke-target\"}"
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "before-invoke",
-    "EventTimestamp": "2026-06-18T00:34:24.628Z",
+    "EventTimestamp": "2026-06-30T20:53:30.707Z",
     "StepStartedDetails": {}
   },
   {
@@ -25,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "before-invoke",
-    "EventTimestamp": "2026-06-18T00:34:24.628Z",
+    "EventTimestamp": "2026-06-30T20:53:30.707Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"before-invoke-value\""
@@ -39,7 +39,7 @@
     "EventId": 4,
     "Id": "c81e728d9d4c2f63",
     "Name": "invoke-target",
-    "EventTimestamp": "2026-06-18T00:34:24.631Z",
+    "EventTimestamp": "2026-06-30T20:53:30.709Z",
     "ChainedInvokeStartedDetails": {
       "FunctionName": "",
       "Input": {
@@ -51,12 +51,12 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 5,
-    "EventTimestamp": "2026-06-18T00:34:24.655Z",
+    "EventTimestamp": "2026-06-30T20:53:30.733Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-06-18T00:34:24.620Z",
-      "EndTimestamp": "2026-06-18T00:34:24.655Z",
+      "StartTimestamp": "2026-06-30T20:53:30.701Z",
+      "EndTimestamp": "2026-06-30T20:53:30.733Z",
       "Error": {},
-      "RequestId": "f490bf14-09b8-4190-b0fe-6f20b035efa4"
+      "RequestId": "b077c74e-b89c-4841-bdeb-006316ec1273"
     }
   },
   {
@@ -65,10 +65,10 @@
     "EventId": 6,
     "Id": "c81e728d9d4c2f63",
     "Name": "invoke-target",
-    "EventTimestamp": "2026-06-18T00:34:24.736Z",
+    "EventTimestamp": "2026-06-30T20:53:30.822Z",
     "ChainedInvokeSucceededDetails": {
       "Result": {
-        "Payload": "{\"received\":\"invoke-payload\"}"
+        "Payload": "{\"result\":\"step-1-result:step-2-result:step-3-result\",\"spans\":[{\"name\":\"step-1 attempt 1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"e496f285a51a06b2\",\"parentSpanId\":\"4f6c0617ac291a2e\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"step-1\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"4f6c0617ac291a2e\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"4f6c0617ac291a2e\",\"parentSpanId\":\"dcca416ac8d85401\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"step-1\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-2 attempt 1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"b9ce32da63044e47\",\"parentSpanId\":\"64e1b04cdc1ecd89\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"step-2\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"64e1b04cdc1ecd89\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-2\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"64e1b04cdc1ecd89\",\"parentSpanId\":\"dcca416ac8d85401\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"step-2\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-3 attempt 1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"bbd6b056cae77fbf\",\"parentSpanId\":\"efdfefee24057686\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"step-3\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"efdfefee24057686\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-3\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"efdfefee24057686\",\"parentSpanId\":\"dcca416ac8d85401\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"step-3\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
       }
     }
   },
@@ -78,7 +78,7 @@
     "EventId": 7,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "after-invoke",
-    "EventTimestamp": "2026-06-18T00:34:24.739Z",
+    "EventTimestamp": "2026-06-30T20:53:30.825Z",
     "StepStartedDetails": {}
   },
   {
@@ -87,7 +87,7 @@
     "EventId": 8,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "after-invoke",
-    "EventTimestamp": "2026-06-18T00:34:24.739Z",
+    "EventTimestamp": "2026-06-30T20:53:30.825Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "\"after-invoke-value\""
@@ -98,22 +98,22 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 9,
-    "EventTimestamp": "2026-06-18T00:34:24.740Z",
+    "EventTimestamp": "2026-06-30T20:53:30.826Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-06-18T00:34:24.737Z",
-      "EndTimestamp": "2026-06-18T00:34:24.740Z",
+      "StartTimestamp": "2026-06-30T20:53:30.823Z",
+      "EndTimestamp": "2026-06-30T20:53:30.826Z",
       "Error": {},
-      "RequestId": "8bad28f4-2191-4d37-96f3-50696eda0839"
+      "RequestId": "6207ee93-0d83-45f3-b2e4-185e45e610f9"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 10,
-    "Id": "9bfa84f8-f1d8-4db3-a846-b98e0f237a2c",
-    "EventTimestamp": "2026-06-18T00:34:24.740Z",
+    "Id": "ebff1dc7-bd7f-4373-bfcc-3e674f0e434b",
+    "EventTimestamp": "2026-06-30T20:53:30.826Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"invokeResult\":{\"received\":\"invoke-payload\"},\"beforeInvoke\":\"before-invoke-value\",\"afterInvoke\":\"after-invoke-value\",\"spans\":[{\"name\":\"after-invoke\",\"traceId\":\"740eb22ac24be7fffcf405b389f21b40\",\"spanId\":\"c0b78ca62c431e85\",\"parentSpanId\":\"6f473045cd95e6f6\",\"attributes\":{\"durable.execution.arn\":\"3bbebdff-b63e-48c6-8810-7bc0ff21ed86\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"after-invoke\"},\"links\":[{\"traceId\":\"740eb22ac24be7fffcf405b389f21b40\",\"spanId\":\"6f473045cd95e6f6\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"after-invoke\",\"traceId\":\"740eb22ac24be7fffcf405b389f21b40\",\"spanId\":\"6f473045cd95e6f6\",\"parentSpanId\":\"429e9d8551bd0578\",\"attributes\":{\"durable.execution.arn\":\"3bbebdff-b63e-48c6-8810-7bc0ff21ed86\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"after-invoke\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
+        "Payload": "{\"invokeResult\":{\"result\":\"step-1-result:step-2-result:step-3-result\",\"spans\":[{\"name\":\"step-1 attempt 1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"e496f285a51a06b2\",\"parentSpanId\":\"4f6c0617ac291a2e\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"step-1\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"4f6c0617ac291a2e\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"4f6c0617ac291a2e\",\"parentSpanId\":\"dcca416ac8d85401\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"step-1\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-2 attempt 1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"b9ce32da63044e47\",\"parentSpanId\":\"64e1b04cdc1ecd89\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"step-2\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"64e1b04cdc1ecd89\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-2\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"64e1b04cdc1ecd89\",\"parentSpanId\":\"dcca416ac8d85401\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"step-2\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-3 attempt 1\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"bbd6b056cae77fbf\",\"parentSpanId\":\"efdfefee24057686\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"step-3\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"efdfefee24057686\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"step-3\",\"traceId\":\"49b8f1f3bb2f19ffbe3fa8dddd387fb8\",\"spanId\":\"efdfefee24057686\",\"parentSpanId\":\"dcca416ac8d85401\",\"attributes\":{\"durable.execution.arn\":\"9c60def9-defd-46d6-854b-e4fce76956a8\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"step-3\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]},\"beforeInvoke\":\"before-invoke-value\",\"afterInvoke\":\"after-invoke-value\",\"spans\":[{\"name\":\"before-invoke attempt 1\",\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"72cb1c074376e24f\",\"parentSpanId\":\"ecd5fe99c6978f50\",\"attributes\":{\"durable.execution.arn\":\"e4ce7cf6-3644-4a85-9972-bef9c205e5bf\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"before-invoke\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"ecd5fe99c6978f50\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"before-invoke\",\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"ecd5fe99c6978f50\",\"parentSpanId\":\"17e9c1796f7b9de6\",\"attributes\":{\"durable.execution.arn\":\"e4ce7cf6-3644-4a85-9972-bef9c205e5bf\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"before-invoke\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invoke-target\",\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"1af2bcf0a9e096c1\",\"parentSpanId\":\"17e9c1796f7b9de6\",\"attributes\":{\"durable.execution.arn\":\"e4ce7cf6-3644-4a85-9972-bef9c205e5bf\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"CHAINED_INVOKE\",\"durable.operation.name\":\"invoke-target\",\"durable.operation.subtype\":\"ChainedInvoke\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"17e9c1796f7b9de6\",\"attributes\":{\"durable.execution.arn\":\"e4ce7cf6-3644-4a85-9972-bef9c205e5bf\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"after-invoke attempt 1\",\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"370b7b2753b81f5d\",\"parentSpanId\":\"e2079913dd2f09a4\",\"attributes\":{\"durable.execution.arn\":\"e4ce7cf6-3644-4a85-9972-bef9c205e5bf\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"after-invoke\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"e2079913dd2f09a4\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"after-invoke\",\"traceId\":\"a2e1dc619cefe51838103de57d802c4b\",\"spanId\":\"e2079913dd2f09a4\",\"parentSpanId\":\"fbc844cf1031c886\",\"attributes\":{\"durable.execution.arn\":\"e4ce7cf6-3644-4a85-9972-bef9c205e5bf\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"after-invoke\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
       }
     }
   }
