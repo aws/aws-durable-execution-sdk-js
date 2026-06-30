@@ -205,6 +205,8 @@ const insight = workflowInsight({
 
 ### `samplingRate`
 
+> **Not yet implemented.** Reserved for a future release. Setting this currently has no effect.
+
 A number between 0 and 1. The decision is per-execution (all-or-nothing):
 
 ```typescript
@@ -224,6 +226,8 @@ exporters: [
 ```
 
 ### `content` (advanced)
+
+> **Not yet implemented.** Reserved for a future release. Setting this currently has no effect.
 
 Control what data is included in records:
 
@@ -613,6 +617,123 @@ aws timestream-write create-table \
 
 ---
 
+### CDK Infrastructure (Automated Setup)
+
+> **Note:** This CDK stack is designed for **getting started and testing**. It uses minimal configurations (single-AZ, no backups, `RemovalPolicy.DESTROY`) to keep costs low and teardown easy. For production, build your own infrastructure with proper security, redundancy, monitoring, and cost controls tailored to your workload.
+
+Instead of creating resources manually, you can use the included CDK stack to deploy all destination infrastructure, IAM permissions, and an example Lambda function with a single command.
+
+**Location:** `cdk/` directory within this package.
+
+#### Quick Start
+
+```bash
+cd packages/aws-durable-execution-sdk-js-insight/cdk
+npm install
+npx cdk deploy
+```
+
+> The CDK package depends on the `@aws/durable-execution-sdk-js` and
+> `@aws/durable-execution-sdk-js-insight` workspace packages (the example
+> Lambda imports them). The `deploy`, `synth`, `test`, and `typecheck` scripts
+> automatically build these dependencies first via a `build:deps` pre-step, so
+> no manual ordering is required. (If you prefer to build manually, run
+> `npm run build:deps`.)
+
+#### Configuration (`cdk/config.json`)
+
+Edit `config.json` to enable/disable destinations and configure settings:
+
+```json
+{
+  "destinations": {
+    "cloudwatchLogs": {
+      "enabled": true,
+      "logGroupName": "/workflow-insight/demo",
+      "retentionDays": 30
+    },
+    "dynamodb": { "enabled": true, "tableName": "workflow-insight" },
+    "aurora": {
+      "enabled": true,
+      "tableName": "workflow_insight",
+      "databaseName": "postgres",
+      "minCapacity": 0.5,
+      "maxCapacity": 1
+    },
+    "s3": { "enabled": false, "bucketName": "workflow-insight-records" },
+    "redshift": {
+      "enabled": false,
+      "namespaceName": "insight-namespace",
+      "workgroupName": "insight-workgroup",
+      "databaseName": "dev",
+      "tableName": "workflow_insight",
+      "schema": "public"
+    },
+    "opensearch": { "enabled": false, "domainName": "workflow-insight" },
+    "firehose": {
+      "enabled": false,
+      "streamName": "workflow-insight",
+      "bufferIntervalSeconds": 60,
+      "bufferSizeMB": 1
+    },
+    "sqs": { "enabled": false, "queueName": "workflow-insight", "fifo": false },
+    "eventbridge": { "enabled": false, "eventBusName": "default" },
+    "timestream": {
+      "enabled": false,
+      "databaseName": "workflow-insight",
+      "tableName": "records",
+      "memoryRetentionHours": 24,
+      "magneticRetentionDays": 365
+    }
+  },
+  "lambda": {
+    "roleNames": [],
+    "discoverDurableFunctions": false,
+    "createExampleFunction": true,
+    "autoInvoke": { "enabled": false, "rateMinutes": 5 }
+  }
+}
+```
+
+#### Lambda Settings
+
+| Setting                    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `roleNames`                | Array of **existing** IAM role names to attach the Insight permissions policy to. Default: `[]` (empty). The example function's role is added automatically when `createExampleFunction` is `true`, so you can leave this empty to start. Add your own durable function roles here to grant them access.                                                                                                                                                                      |
+| `discoverDurableFunctions` | When `true`, the CDK app lists all Lambda functions **at synth time** and identifies durable functions by the presence of `DurableConfig` (the native Lambda API field). The Insight permissions policy is attached directly to their exact execution-role ARNs — no runtime Lambda or `iam:PutRolePolicy` grant is used. Requires AWS credentials at synth time (same model as CDK context lookups), and `cdk synth`/`deploy` will reflect the account state at that moment. |
+| `createExampleFunction`    | Deploys an insurance claim processing workflow (with retry policies and random transient failures) pre-configured with the Insight plugin pointing to all enabled destinations                                                                                                                                                                                                                                                                                                |
+| `autoInvoke.enabled`       | Deploys a dispatcher Lambda + EventBridge rule that invokes the example function on a schedule with randomized input. **Default: `false`.** Enabling creates ongoing costs (Lambda invocations, Aurora ACU time, DynamoDB writes). Disable or destroy the stack when not actively testing.                                                                                                                                                                                    |
+| `autoInvoke.rateMinutes`   | How often the dispatcher triggers (default: 5 minutes)                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+#### What Gets Deployed
+
+When `createExampleFunction` and `autoInvoke` are both enabled, the stack creates:
+
+1. **Destination resources** — tables, clusters, queues, etc. for each enabled destination
+2. **IAM policy** — a single managed policy (`WorkflowInsightDestinations`) attached to all target roles
+3. **Example function** (`insight-example-workflow`) — a 6-step insurance claim workflow with:
+   - Retry policy (4 attempts, 1s initial backoff, coefficient 2, max 5s)
+   - ~30% random transient failure rate per step (generates retry attempt data)
+   - Three possible outcomes: APPROVED, REJECTED, or MORE_DOCUMENTS_REQUIRED
+4. **Dispatcher** (`insight-example-dispatcher`) — generates random claims with: `customerName`, `insuranceClaimNumber`, `claimAmount`, `claimType`
+5. **EventBridge rule** (`insight-example-dispatch`) — triggers the dispatcher every N minutes
+
+After deployment, data starts flowing automatically to all enabled destinations.
+
+#### Aurora Table Auto-Creation
+
+When Aurora is enabled, the stack deploys a custom resource that creates the `workflow_insight` table automatically via the RDS Data API. No manual SQL needed.
+
+#### Tear Down
+
+```bash
+npx cdk destroy
+```
+
+This removes all created resources (tables, clusters, functions, rules). Resources use `RemovalPolicy.DESTROY` by default for clean teardown.
+
+---
+
 ### Exporter Usage & Examples
 
 Detailed configuration, code examples, and use-case guidance for each exporter.
@@ -819,6 +940,8 @@ const insight2 = workflowInsight({
 **IAM required:** `redshift-data:ExecuteStatement` (+ `redshift-serverless:GetCredentials` or `redshift:GetClusterCredentialsWithIAM`).
 
 **When to use:** Large-scale cross-function analytics, BI dashboards, data warehouse integration.
+
+**Note:** The `record_json` column uses Redshift's SUPER type with `JSON_PARSE()` for navigable nested queries. SUPER values are limited to ~1 MB — executions with unusually large input/output payloads may fail the insert.
 
 ---
 

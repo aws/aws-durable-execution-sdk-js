@@ -247,6 +247,18 @@ const SDK_VERSION = "2.0.0-alpha.1";
 export function workflowInsight(
   config: WorkflowInsightConfig,
 ): DurableInstrumentationPlugin {
+  // Warn about unimplemented config options
+  if (config.samplingRate !== undefined) {
+    console.warn(
+      "[workflow-insight] samplingRate is not yet implemented and has no effect.",
+    );
+  }
+  if (config.content !== undefined) {
+    console.warn(
+      "[workflow-insight] content filtering is not yet implemented and has no effect.",
+    );
+  }
+
   const exporters =
     config.exporters && config.exporters.length > 0
       ? config.exporters

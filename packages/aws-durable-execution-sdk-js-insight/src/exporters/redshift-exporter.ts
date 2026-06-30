@@ -135,12 +135,12 @@ export class RedshiftExporter implements InsightExporter {
       status = :status,
       end_time = ${endTimeExpr},
       duration_ms = ${durationExpr},
-      record_json = :record_json,
+      record_json = JSON_PARSE(:record_json),
       emitted_at = :emitted_at
     WHEN NOT MATCHED THEN INSERT
       (execution_arn, execution_name, function_name, status, start_time, end_time, duration_ms, record_json, emitted_at)
     VALUES
-      (:execution_arn, ${execNameExpr}, :function_name, :status, :start_time, ${endTimeExpr}, ${durationExpr}, :record_json, :emitted_at)`;
+      (:execution_arn, ${execNameExpr}, :function_name, :status, :start_time, ${endTimeExpr}, ${durationExpr}, JSON_PARSE(:record_json), :emitted_at)`;
 
     await this.client.send(
       new ExecuteStatementCommand({

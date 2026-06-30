@@ -52,8 +52,6 @@
 - [ ] In `finished-only` mode, emit **only** on terminal `SUCCEEDED`/`FAILED`;
       currently `onInvocationEnd` also schedules on `PENDING` (every wait/suspend)
       and `RETRYING`
-- [ ] Replay-safe emission — avoid duplicate/redundant exports across replays
-      (in-progress mode re-fires `onOperationChange` for already-completed ops)
 
 ## Record Size / Truncation
 

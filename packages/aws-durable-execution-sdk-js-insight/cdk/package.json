@@ -1,0 +1,46 @@
+{
+  "name": "@aws/durable-execution-sdk-js-insight-cdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CDK stack to deploy Workflow Insight destination infrastructure",
+  "scripts": {
+    "build:deps": "npm --prefix ../../aws-durable-execution-sdk-js run build && npm --prefix .. run build",
+    "build": "tsc -p tsconfig.build.json",
+    "pretypecheck": "npm run build:deps",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build:deps",
+    "test": "jest",
+    "presynth": "npm run build:deps",
+    "synth": "cdk synth",
+    "predeploy": "npm run build:deps",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "@aws-sdk/client-lambda": "^3.1076.0",
+    "@aws-sdk/client-redshift-data": "^3.1076.0",
+    "@aws/durable-execution-sdk-js": "file:../../aws-durable-execution-sdk-js",
+    "@aws/durable-execution-sdk-js-insight": "file:..",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.162",
+    "@types/jest": "^29.5.0",
+    "aws-cdk": "^2.150.0",
+    "esbuild": "^0.24.2",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.5.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.ts"
+    ],
+    "modulePathIgnorePatterns": [
+      "cdk.out"
+    ]
+  }
+}
