@@ -1,6 +1,7 @@
 import {
   RedshiftDataClient,
   ExecuteStatementCommand,
+  type SqlParameter,
 } from "@aws-sdk/client-redshift-data";
 import type { InsightExporter, WorkflowInsightRecord } from "../types";
 
@@ -70,8 +71,7 @@ export interface RedshiftExporterConfig {
  */
 export class RedshiftExporter implements InsightExporter {
   private readonly database: string;
-  private readonly table: string;
-  private readonly schema: string;
+  private readonly fqTable: string;
   private readonly workgroupName?: string;
   private readonly clusterIdentifier?: string;
   private readonly dbUser?: string;
@@ -85,8 +85,9 @@ export class RedshiftExporter implements InsightExporter {
       );
     }
     this.database = config.database;
-    this.table = sanitizeIdentifier(config.table ?? "workflow_insight");
-    this.schema = sanitizeIdentifier(config.schema ?? "public");
+    const table = sanitizeIdentifier(config.table ?? "workflow_insight");
+    const schema = sanitizeIdentifier(config.schema ?? "public");
+    this.fqTable = `${schema}.${table}`;
     this.workgroupName = config.workgroupName;
     this.clusterIdentifier = config.clusterIdentifier;
     this.dbUser = config.dbUser;
@@ -97,8 +98,49 @@ export class RedshiftExporter implements InsightExporter {
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {
-    const fqTable = `${this.schema}.${this.table}`;
-    const sql = this.buildMerge(fqTable, record);
+    const parameters: SqlParameter[] = [
+      { name: "execution_arn", value: record.executionArn },
+      { name: "function_name", value: record.functionName },
+      { name: "status", value: record.status },
+      { name: "start_time", value: record.startTime },
+      { name: "record_json", value: JSON.stringify(record) },
+      { name: "emitted_at", value: record.emittedAt },
+    ];
+
+    // Nullable fields: Redshift Data API doesn't support NULL or empty string
+    // in parameters, so we use SQL NULL literals for absent values.
+    const endTimeExpr = record.endTime
+      ? (parameters.push({ name: "end_time", value: record.endTime }),
+        ":end_time")
+      : "NULL";
+    const durationExpr =
+      record.durationMs != null
+        ? (parameters.push({
+            name: "duration_ms",
+            value: String(record.durationMs),
+          }),
+          ":duration_ms")
+        : "NULL";
+    const execNameExpr = record.executionName
+      ? (parameters.push({
+          name: "execution_name",
+          value: record.executionName,
+        }),
+        ":execution_name")
+      : "NULL";
+
+    const sql = `MERGE INTO ${this.fqTable} USING (SELECT 1) AS src
+    ON ${this.fqTable}.execution_arn = :execution_arn
+    WHEN MATCHED THEN UPDATE SET
+      status = :status,
+      end_time = ${endTimeExpr},
+      duration_ms = ${durationExpr},
+      record_json = :record_json,
+      emitted_at = :emitted_at
+    WHEN NOT MATCHED THEN INSERT
+      (execution_arn, execution_name, function_name, status, start_time, end_time, duration_ms, record_json, emitted_at)
+    VALUES
+      (:execution_arn, ${execNameExpr}, :function_name, :status, :start_time, ${endTimeExpr}, ${durationExpr}, :record_json, :emitted_at)`;
 
     await this.client.send(
       new ExecuteStatementCommand({
@@ -108,30 +150,12 @@ export class RedshiftExporter implements InsightExporter {
         DbUser: this.dbUser,
         SecretArn: this.secretArn,
         Sql: sql,
+        Parameters: parameters,
       }),
     );
   }
 
   async flush(): Promise<void> {
     // No buffering — each export is a single ExecuteStatement.
-  }
-
-  private buildMerge(fqTable: string, record: WorkflowInsightRecord): string {
-    const esc = (v: string | undefined | null) =>
-      v == null ? "NULL" : `'${v.replace(/'/g, "''")}'`;
-    const num = (v: number | undefined) => (v == null ? "NULL" : String(v));
-
-    return `MERGE INTO ${fqTable} USING (SELECT 1) AS src
-    ON ${fqTable}.execution_arn = ${esc(record.executionArn)}
-    WHEN MATCHED THEN UPDATE SET
-      status = ${esc(record.status)},
-      end_time = ${esc(record.endTime)},
-      duration_ms = ${num(record.durationMs)},
-      record_json = ${esc(JSON.stringify(record))},
-      emitted_at = ${esc(record.emittedAt)}
-    WHEN NOT MATCHED THEN INSERT
-      (execution_arn, execution_name, function_name, status, start_time, end_time, duration_ms, record_json, emitted_at)
-    VALUES
-      (${esc(record.executionArn)}, ${esc(record.executionName)}, ${esc(record.functionName)}, ${esc(record.status)}, ${esc(record.startTime)}, ${esc(record.endTime)}, ${num(record.durationMs)}, ${esc(JSON.stringify(record))}, ${esc(record.emittedAt)})`;
   }
 }
