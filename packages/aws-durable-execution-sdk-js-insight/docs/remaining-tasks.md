@@ -43,15 +43,15 @@
 ## Emit Timing & Lifecycle
 
 - [x] Export on `onInvocationEnd`
-- [x] Export on `onOperationChange` for `in-progress` mode (gated by `emitMode`)
+- [x] Export on `onOperationChange` for `on-change` mode (gated by `emitMode`)
 - [x] Flush/await before returning via `wrapInvocation`
 - [x] Handle exporter errors gracefully (never fail the execution; `Promise.allSettled`)
 - [x] Coalesce overlapping exports — single in-flight export + latest-pending slot,
       so intermediate in-progress updates are dropped (`ExportScheduler`)
 - [x] Drain the export queue in `wrapInvocation` so the final record is delivered
-- [ ] In `finished-only` mode, emit **only** on terminal `SUCCEEDED`/`FAILED`;
-      currently `onInvocationEnd` also schedules on `PENDING` (every wait/suspend)
-      and `RETRYING`
+- [x] In `on-complete` mode, emit **only** on terminal `SUCCEEDED`/`FAILED`
+      (also added `on-failure` mode: emit only on terminal `FAILED`). Gated in
+      `onInvocationEnd`; non-terminal `PENDING`/`RETRYING` updates no longer emit.
 
 ## Record Size / Truncation
 

@@ -93,7 +93,11 @@ function parseExecutionArn(executionArn: string): ParsedArn {
 const STATUS_MAP: Record<string, WorkflowInsightRecord["status"]> = {
   SUCCEEDED: "SUCCEEDED",
   FAILED: "FAILED",
-  PENDING: "PENDING",
+  // A durable execution suspends (no compute) while waiting on a timer or an
+  // external event/callback. The runtime reports this as PENDING, but from the
+  // execution's point of view it is still in flight, so we surface it as
+  // RUNNING. RETRYING (runtime will auto-retry) is likewise still in flight.
+  PENDING: "RUNNING",
   RETRYING: "RUNNING",
 };
 
@@ -263,7 +267,7 @@ export function workflowInsight(
     config.exporters && config.exporters.length > 0
       ? config.exporters
       : [new LambdaLogExporter()];
-  const emitMode = config.emitMode ?? "finished-only";
+  const emitMode = config.emitMode ?? "on-complete";
   const scheduler = new ExportScheduler(exporters);
 
   // Per-execution state, keyed by executionArn. Prevents warm-container bleed
@@ -337,7 +341,7 @@ export function workflowInsight(
       }
       state.cachedInput = info.executionInput;
 
-      if (emitMode === "in-progress") {
+      if (emitMode === "on-change") {
         scheduler.schedule(
           buildRecord({
             executionArn: info.executionArn,
@@ -366,23 +370,46 @@ export function workflowInsight(
     },
 
     async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
-      scheduler.schedule(
-        buildRecord({
-          executionArn: info.executionArn,
-          status: mapStatus(info.status),
-          operations: buildOperationRecords(info.operations),
-          endTime: new Date(),
-          input: info.executionInput,
-          output: info.executionResult,
-          error: info.executionError,
-        }),
-      );
-      // Clear per-execution state to prevent warm-container bleed
-      execState.delete(info.executionArn);
+      const status = mapStatus(info.status);
+      const isTerminal = status === "SUCCEEDED" || status === "FAILED";
+      const isFailure = status === "FAILED";
+
+      // Decide whether this status update should produce a record.
+      // - on-change:   emit on every update (terminal or not)
+      // - on-complete: emit only on terminal SUCCEEDED/FAILED
+      // - on-failure:  emit only on terminal FAILED
+      const shouldEmit =
+        emitMode === "on-change"
+          ? true
+          : emitMode === "on-failure"
+            ? isFailure
+            : isTerminal;
+
+      if (shouldEmit) {
+        scheduler.schedule(
+          buildRecord({
+            executionArn: info.executionArn,
+            status,
+            operations: buildOperationRecords(info.operations),
+            endTime: new Date(),
+            input: info.executionInput,
+            output: info.executionResult,
+            error: info.executionError,
+          }),
+        );
+      }
+
+      // Only clear per-execution state once the execution is truly finished.
+      // onInvocationEnd also fires on non-terminal suspends (PENDING/RETRYING);
+      // clearing state there would lose the original startTime and cachedInput
+      // across resumes and corrupt duration computation.
+      if (isTerminal) {
+        execState.delete(info.executionArn);
+      }
     },
 
     async onOperationChange(info: OperationChangeInfo): Promise<void> {
-      if (emitMode !== "in-progress") {
+      if (emitMode !== "on-change") {
         return;
       }
       const state = getState(info.executionArn);

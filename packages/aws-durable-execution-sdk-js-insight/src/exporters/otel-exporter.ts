@@ -134,7 +134,6 @@ function severityFor(status: string): number {
     case "FAILED":
       return 17; // ERROR
     case "RUNNING":
-    case "PENDING":
       return 9; // INFO
     case "SUCCEEDED":
       return 9; // INFO

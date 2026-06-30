@@ -41,10 +41,11 @@ interface WorkflowInsightConfig {
 
   /**
    * When to emit records.
-   * - "finished-only": emit one record when execution ends (default)
-   * - "in-progress": emit/update on every operation status change + end
+   * - "on-complete": emit one record when execution ends (default)
+   * - "on-change": emit/update on every operation status change + end
+   * - "on-failure": emit one record only when execution ends in FAILED
    */
-  emitMode?: "finished-only" | "in-progress";
+  emitMode?: "on-complete" | "on-change" | "on-failure";
 
   /**
    * Control what data is included in the emitted record.
@@ -207,7 +208,7 @@ import {
 
 const insight = workflowInsight({
   exporters: [new CloudWatchLogsExporter()],
-  emitMode: "finished-only",
+  emitMode: "on-complete",
 });
 
 export const handler = withDurableExecution(myHandler, {
@@ -239,7 +240,7 @@ const insight = workflowInsight({
       maxRecordSizeBytes: 128_000,
     }),
   ],
-  emitMode: "in-progress",
+  emitMode: "on-change",
   content: {
     input: (input) => ({
       customerId: input.customerId,
@@ -316,7 +317,7 @@ interface WorkflowInsightRecord {
   // --- Execution State ---
 
   /** Current execution status. */
-  status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING";
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
 
   /** ISO-8601 timestamp when execution started. */
   startTime: string;
@@ -471,10 +472,11 @@ interface OperationRecord {
 
 ## 3. Emit Timing & Lifecycle
 
-| emitMode        | When record is emitted                                        | Record updates?                                      |
-| --------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
-| `finished-only` | Once, at `onInvocationEnd` when status is SUCCEEDED or FAILED | No — single write                                    |
-| `in-progress`   | On every `onOperationChange` + at `onInvocationEnd`           | Yes — same record key, overwritten with latest state |
+| emitMode      | When record is emitted                                        | Record updates?                                      |
+| ------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| `on-complete` | Once, at `onInvocationEnd` when status is SUCCEEDED or FAILED | No — single write                                    |
+| `on-change`   | On every `onOperationChange` + at `onInvocationEnd`           | Yes — same record key, overwritten with latest state |
+| `on-failure`  | Once, at `onInvocationEnd` when status is FAILED              | No — single write (only for failures)                |
 
 ### Critical constraint: `onInvocationEnd` must be awaited
 
@@ -492,4 +494,4 @@ The current plugin runner fires `onInvocationEnd` as fire-and-forget. For Workfl
 | Average duration of successful executions?     | `AVG(durationMs) WHERE status = 'SUCCEEDED'`                         |
 | Which step has the highest failure rate?       | Unnest operations, group by name, count failed/total                 |
 | Executions with >3 retry attempts on any step? | `WHERE ANY(operations[*].attempt > 3)`                               |
-| Currently running executions?                  | `WHERE status = 'RUNNING'` (in-progress mode only)                   |
+| Currently running executions?                  | `WHERE status = 'RUNNING'` (on-change mode only)                     |
