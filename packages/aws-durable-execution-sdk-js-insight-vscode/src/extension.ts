@@ -5,6 +5,7 @@ import { runLogsInsightsQuery } from "./logsInsights";
 import { runDynamoDBQuery } from "./dynamodb";
 import { runAuroraQuery } from "./aurora";
 import { ensureLimit } from "./schema";
+import { assertReadOnly } from "./queryValidator";
 
 type InboundMessage =
   | { type: "ready" }
@@ -193,6 +194,7 @@ class ExplorerPanel {
         if (cfg.destinationType === "dynamodb") {
           if (!cfg.dynamodbTableName)
             throw new Error("No DynamoDB table configured.");
+          assertReadOnly(generated.query, "PartiQL");
           const table = await runDynamoDBQuery({
             region: cfg.region,
             credentials,
@@ -211,6 +213,7 @@ class ExplorerPanel {
         if (cfg.destinationType === "aurora") {
           if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
             throw new Error("Aurora not configured.");
+          assertReadOnly(generated.query, "PostgreSQL");
           const table = await runAuroraQuery({
             region: cfg.region,
             credentials,
