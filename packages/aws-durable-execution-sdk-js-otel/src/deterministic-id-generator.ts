@@ -114,12 +114,24 @@ export function deriveTraceIdFromArn(executionArn: string): string {
 }
 
 /**
- * Derive a deterministic span ID from an operation ID by hashing it
- * with SHA-256 and truncating to the first 16 lowercase hex characters.
+ * Derive a deterministic span ID from an operation ID scoped to a specific execution.
+ * Hashes `executionArn + ":" + operationId` with SHA-256 and truncates to the first
+ * 16 lowercase hex characters.
  *
- * @param operationId - The operation ID string
+ * The executionArn is included in the hash input to avoid span ID collisions when
+ * different executions (e.g., a parent and child workflow) share the same trace and
+ * have operations at the same positional ID.
+ *
+ * @param operationId - The operation ID string (positional identifier within an execution)
+ * @param executionArn - The execution ARN, used to scope span IDs per execution
  * @returns A 16-char lowercase hex string
  */
-export function deriveSpanIdFromOperationId(operationId: string): string {
-  return createHash("sha256").update(operationId).digest("hex").slice(0, 16);
+export function deriveSpanIdFromOperationId(
+  operationId: string,
+  executionArn: string,
+): string {
+  return createHash("sha256")
+    .update(executionArn + ":" + operationId)
+    .digest("hex")
+    .slice(0, 16);
 }

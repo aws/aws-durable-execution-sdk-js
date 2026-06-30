@@ -241,7 +241,10 @@ describe("OtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const expectedDeterministicId = deriveSpanIdFromOperationId("op-replay");
+      const expectedDeterministicId = deriveSpanIdFromOperationId(
+        "op-replay",
+        TEST_ARN,
+      );
       const opSpan = findSpan("CONTEXT");
       expect(opSpan).toBeDefined();
       // Random span ID should differ from deterministic
@@ -296,7 +299,10 @@ describe("OtelPlugin", () => {
       const continuationSpan = findSpan("remote-op");
       expect(continuationSpan).toBeDefined();
       // Should have a Link pointing to deterministic span ID of op-cross
-      const expectedDeterministicId = deriveSpanIdFromOperationId("op-cross");
+      const expectedDeterministicId = deriveSpanIdFromOperationId(
+        "op-cross",
+        TEST_ARN,
+      );
       expect(continuationSpan!.links.length).toBeGreaterThan(0);
       expect(continuationSpan!.links[0].context.spanId).toBe(
         expectedDeterministicId,
@@ -472,7 +478,7 @@ describe("OtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const expectedSpanId = deriveSpanIdFromOperationId("op-link");
+      const expectedSpanId = deriveSpanIdFromOperationId("op-link", TEST_ARN);
       const attemptSpan = getExportedSpans().find(
         (s) => s.attributes["durable.operation.attempt"] === 1,
       );
@@ -1306,6 +1312,107 @@ describe("OtelPlugin", () => {
         );
         expect(waitSpan).toBeDefined();
       });
+    });
+  });
+
+  describe("Parent-child workflow span ID collision prevention", () => {
+    it("parent and child workflows with same operation position produce distinct span IDs and correct parenting", async () => {
+      // Two different execution ARNs (parent and child workflows)
+      const PARENT_ARN =
+        "arn:aws:lambda:us-east-1:123456789012:function:durable-workflow:$LATEST:parent-exec-1";
+      const CHILD_ARN =
+        "arn:aws:lambda:us-east-1:123456789012:function:durable-enrich:$LATEST:child-exec-1";
+
+      // Create parent plugin with shared provider
+      const parentPlugin = new OtelPlugin({ tracerProvider: provider });
+
+      // Create child plugin with shared provider
+      const childPlugin = new OtelPlugin({ tracerProvider: provider });
+
+      // --- Parent workflow execution ---
+      await parentPlugin.onInvocationStart(
+        makeInvocationInfo({ executionArn: PARENT_ARN }),
+      );
+      // Parent has operation at position "1" (same as child will have)
+      await parentPlugin.onOperationStart(
+        makeOperationInfo({
+          id: "1",
+          name: "validate",
+          type: "STEP",
+          isReplay: false,
+        }),
+      );
+      await parentPlugin.onOperationEnd(
+        makeOperationEndInfo({ id: "1", name: "validate", type: "STEP" }),
+      );
+      await parentPlugin.onInvocationEnd(
+        makeInvocationEndInfo({ executionArn: PARENT_ARN }),
+      );
+
+      // --- Child workflow execution ---
+      await childPlugin.onInvocationStart(
+        makeInvocationInfo({ executionArn: CHILD_ARN }),
+      );
+      // Child also has operation at position "1"
+      await childPlugin.onOperationStart(
+        makeOperationInfo({
+          id: "1",
+          name: "enrich",
+          type: "STEP",
+          isReplay: false,
+        }),
+      );
+      await childPlugin.onOperationEnd(
+        makeOperationEndInfo({ id: "1", name: "enrich", type: "STEP" }),
+      );
+      await childPlugin.onInvocationEnd(
+        makeInvocationEndInfo({ executionArn: CHILD_ARN }),
+      );
+
+      // --- Verify span IDs are DIFFERENT ---
+      const allSpans = getExportedSpans();
+      const validateSpan = allSpans.find(
+        (s) =>
+          s.name === "validate" &&
+          s.attributes["durable.execution.arn"] === PARENT_ARN,
+      );
+      const enrichSpan = allSpans.find(
+        (s) =>
+          s.name === "enrich" &&
+          s.attributes["durable.execution.arn"] === CHILD_ARN,
+      );
+
+      expect(validateSpan).toBeDefined();
+      expect(enrichSpan).toBeDefined();
+
+      // Key assertion: same operation position ("1") but different ARNs → different span IDs
+      expect(validateSpan!.spanContext().spanId).not.toBe(
+        enrichSpan!.spanContext().spanId,
+      );
+
+      // --- Verify correct parenting ---
+      const parentInvocationSpan = allSpans.find(
+        (s) =>
+          s.name === "invocation" &&
+          s.attributes["durable.execution.arn"] === PARENT_ARN,
+      );
+      const childInvocationSpan = allSpans.find(
+        (s) =>
+          s.name === "invocation" &&
+          s.attributes["durable.execution.arn"] === CHILD_ARN,
+      );
+
+      expect(parentInvocationSpan).toBeDefined();
+      expect(childInvocationSpan).toBeDefined();
+
+      // validate span should be child of parent's invocation span
+      expect(validateSpan!.parentSpanContext?.spanId).toBe(
+        parentInvocationSpan!.spanContext().spanId,
+      );
+      // enrich span should be child of child's invocation span
+      expect(enrichSpan!.parentSpanContext?.spanId).toBe(
+        childInvocationSpan!.spanContext().spanId,
+      );
     });
   });
 });
