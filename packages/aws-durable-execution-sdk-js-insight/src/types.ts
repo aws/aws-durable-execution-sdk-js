@@ -38,8 +38,10 @@ export interface OperationOverride {
 }
 
 /**
- * Controls what data is included in the emitted record.
- * @experimental This interface is experimental and may change in future releases.
+ * Controls what data is included in emitted records.
+ *
+ * @experimental **Not yet implemented.** This interface is reserved for a future release.
+ * Configuring it currently has no effect on emitted records.
  */
 export interface ContentConfig {
   input?: boolean | ((input: ExecutionInput) => ExecutionInput);
@@ -66,8 +68,25 @@ export interface InsightExporter {
  */
 export interface WorkflowInsightConfig {
   exporters?: InsightExporter[];
+
+  /**
+   * Sampling rate: 0.0–1.0. When set, only a fraction of executions emit records.
+   * The decision is per-execution (all-or-nothing).
+   *
+   * @experimental **Not yet implemented.** This field is reserved for a future release.
+   * Setting it currently has no effect.
+   */
   samplingRate?: number;
+
   emitMode?: "finished-only" | "in-progress";
+
+  /**
+   * Control what data is included in records (input/output transforms,
+   * operation overrides, error inclusion).
+   *
+   * @experimental **Not yet implemented.** This field is reserved for a future release.
+   * Setting it currently has no effect.
+   */
   content?: ContentConfig;
 }
 
