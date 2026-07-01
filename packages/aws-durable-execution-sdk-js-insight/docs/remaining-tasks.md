@@ -19,12 +19,18 @@
 ## Operation-Level Detail Capture
 
 > The `OperationRecord` contract includes `attempt`, per-operation `error`, and
-> (via content overrides) `result`. `OperationInfo` from `onOperationChange`
-> does not carry these — capturing them requires additional lifecycle hooks.
+> `result`. These are all present in the checkpointed `Operation` data; the core
+> SDK's `toOperationInfo()` now surfaces them on `OperationInfo`, so they arrive
+> via `onOperationChange` with no extra lifecycle hooks needed.
 
-- [ ] Capture per-operation `error` (wire `onOperationEnd`)
-- [ ] Capture per-operation `attempt` count (wire `onOperationAttemptEnd`)
-- [ ] Capture per-operation `result` (needed for `content.operations.overrides`)
+- [x] Capture per-operation `error` — SDK `toOperationInfo` maps `*Details.Error`
+      onto `OperationInfo.error` (via `DurableOperationError.fromErrorObject`);
+      plugin serializes it into `OperationRecord.error`.
+- [x] Capture per-operation `attempt` count — SDK maps `StepDetails.Attempt`
+      onto `OperationInfo.attempt`; plugin serializes it into `OperationRecord.attempt`.
+- [~] Capture per-operation `result` — now available on `OperationInfo.result`
+  (SDK already mapped it), but not yet emitted in `OperationRecord`; defer to
+  Content Filtering since raw results are unbounded and need override/size gating.
 
 ## Content Filtering
 
