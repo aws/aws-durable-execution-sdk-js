@@ -98,7 +98,11 @@
 
 - [x] `npm run build` passes locally (esm, cjs, types)
 - [ ] Add the insight package to root `package.json` build/test scripts
-- [ ] Wire the package into the root ESLint config (currently not linted)
+- [x] Wire the package into ESLint — added a package-local `eslint.config.js`
+      (core SDK's TypeScript rules, using only published deps — no local
+      filename-convention plugin) and a `lint` script, consistent with the other
+      packages. Lints clean (0 errors); pre-commit lint-staged now applies the
+      TS rules to insight sources.
 - [x] Package `README.md` — comprehensive docs with all exporters, config, examples
 - [ ] Add a runnable example under `aws-durable-execution-sdk-js-examples`
 
