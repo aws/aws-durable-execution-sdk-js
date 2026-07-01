@@ -147,6 +147,10 @@ function toOperationRecord(op: OperationInfo): OperationRecord {
     startTime: toIsoString(op.startTimestamp),
     endTime: toIsoString(op.endTimestamp),
     durationMs,
+    attempt: op.attempt,
+    error: op.error
+      ? { name: op.error.name, message: op.error.message }
+      : undefined,
   };
 }
 
