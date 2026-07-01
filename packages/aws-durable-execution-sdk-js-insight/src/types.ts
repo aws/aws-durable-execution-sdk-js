@@ -78,7 +78,20 @@ export interface WorkflowInsightConfig {
    */
   samplingRate?: number;
 
-  emitMode?: "finished-only" | "in-progress";
+  /**
+   * Controls when records are emitted.
+   *
+   * - `"on-change"`: emit on every operation status change and at execution
+   *   end, including while the execution is still in flight (`RUNNING`).
+   *   Highest overhead; gives real-time visibility into running executions.
+   * - `"on-complete"` (default): emit a single record when the execution
+   *   reaches a terminal status (`SUCCEEDED` or `FAILED`). No emissions on
+   *   intermediate waits/suspends.
+   * - `"on-failure"`: emit a single record only when the execution reaches a
+   *   terminal `FAILED` status. Successful executions emit nothing. Lowest
+   *   overhead; useful for error-focused alerting and triage.
+   */
+  emitMode?: "on-complete" | "on-change" | "on-failure";
 
   /**
    * Control what data is included in records (input/output transforms,
@@ -126,7 +139,7 @@ export interface WorkflowInsightRecord {
   functionQualifier: string;
   region: string;
   accountId: string;
-  status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING";
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
   startTime: string;
   endTime?: string;
   durationMs?: number;

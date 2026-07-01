@@ -9,7 +9,7 @@ One line of configuration gives you full visibility into your durable workflows 
 Every time your durable function runs, Workflow Insight builds a **cumulative snapshot** of the execution (`WorkflowInsightRecord`) and sends it to one or more exporters. The record includes:
 
 - **Execution identity** — ARN, function name, region, account
-- **Status** — RUNNING, SUCCEEDED, FAILED, PENDING
+- **Status** — RUNNING, SUCCEEDED, FAILED
 - **Timing** — start/end time, total duration
 - **Input/Output** — the event and result of the execution
 - **Operations** — every step, wait, invoke, and callback with individual timing and status
@@ -34,7 +34,7 @@ interface WorkflowInsightRecord {
   accountId: string; // AWS account ID
 
   // Execution state
-  status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING";
+  status: "RUNNING" | "SUCCEEDED" | "FAILED"; // suspends (waits/timers) surface as RUNNING
   startTime: string; // ISO-8601
   endTime?: string; // ISO-8601 (absent while running)
   durationMs?: number; // Total duration (absent while running)
@@ -182,8 +182,8 @@ That's it. With zero configuration, insight records appear in your function's ow
 
 ```typescript
 const insight = workflowInsight({
-  // When to emit records (default: "finished-only")
-  emitMode: "finished-only",
+  // When to emit records (default: "on-complete")
+  emitMode: "on-complete",
 
   // Sampling rate: 0.0–1.0 (default: 1.0 = all executions)
   samplingRate: 1.0,
@@ -198,10 +198,11 @@ const insight = workflowInsight({
 
 ### `emitMode`
 
-| Mode                        | Behavior                                                    | Use case                                              |
-| --------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
-| `"finished-only"` (default) | Emit one record when execution completes (SUCCEEDED/FAILED) | Low overhead; sufficient for post-hoc analysis        |
-| `"in-progress"`             | Emit on every operation change + at end                     | Real-time monitoring; see executions as they progress |
+| Mode                      | Behavior                                                    | Use case                                              |
+| ------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
+| `"on-complete"` (default) | Emit one record when execution completes (SUCCEEDED/FAILED) | Low overhead; sufficient for post-hoc analysis        |
+| `"on-change"`             | Emit on every operation change + at end                     | Real-time monitoring; see executions as they progress |
+| `"on-failure"`            | Emit one record only when execution ends in FAILED          | Lowest overhead; error-focused alerting and triage    |
 
 ### `samplingRate`
 
@@ -1041,7 +1042,7 @@ const insight = workflowInsight({
 **Event structure:**
 
 - Source: `aws.durable-execution.insight`
-- DetailType: `SUCCEEDED` | `FAILED` | `RUNNING` | `PENDING`
+- DetailType: `SUCCEEDED` | `FAILED` | `RUNNING`
 - Detail: full record JSON
 
 **Example rule pattern:**
@@ -1246,7 +1247,7 @@ const insight = workflowInsight({
     new DynamoDBExporter({ tableName: "insight-live" }), // Fast lookups
     new EventBridgeExporter({}), // Trigger alerts
   ],
-  emitMode: "in-progress",
+  emitMode: "on-change",
 });
 ```
 
@@ -1352,14 +1353,13 @@ The same pattern applies — the lifecycle handler reads the event and writes to
 
 ### What each status means
 
-| Status    | Origin                              | Captured by plugin?   | Captured by EventBridge? |
-| --------- | ----------------------------------- | --------------------- | ------------------------ |
-| RUNNING   | Lambda invocation                   | ✅ (in-progress mode) | ❌                       |
-| SUCCEEDED | Lambda invocation                   | ✅                    | ✅                       |
-| FAILED    | Lambda invocation                   | ✅                    | ✅                       |
-| PENDING   | Lambda invocation (wait/suspend)    | ✅                    | ❌                       |
-| STOPPED   | Backend (manual stop API)           | ❌                    | ✅                       |
-| TIMED_OUT | Backend (ExecutionTimeout exceeded) | ❌                    | ✅                       |
+| Status    | Origin                                                              | Captured by plugin? | Captured by EventBridge? |
+| --------- | ------------------------------------------------------------------- | ------------------- | ------------------------ |
+| RUNNING   | Lambda invocation (incl. wait/suspend for timers & external events) | ✅ (on-change mode) | ❌                       |
+| SUCCEEDED | Lambda invocation                                                   | ✅                  | ✅                       |
+| FAILED    | Lambda invocation                                                   | ✅                  | ✅                       |
+| STOPPED   | Backend (manual stop API)                                           | ❌                  | ✅                       |
+| TIMED_OUT | Backend (ExecutionTimeout exceeded)                                 | ❌                  | ✅                       |
 
 > **Tip:** If you use the `EventBridgeExporter` alongside this pattern, your
 > plugin-emitted events (SUCCEEDED/FAILED) and the backend-emitted events
@@ -1371,8 +1371,8 @@ The same pattern applies — the lifecycle handler reads the event and writes to
 The plugin hooks into the durable execution lifecycle:
 
 1. **`onInvocationStart`** — records execution start time
-2. **`onOperationChange`** — (in-progress mode) schedules export of a RUNNING snapshot
-3. **`onInvocationEnd`** — schedules export of the terminal snapshot (SUCCEEDED/FAILED/PENDING)
+2. **`onOperationChange`** — (on-change mode) schedules export of a RUNNING snapshot
+3. **`onInvocationEnd`** — schedules export of the snapshot, gated by `emitMode`: on terminal SUCCEEDED/FAILED (`on-complete`), FAILED only (`on-failure`), or every update including in-flight RUNNING snapshots (`on-change`)
 4. **`wrapInvocation`** — drains all pending exports before the Lambda returns
 
 Exports are **coalesced**: if updates arrive faster than the exporter can handle, intermediate snapshots are dropped (each record is a complete snapshot, so the latest one supersedes all earlier ones). This prevents overlapping export calls and keeps overhead minimal.
