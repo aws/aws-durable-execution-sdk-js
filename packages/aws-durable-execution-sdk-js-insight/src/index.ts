@@ -337,9 +337,6 @@ async function flushAll(exporters: InsightExporter[]): Promise<void> {
 
 // --- Plugin Factory ---
 
-const PLUGIN_VERSION = "0.1.0-alpha.0";
-const SDK_VERSION = "2.0.0-alpha.1";
-
 /**
  * Creates a Workflow Insight plugin that listens to execution lifecycle events.
  * @experimental This function is experimental and may change in future releases.
@@ -430,8 +427,6 @@ export function workflowInsight(
         ? { name: args.error.name, message: args.error.message }
         : undefined,
       operations: args.operations,
-      pluginVersion: PLUGIN_VERSION,
-      sdkVersion: SDK_VERSION,
     };
   };
 
