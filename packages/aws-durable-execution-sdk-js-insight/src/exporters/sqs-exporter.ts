@@ -1,5 +1,10 @@
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
-import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import type {
+  InsightExporter,
+  OperationsFormat,
+  WorkflowInsightRecord,
+} from "../types";
+import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the SQS exporter.
@@ -17,6 +22,13 @@ export interface SQSExporterConfig {
 
   /** AWS region. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * How operations are rendered in the message body: the canonical `operations`
+   * array (`"array"`, default), the `operationsByName` map (`"by-name"`), or
+   * `"both"`. Choose based on what your consumer expects.
+   */
+  operationsFormat?: OperationsFormat;
 }
 
 /**
@@ -35,12 +47,14 @@ export class SQSExporter implements InsightExporter {
   private readonly queueUrl: string;
   private readonly messageGroupId?: string;
   private readonly isFifo: boolean;
+  private readonly operationsFormat: OperationsFormat;
   private readonly client: SQSClient;
 
   constructor(config: SQSExporterConfig) {
     this.queueUrl = config.queueUrl;
     this.messageGroupId = config.messageGroupId;
     this.isFifo = config.queueUrl.endsWith(".fifo");
+    this.operationsFormat = config.operationsFormat ?? "array";
     this.client = new SQSClient(config.region ? { region: config.region } : {});
   }
 
@@ -48,7 +62,9 @@ export class SQSExporter implements InsightExporter {
     await this.client.send(
       new SendMessageCommand({
         QueueUrl: this.queueUrl,
-        MessageBody: JSON.stringify(record),
+        MessageBody: JSON.stringify(
+          applyOperationsFormat(record, this.operationsFormat),
+        ),
         MessageGroupId: this.isFifo
           ? (this.messageGroupId ?? record.executionArn)
           : undefined,

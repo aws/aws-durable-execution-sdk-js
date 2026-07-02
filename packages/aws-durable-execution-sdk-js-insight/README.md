@@ -272,6 +272,63 @@ content: {
 > using the default JSON serialization, or whose serialized form your transform
 > can handle. Input/output transforms are not affected by this.
 
+## Querying by operation name (`operationsByName`)
+
+`operations` is a canonical **array** — lossless (it keeps every occurrence of a
+repeated step name), and queryable in the analytical stores that support nested
+data (Athena `UNNEST`, Postgres/Redshift JSON path, OpenSearch `nested`):
+
+```sql
+-- Postgres (JSONB): executions where "convert_data" ran under 5s
+WHERE record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationMs < 5000)';
+```
+
+Point-access stores that can't filter "the array element named X" —
+**CloudWatch Logs** (`LambdaLogExporter`, `CloudWatchLogsExporter`) and
+**DynamoDB** (`DynamoDBExporter`) — emit an `operationsByName` map **instead of
+the `operations` array**, so name-based queries become a simple dot-path (these
+stores trade the per-occurrence array detail for queryability):
+
+```
+# CloudWatch Logs Insights
+fields executionArn | filter operationsByName.convert_data.maxDurationMs < 5000
+```
+
+Each entry aggregates metrics across all occurrences of the name; `result`/`error`
+are kept only when the name ran exactly once:
+
+```json
+"operationsByName": {
+  "insert_to_db": {
+    "type": "STEP", "subType": "Step",
+    "count": 1, "minDurationMs": 6200, "maxDurationMs": 6200, "totalDurationMs": 6200,
+    "failedCount": 0, "maxAttempt": 1,
+    "status": "SUCCEEDED",
+    "result": { "rows": 1200 }
+  }
+}
+```
+
+Notes:
+
+- **Metrics** (`count`, `min`/`max`/`totalDurationMs`, `failedCount`, `maxAttempt`)
+  span all occurrences; `type`/`subType`/`status` reflect the most recently seen
+  occurrence.
+- **`result`/`error` are included only when the name occurs exactly once.** For a
+  repeated name (loops/retries/map) they're dropped — there's no single
+  representative value — but `failedCount` still flags failures.
+- Operations **without a name are excluded** (they can't be keyed or queried).
+- **Choosing store-safe operation names is your responsibility.** Names are used
+  verbatim as keys/identifiers — the library never sanitizes or escapes them. Any
+  character your target store treats specially (e.g. `.` in CloudWatch Logs
+  Insights / OpenSearch field paths, reserved or quoting characters in
+  DynamoDB attribute names and SQL identifiers, etc.) can make an operation hard
+  or impossible to query there. Stick to simple, portable names — letters,
+  digits, `-`, `_` — to stay safe across destinations.
+- The array remains the source of truth; array-native exporters (S3/Athena,
+  OpenSearch, Aurora, Redshift) emit only the array. See
+  [`docs/operations-shape.md`](./docs/operations-shape.md).
+
 ## Exporters
 
 ### Comparison Table
@@ -1024,6 +1081,7 @@ const insight = workflowInsight({
     new FirehoseExporter({
       deliveryStreamName: "workflow-insight-stream",
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1053,6 +1111,7 @@ const insight = workflowInsight({
       eventBusName: "default", // optional (default)
       source: "aws.durable-execution.insight", // optional (default)
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1093,6 +1152,7 @@ const insight = workflowInsight({
         "https://sqs.us-east-1.amazonaws.com/123456789012/insight-queue.fifo",
       messageGroupId: undefined, // optional (default: executionArn)
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1167,6 +1227,7 @@ const insight = workflowInsight({
       endpoint: "https://otlp.datadoghq.com/v1/logs",
       headers: { "DD-API-KEY": process.env.DD_API_KEY! },
       protocol: "http/json", // optional (default)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1176,7 +1237,10 @@ const insight = workflowInsight({
 
 - Resource: `service.name`, `cloud.region`, `cloud.account.id`, `faas.name`, `faas.version`
 - Log attributes: `workflow.execution_arn`, `workflow.status`, `workflow.duration_ms`
-- Log body: full record JSON
+- Log body: full record JSON. `operationsFormat` controls how operations appear
+  in the body — the `operations` array (default), the `operationsByName` map, or
+  both. (Operations are only in the body, never attributes, so this never affects
+  attribute cardinality.)
 - Severity: ERROR for FAILED, INFO otherwise
 
 **No dependencies** — uses native `fetch`.
@@ -1202,12 +1266,17 @@ const insight = workflowInsight({
       headers: { Authorization: "Bearer " + process.env.TOKEN },
       method: "POST", // optional (default)
       timeoutMs: 5000, // optional (default: 10000)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
 ```
 
 **No dependencies** — uses native `fetch` with configurable timeout.
+
+`operationsFormat` controls how operations are rendered in the posted body:
+the canonical `operations` array (default), the name-keyed `operationsByName`
+map, or both — pick what your endpoint consumes.
 
 **When to use:** Custom backends, internal microservices, SaaS integrations without dedicated exporters, prototyping.
 
@@ -1229,6 +1298,7 @@ const insight = workflowInsight({
     new FileExporter({
       directory: "/mnt/efs/workflow-insight",
       mode: "ndjson", // optional (default)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });

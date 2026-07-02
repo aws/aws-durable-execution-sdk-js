@@ -145,6 +145,53 @@ export interface OperationRecord {
 }
 
 /**
+ * How an exporter renders operations in the emitted record:
+ * - `"array"`: the canonical `operations` array (lossless; default).
+ * - `"by-name"`: replace it with the `operationsByName` map (name-keyed summary).
+ * - `"both"`: include the `operations` array and the `operationsByName` map.
+ *
+ * @experimental This type is experimental and may change in future releases.
+ */
+export type OperationsFormat = "array" | "by-name" | "both";
+
+/**
+ * A per-operation-name summary emitted (as an `operationsByName` map) by
+ * point-access exporters (CloudWatch Logs, DynamoDB) to make name-based queries
+ * ergonomic. The canonical `operations` array remains the lossless source of
+ * truth; see `docs/operations-shape.md`.
+ *
+ * Metric fields aggregate across ALL occurrences of the name; `type`, `subType`,
+ * and `status` reflect the most recently seen occurrence. `result` and `error`
+ * are included only when the name occurs exactly ONCE in the execution — for a
+ * repeated name there is no single representative value, so both are omitted.
+ *
+ * @experimental This interface is experimental and may change in future releases.
+ */
+export interface OperationSummary {
+  type: string;
+  subType?: string;
+  /** Number of occurrences of this operation name in the execution. */
+  count: number;
+  /** Min/max/total duration across occurrences that have a duration. */
+  minDurationMs?: number;
+  maxDurationMs?: number;
+  totalDurationMs?: number;
+  /** How many occurrences ended in FAILED. */
+  failedCount: number;
+  /** Highest attempt number seen across occurrences. */
+  maxAttempt?: number;
+  /** Status of the most recently seen occurrence. */
+  status: string;
+  /** Result — only present when this name occurs exactly once (and opted results in). */
+  result?: OperationResult;
+  /** Error — only present when this name occurs exactly once (and it failed, errors included). */
+  error?: {
+    name: string;
+    message: string;
+  };
+}
+
+/**
  * The curated execution record emitted to destinations.
  * @experimental This interface is experimental and may change in future releases.
  */

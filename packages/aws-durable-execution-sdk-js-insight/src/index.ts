@@ -16,15 +16,24 @@ import type {
   JsonValue,
   InsightExporter,
 } from "./types";
+import { withOperationsByName } from "./operations-index";
 
 export type {
   InsightExporter,
   WorkflowInsightConfig,
   WorkflowInsightRecord,
   OperationRecord,
+  OperationSummary,
+  OperationsFormat,
   ContentConfig,
   OperationOverride,
 } from "./types";
+
+export {
+  buildOperationsByName,
+  withOperationsByName,
+  applyOperationsFormat,
+} from "./operations-index";
 
 export { S3Exporter } from "./exporters/s3-exporter";
 export type { S3ExporterConfig } from "./exporters/s3-exporter";
@@ -255,7 +264,7 @@ function buildOperationRecords(
  */
 export class LambdaLogExporter implements InsightExporter {
   async export(record: WorkflowInsightRecord): Promise<void> {
-    console.log(JSON.stringify(record));
+    console.log(JSON.stringify(withOperationsByName(record)));
   }
 }
 

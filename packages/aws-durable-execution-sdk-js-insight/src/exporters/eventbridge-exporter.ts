@@ -2,7 +2,12 @@ import {
   EventBridgeClient,
   PutEventsCommand,
 } from "@aws-sdk/client-eventbridge";
-import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import type {
+  InsightExporter,
+  OperationsFormat,
+  WorkflowInsightRecord,
+} from "../types";
+import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the EventBridge exporter.
@@ -23,6 +28,13 @@ export interface EventBridgeExporterConfig {
 
   /** AWS region. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * How operations are rendered in the event detail: the canonical `operations`
+   * array (`"array"`, default), the `operationsByName` map (`"by-name"`), or
+   * `"both"`. Choose based on what your rule targets consume.
+   */
+  operationsFormat?: OperationsFormat;
 }
 
 /**
@@ -41,11 +53,13 @@ export interface EventBridgeExporterConfig {
 export class EventBridgeExporter implements InsightExporter {
   private readonly eventBusName: string;
   private readonly source: string;
+  private readonly operationsFormat: OperationsFormat;
   private readonly client: EventBridgeClient;
 
   constructor(config: EventBridgeExporterConfig = {}) {
     this.eventBusName = config.eventBusName ?? "default";
     this.source = config.source ?? "aws.durable-execution.insight";
+    this.operationsFormat = config.operationsFormat ?? "array";
     this.client = new EventBridgeClient(
       config.region ? { region: config.region } : {},
     );
@@ -59,7 +73,9 @@ export class EventBridgeExporter implements InsightExporter {
             EventBusName: this.eventBusName,
             Source: this.source,
             DetailType: record.status,
-            Detail: JSON.stringify(record),
+            Detail: JSON.stringify(
+              applyOperationsFormat(record, this.operationsFormat),
+            ),
             Time: new Date(record.emittedAt),
           },
         ],

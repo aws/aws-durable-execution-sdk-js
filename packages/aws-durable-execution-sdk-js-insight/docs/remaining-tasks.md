@@ -33,6 +33,24 @@
       `content.operations.overrides[].result` transform (omitted by default to
       avoid unbounded payloads).
 
+## Query Ergonomics — per-store operation shaping
+
+> Design agreed in `operations-shape.md`. `operations` stays a canonical array;
+> point-access stores emit a name-keyed `operationsByName` index instead of the array.
+
+- [x] Add shared `buildOperationsByName(operations)` helper (per-name summary:
+      aggregate `count`/`min`/`max`/`totalDurationMs`/`failedCount`/`maxAttempt`
+      across occurrences + last-occurrence `type`/`subType`/`status`/`result`|`error`)
+- [x] Emit `operationsByName` (instead of the array) from `LambdaLogExporter`,
+      `CloudWatchLogsExporter`, and `DynamoDBExporter`
+- [x] Unit tests for `buildOperationsByName` (duplicate names, last-occurrence
+      result/error, failedCount, missing durations)
+- [x] Document per-store shape + example queries in the README
+- [x] `operationsFormat` option (`array` | `by-name` | `both`, default `array`) on the
+      flexible-sink exporters — `HttpExporter`, `OTelExporter`, `SQSExporter`,
+      `EventBridgeExporter`, `FirehoseExporter`, `FileExporter`. (Timestream is
+      dimensional, so it's excluded.)
+
 ## Content Filtering
 
 - [x] Apply `content.input` transform (boolean or function)
