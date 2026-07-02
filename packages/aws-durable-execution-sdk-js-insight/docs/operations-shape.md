@@ -59,11 +59,12 @@ or the `operationsByName` map — never both.
 
 - Keyed by the **raw operation name**. Unnamed operations are excluded (a
   customer can't identify or query them anyway).
-  - Caveat: **choosing a query-safe name is the developer's responsibility.** The
-    name is used verbatim as the key — the plugin does no sanitization or escaping.
-    A name containing `.` (or other characters a destination treats specially in
-    field paths) may not be addressable via dot-path in some stores (notably
-    CloudWatch Logs Insights; DynamoDB PartiQL can quote it). Prefer simple names.
+  - Caveat: **choosing a store-safe name is the developer's responsibility.** The
+    name is used verbatim as the key — the plugin never sanitizes or escapes it.
+    Any character the target store treats specially (e.g. `.` in CloudWatch/
+    OpenSearch field paths, reserved/quoting characters in DynamoDB attribute
+    names or SQL identifiers) can make an operation hard or impossible to query
+    there. Stick to simple, portable names (letters, digits, `-`, `_`).
 - Value = a per-name summary, built in a **single pass** over the array
   (insert-or-update; no grouping or sorting):
   - **Aggregated across ALL occurrences** (multiplicity-independent, safe for

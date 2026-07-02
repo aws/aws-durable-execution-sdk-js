@@ -318,11 +318,13 @@ Notes:
   repeated name (loops/retries/map) they're dropped — there's no single
   representative value — but `failedCount` still flags failures.
 - Operations **without a name are excluded** (they can't be keyed or queried).
-- **Choosing query-safe operation names is your responsibility.** The name is used
-  verbatim as the map key — the library does no sanitization or escaping. A name
-  containing `.` (or other characters a destination treats specially in field
-  paths) may not be addressable via dot-path in some stores (notably CloudWatch
-  Logs Insights). Prefer simple names like `charge-card`.
+- **Choosing store-safe operation names is your responsibility.** Names are used
+  verbatim as keys/identifiers — the library never sanitizes or escapes them. Any
+  character your target store treats specially (e.g. `.` in CloudWatch Logs
+  Insights / OpenSearch field paths, reserved or quoting characters in
+  DynamoDB attribute names and SQL identifiers, etc.) can make an operation hard
+  or impossible to query there. Stick to simple, portable names — letters,
+  digits, `-`, `_` — to stay safe across destinations.
 - The array remains the source of truth; array-native exporters (S3/Athena,
   OpenSearch, Aurora, Redshift) emit only the array. See
   [`docs/operations-shape.md`](./docs/operations-shape.md).
