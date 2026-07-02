@@ -21,7 +21,10 @@ import type {
 export function buildOperationsByName(
   operations: OperationRecord[],
 ): Record<string, OperationSummary> {
-  const byName: Record<string, OperationSummary> = {};
+  // Accumulate in a Map: operation names are arbitrary strings, and indexing a
+  // plain object with e.g. "__proto__" would read/mutate Object.prototype.
+  // Map get/set are entry operations and immune to prototype pollution.
+  const groups = new Map<string, OperationSummary>();
 
   for (const op of operations) {
     if (!op.name) continue;
@@ -31,7 +34,7 @@ export function buildOperationsByName(
     const attempt = typeof op.attempt === "number" ? op.attempt : undefined;
     const failed = op.status === "FAILED" ? 1 : 0;
 
-    const existing = byName[op.name];
+    const existing = groups.get(op.name);
     if (!existing) {
       const summary: OperationSummary = {
         type: op.type,
@@ -48,7 +51,7 @@ export function buildOperationsByName(
       if (attempt !== undefined) summary.maxAttempt = attempt;
       if (op.result !== undefined) summary.result = op.result;
       if (op.error !== undefined) summary.error = op.error;
-      byName[op.name] = summary;
+      groups.set(op.name, summary);
       continue;
     }
 
@@ -79,6 +82,18 @@ export function buildOperationsByName(
     delete existing.error;
   }
 
+  // Materialize as a plain object. `defineProperty` creates an own data property
+  // even for a key like "__proto__", so a malicious name can't reach the
+  // Object.prototype setter.
+  const byName: Record<string, OperationSummary> = {};
+  for (const [name, summary] of groups) {
+    Object.defineProperty(byName, name, {
+      value: summary,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
   return byName;
 }
 

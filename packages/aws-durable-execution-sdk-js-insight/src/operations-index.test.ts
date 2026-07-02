@@ -126,6 +126,23 @@ describe("buildOperationsByName", () => {
     expect(byName.x.status).toBe("FAILED");
     expect(byName.x.failedCount).toBe(1);
   });
+
+  it("does not pollute Object.prototype for a '__proto__' operation name", () => {
+    const byName = buildOperationsByName([
+      op({ id: "o1", name: "__proto__", status: "SUCCEEDED", durationMs: 5 }),
+      // second occurrence exercises the update + delete path
+      op({ id: "o2", name: "__proto__", status: "FAILED", durationMs: 9 }),
+    ]);
+
+    // Object.prototype must be untouched.
+    expect(({} as Record<string, unknown>).count).toBeUndefined();
+    expect(({} as Record<string, unknown>).status).toBeUndefined();
+
+    // The summary is stored as an own data property, not on the prototype.
+    const desc = Object.getOwnPropertyDescriptor(byName, "__proto__");
+    expect(desc?.value?.count).toBe(2);
+    expect(desc?.value?.status).toBe("FAILED");
+  });
 });
 
 describe("withOperationsByName", () => {
