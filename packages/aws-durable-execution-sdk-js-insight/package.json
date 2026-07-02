@@ -33,6 +33,7 @@
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
     "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
     "lint": "eslint src --ext .ts",
+    "test": "jest",
     "clean": "rm -rf dist dist-cjs dist-types"
   },
   "peerDependencies": {
@@ -98,6 +99,8 @@
     "@typescript-eslint/parser": "^8.25.0",
     "eslint": "^9.21.0",
     "eslint-plugin-tsdoc": "^0.5.2",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.6",
     "@aws-sdk/client-s3": "^3.658.0",
     "@aws-sdk/client-dynamodb": "^3.658.0",
     "@aws-sdk/util-dynamodb": "^3.658.0",

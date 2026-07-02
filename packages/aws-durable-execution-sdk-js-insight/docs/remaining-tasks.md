@@ -28,16 +28,17 @@
       plugin serializes it into `OperationRecord.error`.
 - [x] Capture per-operation `attempt` count — SDK maps `StepDetails.Attempt`
       onto `OperationInfo.attempt`; plugin serializes it into `OperationRecord.attempt`.
-- [~] Capture per-operation `result` — now available on `OperationInfo.result`
-  (SDK already mapped it), but not yet emitted in `OperationRecord`; defer to
-  Content Filtering since raw results are unbounded and need override/size gating.
+- [x] Capture per-operation `result` — `OperationInfo.result` (mapped by the SDK)
+      is now serialized into `OperationRecord.result`, gated behind a matching
+      `content.operations.overrides[].result` transform (omitted by default to
+      avoid unbounded payloads).
 
 ## Content Filtering
 
-- [ ] Apply `content.input` transform (boolean or function)
-- [ ] Apply `content.output` transform (boolean or function)
-- [ ] Apply `content.operations.overrides` — exclude operations and transform results
-- [ ] Apply `content.operations.includeErrors` setting
+- [x] Apply `content.input` transform (boolean or function)
+- [x] Apply `content.output` transform (boolean or function)
+- [x] Apply `content.operations.overrides` — exclude operations and transform results
+- [x] Apply `content.operations.includeErrors` setting
 
 ## Sampling
 
@@ -85,10 +86,18 @@
 
 ## Testing
 
-- [ ] Unit tests for `toOperationRecord` and `buildOperationRecords`
-- [ ] Unit tests for record building (full WorkflowInsightRecord)
+> Jest is set up for the package (`jest.config.js` + `npm test`), mirroring the
+> core SDK's ts-jest configuration. Tests drive the public `workflowInsight`
+> plugin via a capturing exporter.
+
+- [x] Unit tests for `toOperationRecord` and `buildOperationRecords` — covered via
+      content-filtering + operation-detail tests (exclude, includeErrors, result gating,
+      error/attempt capture, unnamed-op exclusion)
+- [~] Unit tests for record building (full WorkflowInsightRecord) — status mapping
+  (PENDING→RUNNING) and emit modes covered; identity-field building not yet
 - [ ] Unit tests for `ExportScheduler` (coalescing, no overlap, drain)
-- [ ] Unit tests for content filtering (input/output transforms, operation overrides)
+- [x] Unit tests for content filtering (input/output transforms, operation overrides,
+      includeErrors, result transform incl. non-JSON + throwing-transform safety)
 - [ ] Unit tests for sampling logic (including replay determinism)
 - [ ] Unit tests for each exporter (mock SDK clients, verify correct API calls)
 - [ ] Integration test with the testing SDK (end-to-end plugin lifecycle)
@@ -97,7 +106,7 @@
 ## Packaging & Docs
 
 - [x] `npm run build` passes locally (esm, cjs, types)
-- [ ] Add the insight package to root `package.json` build/test scripts
+- [x] Add the insight package to root `package.json` build/test scripts
 - [x] Wire the package into ESLint — added a package-local `eslint.config.js`
       (core SDK's TypeScript rules, using only published deps — no local
       filename-convention plugin) and a `lint` script, consistent with the other
@@ -122,6 +131,11 @@
 ## Known Limitations (document, not necessarily fix)
 
 - [x] Documented in README: best-effort delivery only
+- [x] Operation `result` (via `content.operations.overrides[].result`) exposes the
+      **checkpointed serialized** value, not the deserialized object. The plugin
+      does not run the SDK `Serdes.deserialize`; with a custom/overflow Serdes the
+      transform may receive a non-JSON string or a storage pointer. Documented in
+      README (content caveat), `OperationOverride.result` JSDoc, and plugin-contracts.
 - [ ] Document no coverage for backend-initiated events (`STOPPED`, `TIMED_OUT`);
       customers must subscribe to EventBridge lifecycle events themselves
 - [ ] `RedshiftExporter` stores time fields as `VARCHAR(30)` — needs `::timestamptz`

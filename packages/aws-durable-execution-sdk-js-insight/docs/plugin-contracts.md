@@ -96,6 +96,12 @@ interface OperationOverride {
    * If omitted, result is not included (default behavior).
    * - (r) => r: include full result
    * - (r) => ({ field: r.field }): include only specific fields
+   *
+   * NOTE: the value passed in is the operation's checkpointed, SERIALIZED
+   * result (JSON-parsed when valid JSON, else the raw string). The plugin does
+   * not run the SDK's Serdes.deserialize. With a custom/overflow Serdes the
+   * value may be a non-JSON string or a storage pointer, not the original
+   * object. See README "content" caveat.
    */
   result?: (result: OperationResult) => OperationResult;
 }
@@ -128,7 +134,7 @@ interface ContentConfig {
    * Use overrides to include results for specific operations or exclude them entirely.
    */
   operations?: {
-    /** Per-operation overrides. */
+    /** Per-operation overrides, matched by `operationName` (last match wins). */
     overrides?: OperationOverride[];
 
     /** Include operation error details. Default: true. */
