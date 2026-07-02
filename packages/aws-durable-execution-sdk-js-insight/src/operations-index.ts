@@ -5,74 +5,79 @@ import type {
 } from "./types";
 
 /**
- * Picks the "last" occurrence of a same-named group: the one with the greatest
- * `startTime` (ISO-8601 strings sort chronologically). Missing timestamps sort
- * earliest, and ties resolve to the later array index (insertion order).
- */
-function latestOccurrence(group: OperationRecord[]): OperationRecord {
-  let last = group[0];
-  for (let i = 1; i < group.length; i++) {
-    if ((group[i].startTime ?? "") >= (last.startTime ?? "")) {
-      last = group[i];
-    }
-  }
-  return last;
-}
-
-function summarize(group: OperationRecord[]): OperationSummary {
-  const durations = group
-    .map((o) => o.durationMs)
-    .filter((d): d is number => typeof d === "number");
-  const attempts = group
-    .map((o) => o.attempt)
-    .filter((a): a is number => typeof a === "number");
-  const last = latestOccurrence(group);
-
-  const summary: OperationSummary = {
-    type: last.type,
-    count: group.length,
-    failedCount: group.filter((o) => o.status === "FAILED").length,
-    status: last.status,
-  };
-
-  if (last.subType !== undefined) summary.subType = last.subType;
-  if (durations.length > 0) {
-    summary.minDurationMs = Math.min(...durations);
-    summary.maxDurationMs = Math.max(...durations);
-    summary.totalDurationMs = durations.reduce((a, b) => a + b, 0);
-  }
-  if (attempts.length > 0) summary.maxAttempt = Math.max(...attempts);
-  // A single occurrence is either a success (result) or a failure (error), so
-  // the last occurrence naturally contributes at most one of these.
-  if (last.result !== undefined) summary.result = last.result;
-  if (last.error !== undefined) summary.error = last.error;
-
-  return summary;
-}
-
-/**
  * Builds a name-keyed index of operation summaries from the canonical operations
- * array. Operations without a name are skipped (they can't be keyed or queried).
+ * array, in a single pass. Operations without a name are skipped (they can't be
+ * keyed or queried).
  *
- * Metric fields aggregate across all occurrences of a name; `type`/`subType`/
- * `status`/`result`/`error` come from the last occurrence. See
- * `docs/operations-shape.md`.
+ * For each named operation: if the name is not yet in the index, insert a
+ * summary (including its `result`/`error`); if it is already present (a repeated
+ * name — loops/retries/map), update the aggregate metrics and **drop
+ * `result`/`error`**, since there is no single representative value for a name
+ * that ran more than once. Scalar fields (`type`, `subType`, `status`) reflect
+ * the most recently seen occurrence (the runtime appends newer operations to the
+ * end of the array). See `docs/operations-shape.md`.
  */
 export function buildOperationsByName(
   operations: OperationRecord[],
 ): Record<string, OperationSummary> {
-  const groups = new Map<string, OperationRecord[]>();
+  const byName: Record<string, OperationSummary> = {};
+
   for (const op of operations) {
     if (!op.name) continue;
-    const existing = groups.get(op.name);
-    if (existing) existing.push(op);
-    else groups.set(op.name, [op]);
+
+    const duration =
+      typeof op.durationMs === "number" ? op.durationMs : undefined;
+    const attempt = typeof op.attempt === "number" ? op.attempt : undefined;
+    const failed = op.status === "FAILED" ? 1 : 0;
+
+    const existing = byName[op.name];
+    if (!existing) {
+      const summary: OperationSummary = {
+        type: op.type,
+        count: 1,
+        failedCount: failed,
+        status: op.status,
+      };
+      if (op.subType !== undefined) summary.subType = op.subType;
+      if (duration !== undefined) {
+        summary.minDurationMs = duration;
+        summary.maxDurationMs = duration;
+        summary.totalDurationMs = duration;
+      }
+      if (attempt !== undefined) summary.maxAttempt = attempt;
+      if (op.result !== undefined) summary.result = op.result;
+      if (op.error !== undefined) summary.error = op.error;
+      byName[op.name] = summary;
+      continue;
+    }
+
+    // Repeated name: aggregate and drop the per-occurrence result/error.
+    existing.count += 1;
+    existing.failedCount += failed;
+    existing.type = op.type;
+    existing.status = op.status;
+    if (op.subType !== undefined) existing.subType = op.subType;
+    if (duration !== undefined) {
+      existing.minDurationMs =
+        existing.minDurationMs === undefined
+          ? duration
+          : Math.min(existing.minDurationMs, duration);
+      existing.maxDurationMs =
+        existing.maxDurationMs === undefined
+          ? duration
+          : Math.max(existing.maxDurationMs, duration);
+      existing.totalDurationMs = (existing.totalDurationMs ?? 0) + duration;
+    }
+    if (attempt !== undefined) {
+      existing.maxAttempt =
+        existing.maxAttempt === undefined
+          ? attempt
+          : Math.max(existing.maxAttempt, attempt);
+    }
+    delete existing.result;
+    delete existing.error;
   }
 
-  const byName: Record<string, OperationSummary> = {};
-  for (const [name, group] of groups) {
-    byName[name] = summarize(group);
-  }
   return byName;
 }
 

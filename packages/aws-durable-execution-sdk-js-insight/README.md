@@ -293,14 +293,14 @@ so name-based queries become a simple dot-path:
 fields executionArn | filter operationsByName.convert_data.maxDurationMs < 5000
 ```
 
-Each entry aggregates metrics across all occurrences of the name and snapshots
-the last occurrence's detail:
+Each entry aggregates metrics across all occurrences of the name; `result`/`error`
+are kept only when the name ran exactly once:
 
 ```json
 "operationsByName": {
-  "convert_data": {
+  "insert_to_db": {
     "type": "STEP", "subType": "Step",
-    "count": 2, "minDurationMs": 4200, "maxDurationMs": 8100, "totalDurationMs": 12300,
+    "count": 1, "minDurationMs": 6200, "maxDurationMs": 6200, "totalDurationMs": 6200,
     "failedCount": 0, "maxAttempt": 1,
     "status": "SUCCEEDED",
     "result": { "rows": 1200 }
@@ -311,9 +311,11 @@ the last occurrence's detail:
 Notes:
 
 - **Metrics** (`count`, `min`/`max`/`totalDurationMs`, `failedCount`, `maxAttempt`)
-  span all occurrences; `type`/`subType`/`status`/`result`/`error` reflect the
-  **last** occurrence (a run is either a success with `result` or a failure with
-  `error`).
+  span all occurrences; `type`/`subType`/`status` reflect the most recently seen
+  occurrence.
+- **`result`/`error` are included only when the name occurs exactly once.** For a
+  repeated name (loops/retries/map) they're dropped — there's no single
+  representative value — but `failedCount` still flags failures.
 - Operations **without a name are excluded** (they can't be keyed or queried).
 - Operation names containing `.` don't work as dot-path keys; use the canonical
   `operations` array for those.

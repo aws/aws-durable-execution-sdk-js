@@ -11,14 +11,13 @@ function op(
 }
 
 describe("buildOperationsByName", () => {
-  it("aggregates metrics across occurrences and snapshots the last occurrence", () => {
+  it("aggregates metrics across occurrences and drops result/error for repeated names", () => {
     const byName = buildOperationsByName([
       op({
         id: "o1",
         name: "charge",
         subType: "Step",
         status: "FAILED",
-        startTime: "2026-01-01T00:00:01.000Z",
         durationMs: 100,
         attempt: 1,
         error: { name: "StepError", message: "e1" },
@@ -28,7 +27,6 @@ describe("buildOperationsByName", () => {
         name: "charge",
         subType: "Step",
         status: "SUCCEEDED",
-        startTime: "2026-01-01T00:00:03.000Z",
         durationMs: 210,
         attempt: 2,
         result: { ok: true },
@@ -44,15 +42,22 @@ describe("buildOperationsByName", () => {
       totalDurationMs: 310,
       failedCount: 1,
       maxAttempt: 2,
-      status: "SUCCEEDED", // last occurrence (later startTime) succeeded
-      result: { ok: true }, // from the last occurrence
-      // no error: last occurrence succeeded
+      status: "SUCCEEDED", // most recently seen occurrence
+      // no result/error: the name repeated
     });
+    expect(byName.charge.result).toBeUndefined();
+    expect(byName.charge.error).toBeUndefined();
   });
 
-  it("uses the same uniform shape for a single occurrence", () => {
+  it("keeps result for a single-occurrence operation", () => {
     const byName = buildOperationsByName([
-      op({ id: "o1", name: "insert", status: "SUCCEEDED", durationMs: 6200 }),
+      op({
+        id: "o1",
+        name: "insert",
+        status: "SUCCEEDED",
+        durationMs: 6200,
+        result: { rows: 3 },
+      }),
     ]);
     expect(byName.insert).toEqual({
       type: "STEP",
@@ -62,7 +67,26 @@ describe("buildOperationsByName", () => {
       totalDurationMs: 6200,
       failedCount: 0,
       status: "SUCCEEDED",
+      result: { rows: 3 },
     });
+  });
+
+  it("keeps error for a single failed occurrence", () => {
+    const byName = buildOperationsByName([
+      op({
+        id: "o1",
+        name: "convert",
+        status: "FAILED",
+        error: { name: "StepError", message: "boom" },
+      }),
+    ]);
+    expect(byName.convert.status).toBe("FAILED");
+    expect(byName.convert.failedCount).toBe(1);
+    expect(byName.convert.error).toEqual({
+      name: "StepError",
+      message: "boom",
+    });
+    expect(byName.convert.result).toBeUndefined();
   });
 
   it("excludes operations without a name", () => {
@@ -82,38 +106,24 @@ describe("buildOperationsByName", () => {
     expect(byName["wait-1"].totalDurationMs).toBeUndefined();
   });
 
-  it("surfaces the last occurrence's error (and no result) when it failed", () => {
+  it("initializes duration aggregates when only a later occurrence has a duration", () => {
     const byName = buildOperationsByName([
-      op({
-        id: "o1",
-        name: "convert",
-        status: "SUCCEEDED",
-        startTime: "2026-01-01T00:00:01.000Z",
-        result: { a: 1 },
-      }),
-      op({
-        id: "o2",
-        name: "convert",
-        status: "FAILED",
-        startTime: "2026-01-01T00:00:05.000Z",
-        error: { name: "StepError", message: "boom" },
-      }),
+      op({ id: "o1", name: "x", status: "SUCCEEDED" }),
+      op({ id: "o2", name: "x", status: "SUCCEEDED", durationMs: 50 }),
     ]);
-    expect(byName.convert.status).toBe("FAILED");
-    expect(byName.convert.failedCount).toBe(1);
-    expect(byName.convert.error).toEqual({
-      name: "StepError",
-      message: "boom",
-    });
-    expect(byName.convert.result).toBeUndefined();
+    expect(byName.x.count).toBe(2);
+    expect(byName.x.minDurationMs).toBe(50);
+    expect(byName.x.maxDurationMs).toBe(50);
+    expect(byName.x.totalDurationMs).toBe(50);
   });
 
-  it("breaks startTime ties by insertion order (later index wins)", () => {
+  it("updates status/type to the most recently seen occurrence", () => {
     const byName = buildOperationsByName([
-      op({ id: "o1", name: "x", status: "SUCCEEDED", result: { first: true } }),
-      op({ id: "o2", name: "x", status: "SUCCEEDED", result: { last: true } }),
+      op({ id: "o1", name: "x", type: "STEP", status: "SUCCEEDED" }),
+      op({ id: "o2", name: "x", type: "STEP", status: "FAILED" }),
     ]);
-    expect(byName.x.result).toEqual({ last: true });
+    expect(byName.x.status).toBe("FAILED");
+    expect(byName.x.failedCount).toBe(1);
   });
 });
 

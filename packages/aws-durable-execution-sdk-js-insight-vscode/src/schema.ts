@@ -33,7 +33,7 @@ const RECORD_SCHEMA_DIRECT = `Each log event is a raw JSON WorkflowInsightRecord
 - operations: array of { id, name, type, subType, parentId, status, startTime, endTime, durationMs, attempt, error, result }
 - operationsByName: object keyed by operation name → per-name summary:
     { type, subType, count, minDurationMs, maxDurationMs, totalDurationMs, failedCount, maxAttempt, status, result, error }
-    Metric fields aggregate ALL occurrences of that name; type/subType/status/result/error reflect the LAST occurrence.
+    Metric fields aggregate ALL occurrences of that name; type/subType/status reflect the most recent occurrence; result/error are present only when the name occurs exactly once.
 - pluginVersion: string
 - sdkVersion: string
 
@@ -180,7 +180,7 @@ The partition key is "pk" (the executionArn). All record fields are stored as to
 - operations: list of maps
 - operationsByName: map keyed by operation name → per-name summary map
     { type, subType, count, minDurationMs, maxDurationMs, totalDurationMs, failedCount, maxAttempt, status, result, error }
-    Metrics aggregate all occurrences; status/result/error are from the last occurrence.
+    Metrics aggregate all occurrences; status is the most recent; result/error are present only when the name occurs exactly once.
     Navigate it for per-operation-name filters, e.g. WHERE "operationsByName"."convert_data"."maxDurationMs" < 5000
 - pluginVersion: string
 - sdkVersion: string`;

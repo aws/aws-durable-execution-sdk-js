@@ -151,7 +151,9 @@ export interface OperationRecord {
  * truth; see `docs/operations-shape.md`.
  *
  * Metric fields aggregate across ALL occurrences of the name; `type`, `subType`,
- * `status`, and `result`/`error` reflect the LAST occurrence (by `startTime`).
+ * and `status` reflect the most recently seen occurrence. `result` and `error`
+ * are included only when the name occurs exactly ONCE in the execution — for a
+ * repeated name there is no single representative value, so both are omitted.
  *
  * @experimental This interface is experimental and may change in future releases.
  */
@@ -168,11 +170,11 @@ export interface OperationSummary {
   failedCount: number;
   /** Highest attempt number seen across occurrences. */
   maxAttempt?: number;
-  /** Status of the last occurrence. */
+  /** Status of the most recently seen occurrence. */
   status: string;
-  /** Result of the last occurrence (present only if that op opted results in). */
+  /** Result — only present when this name occurs exactly once (and opted results in). */
   result?: OperationResult;
-  /** Error of the last occurrence (present only if it failed and errors are included). */
+  /** Error — only present when this name occurs exactly once (and it failed, errors included). */
   error?: {
     name: string;
     message: string;

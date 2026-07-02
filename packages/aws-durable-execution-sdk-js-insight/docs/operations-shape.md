@@ -50,14 +50,18 @@ never named, so surfacing it adds noise without value.
   - Caveat: names containing `.` (or other path-breaking characters) don't work
     as dot-path keys in CloudWatch/OpenSearch/DynamoDB. No sanitization is done;
     the canonical array is the fallback. Recommend avoiding `.` in step names.
-- Value = a per-name summary combining two kinds of fields:
+- Value = a per-name summary, built in a **single pass** over the array
+  (insert-or-update; no grouping or sorting):
   - **Aggregated across ALL occurrences** (multiplicity-independent, safe for
     filtering): `count`, `minDurationMs`, `maxDurationMs`, `totalDurationMs`,
     `failedCount`, `maxAttempt`.
-  - **Snapshot of the LAST occurrence** (by `startTime`; fallback insertion
-    order): `type`, `subType`, `status`, and `result` **XOR** `error`.
-    - A single occurrence is either a success (has `result`) or a failure (has
-      `error`), so the last occurrence naturally contributes one of them.
+  - **Most recently seen occurrence**: `type`, `subType`, `status` (the runtime
+    appends newer operations to the end of the array, so the last one processed
+    wins).
+  - **`result` / `error`** are included only when the name occurs **exactly
+    once** in the execution. On the first repeat they are dropped — a repeated
+    name has no single representative value, and this keeps the logic trivial (no
+    "which occurrence?" choice).
     - `result` is present only when the operation opted in via
       `content.operations.overrides[].result`. `error` is gated by
       `content.operations.includeErrors`.
@@ -65,20 +69,20 @@ never named, so surfacing it adds noise without value.
       (and override-transformed) value — with a custom/overflow Serdes it may be
       a non-JSON string or a storage pointer, not the original object.
 
-Rule of thumb: **aggregate metrics across all runs; snapshot the last run's
-`type`/`subType`/`status`/`result`/`error`.**
+Rule of thumb: **aggregate metrics across all runs; keep `result`/`error` only
+for names that ran once.**
 
 ### Example value
 
 ```json
 "operationsByName": {
-  "convert_data": {
+  "insert_to_db": {
     "type": "STEP",
     "subType": "Step",
-    "count": 2,
-    "minDurationMs": 4200,
-    "maxDurationMs": 8100,
-    "totalDurationMs": 12300,
+    "count": 1,
+    "minDurationMs": 6200,
+    "maxDurationMs": 6200,
+    "totalDurationMs": 6200,
     "failedCount": 0,
     "maxAttempt": 1,
     "status": "SUCCEEDED",
@@ -93,11 +97,14 @@ Rule of thumb: **aggregate metrics across all runs; snapshot the last run's
     "totalDurationMs": 450,
     "failedCount": 1,
     "maxAttempt": 3,
-    "status": "FAILED",
-    "error": { "name": "StepError", "message": "declined" }
+    "status": "SUCCEEDED"
   }
 }
 ```
+
+`insert_to_db` ran once → its `result` is kept. `charge` ran three times → no
+single `result`/`error`, just the aggregate metrics (`failedCount: 1` still flags
+that one run failed).
 
 ## Query example: "executions where operation `convert_data` took < 5s"
 
@@ -151,7 +158,9 @@ operationsByName.convert_data.maxDurationMs < :v   (:v = 5000)
 
 - `totalDurationMs`: **included** (enables cumulative-cost queries `min`/`max` don't).
 - `subType`: **included** (carries customer-defined child-context labels).
-- Representative detail: **last** occurrence (by `startTime`, insertion-order tiebreak).
+- Representative detail: `result`/`error` kept only for **single-occurrence**
+  names (dropped on the first repeat); `type`/`subType`/`status` reflect the
+  most recently seen occurrence. Single-pass, no sorting.
 - `operationsByName` is emitted **always** by the three point-access exporters
   (no toggle) — bounded by distinct names, so the size cost is small.
 
