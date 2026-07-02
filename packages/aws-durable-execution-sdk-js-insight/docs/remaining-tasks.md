@@ -86,10 +86,17 @@
 
 ## Testing
 
-- [ ] Unit tests for `toOperationRecord` and `buildOperationRecords`
-- [ ] Unit tests for record building (full WorkflowInsightRecord)
+> Jest is set up for the package (`jest.config.js`, `tsconfig.test.json`, `npm test`).
+> Tests drive the public `workflowInsight` plugin via a capturing exporter.
+
+- [x] Unit tests for `toOperationRecord` and `buildOperationRecords` — covered via
+      content-filtering + operation-detail tests (exclude, includeErrors, result gating,
+      error/attempt capture, unnamed-op exclusion)
+- [~] Unit tests for record building (full WorkflowInsightRecord) — status mapping
+  (PENDING→RUNNING) and emit modes covered; identity-field building not yet
 - [ ] Unit tests for `ExportScheduler` (coalescing, no overlap, drain)
-- [ ] Unit tests for content filtering (input/output transforms, operation overrides)
+- [x] Unit tests for content filtering (input/output transforms, operation overrides,
+      includeErrors, result transform incl. non-JSON + throwing-transform safety)
 - [ ] Unit tests for sampling logic (including replay determinism)
 - [ ] Unit tests for each exporter (mock SDK clients, verify correct API calls)
 - [ ] Integration test with the testing SDK (end-to-end plugin lifecycle)
@@ -98,7 +105,7 @@
 ## Packaging & Docs
 
 - [x] `npm run build` passes locally (esm, cjs, types)
-- [ ] Add the insight package to root `package.json` build/test scripts
+- [x] Add the insight package to root `package.json` build/test scripts
 - [x] Wire the package into ESLint — added a package-local `eslint.config.js`
       (core SDK's TypeScript rules, using only published deps — no local
       filename-convention plugin) and a `lint` script, consistent with the other
