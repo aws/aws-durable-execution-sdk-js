@@ -7,7 +7,9 @@ import type {
 
 /**
  * Builds a name-keyed index of operation summaries from the canonical operations
- * array, in a single pass. Operations without a name are skipped (they can't be
+ * array in one pass over the operations (aggregating into a Map), then a second
+ * pass over the smaller distinct-name Map to materialize the result. Operations
+ * without a name are skipped (they can't be
  * keyed or queried).
  *
  * For each named operation: if the name is not yet in the index, insert a

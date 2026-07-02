@@ -69,8 +69,9 @@ or the `operationsByName` map — never both.
     OpenSearch field paths, reserved/quoting characters in DynamoDB attribute
     names or SQL identifiers) can make an operation hard or impossible to query
     there. Stick to simple, portable names (letters, digits, `-`, `_`).
-- Value = a per-name summary, built in a **single pass** over the array
-  (insert-or-update; no grouping or sorting):
+- Value = a per-name summary, built by aggregating in one pass over the
+  operations (insert-or-update into a map), then materializing the smaller
+  distinct-name map — no grouping or sorting:
   - **Aggregated across ALL occurrences** (multiplicity-independent, safe for
     filtering): `count`, `minDurationMs`, `maxDurationMs`, `totalDurationMs`,
     `failedCount`, `maxAttempt`.
@@ -179,7 +180,7 @@ operationsByName.convert_data.maxDurationMs < :v   (:v = 5000)
 - `subType`: **included** (carries customer-defined child-context labels).
 - Representative detail: `result`/`error` kept only for **single-occurrence**
   names (dropped on the first repeat); `type`/`subType`/`status` reflect the
-  most recently seen occurrence. Single-pass, no sorting.
+  most recently seen occurrence. No sorting.
 - `operationsByName` is emitted **always** by the three point-access exporters
   (no toggle) — bounded by distinct names, so the size cost is small.
 
