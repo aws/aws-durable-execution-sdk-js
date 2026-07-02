@@ -6,6 +6,7 @@ import {
   AttemptEndInfo,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
+import { DurableOperationError } from "../../errors/durable-error/durable-error";
 
 /**
  * Converts an Operation to an OperationInfo.
@@ -13,6 +14,12 @@ import {
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
 export function toOperationInfo(operation?: Operation): OperationInfo {
+  const errorObject =
+    operation?.StepDetails?.Error ??
+    operation?.CallbackDetails?.Error ??
+    operation?.ContextDetails?.Error ??
+    operation?.ChainedInvokeDetails?.Error;
+
   return {
     id: operation?.Id ?? "",
     name: operation?.Name,
@@ -27,6 +34,10 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
       operation?.CallbackDetails?.Result ??
       operation?.ContextDetails?.Result ??
       operation?.ChainedInvokeDetails?.Result,
+    error: errorObject
+      ? DurableOperationError.fromErrorObject(errorObject)
+      : undefined,
+    attempt: operation?.StepDetails?.Attempt,
     isReplay: false,
   };
 }

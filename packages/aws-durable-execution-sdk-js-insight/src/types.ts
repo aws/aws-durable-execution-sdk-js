@@ -34,19 +34,35 @@ export type OperationResult = JsonValue;
 export interface OperationOverride {
   operationName: string;
   exclude?: boolean;
+  /**
+   * Include and transform the operation's result. Omitted by default.
+   *
+   * ⚠️ The value passed to this function is the operation's **checkpointed,
+   * serialized** result — JSON-parsed when it is valid JSON, otherwise the raw
+   * string. The plugin does NOT run your SDK `Serdes.deserialize`. If the
+   * operation uses a custom Serdes (non-JSON format, encryption, or a
+   * filesystem/overflow Serdes that checkpoints only a pointer/filepath), this
+   * function receives that serialized form or pointer — not the original
+   * deserialized value. Only enable operation results for operations that use
+   * the default JSON serialization, or whose serialized form your transform
+   * can handle.
+   */
   result?: (result: OperationResult) => OperationResult;
 }
 
 /**
  * Controls what data is included in emitted records.
  *
- * @experimental **Not yet implemented.** This interface is reserved for a future release.
- * Configuring it currently has no effect on emitted records.
+ * @experimental This interface is experimental and may change in future releases.
  */
 export interface ContentConfig {
   input?: boolean | ((input: ExecutionInput) => ExecutionInput);
   output?: boolean | ((output: ExecutionOutput) => ExecutionOutput);
   operations?: {
+    /**
+     * Per-operation overrides, matched by `operationName`. If multiple entries
+     * (or multiple operations) share a name, the last matching entry wins.
+     */
     overrides?: OperationOverride[];
     includeErrors?: boolean;
   };
@@ -78,14 +94,26 @@ export interface WorkflowInsightConfig {
    */
   samplingRate?: number;
 
-  emitMode?: "finished-only" | "in-progress";
+  /**
+   * Controls when records are emitted.
+   *
+   * - `"on-change"`: emit on every operation status change and at execution
+   *   end, including while the execution is still in flight (`RUNNING`).
+   *   Highest overhead; gives real-time visibility into running executions.
+   * - `"on-complete"` (default): emit a single record when the execution
+   *   reaches a terminal status (`SUCCEEDED` or `FAILED`). No emissions on
+   *   intermediate waits/suspends.
+   * - `"on-failure"`: emit a single record only when the execution reaches a
+   *   terminal `FAILED` status. Successful executions emit nothing. Lowest
+   *   overhead; useful for error-focused alerting and triage.
+   */
+  emitMode?: "on-complete" | "on-change" | "on-failure";
 
   /**
    * Control what data is included in records (input/output transforms,
    * operation overrides, error inclusion).
    *
-   * @experimental **Not yet implemented.** This field is reserved for a future release.
-   * Setting it currently has no effect.
+   * @experimental This field is experimental and may change in future releases.
    */
   content?: ContentConfig;
 }
@@ -109,6 +137,58 @@ export interface OperationRecord {
     name: string;
     message: string;
   };
+  /**
+   * The operation's result. Omitted by default; included only when a matching
+   * `content.operations.overrides` entry supplies a `result` transform.
+   */
+  result?: OperationResult;
+}
+
+/**
+ * How an exporter renders operations in the emitted record:
+ * - `"array"`: the canonical `operations` array (lossless; default).
+ * - `"by-name"`: replace it with the `operationsByName` map (name-keyed summary).
+ * - `"both"`: include the `operations` array and the `operationsByName` map.
+ *
+ * @experimental This type is experimental and may change in future releases.
+ */
+export type OperationsFormat = "array" | "by-name" | "both";
+
+/**
+ * A per-operation-name summary emitted (as an `operationsByName` map) by
+ * point-access exporters (CloudWatch Logs, DynamoDB) to make name-based queries
+ * ergonomic. The canonical `operations` array remains the lossless source of
+ * truth; see `docs/operations-shape.md`.
+ *
+ * Metric fields aggregate across ALL occurrences of the name; `type`, `subType`,
+ * and `status` reflect the most recently seen occurrence. `result` and `error`
+ * are included only when the name occurs exactly ONCE in the execution — for a
+ * repeated name there is no single representative value, so both are omitted.
+ *
+ * @experimental This interface is experimental and may change in future releases.
+ */
+export interface OperationSummary {
+  type: string;
+  subType?: string;
+  /** Number of occurrences of this operation name in the execution. */
+  count: number;
+  /** Min/max/total duration across occurrences that have a duration. */
+  minDurationMs?: number;
+  maxDurationMs?: number;
+  totalDurationMs?: number;
+  /** How many occurrences ended in FAILED. */
+  failedCount: number;
+  /** Highest attempt number seen across occurrences. */
+  maxAttempt?: number;
+  /** Status of the most recently seen occurrence. */
+  status: string;
+  /** Result — only present when this name occurs exactly once (and opted results in). */
+  result?: OperationResult;
+  /** Error — only present when this name occurs exactly once (and it failed, errors included). */
+  error?: {
+    name: string;
+    message: string;
+  };
 }
 
 /**
@@ -126,7 +206,7 @@ export interface WorkflowInsightRecord {
   functionQualifier: string;
   region: string;
   accountId: string;
-  status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING";
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
   startTime: string;
   endTime?: string;
   durationMs?: number;

@@ -56,6 +56,17 @@ export interface OperationInfo {
   startTimestamp?: Date;
   endTimestamp?: Date;
   result?: string;
+  /**
+   * The error the operation failed with, reconstructed from the checkpointed
+   * error data. Present on failed operations regardless of which lifecycle
+   * hook surfaced this info (e.g. also available via `onOperationChange`).
+   */
+  error?: Error;
+  /**
+   * The current attempt number for the operation (1-based), when applicable
+   * (e.g. steps). Sourced from the checkpointed step details.
+   */
+  attempt?: number;
   isReplay: boolean;
 }
 

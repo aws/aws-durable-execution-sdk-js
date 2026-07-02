@@ -9,7 +9,7 @@ One line of configuration gives you full visibility into your durable workflows 
 Every time your durable function runs, Workflow Insight builds a **cumulative snapshot** of the execution (`WorkflowInsightRecord`) and sends it to one or more exporters. The record includes:
 
 - **Execution identity** — ARN, function name, region, account
-- **Status** — RUNNING, SUCCEEDED, FAILED, PENDING
+- **Status** — RUNNING, SUCCEEDED, FAILED
 - **Timing** — start/end time, total duration
 - **Input/Output** — the event and result of the execution
 - **Operations** — every step, wait, invoke, and callback with individual timing and status
@@ -34,7 +34,7 @@ interface WorkflowInsightRecord {
   accountId: string; // AWS account ID
 
   // Execution state
-  status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING";
+  status: "RUNNING" | "SUCCEEDED" | "FAILED"; // suspends (waits/timers) surface as RUNNING
   startTime: string; // ISO-8601
   endTime?: string; // ISO-8601 (absent while running)
   durationMs?: number; // Total duration (absent while running)
@@ -182,8 +182,8 @@ That's it. With zero configuration, insight records appear in your function's ow
 
 ```typescript
 const insight = workflowInsight({
-  // When to emit records (default: "finished-only")
-  emitMode: "finished-only",
+  // When to emit records (default: "on-complete")
+  emitMode: "on-complete",
 
   // Sampling rate: 0.0–1.0 (default: 1.0 = all executions)
   samplingRate: 1.0,
@@ -198,10 +198,11 @@ const insight = workflowInsight({
 
 ### `emitMode`
 
-| Mode                        | Behavior                                                    | Use case                                              |
-| --------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
-| `"finished-only"` (default) | Emit one record when execution completes (SUCCEEDED/FAILED) | Low overhead; sufficient for post-hoc analysis        |
-| `"in-progress"`             | Emit on every operation change + at end                     | Real-time monitoring; see executions as they progress |
+| Mode                      | Behavior                                                    | Use case                                              |
+| ------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
+| `"on-complete"` (default) | Emit one record when execution completes (SUCCEEDED/FAILED) | Low overhead; sufficient for post-hoc analysis        |
+| `"on-change"`             | Emit on every operation change + at end                     | Real-time monitoring; see executions as they progress |
+| `"on-failure"`            | Emit one record only when execution ends in FAILED          | Lowest overhead; error-focused alerting and triage    |
 
 ### `samplingRate`
 
@@ -227,9 +228,11 @@ exporters: [
 
 ### `content` (advanced)
 
-> **Not yet implemented.** Reserved for a future release. Setting this currently has no effect.
-
-Control what data is included in records:
+Control what data is included in records. By default, execution input/output are
+included as-is, per-operation errors are included, and operation results are
+**not** included. Use `content` to redact/reshape input/output, opt specific
+operation results in (with optional transforms), exclude operations, or drop
+operation errors:
 
 ```typescript
 content: {
@@ -251,6 +254,80 @@ content: {
   },
 },
 ```
+
+> **Note:** operation overrides are matched by `operationName`. If multiple
+> override entries (or multiple operations) share a name, the last matching
+> entry wins.
+
+> [!IMPORTANT]
+> **Operation `result` reflects the checkpointed, serialized value — not
+> necessarily your original return value.** The plugin passes your `result`
+> transform the operation's checkpointed result, JSON-parsed when it is valid
+> JSON and otherwise the raw string. It does **not** run your SDK
+> `Serdes.deserialize`. If the operation uses a custom `Serdes` — one that
+> serializes to a non-JSON format (e.g. XML), encrypts, or offloads large values
+> to external storage and checkpoints only a **pointer/filepath** (overflow
+> mode) — your transform receives that serialized form or pointer, not the
+> original deserialized object. Only enable operation results for operations
+> using the default JSON serialization, or whose serialized form your transform
+> can handle. Input/output transforms are not affected by this.
+
+## Querying by operation name (`operationsByName`)
+
+`operations` is a canonical **array** — lossless (it keeps every occurrence of a
+repeated step name), and queryable in the analytical stores that support nested
+data (Athena `UNNEST`, Postgres/Redshift JSON path, OpenSearch `nested`):
+
+```sql
+-- Postgres (JSONB): executions where "convert_data" ran under 5s
+WHERE record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationMs < 5000)';
+```
+
+Point-access stores that can't filter "the array element named X" —
+**CloudWatch Logs** (`LambdaLogExporter`, `CloudWatchLogsExporter`) and
+**DynamoDB** (`DynamoDBExporter`) — emit an `operationsByName` map **instead of
+the `operations` array**, so name-based queries become a simple dot-path (these
+stores trade the per-occurrence array detail for queryability):
+
+```
+# CloudWatch Logs Insights
+fields executionArn | filter operationsByName.convert_data.maxDurationMs < 5000
+```
+
+Each entry aggregates metrics across all occurrences of the name; `result`/`error`
+are kept only when the name ran exactly once:
+
+```json
+"operationsByName": {
+  "insert_to_db": {
+    "type": "STEP", "subType": "Step",
+    "count": 1, "minDurationMs": 6200, "maxDurationMs": 6200, "totalDurationMs": 6200,
+    "failedCount": 0, "maxAttempt": 1,
+    "status": "SUCCEEDED",
+    "result": { "rows": 1200 }
+  }
+}
+```
+
+Notes:
+
+- **Metrics** (`count`, `min`/`max`/`totalDurationMs`, `failedCount`, `maxAttempt`)
+  span all occurrences; `type`/`subType`/`status` reflect the most recently seen
+  occurrence.
+- **`result`/`error` are included only when the name occurs exactly once.** For a
+  repeated name (loops/retries/map) they're dropped — there's no single
+  representative value — but `failedCount` still flags failures.
+- Operations **without a name are excluded** (they can't be keyed or queried).
+- **Choosing store-safe operation names is your responsibility.** Names are used
+  verbatim as keys/identifiers — the library never sanitizes or escapes them. Any
+  character your target store treats specially (e.g. `.` in CloudWatch Logs
+  Insights / OpenSearch field paths, reserved or quoting characters in
+  DynamoDB attribute names and SQL identifiers, etc.) can make an operation hard
+  or impossible to query there. Stick to simple, portable names — letters,
+  digits, `-`, `_` — to stay safe across destinations.
+- The array remains the source of truth; array-native exporters (S3/Athena,
+  OpenSearch, Aurora, Redshift) emit only the array. See
+  [`docs/operations-shape.md`](./docs/operations-shape.md).
 
 ## Exporters
 
@@ -1004,6 +1081,7 @@ const insight = workflowInsight({
     new FirehoseExporter({
       deliveryStreamName: "workflow-insight-stream",
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1033,6 +1111,7 @@ const insight = workflowInsight({
       eventBusName: "default", // optional (default)
       source: "aws.durable-execution.insight", // optional (default)
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1041,7 +1120,7 @@ const insight = workflowInsight({
 **Event structure:**
 
 - Source: `aws.durable-execution.insight`
-- DetailType: `SUCCEEDED` | `FAILED` | `RUNNING` | `PENDING`
+- DetailType: `SUCCEEDED` | `FAILED` | `RUNNING`
 - Detail: full record JSON
 
 **Example rule pattern:**
@@ -1073,6 +1152,7 @@ const insight = workflowInsight({
         "https://sqs.us-east-1.amazonaws.com/123456789012/insight-queue.fifo",
       messageGroupId: undefined, // optional (default: executionArn)
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1147,6 +1227,7 @@ const insight = workflowInsight({
       endpoint: "https://otlp.datadoghq.com/v1/logs",
       headers: { "DD-API-KEY": process.env.DD_API_KEY! },
       protocol: "http/json", // optional (default)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1156,7 +1237,10 @@ const insight = workflowInsight({
 
 - Resource: `service.name`, `cloud.region`, `cloud.account.id`, `faas.name`, `faas.version`
 - Log attributes: `workflow.execution_arn`, `workflow.status`, `workflow.duration_ms`
-- Log body: full record JSON
+- Log body: full record JSON. `operationsFormat` controls how operations appear
+  in the body — the `operations` array (default), the `operationsByName` map, or
+  both. (Operations are only in the body, never attributes, so this never affects
+  attribute cardinality.)
 - Severity: ERROR for FAILED, INFO otherwise
 
 **No dependencies** — uses native `fetch`.
@@ -1182,12 +1266,17 @@ const insight = workflowInsight({
       headers: { Authorization: "Bearer " + process.env.TOKEN },
       method: "POST", // optional (default)
       timeoutMs: 5000, // optional (default: 10000)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
 ```
 
 **No dependencies** — uses native `fetch` with configurable timeout.
+
+`operationsFormat` controls how operations are rendered in the posted body:
+the canonical `operations` array (default), the name-keyed `operationsByName`
+map, or both — pick what your endpoint consumes.
 
 **When to use:** Custom backends, internal microservices, SaaS integrations without dedicated exporters, prototyping.
 
@@ -1209,6 +1298,7 @@ const insight = workflowInsight({
     new FileExporter({
       directory: "/mnt/efs/workflow-insight",
       mode: "ndjson", // optional (default)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1246,7 +1336,7 @@ const insight = workflowInsight({
     new DynamoDBExporter({ tableName: "insight-live" }), // Fast lookups
     new EventBridgeExporter({}), // Trigger alerts
   ],
-  emitMode: "in-progress",
+  emitMode: "on-change",
 });
 ```
 
@@ -1352,14 +1442,13 @@ The same pattern applies — the lifecycle handler reads the event and writes to
 
 ### What each status means
 
-| Status    | Origin                              | Captured by plugin?   | Captured by EventBridge? |
-| --------- | ----------------------------------- | --------------------- | ------------------------ |
-| RUNNING   | Lambda invocation                   | ✅ (in-progress mode) | ❌                       |
-| SUCCEEDED | Lambda invocation                   | ✅                    | ✅                       |
-| FAILED    | Lambda invocation                   | ✅                    | ✅                       |
-| PENDING   | Lambda invocation (wait/suspend)    | ✅                    | ❌                       |
-| STOPPED   | Backend (manual stop API)           | ❌                    | ✅                       |
-| TIMED_OUT | Backend (ExecutionTimeout exceeded) | ❌                    | ✅                       |
+| Status    | Origin                                                              | Captured by plugin? | Captured by EventBridge? |
+| --------- | ------------------------------------------------------------------- | ------------------- | ------------------------ |
+| RUNNING   | Lambda invocation (incl. wait/suspend for timers & external events) | ✅ (on-change mode) | ❌                       |
+| SUCCEEDED | Lambda invocation                                                   | ✅                  | ✅                       |
+| FAILED    | Lambda invocation                                                   | ✅                  | ✅                       |
+| STOPPED   | Backend (manual stop API)                                           | ❌                  | ✅                       |
+| TIMED_OUT | Backend (ExecutionTimeout exceeded)                                 | ❌                  | ✅                       |
 
 > **Tip:** If you use the `EventBridgeExporter` alongside this pattern, your
 > plugin-emitted events (SUCCEEDED/FAILED) and the backend-emitted events
@@ -1371,8 +1460,8 @@ The same pattern applies — the lifecycle handler reads the event and writes to
 The plugin hooks into the durable execution lifecycle:
 
 1. **`onInvocationStart`** — records execution start time
-2. **`onOperationChange`** — (in-progress mode) schedules export of a RUNNING snapshot
-3. **`onInvocationEnd`** — schedules export of the terminal snapshot (SUCCEEDED/FAILED/PENDING)
+2. **`onOperationChange`** — (on-change mode) schedules export of a RUNNING snapshot
+3. **`onInvocationEnd`** — schedules export of the snapshot, gated by `emitMode`: on terminal SUCCEEDED/FAILED (`on-complete`), FAILED only (`on-failure`), or every update including in-flight RUNNING snapshots (`on-change`)
 4. **`wrapInvocation`** — drains all pending exports before the Lambda returns
 
 Exports are **coalesced**: if updates arrive faster than the exporter can handle, intermediate snapshots are dropped (each record is a complete snapshot, so the latest one supersedes all earlier ones). This prevents overlapping export calls and keeps overhead minimal.

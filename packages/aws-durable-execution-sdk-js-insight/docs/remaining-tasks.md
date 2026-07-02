@@ -19,19 +19,44 @@
 ## Operation-Level Detail Capture
 
 > The `OperationRecord` contract includes `attempt`, per-operation `error`, and
-> (via content overrides) `result`. `OperationInfo` from `onOperationChange`
-> does not carry these — capturing them requires additional lifecycle hooks.
+> `result`. These are all present in the checkpointed `Operation` data; the core
+> SDK's `toOperationInfo()` now surfaces them on `OperationInfo`, so they arrive
+> via `onOperationChange` with no extra lifecycle hooks needed.
 
-- [ ] Capture per-operation `error` (wire `onOperationEnd`)
-- [ ] Capture per-operation `attempt` count (wire `onOperationAttemptEnd`)
-- [ ] Capture per-operation `result` (needed for `content.operations.overrides`)
+- [x] Capture per-operation `error` — SDK `toOperationInfo` maps `*Details.Error`
+      onto `OperationInfo.error` (via `DurableOperationError.fromErrorObject`);
+      plugin serializes it into `OperationRecord.error`.
+- [x] Capture per-operation `attempt` count — SDK maps `StepDetails.Attempt`
+      onto `OperationInfo.attempt`; plugin serializes it into `OperationRecord.attempt`.
+- [x] Capture per-operation `result` — `OperationInfo.result` (mapped by the SDK)
+      is now serialized into `OperationRecord.result`, gated behind a matching
+      `content.operations.overrides[].result` transform (omitted by default to
+      avoid unbounded payloads).
+
+## Query Ergonomics — per-store operation shaping
+
+> Design agreed in `operations-shape.md`. `operations` stays a canonical array;
+> point-access stores emit a name-keyed `operationsByName` index instead of the array.
+
+- [x] Add shared `buildOperationsByName(operations)` helper (per-name summary:
+      aggregate `count`/`min`/`max`/`totalDurationMs`/`failedCount`/`maxAttempt`
+      across occurrences + last-occurrence `type`/`subType`/`status`/`result`|`error`)
+- [x] Emit `operationsByName` (instead of the array) from `LambdaLogExporter`,
+      `CloudWatchLogsExporter`, and `DynamoDBExporter`
+- [x] Unit tests for `buildOperationsByName` (duplicate names, last-occurrence
+      result/error, failedCount, missing durations)
+- [x] Document per-store shape + example queries in the README
+- [x] `operationsFormat` option (`array` | `by-name` | `both`, default `array`) on the
+      flexible-sink exporters — `HttpExporter`, `OTelExporter`, `SQSExporter`,
+      `EventBridgeExporter`, `FirehoseExporter`, `FileExporter`. (Timestream is
+      dimensional, so it's excluded.)
 
 ## Content Filtering
 
-- [ ] Apply `content.input` transform (boolean or function)
-- [ ] Apply `content.output` transform (boolean or function)
-- [ ] Apply `content.operations.overrides` — exclude operations and transform results
-- [ ] Apply `content.operations.includeErrors` setting
+- [x] Apply `content.input` transform (boolean or function)
+- [x] Apply `content.output` transform (boolean or function)
+- [x] Apply `content.operations.overrides` — exclude operations and transform results
+- [x] Apply `content.operations.includeErrors` setting
 
 ## Sampling
 
@@ -43,15 +68,15 @@
 ## Emit Timing & Lifecycle
 
 - [x] Export on `onInvocationEnd`
-- [x] Export on `onOperationChange` for `in-progress` mode (gated by `emitMode`)
+- [x] Export on `onOperationChange` for `on-change` mode (gated by `emitMode`)
 - [x] Flush/await before returning via `wrapInvocation`
 - [x] Handle exporter errors gracefully (never fail the execution; `Promise.allSettled`)
 - [x] Coalesce overlapping exports — single in-flight export + latest-pending slot,
       so intermediate in-progress updates are dropped (`ExportScheduler`)
 - [x] Drain the export queue in `wrapInvocation` so the final record is delivered
-- [ ] In `finished-only` mode, emit **only** on terminal `SUCCEEDED`/`FAILED`;
-      currently `onInvocationEnd` also schedules on `PENDING` (every wait/suspend)
-      and `RETRYING`
+- [x] In `on-complete` mode, emit **only** on terminal `SUCCEEDED`/`FAILED`
+      (also added `on-failure` mode: emit only on terminal `FAILED`). Gated in
+      `onInvocationEnd`; non-terminal `PENDING`/`RETRYING` updates no longer emit.
 
 ## Record Size / Truncation
 
@@ -79,10 +104,18 @@
 
 ## Testing
 
-- [ ] Unit tests for `toOperationRecord` and `buildOperationRecords`
-- [ ] Unit tests for record building (full WorkflowInsightRecord)
+> Jest is set up for the package (`jest.config.js` + `npm test`), mirroring the
+> core SDK's ts-jest configuration. Tests drive the public `workflowInsight`
+> plugin via a capturing exporter.
+
+- [x] Unit tests for `toOperationRecord` and `buildOperationRecords` — covered via
+      content-filtering + operation-detail tests (exclude, includeErrors, result gating,
+      error/attempt capture, unnamed-op exclusion)
+- [~] Unit tests for record building (full WorkflowInsightRecord) — status mapping
+  (PENDING→RUNNING) and emit modes covered; identity-field building not yet
 - [ ] Unit tests for `ExportScheduler` (coalescing, no overlap, drain)
-- [ ] Unit tests for content filtering (input/output transforms, operation overrides)
+- [x] Unit tests for content filtering (input/output transforms, operation overrides,
+      includeErrors, result transform incl. non-JSON + throwing-transform safety)
 - [ ] Unit tests for sampling logic (including replay determinism)
 - [ ] Unit tests for each exporter (mock SDK clients, verify correct API calls)
 - [ ] Integration test with the testing SDK (end-to-end plugin lifecycle)
@@ -91,8 +124,12 @@
 ## Packaging & Docs
 
 - [x] `npm run build` passes locally (esm, cjs, types)
-- [ ] Add the insight package to root `package.json` build/test scripts
-- [ ] Wire the package into the root ESLint config (currently not linted)
+- [x] Add the insight package to root `package.json` build/test scripts
+- [x] Wire the package into ESLint — added a package-local `eslint.config.js`
+      (core SDK's TypeScript rules, using only published deps — no local
+      filename-convention plugin) and a `lint` script, consistent with the other
+      packages. Lints clean (0 errors); pre-commit lint-staged now applies the
+      TS rules to insight sources.
 - [x] Package `README.md` — comprehensive docs with all exporters, config, examples
 - [ ] Add a runnable example under `aws-durable-execution-sdk-js-examples`
 
@@ -112,6 +149,11 @@
 ## Known Limitations (document, not necessarily fix)
 
 - [x] Documented in README: best-effort delivery only
+- [x] Operation `result` (via `content.operations.overrides[].result`) exposes the
+      **checkpointed serialized** value, not the deserialized object. The plugin
+      does not run the SDK `Serdes.deserialize`; with a custom/overflow Serdes the
+      transform may receive a non-JSON string or a storage pointer. Documented in
+      README (content caveat), `OperationOverride.result` JSDoc, and plugin-contracts.
 - [ ] Document no coverage for backend-initiated events (`STOPPED`, `TIMED_OUT`);
       customers must subscribe to EventBridge lifecycle events themselves
 - [ ] `RedshiftExporter` stores time fields as `VARCHAR(30)` — needs `::timestamptz`
