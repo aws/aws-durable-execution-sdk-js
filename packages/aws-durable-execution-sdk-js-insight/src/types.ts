@@ -34,14 +34,26 @@ export type OperationResult = JsonValue;
 export interface OperationOverride {
   operationName: string;
   exclude?: boolean;
+  /**
+   * Include and transform the operation's result. Omitted by default.
+   *
+   * ⚠️ The value passed to this function is the operation's **checkpointed,
+   * serialized** result — JSON-parsed when it is valid JSON, otherwise the raw
+   * string. The plugin does NOT run your SDK `Serdes.deserialize`. If the
+   * operation uses a custom Serdes (non-JSON format, encryption, or a
+   * filesystem/overflow Serdes that checkpoints only a pointer/filepath), this
+   * function receives that serialized form or pointer — not the original
+   * deserialized value. Only enable operation results for operations that use
+   * the default JSON serialization, or whose serialized form your transform
+   * can handle.
+   */
   result?: (result: OperationResult) => OperationResult;
 }
 
 /**
  * Controls what data is included in emitted records.
  *
- * @experimental **Not yet implemented.** This interface is reserved for a future release.
- * Configuring it currently has no effect on emitted records.
+ * @experimental This interface is experimental and may change in future releases.
  */
 export interface ContentConfig {
   input?: boolean | ((input: ExecutionInput) => ExecutionInput);
@@ -97,8 +109,7 @@ export interface WorkflowInsightConfig {
    * Control what data is included in records (input/output transforms,
    * operation overrides, error inclusion).
    *
-   * @experimental **Not yet implemented.** This field is reserved for a future release.
-   * Setting it currently has no effect.
+   * @experimental This field is experimental and may change in future releases.
    */
   content?: ContentConfig;
 }
@@ -122,6 +133,11 @@ export interface OperationRecord {
     name: string;
     message: string;
   };
+  /**
+   * The operation's result. Omitted by default; included only when a matching
+   * `content.operations.overrides` entry supplies a `result` transform.
+   */
+  result?: OperationResult;
 }
 
 /**

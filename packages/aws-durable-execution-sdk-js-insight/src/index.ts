@@ -11,6 +11,9 @@ import type {
   WorkflowInsightConfig,
   WorkflowInsightRecord,
   OperationRecord,
+  OperationOverride,
+  OperationResult,
+  JsonValue,
   InsightExporter,
 } from "./types";
 
@@ -154,12 +157,92 @@ function toOperationRecord(op: OperationInfo): OperationRecord {
   };
 }
 
+/**
+ * Options controlling how operation records are filtered/enriched, derived from
+ * `content.operations`.
+ */
+interface OperationContentOptions {
+  /** Overrides keyed by `operationName`. */
+  overridesByName: Map<string, OperationOverride>;
+  /** Whether to include per-operation error details. */
+  includeErrors: boolean;
+}
+
+/**
+ * Applies a user-supplied result transform to an operation's raw (serialized)
+ * result. The checkpointed result is a JSON string; we parse it before handing
+ * it to the transform, falling back to the raw string if it isn't valid JSON.
+ *
+ * User transforms are untrusted code: a throwing transform must never break the
+ * execution or leak the raw result, so on error we omit the field.
+ */
+function applyResultOverride(
+  transform: (result: OperationResult) => OperationResult,
+  rawResult: string | undefined,
+): OperationResult | undefined {
+  if (rawResult === undefined) return undefined;
+  let parsed: OperationResult;
+  try {
+    parsed = JSON.parse(rawResult) as OperationResult;
+  } catch {
+    parsed = rawResult;
+  }
+  try {
+    return transform(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolves a `content.input`/`content.output` setting against a value.
+ * - `false` → omit (undefined)
+ * - function → transformed value (omit on throw, so a failing redactor never
+ *   leaks the raw value)
+ * - `true`/`undefined` → include as-is
+ */
+function applyDataContent(
+  value: unknown,
+  setting: boolean | ((value: JsonValue) => JsonValue) | undefined,
+): JsonValue | undefined {
+  if (setting === false) return undefined;
+  if (value === undefined) return undefined;
+  if (typeof setting === "function") {
+    try {
+      return setting(value as JsonValue);
+    } catch {
+      return undefined;
+    }
+  }
+  return value as JsonValue;
+}
+
 function buildOperationRecords(
   operations: Record<string, OperationInfo>,
+  opts: OperationContentOptions,
 ): OperationRecord[] {
-  return Object.values(operations)
-    .filter((op) => op.name)
-    .map(toOperationRecord);
+  const records: OperationRecord[] = [];
+  for (const op of Object.values(operations)) {
+    // Unnamed operations are excluded by default (can't be targeted or keyed).
+    if (!op.name) continue;
+
+    const override = opts.overridesByName.get(op.name);
+    if (override?.exclude) continue;
+
+    const record = toOperationRecord(op);
+
+    if (!opts.includeErrors) {
+      record.error = undefined;
+    }
+
+    // Results are omitted unless an override explicitly opts in via a transform.
+    if (override?.result) {
+      record.result = applyResultOverride(override.result, op.result);
+    }
+
+    records.push(record);
+  }
+  return records;
 }
 
 // --- CloudWatch Logs Exporter ---
@@ -261,11 +344,17 @@ export function workflowInsight(
       "[workflow-insight] samplingRate is not yet implemented and has no effect.",
     );
   }
-  if (config.content !== undefined) {
-    console.warn(
-      "[workflow-insight] content filtering is not yet implemented and has no effect.",
-    );
+
+  const content = config.content;
+  const includeErrors = content?.operations?.includeErrors ?? true;
+  const overridesByName = new Map<string, OperationOverride>();
+  for (const override of content?.operations?.overrides ?? []) {
+    overridesByName.set(override.operationName, override);
   }
+  const opContentOptions: OperationContentOptions = {
+    overridesByName,
+    includeErrors,
+  };
 
   const exporters =
     config.exporters && config.exporters.length > 0
@@ -326,8 +415,8 @@ export function workflowInsight(
       startTime: startTime.toISOString(),
       endTime: args.endTime?.toISOString(),
       durationMs,
-      input: args.input as WorkflowInsightRecord["input"],
-      output: args.output as WorkflowInsightRecord["output"],
+      input: applyDataContent(args.input, content?.input),
+      output: applyDataContent(args.output, content?.output),
       error: args.error
         ? { name: args.error.name, message: args.error.message }
         : undefined,
@@ -350,7 +439,10 @@ export function workflowInsight(
           buildRecord({
             executionArn: info.executionArn,
             status: "RUNNING",
-            operations: buildOperationRecords(info.operations),
+            operations: buildOperationRecords(
+              info.operations,
+              opContentOptions,
+            ),
             input: info.executionInput,
           }),
         );
@@ -394,7 +486,10 @@ export function workflowInsight(
           buildRecord({
             executionArn: info.executionArn,
             status,
-            operations: buildOperationRecords(info.operations),
+            operations: buildOperationRecords(
+              info.operations,
+              opContentOptions,
+            ),
             endTime: new Date(),
             input: info.executionInput,
             output: info.executionResult,
@@ -421,7 +516,7 @@ export function workflowInsight(
         buildRecord({
           executionArn: info.executionArn,
           status: "RUNNING",
-          operations: buildOperationRecords(info.operations),
+          operations: buildOperationRecords(info.operations, opContentOptions),
           input: state.cachedInput,
         }),
       );

@@ -28,16 +28,17 @@
       plugin serializes it into `OperationRecord.error`.
 - [x] Capture per-operation `attempt` count — SDK maps `StepDetails.Attempt`
       onto `OperationInfo.attempt`; plugin serializes it into `OperationRecord.attempt`.
-- [~] Capture per-operation `result` — now available on `OperationInfo.result`
-  (SDK already mapped it), but not yet emitted in `OperationRecord`; defer to
-  Content Filtering since raw results are unbounded and need override/size gating.
+- [x] Capture per-operation `result` — `OperationInfo.result` (mapped by the SDK)
+      is now serialized into `OperationRecord.result`, gated behind a matching
+      `content.operations.overrides[].result` transform (omitted by default to
+      avoid unbounded payloads).
 
 ## Content Filtering
 
-- [ ] Apply `content.input` transform (boolean or function)
-- [ ] Apply `content.output` transform (boolean or function)
-- [ ] Apply `content.operations.overrides` — exclude operations and transform results
-- [ ] Apply `content.operations.includeErrors` setting
+- [x] Apply `content.input` transform (boolean or function)
+- [x] Apply `content.output` transform (boolean or function)
+- [x] Apply `content.operations.overrides` — exclude operations and transform results
+- [x] Apply `content.operations.includeErrors` setting
 
 ## Sampling
 
@@ -122,6 +123,11 @@
 ## Known Limitations (document, not necessarily fix)
 
 - [x] Documented in README: best-effort delivery only
+- [x] Operation `result` (via `content.operations.overrides[].result`) exposes the
+      **checkpointed serialized** value, not the deserialized object. The plugin
+      does not run the SDK `Serdes.deserialize`; with a custom/overflow Serdes the
+      transform may receive a non-JSON string or a storage pointer. Documented in
+      README (content caveat), `OperationOverride.result` JSDoc, and plugin-contracts.
 - [ ] Document no coverage for backend-initiated events (`STOPPED`, `TIMED_OUT`);
       customers must subscribe to EventBridge lifecycle events themselves
 - [ ] `RedshiftExporter` stores time fields as `VARCHAR(30)` — needs `::timestamptz`

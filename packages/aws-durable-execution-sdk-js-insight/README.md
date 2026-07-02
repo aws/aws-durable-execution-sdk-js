@@ -228,9 +228,11 @@ exporters: [
 
 ### `content` (advanced)
 
-> **Not yet implemented.** Reserved for a future release. Setting this currently has no effect.
-
-Control what data is included in records:
+Control what data is included in records. By default, execution input/output are
+included as-is, per-operation errors are included, and operation results are
+**not** included. Use `content` to redact/reshape input/output, opt specific
+operation results in (with optional transforms), exclude operations, or drop
+operation errors:
 
 ```typescript
 content: {
@@ -252,6 +254,19 @@ content: {
   },
 },
 ```
+
+> [!IMPORTANT]
+> **Operation `result` reflects the checkpointed, serialized value — not
+> necessarily your original return value.** The plugin passes your `result`
+> transform the operation's checkpointed result, JSON-parsed when it is valid
+> JSON and otherwise the raw string. It does **not** run your SDK
+> `Serdes.deserialize`. If the operation uses a custom `Serdes` — one that
+> serializes to a non-JSON format (e.g. XML), encrypts, or offloads large values
+> to external storage and checkpoints only a **pointer/filepath** (overflow
+> mode) — your transform receives that serialized form or pointer, not the
+> original deserialized object. Only enable operation results for operations
+> using the default JSON serialization, or whose serialized form your transform
+> can handle. Input/output transforms are not affected by this.
 
 ## Exporters
 
