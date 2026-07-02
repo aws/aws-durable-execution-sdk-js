@@ -145,6 +145,41 @@ export interface OperationRecord {
 }
 
 /**
+ * A per-operation-name summary emitted (as an `operationsByName` map) by
+ * point-access exporters (CloudWatch Logs, DynamoDB) to make name-based queries
+ * ergonomic. The canonical `operations` array remains the lossless source of
+ * truth; see `docs/operations-shape.md`.
+ *
+ * Metric fields aggregate across ALL occurrences of the name; `type`, `subType`,
+ * `status`, and `result`/`error` reflect the LAST occurrence (by `startTime`).
+ *
+ * @experimental This interface is experimental and may change in future releases.
+ */
+export interface OperationSummary {
+  type: string;
+  subType?: string;
+  /** Number of occurrences of this operation name in the execution. */
+  count: number;
+  /** Min/max/total duration across occurrences that have a duration. */
+  minDurationMs?: number;
+  maxDurationMs?: number;
+  totalDurationMs?: number;
+  /** How many occurrences ended in FAILED. */
+  failedCount: number;
+  /** Highest attempt number seen across occurrences. */
+  maxAttempt?: number;
+  /** Status of the last occurrence. */
+  status: string;
+  /** Result of the last occurrence (present only if that op opted results in). */
+  result?: OperationResult;
+  /** Error of the last occurrence (present only if it failed and errors are included). */
+  error?: {
+    name: string;
+    message: string;
+  };
+}
+
+/**
  * The curated execution record emitted to destinations.
  * @experimental This interface is experimental and may change in future releases.
  */

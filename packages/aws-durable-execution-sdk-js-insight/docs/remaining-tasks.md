@@ -33,6 +33,20 @@
       `content.operations.overrides[].result` transform (omitted by default to
       avoid unbounded payloads).
 
+## Query Ergonomics — per-store operation shaping
+
+> Design agreed in `operations-shape.md`. `operations` stays a canonical array;
+> point-access stores additionally emit a name-keyed `operationsByName` index.
+
+- [x] Add shared `buildOperationsByName(operations)` helper (per-name summary:
+      aggregate `count`/`min`/`max`/`totalDurationMs`/`failedCount`/`maxAttempt`
+      across occurrences + last-occurrence `type`/`subType`/`status`/`result`|`error`)
+- [x] Emit `operationsByName` (alongside the array) from `LambdaLogExporter`,
+      `CloudWatchLogsExporter`, and `DynamoDBExporter`
+- [x] Unit tests for `buildOperationsByName` (duplicate names, last-occurrence
+      result/error, failedCount, missing durations)
+- [x] Document per-store shape + example queries in the README
+
 ## Content Filtering
 
 - [x] Apply `content.input` transform (boolean or function)

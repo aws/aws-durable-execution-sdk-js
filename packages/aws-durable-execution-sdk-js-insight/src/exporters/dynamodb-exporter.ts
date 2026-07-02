@@ -1,6 +1,7 @@
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { marshall } from "@aws-sdk/util-dynamodb";
 import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import { withOperationsByName } from "../operations-index";
 
 /**
  * Configuration for the DynamoDB exporter.
@@ -54,7 +55,7 @@ export class DynamoDBExporter implements InsightExporter {
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     const item: Record<string, unknown> = {
-      ...record,
+      ...withOperationsByName(record),
       [this.partitionKey]: record.executionArn,
     };
 

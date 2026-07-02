@@ -272,6 +272,55 @@ content: {
 > using the default JSON serialization, or whose serialized form your transform
 > can handle. Input/output transforms are not affected by this.
 
+## Querying by operation name (`operationsByName`)
+
+`operations` is a canonical **array** — lossless (it keeps every occurrence of a
+repeated step name), and queryable in the analytical stores that support nested
+data (Athena `UNNEST`, Postgres/Redshift JSON path, OpenSearch `nested`):
+
+```sql
+-- Postgres (JSONB): executions where "convert_data" ran under 5s
+WHERE record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationMs < 5000)';
+```
+
+Point-access stores that can't filter "the array element named X" —
+**CloudWatch Logs** (`LambdaLogExporter`, `CloudWatchLogsExporter`) and
+**DynamoDB** (`DynamoDBExporter`) — additionally emit an `operationsByName` map
+so name-based queries become a simple dot-path:
+
+```
+# CloudWatch Logs Insights
+fields executionArn | filter operationsByName.convert_data.maxDurationMs < 5000
+```
+
+Each entry aggregates metrics across all occurrences of the name and snapshots
+the last occurrence's detail:
+
+```json
+"operationsByName": {
+  "convert_data": {
+    "type": "STEP", "subType": "Step",
+    "count": 2, "minDurationMs": 4200, "maxDurationMs": 8100, "totalDurationMs": 12300,
+    "failedCount": 0, "maxAttempt": 1,
+    "status": "SUCCEEDED",
+    "result": { "rows": 1200 }
+  }
+}
+```
+
+Notes:
+
+- **Metrics** (`count`, `min`/`max`/`totalDurationMs`, `failedCount`, `maxAttempt`)
+  span all occurrences; `type`/`subType`/`status`/`result`/`error` reflect the
+  **last** occurrence (a run is either a success with `result` or a failure with
+  `error`).
+- Operations **without a name are excluded** (they can't be keyed or queried).
+- Operation names containing `.` don't work as dot-path keys; use the canonical
+  `operations` array for those.
+- The array remains the source of truth; array-native exporters (S3/Athena,
+  OpenSearch, Aurora, Redshift) emit only the array. See
+  [`docs/operations-shape.md`](./docs/operations-shape.md).
+
 ## Exporters
 
 ### Comparison Table

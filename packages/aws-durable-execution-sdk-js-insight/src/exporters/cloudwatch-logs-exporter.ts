@@ -5,6 +5,7 @@ import {
   ResourceAlreadyExistsException,
 } from "@aws-sdk/client-cloudwatch-logs";
 import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import { withOperationsByName } from "../operations-index";
 
 /**
  * Configuration for the CloudWatch Logs exporter.
@@ -63,7 +64,7 @@ export class CloudWatchLogsExporter implements InsightExporter {
         logEvents: [
           {
             timestamp: Date.now(),
-            message: JSON.stringify(record),
+            message: JSON.stringify(withOperationsByName(record)),
           },
         ],
       }),
