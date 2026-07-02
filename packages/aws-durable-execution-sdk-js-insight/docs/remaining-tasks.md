@@ -14,7 +14,6 @@
 - [x] Capture execution error from `InvocationEndInfo.executionError`
 - [x] Compute execution `startTime` and `endTime`/`durationMs`
 - [x] Handle non-Date operation timestamps (runtime sends epoch ms numbers, not Date objects)
-- [ ] Emit operations in execution order (currently `Object.values` insertion order; sort by `startTime`)
 
 ## Operation-Level Detail Capture
 
