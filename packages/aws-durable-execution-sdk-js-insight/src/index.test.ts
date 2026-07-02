@@ -295,3 +295,151 @@ describe("emit modes", () => {
     expect(exporter.records[0].status).toBe("FAILED");
   });
 });
+
+describe("sampling", () => {
+  // Build an execution ARN whose executionName is `name` and whose trailing
+  // per-invocation segment is `inv`. Sampling must depend on `name` only.
+  function arnFor(name: string, inv = "inv-1"): string {
+    return `arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/${name}/${inv}`;
+  }
+
+  function baseInfo(arn: string): InvocationInfo {
+    return {
+      executionArn: arn,
+      requestId: "req-1",
+      isFirstInvocation: true,
+      executionInput: undefined,
+      operations: {},
+    } as InvocationInfo;
+  }
+
+  // Drive one full execution (terminal SUCCEEDED end + drain) through the
+  // plugin using a single ARN, so wrapInvocation drains the record scheduled by
+  // onInvocationEnd for that same execution.
+  async function runExecution(
+    plugin: DurableInstrumentationPlugin,
+    arn: string,
+    status: InvocationEndInfo["status"] = "SUCCEEDED",
+  ): Promise<void> {
+    await plugin.onInvocationEnd?.({
+      ...baseInfo(arn),
+      status,
+      executionResult: undefined,
+      operations: {},
+    } as InvocationEndInfo);
+    await plugin.wrapInvocation?.(
+      baseInfo(arn),
+      async () => ({}) as unknown as DurableExecutionInvocationOutput,
+    );
+  }
+
+  const NAMES = Array.from({ length: 200 }, (_, i) => `exec-${i}`);
+
+  it("emits for every execution when samplingRate is 1.0 or omitted", async () => {
+    for (const rate of [undefined, 1.0]) {
+      const exporter = new CapturingExporter();
+      const plugin = workflowInsight({
+        exporters: [exporter],
+        samplingRate: rate,
+      });
+      for (const name of NAMES) await runExecution(plugin, arnFor(name));
+      expect(exporter.records).toHaveLength(NAMES.length);
+    }
+  });
+
+  it("emits for no execution when samplingRate is 0", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({ exporters: [exporter], samplingRate: 0 });
+    for (const name of NAMES) await runExecution(plugin, arnFor(name));
+    expect(exporter.records).toHaveLength(0);
+  });
+
+  it("partitions the population at a fractional rate (not all-or-nothing)", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      samplingRate: 0.5,
+    });
+    for (const name of NAMES) await runExecution(plugin, arnFor(name));
+    // Deterministic hash → stable count; assert a healthy split rather than an
+    // exact number so the bound doesn't couple to the hash implementation.
+    expect(exporter.records.length).toBeGreaterThan(NAMES.length * 0.25);
+    expect(exporter.records.length).toBeLessThan(NAMES.length * 0.75);
+  });
+
+  it("makes the same decision across replays, independent of invocationId", async () => {
+    const rate = 0.5;
+    const runWithInvocation = async (inv: string): Promise<Set<string>> => {
+      const exporter = new CapturingExporter();
+      const plugin = workflowInsight({
+        exporters: [exporter],
+        samplingRate: rate,
+      });
+      for (const name of NAMES) await runExecution(plugin, arnFor(name, inv));
+      return new Set(exporter.records.map((r) => r.executionName as string));
+    };
+
+    // Same executionNames, different per-invocation ARN suffix (as on replay).
+    const sampledWithA = await runWithInvocation("inv-a");
+    const sampledWithB = await runWithInvocation("inv-b");
+
+    // The sampled-in set must be identical — the invocationId must not affect it.
+    expect([...sampledWithA].sort()).toEqual([...sampledWithB].sort());
+    expect(sampledWithA.size).toBeGreaterThan(0);
+    expect(sampledWithA.size).toBeLessThan(NAMES.length);
+  });
+
+  it("re-runs of the same execution agree (stable per-execution decision)", async () => {
+    // Whatever the decision for a given name, running it twice yields either
+    // two records or zero — never a mix.
+    const sampledIn: string[] = [];
+    for (const name of NAMES) {
+      const exporter = new CapturingExporter();
+      const plugin = workflowInsight({
+        exporters: [exporter],
+        samplingRate: 0.5,
+      });
+      await runExecution(plugin, arnFor(name, "inv-1"));
+      await runExecution(plugin, arnFor(name, "inv-2"));
+      expect([0, 2]).toContain(exporter.records.length);
+      if (exporter.records.length === 2) sampledIn.push(name);
+    }
+    expect(sampledIn.length).toBeGreaterThan(0);
+  });
+
+  it("clamps out-of-range and non-numeric rates with a warning", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // > 1 clamps to 1 (all emit)
+      const high = new CapturingExporter();
+      const pHigh = workflowInsight({
+        exporters: [high],
+        samplingRate: 5 as number,
+      });
+      for (const name of NAMES) await runExecution(pHigh, arnFor(name));
+      expect(high.records).toHaveLength(NAMES.length);
+
+      // < 0 clamps to 0 (none emit)
+      const low = new CapturingExporter();
+      const pLow = workflowInsight({
+        exporters: [low],
+        samplingRate: -1 as number,
+      });
+      for (const name of NAMES) await runExecution(pLow, arnFor(name));
+      expect(low.records).toHaveLength(0);
+
+      // NaN defaults to 1.0 (all emit)
+      const nan = new CapturingExporter();
+      const pNan = workflowInsight({
+        exporters: [nan],
+        samplingRate: Number.NaN,
+      });
+      for (const name of NAMES) await runExecution(pNan, arnFor(name));
+      expect(nan.records).toHaveLength(NAMES.length);
+
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

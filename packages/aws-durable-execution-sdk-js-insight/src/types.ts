@@ -86,11 +86,17 @@ export interface WorkflowInsightConfig {
   exporters?: InsightExporter[];
 
   /**
-   * Sampling rate: 0.0–1.0. When set, only a fraction of executions emit records.
-   * The decision is per-execution (all-or-nothing).
+   * Sampling rate: 0.0–1.0 (default: 1.0 = every execution). When below 1.0,
+   * only a fraction of executions emit records; the rest are skipped entirely
+   * (no records, no exporter calls).
    *
-   * @experimental **Not yet implemented.** This field is reserved for a future release.
-   * Setting it currently has no effect.
+   * The decision is per-execution and all-or-nothing: a sampled-in execution
+   * emits all of its records, a sampled-out execution emits none. It is
+   * deterministic across replays — derived from the execution's stable identity
+   * (its `executionName`) — so a resumed execution never flips its decision and
+   * produces fragmented records.
+   *
+   * Out-of-range or non-numeric values are clamped/defaulted with a warning.
    */
   samplingRate?: number;
 

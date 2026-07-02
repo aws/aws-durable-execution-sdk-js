@@ -34,7 +34,8 @@ interface WorkflowInsightConfig {
 
   /**
    * Sampling rate: 0.0 to 1.0.
-   * Decision is made once per execution (all-or-nothing).
+   * Decision is made once per execution (all-or-nothing) and is deterministic
+   * across replays (hashed from the execution's stable executionName).
    * Default: 1.0 (emit all executions)
    */
   samplingRate?: number;

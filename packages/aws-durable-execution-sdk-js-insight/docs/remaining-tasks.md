@@ -59,10 +59,14 @@
 
 ## Sampling
 
-- [ ] Implement sampling decision (skip all work if not sampled)
-- [ ] Make the sampling decision **deterministic across replays** — a per-execution
-      decision based only on `isFirstInvocation` won't reproduce on replays;
-      derive it deterministically (e.g., hash of `executionArn`/`executionName`)
+- [x] Implement sampling decision (skip all work if not sampled) — all-or-nothing
+      per execution; sampled-out executions schedule no records and make no
+      exporter calls (guarded in every hook + drain/flush skipped in `wrapInvocation`).
+- [x] Make the sampling decision **deterministic across replays** — keyed on the
+      execution's stable `executionName` (not the full ARN, which carries a
+      per-invocation suffix), hashed with FNV-1a via `Math.imul` for a
+      cross-engine-stable 32-bit result. Out-of-range/non-numeric rates are
+      clamped/defaulted with a warning.
 
 ## Emit Timing & Lifecycle
 
@@ -115,7 +119,9 @@
 - [ ] Unit tests for `ExportScheduler` (coalescing, no overlap, drain)
 - [x] Unit tests for content filtering (input/output transforms, operation overrides,
       includeErrors, result transform incl. non-JSON + throwing-transform safety)
-- [ ] Unit tests for sampling logic (including replay determinism)
+- [x] Unit tests for sampling logic (including replay determinism) — covers
+      rate 0 / 1 / omitted, fractional partitioning, invocationId-independence
+      (replay stability), stable re-runs, and out-of-range/NaN clamping.
 - [ ] Unit tests for each exporter (mock SDK clients, verify correct API calls)
 - [ ] Integration test with the testing SDK (end-to-end plugin lifecycle)
 - [x] Verified end-to-end on deployed Lambda (account 730758745077, `insight-demo-scheduled`)
