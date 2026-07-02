@@ -18,10 +18,16 @@ export const config: ExampleConfig = {
   localOnly: true,
 };
 
+/**
+ * Reset the span exporter. Call this before running the handler
+ * to get a clean set of spans for the test.
+ */
+export function resetExporter(): void {
+  exporter.reset();
+}
+
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    exporter.reset();
-
     const step1Result = await context.step("log-step-1", async () => {
       context.logger.info("Executing log step 1");
       return "step-1-done";

@@ -13,10 +13,16 @@ export const config: ExampleConfig = {
   localOnly: true,
 };
 
+/**
+ * Reset the span exporter. Call this before running the handler
+ * to get a clean set of spans for the test.
+ */
+export function resetExporter(): void {
+  exporter.reset();
+}
+
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    exporter.reset();
-
     const beforeCallback = await context.step(
       "before-callback",
       async () => "before-callback-value",

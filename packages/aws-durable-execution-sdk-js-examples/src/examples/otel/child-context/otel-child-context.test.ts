@@ -1,10 +1,14 @@
-import { handler } from "./otel-child-context";
+import { handler, resetExporter } from "./otel-child-context";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
+    beforeEach(() => {
+      resetExporter();
+    });
+
     it("should produce correct parent-child span hierarchy for child context", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as {
@@ -16,6 +20,9 @@ createTests({
       expect(result.result).toBe("inner-1-result:inner-2-result");
 
       const { spans } = result;
+      // All spans: child-ctx (CONTEXT), inner-step-1 (op + attempt),
+      // inner-step-2 (op + attempt) = 5 spans
+      expect(spans.length).toBe(5);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;

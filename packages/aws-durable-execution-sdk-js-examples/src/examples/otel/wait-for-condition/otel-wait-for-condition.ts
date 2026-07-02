@@ -15,13 +15,20 @@ export const config: ExampleConfig = {
   localOnly: true,
 };
 
+/**
+ * Reset the span exporter. Call this before running the handler
+ * to get a clean set of spans for the test.
+ */
+export function resetExporter(): void {
+  exporter.reset();
+}
+
 interface WaitForConditionEvent {
   mode?: "immediate" | "normal" | "exhausted";
 }
 
 export const handler = withDurableExecution(
   async (event: WaitForConditionEvent, context: DurableContext) => {
-    exporter.reset();
     const mode = event.mode ?? "normal";
 
     if (mode === "immediate") {

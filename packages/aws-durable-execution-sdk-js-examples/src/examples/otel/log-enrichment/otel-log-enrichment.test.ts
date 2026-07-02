@@ -1,9 +1,13 @@
-import { handler } from "./otel-log-enrichment";
+import { handler, resetExporter } from "./otel-log-enrichment";
 import { createTests } from "../../../utils/test-helper";
 
 createTests({
   handler,
   tests: (runner, { assertEventSignatures, isCloud }) => {
+    beforeEach(() => {
+      resetExporter();
+    });
+
     it("should enrich logs with traceId and spanId during step execution", async () => {
       const logLines: string[] = [];
       const originalWrite = process.stdout.write;
@@ -22,6 +26,9 @@ createTests({
 
         expect(result.step1Result).toBe("step-1-done");
         expect(result.step2Result).toBe("step-2-done");
+
+        // Single invocation, 2 steps: log-step-1 (op + attempt) + log-step-2 (op + attempt) = 4 spans
+        expect(result.spans.length).toBe(4);
 
         if (!isCloud) {
           // Parse JSON log lines and check for traceId/spanId
