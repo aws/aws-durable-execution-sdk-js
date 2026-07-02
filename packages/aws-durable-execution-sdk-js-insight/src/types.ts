@@ -59,6 +59,10 @@ export interface ContentConfig {
   input?: boolean | ((input: ExecutionInput) => ExecutionInput);
   output?: boolean | ((output: ExecutionOutput) => ExecutionOutput);
   operations?: {
+    /**
+     * Per-operation overrides, matched by `operationName`. If multiple entries
+     * (or multiple operations) share a name, the last matching entry wins.
+     */
     overrides?: OperationOverride[];
     includeErrors?: boolean;
   };

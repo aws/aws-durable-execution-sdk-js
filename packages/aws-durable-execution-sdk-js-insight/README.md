@@ -255,6 +255,10 @@ content: {
 },
 ```
 
+> **Note:** operation overrides are matched by `operationName`. If multiple
+> override entries (or multiple operations) share a name, the last matching
+> entry wins.
+
 > [!IMPORTANT]
 > **Operation `result` reflects the checkpointed, serialized value — not
 > necessarily your original return value.** The plugin passes your `result`

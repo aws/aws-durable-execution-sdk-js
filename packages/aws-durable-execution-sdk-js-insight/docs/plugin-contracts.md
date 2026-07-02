@@ -134,7 +134,7 @@ interface ContentConfig {
    * Use overrides to include results for specific operations or exclude them entirely.
    */
   operations?: {
-    /** Per-operation overrides. */
+    /** Per-operation overrides, matched by `operationName` (last match wins). */
     overrides?: OperationOverride[];
 
     /** Include operation error details. Default: true. */
