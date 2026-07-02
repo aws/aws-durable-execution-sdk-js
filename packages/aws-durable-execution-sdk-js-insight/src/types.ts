@@ -198,6 +198,11 @@ export interface OperationSummary {
 export interface WorkflowInsightRecord {
   /** Fixed identifier to distinguish insight records from other log data. */
   recordType: "WorkflowInsight";
+  /**
+   * Record schema version. New fields are additive and do not change this
+   * value; it is bumped only for a breaking change (a field is renamed,
+   * removed, or changes meaning/type) so consumers can detect and adapt.
+   */
   schemaVersion: "1.0";
   emittedAt: string;
   executionArn: string;
@@ -217,6 +222,4 @@ export interface WorkflowInsightRecord {
     message: string;
   };
   operations: OperationRecord[];
-  pluginVersion: string;
-  sdkVersion: string;
 }

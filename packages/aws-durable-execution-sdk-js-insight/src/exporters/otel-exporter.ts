@@ -110,7 +110,7 @@ export class OTelExporter implements InsightExporter {
             {
               scope: {
                 name: "@aws/durable-execution-sdk-js-insight",
-                version: record.pluginVersion,
+                version: record.schemaVersion,
               },
               logRecords: [
                 {

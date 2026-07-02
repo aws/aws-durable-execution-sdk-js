@@ -50,10 +50,6 @@ interface WorkflowInsightRecord {
 
   // Operations (steps, waits, invokes, callbacks)
   operations: OperationRecord[];
-
-  // Metadata
-  pluginVersion: string;
-  sdkVersion: string;
 }
 
 interface OperationRecord {
@@ -139,9 +135,7 @@ interface OperationRecord {
       "endTime": "2026-06-16T17:00:27.480Z",
       "durationMs": 80
     }
-  ],
-  "pluginVersion": "0.1.0-alpha.0",
-  "sdkVersion": "2.0.0-alpha.1"
+  ]
 }
 ```
 

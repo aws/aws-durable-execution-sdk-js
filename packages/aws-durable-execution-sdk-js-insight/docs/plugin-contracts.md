@@ -355,14 +355,6 @@ interface WorkflowInsightRecord {
    * Each operation represents a step, wait, invoke, callback, or child context.
    */
   operations: OperationRecord[];
-
-  // --- Metadata ---
-
-  /** Plugin version that emitted this record. */
-  pluginVersion: string;
-
-  /** SDK version. */
-  sdkVersion: string;
 }
 
 interface OperationRecord {
@@ -468,9 +460,7 @@ interface OperationRecord {
       "startTime": null,
       "endTime": null
     }
-  ],
-  "pluginVersion": "0.1.0",
-  "sdkVersion": "2.0.0"
+  ]
 }
 ```
 
