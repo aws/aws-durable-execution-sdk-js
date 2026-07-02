@@ -1,10 +1,14 @@
-import { handler } from "./otel-wait-and-resume";
+import { handler, resetExporter } from "./otel-wait-and-resume";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
+    beforeEach(() => {
+      resetExporter();
+    });
+
     it("should produce continuation spans with links after wait and resume", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as {
@@ -18,6 +22,9 @@ createTests({
       expect(result.afterWait).toBe("after-wait-value");
 
       const { spans } = result;
+      // All spans across both invocations: before-wait (op + attempt),
+      // short-wait, invocation, after-wait (op + attempt) = 6 spans
+      expect(spans.length).toBe(6);
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;

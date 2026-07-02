@@ -11,10 +11,16 @@ export const config: ExampleConfig = {
   name: "OTel Child Context",
 };
 
+/**
+ * Reset the span exporter. Call this before running the handler
+ * to get a clean set of spans for the test.
+ */
+export function resetExporter(): void {
+  exporter.reset();
+}
+
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    exporter.reset();
-
     const result = await context.runInChildContext(
       "child-ctx",
       async (childCtx: DurableContext) => {
