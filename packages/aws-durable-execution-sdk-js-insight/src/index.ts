@@ -119,21 +119,15 @@ function fnv1a32(input: string): number {
 /**
  * Deterministic, all-or-nothing per-execution sampling decision.
  *
- * The decision must be identical for every invocation and replay of the same
- * execution, otherwise a resumed execution could flip its decision mid-flight
- * and emit fragmented records. We therefore key the hash on the execution's
- * stable identity — its `executionName` — and NOT the full ARN: the ARN carries
- * a per-invocation suffix (`.../<executionName>/<invocationId>`) that changes on
- * replay. Falls back to the raw ARN only when no `executionName` is present.
- *
- * Maps the hash into [0, 1) and samples in when it falls below `rate`.
+ * The execution ARN is stable across all invocations and replays of the same
+ * execution, so hashing it directly yields a decision that never changes
+ * mid-flight — a resumed execution always reaches the same conclusion. Maps the
+ * hash into [0, 1) and samples in when it falls below `rate`.
  */
 function shouldSampleExecution(executionArn: string, rate: number): boolean {
   if (rate >= 1) return true;
   if (rate <= 0) return false;
-  const { executionName } = parseExecutionArn(executionArn);
-  const key = executionName || executionArn;
-  return fnv1a32(key) / 0xffffffff < rate;
+  return fnv1a32(executionArn) / 0xffffffff < rate;
 }
 
 /**

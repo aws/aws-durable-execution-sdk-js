@@ -63,10 +63,9 @@
       per execution; sampled-out executions schedule no records and make no
       exporter calls (guarded in every hook + drain/flush skipped in `wrapInvocation`).
 - [x] Make the sampling decision **deterministic across replays** — keyed on the
-      execution's stable `executionName` (not the full ARN, which carries a
-      per-invocation suffix), hashed with FNV-1a via `Math.imul` for a
-      cross-engine-stable 32-bit result. Out-of-range/non-numeric rates are
-      clamped/defaulted with a warning.
+      execution ARN, which is stable across replays, hashed with FNV-1a via
+      `Math.imul` for a cross-engine-stable 32-bit result. Out-of-range/non-numeric
+      rates are clamped/defaulted with a warning.
 
 ## Emit Timing & Lifecycle
 

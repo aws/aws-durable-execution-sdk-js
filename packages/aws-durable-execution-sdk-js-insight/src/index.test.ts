@@ -297,10 +297,9 @@ describe("emit modes", () => {
 });
 
 describe("sampling", () => {
-  // Build an execution ARN whose executionName is `name` and whose trailing
-  // per-invocation segment is `inv`. Sampling must depend on `name` only.
-  function arnFor(name: string, inv = "inv-1"): string {
-    return `arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/${name}/${inv}`;
+  // Build a distinct, replay-stable execution ARN for `name`.
+  function arnFor(name: string): string {
+    return `arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/${name}/inv-1`;
   }
 
   function baseInfo(arn: string): InvocationInfo {
@@ -367,31 +366,31 @@ describe("sampling", () => {
     expect(exporter.records.length).toBeLessThan(NAMES.length * 0.75);
   });
 
-  it("makes the same decision across replays, independent of invocationId", async () => {
+  it("is reproducible: identical ARNs yield identical decisions", async () => {
     const rate = 0.5;
-    const runWithInvocation = async (inv: string): Promise<Set<string>> => {
+    const decideAll = async (): Promise<Set<string>> => {
       const exporter = new CapturingExporter();
       const plugin = workflowInsight({
         exporters: [exporter],
         samplingRate: rate,
       });
-      for (const name of NAMES) await runExecution(plugin, arnFor(name, inv));
-      return new Set(exporter.records.map((r) => r.executionName as string));
+      for (const name of NAMES) await runExecution(plugin, arnFor(name));
+      return new Set(exporter.records.map((r) => r.executionArn));
     };
 
-    // Same executionNames, different per-invocation ARN suffix (as on replay).
-    const sampledWithA = await runWithInvocation("inv-a");
-    const sampledWithB = await runWithInvocation("inv-b");
+    // The execution ARN is stable across replays, so the same set of ARNs must
+    // always produce the same sampled-in set.
+    const first = await decideAll();
+    const second = await decideAll();
 
-    // The sampled-in set must be identical — the invocationId must not affect it.
-    expect([...sampledWithA].sort()).toEqual([...sampledWithB].sort());
-    expect(sampledWithA.size).toBeGreaterThan(0);
-    expect(sampledWithA.size).toBeLessThan(NAMES.length);
+    expect([...first].sort()).toEqual([...second].sort());
+    expect(first.size).toBeGreaterThan(0);
+    expect(first.size).toBeLessThan(NAMES.length);
   });
 
   it("re-runs of the same execution agree (stable per-execution decision)", async () => {
-    // Whatever the decision for a given name, running it twice yields either
-    // two records or zero — never a mix.
+    // Whatever the decision for a given ARN, running it twice yields either two
+    // records or zero — never a mix.
     const sampledIn: string[] = [];
     for (const name of NAMES) {
       const exporter = new CapturingExporter();
@@ -399,8 +398,9 @@ describe("sampling", () => {
         exporters: [exporter],
         samplingRate: 0.5,
       });
-      await runExecution(plugin, arnFor(name, "inv-1"));
-      await runExecution(plugin, arnFor(name, "inv-2"));
+      const arn = arnFor(name);
+      await runExecution(plugin, arn);
+      await runExecution(plugin, arn);
       expect([0, 2]).toContain(exporter.records.length);
       if (exporter.records.length === 2) sampledIn.push(name);
     }

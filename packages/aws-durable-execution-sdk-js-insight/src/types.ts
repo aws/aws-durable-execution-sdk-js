@@ -92,9 +92,9 @@ export interface WorkflowInsightConfig {
    *
    * The decision is per-execution and all-or-nothing: a sampled-in execution
    * emits all of its records, a sampled-out execution emits none. It is
-   * deterministic across replays — derived from the execution's stable identity
-   * (its `executionName`) — so a resumed execution never flips its decision and
-   * produces fragmented records.
+   * deterministic across replays — derived from a hash of the execution ARN,
+   * which is stable across replays — so a resumed execution never flips its
+   * decision and produces fragmented records.
    *
    * Out-of-range or non-numeric values are clamped/defaulted with a warning.
    */

@@ -305,9 +305,9 @@ enum OperationDetail {
 
 ### Sampling
 
-Sampling is decided deterministically at execution start using a hash of the execution's stable identity — its `executionName`. If sampled in, all data for that execution is emitted (every hook fires). If sampled out, no hooks fire. This ensures complete records for sampled executions rather than fragmented partial data.
+Sampling is decided deterministically at execution start using a hash of the execution ARN, which is stable across all invocations and replays of the same execution. If sampled in, all data for that execution is emitted (every hook fires). If sampled out, no hooks fire. This ensures complete records for sampled executions rather than fragmented partial data.
 
-The key is the `executionName`, **not** the full execution ARN: the ARN carries a per-invocation suffix (`.../<executionName>/<invocationId>`) that changes on replay, so hashing the whole ARN would let a resumed execution flip its decision mid-flight. `Math.imul` is used for the FNV-1a multiply so the 32-bit result is identical across JS engines (a plain `*` loses precision past 2^53).
+`Math.imul` is used for the FNV-1a multiply so the 32-bit result is identical across JS engines (a plain `*` loses precision past 2^53).
 
 ```typescript
 function shouldSampleExecution(
@@ -316,11 +316,9 @@ function shouldSampleExecution(
 ): boolean {
   if (samplingRate >= 1.0) return true;
   if (samplingRate <= 0.0) return false;
-  const { executionName } = parseExecutionArn(executionArn);
-  const key = executionName || executionArn; // fall back to ARN if no name
   let hash = 0x811c9dc5;
-  for (let i = 0; i < key.length; i++) {
-    hash ^= key.charCodeAt(i);
+  for (let i = 0; i < executionArn.length; i++) {
+    hash ^= executionArn.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
   return (hash >>> 0) / 0xffffffff < samplingRate;

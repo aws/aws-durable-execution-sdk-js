@@ -206,7 +206,7 @@ A number between 0 and 1 (default `1.0` = every execution). When below 1.0, only
 samplingRate: 0.1, // Only 10% of executions emit records
 ```
 
-The decision is **per-execution and all-or-nothing**: a sampled-in execution emits all of its records, a sampled-out execution emits none — you never get fragmented partial data. It is **deterministic across replays**: the decision is derived from a hash of the execution's stable identity (its `executionName`), not the full ARN (which carries a per-invocation suffix), so a resumed execution always reaches the same decision. Values outside `[0, 1]` or non-numeric values are clamped/defaulted to `1.0` with a warning.
+The decision is **per-execution and all-or-nothing**: a sampled-in execution emits all of its records, a sampled-out execution emits none — you never get fragmented partial data. It is **deterministic across replays**: the decision is derived from a hash of the execution ARN, which is stable across replays, so a resumed execution always reaches the same decision. Values outside `[0, 1]` or non-numeric values are clamped/defaulted to `1.0` with a warning.
 
 ### `exporters`
 
