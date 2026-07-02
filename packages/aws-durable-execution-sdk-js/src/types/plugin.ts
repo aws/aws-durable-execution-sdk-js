@@ -109,7 +109,6 @@ export type AttemptEndInfoOutcome =
 export interface AttemptEndInfo extends AttemptInfo {
   outcome: AttemptEndInfoOutcome;
   error?: Error;
-  nextAttemptDelaySeconds?: number;
 }
 
 /**

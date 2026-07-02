@@ -206,7 +206,6 @@ describe("Step Handler - plugin hooks", () => {
         isReplay: false,
         outcome: AttemptEndInfoOutcome.FAILED,
         error: expect.any(Error),
-        nextAttemptDelaySeconds: 0,
       }),
     );
 

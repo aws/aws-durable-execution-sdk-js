@@ -217,7 +217,6 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       expect.objectContaining({
         isReplay: false,
         outcome: AttemptEndInfoOutcome.FAILED,
-        nextAttemptDelaySeconds: 5,
       }),
     );
 

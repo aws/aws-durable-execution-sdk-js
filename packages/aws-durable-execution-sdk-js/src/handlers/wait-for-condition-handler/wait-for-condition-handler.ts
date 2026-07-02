@@ -337,7 +337,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             AttemptEndInfoOutcome.FAILED,
             {
               attempt: currentAttempt,
-              nextAttemptDelaySeconds,
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);

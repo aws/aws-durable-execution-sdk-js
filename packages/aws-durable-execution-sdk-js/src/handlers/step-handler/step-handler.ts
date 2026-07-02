@@ -455,7 +455,6 @@ export const createStepHandler = <Logger extends DurableLogger>(
             {
               attempt: currentAttempt,
               error: error instanceof Error ? error : new Error(String(error)),
-              nextAttemptDelaySeconds,
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
