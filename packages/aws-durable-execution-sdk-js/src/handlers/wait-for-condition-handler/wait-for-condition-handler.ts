@@ -334,7 +334,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           stepData = context.getStepData(stepId);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
-            AttemptEndInfoOutcome.RETRYING,
+            AttemptEndInfoOutcome.FAILED,
             {
               attempt: currentAttempt,
               nextAttemptDelaySeconds,

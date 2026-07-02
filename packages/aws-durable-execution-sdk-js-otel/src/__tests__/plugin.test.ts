@@ -643,7 +643,7 @@ describe("OtelPlugin", () => {
       expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe("FAILED");
     });
 
-    it("attempt span includes durable.attempt.outcome attribute on retrying", async () => {
+    it("attempt span includes durable.attempt.outcome attribute on failed attempt", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({
@@ -664,7 +664,7 @@ describe("OtelPlugin", () => {
         makeAttemptEndInfo({
           id: "op-outcome-retry",
           attempt: 1,
-          outcome: "RETRYING" as any,
+          outcome: "FAILED" as any,
           error: new Error("transient failure"),
         }),
       );
@@ -679,9 +679,7 @@ describe("OtelPlugin", () => {
           s.attributes["durable.operation.attempt"] === 1,
       );
       expect(attemptSpan).toBeDefined();
-      expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe(
-        "RETRYING",
-      );
+      expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe("FAILED");
     });
   });
 

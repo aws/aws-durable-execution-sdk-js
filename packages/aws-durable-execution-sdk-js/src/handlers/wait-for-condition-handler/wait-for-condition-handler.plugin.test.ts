@@ -175,7 +175,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     );
   });
 
-  it("should call onOperationAttemptEnd with retrying when condition not yet met", async () => {
+  it("should call onOperationAttemptEnd with failed when condition not yet met", async () => {
     const handler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
@@ -207,7 +207,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
 
     await handler("my-condition", checkFunc, config);
 
-    // First attempt: start + retrying end
+    // First attempt: start + failed end
     // Second attempt: start + succeeded end
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(2);
     expect(mockPlugin.onOperationAttemptEnd).toHaveBeenCalledTimes(2);
@@ -216,7 +216,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       1,
       expect.objectContaining({
         isReplay: false,
-        outcome: AttemptEndInfoOutcome.RETRYING,
+        outcome: AttemptEndInfoOutcome.FAILED,
         nextAttemptDelaySeconds: 5,
       }),
     );

@@ -152,7 +152,7 @@ describe("Step Handler - plugin hooks", () => {
     );
   });
 
-  it("should call onOperationAttemptEnd with retrying outcome when step fails and will retry", async () => {
+  it("should call onOperationAttemptEnd with failed outcome when step fails and will retry", async () => {
     let callCount = 0;
     const stepFn = jest.fn().mockImplementation(async () => {
       callCount++;
@@ -182,7 +182,7 @@ describe("Step Handler - plugin hooks", () => {
 
     expect(result).toBe("recovered");
 
-    // First attempt: start + retrying end
+    // First attempt: start + failed end
     // Second attempt: start + succeeded end
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(2);
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(2);
@@ -204,7 +204,7 @@ describe("Step Handler - plugin hooks", () => {
       1,
       expect.objectContaining({
         isReplay: false,
-        outcome: AttemptEndInfoOutcome.RETRYING,
+        outcome: AttemptEndInfoOutcome.FAILED,
         error: expect.any(Error),
         nextAttemptDelaySeconds: 0,
       }),

@@ -451,7 +451,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           stepData = context.getStepData(stepId);
           const attemptEndInfo = toAttemptEndInfo(
             stepData,
-            AttemptEndInfoOutcome.RETRYING,
+            AttemptEndInfoOutcome.FAILED,
             {
               attempt: currentAttempt,
               error: error instanceof Error ? error : new Error(String(error)),
