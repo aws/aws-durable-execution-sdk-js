@@ -35,6 +35,39 @@ import {
 
 const DEBUG = false;
 
+// ADOT Layer ARN mapping for X-Ray E2E test
+// Format: arn:aws:lambda:${region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
+// ARNs sourced from: https://aws-otel.github.io/docs/getting-started/lambda#adot-lambda-layer-arns
+const ADOT_LAYER_ARNS: Record<string, string> = {
+  "us-east-1":
+    "arn:aws:lambda:us-east-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "us-east-2":
+    "arn:aws:lambda:us-east-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "us-west-1":
+    "arn:aws:lambda:us-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "us-west-2":
+    "arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "eu-west-1":
+    "arn:aws:lambda:eu-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "eu-west-2":
+    "arn:aws:lambda:eu-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "eu-central-1":
+    "arn:aws:lambda:eu-central-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "ap-northeast-1":
+    "arn:aws:lambda:ap-northeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "ap-southeast-1":
+    "arn:aws:lambda:ap-southeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+  "ap-southeast-2":
+    "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+};
+
+/**
+ * Checks if the handler corresponds to the otel-xray-e2e function.
+ */
+function isOtelXRayE2E(handler: string): boolean {
+  return handler.includes("otel-xray-e2e");
+}
+
 // Types
 interface EnvironmentVariables {
   AWS_ACCOUNT_ID: string;
@@ -174,6 +207,32 @@ async function checkFunctionExists(
   }
 }
 
+/**
+ * Detects Lambda control-plane throttling (TooManyRequestsException / HTTP 429,
+ * e.g. CallerRateLimitExceeded). The exception is not exported as a class by
+ * @aws-sdk/client-lambda, so match on the error name / status code instead.
+ */
+function isThrottlingError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const e = error as {
+    name?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+  return (
+    e.name === "TooManyRequestsException" || e.$metadata?.httpStatusCode === 429
+  );
+}
+
+/**
+ * Retries an operation on transient Lambda control-plane errors:
+ * - ResourceConflictException: another update is in progress; clears quickly,
+ *   so retry with a short fixed delay.
+ * - TooManyRequestsException (429): the account exceeded its control-plane API
+ *   rate. Bulk-deploying ~100+ functions across parallel runtime jobs can trip
+ *   this, so back off exponentially (with jitter) to let the limit recover.
+ */
 async function retryOnConflict<T>(
   operation: () => Promise<T>,
   maxRetries: number = 10,
@@ -182,14 +241,23 @@ async function retryOnConflict<T>(
     try {
       return await operation();
     } catch (error: unknown) {
-      if (
-        error instanceof ResourceConflictException &&
-        attempt < maxRetries - 1
-      ) {
+      const isConflict = error instanceof ResourceConflictException;
+      const isThrottle = isThrottlingError(error);
+      if ((isConflict || isThrottle) && attempt < maxRetries - 1) {
+        // Conflicts clear quickly; throttles need exponential backoff so the
+        // per-account control-plane rate limit has time to recover.
+        const baseDelayMs = isThrottle
+          ? Math.min(1000 * 2 ** attempt, 20000)
+          : 1000;
+        const delayMs = baseDelayMs + Math.floor(Math.random() * 250);
+        const label = isThrottle
+          ? "TooManyRequestsException (throttled)"
+          : "ResourceConflictException";
         console.warn(
-          `ResourceConflictException encountered: ${error.message}. Retrying ${attempt + 1}/${maxRetries} attempts`,
+          `${label} encountered: ${(error as Error).message}. ` +
+            `Retrying ${attempt + 1}/${maxRetries} attempts in ${delayMs}ms`,
         );
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
       throw error;
@@ -245,6 +313,13 @@ async function createFunction(
   );
 
   const zipBuffer = readFileSync(zipFile);
+
+  // IAM Role Requirements:
+  // - The DurableFunctionsIntegrationTestRole must have `CloudWatchLambdaApplicationSignalsExecutionRolePolicy`
+  //   attached for the otel-xray-e2e function (grants xray:PutTraceSegments, xray:PutTelemetryRecords,
+  //   and related CloudWatch permissions needed by the ADOT layer to export spans to X-Ray).
+  // - The Integration_Test_Role (used by the test runner) must have `xray:GetTraceSummaries` and
+  //   `xray:BatchGetTraces` permissions to query X-Ray traces in the e2e assertion tests.
   const roleArn = `arn:aws:iam::${env.AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole`;
 
   const logGroupName = `/aws/lambda/${functionName}`;
@@ -269,6 +344,32 @@ async function createFunction(
     }),
   );
 
+  // Determine environment variables
+  let envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
+    ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
+    : undefined;
+
+  // Apply ADOT layer + Active Tracing for otel-xray-e2e
+  let tracingConfig: { Mode: "Active" | "PassThrough" } | undefined;
+  let layers: string[] | undefined;
+
+  if (isOtelXRayE2E(exampleConfig.handler)) {
+    const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
+    if (!adotArn) {
+      console.error(
+        `Error: Unsupported region "${env.AWS_REGION}" for ADOT Lambda layer. ` +
+          `Supported regions: ${Object.keys(ADOT_LAYER_ARNS).join(", ")}`,
+      );
+      process.exit(1);
+    }
+    tracingConfig = { Mode: "Active" };
+    layers = [adotArn];
+    envVars = {
+      ...envVars,
+      AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
+    };
+  }
+
   const createParams: CreateFunctionCommandInput = {
     FunctionName: functionName,
     Runtime: runtime,
@@ -283,14 +384,10 @@ async function createFunction(
           ExecutionTimeout: exampleConfig.durableConfig.ExecutionTimeout,
         }
       : undefined,
-    Timeout: 60,
+    Timeout: exampleConfig.lambdaTimeoutSeconds ?? 60,
     MemorySize: useCapacityProvider ? 2048 : 128,
     Environment: {
-      Variables: env.LAMBDA_ENDPOINT
-        ? {
-            AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
-          }
-        : undefined,
+      Variables: envVars,
     },
     Architectures: useCapacityProvider ? [Architecture.arm64] : undefined,
     CapacityProviderConfig:
@@ -308,6 +405,8 @@ async function createFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
+    TracingConfig: tracingConfig,
+    Layers: layers,
   };
 
   const command = new CreateFunctionCommand(createParams);
@@ -352,12 +451,22 @@ async function updateFunction(
   const updateEnvParams: UpdateFunctionConfigurationCommandInput = {
     FunctionName: functionName,
     Runtime: runtime,
+    Timeout: exampleConfig.lambdaTimeoutSeconds ?? 60,
     Environment: {
-      Variables: env.LAMBDA_ENDPOINT
-        ? {
-            AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT,
-          }
-        : undefined,
+      Variables: (() => {
+        let vars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
+          ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
+          : undefined;
+
+        if (isOtelXRayE2E(exampleConfig.handler)) {
+          vars = {
+            ...vars,
+            AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
+          };
+        }
+
+        return vars;
+      })(),
     },
     CapacityProviderConfig:
       useCapacityProvider && exampleConfig.capacityProviderConfig
@@ -371,6 +480,22 @@ async function updateFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
+    ...(isOtelXRayE2E(exampleConfig.handler)
+      ? {
+          TracingConfig: { Mode: "Active" as const },
+          Layers: (() => {
+            const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
+            if (!adotArn) {
+              console.error(
+                `Error: Unsupported region "${env.AWS_REGION}" for ADOT Lambda layer. ` +
+                  `Supported regions: ${Object.keys(ADOT_LAYER_ARNS).join(", ")}`,
+              );
+              process.exit(1);
+            }
+            return [adotArn];
+          })(),
+        }
+      : {}),
   };
 
   // Check if DurableConfig needs updating

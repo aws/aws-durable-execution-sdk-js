@@ -47,6 +47,7 @@ describe("InvokeHandler", () => {
         terminate: jest.fn(),
       },
       durableExecutionArn: "test-arn",
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } as any;
 
     mockSafeSerialize.mockResolvedValue('{"serialized":"data"}');
@@ -199,9 +200,14 @@ describe("InvokeHandler", () => {
 
     it("should wait for status change when operation is still in progress", async () => {
       // Phase 1: first check (null)
+      // After checkpoint: STARTED
       // Phase 2: after waitForStatusChange (SUCCEEDED)
       (mockContext.getStepData as jest.Mock)
         .mockReturnValueOnce(null) // Phase 1 - initial check, triggers checkpoint
+        .mockReturnValueOnce({
+          Status: OperationStatus.STARTED,
+          ChainedInvokeDetails: {},
+        }) // After checkpoint - for plugin onOperationStart
         .mockReturnValueOnce({
           Status: OperationStatus.SUCCEEDED,
           ChainedInvokeDetails: { Result: '{"result":"success"}' },

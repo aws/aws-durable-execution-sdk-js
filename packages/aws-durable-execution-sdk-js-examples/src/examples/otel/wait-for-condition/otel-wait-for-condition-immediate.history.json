@@ -1,0 +1,56 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "a285eed7-c07c-46eb-a3a7-51964bf8a2c6",
+    "EventTimestamp": "2026-06-18T00:09:18.082Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"immediate\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "WaitForCondition",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:18.088Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "WaitForCondition",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-06-18T00:09:18.088Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"counter\":3}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-06-18T00:09:18.090Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-18T00:09:18.082Z",
+      "EndTimestamp": "2026-06-18T00:09:18.090Z",
+      "Error": {},
+      "RequestId": "ded46bad-b565-4c9e-9814-dafae3cb6a4d"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 5,
+    "Id": "a285eed7-c07c-46eb-a3a7-51964bf8a2c6",
+    "EventTimestamp": "2026-06-18T00:09:18.091Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"finalState\":{\"counter\":3},\"mode\":\"immediate\",\"spans\":[{\"name\":\"STEP\",\"traceId\":\"05426b111a2b71740ca89d002e2bcef9\",\"spanId\":\"3e109205bca8f9cc\",\"parentSpanId\":\"026806110351f2bf\",\"attributes\":{\"durable.execution.arn\":\"645e0951-9b70-44dd-8523-a2300a3bd1e8\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1},\"links\":[{\"traceId\":\"05426b111a2b71740ca89d002e2bcef9\",\"spanId\":\"026806110351f2bf\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"05426b111a2b71740ca89d002e2bcef9\",\"spanId\":\"026806110351f2bf\",\"parentSpanId\":\"6d8f869c5c11f5b9\",\"attributes\":{\"durable.execution.arn\":\"645e0951-9b70-44dd-8523-a2300a3bd1e8\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
+      }
+    }
+  }
+]

@@ -267,6 +267,7 @@ describe("CheckpointWorker", () => {
         executionId,
         operationEvents: [],
         invocationId,
+        updatedOperationIds: [],
       };
       mockApiHandlerInstance.performApiCall.mockReturnValue(
         mockInvocationResult,

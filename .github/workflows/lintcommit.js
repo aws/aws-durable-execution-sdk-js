@@ -32,6 +32,7 @@ const scopes = new Set([
   "ci",
   "deps",
   "deps-dev",
+  "otel",
 ]);
 
 /**

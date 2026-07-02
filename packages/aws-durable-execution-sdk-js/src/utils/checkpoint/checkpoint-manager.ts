@@ -9,6 +9,7 @@ import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { hashId } from "../step-id-utils/step-id-utils";
+import { toOperationInfoMap } from "../operation/operation";
 import { EventEmitter } from "events";
 import {
   CheckpointUnrecoverableInvocationError,
@@ -22,10 +23,11 @@ import {
   MAX_POLL_DURATION_MS,
 } from "../constants/constants";
 import {
-  OperationLifecycleState,
   OperationInfo,
   OperationMetadata,
-} from "../../types";
+} from "../../types/operation-lifecycle";
+import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -74,6 +76,8 @@ export class CheckpointManager implements Checkpoint {
     private stepDataEmitter: EventEmitter,
     private logger: DurableLogger,
     private finishedAncestors: Set<string>,
+    private plugin: DurableInstrumentationPlugin,
+    private requestId: string,
   ) {
     this.currentTaskToken = initialTaskToken;
   }
@@ -408,17 +412,21 @@ export class CheckpointManager implements Checkpoint {
     }
 
     if (response.NewExecutionState?.Operations) {
-      this.updateStepDataFromCheckpointResponse(
+      await this.updateStepDataFromCheckpointResponse(
         response.NewExecutionState.Operations,
       );
     }
   }
 
-  private updateStepDataFromCheckpointResponse(operations: Operation[]): void {
+  private async updateStepDataFromCheckpointResponse(
+    operations: Operation[],
+  ): Promise<void> {
     log("🔄", "Updating stepData from checkpoint response:", {
       operationCount: operations.length,
       operationIds: operations.map((op) => op.Id).filter(Boolean),
     });
+
+    const updatedOperations: Record<string, Operation> = {};
 
     operations.forEach((operation) => {
       if (operation.Id) {
@@ -435,15 +443,27 @@ export class CheckpointManager implements Checkpoint {
         // If status changed and we have a waiting promise, resolve it
         if (oldStatus !== newStatus) {
           this.resolveWaitingOperation(operation.Id);
+          updatedOperations[operation.Id] = operation;
         }
       }
     });
+
+    if (
+      Object.keys(updatedOperations).length > 0 &&
+      this.plugin.onOperationChange
+    ) {
+      await this.plugin.onOperationChange({
+        requestId: this.requestId,
+        executionArn: this.durableExecutionArn,
+        updatedOperations: toOperationInfoMap(updatedOperations),
+        operations: toOperationInfoMap(this.stepData),
+      });
+    }
 
     log("✅", "StepData update completed:", {
       totalStepDataEntries: Object.keys(this.stepData).length,
     });
   }
-
   private resolveWaitingOperation(hashedStepId: string): void {
     // Find operation by hashed ID in our operations map
     for (const [stepId, op] of this.operations.entries()) {

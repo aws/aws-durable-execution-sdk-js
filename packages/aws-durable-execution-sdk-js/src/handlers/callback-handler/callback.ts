@@ -9,15 +9,22 @@ import {
 import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { Serdes } from "../../utils/serdes/serdes";
+import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
+  CallbackExternalError,
   CallbackTimeoutError,
 } from "../../errors/durable-error/durable-error";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { durationToSeconds } from "../../utils/duration/duration";
 import { createCallbackPromise } from "./callback-promise";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createPassThroughSerdes = <T>(): Serdes<T> => ({
   serialize: async (value: T | undefined) => value as string | undefined,
@@ -30,6 +37,9 @@ export const createCallback = (
   createStepId: () => string,
   checkAndUpdateReplayMode: () => void,
   parentId?: string,
+
+  getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -46,7 +56,19 @@ export const createCallback = (
     }
 
     const stepId = createStepId();
-    const serdes = config?.serdes || createPassThroughSerdes<T>();
+    const serdes =
+      config?.serdes ||
+      (getDefaultCallbackDeserializer
+        ? getDefaultCallbackDeserializer()
+        : createPassThroughSerdes<T>());
+
+    const opInfo = {
+      id: hashId(stepId),
+      name: name,
+      type: OperationType.CALLBACK,
+      subType: OperationSubType.CALLBACK,
+      parentId: parentId ? hashId(parentId) : undefined,
+    };
 
     // Phase 1: Setup and checkpoint
     let isCompleted = false;
@@ -87,6 +109,15 @@ export const createCallback = (
           },
         );
 
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+
         isCompleted = true;
         return;
       }
@@ -97,6 +128,7 @@ export const createCallback = (
         stepData?.Status === OperationStatus.TIMED_OUT
       ) {
         log("❌", "Callback already failed:", { stepId });
+        checkAndUpdateReplayMode();
 
         checkpoint.markOperationState(
           stepId,
@@ -111,6 +143,15 @@ export const createCallback = (
             },
           },
         );
+
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
 
         isCompleted = true;
         return;
@@ -137,6 +178,13 @@ export const createCallback = (
 
         // Refresh stepData after checkpoint
         stepData = context.getStepData(stepId);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
+      } else {
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -195,7 +243,7 @@ export const createCallback = (
         const isTimeout = stepData?.Status === OperationStatus.TIMED_OUT;
 
         const callbackError = error
-          ? ((): CallbackError | CallbackTimeoutError => {
+          ? ((): CallbackError => {
               const cause = new Error(error.ErrorMessage);
               cause.name = error.ErrorType || "Error";
               cause.stack = error.StackTrace?.join("\n");
@@ -208,7 +256,7 @@ export const createCallback = (
                 );
               }
 
-              return new CallbackError(
+              return new CallbackExternalError(
                 error.ErrorMessage || "Callback failed",
                 cause,
                 error.ErrorData,
@@ -216,7 +264,7 @@ export const createCallback = (
             })()
           : isTimeout
             ? new CallbackTimeoutError("Callback timed out")
-            : new CallbackError("Callback failed");
+            : new CallbackExternalError("Callback failed");
 
         const rejectedPromise = new DurablePromise(async (): Promise<T> => {
           throw callbackError;
@@ -243,6 +291,8 @@ export const createCallback = (
         name,
         serdes,
         checkAndUpdateReplayMode,
+        plugin,
+        opInfo,
       );
 
       log("✅", "Callback created:", { stepId, name, callbackId });

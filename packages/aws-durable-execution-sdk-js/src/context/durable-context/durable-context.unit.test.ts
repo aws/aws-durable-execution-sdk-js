@@ -143,6 +143,38 @@ describe("DurableContext", () => {
 
       expect(context.lambdaContext).toBe(mockContext);
     });
+
+    it("should expose Symbol.toStringTag for nominal type detection", () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLogger,
+        undefined,
+        mockDurableExecution,
+      );
+
+      expect((context as any)[Symbol.toStringTag]).toBe("DurableContext");
+      expect(Object.prototype.toString.call(context)).toBe(
+        "[object DurableContext]",
+      );
+    });
+
+    it("should expose a Symbol.for() brand for cross-library identity", () => {
+      const executionContext = createMockExecutionContext();
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ExecutionMode,
+        mockLogger,
+        undefined,
+        mockDurableExecution,
+      );
+
+      const brand = Symbol.for("@aws/durable-execution-sdk-js/durable-context");
+      expect((context as any)[brand]).toBe(true);
+    });
   });
 
   describe("withModeManagement", () => {
@@ -508,8 +540,8 @@ describe("DurableContext", () => {
       await context.invoke("func", {});
 
       // New invoke handler uses centralized termination, no hasRunningOperations parameter
-      // Verify it was called with the new signature (context, checkpoint, createStepId, parentId, checkAndUpdateReplayMode)
-      expect(createInvokeHandler.mock.calls[0].length).toBe(5);
+      // Verify it was called with the new signature (context, checkpoint, createStepId, parentId, checkAndUpdateReplayMode, getDefaultSerdes, plugin)
+      expect(createInvokeHandler.mock.calls[0].length).toBe(7);
     });
 
     it("should call map handler", async () => {

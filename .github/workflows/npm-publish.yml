@@ -2,7 +2,9 @@
 # For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
 
 name: npm publish
+
 permissions:
+  id-token: write # Required for OIDC
   contents: read
 on:
   release:
@@ -11,12 +13,12 @@ jobs:
   npm-publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.target_commitish }}
-      - uses: actions/setup-node@v4
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run build
@@ -24,7 +26,22 @@ jobs:
       - name: Make script executable
         run: chmod +x ./.github/workflows/iterate-publish-npm.sh
       - name: iterate and publish
+        # The dist-tag is derived from each package's version (see
+        # iterate-publish-npm.sh), so the GitHub Release prerelease flag is
+        # intentionally not passed.
+        env:
+          # Widen the post-publish dist-tag verification window to absorb npm
+          # registry/CDN propagation lag (default is 5 attempts x 10s = 50s,
+          # which can false-fail an otherwise-successful publish).
+          DIST_TAG_VERIFY_ATTEMPTS: "10"
+          DIST_TAG_VERIFY_DELAY: "15"
         run: ./.github/workflows/iterate-publish-npm.sh
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  notify-release:
+    needs: [npm-publish]
+    uses: ./.github/workflows/notify-release.yml
+    with:
+      tag_name: ${{ github.event.release.tag_name }}
+      release_url: ${{ github.event.release.html_url }}
+    secrets: inherit

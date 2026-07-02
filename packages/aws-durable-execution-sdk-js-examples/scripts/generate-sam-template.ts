@@ -4,6 +4,10 @@ import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
 
+// ADOT Layer ARN for local SAM template (uses us-west-2 as default since integration tests deploy there)
+const ADOT_LAYER_ARN =
+  "arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7";
+
 // Configuration for different examples that need special settings
 const EXAMPLE_CONFIGS: Record<string, any> = {
   "steps-with-retry": {
@@ -55,7 +59,7 @@ function createFunctionResource(
       Runtime: "nodejs22.x",
       Architectures: ["x86_64"],
       MemorySize: config.memorySize,
-      Timeout: config.timeout,
+      Timeout: catalog.lambdaTimeoutSeconds ?? config.timeout,
       Role: { "Fn::GetAtt": ["DurableFunctionRole", "Arn"] },
       DurableConfig: catalog.durableConfig,
       Environment: {
@@ -74,6 +78,14 @@ function createFunctionResource(
   // Add policies if specified
   if (config.policies && config.policies.length > 0) {
     functionResource.Properties.Policies = config.policies;
+  }
+
+  // Add ADOT layer and Active Tracing for otel-xray-e2e function
+  if (catalog.handler && catalog.handler.includes("otel-xray-e2e")) {
+    functionResource.Properties.Tracing = "Active";
+    functionResource.Properties.Layers = [ADOT_LAYER_ARN];
+    functionResource.Properties.Environment.Variables.AWS_LAMBDA_EXEC_WRAPPER =
+      "/opt/otel-instrument";
   }
 
   return functionResource;
@@ -128,6 +140,7 @@ function generateTemplate(skipVerboseLogging = false) {
           },
           ManagedPolicyArns: [
             "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            "arn:aws:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy",
           ],
           Policies: [
             {
@@ -153,12 +166,15 @@ function generateTemplate(skipVerboseLogging = false) {
   };
 
   // Generate resources for each example file
-  examplesCatalog.forEach((catalog: { name: string; handler: string }) => {
-    const resourceName = catalog.name.replace(/\s/g, "") + `-22x-NodeJS-Local`;
-    template.Resources[
-      toPascalCase(catalog.handler.slice(0, -".handler".length))
-    ] = createFunctionResource(resourceName, catalog, skipVerboseLogging);
-  });
+  examplesCatalog
+    .filter((catalog: { localOnly?: boolean }) => !catalog.localOnly)
+    .forEach((catalog: { name: string; handler: string }) => {
+      const resourceName =
+        catalog.name.replace(/\s/g, "") + `-22x-NodeJS-Local`;
+      template.Resources[
+        toPascalCase(catalog.handler.slice(0, -".handler".length))
+      ] = createFunctionResource(resourceName, catalog, skipVerboseLogging);
+    });
 
   return template;
 }

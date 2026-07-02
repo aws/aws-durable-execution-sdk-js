@@ -42,11 +42,13 @@ export {
   DurableOperationError,
   StepError,
   CallbackError,
+  CallbackExternalError,
   CallbackTimeoutError,
   CallbackSubmitterError,
   InvokeError,
   ChildContextError,
   WaitForConditionError,
+  PromiseCombinatorError,
 } from "./errors/durable-error/durable-error";
 export {
   defaultSerdes,
@@ -54,7 +56,21 @@ export {
   createClassSerdesWithDates,
   Serdes,
   SerdesContext,
+  SerdesConfig,
+  AnySerdes,
+  AnySerdesDeserializer,
 } from "./utils/serdes/serdes";
+export {
+  createFileSystemSerdes,
+  FileSystemSerdesMode,
+  FileSystemPathEncoding,
+  FileSystemSerdesConfig,
+  FieldMatchMode,
+  PreviewMode,
+  PreviewField,
+  PreviewConfig,
+} from "./utils/serdes/filesystem-serdes";
+export { buildPreview } from "./utils/serdes/preview";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
   createWaitStrategy,
@@ -64,7 +80,23 @@ export {
   createRetryStrategy,
   RetryStrategyConfig,
 } from "./utils/retry/retry-config";
-export { createLinearRetryStrategy } from "./utils/retry/linear-retry-strategy/linear-retry-strategy";
+export {
+  createLinearRetryStrategy,
+  LinearRetryStrategyConfig,
+} from "./utils/retry/linear-retry-strategy/linear-retry-strategy";
 export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
 export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
+export {
+  DurableInstrumentationPlugin,
+  InvocationInfo,
+  InvocationEndInfo,
+  PluginInvocationStatus,
+  OperationChangeInfo,
+  OperationInfo,
+  OperationEndInfo,
+  PluginOperationStatus,
+  AttemptInfo,
+  AttemptEndInfo,
+  AttemptEndInfoOutcome,
+} from "./types/plugin";

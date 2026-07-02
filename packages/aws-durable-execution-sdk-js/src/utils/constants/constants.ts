@@ -21,3 +21,10 @@ export const CHECKPOINT_TERMINATION_COOLDOWN_MS = 20;
  * and limit polling duration for long-running operations
  */
 export const MAX_POLL_DURATION_MS = 15 * 60 * 1000;
+
+/**
+ * Maximum checkpoint payload size in bytes (256KB).
+ * Payloads exceeding this limit trigger ReplayChildren mode in child contexts,
+ * and overflow-to-file behavior in FileSystemSerdes.
+ */
+export const CHECKPOINT_SIZE_LIMIT_BYTES = 256 * 1024;

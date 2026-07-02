@@ -1,0 +1,67 @@
+{
+  "destinations": {
+    "cloudwatchLogs": {
+      "enabled": true,
+      "logGroupName": "/workflow-insight/demo",
+      "retentionDays": 30
+    },
+    "dynamodb": {
+      "enabled": true,
+      "tableName": "workflow-insight"
+    },
+    "aurora": {
+      "enabled": true,
+      "tableName": "workflow_insight",
+      "databaseName": "postgres",
+      "minCapacity": 0.5,
+      "maxCapacity": 1
+    },
+    "s3": {
+      "enabled": false,
+      "bucketName": "workflow-insight-records"
+    },
+    "redshift": {
+      "enabled": false,
+      "namespaceName": "insight-namespace",
+      "workgroupName": "insight-workgroup",
+      "databaseName": "dev",
+      "tableName": "workflow_insight",
+      "schema": "public"
+    },
+    "opensearch": {
+      "enabled": false,
+      "domainName": "workflow-insight"
+    },
+    "firehose": {
+      "enabled": false,
+      "streamName": "workflow-insight",
+      "bufferIntervalSeconds": 60,
+      "bufferSizeMB": 1
+    },
+    "sqs": {
+      "enabled": false,
+      "queueName": "workflow-insight",
+      "fifo": false
+    },
+    "eventbridge": {
+      "enabled": false,
+      "eventBusName": "default"
+    },
+    "timestream": {
+      "enabled": false,
+      "databaseName": "workflow-insight",
+      "tableName": "records",
+      "memoryRetentionHours": 24,
+      "magneticRetentionDays": 365
+    }
+  },
+  "lambda": {
+    "roleNames": [],
+    "discoverDurableFunctions": false,
+    "createExampleFunction": true,
+    "autoInvoke": {
+      "enabled": false,
+      "rateMinutes": 5
+    }
+  }
+}

@@ -49,10 +49,16 @@
     "@aws-sdk/client-dynamodb": "^3.1014.0",
     "@aws-sdk/client-lambda": "^3.1014.0",
     "@aws/durable-execution-sdk-js": "*",
-    "@aws/durable-execution-sdk-js-testing": "*"
+    "@aws/durable-execution-sdk-js-otel": "*",
+    "@aws/durable-execution-sdk-js-testing": "*",
+    "@opentelemetry/api": "^1.0.0",
+    "@opentelemetry/instrumentation": "^0.219.0",
+    "@opentelemetry/instrumentation-aws-sdk": "^0.74.0",
+    "@opentelemetry/sdk-trace-node": "^2.6.1"
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.948.0",
+    "@aws-sdk/client-xray": "^3.948.0",
     "@aws/durable-execution-sdk-js-eslint-plugin": "*",
     "@eslint/js": "^9.23.0",
     "@rollup/plugin-commonjs": "^28.0.9",
@@ -67,7 +73,7 @@
     "dotenv": "^17.2.3",
     "eslint": "^9.23.0",
     "jest": "^30.2.0",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.2.0",
     "prettier": "^3.5.2",
     "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",

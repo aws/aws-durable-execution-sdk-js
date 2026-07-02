@@ -13,12 +13,18 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -26,6 +32,9 @@ export const createInvokeHandler = (
   createStepId: () => string,
   parentId?: string,
   checkAndUpdateReplayMode?: () => void,
+
+  getDefaultSerdes?: () => AnySerdes,
+  plugin: DurableInstrumentationPlugin = {},
 ): {
   <I, O>(
     funcId: string,
@@ -68,6 +77,14 @@ export const createInvokeHandler = (
 
     const stepId = createStepId();
 
+    const opInfo = {
+      id: hashId(stepId),
+      name: name,
+      type: OperationType.CHAINED_INVOKE,
+      subType: OperationSubType.CHAINED_INVOKE,
+      parentId: parentId ? hashId(parentId) : undefined,
+    };
+
     // Phase 1: Start invoke operation
     let isCompleted = false;
 
@@ -107,6 +124,15 @@ export const createInvokeHandler = (
           },
         );
 
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+
         isCompleted = true;
         return;
       }
@@ -118,6 +144,7 @@ export const createInvokeHandler = (
         stepData?.Status === OperationStatus.STOPPED
       ) {
         log("❌", "Invoke already failed:", { stepId });
+        checkAndUpdateReplayMode?.();
 
         checkpoint.markOperationState(
           stepId,
@@ -133,6 +160,15 @@ export const createInvokeHandler = (
           },
         );
 
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        const isUpdatedBetweenInvocation =
+          context.isOperationUpdatedBetweenInvocation(opInfo.id);
+        await plugin.onOperationEnd?.({
+          ...operationInfo,
+          isReplay: !isUpdatedBetweenInvocation,
+        });
+
         isCompleted = true;
         return;
       }
@@ -140,7 +176,8 @@ export const createInvokeHandler = (
       // Start invoke if not already started
       if (!stepData) {
         const serializedPayload = await safeSerialize(
-          config?.payloadSerdes || defaultSerdes,
+          config?.payloadSerdes ||
+            (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
           input,
           stepId,
           name,
@@ -161,6 +198,14 @@ export const createInvokeHandler = (
             ...(config?.tenantId && { TenantId: config.tenantId }),
           },
         });
+        stepData = context.getStepData(stepId);
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: false });
+      } else {
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
       }
 
       // Mark as IDLE_NOT_AWAITED
@@ -193,7 +238,8 @@ export const createInvokeHandler = (
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
           const invokeDetails = stepData.ChainedInvokeDetails;
           return await safeDeserialize(
-            config?.resultSerdes || defaultSerdes,
+            config?.resultSerdes ||
+              (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
             invokeDetails?.Result,
             stepId,
             name,
@@ -233,10 +279,14 @@ export const createInvokeHandler = (
           stepId,
           OperationLifecycleState.COMPLETED,
         );
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
         const invokeDetails = stepData.ChainedInvokeDetails;
         return await safeDeserialize(
-          config?.resultSerdes || defaultSerdes,
+          config?.resultSerdes ||
+            (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes),
           invokeDetails?.Result,
           stepId,
           name,
@@ -250,14 +300,24 @@ export const createInvokeHandler = (
 
       checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
 
-      const invokeDetails = stepData?.ChainedInvokeDetails;
-      if (invokeDetails?.Error) {
+      const invokeError = stepData?.ChainedInvokeDetails?.Error;
+      const operationInfo = toOperationInfo(stepData);
+      backfillOperationInfo(operationInfo, opInfo);
+      await plugin.onOperationEnd?.({
+        ...operationInfo,
+        isReplay: false,
+        error: invokeError?.ErrorMessage
+          ? new Error(invokeError.ErrorMessage)
+          : new Error("Invoke failed"),
+      });
+
+      if (invokeError) {
         throw new InvokeError(
-          invokeDetails.Error.ErrorMessage || "Invoke failed",
-          invokeDetails.Error.ErrorMessage
-            ? new Error(invokeDetails.Error.ErrorMessage)
+          invokeError.ErrorMessage || "Invoke failed",
+          invokeError.ErrorMessage
+            ? new Error(invokeError.ErrorMessage)
             : undefined,
-          invokeDetails.Error.ErrorData,
+          invokeError.ErrorData,
         );
       } else {
         throw new InvokeError("Invoke failed");

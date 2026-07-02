@@ -1,0 +1,269 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "86bac1e1-726f-439d-abee-614524cf9273",
+    "EventTimestamp": "2026-06-15T22:40:19.936Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "map-with-errors",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "2f221a18eb863803",
+    "Name": "process-item-0",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "process-item-1",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "process-item-2",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "6151f5ab282d90e4",
+    "Name": "process-item-1",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error for item 2"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "2f221a18eb863803",
+    "Name": "process-item-0",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"Processed item 1\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "b425e0c75591aa8f",
+    "Name": "process-item-2",
+    "EventTimestamp": "2026-06-15T22:40:19.943Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"Processed item 3\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "MapIteration",
+    "EventId": 12,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-06-15T22:40:19.946Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "CallbackError",
+          "ErrorMessage": "Custom callback error for item 2"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 13,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-06-15T22:40:19.947Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"Processed item 1\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 14,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-06-15T22:40:19.947Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"Processed item 3\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 15,
+    "Id": "c4ca4238a0b92382",
+    "Name": "map-with-errors",
+    "EventTimestamp": "2026-06-15T22:40:19.947Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":\"Processed item 1\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"error\":{\"ErrorType\":\"ChildContextError\",\"ErrorMessage\":\"Custom callback error for item 2\",\"Cause\":{\"ErrorType\":\"CallbackError\",\"ErrorMessage\":\"Custom callback error for item 2\",\"Cause\":{\"ErrorType\":\"CallbackError\",\"ErrorMessage\":\"Custom callback error for item 2\"}}},\"index\":1,\"status\":\"FAILED\"},{\"result\":\"Processed item 3\",\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 16,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "capture-errors",
+    "EventTimestamp": "2026-06-15T22:40:19.947Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 17,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "capture-errors",
+    "EventTimestamp": "2026-06-15T22:40:19.947Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"errorInfo\":[{\"wrapperType\":\"ChildContextError\",\"wrapperMessage\":\"Custom callback error for item 2\",\"causeType\":\"CallbackError\",\"causeMessage\":\"Custom callback error for item 2\"}],\"successCount\":2,\"failureCount\":1}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 18,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay",
+    "EventTimestamp": "2026-06-15T22:40:19.950Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-06-15T22:40:20.950Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 19,
+    "EventTimestamp": "2026-06-15T22:40:19.972Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-15T22:40:19.936Z",
+      "EndTimestamp": "2026-06-15T22:40:19.972Z",
+      "Error": {},
+      "RequestId": "c4be7976-5bdc-4930-ba27-5fbaf238b08d"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 20,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "force-replay",
+    "EventTimestamp": "2026-06-15T22:40:20.951Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 21,
+    "EventTimestamp": "2026-06-15T22:40:20.953Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-06-15T22:40:20.951Z",
+      "EndTimestamp": "2026-06-15T22:40:20.953Z",
+      "Error": {},
+      "RequestId": "c14145fa-4ca0-4c44-8d08-5487b02e9ce7"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 22,
+    "Id": "86bac1e1-726f-439d-abee-614524cf9273",
+    "EventTimestamp": "2026-06-15T22:40:20.954Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"beforeReplay\":{\"errorInfo\":[{\"wrapperType\":\"ChildContextError\",\"wrapperMessage\":\"Custom callback error for item 2\",\"causeType\":\"CallbackError\",\"causeMessage\":\"Custom callback error for item 2\"}],\"successCount\":2,\"failureCount\":1},\"afterReplay\":{\"errorInfo\":[{\"wrapperType\":\"ChildContextError\",\"wrapperMessage\":\"Custom callback error for item 2\",\"causeType\":\"CallbackError\",\"causeMessage\":\"Custom callback error for item 2\"}],\"successCount\":2,\"failureCount\":1}}"
+      }
+    }
+  }
+]

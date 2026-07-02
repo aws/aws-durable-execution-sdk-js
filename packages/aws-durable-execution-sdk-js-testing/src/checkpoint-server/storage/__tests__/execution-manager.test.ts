@@ -156,6 +156,7 @@ describe("execution-manager", () => {
               events: [],
             },
           ],
+          updatedOperationIds: [],
         });
 
         // Verify CheckpointStorage was initialized with correct payload

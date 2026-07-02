@@ -22,6 +22,8 @@ const createCheckpoint = (
     emitter,
     logger,
     new Set<string>(),
+    {},
+    "",
   );
   const checkpoint = (stepId: string, data: any): Promise<any> =>
     manager.checkpoint(stepId, data);
@@ -55,6 +57,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       tenantId: "",
       pendingCompletions: new Set(),
       getStepData: jest.fn(),
+      isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
     } satisfies ExecutionContext;
 
     mockLogger = createDefaultLogger(mockContext);

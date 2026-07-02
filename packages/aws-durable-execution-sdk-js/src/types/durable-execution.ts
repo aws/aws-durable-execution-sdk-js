@@ -12,6 +12,7 @@ import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
 } from "./core";
+import { DurableInstrumentationPlugin } from "./plugin";
 
 /**
  * A handler function type for a durable execution that provides automatic state persistence,
@@ -116,6 +117,30 @@ export interface DurableExecutionConfig {
    * ```
    */
   client?: LambdaClient;
+
+  /**
+   * Optional array of instrumentation plugins for observability and tracing.
+   *
+   * Plugins receive lifecycle callbacks at key points during durable execution,
+   * enabling integration with tracing systems (e.g., OpenTelemetry, X-Ray),
+   * custom metrics, and logging enrichment.
+   *
+   * Multiple plugins can be provided and will be called in order. Plugin errors
+   * are swallowed to prevent instrumentation from affecting execution correctness.
+   *
+   * @example
+   * ```typescript
+   * import { withDurableExecution } from '@aws/durable-execution-sdk-js';
+   * import { myTracingPlugin } from './tracing';
+   *
+   * export const handler = withDurableExecution(myHandler, {
+   *   plugins: [myTracingPlugin]
+   * });
+   * ```
+   *
+   * @experimental This parameter is experimental and may be changed or removed in future releases.
+   */
+  plugins?: DurableInstrumentationPlugin[];
 }
 
 /**

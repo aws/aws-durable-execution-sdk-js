@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-lambda";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { defaultSerdes } from "../../utils/serdes/serdes";
+import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
   safeDeserialize,
@@ -28,9 +28,17 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
+import {
+  DurableInstrumentationPlugin,
+  PluginOperationStatus,
+} from "../../types/plugin";
+import {
+  backfillOperationInfo,
+  toOperationInfo,
+} from "../../utils/operation/operation";
+import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-// Checkpoint size limit in bytes (256KB)
-const CHECKPOINT_SIZE_LIMIT = 256 * 1024;
+import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
 export const determineChildReplayMode = (
   context: ExecutionContext,
@@ -75,6 +83,9 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+
+  getDefaultSerdes?: () => AnySerdes,
+  plugin: DurableInstrumentationPlugin = {},
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,
@@ -142,6 +153,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           options,
           getParentLogger,
           createChildContext,
+          getDefaultSerdes,
         );
       }
 
@@ -157,6 +169,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         getParentLogger,
         createChildContext,
         parentId,
+        getDefaultSerdes,
+        plugin,
       );
     })()
       .then((result) => {
@@ -197,8 +211,11 @@ export const handleCompletedChildContext = async <
     checkpointToken: string | undefined,
     parentId?: string,
   ) => DurableContext<Logger>,
+
+  getDefaultSerdes?: () => AnySerdes,
 ): Promise<T> => {
-  const serdes = options?.serdes || defaultSerdes;
+  const serdes =
+    options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
@@ -240,8 +257,28 @@ export const handleCompletedChildContext = async <
       entityId, // parentId
     );
 
-    return await runWithContext(entityId, entityId, () =>
+    const replayedResult = await runWithContext(entityId, entityId, () =>
       fn(durableChildContext),
+    );
+
+    // Large payloads re-execute the child function on replay, so apply the
+    // same serdes round-trip first-run uses, keeping the returned value
+    // consistent across first-run and replay.
+    const reserialized = await safeSerialize(
+      serdes,
+      replayedResult,
+      entityId,
+      stepName,
+      context.terminationManager,
+      context.durableExecutionArn,
+    );
+    return await safeDeserialize(
+      serdes,
+      reserialized,
+      entityId,
+      stepName,
+      context.terminationManager,
+      context.durableExecutionArn,
     );
   }
 
@@ -249,6 +286,7 @@ export const handleCompletedChildContext = async <
     entityId,
   });
 
+  // Small payloads: replay deserializes the checkpoint, so match that here.
   return await safeDeserialize(
     serdes,
     result,
@@ -278,10 +316,21 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     parentId?: string,
   ) => DurableContext<Logger>,
   parentId?: string,
+
+  getDefaultSerdes?: () => AnySerdes,
+  plugin: DurableInstrumentationPlugin = {},
 ): Promise<T> => {
-  const serdes = options?.serdes || defaultSerdes;
+  const serdes =
+    options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const isVirtual = options?.virtualContext === true;
+  const opInfo = {
+    id: hashId(entityId),
+    name: name,
+    type: OperationType.CONTEXT,
+    subType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+    parentId: parentId ? hashId(parentId) : undefined,
+  };
 
   // Checkpoint at start if not already started and not virtual (fire-and-forget for performance)
   if (!isVirtual && context.getStepData(entityId) === undefined) {
@@ -294,6 +343,13 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       Type: OperationType.CONTEXT,
       Name: name,
     });
+    await plugin.onOperationStart?.({
+      ...opInfo,
+      status: PluginOperationStatus.STARTED,
+      isReplay: false,
+    });
+  } else {
+    await plugin.onOperationStart?.({ ...opInfo, isReplay: true });
   }
 
   const childReplayMode = determineChildReplayMode(context, entityId);
@@ -309,19 +365,26 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     // parentId: this parameter is used for checkpointing, and should point to
     // valid parentId tthat is already checkpointed.
     // If this runInChildContext is a virtual, then we will use the parentId  (the ancestor)
-    // But if this runInChildContext is a virtual, then it's entityId can be used
+    // But if this runInChildContext is not virtual, then it's entityId can be used
     isVirtual ? parentId : entityId,
   );
 
   try {
     // Execute the child context function with context tracking
-    const result = await runWithContext(
+    const childContextFn = () => fn(durableChildContext);
+    const wrapInfo = {
+      ...opInfo,
+      isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
+    };
+    const result = (await runWithContext(
       entityId,
       parentId,
-      () => fn(durableChildContext),
+      plugin.wrapChildContextFn
+        ? () => plugin.wrapChildContextFn!(wrapInfo, childContextFn)
+        : childContextFn,
       undefined,
       childReplayMode,
-    );
+    )) as T;
 
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
@@ -339,7 +402,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
     if (
       serializedResult &&
-      Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT
+      Buffer.byteLength(serializedResult, "utf8") > CHECKPOINT_SIZE_LIMIT_BYTES
     ) {
       replayChildren = true;
 
@@ -354,7 +417,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
         payloadSize: Buffer.byteLength(serializedResult, "utf8"),
-        limit: CHECKPOINT_SIZE_LIMIT,
+        limit: CHECKPOINT_SIZE_LIMIT_BYTES,
       });
     }
 
@@ -373,6 +436,14 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
         Name: name,
       });
+      const currentStepData = context.getStepData(entityId);
+      const onOperationEndInfo = toOperationInfo(currentStepData);
+      backfillOperationInfo(onOperationEndInfo, opInfo);
+      await plugin.onOperationEnd?.({
+        ...onOperationEndInfo,
+        status: PluginOperationStatus.SUCCEEDED,
+        isReplay: false,
+      });
 
       log("✅", "Child context completed successfully:", {
         entityId,
@@ -383,9 +454,24 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
       });
+      await plugin.onOperationEnd?.({ ...opInfo, isReplay: true });
     }
 
-    return result;
+    // Return deserialize(serialize(result)) in every mode (small payload,
+    // large payload / ReplayChildren, and virtual). This gives developers a
+    // single, predictable mental model: the value handed back from a child
+    // context has always passed through the serdes round-trip, regardless of
+    // payload size or whether the context is virtual. The corresponding replay
+    // paths (small: deserialize the checkpoint; large: re-execute then
+    // round-trip; virtual: re-execute then round-trip) produce the same value.
+    return await safeDeserialize(
+      serdes,
+      serializedResult,
+      entityId,
+      name,
+      context.terminationManager,
+      context.durableExecutionArn,
+    );
   } catch (error) {
     log(
       "❌",
@@ -396,6 +482,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         error,
       },
     );
+
+    // Always wrap in ChildContextError for consistent error handling
+    const errorObject = createErrorObjectFromError(error);
+    const reconstructedError =
+      DurableOperationError.fromErrorObject(errorObject);
 
     // Mark this run-in-child-context as finished and checkpoint failure (only for non-virtual)
     if (!isVirtual) {
@@ -411,12 +502,22 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         Error: createErrorObjectFromError(error),
         Name: name,
       });
+      const currentStepData = context.getStepData(entityId);
+      const onOperationEndInfo = toOperationInfo(currentStepData);
+      backfillOperationInfo(onOperationEndInfo, opInfo);
+      await plugin.onOperationEnd?.({
+        ...onOperationEndInfo,
+        status: PluginOperationStatus.FAILED,
+        isReplay: false,
+        error: reconstructedError,
+      });
+    } else {
+      await plugin.onOperationEnd?.({
+        ...opInfo,
+        isReplay: true,
+        error: reconstructedError,
+      });
     }
-
-    // Always wrap in ChildContextError for consistent error handling
-    const errorObject = createErrorObjectFromError(error);
-    const reconstructedError =
-      DurableOperationError.fromErrorObject(errorObject);
 
     // Use errorMapper if provided, otherwise wrap in ChildContextError
     if (errorMapper) {

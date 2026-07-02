@@ -15,6 +15,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy
       Policies:
         - PolicyName: DurableExecutionPolicy
           PolicyDocument:
@@ -925,6 +926,31 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  MapErrorTypePreservationReplay:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapErrorTypePreservationAcrossReplay-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-error-type-preservation-replay.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   MapFailureThresholdExceededCount:
     Type: AWS::Serverless::Function
     Properties:
@@ -1321,6 +1347,85 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  OtelBasicSteps:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelBasicSteps-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-basic-steps.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  OtelChildContext:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelChildContext-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-child-context.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  OtelXrayE2e:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelXRayE2E-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-xray-e2e.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   ParallelBasic:
@@ -1973,12 +2078,62 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  RunInChildContextErrorDataPropagation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RuninChildContext-ErrorDataPropagation-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: run-in-child-context-error-data-propagation.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   RunInChildContextLargeData:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: RunInChildContextLargeData-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: run-in-child-context-large-data.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  RunInChildContextSerdes:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RuninChildContextwithSerdes-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: run-in-child-context-serdes.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -2073,6 +2228,56 @@ Resources:
           DURABLE_EXAMPLES_VERBOSE: "true"
     Metadata:
       SkipBuild: "True"
+  ConfigureCallbackDeserializer:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfigureDefaultCallbackDeserializer-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: configure-callback-deserializer.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  ConfigureSerdes:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ConfigureDefaultSerdesviaconfigureSerdes-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: configure-serdes.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
   SimpleExecution:
     Type: AWS::Serverless::Function
     Properties:
@@ -2109,6 +2314,31 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  StepInterruptedNoRetry:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: StepInterruptedNoRetry-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: step-interrupted-no-retry.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 5
       Role:
         Fn::GetAtt:
           - DurableFunctionRole

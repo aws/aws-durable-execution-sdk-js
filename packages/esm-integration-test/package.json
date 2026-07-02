@@ -1,0 +1,13 @@
+{
+  "name": "esm-integration-test",
+  "version": "1.0.0",
+  "description": "ESM integration test to verify external ECMAScript Module compatibility",
+  "type": "module",
+  "main": "test.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "*"
+  }
+}

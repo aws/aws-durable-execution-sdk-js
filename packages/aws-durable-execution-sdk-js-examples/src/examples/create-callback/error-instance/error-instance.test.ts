@@ -30,7 +30,8 @@ createTests({
         },
         failureError: {
           isCallbackError: true,
-          errorName: "CallbackError",
+          isCallbackExternalError: true,
+          errorName: "CallbackExternalError",
           errorMessage: "Callback failed",
         },
       });

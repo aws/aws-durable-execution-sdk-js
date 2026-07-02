@@ -138,7 +138,14 @@ class IntegrationTestRunner {
   // Get integration examples from catalog
   getIntegrationExamples() {
     log.info("Getting integration examples...");
-    return examplesCatalog;
+    return examplesCatalog.filter(
+      (example) =>
+        !example.localOnly &&
+        !(
+          example.excludeRuntimes &&
+          example.excludeRuntimes.includes(this.runtime)
+        ),
+    );
   }
 
   /**

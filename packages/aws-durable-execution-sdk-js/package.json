@@ -2,7 +2,7 @@
   "name": "@aws/durable-execution-sdk-js",
   "description": "AWS Durable Execution Language SDK for TypeScript",
   "license": "Apache-2.0",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
@@ -18,8 +18,8 @@
   "exports": {
     ".": {
       "types": "./dist-types/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist-cjs/index.js"
+      "require": "./dist-cjs/index.js",
+      "import": "./dist/index.mjs"
     }
   },
   "files": [
@@ -36,9 +36,6 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:scripts": "jest --config jest.scripts.config.js",
-    "test:scripts:watch": "jest --config jest.scripts.config.js --watch",
-    "test:scripts:coverage": "jest --config jest.scripts.config.js --coverage",
     "test:all": "jest --config jest.all.config.js",
     "test:all:coverage": "jest --config jest.all.config.js --coverage",
     "lint": "eslint src --ext .ts",
