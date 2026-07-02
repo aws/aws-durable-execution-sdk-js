@@ -1,5 +1,9 @@
 import { workflowInsight } from "./index";
-import type { InsightExporter, WorkflowInsightRecord } from "./types";
+import type {
+  InsightExporter,
+  OperationResult,
+  WorkflowInsightRecord,
+} from "./types";
 import type {
   DurableExecutionInvocationOutput,
   DurableInstrumentationPlugin,
@@ -72,7 +76,9 @@ describe("content filtering", () => {
           overrides: [
             {
               operationName: "charge",
-              result: (r) => ({ amount: (r as { amount: number }).amount }),
+              result: (r): OperationResult => ({
+                amount: (r as { amount: number }).amount,
+              }),
             },
             { operationName: "internal", exclude: true },
           ],
@@ -165,7 +171,9 @@ describe("content filtering", () => {
       exporters: [exporter],
       content: {
         operations: {
-          overrides: [{ operationName: "xml-step", result: (r) => r }],
+          overrides: [
+            { operationName: "xml-step", result: (r): OperationResult => r },
+          ],
         },
       },
     });
