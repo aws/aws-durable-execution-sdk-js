@@ -5,14 +5,9 @@ module.exports = {
   displayName: "Workflow Insight Tests",
   roots: ["<rootDir>/src"],
   testMatch: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
-  testPathIgnorePatterns: [
-    "/node_modules/",
-    "/dist/",
-    "/dist-cjs/",
-    "/dist-types/",
-  ],
+  testPathIgnorePatterns: ["/node_modules/", "/dist/"],
   transform: {
-    "^.+\\.ts$": ["ts-jest", { tsconfig: "<rootDir>/tsconfig.test.json" }],
+    "^.+\\.ts$": "ts-jest",
   },
   moduleFileExtensions: ["ts", "js", "json", "node"],
 };

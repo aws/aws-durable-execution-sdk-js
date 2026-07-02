@@ -86,8 +86,9 @@
 
 ## Testing
 
-> Jest is set up for the package (`jest.config.js`, `tsconfig.test.json`, `npm test`).
-> Tests drive the public `workflowInsight` plugin via a capturing exporter.
+> Jest is set up for the package (`jest.config.js` + `npm test`), mirroring the
+> core SDK's ts-jest configuration. Tests drive the public `workflowInsight`
+> plugin via a capturing exporter.
 
 - [x] Unit tests for `toOperationRecord` and `buildOperationRecords` — covered via
       content-filtering + operation-detail tests (exclude, includeErrors, result gating,
