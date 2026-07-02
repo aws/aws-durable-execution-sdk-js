@@ -145,6 +145,16 @@ export interface OperationRecord {
 }
 
 /**
+ * How an exporter renders operations in the emitted record:
+ * - `"array"`: the canonical `operations` array (lossless; default).
+ * - `"by-name"`: replace it with the `operationsByName` map (name-keyed summary).
+ * - `"both"`: include the `operations` array and the `operationsByName` map.
+ *
+ * @experimental This type is experimental and may change in future releases.
+ */
+export type OperationsFormat = "array" | "by-name" | "both";
+
+/**
  * A per-operation-name summary emitted (as an `operationsByName` map) by
  * point-access exporters (CloudWatch Logs, DynamoDB) to make name-based queries
  * ergonomic. The canonical `operations` array remains the lossless source of

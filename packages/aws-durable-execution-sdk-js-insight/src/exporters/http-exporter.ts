@@ -1,4 +1,9 @@
-import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import type {
+  InsightExporter,
+  OperationsFormat,
+  WorkflowInsightRecord,
+} from "../types";
+import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the HTTP/Webhook exporter.
@@ -19,6 +24,13 @@ export interface HttpExporterConfig {
 
   /** Request timeout in milliseconds. Default: 10000 (10s). */
   timeoutMs?: number;
+
+  /**
+   * How operations are rendered in the posted record: the canonical
+   * `operations` array (`"array"`, default), the name-keyed `operationsByName`
+   * map (`"by-name"`), or `"both"`. Choose based on what your endpoint consumes.
+   */
+  operationsFormat?: OperationsFormat;
 }
 
 /**
@@ -36,12 +48,14 @@ export class HttpExporter implements InsightExporter {
   private readonly method: "POST" | "PUT";
   private readonly headers: Record<string, string>;
   private readonly timeoutMs: number;
+  private readonly operationsFormat: OperationsFormat;
 
   constructor(config: HttpExporterConfig) {
     this.url = config.url;
     this.method = config.method ?? "POST";
     this.headers = config.headers ?? {};
     this.timeoutMs = config.timeoutMs ?? 10_000;
+    this.operationsFormat = config.operationsFormat ?? "array";
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {
@@ -55,7 +69,9 @@ export class HttpExporter implements InsightExporter {
           "Content-Type": "application/json",
           ...this.headers,
         },
-        body: JSON.stringify(record),
+        body: JSON.stringify(
+          applyOperationsFormat(record, this.operationsFormat),
+        ),
         signal: controller.signal,
       });
 

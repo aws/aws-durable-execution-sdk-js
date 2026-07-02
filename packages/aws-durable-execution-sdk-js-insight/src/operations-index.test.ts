@@ -1,4 +1,5 @@
 import {
+  applyOperationsFormat,
   buildOperationsByName,
   withOperationsByName,
 } from "./operations-index";
@@ -141,5 +142,40 @@ describe("withOperationsByName", () => {
     ).toBeUndefined();
     // ...but the original record is not mutated.
     expect(record.operations).toHaveLength(1);
+  });
+});
+
+describe("applyOperationsFormat", () => {
+  const record = {
+    operations: [
+      op({ id: "o1", name: "step-a", durationMs: 5 }),
+      op({ id: "o2", name: "step-a", durationMs: 7 }),
+    ],
+  } as unknown as WorkflowInsightRecord;
+
+  it("array: returns the record unchanged", () => {
+    const out = applyOperationsFormat(record, "array") as WorkflowInsightRecord;
+    expect(out.operations).toHaveLength(2);
+    expect(
+      (out as unknown as { operationsByName?: unknown }).operationsByName,
+    ).toBeUndefined();
+  });
+
+  it("by-name: replaces the array with the map", () => {
+    const out = applyOperationsFormat(record, "by-name") as {
+      operations?: unknown;
+      operationsByName: Record<string, { count: number }>;
+    };
+    expect(out.operations).toBeUndefined();
+    expect(out.operationsByName["step-a"].count).toBe(2);
+  });
+
+  it("both: keeps the array and adds the map", () => {
+    const out = applyOperationsFormat(record, "both") as {
+      operations: unknown[];
+      operationsByName: Record<string, { count: number }>;
+    };
+    expect(out.operations).toHaveLength(2);
+    expect(out.operationsByName["step-a"].count).toBe(2);
   });
 });

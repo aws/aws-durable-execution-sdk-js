@@ -1219,6 +1219,7 @@ const insight = workflowInsight({
       endpoint: "https://otlp.datadoghq.com/v1/logs",
       headers: { "DD-API-KEY": process.env.DD_API_KEY! },
       protocol: "http/json", // optional (default)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1228,7 +1229,10 @@ const insight = workflowInsight({
 
 - Resource: `service.name`, `cloud.region`, `cloud.account.id`, `faas.name`, `faas.version`
 - Log attributes: `workflow.execution_arn`, `workflow.status`, `workflow.duration_ms`
-- Log body: full record JSON
+- Log body: full record JSON. `operationsFormat` controls how operations appear
+  in the body — the `operations` array (default), the `operationsByName` map, or
+  both. (Operations are only in the body, never attributes, so this never affects
+  attribute cardinality.)
 - Severity: ERROR for FAILED, INFO otherwise
 
 **No dependencies** — uses native `fetch`.
@@ -1254,12 +1258,17 @@ const insight = workflowInsight({
       headers: { Authorization: "Bearer " + process.env.TOKEN },
       method: "POST", // optional (default)
       timeoutMs: 5000, // optional (default: 10000)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
 ```
 
 **No dependencies** — uses native `fetch` with configurable timeout.
+
+`operationsFormat` controls how operations are rendered in the posted body:
+the canonical `operations` array (default), the name-keyed `operationsByName`
+map, or both — pick what your endpoint consumes.
 
 **When to use:** Custom backends, internal microservices, SaaS integrations without dedicated exporters, prototyping.
 

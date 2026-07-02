@@ -24,6 +24,7 @@ export type {
   WorkflowInsightRecord,
   OperationRecord,
   OperationSummary,
+  OperationsFormat,
   ContentConfig,
   OperationOverride,
 } from "./types";
@@ -31,6 +32,7 @@ export type {
 export {
   buildOperationsByName,
   withOperationsByName,
+  applyOperationsFormat,
 } from "./operations-index";
 
 export { S3Exporter } from "./exporters/s3-exporter";

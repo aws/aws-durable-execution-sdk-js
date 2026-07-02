@@ -1,6 +1,7 @@
 import type {
   OperationRecord,
   OperationSummary,
+  OperationsFormat,
   WorkflowInsightRecord,
 } from "./types";
 
@@ -96,4 +97,39 @@ export function withOperationsByName(record: WorkflowInsightRecord): Omit<
 } {
   const { operations, ...rest } = record;
   return { ...rest, operationsByName: buildOperationsByName(operations) };
+}
+
+/** The record as rendered by {@link applyOperationsFormat}. */
+export type FormattedRecord =
+  | WorkflowInsightRecord
+  | (Omit<WorkflowInsightRecord, "operations"> & {
+      operationsByName: Record<string, OperationSummary>;
+    })
+  | (WorkflowInsightRecord & {
+      operationsByName: Record<string, OperationSummary>;
+    });
+
+/**
+ * Renders a record's operations according to an {@link OperationsFormat}. Used by
+ * flexible-destination exporters (HTTP, OTel) that can carry either shape:
+ * - `"array"`  → the record unchanged (canonical operations array).
+ * - `"by-name"`→ `operations` replaced by the `operationsByName` map.
+ * - `"both"`   → the array plus an added `operationsByName` map.
+ */
+export function applyOperationsFormat(
+  record: WorkflowInsightRecord,
+  format: OperationsFormat,
+): FormattedRecord {
+  switch (format) {
+    case "by-name":
+      return withOperationsByName(record);
+    case "both":
+      return {
+        ...record,
+        operationsByName: buildOperationsByName(record.operations),
+      };
+    case "array":
+    default:
+      return record;
+  }
 }

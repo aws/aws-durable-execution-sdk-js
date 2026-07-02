@@ -1,4 +1,9 @@
-import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import type {
+  InsightExporter,
+  OperationsFormat,
+  WorkflowInsightRecord,
+} from "../types";
+import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the OpenTelemetry log exporter.
@@ -21,6 +26,14 @@ export interface OTelExporterConfig {
    * Default: "http/json"
    */
   protocol?: "http/json" | "http/protobuf";
+
+  /**
+   * How operations are rendered in the log body: the canonical `operations`
+   * array (`"array"`, default), the name-keyed `operationsByName` map
+   * (`"by-name"`), or `"both"`. Operations are only in the log body (not
+   * attributes), so this has no effect on attribute cardinality.
+   */
+  operationsFormat?: OperationsFormat;
 }
 
 /**
@@ -40,6 +53,7 @@ export interface OTelExporterConfig {
 export class OTelExporter implements InsightExporter {
   private readonly endpoint: string;
   private readonly headers: Record<string, string>;
+  private readonly operationsFormat: OperationsFormat;
 
   constructor(config: OTelExporterConfig) {
     if (config.protocol === "http/protobuf") {
@@ -49,6 +63,7 @@ export class OTelExporter implements InsightExporter {
     }
     this.endpoint = config.endpoint;
     this.headers = config.headers ?? {};
+    this.operationsFormat = config.operationsFormat ?? "array";
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {
@@ -102,7 +117,11 @@ export class OTelExporter implements InsightExporter {
                   timeUnixNano: toNano(record.emittedAt),
                   severityNumber: severityFor(record.status),
                   severityText: record.status,
-                  body: { stringValue: JSON.stringify(record) },
+                  body: {
+                    stringValue: JSON.stringify(
+                      applyOperationsFormat(record, this.operationsFormat),
+                    ),
+                  },
                   attributes: [
                     kv("workflow.execution_arn", record.executionArn),
                     kv("workflow.execution_name", record.executionName ?? ""),
