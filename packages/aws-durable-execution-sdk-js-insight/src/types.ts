@@ -97,6 +97,8 @@ export interface WorkflowInsightConfig {
    * decision and produces fragmented records.
    *
    * Out-of-range or non-numeric values are clamped/defaulted with a warning.
+   *
+   * @experimental This field is experimental and may change in future releases.
    */
   samplingRate?: number;
 
