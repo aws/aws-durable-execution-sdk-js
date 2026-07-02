@@ -642,45 +642,6 @@ describe("OtelPlugin", () => {
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe("FAILED");
     });
-
-    it("attempt span includes durable.attempt.outcome attribute on failed attempt", async () => {
-      await plugin.onInvocationStart(makeInvocationInfo());
-      await plugin.onOperationStart(
-        makeOperationInfo({
-          id: "op-outcome-retry",
-          name: "retry-step",
-          type: "step",
-        }),
-      );
-      await plugin.onOperationAttemptStart(
-        makeAttemptInfo({
-          id: "op-outcome-retry",
-          name: "retry-step",
-          type: "step",
-          attempt: 1,
-        }),
-      );
-      await plugin.onOperationAttemptEnd(
-        makeAttemptEndInfo({
-          id: "op-outcome-retry",
-          attempt: 1,
-          outcome: "FAILED" as any,
-          error: new Error("transient failure"),
-        }),
-      );
-      await plugin.onOperationEnd(
-        makeOperationEndInfo({ id: "op-outcome-retry", name: "retry-step" }),
-      );
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
-
-      const attemptSpan = getExportedSpans().find(
-        (s) =>
-          s.attributes["durable.operation.id"] === "op-outcome-retry" &&
-          s.attributes["durable.operation.attempt"] === 1,
-      );
-      expect(attemptSpan).toBeDefined();
-      expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe("FAILED");
-    });
   });
 
   describe("Error handling", () => {
