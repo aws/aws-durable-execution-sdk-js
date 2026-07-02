@@ -82,17 +82,18 @@ export function buildOperationsByName(
 }
 
 /**
- * Returns the record augmented with an `operationsByName` index. Used by
- * point-access exporters (CloudWatch Logs, DynamoDB) whose stores can't filter
- * "the array element named X" but can dot-path into a name-keyed map.
+ * Returns the record with its `operations` array **replaced** by a name-keyed
+ * `operationsByName` index. Used by point-access exporters (CloudWatch Logs,
+ * DynamoDB) whose stores can't filter "the array element named X" but can
+ * dot-path into a name-keyed map — so they carry the index instead of the array
+ * (array-native exporters keep the `operations` array unchanged).
  */
-export function withOperationsByName(
-  record: WorkflowInsightRecord,
-): WorkflowInsightRecord & {
+export function withOperationsByName(record: WorkflowInsightRecord): Omit<
+  WorkflowInsightRecord,
+  "operations"
+> & {
   operationsByName: Record<string, OperationSummary>;
 } {
-  return {
-    ...record,
-    operationsByName: buildOperationsByName(record.operations),
-  };
+  const { operations, ...rest } = record;
+  return { ...rest, operationsByName: buildOperationsByName(operations) };
 }

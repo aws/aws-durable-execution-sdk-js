@@ -30,18 +30,16 @@ const RECORD_SCHEMA_DIRECT = `Each log event is a raw JSON WorkflowInsightRecord
 - output: object (optional)
 - error.name: string (optional)
 - error.message: string (optional)
-- operations: array of { id, name, type, subType, parentId, status, startTime, endTime, durationMs, attempt, error, result }
-- operationsByName: object keyed by operation name → per-name summary:
+- operationsByName: object keyed by operation name → per-name summary (this destination carries this INSTEAD OF a raw operations array):
     { type, subType, count, minDurationMs, maxDurationMs, totalDurationMs, failedCount, maxAttempt, status, result, error }
     Metric fields aggregate ALL occurrences of that name; type/subType/status reflect the most recent occurrence; result/error are present only when the name occurs exactly once.
 - pluginVersion: string
 - sdkVersion: string
 
 Fields are directly queryable (no parsing needed). Nested object fields use dot notation (error.name, error.message).
-For PER-OPERATION-NAME queries PREFER operationsByName — it is directly dot-path queryable, e.g.
+For PER-OPERATION-NAME queries use operationsByName — it is directly dot-path queryable, e.g.
   filter operationsByName.convert_data.maxDurationMs < 5000
-(The operations array keeps full per-occurrence detail, but cross-element filtering on it is limited.)
-Operation names containing "." can't be used as dot-path keys — fall back to the operations array for those.`;
+Operation names containing "." can't be used as dot-path keys.`;
 
 const DIALECT_DIRECT = `Target query language: CloudWatch Logs Insights (NOT SQL).
 Rules:
@@ -104,15 +102,13 @@ The "message" field contains a JSON-serialized WorkflowInsightRecord with these 
 - input: object (optional)
 - output: object (optional)
 - error: { name: string, message: string } (optional)
-- operations: array of { id, name, type, subType, parentId, status, startTime, endTime, durationMs, attempt, error, result }
-- operationsByName: object keyed by operation name → per-name summary (type, subType, count, min/max/totalDurationMs, failedCount, maxAttempt, status, result, error)
+- operationsByName: object keyed by operation name → per-name summary (type, subType, count, min/max/totalDurationMs, failedCount, maxAttempt, status, result, error). This destination carries this INSTEAD OF a raw operations array.
 - pluginVersion: string
 - sdkVersion: string
 
 IMPORTANT: The "message" field is a flat JSON string, NOT a nested object.
 To access sub-fields you MUST use: parse message "\\"fieldName\\":\\"*\\"" as alias
 For numeric fields use: parse message "\\"fieldName\\":*," as alias
-Array elements (operations) cannot be individually queried — filter/parse on top-level fields only.
 Per-operation-name numeric filtering (operationsByName) is unreliable here because the record is a
 stringified message; for those queries prefer the CloudWatchLogsExporter (direct) destination, or do a
 coarse text match like: filter message like /"convert_data"/`;
@@ -177,8 +173,7 @@ The partition key is "pk" (the executionArn). All record fields are stored as to
 - input: map (optional)
 - output: map (optional)
 - error: map with name and message (optional)
-- operations: list of maps
-- operationsByName: map keyed by operation name → per-name summary map
+- operationsByName: map keyed by operation name → per-name summary map (stored INSTEAD OF a raw operations list)
     { type, subType, count, minDurationMs, maxDurationMs, totalDurationMs, failedCount, maxAttempt, status, result, error }
     Metrics aggregate all occurrences; status is the most recent; result/error are present only when the name occurs exactly once.
     Navigate it for per-operation-name filters, e.g. WHERE "operationsByName"."convert_data"."maxDurationMs" < 5000

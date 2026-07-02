@@ -285,8 +285,9 @@ WHERE record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationM
 
 Point-access stores that can't filter "the array element named X" —
 **CloudWatch Logs** (`LambdaLogExporter`, `CloudWatchLogsExporter`) and
-**DynamoDB** (`DynamoDBExporter`) — additionally emit an `operationsByName` map
-so name-based queries become a simple dot-path:
+**DynamoDB** (`DynamoDBExporter`) — emit an `operationsByName` map **instead of
+the `operations` array**, so name-based queries become a simple dot-path (these
+stores trade the per-occurrence array detail for queryability):
 
 ```
 # CloudWatch Logs Insights

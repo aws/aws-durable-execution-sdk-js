@@ -8,8 +8,8 @@
 
 `WorkflowInsightRecord.operations` stays a **canonical JSON array** of
 `OperationRecord`. It is the lossless source of truth. Exporters that target
-point-access stores additionally emit a derived, name-keyed **`operationsByName`**
-index; array-native stores keep only the array.
+point-access stores emit a derived, name-keyed **`operationsByName`** index
+instead of the array; array-native stores keep the array.
 
 **Unnamed operations are excluded everywhere.** An operation with no `name` is
 dropped from the canonical array (current behavior) and, consequently, from the
@@ -37,11 +37,16 @@ never named, so surfacing it adds noise without value.
 
 - **CloudWatch Logs Insights** (`LambdaLogExporter`, `CloudWatchLogsExporter`)
   and **DynamoDB** (`DynamoDBExporter`) are point-access stores that cannot
-  filter "the array element named X" well. These additionally emit
-  `operationsByName` for dot-path queries. They emit **array + `operationsByName`**.
+  filter "the array element named X" well. These emit **`operationsByName`
+  instead of the `operations` array** — the map is dot-path queryable. (Trade-off:
+  these stores no longer carry the per-occurrence array detail.)
 - **Array-native stores** — `S3Exporter` (Athena), `OpenSearchExporter`
-  (`nested`), `AuroraExporter`, `RedshiftExporter` (SUPER) — keep the **array only**.
+  (`nested`), `AuroraExporter`, `RedshiftExporter` (SUPER) — keep the
+  **`operations` array** (no `operationsByName`).
 - **Custom exporters** may reshape however they want.
+
+Each store therefore carries exactly one operations representation: the array,
+or the `operationsByName` map — never both.
 
 ## `operationsByName` specification
 
@@ -168,6 +173,6 @@ operationsByName.convert_data.maxDurationMs < :v   (:v = 5000)
 
 1. Shared, unit-tested `buildOperationsByName(operations)` helper.
 2. Wire it into `LambdaLogExporter`, `CloudWatchLogsExporter`, `DynamoDBExporter`
-   (emit array + `operationsByName`).
+   (emit `operationsByName` instead of the `operations` array).
 3. Leave array-native exporters unchanged.
 4. Document the per-store shape and example queries in the README.

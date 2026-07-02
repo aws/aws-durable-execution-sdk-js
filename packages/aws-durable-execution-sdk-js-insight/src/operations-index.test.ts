@@ -128,15 +128,18 @@ describe("buildOperationsByName", () => {
 });
 
 describe("withOperationsByName", () => {
-  it("attaches operationsByName without mutating the original record", () => {
+  it("replaces operations with operationsByName without mutating the original", () => {
     const record = {
       operations: [op({ id: "o1", name: "step-a", durationMs: 5 })],
     } as unknown as WorkflowInsightRecord;
 
-    const augmented = withOperationsByName(record);
-    expect(augmented.operationsByName["step-a"].count).toBe(1);
+    const out = withOperationsByName(record);
+    expect(out.operationsByName["step-a"].count).toBe(1);
+    // the array is dropped from the emitted record...
     expect(
-      (record as unknown as { operationsByName?: unknown }).operationsByName,
+      (out as unknown as { operations?: unknown }).operations,
     ).toBeUndefined();
+    // ...but the original record is not mutated.
+    expect(record.operations).toHaveLength(1);
   });
 });

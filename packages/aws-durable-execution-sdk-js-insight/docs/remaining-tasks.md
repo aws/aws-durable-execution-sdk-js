@@ -36,12 +36,12 @@
 ## Query Ergonomics — per-store operation shaping
 
 > Design agreed in `operations-shape.md`. `operations` stays a canonical array;
-> point-access stores additionally emit a name-keyed `operationsByName` index.
+> point-access stores emit a name-keyed `operationsByName` index instead of the array.
 
 - [x] Add shared `buildOperationsByName(operations)` helper (per-name summary:
       aggregate `count`/`min`/`max`/`totalDurationMs`/`failedCount`/`maxAttempt`
       across occurrences + last-occurrence `type`/`subType`/`status`/`result`|`error`)
-- [x] Emit `operationsByName` (alongside the array) from `LambdaLogExporter`,
+- [x] Emit `operationsByName` (instead of the array) from `LambdaLogExporter`,
       `CloudWatchLogsExporter`, and `DynamoDBExporter`
 - [x] Unit tests for `buildOperationsByName` (duplicate names, last-occurrence
       result/error, failedCount, missing durations)
