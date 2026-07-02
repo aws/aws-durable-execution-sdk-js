@@ -1,8 +1,13 @@
 /**
- * Prompt context for converting natural language into a CloudWatch Logs Insights
- * query. Two variants depending on how records are stored:
- * - "direct": CloudWatchLogsExporter → raw JSON, fields at top level
- * - "nested": LambdaLogExporter → records inside Lambda's JSON envelope (message field)
+ * Prompt context for converting natural language into a query. The record schema
+ * given to the model varies by destination, because the stored shape differs:
+ * - "direct" (CloudWatchLogsExporter): raw JSON, fields at top level; includes an
+ *   `operationsByName` map that is directly dot-path queryable.
+ * - "nested" (LambdaLogExporter): record inside Lambda's JSON envelope (message
+ *   field); `operationsByName` exists but isn't reliably queryable (stringified).
+ * - "dynamodb": record attributes incl. an `operationsByName` map (PartiQL nav).
+ * - "aurora": Postgres; only the canonical operations array (no operationsByName) —
+ *   query operations by name via a JSONB/JSONPath predicate on the array.
  */
 
 // ─── DIRECT (CloudWatchLogsExporter) ─────────────────────────────────────────
@@ -17,7 +22,7 @@ const RECORD_SCHEMA_DIRECT = `Each log event is a raw JSON WorkflowInsightRecord
 - functionQualifier: string
 - region: string
 - accountId: string
-- status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING"
+- status: "RUNNING" | "SUCCEEDED" | "FAILED"
 - startTime: string (ISO-8601)
 - endTime: string (ISO-8601, optional)
 - durationMs: number (optional)
@@ -25,12 +30,18 @@ const RECORD_SCHEMA_DIRECT = `Each log event is a raw JSON WorkflowInsightRecord
 - output: object (optional)
 - error.name: string (optional)
 - error.message: string (optional)
-- operations: array of { id, name, type, subType, parentId, status, startTime, endTime, durationMs }
+- operations: array of { id, name, type, subType, parentId, status, startTime, endTime, durationMs, attempt, error, result }
+- operationsByName: object keyed by operation name → per-name summary:
+    { type, subType, count, minDurationMs, maxDurationMs, totalDurationMs, failedCount, maxAttempt, status, result, error }
+    Metric fields aggregate ALL occurrences of that name; type/subType/status/result/error reflect the LAST occurrence.
 - pluginVersion: string
 - sdkVersion: string
 
 Fields are directly queryable (no parsing needed). Nested object fields use dot notation (error.name, error.message).
-Array elements (operations.0.name) are accessible but cross-element queries are limited.`;
+For PER-OPERATION-NAME queries PREFER operationsByName — it is directly dot-path queryable, e.g.
+  filter operationsByName.convert_data.maxDurationMs < 5000
+(The operations array keeps full per-occurrence detail, but cross-element filtering on it is limited.)
+Operation names containing "." can't be used as dot-path keys — fall back to the operations array for those.`;
 
 const DIALECT_DIRECT = `Target query language: CloudWatch Logs Insights (NOT SQL).
 Rules:
@@ -62,6 +73,12 @@ A: filter recordType = "WorkflowInsight" and status = "SUCCEEDED" and durationMs
 Q: failures with a timeout error
 A: filter recordType = "WorkflowInsight" and status = "FAILED" and error.name like /Timeout/ | fields @timestamp, executionArn, error.name, error.message | sort @timestamp desc | limit 50
 
+Q: executions where operation "convert_data" took less than 5 seconds
+A: filter recordType = "WorkflowInsight" and operationsByName.convert_data.maxDurationMs < 5000 | fields @timestamp, executionArn, operationsByName.convert_data.maxDurationMs | sort @timestamp desc | limit 50
+
+Q: executions where the "charge" operation failed
+A: filter recordType = "WorkflowInsight" and operationsByName.charge.failedCount > 0 | fields @timestamp, executionArn, operationsByName.charge.error.message | sort @timestamp desc | limit 50
+
 Q: show last 100 records
 A: filter recordType = "WorkflowInsight" | fields @timestamp, status, functionName, executionArn, durationMs | sort @timestamp desc | limit 100`;
 
@@ -80,21 +97,25 @@ The "message" field contains a JSON-serialized WorkflowInsightRecord with these 
 - functionQualifier: string
 - region: string
 - accountId: string
-- status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING"
+- status: "RUNNING" | "SUCCEEDED" | "FAILED"
 - startTime: string (ISO-8601)
 - endTime: string (ISO-8601, optional)
 - durationMs: number (optional)
 - input: object (optional)
 - output: object (optional)
 - error: { name: string, message: string } (optional)
-- operations: array of { id, name, type, subType, parentId, status, startTime, endTime, durationMs }
+- operations: array of { id, name, type, subType, parentId, status, startTime, endTime, durationMs, attempt, error, result }
+- operationsByName: object keyed by operation name → per-name summary (type, subType, count, min/max/totalDurationMs, failedCount, maxAttempt, status, result, error)
 - pluginVersion: string
 - sdkVersion: string
 
 IMPORTANT: The "message" field is a flat JSON string, NOT a nested object.
 To access sub-fields you MUST use: parse message "\\"fieldName\\":\\"*\\"" as alias
 For numeric fields use: parse message "\\"fieldName\\":*," as alias
-Array elements (operations) cannot be individually queried — filter/parse on top-level fields only.`;
+Array elements (operations) cannot be individually queried — filter/parse on top-level fields only.
+Per-operation-name numeric filtering (operationsByName) is unreliable here because the record is a
+stringified message; for those queries prefer the CloudWatchLogsExporter (direct) destination, or do a
+coarse text match like: filter message like /"convert_data"/`;
 
 const DIALECT_NESTED = `Target query language: CloudWatch Logs Insights (NOT SQL).
 Rules:
@@ -149,7 +170,7 @@ The partition key is "pk" (the executionArn). All record fields are stored as to
 - functionQualifier: string
 - region: string
 - accountId: string
-- status: "RUNNING" | "SUCCEEDED" | "FAILED" | "PENDING"
+- status: "RUNNING" | "SUCCEEDED" | "FAILED"
 - startTime: string (ISO-8601)
 - endTime: string (ISO-8601, optional)
 - durationMs: number (optional)
@@ -157,6 +178,10 @@ The partition key is "pk" (the executionArn). All record fields are stored as to
 - output: map (optional)
 - error: map with name and message (optional)
 - operations: list of maps
+- operationsByName: map keyed by operation name → per-name summary map
+    { type, subType, count, minDurationMs, maxDurationMs, totalDurationMs, failedCount, maxAttempt, status, result, error }
+    Metrics aggregate all occurrences; status/result/error are from the last occurrence.
+    Navigate it for per-operation-name filters, e.g. WHERE "operationsByName"."convert_data"."maxDurationMs" < 5000
 - pluginVersion: string
 - sdkVersion: string`;
 
@@ -189,7 +214,10 @@ Q: show all executions
 A: SELECT pk, status, functionName, durationMs, emittedAt FROM "TABLE_NAME" WHERE recordType = 'WorkflowInsight'
 
 Q: show executions with errors
-A: SELECT pk, status, functionName, error FROM "TABLE_NAME" WHERE recordType = 'WorkflowInsight' AND attribute_exists(error)`;
+A: SELECT pk, status, functionName, error FROM "TABLE_NAME" WHERE recordType = 'WorkflowInsight' AND attribute_exists(error)
+
+Q: executions where operation "convert_data" took less than 5 seconds
+A: SELECT pk, "operationsByName"."convert_data"."maxDurationMs" FROM "TABLE_NAME" WHERE recordType = 'WorkflowInsight' AND "operationsByName"."convert_data"."maxDurationMs" < 5000`;
 
 /** Build the system prompt handed to the model. */
 // ─── AURORA (PostgreSQL via RDS Data API) ────────────────────────────────────
@@ -198,7 +226,7 @@ const RECORD_SCHEMA_AURORA = `Records are stored in a PostgreSQL table "TABLE_NA
 - execution_arn: VARCHAR(512) PRIMARY KEY
 - execution_name: VARCHAR(256)
 - function_name: VARCHAR(128)
-- status: VARCHAR(20) — values: RUNNING, SUCCEEDED, FAILED, PENDING
+- status: VARCHAR(20) — values: RUNNING, SUCCEEDED, FAILED
 - start_time: TIMESTAMPTZ
 - end_time: TIMESTAMPTZ (NULL if still running)
 - duration_ms: BIGINT (NULL if still running)
@@ -210,6 +238,11 @@ The record_json JSONB column contains the full record including:
 - record_json->'output' — execution output (structure varies per function)
 - record_json->'error' — error details ({name, message})
 - record_json->'operations' — array of operations
+
+Note: Aurora stores only the canonical operations array (there is no
+operationsByName index here). Query operations by name with a JSONPath predicate
+against the array, e.g.
+  record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationMs < 5000)'
 
 To access fields inside input/output, use JSONB operators:
   record_json->'input'->>'fieldName' (extracts as text)
@@ -243,7 +276,10 @@ Q: show last 100 records
 A: SELECT execution_arn, status, function_name, duration_ms, emitted_at FROM TABLE_NAME ORDER BY emitted_at DESC LIMIT 100
 
 Q: average duration grouped by function
-A: SELECT function_name, AVG(duration_ms) AS avg_ms, COUNT(*) AS ct FROM TABLE_NAME WHERE status = 'SUCCEEDED' GROUP BY function_name ORDER BY avg_ms DESC`;
+A: SELECT function_name, AVG(duration_ms) AS avg_ms, COUNT(*) AS ct FROM TABLE_NAME WHERE status = 'SUCCEEDED' GROUP BY function_name ORDER BY avg_ms DESC
+
+Q: executions where operation "convert_data" took less than 5 seconds
+A: SELECT execution_arn, function_name FROM TABLE_NAME WHERE record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationMs < 5000)' LIMIT 50`;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
