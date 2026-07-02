@@ -318,8 +318,11 @@ Notes:
   repeated name (loops/retries/map) they're dropped — there's no single
   representative value — but `failedCount` still flags failures.
 - Operations **without a name are excluded** (they can't be keyed or queried).
-- Operation names containing `.` don't work as dot-path keys; use the canonical
-  `operations` array for those.
+- **Choosing query-safe operation names is your responsibility.** The name is used
+  verbatim as the map key — the library does no sanitization or escaping. A name
+  containing `.` (or other characters a destination treats specially in field
+  paths) may not be addressable via dot-path in some stores (notably CloudWatch
+  Logs Insights). Prefer simple names like `charge-card`.
 - The array remains the source of truth; array-native exporters (S3/Athena,
   OpenSearch, Aurora, Redshift) emit only the array. See
   [`docs/operations-shape.md`](./docs/operations-shape.md).

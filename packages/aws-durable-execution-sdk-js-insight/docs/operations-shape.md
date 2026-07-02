@@ -59,9 +59,11 @@ or the `operationsByName` map — never both.
 
 - Keyed by the **raw operation name**. Unnamed operations are excluded (a
   customer can't identify or query them anyway).
-  - Caveat: names containing `.` (or other path-breaking characters) don't work
-    as dot-path keys in CloudWatch/OpenSearch/DynamoDB. No sanitization is done;
-    the canonical array is the fallback. Recommend avoiding `.` in step names.
+  - Caveat: **choosing a query-safe name is the developer's responsibility.** The
+    name is used verbatim as the key — the plugin does no sanitization or escaping.
+    A name containing `.` (or other characters a destination treats specially in
+    field paths) may not be addressable via dot-path in some stores (notably
+    CloudWatch Logs Insights; DynamoDB PartiQL can quote it). Prefer simple names.
 - Value = a per-name summary, built in a **single pass** over the array
   (insert-or-update; no grouping or sorting):
   - **Aggregated across ALL occurrences** (multiplicity-independent, safe for
