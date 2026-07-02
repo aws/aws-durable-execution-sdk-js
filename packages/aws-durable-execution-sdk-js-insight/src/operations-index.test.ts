@@ -127,6 +127,15 @@ describe("buildOperationsByName", () => {
     expect(byName.x.failedCount).toBe(1);
   });
 
+  it("reflects the latest occurrence's subType (clears a stale earlier one)", () => {
+    const byName = buildOperationsByName([
+      op({ id: "o1", name: "x", subType: "Batch", status: "SUCCEEDED" }),
+      op({ id: "o2", name: "x", status: "SUCCEEDED" }), // no subType
+    ]);
+    expect(byName.x.count).toBe(2);
+    expect(byName.x.subType).toBeUndefined();
+  });
+
   it("does not pollute Object.prototype for a '__proto__' operation name", () => {
     const byName = buildOperationsByName([
       op({ id: "o1", name: "__proto__", status: "SUCCEEDED", durationMs: 5 }),

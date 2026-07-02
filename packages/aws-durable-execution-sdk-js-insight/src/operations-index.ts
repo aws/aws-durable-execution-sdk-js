@@ -60,7 +60,10 @@ export function buildOperationsByName(
     existing.failedCount += failed;
     existing.type = op.type;
     existing.status = op.status;
+    // Reflect the latest occurrence: set subType if present, otherwise clear the
+    // stale earlier value (keeps parity with type/status, which are always set).
     if (op.subType !== undefined) existing.subType = op.subType;
+    else delete existing.subType;
     if (duration !== undefined) {
       existing.minDurationMs =
         existing.minDurationMs === undefined
