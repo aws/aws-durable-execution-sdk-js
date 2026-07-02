@@ -1081,6 +1081,7 @@ const insight = workflowInsight({
     new FirehoseExporter({
       deliveryStreamName: "workflow-insight-stream",
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1110,6 +1111,7 @@ const insight = workflowInsight({
       eventBusName: "default", // optional (default)
       source: "aws.durable-execution.insight", // optional (default)
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1150,6 +1152,7 @@ const insight = workflowInsight({
         "https://sqs.us-east-1.amazonaws.com/123456789012/insight-queue.fifo",
       messageGroupId: undefined, // optional (default: executionArn)
       region: "us-east-1", // optional
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });
@@ -1295,6 +1298,7 @@ const insight = workflowInsight({
     new FileExporter({
       directory: "/mnt/efs/workflow-insight",
       mode: "ndjson", // optional (default)
+      operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
   ],
 });

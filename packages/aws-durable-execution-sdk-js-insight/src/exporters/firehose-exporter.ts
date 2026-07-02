@@ -1,5 +1,10 @@
 import { FirehoseClient, PutRecordCommand } from "@aws-sdk/client-firehose";
-import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import type {
+  InsightExporter,
+  OperationsFormat,
+  WorkflowInsightRecord,
+} from "../types";
+import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the Kinesis Firehose exporter.
@@ -11,6 +16,13 @@ export interface FirehoseExporterConfig {
 
   /** AWS region. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * How operations are rendered in each NDJSON record: the canonical `operations`
+   * array (`"array"`, default), the `operationsByName` map (`"by-name"`), or
+   * `"both"`. Choose based on the downstream destination's consumer.
+   */
+  operationsFormat?: OperationsFormat;
 }
 
 /**
@@ -27,17 +39,21 @@ export interface FirehoseExporterConfig {
  */
 export class FirehoseExporter implements InsightExporter {
   private readonly deliveryStreamName: string;
+  private readonly operationsFormat: OperationsFormat;
   private readonly client: FirehoseClient;
 
   constructor(config: FirehoseExporterConfig) {
     this.deliveryStreamName = config.deliveryStreamName;
+    this.operationsFormat = config.operationsFormat ?? "array";
     this.client = new FirehoseClient(
       config.region ? { region: config.region } : {},
     );
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {
-    const data = JSON.stringify(record) + "\n";
+    const data =
+      JSON.stringify(applyOperationsFormat(record, this.operationsFormat)) +
+      "\n";
 
     await this.client.send(
       new PutRecordCommand({

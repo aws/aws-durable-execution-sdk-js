@@ -1,6 +1,11 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { InsightExporter, WorkflowInsightRecord } from "../types";
+import type {
+  InsightExporter,
+  OperationsFormat,
+  WorkflowInsightRecord,
+} from "../types";
+import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the file exporter.
@@ -20,6 +25,13 @@ export interface FileExporterConfig {
    * Default: "ndjson"
    */
   mode?: "ndjson" | "json";
+
+  /**
+   * How operations are rendered in the written record: the canonical `operations`
+   * array (`"array"`, default), the `operationsByName` map (`"by-name"`), or
+   * `"both"`.
+   */
+  operationsFormat?: OperationsFormat;
 }
 
 /**
@@ -39,26 +51,30 @@ export interface FileExporterConfig {
 export class FileExporter implements InsightExporter {
   private readonly directory: string;
   private readonly mode: "ndjson" | "json";
+  private readonly operationsFormat: OperationsFormat;
   private dirCreated = false;
 
   constructor(config: FileExporterConfig) {
     this.directory = config.directory;
     this.mode = config.mode ?? "ndjson";
+    this.operationsFormat = config.operationsFormat ?? "array";
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     await this.ensureDir();
 
+    const formatted = applyOperationsFormat(record, this.operationsFormat);
+
     if (this.mode === "ndjson") {
       const date = record.emittedAt.slice(0, 10); // YYYY-MM-DD
       const filePath = join(this.directory, `${date}.ndjson`);
-      await appendFile(filePath, JSON.stringify(record) + "\n", "utf-8");
+      await appendFile(filePath, JSON.stringify(formatted) + "\n", "utf-8");
     } else {
       const fileName =
         sanitize(record.executionName ?? record.executionArn) + ".json";
       const filePath = join(this.directory, fileName);
       const { writeFile } = await import("node:fs/promises");
-      await writeFile(filePath, JSON.stringify(record, null, 2), "utf-8");
+      await writeFile(filePath, JSON.stringify(formatted, null, 2), "utf-8");
     }
   }
 

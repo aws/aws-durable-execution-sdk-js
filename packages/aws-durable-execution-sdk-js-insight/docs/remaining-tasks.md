@@ -46,8 +46,10 @@
 - [x] Unit tests for `buildOperationsByName` (duplicate names, last-occurrence
       result/error, failedCount, missing durations)
 - [x] Document per-store shape + example queries in the README
-- [x] `operationsFormat` option (`array` | `by-name` | `both`, default `array`) on
-      `HttpExporter` and `OTelExporter` for arbitrary/flexible destinations
+- [x] `operationsFormat` option (`array` | `by-name` | `both`, default `array`) on the
+      flexible-sink exporters — `HttpExporter`, `OTelExporter`, `SQSExporter`,
+      `EventBridgeExporter`, `FirehoseExporter`, `FileExporter`. (Timestream is
+      dimensional, so it's excluded.)
 
 ## Content Filtering
 

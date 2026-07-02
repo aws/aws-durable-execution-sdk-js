@@ -45,12 +45,16 @@ never named, so surfacing it adds noise without value.
   **`operations` array** (no `operationsByName`).
 - **Custom exporters** may reshape however they want.
 
-- **Flexible sinks** — `HttpExporter` and `OTelExporter` target arbitrary,
-  user-defined consumers, so they take an `operationsFormat` option:
-  `"array"` (default, lossless) · `"by-name"` · `"both"`. Defaulting to `"array"`
-  keeps the safe, dynamic-key-free shape; users who know their consumer can opt
-  into the map. (`"both"` is allowed here because these sinks have no
+- **Flexible sinks** — `HttpExporter`, `OTelExporter`, `SQSExporter`,
+  `EventBridgeExporter`, `FirehoseExporter`, and `FileExporter` route the record
+  JSON to an arbitrary, user-defined consumer, so they take an `operationsFormat`
+  option: `"array"` (default, lossless) · `"by-name"` · `"both"`. Defaulting to
+  `"array"` keeps the safe, dynamic-key-free shape; users who know their consumer
+  can opt into the map. (`"both"` is allowed here because these sinks have no
   store-shape constraint.)
+- **`TimestreamExporter`** is dimensional (fixed dimensions + typed measures, plus
+  a `recordJson` catch-all and an array-derived `operationCount`), not a JSON-blob
+  router, so it has no `operationsFormat` option.
 
 Each store therefore carries exactly one operations representation: the array,
 or the `operationsByName` map — never both.
