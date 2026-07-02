@@ -88,16 +88,23 @@ us.anthropic.claude-sonnet-4-20250514-v1:0
 
 Type a question and click **Ask**. Examples:
 
-| Question                                    | Works best with    |
-| ------------------------------------------- | ------------------ |
-| "show me the last 50 records"               | Any destination    |
-| "count executions by status"                | Any destination    |
-| "show failed executions from the last hour" | Any destination    |
-| "average duration of successful executions" | Aurora, CloudWatch |
-| "failure rate percentage"                   | Aurora             |
-| "average duration grouped by function"      | Aurora             |
-| "show executions longer than 5 seconds"     | Any destination    |
-| "find execution with name abc123"           | DynamoDB, Aurora   |
+| Question                                                | Works best with              |
+| ------------------------------------------------------- | ---------------------------- |
+| "show me the last 50 records"                           | Any destination              |
+| "count executions by status"                            | Any destination              |
+| "show failed executions from the last hour"             | Any destination              |
+| "average duration of successful executions"             | Aurora, CloudWatch           |
+| "failure rate percentage"                               | Aurora                       |
+| "average duration grouped by function"                  | Aurora                       |
+| "show executions longer than 5 seconds"                 | Any destination              |
+| "find execution with name abc123"                       | DynamoDB, Aurora             |
+| "executions where operation convert_data took under 5s" | CloudWatch, DynamoDB, Aurora |
+| "executions where the charge operation failed"          | CloudWatch, DynamoDB, Aurora |
+
+> Per-operation-name questions use the `operationsByName` index (CloudWatch
+> direct + DynamoDB) or a JSONB query over the operations array (Aurora). With
+> the `LambdaLogExporter` (nested logs) these are best-effort — the
+> `CloudWatchLogsExporter` gives the most reliable per-operation queries.
 
 ## Settings Reference
 
