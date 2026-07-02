@@ -118,6 +118,15 @@ describe("buildOperationsByName", () => {
     expect(byName.x.totalDurationMs).toBe(50);
   });
 
+  it("initializes maxAttempt when only a later occurrence has an attempt", () => {
+    const byName = buildOperationsByName([
+      op({ id: "o1", name: "x", status: "SUCCEEDED" }), // no attempt
+      op({ id: "o2", name: "x", status: "SUCCEEDED", attempt: 4 }),
+    ]);
+    expect(byName.x.count).toBe(2);
+    expect(byName.x.maxAttempt).toBe(4);
+  });
+
   it("updates status/type to the most recently seen occurrence", () => {
     const byName = buildOperationsByName([
       op({ id: "o1", name: "x", type: "STEP", status: "SUCCEEDED" }),
@@ -151,6 +160,23 @@ describe("buildOperationsByName", () => {
     const desc = Object.getOwnPropertyDescriptor(byName, "__proto__");
     expect(desc?.value?.count).toBe(2);
     expect(desc?.value?.status).toBe("FAILED");
+  });
+
+  it("serializes a '__proto__' entry through JSON without polluting (round-trip)", () => {
+    const byName = buildOperationsByName([
+      op({ id: "o1", name: "__proto__", status: "SUCCEEDED", durationMs: 5 }),
+    ]);
+
+    const json = JSON.stringify(byName);
+    // The entry is actually emitted (so it reaches CloudWatch/etc., not dropped).
+    expect(json).toContain('"__proto__"');
+
+    const parsed = JSON.parse(json);
+    // Round-trip must not pollute Object.prototype...
+    expect(({} as Record<string, unknown>).count).toBeUndefined();
+    // ...and the summary is recoverable as an own property.
+    const desc = Object.getOwnPropertyDescriptor(parsed, "__proto__");
+    expect(desc?.value?.count).toBe(1);
   });
 });
 
