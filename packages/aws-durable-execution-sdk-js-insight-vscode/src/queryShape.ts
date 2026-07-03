@@ -19,6 +19,20 @@ const GROUP_BY_RE = /\bgroup\s+by\b/i;
 // (without GROUP BY) also collapses all matching rows into one summary row
 // for that column (e.g. "SELECT COUNT(*) FROM ..." -> exactly one row, not
 // one row per execution), so it's just as disqualifying as GROUP BY.
+//
+// KNOWN FALSE POSITIVE (safe, just conservative): this scans the whole query
+// string rather than being scope-aware, so a genuinely row-level query with
+// an aggregate confined to a scalar subquery — e.g.
+// "SELECT executionArn, durationMs FROM t WHERE durationMs >
+// (SELECT AVG(durationMs) FROM t)" — is misclassified as aggregate. That
+// disables identifier injection and drill-down for that one result set
+// (a lost feature, not incorrect data — the query itself is untouched and
+// still runs correctly). A precise fix would need to track paren depth and
+// only match aggregate functions in the outermost SELECT's column list, the
+// same way findOuterSelect/hasTopLevelSetOperator already do — not worth
+// the added complexity for what should be a rare question shape from a
+// single natural-language question, but documented here since it's the same
+// class of "not scope-aware" limitation as those two functions.
 const AGGREGATE_FN_RE = /\b(?:count|sum|avg|min|max)\s*\(/i;
 // CloudWatch Logs Insights uses a pipe-based `stats` command instead of SQL
 // aggregate functions/GROUP BY.
