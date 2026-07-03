@@ -394,7 +394,7 @@ class ExportScheduler {
               truncateRecord(
                 record,
                 exporter.maxRecordSizeBytes,
-                exporter.render ? (r) => exporter.render!(r) : undefined,
+                exporter.render?.bind(exporter),
               ),
             ),
           ),

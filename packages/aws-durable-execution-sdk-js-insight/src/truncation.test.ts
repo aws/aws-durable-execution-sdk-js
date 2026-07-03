@@ -247,4 +247,22 @@ describe("truncateRecord render-aware sizing", () => {
     expect(out).toBe(r);
     expect(out.truncated).toBeUndefined();
   });
+
+  it("does not throw when render is explicitly undefined (falls back to identity)", () => {
+    // Mirrors the scheduler's `exporter.render?.bind(exporter)`, which evaluates
+    // to `undefined` for exporters without a `render`. The default parameter
+    // applies to an explicit `undefined` argument, so this must behave exactly
+    // like omitting the argument, not throw.
+    const ops = [
+      op({ id: "o1", name: "a", result: "A".repeat(500) }),
+      op({ id: "o2", name: "b", result: "B".repeat(500) }),
+    ];
+    const r = record({ operations: ops });
+    const limit = bytes(r) - 400;
+
+    expect(() => truncateRecord(r, limit, undefined)).not.toThrow();
+    expect(truncateRecord(r, limit, undefined)).toEqual(
+      truncateRecord(r, limit),
+    );
+  });
 });
