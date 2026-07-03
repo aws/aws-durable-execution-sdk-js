@@ -106,7 +106,6 @@ export interface DualModeOtelSetup {
   plugin: OtelPlugin;
   getSerializedSpans(): SerializedSpan[];
   resetExporter(): void;
-  getXRayHeader(): string | undefined;
 }
 
 /**
@@ -126,7 +125,6 @@ export function createDualModeOtelSetup(): DualModeOtelSetup {
       plugin,
       getSerializedSpans: () => [],
       resetExporter: () => {},
-      getXRayHeader: () => process.env._X_AMZN_TRACE_ID,
     };
   }
 
@@ -136,6 +134,5 @@ export function createDualModeOtelSetup(): DualModeOtelSetup {
     plugin: setup.plugin,
     getSerializedSpans: setup.getSerializedSpans,
     resetExporter: setup.reset,
-    getXRayHeader: () => undefined,
   };
 }

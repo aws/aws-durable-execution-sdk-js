@@ -1336,70 +1336,12 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
-  OtelCombined:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OTelCombined-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: otel-combined.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Environment:
-        Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-      Tracing: Active
-      Layers:
-        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
-    Metadata:
-      SkipBuild: "True"
   OtelInvoke:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: OTelInvoke-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: otel-invoke.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Environment:
-        Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-      Tracing: Active
-      Layers:
-        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
-    Metadata:
-      SkipBuild: "True"
-  OtelLogEnrichment:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OTelLogEnrichment-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: otel-log-enrichment.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

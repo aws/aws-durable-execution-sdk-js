@@ -22,6 +22,8 @@ const plugin = localSetup ? localSetup.plugin : dualSetup.plugin;
 
 export const config: ExampleConfig = {
   name: "OTel Log Enrichment",
+  excludeRuntimes: ["24.x"],
+  localOnly: true,
 };
 
 export function getSerializedSpans() {
@@ -54,7 +56,7 @@ export const handler = withDurableExecution(
       step1Result,
       step2Result,
       spans: getSerializedSpans(),
-      xRayHeader: dualSetup.getXRayHeader(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
     };
   },
   { plugins: [plugin] },

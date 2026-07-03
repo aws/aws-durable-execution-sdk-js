@@ -2,8 +2,18 @@
 export type OutboundMessage =
   | { type: "ready" }
   | { type: "generate"; question: string }
-  | { type: "saveSettings"; settings: Settings }
-  | { type: "downloadModel" };
+  | { type: "saveSettings"; settings: Record<string, string> }
+  | { type: "downloadModel" }
+  | { type: "startListening" }
+  | { type: "stopListening" };
+
+/** A single SQS message, normalized for display. */
+export interface SqsMessageRow {
+  messageId: string;
+  receivedAt: string;
+  body: string;
+  attributes: Record<string, string>;
+}
 
 /** Messages from extension host → webview */
 export type InboundMessage =
@@ -20,7 +30,9 @@ export type InboundMessage =
     }
   | { type: "error"; message: string }
   | { type: "settingsSaved" }
-  | { type: "downloadProgress"; percent: number; done: boolean };
+  | { type: "downloadProgress"; percent: number; done: boolean }
+  | { type: "sqsStatus"; listening: boolean }
+  | { type: "sqsMessages"; messages: SqsMessageRow[] };
 
 export interface Settings {
   region: string;
@@ -31,6 +43,8 @@ export interface Settings {
   auroraSecretArn: string;
   auroraDatabase: string;
   auroraTable: string;
+  sqsQueueUrl: string;
+  sqsDeleteAfterRead: boolean;
   llmProvider: string;
   awsProfile: string;
   bedrockModelId: string;
@@ -45,6 +59,8 @@ export const DEFAULT_SETTINGS: Settings = {
   auroraSecretArn: "",
   auroraDatabase: "postgres",
   auroraTable: "workflow_insight",
+  sqsQueueUrl: "",
+  sqsDeleteAfterRead: false,
   llmProvider: "bedrock",
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",

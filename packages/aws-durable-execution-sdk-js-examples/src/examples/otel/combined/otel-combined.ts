@@ -5,10 +5,11 @@ import {
 import { ExampleConfig } from "../../../types";
 import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, getSerializedSpans, getXRayHeader } = createDualModeOtelSetup();
+const { plugin, getSerializedSpans } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Combined",
+  localOnly: true,
 };
 
 export { getSerializedSpans };
@@ -66,7 +67,7 @@ export const handler = withDurableExecution(
       mapItemCount: mapResults.getResults().length,
       complete: true,
       spans: getSerializedSpans(),
-      xRayHeader: getXRayHeader(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
     };
   },
   { plugins: [plugin] },

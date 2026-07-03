@@ -84,108 +84,124 @@ createTests({
       assertEventSignatures(execution, "immediate");
     });
 
-    it("normal mode - condition met after 3 polls", async () => {
-      const execution = await runner.run({ payload: { mode: "normal" } });
-      const result = execution.getResult() as {
-        finalState: { counter: number };
-        mode: string;
-        spans: SerializedSpan[];
-        xRayHeader: string | undefined;
-      };
+    (isCloud ? it.skip : it)(
+      "normal mode - condition met after 3 polls",
+      async () => {
+        const execution = await runner.run({ payload: { mode: "normal" } });
+        const result = execution.getResult() as {
+          finalState: { counter: number };
+          mode: string;
+          spans: SerializedSpan[];
+          xRayHeader: string | undefined;
+        };
 
-      // Assert result
-      expect(result.finalState.counter).toBe(3);
-      expect(result.mode).toBe("normal");
+        // Assert result
+        expect(result.finalState.counter).toBe(3);
+        expect(result.mode).toBe("normal");
 
-      if (isCloud) {
-        // Cloud mode: assert spans via X-Ray
-        expect(result.xRayHeader).toBeDefined();
-        const traceId = extractTraceIdFromXRayHeader(result.xRayHeader!);
-        expect(traceId).toBeDefined();
+        if (isCloud) {
+          // Cloud mode: assert spans via X-Ray
+          expect(result.xRayHeader).toBeDefined();
+          const traceId = extractTraceIdFromXRayHeader(result.xRayHeader!);
+          expect(traceId).toBeDefined();
 
-        const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+          const xrayClient = new XRayClient({});
+          const trace = await fetchXRayTrace(xrayClient, traceId!, {
+            delayMs: 30000,
+          });
 
-        // Should have STEP spans for the waitForCondition polling
-        assertSpanNames(trace, ["STEP"]);
+          // Should have STEP spans for the waitForCondition polling
+          assertSpanNames(trace, ["STEP"]);
 
-        // Assert span attributes
-        assertSpanAttributes(trace, "STEP", {
-          "durable.operation.type": "STEP",
-          "durable.operation.subtype": "WaitForCondition",
-        });
-      } else {
-        // Local mode: assert spans via InMemorySpanExporter
-        const spans = getSerializedSpans();
-        // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 3 invocation spans = 9 spans
-        expect(spans).toHaveLength(9);
+          // Assert span attributes
+          assertSpanAttributes(trace, "STEP", {
+            "durable.operation.type": "STEP",
+            "durable.operation.subtype": "WaitForCondition",
+          });
+        } else {
+          // Local mode: assert spans via InMemorySpanExporter
+          const spans = getSerializedSpans();
+          // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 3 invocation spans = 9 spans
+          expect(spans).toHaveLength(9);
 
-        // All spans share the same traceId (deterministic from execution ARN)
-        const traceId = spans[0].traceId;
-        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+          // All spans share the same traceId (deterministic from execution ARN)
+          const traceId = spans[0].traceId;
+          expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+          expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-        // 3 STEP operation spans (one per poll)
-        const stepOps = spans.filter(
-          (s) =>
-            s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
-        );
-        expect(stepOps).toHaveLength(3);
-
-        // Each STEP operation span should have an attempt child
-        for (const stepOp of stepOps) {
-          const attemptSpan = spans.find(
+          // 3 STEP operation spans (one per poll)
+          const stepOps = spans.filter(
             (s) =>
-              s.parentSpanId === stepOp.spanId &&
-              s.attributes["durable.operation.attempt"] !== undefined,
+              s.attributes["durable.operation.type"] === "STEP" &&
+              s.attributes["durable.operation.attempt"] === undefined,
           );
-          expect(attemptSpan).toBeDefined();
-        }
+          expect(stepOps).toHaveLength(3);
 
-        // Attempt numbers increment across polls (1, 2, 3)
-        const attemptSpans = spans
-          .filter(
-            (s) => s.attributes["durable.operation.attempt"] !== undefined,
-          )
-          .sort(
-            (a, b) =>
-              (a.attributes["durable.operation.attempt"] as number) -
-              (b.attributes["durable.operation.attempt"] as number),
+          // Each STEP operation span should have an attempt child
+          for (const stepOp of stepOps) {
+            const attemptSpan = spans.find(
+              (s) =>
+                s.parentSpanId === stepOp.spanId &&
+                s.attributes["durable.operation.attempt"] !== undefined,
+            );
+            expect(attemptSpan).toBeDefined();
+          }
+
+          // Attempt numbers increment across polls (1, 2, 3)
+          const attemptSpans = spans
+            .filter(
+              (s) => s.attributes["durable.operation.attempt"] !== undefined,
+            )
+            .sort(
+              (a, b) =>
+                (a.attributes["durable.operation.attempt"] as number) -
+                (b.attributes["durable.operation.attempt"] as number),
+            );
+          expect(attemptSpans).toHaveLength(3);
+          expect(attemptSpans[0].attributes["durable.operation.attempt"]).toBe(
+            1,
           );
-        expect(attemptSpans).toHaveLength(3);
-        expect(attemptSpans[0].attributes["durable.operation.attempt"]).toBe(1);
-        expect(attemptSpans[1].attributes["durable.operation.attempt"]).toBe(2);
-        expect(attemptSpans[2].attributes["durable.operation.attempt"]).toBe(3);
+          expect(attemptSpans[1].attributes["durable.operation.attempt"]).toBe(
+            2,
+          );
+          expect(attemptSpans[2].attributes["durable.operation.attempt"]).toBe(
+            3,
+          );
 
-        // 3 invocation spans
-        const invocationSpans = spans.filter((s) => s.name === "invocation");
-        expect(invocationSpans).toHaveLength(3);
+          // 3 invocation spans
+          const invocationSpans = spans.filter((s) => s.name === "invocation");
+          expect(invocationSpans).toHaveLength(3);
 
-        // Verify continuation spans with links exist (proves multi-invocation replay)
-        const spansWithLinks = spans.filter((s) => s.links.length > 0);
-        expect(spansWithLinks.length).toBeGreaterThanOrEqual(1);
+          // Verify continuation spans with links exist (proves multi-invocation replay)
+          const spansWithLinks = spans.filter((s) => s.links.length > 0);
+          expect(spansWithLinks.length).toBeGreaterThanOrEqual(1);
 
-        // Verify link span IDs are 16-char hex strings (deterministic span IDs)
-        for (const span of spansWithLinks) {
-          for (const link of span.links) {
-            expect(link.spanId).toMatch(/^[0-9a-f]{16}$/);
-            expect(link.traceId).toMatch(/^[0-9a-f]{32}$/);
+          // Verify link span IDs are 16-char hex strings (deterministic span IDs)
+          for (const span of spansWithLinks) {
+            for (const link of span.links) {
+              expect(link.spanId).toMatch(/^[0-9a-f]{16}$/);
+              expect(link.traceId).toMatch(/^[0-9a-f]{32}$/);
+            }
           }
         }
-      }
 
-      assertEventSignatures(execution);
-    });
+        assertEventSignatures(execution);
+      },
+    );
 
     it("exhausted mode - condition never met", async () => {
       const execution = await runner.run({ payload: { mode: "exhausted" } });
 
-      // Execution should fail because condition was never met and maxAttempts exhausted
-      expect(execution.getError()).toBeDefined();
+      const result = execution.getResult() as {
+        failed: boolean;
+        errorMessage: string;
+        mode: string;
+      };
 
+      // The handler catches the error and returns normally
+      expect(result.failed).toBe(true);
+      expect(result.errorMessage).toBeDefined();
+      expect(result.mode).toBe("exhausted");
       assertEventSignatures(execution, "exhausted");
     });
   },

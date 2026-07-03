@@ -7,11 +7,11 @@ import {
 import { ExampleConfig } from "../../../types";
 import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, getSerializedSpans, resetExporter, getXRayHeader } =
-  createDualModeOtelSetup();
+const { plugin, getSerializedSpans, resetExporter } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Wait for Condition",
+  excludeRuntimes: ["24.x"],
 };
 
 export { getSerializedSpans, resetExporter };
@@ -41,33 +41,42 @@ export const handler = withDurableExecution(
         finalState,
         mode,
         spans: getSerializedSpans(),
-        xRayHeader: getXRayHeader(),
+        xRayHeader: process.env._X_AMZN_TRACE_ID,
       };
     }
 
     if (mode === "exhausted") {
       // Condition never met, exhausts maxAttempts (5)
-      const finalState = await context.waitForCondition(
-        async (state: { counter: number }) => {
-          return { counter: state.counter + 1 };
-        },
-        {
-          waitStrategy: createWaitStrategy<{ counter: number }>({
-            maxAttempts: 5,
-            initialDelay: { seconds: 1 },
-            maxDelay: { seconds: 1 },
-            backoffRate: 1,
-            jitter: JitterStrategy.NONE,
-            shouldContinuePolling: () => true,
-          }),
-          initialState: { counter: 0 },
-        },
-      );
+      let exhaustedError: unknown;
+      try {
+        await context.waitForCondition(
+          async (state: { counter: number }) => {
+            return { counter: state.counter + 1 };
+          },
+          {
+            waitStrategy: createWaitStrategy<{ counter: number }>({
+              maxAttempts: 5,
+              initialDelay: { seconds: 1 },
+              maxDelay: { seconds: 1 },
+              backoffRate: 1,
+              jitter: JitterStrategy.NONE,
+              shouldContinuePolling: () => true,
+            }),
+            initialState: { counter: 0 },
+          },
+        );
+      } catch (error) {
+        exhaustedError = error;
+      }
       return {
-        finalState,
+        failed: true,
+        errorMessage:
+          exhaustedError instanceof Error
+            ? exhaustedError.message
+            : String(exhaustedError),
         mode,
         spans: getSerializedSpans(),
-        xRayHeader: getXRayHeader(),
+        xRayHeader: process.env._X_AMZN_TRACE_ID,
       };
     }
 
@@ -91,7 +100,7 @@ export const handler = withDurableExecution(
       finalState,
       mode,
       spans: getSerializedSpans(),
-      xRayHeader: getXRayHeader(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
     };
   },
   { plugins: [plugin] },

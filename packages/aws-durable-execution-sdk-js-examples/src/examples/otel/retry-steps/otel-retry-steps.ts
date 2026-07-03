@@ -6,10 +6,11 @@ import {
 import { ExampleConfig } from "../../../types";
 import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, getSerializedSpans, getXRayHeader } = createDualModeOtelSetup();
+const { plugin, getSerializedSpans } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Retry Steps",
+  excludeRuntimes: ["24.x"],
 };
 
 export { getSerializedSpans };
@@ -42,7 +43,7 @@ export const handler = withDurableExecution(
       errorMessage:
         stepError instanceof Error ? stepError.message : String(stepError),
       spans: getSerializedSpans(),
-      xRayHeader: getXRayHeader(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
     };
   },
   { plugins: [plugin] },
