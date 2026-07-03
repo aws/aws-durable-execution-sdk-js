@@ -38,6 +38,15 @@ export interface IdentifierInjectionResult {
   query: string;
   /** The column the row's identifier will appear under in the result set, or undefined if no identifier could be added (aggregate query, or dialect-specific reasons). */
   idColumn?: string;
+  /**
+   * Columns from `extraColumns` that were actually ensured present in the
+   * result set (added if missing, alongside idColumn) — undefined/empty for
+   * aggregate queries, same as idColumn. Currently used to carry Athena's
+   * year/month/day partition columns through to the row-detail fetch, so
+   * that fetch can add a partition-pruning predicate instead of scanning
+   * every partition on every row click.
+   */
+  extraColumns?: string[];
 }
 
 /**
@@ -46,34 +55,45 @@ export interface IdentifierInjectionResult {
  * identifier the UI can use to fetch the full record on demand. No-op for
  * aggregate queries — returns the query unchanged with no idColumn.
  *
+ * `extraColumns` (optional) are ensured present the same way, for columns
+ * the drill-down fetch wants available even though they're not identifiers
+ * themselves — e.g. Athena's year/month/day partition columns, so the
+ * fetch-by-id query (see fetchAthenaRecord) can prune partitions instead of
+ * scanning the whole table on every row click.
+ *
  * This is deliberately conservative: it only handles the common
  * `SELECT <list> FROM ...` shape (optionally preceded by a `WITH` CTE clause,
  * which passes through untouched since only the final SELECT's column list
  * matters for the result shape). If the shape isn't recognized, it leaves the
- * query untouched and reports no idColumn rather than risk producing invalid
- * SQL — the UI simply won't offer row-level drill-down for that result set.
+ * query untouched and reports no idColumn/extraColumns rather than risk
+ * producing invalid SQL — the UI simply won't offer row-level drill-down (or
+ * partition pruning) for that result set.
  */
 export function ensureIdentifierColumn(
   query: string,
   idColumn: string,
   dialect: "sql" | "logs-insights",
+  extraColumns: string[] = [],
 ): IdentifierInjectionResult {
   const trimmed = query.trim();
 
   if (dialect === "logs-insights") {
     if (isAggregateQuery(trimmed, dialect)) return { query: trimmed };
     // Logs Insights: a `fields` command explicitly lists output fields; if
-    // present, make sure idColumn is one of them. If there's no `fields`
-    // command, every field is already included by default, so idColumn is
-    // already present — nothing to inject.
+    // present, make sure idColumn (and any extraColumns) are among them. If
+    // there's no `fields` command, every field is already included by
+    // default, so everything is already present — nothing to inject.
     const fieldsMatch = trimmed.match(/\|\s*fields\s+([^|]+)/i);
-    if (!fieldsMatch) return { query: trimmed, idColumn };
-    const fieldList = fieldsMatch[1];
-    const alreadyPresent = fieldList
-      .split(",")
-      .map((f) => f.trim())
-      .includes(idColumn);
-    if (alreadyPresent) return { query: trimmed, idColumn };
+    if (!fieldsMatch) {
+      return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
+    }
+    const present = fieldsMatch[1].split(",").map((f) => f.trim());
+    const toAdd = [idColumn, ...extraColumns].filter(
+      (c) => !present.includes(c),
+    );
+    if (toAdd.length === 0) {
+      return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
+    }
     // Trim trailing whitespace from the matched field list before appending,
     // so injection doesn't leave "fieldA, fieldB idColumn" (missing comma) or
     // "fieldA, fieldBidColumn|" (missing space before the next pipe) — the
@@ -83,9 +103,9 @@ export function ensureIdentifierColumn(
     const trailingWhitespace = fieldsMatch[0].slice(trimmedFieldsMatch.length);
     const injected = trimmed.replace(
       fieldsMatch[0],
-      `${trimmedFieldsMatch}, ${idColumn}${trailingWhitespace}`,
+      `${trimmedFieldsMatch}, ${toAdd.join(", ")}${trailingWhitespace}`,
     );
-    return { query: injected, idColumn };
+    return { query: injected, idColumn, extraColumns: [...extraColumns] };
   }
 
   // SQL dialects (PartiQL, PostgreSQL, Trino/Presto): only handle a single
@@ -104,15 +124,19 @@ export function ensureIdentifierColumn(
     /\*\s*,|\bselect\s+\*/i.test(columnList)
   ) {
     // SELECT * already includes every column, including the identifier.
-    return { query: trimmed, idColumn };
+    return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
   }
 
   const columns = splitTopLevel(columnList);
-  const alreadyPresent = columns.some((c) => referencesColumn(c, idColumn));
-  if (alreadyPresent) return { query: trimmed, idColumn };
+  const toAdd = [idColumn, ...extraColumns].filter(
+    (c) => !columns.some((existing) => referencesColumn(existing, c)),
+  );
+  if (toAdd.length === 0) {
+    return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
+  }
 
-  const injected = `${prefix}${columnList}, ${idColumn}${fromKeyword}${rest}`;
-  return { query: injected, idColumn };
+  const injected = `${prefix}${columnList}, ${toAdd.join(", ")}${fromKeyword}${rest}`;
+  return { query: injected, idColumn, extraColumns: [...extraColumns] };
 }
 
 /**

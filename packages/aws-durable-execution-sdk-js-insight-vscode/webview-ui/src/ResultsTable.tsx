@@ -33,6 +33,15 @@ interface Props {
    * COUNT, etc.), which have no single execution a row corresponds to.
    */
   idColumn?: string;
+  /**
+   * The actual result-column names (if present) carrying each row's
+   * year/month/day partition value — passed straight through from the
+   * "results" message. Only meaningful for the S3+Athena destination; lets
+   * the row-detail fetch prune to one partition instead of scanning the
+   * whole table on every click (see extension.ts's onFetchDetail and
+   * athena.ts's fetchAthenaRecord).
+   */
+  partitionColumns?: { year?: string; month?: string; day?: string };
   /** Full record fetched for the currently open detail view, or null while none is open. Only meaningful when `idColumn` is set. */
   detailFields?: Record<string, string> | null;
   /** True while a "fetchDetail" request is in flight. */
@@ -51,6 +60,7 @@ export function ResultsTable({
   explanation,
   primaryColumns,
   idColumn,
+  partitionColumns,
   detailFields,
   detailLoading,
   onDetailDismiss,
@@ -109,7 +119,14 @@ export function ResultsTable({
       const idValue = item[idColumn];
       if (idValue) {
         onDetailFetchStart?.();
-        postMessage({ type: "fetchDetail", idColumn, idValue });
+        postMessage({
+          type: "fetchDetail",
+          idColumn,
+          idValue,
+          year: partitionColumns?.year ? item[partitionColumns.year] : undefined,
+          month: partitionColumns?.month ? item[partitionColumns.month] : undefined,
+          day: partitionColumns?.day ? item[partitionColumns.day] : undefined,
+        });
       }
     } else if (!item) {
       onDetailDismiss?.();

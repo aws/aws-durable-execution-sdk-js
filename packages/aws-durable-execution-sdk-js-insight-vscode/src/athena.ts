@@ -259,11 +259,15 @@ export async function ensureAthenaTable(opts: {
 
 /**
  * Fetch a single full record by executionArn, for the row-detail
- * drill-down. Athena has no cheap point-lookup (every query scans the
- * relevant partitions), but scoping to a specific executionArn with an
- * equality predicate lets Athena's engine short-circuit once it finds the
- * match, and LIMIT 1 keeps the result set trivially small — still an
- * ordinary query under the hood, just narrowly scoped.
+ * drill-down. Without a partition predicate this scans every year/month/day
+ * partition in the table on every row click — `LIMIT 1` only bounds the
+ * number of *output* rows, it does not make Trino/Athena stop scanning
+ * splits early once a match is found, so this is a real full-table scan
+ * (cost + latency) on a large bucket. Pass `year`/`month`/`day` (the
+ * clicked row's own partition columns, carried through by
+ * ensureIdentifierColumn's extraColumns — see extension.ts) whenever
+ * available to add an equality predicate on the partition columns and let
+ * Athena prune to just that one partition.
  *
  * Unlike fetchAuroraRecord/fetchDynamoDBRecord, this can't use a
  * parameterized statement — StartQueryExecutionCommand takes a single
@@ -280,15 +284,27 @@ export async function fetchAthenaRecord(opts: {
   workgroup?: string;
   outputLocation?: string;
   executionArn: string;
+  /** The clicked row's own year/month/day partition values, if known — adds a partition-pruning predicate instead of scanning the whole table. */
+  year?: string;
+  month?: string;
+  day?: string;
 }): Promise<Record<string, string> | undefined> {
   const escaped = opts.executionArn.replace(/'/g, "''");
+  const partitionPredicate = [
+    opts.year ? `year = '${opts.year.replace(/'/g, "''")}'` : undefined,
+    opts.month ? `month = '${opts.month.replace(/'/g, "''")}'` : undefined,
+    opts.day ? `day = '${opts.day.replace(/'/g, "''")}'` : undefined,
+  ]
+    .filter((p): p is string => p != null)
+    .map((p) => `${p} AND `)
+    .join("");
   const result = await runAthenaQuery({
     region: opts.region,
     credentials: opts.credentials,
     database: opts.database,
     workgroup: opts.workgroup,
     outputLocation: opts.outputLocation,
-    query: `SELECT * FROM ${opts.table} WHERE executionarn = '${escaped}' LIMIT 1`,
+    query: `SELECT * FROM ${opts.table} WHERE ${partitionPredicate}executionarn = '${escaped}' LIMIT 1`,
   });
 
   if (result.rows.length === 0) return undefined;

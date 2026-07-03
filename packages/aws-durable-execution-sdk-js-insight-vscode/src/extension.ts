@@ -26,7 +26,14 @@ type InboundMessage =
   | { type: "exportChart"; format: "svg" | "png"; content: string }
   | { type: "startListening" }
   | { type: "stopListening" }
-  | { type: "fetchDetail"; idColumn: string; idValue: string };
+  | {
+      type: "fetchDetail";
+      idColumn: string;
+      idValue: string;
+      year?: string;
+      month?: string;
+      day?: string;
+    };
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -93,7 +100,13 @@ class ExplorerPanel {
         case "stopListening":
           return this.onStopListening();
         case "fetchDetail":
-          return await this.onFetchDetail(msg.idColumn, msg.idValue);
+          return await this.onFetchDetail(
+            msg.idColumn,
+            msg.idValue,
+            msg.year,
+            msg.month,
+            msg.day,
+          );
       }
     } catch (err) {
       this.post({
@@ -373,11 +386,15 @@ class ExplorerPanel {
           // The openx JSON SerDe lowercases all keys, so the identifier
           // column the LLM's SQL would reference is "executionarn", not
           // "executionArn" — match that here too (see schema.ts's Athena
-          // dialect notes on key casing).
+          // dialect notes on key casing). Also carry the year/month/day
+          // partition columns through so the row-detail fetch can prune to
+          // one partition instead of scanning the whole table (see
+          // fetchAthenaRecord's doc comment).
           const { query, idColumn } = ensureIdentifierColumn(
             generated.query,
             "executionarn",
             "sql",
+            ["year", "month", "day"],
           );
           const table = await runAthenaQuery({
             region: cfg.region,
@@ -394,6 +411,11 @@ class ExplorerPanel {
             suggestedCharts: generated.suggestedCharts,
             finalQuery: query,
             idColumn: resolveActualColumnCasing(idColumn, table.columns),
+            partitionColumns: {
+              year: resolveActualColumnCasing("year", table.columns),
+              month: resolveActualColumnCasing("month", table.columns),
+              day: resolveActualColumnCasing("day", table.columns),
+            },
           });
           return;
         }
@@ -469,6 +491,9 @@ class ExplorerPanel {
   private async onFetchDetail(
     idColumn: string,
     idValue: string,
+    year?: string,
+    month?: string,
+    day?: string,
   ): Promise<void> {
     const cfg = readConfig();
     const credentials = resolveCredentials(cfg.awsProfile);
@@ -500,6 +525,9 @@ class ExplorerPanel {
           workgroup: cfg.athenaWorkgroup || undefined,
           outputLocation: cfg.athenaOutputLocation || undefined,
           executionArn: idValue,
+          year,
+          month,
+          day,
         });
       } else {
         record = await fetchLogsInsightsRecord({

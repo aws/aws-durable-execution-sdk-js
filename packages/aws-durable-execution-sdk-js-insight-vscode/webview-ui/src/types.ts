@@ -6,7 +6,14 @@ export type OutboundMessage =
   | { type: "downloadModel" }
   | { type: "startListening" }
   | { type: "stopListening" }
-  | { type: "fetchDetail"; idColumn: string; idValue: string };
+  | {
+      type: "fetchDetail";
+      idColumn: string;
+      idValue: string;
+      year?: string;
+      month?: string;
+      day?: string;
+    };
 
 /** A single SQS message, normalized for display. */
 export interface SqsMessageRow {
@@ -37,6 +44,15 @@ export type InboundMessage =
        * for those results.
        */
       idColumn?: string;
+      /**
+       * For the S3+Athena destination: the actual result-column names (if
+       * present) carrying the row's year/month/day partition values, added
+       * alongside idColumn so the row-detail fetch can prune to a single
+       * partition instead of scanning the whole table on every click. Each
+       * field is undefined if that partition column isn't in this result
+       * set (e.g. an aggregate query, or a non-S3 destination).
+       */
+      partitionColumns?: { year?: string; month?: string; day?: string };
     }
   | { type: "detailResult"; fields: Record<string, string> }
   | { type: "error"; message: string }

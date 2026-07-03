@@ -20,7 +20,13 @@ export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [results, setResults] = useState<{ columns: string[]; rows: string[][]; suggestedCharts?: string[]; idColumn?: string } | null>(null);
+  const [results, setResults] = useState<{
+    columns: string[];
+    rows: string[][];
+    suggestedCharts?: string[];
+    idColumn?: string;
+    partitionColumns?: { year?: string; month?: string; day?: string };
+  } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(false);
@@ -48,7 +54,7 @@ export function App() {
         if (msg.done) setModelDownloaded(true);
         break;
       case "results":
-        setResults({ columns: msg.columns, rows: msg.rows, suggestedCharts: msg.suggestedCharts, idColumn: msg.idColumn });
+        setResults({ columns: msg.columns, rows: msg.rows, suggestedCharts: msg.suggestedCharts, idColumn: msg.idColumn, partitionColumns: msg.partitionColumns });
         setExplanation(msg.explanation ?? "");
         setStatus("");
         setLoading(false);
@@ -178,6 +184,7 @@ export function App() {
                       rows={results.rows}
                       explanation={explanation}
                       idColumn={results.idColumn}
+                      partitionColumns={results.partitionColumns}
                       detailFields={detailFields}
                       detailLoading={detailLoading}
                       onDetailFetchStart={() => setDetailLoading(true)}
