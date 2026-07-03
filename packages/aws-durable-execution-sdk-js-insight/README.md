@@ -373,7 +373,7 @@ Per-exporter defaults (override via each exporter's `maxRecordSizeBytes`):
 | Aurora, Redshift, Firehose, OTel              | 1 MB    |
 | S3                                            | 5 MB    |
 | OpenSearch                                    | 10 MB   |
-| HTTP, File, Timestream                        | none¹   |
+| HTTP, File                                    | none¹   |
 
 ¹ No default — truncation is disabled unless you set `maxRecordSizeBytes`.
 
@@ -393,7 +393,6 @@ Per-exporter defaults (override via each exporter's `maxRecordSizeBytes`):
 | `FirehoseExporter`       | Kinesis Firehose → anywhere     | N/A           | Depends on dest. | Delivery stream    | Fan-out to S3/Redshift/Splunk       |
 | `EventBridgeExporter`    | Amazon EventBridge              | N/A           | Rules/patterns   | Event bus          | Event-driven reactions              |
 | `SQSExporter`            | Amazon SQS                      | N/A           | Consumer         | Queue              | Decoupled processing                |
-| `TimestreamExporter`     | Amazon Timestream               | N/A           | Time-series SQL  | Database + table   | Metrics, trends, percentiles        |
 | `OTelExporter`           | Any OTLP backend                | N/A           | Varies           | Endpoint           | Third-party observability           |
 | `HttpExporter`           | Any HTTP endpoint               | N/A           | N/A              | URL                | Custom backends, webhooks           |
 | `FileExporter`           | Filesystem (EFS/mount)          | Configurable  | File read        | Directory          | Local dev, EFS persistence          |
@@ -671,28 +670,6 @@ aws sqs create-queue --queue-name workflow-insight-queue.fifo \
 }
 ```
 
-#### TimestreamExporter
-
-**Resource:** A Timestream database and table.
-
-```bash
-aws timestream-write create-database --database-name workflows
-aws timestream-write create-table \
-  --database-name workflows \
-  --table-name insight_metrics \
-  --retention-properties MemoryStoreRetentionPeriodInHours=24,MagneticStoreRetentionPeriodInDays=365
-```
-
-**IAM policy:**
-
-```json
-{
-  "Effect": "Allow",
-  "Action": ["timestream:WriteRecords", "timestream:DescribeEndpoints"],
-  "Resource": "arn:aws:timestream:*:*:database/workflows/table/insight_metrics"
-}
-```
-
 #### OTelExporter
 
 **Resource:** An OTLP-compatible endpoint (Datadog, Grafana Cloud, Splunk, New Relic, etc.). Setup varies by vendor.
@@ -802,14 +779,7 @@ Edit `config.json` to enable/disable destinations and configure settings:
       "bufferSizeMB": 1
     },
     "sqs": { "enabled": false, "queueName": "workflow-insight", "fifo": false },
-    "eventbridge": { "enabled": false, "eventBusName": "default" },
-    "timestream": {
-      "enabled": false,
-      "databaseName": "workflow-insight",
-      "tableName": "records",
-      "memoryRetentionHours": 24,
-      "magneticRetentionDays": 365
-    }
+    "eventbridge": { "enabled": false, "eventBusName": "default" }
   },
   "lambda": {
     "roleNames": [],
@@ -1211,51 +1181,6 @@ const insight = workflowInsight({
 **IAM required:** `sqs:SendMessage` on the queue.
 
 **When to use:** Guaranteed single-consumer delivery, decoupling export processing from the Lambda invocation, ordered processing (FIFO).
-
----
-
-### TimestreamExporter
-
-Writes records to Amazon Timestream for time-series analytics.
-
-```typescript
-import {
-  workflowInsight,
-  TimestreamExporter,
-} from "@aws/durable-execution-sdk-js-insight";
-
-const insight = workflowInsight({
-  exporters: [
-    new TimestreamExporter({
-      databaseName: "workflows",
-      tableName: "insight_metrics",
-      region: "us-east-1", // optional
-    }),
-  ],
-});
-```
-
-**Data model:**
-
-- Dimensions: `executionArn`, `functionName`, `status`, `region`, `accountId`
-- Measures: `durationMs` (BIGINT), `operationCount` (BIGINT), `recordJson` (VARCHAR)
-- Time: `emittedAt`
-
-**Example queries:**
-
-```sql
--- p99 duration over the last hour
-SELECT approx_percentile(durationMs, 0.99) FROM "workflows"."insight_metrics"
-WHERE time > ago(1h) AND status = 'SUCCEEDED'
-
--- Failure rate trend (5-min bins)
-SELECT bin(time, 5m), COUNT_IF(status='FAILED') * 100.0 / COUNT(*) as pct
-FROM "workflows"."insight_metrics" WHERE time > ago(24h) GROUP BY 1
-```
-
-**IAM required:** `timestream:WriteRecords`, `timestream:DescribeEndpoints`.
-
-**When to use:** Time-series dashboards, percentile trends, alerting on duration/failure spikes.
 
 ---
 

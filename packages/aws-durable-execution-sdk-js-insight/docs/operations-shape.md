@@ -52,9 +52,6 @@ never named, so surfacing it adds noise without value.
   `"array"` keeps the safe, dynamic-key-free shape; users who know their consumer
   can opt into the map. (`"both"` is allowed here because these sinks have no
   store-shape constraint.)
-- **`TimestreamExporter`** is dimensional (fixed dimensions + typed measures, plus
-  a `recordJson` catch-all and an array-derived `operationCount`), not a JSON-blob
-  router, so it has no `operationsFormat` option.
 
 Each store therefore carries exactly one operations representation: the array,
 or the `operationsByName` map — never both.
