@@ -61,6 +61,10 @@ export class CloudWatchLogsExporter implements InsightExporter {
     );
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return withOperationsByName(record);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     const streamName = this.buildStreamName();
     await this.ensureStream(streamName);
@@ -72,7 +76,7 @@ export class CloudWatchLogsExporter implements InsightExporter {
         logEvents: [
           {
             timestamp: Date.now(),
-            message: JSON.stringify(withOperationsByName(record)),
+            message: JSON.stringify(this.render(record)),
           },
         ],
       }),

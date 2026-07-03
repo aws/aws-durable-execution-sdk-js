@@ -68,10 +68,14 @@ export class FileExporter implements InsightExporter {
     this.maxRecordSizeBytes = config.maxRecordSizeBytes;
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     await this.ensureDir();
 
-    const formatted = applyOperationsFormat(record, this.operationsFormat);
+    const formatted = this.render(record);
 
     if (this.mode === "ndjson") {
       const date = record.emittedAt.slice(0, 10); // YYYY-MM-DD

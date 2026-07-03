@@ -58,10 +58,12 @@ export class FirehoseExporter implements InsightExporter {
     );
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
-    const data =
-      JSON.stringify(applyOperationsFormat(record, this.operationsFormat)) +
-      "\n";
+    const data = JSON.stringify(this.render(record)) + "\n";
 
     await this.client.send(
       new PutRecordCommand({

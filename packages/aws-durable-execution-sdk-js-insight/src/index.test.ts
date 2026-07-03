@@ -496,4 +496,52 @@ describe("per-exporter truncation", () => {
     // The two exporters got different objects — no shared mutation.
     expect(small.records[0]).not.toBe(unlimited.records[0]);
   });
+
+  it("sizes truncation against the exporter's rendered (emitted) shape", async () => {
+    // An exporter that emits a strictly larger shape than the canonical record.
+    class RenderExporter implements InsightExporter {
+      records: WorkflowInsightRecord[] = [];
+      constructor(readonly maxRecordSizeBytes: number) {}
+      render(record: WorkflowInsightRecord): unknown {
+        return { ...record, operationsExpanded: record.operations };
+      }
+      async export(record: WorkflowInsightRecord): Promise<void> {
+        this.records.push(record);
+      }
+    }
+
+    const sizeOf = (v: unknown): number =>
+      new TextEncoder().encode(JSON.stringify(v)).length;
+
+    const exporter = new RenderExporter(900);
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      content: {
+        operations: {
+          overrides: [{ operationName: "big", result: (r) => r }],
+        },
+      },
+    });
+
+    await endAndDrain(
+      plugin,
+      endInfo({
+        status: "SUCCEEDED",
+        operations: {
+          o1: op({
+            id: "o1",
+            name: "big",
+            status: "SUCCEEDED",
+            result: JSON.stringify("X".repeat(1500)),
+          }),
+        },
+      }),
+    );
+
+    const got = exporter.records[0];
+    // The rendered shape (what is actually emitted) fits the limit — the plain
+    // record alone would have been measured smaller and mis-sized.
+    expect(got.truncated).toBe(true);
+    expect(sizeOf(exporter.render(got))).toBeLessThanOrEqual(900);
+  });
 });

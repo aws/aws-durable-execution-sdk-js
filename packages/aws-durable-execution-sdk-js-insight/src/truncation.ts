@@ -47,14 +47,23 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  *
  * The input record is never mutated (the same instance is shared across
  * exporters, which may have different limits).
+ *
+ * `render` maps the record to the exact value the exporter will serialize (e.g.
+ * the `operationsByName` expansion), so the size check measures what is actually
+ * emitted rather than the canonical record. It defaults to the identity. Note
+ * this bounds the serialized record *body*, not any destination wire envelope
+ * (DynamoDB type descriptors, CloudWatch Logs event framing, gzip, etc.);
+ * exporters with non-trivial envelope overhead should keep `maxRecordSizeBytes`
+ * below their hard limit to leave headroom.
  */
 export function truncateRecord(
   record: WorkflowInsightRecord,
   maxBytes: number | undefined,
+  render: (r: WorkflowInsightRecord) => unknown = (r) => r,
 ): WorkflowInsightRecord {
   if (maxBytes === undefined || maxBytes <= 0) return record;
 
-  const initialSize = jsonByteSize(record);
+  const initialSize = jsonByteSize(render(record));
   if (initialSize === undefined || initialSize <= maxBytes) return record;
 
   // Clone operations (and each op we may edit) so we never touch the shared input.
@@ -86,7 +95,7 @@ export function truncateRecord(
   };
 
   const fits = (): boolean => {
-    const size = jsonByteSize(candidate());
+    const size = jsonByteSize(render(candidate()));
     return size !== undefined && size <= maxBytes;
   };
 

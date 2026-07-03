@@ -66,6 +66,10 @@ export class HttpExporter implements InsightExporter {
     this.operationsFormat = config.operationsFormat ?? "array";
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -77,9 +81,7 @@ export class HttpExporter implements InsightExporter {
           "Content-Type": "application/json",
           ...this.headers,
         },
-        body: JSON.stringify(
-          applyOperationsFormat(record, this.operationsFormat),
-        ),
+        body: JSON.stringify(this.render(record)),
         signal: controller.signal,
       });
 

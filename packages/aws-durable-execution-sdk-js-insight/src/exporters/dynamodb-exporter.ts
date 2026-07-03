@@ -61,6 +61,10 @@ export class DynamoDBExporter implements InsightExporter {
     );
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return withOperationsByName(record);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     const item: Record<string, unknown> = {
       ...withOperationsByName(record),

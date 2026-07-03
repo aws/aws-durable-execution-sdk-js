@@ -91,6 +91,19 @@ export interface InsightExporter {
    * `undefined` disables truncation.
    */
   maxRecordSizeBytes?: number;
+  /**
+   * Maps a record to the exact value this exporter serializes/sends — e.g. the
+   * `operationsByName` expansion, or a chosen {@link OperationsFormat}. The size
+   * limiter measures this shape (not the canonical record) so a record trimmed
+   * to `maxRecordSizeBytes` reflects what is actually emitted. Defaults to the
+   * record unchanged.
+   *
+   * To avoid drift, an exporter that reshapes the record should call the same
+   * `render` from its {@link InsightExporter.export | export} so sizing and
+   * emission share one code path. This bounds the serialized record body only,
+   * not the destination wire envelope.
+   */
+  render?(record: WorkflowInsightRecord): unknown;
 }
 
 /**

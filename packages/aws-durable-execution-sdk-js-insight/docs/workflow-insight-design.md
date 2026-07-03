@@ -518,6 +518,13 @@ operation is gone — (3) execution `input`, then `output`. Identity/timeline
 fields are never dropped; use `content.input`/`content.output` transforms to
 bound input/output before it comes to that (they run before truncation).
 
+The limiter measures the shape each exporter actually emits — exporters that
+reshape operations (the `operationsByName` expansion, or the `"both"` format)
+expose a `render` used both to size and to serialize, so the two can't drift.
+This bounds the serialized record body, not the destination wire envelope
+(DynamoDB type descriptors, CloudWatch Logs framing, gzip); defaults sit below
+the hard limits to absorb that overhead.
+
 | Destination                                      | Default Limit        |
 | ------------------------------------------------ | -------------------- |
 | CloudWatch Logs / Lambda log / SQS / EventBridge | 256 KB               |

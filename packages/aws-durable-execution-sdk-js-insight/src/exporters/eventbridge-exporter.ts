@@ -73,6 +73,10 @@ export class EventBridgeExporter implements InsightExporter {
     );
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     const result = await this.client.send(
       new PutEventsCommand({
@@ -81,9 +85,7 @@ export class EventBridgeExporter implements InsightExporter {
             EventBusName: this.eventBusName,
             Source: this.source,
             DetailType: record.status,
-            Detail: JSON.stringify(
-              applyOperationsFormat(record, this.operationsFormat),
-            ),
+            Detail: JSON.stringify(this.render(record)),
             Time: new Date(record.emittedAt),
           },
         ],

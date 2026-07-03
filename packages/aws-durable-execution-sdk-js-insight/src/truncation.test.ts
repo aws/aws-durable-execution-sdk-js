@@ -210,3 +210,41 @@ describe("truncateRecord", () => {
     expect(out.operations.map((o) => o.id)).toEqual(["untimed"]);
   });
 });
+
+describe("truncateRecord render-aware sizing", () => {
+  // A render that emits a strictly larger shape than the canonical record,
+  // mirroring exporters that expand operations (e.g. operationsByName / "both").
+  const expand = (r: WorkflowInsightRecord): unknown => ({
+    ...r,
+    operationsExpanded: r.operations,
+  });
+
+  it("measures the rendered shape, not the canonical record", () => {
+    const r = record({
+      operations: [
+        op({ id: "o1", name: "a", result: "A".repeat(400) }),
+        op({ id: "o2", name: "b", result: "B".repeat(400) }),
+      ],
+    });
+    // Limit sits between the plain record and its (larger) rendered shape.
+    const limit = bytes(r) + 50;
+    expect(bytes(r)).toBeLessThanOrEqual(limit); // plain record already fits...
+    expect(bytes(expand(r))).toBeGreaterThan(limit); // ...but the emitted shape doesn't.
+
+    // Without a render, truncateRecord sees a fitting record → no-op.
+    expect(truncateRecord(r, limit)).toBe(r);
+
+    // With the render, it trims until the *emitted* shape fits.
+    const out = truncateRecord(r, limit, expand);
+    expect(out).not.toBe(r);
+    expect(out.truncated).toBe(true);
+    expect(bytes(expand(out))).toBeLessThanOrEqual(limit);
+  });
+
+  it("still returns the original when the rendered shape already fits", () => {
+    const r = record({ operations: [op({ id: "o1", name: "a" })] });
+    const out = truncateRecord(r, 10_000, expand);
+    expect(out).toBe(r);
+    expect(out.truncated).toBeUndefined();
+  });
+});

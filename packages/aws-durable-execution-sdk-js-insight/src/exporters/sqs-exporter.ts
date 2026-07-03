@@ -66,13 +66,15 @@ export class SQSExporter implements InsightExporter {
     this.client = new SQSClient(config.region ? { region: config.region } : {});
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     await this.client.send(
       new SendMessageCommand({
         QueueUrl: this.queueUrl,
-        MessageBody: JSON.stringify(
-          applyOperationsFormat(record, this.operationsFormat),
-        ),
+        MessageBody: JSON.stringify(this.render(record)),
         MessageGroupId: this.isFifo
           ? (this.messageGroupId ?? record.executionArn)
           : undefined,

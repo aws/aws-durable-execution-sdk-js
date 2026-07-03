@@ -354,6 +354,16 @@ operation whose result was dropped is itself marked `truncated: true`, and
 applicable — so a trimmed record is always distinguishable from a complete one
 ("cut, not missing").
 
+The size check measures the **exact shape each exporter emits**, not just the
+canonical record. Exporters that reshape operations (the `operationsByName`
+expansion used by CloudWatch Logs / DynamoDB / Lambda log, or the `"both"`
+format) expose a `render` the limiter sizes against, so a record trimmed to its
+limit reflects what is actually serialized. This bounds the serialized record
+_body_; it does not model the destination wire envelope (DynamoDB type
+descriptors, CloudWatch Logs event framing, gzip, etc.) — which is why the
+first-party defaults below sit under each destination's hard limit to leave
+headroom.
+
 Per-exporter defaults (override via each exporter's `maxRecordSizeBytes`):
 
 | Exporter(s)                                   | Default |

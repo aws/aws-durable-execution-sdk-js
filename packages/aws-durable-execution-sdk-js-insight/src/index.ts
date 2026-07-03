@@ -327,8 +327,12 @@ export class LambdaLogExporter implements InsightExporter {
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    return withOperationsByName(record);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
-    console.log(JSON.stringify(withOperationsByName(record)));
+    console.log(JSON.stringify(this.render(record)));
   }
 }
 
@@ -382,11 +386,16 @@ class ExportScheduler {
         this.pending = undefined;
         // allSettled so one failing/slow exporter never blocks or fails the others,
         // and an export error never propagates into the execution. Each exporter
-        // gets a copy truncated to its own maxRecordSizeBytes (no-op when unset).
+        // gets a copy truncated to its own maxRecordSizeBytes (no-op when unset),
+        // measured against the exact shape that exporter emits (its `render`).
         await Promise.allSettled(
           this.exporters.map((exporter) =>
             exporter.export(
-              truncateRecord(record, exporter.maxRecordSizeBytes),
+              truncateRecord(
+                record,
+                exporter.maxRecordSizeBytes,
+                exporter.render ? (r) => exporter.render!(r) : undefined,
+              ),
             ),
           ),
         );

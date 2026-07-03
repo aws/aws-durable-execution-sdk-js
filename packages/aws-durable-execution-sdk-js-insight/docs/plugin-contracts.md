@@ -31,12 +31,26 @@ interface InsightExporter {
    * the `droppedOperations` count / `droppedInput` / `droppedOutput` flags are
    * set as applicable.
    *
+   * The size is measured against the shape the exporter emits (via its optional
+   * `render` — e.g. the `operationsByName` expansion), not the canonical record,
+   * so a trimmed record reflects what is actually serialized. This bounds the
+   * record body, not the destination wire envelope; defaults sit below the hard
+   * limits to leave headroom.
+   *
    * First-party defaults: CloudWatch Logs / Lambda log / SQS / EventBridge
    * 256KB, DynamoDB 400KB, Aurora / Redshift / Firehose / OTel 1MB, S3 5MB,
    * OpenSearch 10MB. HTTP, File, and Timestream have no default (`undefined`
    * disables truncation).
    */
   maxRecordSizeBytes?: number;
+
+  /**
+   * Optional: maps a record to the exact value this exporter serializes (e.g.
+   * the operationsByName expansion), so the size limiter measures the emitted
+   * shape. Defaults to the record unchanged; reuse it from `export` to avoid
+   * drift.
+   */
+  render?(record: WorkflowInsightRecord): unknown;
 }
 
 interface WorkflowInsightConfig {

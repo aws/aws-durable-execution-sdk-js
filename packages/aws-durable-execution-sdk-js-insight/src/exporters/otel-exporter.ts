@@ -74,6 +74,12 @@ export class OTelExporter implements InsightExporter {
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 1_000_000;
   }
 
+  render(record: WorkflowInsightRecord): unknown {
+    // Measure the full OTLP request — the record is embedded in body.stringValue,
+    // so this captures both the record content and the OTLP envelope.
+    return this.buildPayload(record);
+  }
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     const payload = this.buildPayload(record);
 
