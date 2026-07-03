@@ -89,10 +89,11 @@
       HTTP/File/Timestream none). `undefined` disables truncation.
 - [x] Truncate oversized records by dropping operation results oldest-first, then
       whole operations oldest-first, then — as a last resort — execution input
-      then output; identity/timeline fields are never dropped. Sets `truncated` +
-      `droppedOperationResults`/`droppedOperations` counts and
-      `droppedInput`/`droppedOutput` flags (additive fields — schemaVersion stays
-      "1.0"). Never mutates the shared record (each exporter gets its own trimmed copy).
+      then output; identity/timeline fields are never dropped. Sets record-level
+      `truncated`, a per-operation `truncated` flag on operations whose result was
+      dropped, the `droppedOperations` count, and `droppedInput`/`droppedOutput`
+      flags (additive fields — schemaVersion stays "1.0"). Never mutates the
+      shared record (each exporter gets its own trimmed copy).
 
 ## Exporters (first-party)
 

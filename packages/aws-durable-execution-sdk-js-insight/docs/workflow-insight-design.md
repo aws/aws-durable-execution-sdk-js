@@ -527,9 +527,10 @@ bound input/output before it comes to that (they run before truncation).
 | OpenSearch                                       | 10 MB                |
 | HTTP / File / Timestream                         | none (no truncation) |
 
-When truncation occurs, `truncated: true` is set (plus `droppedOperationResults`
-and `droppedOperations` counts, and `droppedInput`/`droppedOutput` flags when
-those last-resort drops happen) so customers know data was cut, not missing.
+When truncation occurs, `truncated: true` is set on the record; each operation
+whose result was dropped is itself marked `truncated: true`, and the
+`droppedOperations` count / `droppedInput` / `droppedOutput` flags are set when
+those drops happen — so customers know data was cut, not missing.
 
 ---
 

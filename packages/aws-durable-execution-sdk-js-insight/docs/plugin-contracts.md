@@ -26,9 +26,10 @@ interface InsightExporter {
    *   3. last resort — execution `input`, then `output`.
    * Identity/timeline fields are never dropped; prefer `content.input`/
    * `content.output` transforms to bound `input`/`output` before it comes to
-   * that. When anything is dropped, `truncated: true` (+ the relevant
-   * `droppedOperationResults` / `droppedOperations` counts and `droppedInput` /
-   * `droppedOutput` flags) is set on the emitted record.
+   * that. When anything is dropped, `truncated: true` is set on the record, each
+   * operation whose result was dropped is itself marked `truncated: true`, and
+   * the `droppedOperations` count / `droppedInput` / `droppedOutput` flags are
+   * set as applicable.
    *
    * First-party defaults: CloudWatch Logs / Lambda log / SQS / EventBridge
    * 256KB, DynamoDB 400KB, Aurora / Redshift / Firehose / OTel 1MB, S3 5MB,
@@ -375,8 +376,6 @@ interface WorkflowInsightRecord {
 
   /** True when data was dropped to fit the exporter's maxRecordSizeBytes. */
   truncated?: boolean;
-  /** Number of operation `result` fields dropped. */
-  droppedOperationResults?: number;
   /** Number of whole operations dropped. */
   droppedOperations?: number;
   /** True when execution input was dropped as a last resort. */
@@ -421,6 +420,9 @@ interface OperationRecord {
     name: string;
     message: string;
   };
+
+  /** True when the size limiter dropped this operation's result. */
+  truncated?: boolean;
 }
 ```
 

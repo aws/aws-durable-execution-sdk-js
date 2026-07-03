@@ -81,11 +81,11 @@ export interface InsightExporter {
    * calling {@link InsightExporter.export | export} (best-effort): it drops
    * operation `result` fields oldest-first, then whole operations oldest-first,
    * then — only as a last resort — execution `input` and `output`. It sets
-   * `truncated: true` plus the relevant markers (`droppedOperationResults` /
-   * `droppedOperations` counts, `droppedInput` / `droppedOutput` flags) on the
-   * emitted record. Prefer `content.input` / `content.output` transforms to
-   * bound `input`/`output` before it comes to that; identity/timeline fields
-   * are never dropped.
+   * `truncated: true` on the emitted record, marks each operation whose result
+   * was dropped with its own `truncated: true`, and adds the `droppedOperations`
+   * count and `droppedInput` / `droppedOutput` flags. Prefer `content.input` /
+   * `content.output` transforms to bound `input`/`output` before it comes to
+   * that; identity/timeline fields are never dropped.
    *
    * First-party exporters default this to their destination's practical limit;
    * `undefined` disables truncation.
@@ -165,6 +165,12 @@ export interface OperationRecord {
    * `content.operations.overrides` entry supplies a `result` transform.
    */
   result?: OperationResult;
+  /**
+   * `true` when the size limiter dropped this operation's `result` to fit the
+   * exporter's `maxRecordSizeBytes`. The operation's other fields are retained;
+   * only the (opted-in) `result` value was removed.
+   */
+  truncated?: boolean;
 }
 
 /**
@@ -251,8 +257,6 @@ export interface WorkflowInsightRecord {
    * record is always distinguishable from a complete one ("cut, not missing").
    */
   truncated?: boolean;
-  /** Number of operation `result` fields dropped by the size limiter. */
-  droppedOperationResults?: number;
   /** Number of whole operations dropped by the size limiter. */
   droppedOperations?: number;
   /**

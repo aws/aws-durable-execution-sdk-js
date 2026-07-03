@@ -53,7 +53,6 @@ interface WorkflowInsightRecord {
 
   // Truncation markers — present only when the size limiter dropped data
   truncated?: boolean; // true when data was dropped to fit maxRecordSizeBytes
-  droppedOperationResults?: number; // count of operation results dropped
   droppedOperations?: number; // count of whole operations dropped
   droppedInput?: boolean; // true if execution input was dropped (last resort)
   droppedOutput?: boolean; // true if execution output was dropped (last resort)
@@ -75,6 +74,7 @@ interface OperationRecord {
     name: string;
     message: string;
   };
+  truncated?: boolean; // true if the size limiter dropped this operation's result
 }
 ```
 
@@ -348,10 +348,11 @@ Drop order, until the record fits:
 Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
 only after all operations are gone — so prefer `content.input` /
 `content.output` transforms to bound them earlier (those run before truncation).
-When anything is dropped, the emitted record carries `truncated: true` plus the
-relevant markers (`droppedOperationResults` / `droppedOperations` counts,
-`droppedInput` / `droppedOutput` flags), so a trimmed record is always
-distinguishable from a complete one ("cut, not missing").
+When anything is dropped, the emitted record carries `truncated: true`; each
+operation whose result was dropped is itself marked `truncated: true`, and
+`droppedOperations` (count), `droppedInput` / `droppedOutput` flags are set as
+applicable — so a trimmed record is always distinguishable from a complete one
+("cut, not missing").
 
 Per-exporter defaults (override via each exporter's `maxRecordSizeBytes`):
 

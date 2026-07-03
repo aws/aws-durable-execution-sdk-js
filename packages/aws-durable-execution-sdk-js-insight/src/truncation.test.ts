@@ -74,14 +74,16 @@ describe("truncateRecord", () => {
 
     expect(out).not.toBe(r);
     expect(out.truncated).toBe(true);
-    expect(out.droppedOperationResults).toBe(1);
     expect(out.droppedOperations).toBeUndefined();
-    // Oldest (o1) lost its result; newest (o2) kept it. Both operations remain.
+    // Oldest (o1) lost its result and is marked truncated; newest (o2) kept it.
+    // Both operations remain in the array.
     expect(out.operations).toHaveLength(2);
-    expect(out.operations.find((o) => o.id === "o1")?.result).toBeUndefined();
-    expect(out.operations.find((o) => o.id === "o2")?.result).toBe(
-      "B".repeat(500),
-    );
+    const o1 = out.operations.find((o) => o.id === "o1");
+    const o2 = out.operations.find((o) => o.id === "o2");
+    expect(o1?.result).toBeUndefined();
+    expect(o1?.truncated).toBe(true);
+    expect(o2?.result).toBe("B".repeat(500));
+    expect(o2?.truncated).toBeUndefined();
     expect(bytes(out)).toBeLessThanOrEqual(limit);
   });
 

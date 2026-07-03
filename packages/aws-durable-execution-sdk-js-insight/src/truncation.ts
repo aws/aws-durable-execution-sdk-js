@@ -40,9 +40,10 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  * Identity/timeline fields (arn, status, timestamps, etc.) are never dropped.
  * `input`/`output` are dropped only after every operation is gone, so prefer
  * `content.input`/`content.output` transforms to bound them earlier. When
- * anything is dropped, the returned record has `truncated: true` and the
- * relevant markers (`droppedOperationResults` / `droppedOperations` counts,
- * `droppedInput` / `droppedOutput` flags).
+ * anything is dropped, the returned record has `truncated: true`; each operation
+ * whose result was dropped is itself marked `truncated: true`, and
+ * `droppedOperations` / `droppedInput` / `droppedOutput` markers are set as
+ * applicable.
  *
  * The input record is never mutated (the same instance is shared across
  * exporters, which may have different limits).
@@ -61,7 +62,7 @@ export function truncateRecord(
   const kept = new Array<boolean>(ops.length).fill(true);
   const order = oldestFirstOrder(ops);
 
-  let droppedOperationResults = 0;
+  let anyResultDropped = false;
   let droppedOperations = 0;
   let droppedInput = false;
   let droppedOutput = false;
@@ -72,8 +73,6 @@ export function truncateRecord(
       operations: ops.filter((_, i) => kept[i]),
       truncated: true,
     };
-    if (droppedOperationResults > 0)
-      out.droppedOperationResults = droppedOperationResults;
     if (droppedOperations > 0) out.droppedOperations = droppedOperations;
     if (droppedInput) {
       out.input = undefined;
@@ -91,12 +90,13 @@ export function truncateRecord(
     return size !== undefined && size <= maxBytes;
   };
 
-  // Phase 1: drop operation results, oldest first.
+  // Phase 1: drop operation results, oldest first. The operation is kept and
+  // marked `truncated` so consumers can tell its result was cut, not absent.
   for (const idx of order) {
     if (fits()) break;
     if (kept[idx] && ops[idx].result !== undefined) {
-      ops[idx] = { ...ops[idx], result: undefined };
-      droppedOperationResults++;
+      ops[idx] = { ...ops[idx], result: undefined, truncated: true };
+      anyResultDropped = true;
     }
   }
 
@@ -116,7 +116,7 @@ export function truncateRecord(
 
   // If nothing was actually dropped, return the original untouched — not cut.
   if (
-    droppedOperationResults === 0 &&
+    !anyResultDropped &&
     droppedOperations === 0 &&
     !droppedInput &&
     !droppedOutput
