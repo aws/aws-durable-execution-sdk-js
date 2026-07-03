@@ -222,8 +222,9 @@ export class InsightDestinationsStack extends cdk.Stack {
     }
 
     // --- S3 ---
+    let insightBucket: s3.Bucket | undefined;
     if (config.destinations.s3.enabled) {
-      const bucket = new s3.Bucket(this, "InsightBucket", {
+      insightBucket = new s3.Bucket(this, "InsightBucket", {
         bucketName: config.destinations.s3.bucketName,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
@@ -232,9 +233,13 @@ export class InsightDestinationsStack extends cdk.Stack {
       policyStatements.push(
         new iam.PolicyStatement({
           actions: ["s3:PutObject"],
-          resources: [`${bucket.bucketArn}/*`],
+          resources: [`${insightBucket.bucketArn}/*`],
         }),
       );
+
+      new cdk.CfnOutput(this, "InsightBucketName", {
+        value: insightBucket.bucketName,
+      });
     }
 
     // --- Redshift Serverless ---
@@ -526,6 +531,9 @@ export class InsightDestinationsStack extends cdk.Stack {
       }
       if (config.destinations.sqs.enabled && sqsQueue) {
         envVars.INSIGHT_SQS_QUEUE_URL = sqsQueue.queueUrl;
+      }
+      if (config.destinations.s3.enabled && insightBucket) {
+        envVars.INSIGHT_S3_BUCKET = insightBucket.bucketName;
       }
 
       const exampleFn = new lambdaNode.NodejsFunction(

@@ -17,7 +17,7 @@
       "maxCapacity": 1
     },
     "s3": {
-      "enabled": false,
+      "enabled": true,
       "bucketName": "workflow-insight-records"
     },
     "redshift": {

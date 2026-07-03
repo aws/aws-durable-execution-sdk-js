@@ -288,8 +288,8 @@ below). Columns:
 - startTime: string (ISO-8601)
 - endTime: string (ISO-8601, nullable)
 - durationMs: bigint (nullable)
-- input: string (JSON-serialized; use json_extract_scalar/json_extract to read fields)
-- output: string (JSON-serialized; use json_extract_scalar/json_extract to read fields)
+- input: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see lowercasing note below)
+- output: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see lowercasing note below)
 - error: struct<name:string,message:string> (nullable)
 - operations: array<struct<id,name,type,subType,parentId,status,startTime,endTime,durationMs,attempt,error,result,truncated>>
     This is the canonical per-operation array (NOT operationsByName — S3Exporter
@@ -302,15 +302,25 @@ below). Columns:
 - droppedInput / droppedOutput: boolean (nullable)
 
 input/output are stored as JSON strings (not native structs, since their shape is
-user-defined) — use json_extract_scalar(input, '$.fieldName') for scalars or
-json_extract(input, '$.fieldName') for nested values. The user will specify which
-fields they want — do not assume the structure.`;
+user-defined) — use json_extract_scalar(input, '$.fieldname') for scalars or
+json_extract(input, '$.fieldname') for nested values. The user will specify which
+fields they want — do not assume the structure.
+
+IMPORTANT — key casing: the table's JSON SerDe lowercases ALL object keys when
+parsing input/output (this does NOT affect top-level columns like executionArn,
+functionName, etc. — only keys inside the input/output JSON blobs). A field named
+"claimType" or "customerName" in the original payload must be looked up as
+json_extract_scalar(output, '$.claimtype') / '$.customername' — camelCase or
+mixed-case JSON path segments will silently return NULL. Always lowercase every
+path segment when building a json_extract_scalar/json_extract path into input or
+output.`;
 
 const DIALECT_ATHENA = `Target query language: Trino/Presto SQL (Amazon Athena) — NOT standard ANSI SQL in all respects.
 Rules:
 - Table name is TABLE_NAME (already database-qualified by the connection — do not prefix it).
 - To inspect operations, UNNEST the array: CROSS JOIN UNNEST(operations) AS t(op), then reference op.name, op.type, op.status, op.durationMs, etc.
 - json_extract_scalar(col, '$.path') returns a scalar string; json_extract(col, '$.path') returns JSON — cast as needed, e.g. CAST(json_extract_scalar(...) AS double).
+- Every path segment passed to json_extract_scalar/json_extract on input or output MUST be lowercase (the SerDe lowercases JSON keys on read) — e.g. '$.claimtype' not '$.claimType'.
 - Prefer filtering on the year/month/day partition columns when the question implies a time range, to avoid scanning the whole bucket (cost + speed).
 - String comparisons use single quotes: WHERE status = 'SUCCEEDED'
 - Always include LIMIT (default 100) unless aggregating (GROUP BY / COUNT / AVG etc).
@@ -342,8 +352,8 @@ A: SELECT op.name, COUNT(*) AS failures FROM TABLE_NAME t CROSS JOIN UNNEST(t.op
 Q: average duration per operation name
 A: SELECT op.name, AVG(op.durationMs) AS avg_ms, COUNT(*) AS ct FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) WHERE op.durationMs IS NOT NULL GROUP BY op.name ORDER BY avg_ms DESC
 
-Q: executions where the output field "amount" was over 1000
-A: SELECT executionArn, CAST(json_extract_scalar(output, '$.amount') AS double) AS amount FROM TABLE_NAME WHERE CAST(json_extract_scalar(output, '$.amount') AS double) > 1000 LIMIT 50`;
+Q: executions where the output field "approvedAmount" was over 1000
+A: SELECT executionArn, CAST(json_extract_scalar(output, '$.approvedamount') AS double) AS approved_amount FROM TABLE_NAME WHERE CAST(json_extract_scalar(output, '$.approvedamount') AS double) > 1000 LIMIT 50`;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
