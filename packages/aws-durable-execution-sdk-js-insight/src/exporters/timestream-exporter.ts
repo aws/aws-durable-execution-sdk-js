@@ -20,6 +20,13 @@ export interface TimestreamExporterConfig {
 
   /** AWS region. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * Max serialized record size before truncation. No default — Timestream is
+   * dimensional (the record is one VARCHAR measure), so truncation rarely
+   * applies; set this only if the `recordJson` measure risks exceeding limits.
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -40,10 +47,12 @@ export class TimestreamExporter implements InsightExporter {
   private readonly databaseName: string;
   private readonly tableName: string;
   private readonly client: TimestreamWriteClient;
+  readonly maxRecordSizeBytes?: number;
 
   constructor(config: TimestreamExporterConfig) {
     this.databaseName = config.databaseName;
     this.tableName = config.tableName;
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes;
     this.client = new TimestreamWriteClient(
       config.region ? { region: config.region } : {},
     );

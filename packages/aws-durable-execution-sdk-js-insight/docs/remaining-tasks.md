@@ -82,10 +82,18 @@
 
 ## Record Size / Truncation
 
-> `InsightExporter.maxRecordSizeBytes` exists in the types but is never read.
-
-- [ ] Enforce `maxRecordSizeBytes` per exporter (contract default 256KB)
-- [ ] Truncate oversized records by dropping operation results starting from oldest
+- [x] Enforce `maxRecordSizeBytes` per exporter — applied per-exporter in
+      `ExportScheduler` via `truncateRecord`; each first-party exporter sets a
+      destination-appropriate default (CW/Lambda-log/SQS/EventBridge 256KB,
+      DynamoDB 400KB, Aurora/Redshift/Firehose/OTel 1MB, S3 5MB, OpenSearch 10MB;
+      HTTP/File/Timestream none). `undefined` disables truncation.
+- [x] Truncate oversized records by dropping operation results oldest-first, then
+      whole operations oldest-first, then — as a last resort — execution input
+      then output; identity/timeline fields are never dropped. Sets record-level
+      `truncated`, a per-operation `truncated` flag on operations whose result was
+      dropped, the `droppedOperations` count, and `droppedInput`/`droppedOutput`
+      flags (additive fields — schemaVersion stays "1.0"). Never mutates the
+      shared record (each exporter gets its own trimmed copy).
 
 ## Exporters (first-party)
 
@@ -118,6 +126,10 @@
 - [ ] Unit tests for `ExportScheduler` (coalescing, no overlap, drain)
 - [x] Unit tests for content filtering (input/output transforms, operation overrides,
       includeErrors, result transform incl. non-JSON + throwing-transform safety)
+- [x] Unit tests for record truncation — drop order (results then whole
+      operations, oldest-first), `truncated`/dropped counts, no-op when it fits,
+      no input mutation, input/output never dropped, and per-exporter application
+      via the scheduler (different limits → different copies).
 - [x] Unit tests for sampling logic (including replay determinism) — covers
       rate 0 / 1 / omitted, fractional partitioning, invocationId-independence
       (replay stability), stable re-runs, and out-of-range/NaN clamping.

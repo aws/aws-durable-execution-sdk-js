@@ -26,6 +26,12 @@ export interface DynamoDBExporterConfig {
 
   /** AWS region of the table. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 400_000 (DynamoDB's 400 KB item limit).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -43,15 +49,19 @@ export class DynamoDBExporter implements InsightExporter {
   private readonly partitionKey: string;
   private readonly sortKey: string | undefined;
   private readonly client: DynamoDBClient;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: DynamoDBExporterConfig) {
     this.tableName = config.tableName;
     this.partitionKey = config.partitionKey ?? "pk";
     this.sortKey = config.sortKey ?? "sk";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 400_000;
     this.client = new DynamoDBClient(
       config.region ? { region: config.region } : {},
     );
   }
+
+  render = withOperationsByName;
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     const item: Record<string, unknown> = {

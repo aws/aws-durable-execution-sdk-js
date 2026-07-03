@@ -50,6 +50,12 @@ interface WorkflowInsightRecord {
 
   // Operations (steps, waits, invokes, callbacks)
   operations: OperationRecord[];
+
+  // Truncation markers — present only when the size limiter dropped data
+  truncated?: boolean; // true when data was dropped to fit maxRecordSizeBytes
+  droppedOperations?: number; // count of whole operations dropped
+  droppedInput?: boolean; // true if execution input was dropped (last resort)
+  droppedOutput?: boolean; // true if execution output was dropped (last resort)
 }
 
 interface OperationRecord {
@@ -68,6 +74,7 @@ interface OperationRecord {
     name: string;
     message: string;
   };
+  truncated?: boolean; // true if the size limiter dropped this operation's result
 }
 ```
 
@@ -322,6 +329,53 @@ Notes:
 - The array remains the source of truth; array-native exporters (S3/Athena,
   OpenSearch, Aurora, Redshift) emit only the array. See
   [`docs/operations-shape.md`](./docs/operations-shape.md).
+
+## Record size & truncation
+
+Destinations cap payload size (CloudWatch Logs events at 256 KB, DynamoDB items
+at 400 KB, etc.). Each exporter carries a `maxRecordSizeBytes`; when a record's
+serialized JSON exceeds it, the plugin truncates a **per-exporter copy**
+(best-effort) before sending — the same record can go out full to one exporter
+and trimmed to another.
+
+Drop order, until the record fits:
+
+1. operation `result` fields, **oldest operation first**;
+2. whole operations, **oldest first**;
+3. as a last resort (once every operation is gone), execution `input`, then
+   `output`.
+
+Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
+only after all operations are gone — so prefer `content.input` /
+`content.output` transforms to bound them earlier (those run before truncation).
+When anything is dropped, the emitted record carries `truncated: true`; each
+operation whose result was dropped is itself marked `truncated: true`, and
+`droppedOperations` (count), `droppedInput` / `droppedOutput` flags are set as
+applicable — so a trimmed record is always distinguishable from a complete one
+("cut, not missing").
+
+The size check measures the **exact shape each exporter emits**, not just the
+canonical record. Exporters that reshape operations (the `operationsByName`
+expansion used by CloudWatch Logs / DynamoDB / Lambda log, or the `"both"`
+format) expose a `render` the limiter sizes against, so a record trimmed to its
+limit reflects what is actually serialized. This bounds the serialized record
+_body_; it does not model the destination wire envelope (DynamoDB type
+descriptors, CloudWatch Logs event framing, gzip, etc.) — which is why the
+first-party defaults below sit under each destination's hard limit to leave
+headroom.
+
+Per-exporter defaults (override via each exporter's `maxRecordSizeBytes`):
+
+| Exporter(s)                                   | Default |
+| --------------------------------------------- | ------- |
+| Lambda log, CloudWatch Logs, SQS, EventBridge | 256 KB  |
+| DynamoDB                                      | 400 KB  |
+| Aurora, Redshift, Firehose, OTel              | 1 MB    |
+| S3                                            | 5 MB    |
+| OpenSearch                                    | 10 MB   |
+| HTTP, File, Timestream                        | none¹   |
+
+¹ No default — truncation is disabled unless you set `maxRecordSizeBytes`.
 
 ## Exporters
 
@@ -1345,6 +1399,12 @@ import {
 } from "@aws/durable-execution-sdk-js-insight";
 
 class MyExporter implements InsightExporter {
+  // Optional: opt into size-based truncation. When set, the plugin sends this
+  // exporter a copy trimmed to fit (drops operation results, then whole
+  // operations oldest-first, then execution input/output as a last resort) and
+  // sets `truncated: true` on it. Omit to receive full records.
+  readonly maxRecordSizeBytes = 256_000;
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     // Send record wherever you want
   }

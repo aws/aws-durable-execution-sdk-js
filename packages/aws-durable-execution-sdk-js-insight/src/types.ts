@@ -75,7 +75,35 @@ export interface ContentConfig {
 export interface InsightExporter {
   export(record: WorkflowInsightRecord): Promise<void>;
   flush?(): Promise<void>;
+  /**
+   * Maximum serialized record size, in bytes, this exporter will emit. When a
+   * record's JSON exceeds this, the plugin truncates a per-exporter copy before
+   * calling {@link InsightExporter.export | export} (best-effort): it drops
+   * operation `result` fields oldest-first, then whole operations oldest-first,
+   * then — only as a last resort — execution `input` and `output`. It sets
+   * `truncated: true` on the emitted record, marks each operation whose result
+   * was dropped with its own `truncated: true`, and adds the `droppedOperations`
+   * count and `droppedInput` / `droppedOutput` flags. Prefer `content.input` /
+   * `content.output` transforms to bound `input`/`output` before it comes to
+   * that; identity/timeline fields are never dropped.
+   *
+   * First-party exporters default this to their destination's practical limit;
+   * `undefined` disables truncation.
+   */
   maxRecordSizeBytes?: number;
+  /**
+   * Maps a record to the exact value this exporter serializes/sends — e.g. the
+   * `operationsByName` expansion, or a chosen {@link OperationsFormat}. The size
+   * limiter measures this shape (not the canonical record) so a record trimmed
+   * to `maxRecordSizeBytes` reflects what is actually emitted. Defaults to the
+   * record unchanged.
+   *
+   * To avoid drift, an exporter that reshapes the record should call the same
+   * `render` from its {@link InsightExporter.export | export} so sizing and
+   * emission share one code path. This bounds the serialized record body only,
+   * not the destination wire envelope.
+   */
+  render?(record: WorkflowInsightRecord): unknown;
 }
 
 /**
@@ -150,6 +178,12 @@ export interface OperationRecord {
    * `content.operations.overrides` entry supplies a `result` transform.
    */
   result?: OperationResult;
+  /**
+   * `true` when the size limiter dropped this operation's `result` to fit the
+   * exporter's `maxRecordSizeBytes`. The operation's other fields are retained;
+   * only the (opted-in) `result` value was removed.
+   */
+  truncated?: boolean;
 }
 
 /**
@@ -230,4 +264,20 @@ export interface WorkflowInsightRecord {
     message: string;
   };
   operations: OperationRecord[];
+  /**
+   * `true` when the size limiter dropped data to fit the exporter's
+   * `maxRecordSizeBytes`. Omitted when nothing was dropped, so a truncated
+   * record is always distinguishable from a complete one ("cut, not missing").
+   */
+  truncated?: boolean;
+  /** Number of whole operations dropped by the size limiter. */
+  droppedOperations?: number;
+  /**
+   * `true` when the size limiter dropped execution `input` as a last resort
+   * (only after every operation was already dropped). Distinguishes a
+   * size-dropped input from one omitted by a `content.input` transform.
+   */
+  droppedInput?: boolean;
+  /** `true` when the size limiter dropped execution `output` as a last resort. */
+  droppedOutput?: boolean;
 }

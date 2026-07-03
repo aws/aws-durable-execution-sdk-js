@@ -32,6 +32,12 @@ export interface FileExporterConfig {
    * `"both"`.
    */
   operationsFormat?: OperationsFormat;
+
+  /**
+   * Max serialized record size before truncation. No default — the filesystem
+   * has no practical per-record limit; set this only if you want smaller files.
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -53,17 +59,23 @@ export class FileExporter implements InsightExporter {
   private readonly mode: "ndjson" | "json";
   private readonly operationsFormat: OperationsFormat;
   private dirCreated = false;
+  readonly maxRecordSizeBytes?: number;
 
   constructor(config: FileExporterConfig) {
     this.directory = config.directory;
     this.mode = config.mode ?? "ndjson";
     this.operationsFormat = config.operationsFormat ?? "array";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes;
+  }
+
+  render(record: WorkflowInsightRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     await this.ensureDir();
 
-    const formatted = applyOperationsFormat(record, this.operationsFormat);
+    const formatted = this.render(record);
 
     if (this.mode === "ndjson") {
       const date = record.emittedAt.slice(0, 10); // YYYY-MM-DD
