@@ -34,12 +34,15 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  *
  * Drop order (see `docs/plugin-contracts.md`):
  *   1. operation `result` fields, oldest operation first;
- *   2. whole operations, oldest first.
+ *   2. whole operations, oldest first;
+ *   3. last resort — execution `input`, then `output`.
  *
- * Execution `input`/`output` and identity/timeline fields are never dropped —
- * use `content.input`/`content.output` transforms to bound those. When anything
- * is dropped, the returned record has `truncated: true` and the
- * `droppedOperationResults` / `droppedOperations` counts.
+ * Identity/timeline fields (arn, status, timestamps, etc.) are never dropped.
+ * `input`/`output` are dropped only after every operation is gone, so prefer
+ * `content.input`/`content.output` transforms to bound them earlier. When
+ * anything is dropped, the returned record has `truncated: true` and the
+ * relevant markers (`droppedOperationResults` / `droppedOperations` counts,
+ * `droppedInput` / `droppedOutput` flags).
  *
  * The input record is never mutated (the same instance is shared across
  * exporters, which may have different limits).
@@ -60,6 +63,8 @@ export function truncateRecord(
 
   let droppedOperationResults = 0;
   let droppedOperations = 0;
+  let droppedInput = false;
+  let droppedOutput = false;
 
   const candidate = (): WorkflowInsightRecord => {
     const out: WorkflowInsightRecord = {
@@ -70,6 +75,14 @@ export function truncateRecord(
     if (droppedOperationResults > 0)
       out.droppedOperationResults = droppedOperationResults;
     if (droppedOperations > 0) out.droppedOperations = droppedOperations;
+    if (droppedInput) {
+      out.input = undefined;
+      out.droppedInput = true;
+    }
+    if (droppedOutput) {
+      out.output = undefined;
+      out.droppedOutput = true;
+    }
     return out;
   };
 
@@ -96,9 +109,20 @@ export function truncateRecord(
     }
   }
 
-  // If nothing was actually dropped (e.g. an oversized input/output with no
-  // operation data to shed), return the original untouched — it wasn't cut.
-  if (droppedOperationResults === 0 && droppedOperations === 0) return record;
+  // Phase 3 (last resort): drop execution input, then output. Only reached once
+  // every operation is gone and the record is still over the limit.
+  if (!fits() && record.input !== undefined) droppedInput = true;
+  if (!fits() && record.output !== undefined) droppedOutput = true;
+
+  // If nothing was actually dropped, return the original untouched — not cut.
+  if (
+    droppedOperationResults === 0 &&
+    droppedOperations === 0 &&
+    !droppedInput &&
+    !droppedOutput
+  ) {
+    return record;
+  }
 
   return candidate();
 }

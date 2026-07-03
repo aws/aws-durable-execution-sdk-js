@@ -96,8 +96,8 @@ The system is built on three pillars:
 │  │ 4. Truncation                                                        │    │
 │  │    - Check total record size against maxRecordSizeBytes              │    │
 │  │    - If over: drop operation results (oldest first), then whole      │    │
-│  │      operations (oldest first); input/output are never dropped       │    │
-│  │    - Set truncated=true (+ dropped* counts) if anything was cut      │    │
+│  │      operations (oldest first), then input, then output             │    │
+│  │    - Set truncated=true (+ dropped* markers) if anything was cut     │    │
 │  └──────────────────────────────────┬──────────────────────────────────┘    │
 │                                     │                                        │
 │                                     ▼                                        │
@@ -467,7 +467,7 @@ interface ExecutionRecord {
   endTime?: string; // ISO 8601
   durationMs?: number;
 
-  // Payload (configurable via content.input/output transforms; never size-truncated)
+  // Payload (bound via content.input/output transforms; size-dropped only as a last resort)
   input?: unknown;
   output?: unknown;
   error?: { message: string; type: string; stack?: string };
@@ -513,9 +513,10 @@ The `schemaVersion` field enables forward-compatible evolution. New fields are a
 Each exporter sets a `maxRecordSizeBytes` appropriate for its destination. When a
 record's serialized JSON exceeds it, the plugin truncates a per-exporter copy
 (best-effort) by dropping, in order: (1) operation `result` fields oldest-first,
-then (2) whole operations oldest-first. Execution `input`/`output` and
-identity/timeline fields are never dropped — use `content.input`/`content.output`
-transforms to bound those (they run before truncation).
+(2) whole operations oldest-first, then — only as a last resort, once every
+operation is gone — (3) execution `input`, then `output`. Identity/timeline
+fields are never dropped; use `content.input`/`content.output` transforms to
+bound input/output before it comes to that (they run before truncation).
 
 | Destination                                      | Default Limit        |
 | ------------------------------------------------ | -------------------- |
@@ -527,7 +528,8 @@ transforms to bound those (they run before truncation).
 | HTTP / File / Timestream                         | none (no truncation) |
 
 When truncation occurs, `truncated: true` is set (plus `droppedOperationResults`
-and `droppedOperations` counts) so customers know data was cut, not missing.
+and `droppedOperations` counts, and `droppedInput`/`droppedOutput` flags when
+those last-resort drops happen) so customers know data was cut, not missing.
 
 ---
 

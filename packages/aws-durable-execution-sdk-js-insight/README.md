@@ -55,6 +55,8 @@ interface WorkflowInsightRecord {
   truncated?: boolean; // true when data was dropped to fit maxRecordSizeBytes
   droppedOperationResults?: number; // count of operation results dropped
   droppedOperations?: number; // count of whole operations dropped
+  droppedInput?: boolean; // true if execution input was dropped (last resort)
+  droppedOutput?: boolean; // true if execution output was dropped (last resort)
 }
 
 interface OperationRecord {
@@ -339,14 +341,17 @@ and trimmed to another.
 Drop order, until the record fits:
 
 1. operation `result` fields, **oldest operation first**;
-2. whole operations, **oldest first**.
+2. whole operations, **oldest first**;
+3. as a last resort (once every operation is gone), execution `input`, then
+   `output`.
 
-Execution `input`/`output` and identity/timeline fields are **never** dropped by
-the size limiter — bound those with `content.input` / `content.output`
-transforms (which run before truncation). When anything is dropped, the emitted
-record carries `truncated: true` plus `droppedOperationResults` /
-`droppedOperations` counts, so a trimmed record is always distinguishable from a
-complete one ("cut, not missing").
+Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
+only after all operations are gone — so prefer `content.input` /
+`content.output` transforms to bound them earlier (those run before truncation).
+When anything is dropped, the emitted record carries `truncated: true` plus the
+relevant markers (`droppedOperationResults` / `droppedOperations` counts,
+`droppedInput` / `droppedOutput` flags), so a trimmed record is always
+distinguishable from a complete one ("cut, not missing").
 
 Per-exporter defaults (override via each exporter's `maxRecordSizeBytes`):
 
@@ -1385,8 +1390,8 @@ import {
 class MyExporter implements InsightExporter {
   // Optional: opt into size-based truncation. When set, the plugin sends this
   // exporter a copy trimmed to fit (drops operation results, then whole
-  // operations, oldest-first) and sets `truncated: true` on it. Omit to
-  // receive full records.
+  // operations oldest-first, then execution input/output as a last resort) and
+  // sets `truncated: true` on it. Omit to receive full records.
   readonly maxRecordSizeBytes = 256_000;
 
   async export(record: WorkflowInsightRecord): Promise<void> {

@@ -22,11 +22,13 @@ interface InsightExporter {
    *
    * Truncation is best-effort and drops in this order until the record fits:
    *   1. operation `result` fields, oldest operation first;
-   *   2. whole operations, oldest first.
-   * Execution `input`/`output` and identity/timeline fields are never dropped —
-   * shrink those with `content.input`/`content.output` transforms. When anything
-   * is dropped, `truncated: true` (+ `droppedOperationResults` /
-   * `droppedOperations` counts) is set on the emitted record.
+   *   2. whole operations, oldest first;
+   *   3. last resort — execution `input`, then `output`.
+   * Identity/timeline fields are never dropped; prefer `content.input`/
+   * `content.output` transforms to bound `input`/`output` before it comes to
+   * that. When anything is dropped, `truncated: true` (+ the relevant
+   * `droppedOperationResults` / `droppedOperations` counts and `droppedInput` /
+   * `droppedOutput` flags) is set on the emitted record.
    *
    * First-party defaults: CloudWatch Logs / Lambda log / SQS / EventBridge
    * 256KB, DynamoDB 400KB, Aurora / Redshift / Firehose / OTel 1MB, S3 5MB,
@@ -377,6 +379,10 @@ interface WorkflowInsightRecord {
   droppedOperationResults?: number;
   /** Number of whole operations dropped. */
   droppedOperations?: number;
+  /** True when execution input was dropped as a last resort. */
+  droppedInput?: boolean;
+  /** True when execution output was dropped as a last resort. */
+  droppedOutput?: boolean;
 }
 
 interface OperationRecord {

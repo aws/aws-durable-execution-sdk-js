@@ -121,13 +121,75 @@ describe("truncateRecord", () => {
   });
 
   it("leaves input/output untouched and returns original if nothing can be dropped", () => {
-    // No operations to shed; a huge input keeps the record over the limit.
-    const r = record({ input: { blob: "Z".repeat(5000) }, operations: [] });
-    const out = truncateRecord(r, 100);
-    // Nothing was actually cut → original returned, no misleading marker.
+    // No operations, tiny input/output — already fits, nothing to drop.
+    const r = record({ input: { a: 1 }, output: { b: 2 }, operations: [] });
+    const out = truncateRecord(r, 10_000);
     expect(out).toBe(r);
     expect(out.truncated).toBeUndefined();
-    expect(out.input).toEqual({ blob: "Z".repeat(5000) });
+  });
+
+  it("drops execution input then output as a last resort", () => {
+    // No operations to shed; a huge input keeps the record over the limit, so
+    // the limiter must fall through to dropping input (then output).
+    const r = record({
+      input: { blob: "Z".repeat(5000) },
+      output: { blob: "Y".repeat(50) },
+      operations: [],
+    });
+    // Big enough to hold the record minus the (huge) input, plus marker overhead.
+    const limit =
+      bytes(record({ output: { blob: "Y".repeat(50) }, operations: [] })) + 80;
+    const out = truncateRecord(r, limit);
+
+    expect(out).not.toBe(r);
+    expect(out.truncated).toBe(true);
+    expect(out.droppedInput).toBe(true);
+    expect(out.input).toBeUndefined();
+    // Input alone was enough to get under the limit → output is preserved
+    // (input is dropped before output).
+    expect(out.droppedOutput).toBeUndefined();
+    expect(out.output).toEqual({ blob: "Y".repeat(50) });
+    // Original is never mutated.
+    expect(r.input).toEqual({ blob: "Z".repeat(5000) });
+  });
+
+  it("drops output too when dropping input is not enough", () => {
+    const r = record({
+      input: { blob: "Z".repeat(5000) },
+      output: { blob: "Y".repeat(5000) },
+      operations: [],
+    });
+    const out = truncateRecord(r, 300);
+
+    expect(out.truncated).toBe(true);
+    expect(out.droppedInput).toBe(true);
+    expect(out.droppedOutput).toBe(true);
+    expect(out.input).toBeUndefined();
+    expect(out.output).toBeUndefined();
+  });
+
+  it("drops operations before touching input/output", () => {
+    // A big operation result plus a modest input: dropping the operation should
+    // suffice, leaving input intact.
+    const r = record({
+      input: { keep: "me" },
+      operations: [
+        op({
+          id: "o1",
+          name: "big",
+          startTime: "2026-07-02T00:00:01.000Z",
+          result: "R".repeat(3000),
+        }),
+      ],
+    });
+    const limit = bytes(record({ input: { keep: "me" }, operations: [] })) + 80;
+
+    const out = truncateRecord(r, limit);
+
+    expect(out.truncated).toBe(true);
+    expect(out.input).toEqual({ keep: "me" });
+    expect(out.droppedInput).toBeUndefined();
+    expect(out.droppedOutput).toBeUndefined();
   });
 
   it("treats operations without a startTime as newest (dropped last)", () => {

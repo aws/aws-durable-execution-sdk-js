@@ -80,10 +80,12 @@ export interface InsightExporter {
    * record's JSON exceeds this, the plugin truncates a per-exporter copy before
    * calling {@link InsightExporter.export | export} (best-effort): it drops
    * operation `result` fields oldest-first, then whole operations oldest-first,
-   * and sets `truncated: true` (plus `droppedOperationResults` /
-   * `droppedOperations` counts) on the emitted record. Execution `input` /
-   * `output` and identity/timeline fields are never dropped by the size limiter
-   * — shrink those with `content.input` / `content.output` transforms instead.
+   * then — only as a last resort — execution `input` and `output`. It sets
+   * `truncated: true` plus the relevant markers (`droppedOperationResults` /
+   * `droppedOperations` counts, `droppedInput` / `droppedOutput` flags) on the
+   * emitted record. Prefer `content.input` / `content.output` transforms to
+   * bound `input`/`output` before it comes to that; identity/timeline fields
+   * are never dropped.
    *
    * First-party exporters default this to their destination's practical limit;
    * `undefined` disables truncation.
@@ -253,4 +255,12 @@ export interface WorkflowInsightRecord {
   droppedOperationResults?: number;
   /** Number of whole operations dropped by the size limiter. */
   droppedOperations?: number;
+  /**
+   * `true` when the size limiter dropped execution `input` as a last resort
+   * (only after every operation was already dropped). Distinguishes a
+   * size-dropped input from one omitted by a `content.input` transform.
+   */
+  droppedInput?: boolean;
+  /** `true` when the size limiter dropped execution `output` as a last resort. */
+  droppedOutput?: boolean;
 }
