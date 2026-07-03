@@ -51,6 +51,29 @@ describe("InsightDestinationsStack", () => {
     template.resourceCountIs("Custom::AWS", 1);
   });
 
+  it("creates an S3 bucket for the S3Exporter destination", () => {
+    template.hasResourceProperties("AWS::S3::Bucket", {
+      BucketName: "workflow-insight-records",
+    });
+  });
+
+  it("creates a Glue database and table for Athena querying", () => {
+    template.hasResourceProperties("AWS::Glue::Database", {
+      DatabaseInput: { Name: "workflow_insight" },
+    });
+    template.hasResourceProperties("AWS::Glue::Table", {
+      DatabaseName: "workflow_insight",
+      TableInput: Match.objectLike({
+        Name: "workflow_insight",
+        PartitionKeys: [
+          { Name: "year", Type: "string" },
+          { Name: "month", Type: "string" },
+          { Name: "day", Type: "string" },
+        ],
+      }),
+    });
+  });
+
   it("creates an IAM policy for destinations", () => {
     template.hasResourceProperties("AWS::IAM::Policy", {
       PolicyName: "WorkflowInsightDestinations",

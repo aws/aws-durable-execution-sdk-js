@@ -18,7 +18,9 @@
     },
     "s3": {
       "enabled": true,
-      "bucketName": "workflow-insight-records"
+      "bucketName": "workflow-insight-records",
+      "glueDatabaseName": "workflow_insight",
+      "glueTableName": "workflow_insight"
     },
     "redshift": {
       "enabled": false,
