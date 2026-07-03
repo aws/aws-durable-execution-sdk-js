@@ -2,8 +2,11 @@ import Table from "@cloudscape-design/components/table";
 import Box from "@cloudscape-design/components/box";
 import Header from "@cloudscape-design/components/header";
 import Pagination from "@cloudscape-design/components/pagination";
+import Spinner from "@cloudscape-design/components/spinner";
+import Modal from "@cloudscape-design/components/modal";
 import { useState } from "react";
 import { RecordDetail } from "./RecordDetail";
+import { postMessage } from "./vscode";
 
 interface Props {
   columns: string[];
@@ -14,13 +17,45 @@ interface Props {
    * skipping any not present in `columns`); the rest of each record's fields
    * are still available by clicking the row, in a detail view. Omit to show
    * every column in the table with no detail view (previous behavior).
+   *
+   * Mutually exclusive with `idColumn` in practice: this is for callers that
+   * already have every field in memory (e.g. the SQS live view, which
+   * parses the full message body) and just want to hide some by default.
    */
   primaryColumns?: string[];
+  /**
+   * When set, result rows carry a stable per-execution identifier under this
+   * column (added by the extension host — see queryShape.ts), and clicking a
+   * row fetches the *full* record on demand (via a "fetchDetail" message) —
+   * unlike `primaryColumns`, the extra fields are NOT already in `rows`,
+   * since the query that produced this result set may only have selected a
+   * few columns. Omitted entirely for aggregate query results (GROUP BY,
+   * COUNT, etc.), which have no single execution a row corresponds to.
+   */
+  idColumn?: string;
+  /** Full record fetched for the currently open detail view, or null while none is open. Only meaningful when `idColumn` is set. */
+  detailFields?: Record<string, string> | null;
+  /** True while a "fetchDetail" request is in flight. */
+  detailLoading?: boolean;
+  /** Called when the detail modal is dismissed, to let the caller clear `detailFields`. */
+  onDetailDismiss?: () => void;
+  /** Called right before a "fetchDetail" message is posted, so the caller can set loading state. */
+  onDetailFetchStart?: () => void;
 }
 
 const PAGE_SIZE = 25;
 
-export function ResultsTable({ columns, rows, explanation, primaryColumns }: Props) {
+export function ResultsTable({
+  columns,
+  rows,
+  explanation,
+  primaryColumns,
+  idColumn,
+  detailFields,
+  detailLoading,
+  onDetailDismiss,
+  onDetailFetchStart,
+}: Props) {
   const [currentPage, setCurrentPage] = useState(1);
   const [detailItem, setDetailItem] = useState<Record<string, string> | null>(null);
   const [selectedItems, setSelectedItems] = useState<Record<string, string>[]>([]);
@@ -36,8 +71,12 @@ export function ResultsTable({ columns, rows, explanation, primaryColumns }: Pro
   const displayColumns = primaryColumns
     ? primaryColumns.filter((c) => columns.includes(c))
     : columns;
-  // Only offer a detail view when there's actually something extra to show.
-  const hasDetail = primaryColumns != null && displayColumns.length < columns.length;
+  // Two independent ways a row can have "more to show": primaryColumns (the
+  // extra fields are already in this row, just hidden from the table) or
+  // idColumn (the extra fields need to be fetched — nothing to show yet).
+  const hasInMemoryDetail = primaryColumns != null && displayColumns.length < columns.length;
+  const hasFetchableDetail = idColumn != null && columns.includes(idColumn);
+  const hasDetail = hasInMemoryDetail || hasFetchableDetail;
 
   const columnDefs = displayColumns.map((col) => ({
     id: col,
@@ -66,7 +105,29 @@ export function ResultsTable({ columns, rows, explanation, primaryColumns }: Pro
   const selectItem = (item: Record<string, string> | null) => {
     setSelectedItems(item ? [item] : []);
     setDetailItem(item);
+    if (item && hasFetchableDetail && idColumn) {
+      const idValue = item[idColumn];
+      if (idValue) {
+        onDetailFetchStart?.();
+        postMessage({ type: "fetchDetail", idColumn, idValue });
+      }
+    } else if (!item) {
+      onDetailDismiss?.();
+    }
   };
+
+  // In fetchable-detail mode, the modal's content is the freshly fetched
+  // full record (detailFields), not the row's own (partial) fields — the row
+  // only carries whatever columns the query selected, which is why a fetch
+  // was needed in the first place. In in-memory mode (SQS), the row already
+  // has everything.
+  const modalFields = hasFetchableDetail ? detailFields ?? {} : detailItem ?? {};
+  const modalColumns = hasFetchableDetail
+    ? Object.keys(detailFields ?? {})
+    : columns;
+  const modalVisible = hasFetchableDetail
+    ? detailItem != null && (detailLoading || detailFields != null)
+    : detailItem != null;
 
   return (
     <>
@@ -113,12 +174,20 @@ export function ResultsTable({ columns, rows, explanation, primaryColumns }: Pro
         }
       />
 
-      <RecordDetail
-        visible={detailItem != null}
-        onDismiss={() => selectItem(null)}
-        fields={detailItem ?? {}}
-        columns={columns}
-      />
+      {hasFetchableDetail && detailItem != null && detailLoading && detailFields == null ? (
+        <Modal visible onDismiss={() => selectItem(null)} header="Record Details" size="large">
+          <Box textAlign="center" padding="xl">
+            <Spinner size="large" /> Loading record...
+          </Box>
+        </Modal>
+      ) : (
+        <RecordDetail
+          visible={modalVisible}
+          onDismiss={() => selectItem(null)}
+          fields={modalFields}
+          columns={modalColumns}
+        />
+      )}
     </>
   );
 }

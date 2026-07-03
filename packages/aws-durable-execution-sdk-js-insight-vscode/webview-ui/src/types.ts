@@ -5,7 +5,8 @@ export type OutboundMessage =
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel" }
   | { type: "startListening" }
-  | { type: "stopListening" };
+  | { type: "stopListening" }
+  | { type: "fetchDetail"; idColumn: string; idValue: string };
 
 /** A single SQS message, normalized for display. */
 export interface SqsMessageRow {
@@ -27,7 +28,17 @@ export type InboundMessage =
       explanation?: string;
       finalQuery?: string;
       suggestedCharts?: string[];
+      /**
+       * The column (if any) result rows carry a stable per-execution
+       * identifier under, added by the extension host's identifier
+       * injection (see queryShape.ts). Omitted for aggregate query results
+       * (GROUP BY, bare COUNT/SUM/etc.) — there is no single execution a
+       * summary row corresponds to, so no row-detail drill-down is offered
+       * for those results.
+       */
+      idColumn?: string;
     }
+  | { type: "detailResult"; fields: Record<string, string> }
   | { type: "error"; message: string }
   | { type: "settingsSaved" }
   | { type: "downloadProgress"; percent: number; done: boolean }

@@ -146,11 +146,19 @@ Type a question and click **Ask**. Examples:
 | "executions where the charge operation failed"          | CloudWatch, DynamoDB, Aurora, S3+Athena |
 
 > Per-operation-name questions use the `operationsByName` index (CloudWatch
-> Per-operation-name questions use the `operationsByName` index (CloudWatch
 > direct + DynamoDB), a JSONB query over the operations array (Aurora), or
 > `UNNEST(operations)` (S3 + Athena). With the `LambdaLogExporter` (nested
 > logs) these are best-effort — the `CloudWatchLogsExporter` gives the most
 > reliable per-operation queries.
+
+For row-level results (not aggregates like "count by status"), the Explorer
+adds a hidden identifier column to the generated query if it's missing, and
+selecting a row fetches and shows the _full_ record — including
+`operations`, `input`, `output`, and `error` — even if the question's answer
+only needed a couple of columns (e.g. "show me the last 10 executions" only
+returns 4 columns, but you can still click a row to see everything else).
+Aggregate results have no single execution a row corresponds to, so no
+identifier is added and rows aren't clickable for those.
 
 ## Settings Reference
 

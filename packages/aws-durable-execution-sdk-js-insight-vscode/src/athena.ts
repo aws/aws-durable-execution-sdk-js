@@ -256,3 +256,39 @@ export async function ensureAthenaTable(opts: {
     query: `MSCK REPAIR TABLE \`${opts.database}\`.\`${opts.table}\`;`,
   });
 }
+
+/**
+ * Fetch a single full record by executionArn, for the row-detail
+ * drill-down. Athena has no cheap point-lookup (every query scans the
+ * relevant partitions), but scoping to a specific executionArn with an
+ * equality predicate lets Athena's engine short-circuit once it finds the
+ * match, and LIMIT 1 keeps the result set trivially small — still an
+ * ordinary query under the hood, just narrowly scoped.
+ */
+export async function fetchAthenaRecord(opts: {
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  database: string;
+  table: string;
+  workgroup?: string;
+  outputLocation?: string;
+  executionArn: string;
+}): Promise<Record<string, string> | undefined> {
+  const escaped = opts.executionArn.replace(/'/g, "''");
+  const result = await runAthenaQuery({
+    region: opts.region,
+    credentials: opts.credentials,
+    database: opts.database,
+    workgroup: opts.workgroup,
+    outputLocation: opts.outputLocation,
+    query: `SELECT * FROM ${opts.table} WHERE executionarn = '${escaped}' LIMIT 1`,
+  });
+
+  if (result.rows.length === 0) return undefined;
+  const row = result.rows[0];
+  const record: Record<string, string> = {};
+  result.columns.forEach((col, i) => {
+    if (row[i]) record[col] = row[i];
+  });
+  return record;
+}

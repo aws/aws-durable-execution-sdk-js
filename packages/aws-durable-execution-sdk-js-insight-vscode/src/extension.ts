@@ -1,13 +1,22 @@
 import * as vscode from "vscode";
 import { readConfig, resolveCredentials } from "./config";
 import { generateQuery, isModelDownloaded, ensureModel } from "./llm";
-import { runLogsInsightsQuery } from "./logsInsights";
-import { runDynamoDBQuery } from "./dynamodb";
-import { runAuroraQuery } from "./aurora";
-import { runAthenaQuery, ensureAthenaTable, tableExists } from "./athena";
+import { runLogsInsightsQuery, fetchLogsInsightsRecord } from "./logsInsights";
+import { runDynamoDBQuery, fetchDynamoDBRecord } from "./dynamodb";
+import { runAuroraQuery, fetchAuroraRecord } from "./aurora";
+import {
+  runAthenaQuery,
+  ensureAthenaTable,
+  tableExists,
+  fetchAthenaRecord,
+} from "./athena";
 import { listenToQueue, type SqsMessageRow } from "./sqs";
 import { ensureLimit } from "./schema";
 import { assertReadOnly } from "./queryValidator";
+import {
+  ensureIdentifierColumn,
+  resolveActualColumnCasing,
+} from "./queryShape";
 
 type InboundMessage =
   | { type: "ready" }
@@ -16,7 +25,8 @@ type InboundMessage =
   | { type: "downloadModel" }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
   | { type: "startListening" }
-  | { type: "stopListening" };
+  | { type: "stopListening" }
+  | { type: "fetchDetail"; idColumn: string; idValue: string };
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -82,6 +92,8 @@ class ExplorerPanel {
           return this.onStartListening();
         case "stopListening":
           return this.onStopListening();
+        case "fetchDetail":
+          return await this.onFetchDetail(msg.idColumn, msg.idValue);
       }
     } catch (err) {
       this.post({
@@ -307,18 +319,24 @@ class ExplorerPanel {
           if (!cfg.dynamodbTableName)
             throw new Error("No DynamoDB table configured.");
           assertReadOnly(generated.query, "PartiQL");
+          const { query, idColumn } = ensureIdentifierColumn(
+            generated.query,
+            "pk",
+            "sql",
+          );
           const table = await runDynamoDBQuery({
             region: cfg.region,
             credentials,
             tableName: cfg.dynamodbTableName,
-            statement: generated.query,
+            statement: query,
           });
           this.post({
             type: "results",
             ...table,
             explanation: generated.explanation,
             suggestedCharts: generated.suggestedCharts,
-            finalQuery: generated.query,
+            finalQuery: query,
+            idColumn: resolveActualColumnCasing(idColumn, table.columns),
           });
           return;
         }
@@ -326,63 +344,87 @@ class ExplorerPanel {
           if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
             throw new Error("Aurora not configured.");
           assertReadOnly(generated.query, "PostgreSQL");
+          const { query, idColumn } = ensureIdentifierColumn(
+            generated.query,
+            "execution_arn",
+            "sql",
+          );
           const table = await runAuroraQuery({
             region: cfg.region,
             credentials,
             resourceArn: cfg.auroraResourceArn,
             secretArn: cfg.auroraSecretArn,
             database: cfg.auroraDatabase,
-            sql: generated.query,
+            sql: query,
           });
           this.post({
             type: "results",
             ...table,
             explanation: generated.explanation,
             suggestedCharts: generated.suggestedCharts,
-            finalQuery: generated.query,
+            finalQuery: query,
+            idColumn: resolveActualColumnCasing(idColumn, table.columns),
           });
           return;
         }
         if (cfg.destinationType === "s3") {
           if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
           assertReadOnly(generated.query, "Trino/Presto SQL");
+          // The openx JSON SerDe lowercases all keys, so the identifier
+          // column the LLM's SQL would reference is "executionarn", not
+          // "executionArn" — match that here too (see schema.ts's Athena
+          // dialect notes on key casing).
+          const { query, idColumn } = ensureIdentifierColumn(
+            generated.query,
+            "executionarn",
+            "sql",
+          );
           const table = await runAthenaQuery({
             region: cfg.region,
             credentials,
             database: cfg.athenaDatabase,
             workgroup: cfg.athenaWorkgroup || undefined,
             outputLocation: cfg.athenaOutputLocation || undefined,
-            query: generated.query,
+            query,
           });
           this.post({
             type: "results",
             ...table,
             explanation: generated.explanation,
             suggestedCharts: generated.suggestedCharts,
-            finalQuery: generated.query,
+            finalQuery: query,
+            idColumn: resolveActualColumnCasing(idColumn, table.columns),
           });
           return;
         }
         // CloudWatch Logs path
-        const finalQuery = ensureLimit(generated.query);
-        const endTimeMs = Date.now();
-        const startTimeMs = endTimeMs - generated.timeRangeMs;
-        const table = await runLogsInsightsQuery({
-          region: cfg.region,
-          credentials,
-          logGroupNames: cfg.logGroupNames,
-          queryString: finalQuery,
-          startTimeMs,
-          endTimeMs,
-        });
-        this.post({
-          type: "results",
-          ...table,
-          explanation: generated.explanation,
-          suggestedCharts: generated.suggestedCharts,
-          finalQuery,
-        });
-        return;
+        {
+          const limited = ensureLimit(generated.query);
+          const { query: finalQuery, idColumn } = ensureIdentifierColumn(
+            limited,
+            "executionArn",
+            "logs-insights",
+          );
+          const endTimeMs = Date.now();
+          const startTimeMs = endTimeMs - generated.timeRangeMs;
+          const table = await runLogsInsightsQuery({
+            region: cfg.region,
+            credentials,
+            logGroupNames: cfg.logGroupNames,
+            queryString: finalQuery,
+            startTimeMs,
+            endTimeMs,
+          });
+          this.post({
+            type: "results",
+            ...table,
+            explanation: generated.explanation,
+            suggestedCharts: generated.suggestedCharts,
+            finalQuery,
+            idColumn: resolveActualColumnCasing(idColumn, table.columns),
+          });
+          return;
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (
@@ -410,6 +452,75 @@ class ExplorerPanel {
         }
         throw err;
       }
+    }
+  }
+
+  /**
+   * Fetch the full record for a single row, keyed by the identifier column
+   * ensureIdentifierColumn added to the query (idColumn/idValue from the
+   * webview's row-click). Dispatches to the destination-appropriate
+   * point-lookup. Aggregate query results never carry an idColumn (see
+   * queryShape.ts), so the webview never sends this message for those —
+   * this handler doesn't need to re-check that.
+   */
+  private async onFetchDetail(
+    idColumn: string,
+    idValue: string,
+  ): Promise<void> {
+    const cfg = readConfig();
+    const credentials = resolveCredentials(cfg.awsProfile);
+    try {
+      let record: Record<string, string> | undefined;
+      if (cfg.destinationType === "dynamodb") {
+        record = await fetchDynamoDBRecord({
+          region: cfg.region,
+          credentials,
+          tableName: cfg.dynamodbTableName,
+          pk: idValue,
+        });
+      } else if (cfg.destinationType === "aurora") {
+        record = await fetchAuroraRecord({
+          region: cfg.region,
+          credentials,
+          resourceArn: cfg.auroraResourceArn,
+          secretArn: cfg.auroraSecretArn,
+          database: cfg.auroraDatabase,
+          table: cfg.auroraTable,
+          executionArn: idValue,
+        });
+      } else if (cfg.destinationType === "s3") {
+        record = await fetchAthenaRecord({
+          region: cfg.region,
+          credentials,
+          database: cfg.athenaDatabase,
+          table: cfg.athenaTable,
+          workgroup: cfg.athenaWorkgroup || undefined,
+          outputLocation: cfg.athenaOutputLocation || undefined,
+          executionArn: idValue,
+        });
+      } else {
+        record = await fetchLogsInsightsRecord({
+          region: cfg.region,
+          credentials,
+          logGroupNames: cfg.logGroupNames,
+          executionArn: idValue,
+        });
+      }
+
+      if (!record) {
+        this.post({
+          type: "error",
+          message: `Couldn't find a record for ${idColumn} = ${idValue}.`,
+        });
+        return;
+      }
+      this.post({ type: "detailResult", fields: record });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.post({
+        type: "error",
+        message: `Failed to fetch record detail: ${msg}`,
+      });
     }
   }
 
