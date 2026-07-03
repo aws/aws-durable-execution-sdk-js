@@ -50,7 +50,7 @@
     "typescript-eslint": "^8.34.1"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": ">=2.0.1",
+    "@aws/durable-execution-sdk-js": ">=2.1.0",
     "@opentelemetry/api": "^1.0.0",
     "@opentelemetry/instrumentation": "^0.219.0",
     "@opentelemetry/instrumentation-aws-sdk": "^0.74.0",
