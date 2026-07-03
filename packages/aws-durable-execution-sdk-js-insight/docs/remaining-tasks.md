@@ -47,8 +47,7 @@
 - [x] Document per-store shape + example queries in the README
 - [x] `operationsFormat` option (`array` | `by-name` | `both`, default `array`) on the
       flexible-sink exporters — `HttpExporter`, `OTelExporter`, `SQSExporter`,
-      `EventBridgeExporter`, `FirehoseExporter`, `FileExporter`. (Timestream is
-      dimensional, so it's excluded.)
+      `EventBridgeExporter`, `FirehoseExporter`, `FileExporter`.
 
 ## Content Filtering
 
@@ -86,7 +85,7 @@
       `ExportScheduler` via `truncateRecord`; each first-party exporter sets a
       destination-appropriate default (CW/Lambda-log/SQS/EventBridge 256KB,
       DynamoDB 400KB, Aurora/Redshift/Firehose/OTel 1MB, S3 5MB, OpenSearch 10MB;
-      HTTP/File/Timestream none). `undefined` disables truncation.
+      HTTP/File none). `undefined` disables truncation.
 - [x] Truncate oversized records by dropping operation results oldest-first, then
       whole operations oldest-first, then — as a last resort — execution input
       then output; identity/timeline fields are never dropped. Sets record-level
@@ -107,10 +106,18 @@
 - [x] `FirehoseExporter` — PutRecord as NDJSON to Kinesis Firehose
 - [x] `EventBridgeExporter` — PutEvents for event-driven reactions
 - [x] `SQSExporter` — SendMessage with FIFO/dedup support
-- [x] `TimestreamExporter` — WriteRecords as multi-measure time-series
 - [x] `OTelExporter` — OTLP HTTP/JSON to any compatible backend
 - [x] `HttpExporter` — generic POST/PUT to any URL
 - [x] `FileExporter` — filesystem (EFS, S3 mount, /tmp) in ndjson or json mode
+
+> `TimestreamExporter` (Amazon Timestream for LiveAnalytics) was implemented and
+> then removed: AWS closed LiveAnalytics to new customers on 2025-06-20 (existing
+> customers only; see
+> [availability change](https://docs.aws.amazon.com/timestream/latest/developerguide/AmazonTimestreamForLiveAnalytics-availability-change.html)),
+> so provisioning it fails for any new deployment. AWS's replacement,
+> Timestream for InfluxDB, is architecturally different (instance-based, VPC-bound,
+> line-protocol writes rather than a stateless `WriteRecords` API call) and would
+> need its own exporter design, not a drop-in swap.
 
 ## Testing
 

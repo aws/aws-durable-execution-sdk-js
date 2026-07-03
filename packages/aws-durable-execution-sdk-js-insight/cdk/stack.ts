@@ -9,7 +9,6 @@ import * as firehose from "aws-cdk-lib/aws-kinesisfirehose";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
-import * as timestream from "aws-cdk-lib/aws-timestream";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as lambdaNode from "aws-cdk-lib/aws-lambda-nodejs";
@@ -50,6 +49,12 @@ export class InsightDestinationsStack extends cdk.Stack {
           managedPolicies: [
             iam.ManagedPolicy.fromAwsManagedPolicyName(
               "service-role/AWSLambdaBasicExecutionRole",
+            ),
+            // Grants lambda:CheckpointDurableExecutions and
+            // lambda:GetDurableExecutionState — required for the SDK to persist
+            // and resume durable execution state (see AGENTS.md IAM section).
+            iam.ManagedPolicy.fromAwsManagedPolicyName(
+              "service-role/AWSLambdaBasicDurableExecutionRolePolicy",
             ),
           ],
         })
@@ -142,44 +147,57 @@ export class InsightDestinationsStack extends cdk.Stack {
         );
       `;
 
-      new cr.AwsCustomResource(this, "AuroraCreateTable", {
-        onCreate: {
-          service: "RDSDataService",
-          action: "executeStatement",
-          parameters: {
-            resourceArn: auroraCluster.clusterArn,
-            secretArn: auroraCluster.secret!.secretArn,
-            database: config.destinations.aurora.databaseName,
-            sql: createTableSql,
+      const auroraCreateTable = new cr.AwsCustomResource(
+        this,
+        "AuroraCreateTable",
+        {
+          onCreate: {
+            service: "RDSDataService",
+            action: "executeStatement",
+            parameters: {
+              resourceArn: auroraCluster.clusterArn,
+              secretArn: auroraCluster.secret!.secretArn,
+              database: config.destinations.aurora.databaseName,
+              sql: createTableSql,
+            },
+            physicalResourceId: cr.PhysicalResourceId.of(
+              `aurora-create-table-${config.destinations.aurora.tableName}`,
+            ),
           },
-          physicalResourceId: cr.PhysicalResourceId.of(
-            `aurora-create-table-${config.destinations.aurora.tableName}`,
-          ),
-        },
-        onUpdate: {
-          service: "RDSDataService",
-          action: "executeStatement",
-          parameters: {
-            resourceArn: auroraCluster.clusterArn,
-            secretArn: auroraCluster.secret!.secretArn,
-            database: config.destinations.aurora.databaseName,
-            sql: createTableSql,
+          onUpdate: {
+            service: "RDSDataService",
+            action: "executeStatement",
+            parameters: {
+              resourceArn: auroraCluster.clusterArn,
+              secretArn: auroraCluster.secret!.secretArn,
+              database: config.destinations.aurora.databaseName,
+              sql: createTableSql,
+            },
+            physicalResourceId: cr.PhysicalResourceId.of(
+              `aurora-create-table-${config.destinations.aurora.tableName}`,
+            ),
           },
-          physicalResourceId: cr.PhysicalResourceId.of(
-            `aurora-create-table-${config.destinations.aurora.tableName}`,
-          ),
+          policy: cr.AwsCustomResourcePolicy.fromStatements([
+            new iam.PolicyStatement({
+              actions: ["rds-data:ExecuteStatement"],
+              resources: [auroraCluster.clusterArn],
+            }),
+            new iam.PolicyStatement({
+              actions: ["secretsmanager:GetSecretValue"],
+              resources: [auroraCluster.secret!.secretArn],
+            }),
+          ]),
         },
-        policy: cr.AwsCustomResourcePolicy.fromStatements([
-          new iam.PolicyStatement({
-            actions: ["rds-data:ExecuteStatement"],
-            resources: [auroraCluster.clusterArn],
-          }),
-          new iam.PolicyStatement({
-            actions: ["secretsmanager:GetSecretValue"],
-            resources: [auroraCluster.secret!.secretArn],
-          }),
-        ]),
-      });
+      );
+
+      // The cluster resource reaches CREATE_COMPLETE before its writer instance
+      // is ready to serve queries, so the RDS Data API can fail with "Cannot
+      // find DBInstance in DBCluster" if the custom resource only depends on
+      // the cluster (CDK's automatic dependency inference, since the custom
+      // resource references auroraCluster.clusterArn/secret, does not reach the
+      // writer instance construct). Depend on the writer explicitly.
+      const writerInstance = auroraCluster.node.findChild("writer");
+      auroraCreateTable.node.addDependency(writerInstance);
 
       policyStatements.push(
         new iam.PolicyStatement({
@@ -418,6 +436,7 @@ export class InsightDestinationsStack extends cdk.Stack {
     }
 
     // --- SQS ---
+    let sqsQueue: sqs.Queue | undefined;
     if (config.destinations.sqs.enabled) {
       const queueProps: sqs.QueueProps = {
         queueName: config.destinations.sqs.fifo
@@ -429,12 +448,12 @@ export class InsightDestinationsStack extends cdk.Stack {
           : undefined,
       };
 
-      const queue = new sqs.Queue(this, "InsightQueue", queueProps);
+      sqsQueue = new sqs.Queue(this, "InsightQueue", queueProps);
 
       policyStatements.push(
         new iam.PolicyStatement({
           actions: ["sqs:SendMessage"],
-          resources: [queue.queueArn],
+          resources: [sqsQueue.queueArn],
         }),
       );
     }
@@ -456,41 +475,6 @@ export class InsightDestinationsStack extends cdk.Stack {
         new iam.PolicyStatement({
           actions: ["events:PutEvents"],
           resources: [eventBusArn],
-        }),
-      );
-    }
-
-    // --- Timestream ---
-    if (config.destinations.timestream.enabled) {
-      const db = new timestream.CfnDatabase(this, "InsightTimestreamDb", {
-        databaseName: config.destinations.timestream.databaseName,
-      });
-
-      const table = new timestream.CfnTable(this, "InsightTimestreamTable", {
-        databaseName: config.destinations.timestream.databaseName,
-        tableName: config.destinations.timestream.tableName,
-        retentionProperties: {
-          MemoryStoreRetentionPeriodInHours: String(
-            config.destinations.timestream.memoryRetentionHours,
-          ),
-          MagneticStoreRetentionPeriodInDays: String(
-            config.destinations.timestream.magneticRetentionDays,
-          ),
-        },
-      });
-      table.addDependency(db);
-
-      policyStatements.push(
-        new iam.PolicyStatement({
-          actions: ["timestream:WriteRecords"],
-          resources: [
-            `arn:${this.partition}:timestream:${this.region}:${this.account}:database/${config.destinations.timestream.databaseName}/table/${config.destinations.timestream.tableName}`,
-          ],
-        }),
-        // DescribeEndpoints requires resource: "*" (API does not support resource-level permissions)
-        new iam.PolicyStatement({
-          actions: ["timestream:DescribeEndpoints"],
-          resources: ["*"],
         }),
       );
     }
@@ -540,6 +524,9 @@ export class InsightDestinationsStack extends cdk.Stack {
           config.destinations.aurora.databaseName;
         envVars.INSIGHT_AURORA_TABLE = config.destinations.aurora.tableName;
       }
+      if (config.destinations.sqs.enabled && sqsQueue) {
+        envVars.INSIGHT_SQS_QUEUE_URL = sqsQueue.queueUrl;
+      }
 
       const exampleFn = new lambdaNode.NodejsFunction(
         this,
@@ -551,6 +538,15 @@ export class InsightDestinationsStack extends cdk.Stack {
           role: exampleRole,
           timeout: cdk.Duration.seconds(30),
           environment: envVars,
+          // Required: durable execution must be enabled on the function resource
+          // itself (see AGENTS.md IaC checklist) — without this, invocations are
+          // rejected with "Unexpected payload provided to start the durable
+          // execution." executionTimeout bounds the whole execution (including
+          // wait time), separate from the per-invocation `timeout` above.
+          durableConfig: {
+            executionTimeout: cdk.Duration.hours(1),
+            retentionPeriod: cdk.Duration.days(7),
+          },
           bundling: {
             format: lambdaNode.OutputFormat.ESM,
             mainFields: ["module", "main"],
@@ -580,7 +576,11 @@ export class InsightDestinationsStack extends cdk.Stack {
             entry: path.join(__dirname, "dispatcher", "index.ts"),
             timeout: cdk.Duration.seconds(15),
             environment: {
-              TARGET_FUNCTION_NAME: exampleFn.functionName,
+              // Durable functions require a qualified identifier to invoke
+              // (version, alias, or $LATEST) — an unqualified name is rejected.
+              // $LATEST is fine for this getting-started demo; production
+              // invocations should target a published version or alias.
+              TARGET_FUNCTION_NAME: `${exampleFn.functionName}:$LATEST`,
             },
             bundling: {
               format: lambdaNode.OutputFormat.ESM,

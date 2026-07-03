@@ -8,6 +8,7 @@ import {
   CloudWatchLogsExporter,
   DynamoDBExporter,
   AuroraExporter,
+  SQSExporter,
 } from "@aws/durable-execution-sdk-js-insight";
 
 /**
@@ -45,6 +46,14 @@ const exporters = [
           database: process.env.INSIGHT_AURORA_DATABASE ?? "postgres",
           table: process.env.INSIGHT_AURORA_TABLE ?? "workflow_insight",
           engine: "postgresql",
+          region: process.env.AWS_REGION,
+        }),
+      ]
+    : []),
+  ...(process.env.INSIGHT_SQS_QUEUE_URL
+    ? [
+        new SQSExporter({
+          queueUrl: process.env.INSIGHT_SQS_QUEUE_URL,
           region: process.env.AWS_REGION,
         }),
       ]
