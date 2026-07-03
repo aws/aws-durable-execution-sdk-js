@@ -32,6 +32,19 @@ const COLUMN_PRIORITY = [
   "emittedAt",
 ];
 
+// The subset of fields shown directly in the table; everything else (input,
+// output, error, operationsByName, etc.) is still available — click a row to
+// see the full record.
+const PRIMARY_COLUMNS = [
+  "receivedAt",
+  "status",
+  "functionName",
+  "executionName",
+  "durationMs",
+  "startTime",
+  "endTime",
+];
+
 /**
  * Live view for the "sqs" destination type. Unlike the other destinations,
  * SQS has no query engine — this just starts/stops a long-poll listener in
@@ -84,7 +97,7 @@ export function SqsLiveView({ listening, messages, error, queueConfigured, onCle
             Stopped — {messages.length} message{messages.length === 1 ? "" : "s"} received
           </StatusIndicator>
         )}
-        <ResultsTable columns={columns} rows={rows} />
+        <ResultsTable columns={columns} rows={rows} primaryColumns={PRIMARY_COLUMNS} />
         {rows.length > 0 && (
           <Button variant="primary" onClick={onVisualize}>
             Visualize →
