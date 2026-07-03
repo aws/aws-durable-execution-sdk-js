@@ -56,6 +56,8 @@ function JsonView({ value }: { value: unknown }) {
 function OperationsTable({ operations }: { operations: OperationRecord[] }) {
   const [selected, setSelected] = useState<OperationRecord | null>(null);
 
+  // Operation `id` is unique per the SDK's OperationRecord contract, so it's a
+  // safe trackBy key (unlike name, which can repeat across loop iterations).
   const columnDefs = [
     { id: "name", header: "Name", cell: (o: OperationRecord) => o.name ?? o.id },
     { id: "type", header: "Type", cell: (o: OperationRecord) => o.subType ?? o.type },
@@ -74,14 +76,20 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
 
   const hasDetail = (o: OperationRecord) => o.result !== undefined || o.error !== undefined;
 
+  const selectOperation = (o: OperationRecord | null) => setSelected(o && hasDetail(o) ? o : null);
+
   return (
     <>
       <Table
         columnDefinitions={columnDefs}
         items={operations}
+        trackBy="id"
+        selectionType="single"
+        selectedItems={selected ? [selected] : []}
+        onSelectionChange={({ detail }) => selectOperation(detail.selectedItems[0] ?? null)}
         variant="embedded"
         wrapLines
-        onRowClick={({ detail }) => (hasDetail(detail.item) ? setSelected(detail.item) : undefined)}
+        onRowClick={({ detail }) => selectOperation(detail.item)}
         empty={
           <Box textAlign="center" color="text-body-secondary">
             No operations.
@@ -134,11 +142,17 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
 export function RecordDetail({ visible, onDismiss, fields, columns }: Props) {
   const operations = tryParseJson(fields.operations ?? fields.operationsByName ?? "");
   const operationsList: OperationRecord[] | undefined = Array.isArray(operations)
+    // Raw operations array (Aurora, and the "array"/"both" operationsFormat):
+    // `id` is already unique per the SDK contract.
     ? operations
     : operations && typeof operations === "object"
+      // operationsByName map (DynamoDB, CloudWatch direct): OperationSummary
+      // has no `id` field, but the map key (name) is unique by construction —
+      // use it as a synthetic id so the table can select rows reliably.
       ? Object.entries(operations as Record<string, unknown>).map(([name, v]) => ({
+          id: name,
           name,
-          ...(v as Omit<OperationRecord, "name">),
+          ...(v as Omit<OperationRecord, "id" | "name">),
         }))
       : undefined;
 
