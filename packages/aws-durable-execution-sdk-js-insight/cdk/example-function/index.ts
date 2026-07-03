@@ -275,6 +275,24 @@ export const handler = withDurableExecution(
     };
   },
   {
-    plugins: [workflowInsight({ exporters })],
+    plugins: [
+      workflowInsight({
+        exporters,
+        content: {
+          operations: {
+            // Result is omitted by default (it's the most expensive field to
+            // capture/store). Opt a few representative operations in here so
+            // the "Result" tab in the VS Code extension's operation detail
+            // view has something to show. The identity function is enough —
+            // these steps already return small, JSON-serializable objects.
+            overrides: [
+              { operationName: "validateClaim", result: (r) => r },
+              { operationName: "fraudDetection", result: (r) => r },
+              { operationName: "assessClaim", result: (r) => r },
+            ],
+          },
+        },
+      }),
+    ],
   },
 );
