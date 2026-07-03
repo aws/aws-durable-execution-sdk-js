@@ -110,10 +110,13 @@ export function ensureIdentifierColumn(
 
   // SQL dialects (PartiQL, PostgreSQL, Trino/Presto): only handle a single
   // top-level SELECT list. Bail out (no injection) for anything containing
-  // `SELECT *`, since idColumn is necessarily already included, or for
-  // shapes this simple parser can't confidently rewrite (subqueries in the
-  // FROM clause, UNION, etc.) — better to skip drill-down than corrupt SQL.
+  // `SELECT *` (idColumn is necessarily already included), a top-level set
+  // operator (UNION/INTERSECT/EXCEPT — see hasTopLevelSetOperator; injecting
+  // into just the last branch would corrupt column counts across branches),
+  // or other shapes this simple parser can't confidently rewrite (subqueries
+  // in the FROM clause, etc.) — better to skip drill-down than corrupt SQL.
   if (isAggregateQuery(trimmed, dialect)) return { query: trimmed };
+  if (hasTopLevelSetOperator(trimmed)) return { query: trimmed };
 
   const outer = findOuterSelect(trimmed);
   if (!outer) return { query: trimmed };
@@ -140,6 +143,46 @@ export function ensureIdentifierColumn(
 }
 
 /**
+ * Whether `query` contains a top-level (not inside parens, not inside a
+ * string literal) UNION, UNION ALL, INTERSECT, or EXCEPT — i.e. multiple
+ * SELECT branches combined into one result set. `findOuterSelect`'s
+ * "last top-level SELECT" heuristic only identifies one branch of a set
+ * operation, and injecting an identifier into just that branch would
+ * produce a column-count mismatch across branches (invalid SQL) or, if the
+ * branches already happen to have matching counts, silently wrong data
+ * (the identifier would only appear correctly aligned in one branch's
+ * output rows). Detecting this and skipping injection entirely is the safe
+ * choice — a query shape this rare from an LLM-generated single-question
+ * query isn't worth a more elaborate per-branch rewrite.
+ */
+function hasTopLevelSetOperator(query: string): boolean {
+  let depth = 0;
+  let inString: string | null = null;
+  for (let i = 0; i < query.length; i++) {
+    const ch = query[i];
+    if (inString) {
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      inString = ch;
+      continue;
+    }
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (depth === 0) {
+      const rest = query.slice(i);
+      const match = rest.match(/^(union(\s+all)?|intersect|except)\b/i);
+      if (match) {
+        const before = query[i - 1];
+        if (!before || /\W/.test(before)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Finds the outermost SELECT's column list — i.e. the LAST top-level (not
  * inside parens) `SELECT ... FROM` in the query. This is deliberately "last"
  * rather than "first": a `WITH cte AS (SELECT ...) SELECT ... FROM cte`
@@ -147,6 +190,13 @@ export function ensureIdentifierColumn(
  * the first SELECT would rewrite the CTE's inner list instead — corrupting
  * the CTE but leaving the actual output column list (and thus the row
  * shape the UI sees) untouched.
+ *
+ * This function alone does NOT handle UNION/INTERSECT/EXCEPT — for
+ * `SELECT a FROM t UNION SELECT b FROM t`, "last top-level SELECT" finds the
+ * second branch, and injecting there would corrupt the query (mismatched
+ * column counts across branches). Callers must check
+ * `hasTopLevelSetOperator` first and skip injection entirely if true;
+ * `ensureIdentifierColumn` does this before calling `findOuterSelect`.
  */
 function findOuterSelect(
   query: string,
