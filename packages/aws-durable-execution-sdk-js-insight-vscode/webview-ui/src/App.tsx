@@ -68,7 +68,14 @@ export function App() {
           // the same message can be re-delivered after its visibility timeout.
           const seen = new Set(prev.map((m) => m.messageId));
           const next = msg.messages.filter((m) => !seen.has(m.messageId));
-          return next.length > 0 ? [...prev, ...next] : prev;
+          if (next.length === 0) return prev;
+          // Cap at MAX_DISPLAYED_MESSAGES so a long-running listener session
+          // doesn't grow this state (and the seen-set rebuild above) without
+          // bound — only the most recent messages are ever shown anyway.
+          const combined = [...prev, ...next];
+          return combined.length > MAX_DISPLAYED_MESSAGES
+            ? combined.slice(-MAX_DISPLAYED_MESSAGES)
+            : combined;
         });
         break;
     }
