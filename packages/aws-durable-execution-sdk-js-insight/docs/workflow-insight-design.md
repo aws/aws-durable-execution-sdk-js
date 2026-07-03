@@ -305,7 +305,9 @@ enum OperationDetail {
 
 ### Sampling
 
-Sampling is decided deterministically at execution start using a hash of the execution ARN. If sampled in, all data for that execution is emitted (every hook fires). If sampled out, no hooks fire. This ensures complete records for sampled executions rather than fragmented partial data.
+Sampling is decided deterministically at execution start using a hash of the execution ARN, which is stable across all invocations and replays of the same execution. If sampled in, all data for that execution is emitted (every hook fires). If sampled out, no hooks fire. This ensures complete records for sampled executions rather than fragmented partial data.
+
+`Math.imul` is used for the FNV-1a multiply so the 32-bit result is identical across JS engines (a plain `*` loses precision past 2^53).
 
 ```typescript
 function shouldSampleExecution(
@@ -317,9 +319,9 @@ function shouldSampleExecution(
   let hash = 0x811c9dc5;
   for (let i = 0; i < executionArn.length; i++) {
     hash ^= executionArn.charCodeAt(i);
-    hash = (hash * 0x01000193) >>> 0;
+    hash = Math.imul(hash, 0x01000193);
   }
-  return hash / 0xffffffff < samplingRate;
+  return (hash >>> 0) / 0xffffffff < samplingRate;
 }
 ```
 

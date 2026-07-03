@@ -100,6 +100,60 @@ function parseExecutionArn(executionArn: string): ParsedArn {
   };
 }
 
+// --- Sampling ---
+
+/**
+ * FNV-1a 32-bit hash. `Math.imul` performs a correct 32-bit integer multiply —
+ * a plain `*` loses precision once the intermediate exceeds 2^53 — so the
+ * result is identical across JS engines and therefore stable across replays.
+ */
+function fnv1a32(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Deterministic, all-or-nothing per-execution sampling decision.
+ *
+ * The execution ARN is stable across all invocations and replays of the same
+ * execution, so hashing it directly yields a decision that never changes
+ * mid-flight — a resumed execution always reaches the same conclusion. Maps the
+ * hash into [0, 1) and samples in when it falls below `rate`.
+ */
+function shouldSampleExecution(executionArn: string, rate: number): boolean {
+  if (rate >= 1) return true;
+  if (rate <= 0) return false;
+  return fnv1a32(executionArn) / 0xffffffff < rate;
+}
+
+/**
+ * Normalizes a user-supplied `samplingRate` into a rate in [0, 1]. `undefined`
+ * means "sample everything" (1.0). Out-of-range or non-numeric values are
+ * clamped/defaulted with a warning rather than throwing, so a misconfiguration
+ * never breaks instrumentation.
+ */
+function resolveSamplingRate(rate: number | undefined): number {
+  if (rate === undefined) return 1;
+  if (typeof rate !== "number" || Number.isNaN(rate)) {
+    console.warn(
+      "[workflow-insight] samplingRate is not a number; defaulting to 1.0 (all executions).",
+    );
+    return 1;
+  }
+  if (rate < 0 || rate > 1) {
+    const clamped = Math.max(0, Math.min(1, rate));
+    console.warn(
+      `[workflow-insight] samplingRate ${rate} is out of range [0, 1]; clamping to ${clamped}.`,
+    );
+    return clamped;
+  }
+  return rate;
+}
+
 // --- Status Mapping ---
 
 const STATUS_MAP: Record<string, WorkflowInsightRecord["status"]> = {
@@ -344,12 +398,7 @@ async function flushAll(exporters: InsightExporter[]): Promise<void> {
 export function workflowInsight(
   config: WorkflowInsightConfig,
 ): DurableInstrumentationPlugin {
-  // Warn about unimplemented config options
-  if (config.samplingRate !== undefined) {
-    console.warn(
-      "[workflow-insight] samplingRate is not yet implemented and has no effect.",
-    );
-  }
+  const samplingRate = resolveSamplingRate(config.samplingRate);
 
   const content = config.content;
   const includeErrors = content?.operations?.includeErrors ?? true;
@@ -375,6 +424,12 @@ export function workflowInsight(
     startTime: Date;
     parsedArn: ParsedArn;
     cachedInput: unknown;
+    /**
+     * Deterministic sampling decision for this execution. Computed once from the
+     * execution's stable identity so every invocation/replay agrees, then reused
+     * by all hooks to skip work entirely when the execution is sampled out.
+     */
+    sampledIn: boolean;
   }
   const execState = new Map<string, ExecutionState>();
 
@@ -385,6 +440,7 @@ export function workflowInsight(
         startTime: new Date(),
         parsedArn: parseExecutionArn(executionArn),
         cachedInput: undefined,
+        sampledIn: shouldSampleExecution(executionArn, samplingRate),
       };
       execState.set(executionArn, state);
     }
@@ -433,6 +489,7 @@ export function workflowInsight(
   return {
     async onInvocationStart(info: InvocationInfo): Promise<void> {
       const state = getState(info.executionArn);
+      if (!state.sampledIn) return;
       if (info.isFirstInvocation) {
         state.startTime = new Date();
       }
@@ -458,18 +515,24 @@ export function workflowInsight(
     // record (scheduled by onInvocationEnd, which runs inside fn) is delivered.
     // The drain runs in `finally` so it also covers the throwing/retry paths.
     async wrapInvocation(
-      _info: InvocationInfo,
+      info: InvocationInfo,
       fn: () => Promise<DurableExecutionInvocationOutput>,
     ): Promise<DurableExecutionInvocationOutput> {
+      const state = getState(info.executionArn);
       try {
         return await fn();
       } finally {
-        await scheduler.drain();
-        await flushAll(exporters);
+        // Sampled-out executions never schedule a record, so there is nothing
+        // to drain or flush — skip the work entirely.
+        if (state.sampledIn) {
+          await scheduler.drain();
+          await flushAll(exporters);
+        }
       }
     },
 
     async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+      const state = getState(info.executionArn);
       const status = mapStatus(info.status);
       const isTerminal = status === "SUCCEEDED" || status === "FAILED";
       const isFailure = status === "FAILED";
@@ -485,7 +548,9 @@ export function workflowInsight(
             ? isFailure
             : isTerminal;
 
-      if (shouldEmit) {
+      // Sampled-out executions emit nothing, but must still fall through to the
+      // terminal state cleanup below so their state entry doesn't leak.
+      if (state.sampledIn && shouldEmit) {
         scheduler.schedule(
           buildRecord({
             executionArn: info.executionArn,
@@ -516,6 +581,7 @@ export function workflowInsight(
         return;
       }
       const state = getState(info.executionArn);
+      if (!state.sampledIn) return;
       scheduler.schedule(
         buildRecord({
           executionArn: info.executionArn,

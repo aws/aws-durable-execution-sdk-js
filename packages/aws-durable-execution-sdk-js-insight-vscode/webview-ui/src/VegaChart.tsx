@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import embed, { type Result } from "vega-embed";
-import * as vegaInterpreter from "vega-interpreter";
+import { expressionInterpreter } from "vega-interpreter";
 import Container from "@cloudscape-design/components/container";
 import Header from "@cloudscape-design/components/header";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -41,7 +41,7 @@ export function VegaChart({ spec, data }: Props) {
       actions: false,
       renderer: "svg",
       ast: true,
-      expr: vegaInterpreter,
+      expr: expressionInterpreter,
     })
       .then((result) => {
         viewRef.current = result;
