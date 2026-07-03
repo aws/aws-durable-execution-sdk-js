@@ -35,6 +35,12 @@ export interface EventBridgeExporterConfig {
    * `"both"`. Choose based on what your rule targets consume.
    */
   operationsFormat?: OperationsFormat;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 256_000 (EventBridge's 256 KB PutEvents entry limit).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -55,11 +61,13 @@ export class EventBridgeExporter implements InsightExporter {
   private readonly source: string;
   private readonly operationsFormat: OperationsFormat;
   private readonly client: EventBridgeClient;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: EventBridgeExporterConfig = {}) {
     this.eventBusName = config.eventBusName ?? "default";
     this.source = config.source ?? "aws.durable-execution.insight";
     this.operationsFormat = config.operationsFormat ?? "array";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
     this.client = new EventBridgeClient(
       config.region ? { region: config.region } : {},
     );

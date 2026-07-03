@@ -75,6 +75,19 @@ export interface ContentConfig {
 export interface InsightExporter {
   export(record: WorkflowInsightRecord): Promise<void>;
   flush?(): Promise<void>;
+  /**
+   * Maximum serialized record size, in bytes, this exporter will emit. When a
+   * record's JSON exceeds this, the plugin truncates a per-exporter copy before
+   * calling {@link InsightExporter.export | export} (best-effort): it drops
+   * operation `result` fields oldest-first, then whole operations oldest-first,
+   * and sets `truncated: true` (plus `droppedOperationResults` /
+   * `droppedOperations` counts) on the emitted record. Execution `input` /
+   * `output` and identity/timeline fields are never dropped by the size limiter
+   * — shrink those with `content.input` / `content.output` transforms instead.
+   *
+   * First-party exporters default this to their destination's practical limit;
+   * `undefined` disables truncation.
+   */
   maxRecordSizeBytes?: number;
 }
 
@@ -230,4 +243,14 @@ export interface WorkflowInsightRecord {
     message: string;
   };
   operations: OperationRecord[];
+  /**
+   * `true` when the size limiter dropped data to fit the exporter's
+   * `maxRecordSizeBytes`. Omitted when nothing was dropped, so a truncated
+   * record is always distinguishable from a complete one ("cut, not missing").
+   */
+  truncated?: boolean;
+  /** Number of operation `result` fields dropped by the size limiter. */
+  droppedOperationResults?: number;
+  /** Number of whole operations dropped by the size limiter. */
+  droppedOperations?: number;
 }

@@ -50,6 +50,11 @@ interface WorkflowInsightRecord {
 
   // Operations (steps, waits, invokes, callbacks)
   operations: OperationRecord[];
+
+  // Truncation markers — present only when the size limiter dropped data
+  truncated?: boolean; // true when data was dropped to fit maxRecordSizeBytes
+  droppedOperationResults?: number; // count of operation results dropped
+  droppedOperations?: number; // count of whole operations dropped
 }
 
 interface OperationRecord {
@@ -322,6 +327,39 @@ Notes:
 - The array remains the source of truth; array-native exporters (S3/Athena,
   OpenSearch, Aurora, Redshift) emit only the array. See
   [`docs/operations-shape.md`](./docs/operations-shape.md).
+
+## Record size & truncation
+
+Destinations cap payload size (CloudWatch Logs events at 256 KB, DynamoDB items
+at 400 KB, etc.). Each exporter carries a `maxRecordSizeBytes`; when a record's
+serialized JSON exceeds it, the plugin truncates a **per-exporter copy**
+(best-effort) before sending — the same record can go out full to one exporter
+and trimmed to another.
+
+Drop order, until the record fits:
+
+1. operation `result` fields, **oldest operation first**;
+2. whole operations, **oldest first**.
+
+Execution `input`/`output` and identity/timeline fields are **never** dropped by
+the size limiter — bound those with `content.input` / `content.output`
+transforms (which run before truncation). When anything is dropped, the emitted
+record carries `truncated: true` plus `droppedOperationResults` /
+`droppedOperations` counts, so a trimmed record is always distinguishable from a
+complete one ("cut, not missing").
+
+Per-exporter defaults (override via each exporter's `maxRecordSizeBytes`):
+
+| Exporter(s)                                   | Default |
+| --------------------------------------------- | ------- |
+| Lambda log, CloudWatch Logs, SQS, EventBridge | 256 KB  |
+| DynamoDB                                      | 400 KB  |
+| Aurora, Redshift, Firehose, OTel              | 1 MB    |
+| S3                                            | 5 MB    |
+| OpenSearch                                    | 10 MB   |
+| HTTP, File, Timestream                        | none¹   |
+
+¹ No default — truncation is disabled unless you set `maxRecordSizeBytes`.
 
 ## Exporters
 
@@ -1345,6 +1383,12 @@ import {
 } from "@aws/durable-execution-sdk-js-insight";
 
 class MyExporter implements InsightExporter {
+  // Optional: opt into size-based truncation. When set, the plugin sends this
+  // exporter a copy trimmed to fit (drops operation results, then whole
+  // operations, oldest-first) and sets `truncated: true` on it. Omit to
+  // receive full records.
+  readonly maxRecordSizeBytes = 256_000;
+
   async export(record: WorkflowInsightRecord): Promise<void> {
     // Send record wherever you want
   }

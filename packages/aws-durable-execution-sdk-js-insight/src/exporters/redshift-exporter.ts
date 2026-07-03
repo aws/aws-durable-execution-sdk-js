@@ -52,6 +52,12 @@ export interface RedshiftExporterConfig {
 
   /** AWS region. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 1_000_000 (Redshift Data API practical statement/parameter limit).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -77,6 +83,7 @@ export class RedshiftExporter implements InsightExporter {
   private readonly dbUser?: string;
   private readonly secretArn?: string;
   private readonly client: RedshiftDataClient;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: RedshiftExporterConfig) {
     if (!config.workgroupName && !config.clusterIdentifier) {
@@ -92,6 +99,7 @@ export class RedshiftExporter implements InsightExporter {
     this.clusterIdentifier = config.clusterIdentifier;
     this.dbUser = config.dbUser;
     this.secretArn = config.secretArn;
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 1_000_000;
     this.client = new RedshiftDataClient(
       config.region ? { region: config.region } : {},
     );

@@ -34,6 +34,12 @@ export interface OTelExporterConfig {
    * attributes), so this has no effect on attribute cardinality.
    */
   operationsFormat?: OperationsFormat;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 1_000_000 (a conservative OTLP/HTTP request guard).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -54,6 +60,7 @@ export class OTelExporter implements InsightExporter {
   private readonly endpoint: string;
   private readonly headers: Record<string, string>;
   private readonly operationsFormat: OperationsFormat;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: OTelExporterConfig) {
     if (config.protocol === "http/protobuf") {
@@ -64,6 +71,7 @@ export class OTelExporter implements InsightExporter {
     this.endpoint = config.endpoint;
     this.headers = config.headers ?? {};
     this.operationsFormat = config.operationsFormat ?? "array";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 1_000_000;
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {

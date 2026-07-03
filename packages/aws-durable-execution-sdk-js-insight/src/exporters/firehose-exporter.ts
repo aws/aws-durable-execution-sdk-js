@@ -23,6 +23,12 @@ export interface FirehoseExporterConfig {
    * `"both"`. Choose based on the downstream destination's consumer.
    */
   operationsFormat?: OperationsFormat;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 1_000_000 (Firehose's 1 MB per-record limit).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -41,10 +47,12 @@ export class FirehoseExporter implements InsightExporter {
   private readonly deliveryStreamName: string;
   private readonly operationsFormat: OperationsFormat;
   private readonly client: FirehoseClient;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: FirehoseExporterConfig) {
     this.deliveryStreamName = config.deliveryStreamName;
     this.operationsFormat = config.operationsFormat ?? "array";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 1_000_000;
     this.client = new FirehoseClient(
       config.region ? { region: config.region } : {},
     );

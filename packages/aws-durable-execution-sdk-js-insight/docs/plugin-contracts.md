@@ -17,9 +17,21 @@ interface InsightExporter {
   flush?(): Promise<void>;
 
   /**
-   * Maximum record size in bytes before truncation.
-   * Each exporter can set its own limit based on destination constraints.
-   * Default: 256KB. Truncation removes operation results starting from oldest.
+   * Maximum serialized record size in bytes before truncation. Each exporter
+   * can set its own limit based on destination constraints.
+   *
+   * Truncation is best-effort and drops in this order until the record fits:
+   *   1. operation `result` fields, oldest operation first;
+   *   2. whole operations, oldest first.
+   * Execution `input`/`output` and identity/timeline fields are never dropped —
+   * shrink those with `content.input`/`content.output` transforms. When anything
+   * is dropped, `truncated: true` (+ `droppedOperationResults` /
+   * `droppedOperations` counts) is set on the emitted record.
+   *
+   * First-party defaults: CloudWatch Logs / Lambda log / SQS / EventBridge
+   * 256KB, DynamoDB 400KB, Aurora / Redshift / Firehose / OTel 1MB, S3 5MB,
+   * OpenSearch 10MB. HTTP, File, and Timestream have no default (`undefined`
+   * disables truncation).
    */
   maxRecordSizeBytes?: number;
 }
@@ -356,6 +368,15 @@ interface WorkflowInsightRecord {
    * Each operation represents a step, wait, invoke, callback, or child context.
    */
   operations: OperationRecord[];
+
+  // --- Truncation markers (present only when the size limiter dropped data) ---
+
+  /** True when data was dropped to fit the exporter's maxRecordSizeBytes. */
+  truncated?: boolean;
+  /** Number of operation `result` fields dropped. */
+  droppedOperationResults?: number;
+  /** Number of whole operations dropped. */
+  droppedOperations?: number;
 }
 
 interface OperationRecord {

@@ -31,6 +31,12 @@ export interface HttpExporterConfig {
    * map (`"by-name"`), or `"both"`. Choose based on what your endpoint consumes.
    */
   operationsFormat?: OperationsFormat;
+
+  /**
+   * Max serialized record size before truncation. No default — a generic HTTP
+   * endpoint has no known limit; set this if your endpoint caps request size.
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -49,12 +55,14 @@ export class HttpExporter implements InsightExporter {
   private readonly headers: Record<string, string>;
   private readonly timeoutMs: number;
   private readonly operationsFormat: OperationsFormat;
+  readonly maxRecordSizeBytes?: number;
 
   constructor(config: HttpExporterConfig) {
     this.url = config.url;
     this.method = config.method ?? "POST";
     this.headers = config.headers ?? {};
     this.timeoutMs = config.timeoutMs ?? 10_000;
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes;
     this.operationsFormat = config.operationsFormat ?? "array";
   }
 
