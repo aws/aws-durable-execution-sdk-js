@@ -96,7 +96,6 @@ export interface AttemptInfo extends OperationInfo {
 export const AttemptEndInfoOutcome = {
   SUCCEEDED: "SUCCEEDED",
   FAILED: "FAILED",
-  RETRYING: "RETRYING",
 } as const;
 
 export type AttemptEndInfoOutcome =
@@ -110,7 +109,6 @@ export type AttemptEndInfoOutcome =
 export interface AttemptEndInfo extends AttemptInfo {
   outcome: AttemptEndInfoOutcome;
   error?: Error;
-  nextAttemptDelaySeconds?: number;
 }
 
 /**
