@@ -2,9 +2,8 @@ import Table from "@cloudscape-design/components/table";
 import Box from "@cloudscape-design/components/box";
 import Header from "@cloudscape-design/components/header";
 import Pagination from "@cloudscape-design/components/pagination";
-import Modal from "@cloudscape-design/components/modal";
-import KeyValuePairs from "@cloudscape-design/components/key-value-pairs";
 import { useState } from "react";
+import { RecordDetail } from "./RecordDetail";
 
 interface Props {
   columns: string[];
@@ -94,22 +93,12 @@ export function ResultsTable({ columns, rows, explanation, primaryColumns }: Pro
         }
       />
 
-      <Modal
+      <RecordDetail
         visible={detailItem != null}
         onDismiss={() => setDetailItem(null)}
-        header="Record Details"
-        size="large"
-      >
-        {detailItem && (
-          <KeyValuePairs
-            columns={1}
-            items={columns.map((col) => ({
-              label: col,
-              value: detailItem[col] || <Box color="text-body-secondary">—</Box>,
-            }))}
-          />
-        )}
-      </Modal>
+        fields={detailItem ?? {}}
+        columns={columns}
+      />
     </>
   );
 }
