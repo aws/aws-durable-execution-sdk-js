@@ -45,6 +45,11 @@ export interface Settings {
   auroraTable: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
+  athenaDatabase: string;
+  athenaTable: string;
+  athenaWorkgroup: string;
+  athenaOutputLocation: string;
+  athenaS3Location: string;
   llmProvider: string;
   awsProfile: string;
   bedrockModelId: string;
@@ -61,6 +66,11 @@ export const DEFAULT_SETTINGS: Settings = {
   auroraTable: "workflow_insight",
   sqsQueueUrl: "",
   sqsDeleteAfterRead: false,
+  athenaDatabase: "",
+  athenaTable: "workflow_insight",
+  athenaWorkgroup: "",
+  athenaOutputLocation: "",
+  athenaS3Location: "",
   llmProvider: "bedrock",
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",

@@ -270,6 +270,81 @@ A: SELECT function_name, AVG(duration_ms) AS avg_ms, COUNT(*) AS ct FROM TABLE_N
 Q: executions where operation "convert_data" took less than 5 seconds
 A: SELECT execution_arn, function_name FROM TABLE_NAME WHERE record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationMs < 5000)' LIMIT 50`;
 
+// ─── ATHENA (Trino/Presto SQL over S3 via S3Exporter) ────────────────────────
+
+const RECORD_SCHEMA_ATHENA = `Records are stored as one JSON object per file in S3 (via S3Exporter), registered as
+a Glue table "TABLE_NAME" and Hive-partitioned by year/month/day (partition columns
+below). Columns:
+- recordType: string ("WorkflowInsight")
+- schemaVersion: string
+- emittedAt: string (ISO-8601)
+- executionArn: string
+- executionName: string (nullable)
+- functionName: string
+- functionQualifier: string
+- region: string
+- accountId: string
+- status: string — RUNNING | SUCCEEDED | FAILED
+- startTime: string (ISO-8601)
+- endTime: string (ISO-8601, nullable)
+- durationMs: bigint (nullable)
+- input: string (JSON-serialized; use json_extract_scalar/json_extract to read fields)
+- output: string (JSON-serialized; use json_extract_scalar/json_extract to read fields)
+- error: struct<name:string,message:string> (nullable)
+- operations: array<struct<id,name,type,subType,parentId,status,startTime,endTime,durationMs,attempt,error,result,truncated>>
+    This is the canonical per-operation array (NOT operationsByName — S3Exporter
+    keeps the raw array). To filter/aggregate by operation name or fields, UNNEST it.
+- year, month, day: string — Hive partition columns (from the S3 key
+    year=YYYY/month=MM/day=DD/), zero-padded 2-digit strings for month/day. Filter
+    on these instead of parsing startTime/emittedAt for partition pruning.
+- truncated: boolean (nullable)
+- droppedOperations: int (nullable)
+- droppedInput / droppedOutput: boolean (nullable)
+
+input/output are stored as JSON strings (not native structs, since their shape is
+user-defined) — use json_extract_scalar(input, '$.fieldName') for scalars or
+json_extract(input, '$.fieldName') for nested values. The user will specify which
+fields they want — do not assume the structure.`;
+
+const DIALECT_ATHENA = `Target query language: Trino/Presto SQL (Amazon Athena) — NOT standard ANSI SQL in all respects.
+Rules:
+- Table name is TABLE_NAME (already database-qualified by the connection — do not prefix it).
+- To inspect operations, UNNEST the array: CROSS JOIN UNNEST(operations) AS t(op), then reference op.name, op.type, op.status, op.durationMs, etc.
+- json_extract_scalar(col, '$.path') returns a scalar string; json_extract(col, '$.path') returns JSON — cast as needed, e.g. CAST(json_extract_scalar(...) AS double).
+- Prefer filtering on the year/month/day partition columns when the question implies a time range, to avoid scanning the whole bucket (cost + speed).
+- String comparisons use single quotes: WHERE status = 'SUCCEEDED'
+- Always include LIMIT (default 100) unless aggregating (GROUP BY / COUNT / AVG etc).
+- Use double quotes only for identifiers that need escaping; prefer unquoted lowercase identifiers.
+- Return ONLY the SQL query via the tool call. No prose, no trailing semicolon required but harmless.`;
+
+const FEWSHOTS_ATHENA = `Examples:
+Q: show the most recent failed executions
+A: SELECT executionArn, functionName, durationMs, emittedAt FROM TABLE_NAME WHERE status = 'FAILED' ORDER BY emittedAt DESC LIMIT 50
+
+Q: average duration of successful executions
+A: SELECT AVG(durationMs) AS avg_duration_ms FROM TABLE_NAME WHERE status = 'SUCCEEDED'
+
+Q: count executions by status
+A: SELECT status, COUNT(*) AS ct FROM TABLE_NAME GROUP BY status ORDER BY ct DESC
+
+Q: executions longer than 5 seconds
+A: SELECT executionArn, functionName, durationMs FROM TABLE_NAME WHERE status = 'SUCCEEDED' AND durationMs > 5000 ORDER BY durationMs DESC LIMIT 50
+
+Q: show last 100 records from today
+A: SELECT executionArn, status, functionName, durationMs, emittedAt FROM TABLE_NAME WHERE year = date_format(current_date, '%Y') AND month = date_format(current_date, '%m') AND day = date_format(current_date, '%d') ORDER BY emittedAt DESC LIMIT 100
+
+Q: executions where operation "convert_data" took less than 5 seconds
+A: SELECT DISTINCT t.executionArn, t.functionName FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) WHERE op.name = 'convert_data' AND op.durationMs < 5000 LIMIT 50
+
+Q: which operations fail most often
+A: SELECT op.name, COUNT(*) AS failures FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) WHERE op.status = 'FAILED' GROUP BY op.name ORDER BY failures DESC LIMIT 20
+
+Q: average duration per operation name
+A: SELECT op.name, AVG(op.durationMs) AS avg_ms, COUNT(*) AS ct FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) WHERE op.durationMs IS NOT NULL GROUP BY op.name ORDER BY avg_ms DESC
+
+Q: executions where the output field "amount" was over 1000
+A: SELECT executionArn, CAST(json_extract_scalar(output, '$.amount') AS double) AS amount FROM TABLE_NAME WHERE CAST(json_extract_scalar(output, '$.amount') AS double) > 1000 LIMIT 50`;
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function buildSystemPrompt(
@@ -277,9 +352,26 @@ export function buildSystemPrompt(
     | "cloudwatch-logs-exporter"
     | "lambda-log-exporter"
     | "dynamodb"
-    | "aurora",
+    | "aurora"
+    | "s3",
   options?: { tableName?: string },
 ): string {
+  if (destinationType === "s3") {
+    const table = options?.tableName || "workflow_insight";
+    return [
+      "You convert a user's plain-English question into a single Trino/Presto SQL query",
+      "for querying AWS Durable Execution Workflow Insight records via Amazon Athena.",
+      "",
+      RECORD_SCHEMA_ATHENA.replace(/TABLE_NAME/g, table),
+      "",
+      DIALECT_ATHENA.replace(/TABLE_NAME/g, table),
+      "",
+      FEWSHOTS_ATHENA.replace(/TABLE_NAME/g, table),
+      "",
+      'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
+    ].join("\n");
+  }
+
   if (destinationType === "aurora") {
     const table = options?.tableName || "workflow_insight";
     return [

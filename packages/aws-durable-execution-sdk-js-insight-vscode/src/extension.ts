@@ -4,6 +4,7 @@ import { generateQuery, isModelDownloaded, ensureModel } from "./llm";
 import { runLogsInsightsQuery } from "./logsInsights";
 import { runDynamoDBQuery } from "./dynamodb";
 import { runAuroraQuery } from "./aurora";
+import { runAthenaQuery, ensureAthenaTable, tableExists } from "./athena";
 import { listenToQueue, type SqsMessageRow } from "./sqs";
 import { ensureLimit } from "./schema";
 import { assertReadOnly } from "./queryValidator";
@@ -105,6 +106,11 @@ class ExplorerPanel {
         auroraTable: cfg.auroraTable,
         sqsQueueUrl: cfg.sqsQueueUrl,
         sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
+        athenaDatabase: cfg.athenaDatabase,
+        athenaTable: cfg.athenaTable,
+        athenaWorkgroup: cfg.athenaWorkgroup,
+        athenaOutputLocation: cfg.athenaOutputLocation,
+        athenaS3Location: cfg.athenaS3Location,
         llmProvider: cfg.llmProvider,
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
@@ -126,7 +132,60 @@ class ExplorerPanel {
       await config.update(key, coerced, vscode.ConfigurationTarget.Global);
     }
     this.sendConfig();
+
+    const cfg = readConfig();
+    if (
+      cfg.destinationType === "s3" &&
+      cfg.athenaDatabase &&
+      cfg.athenaS3Location
+    ) {
+      await this.onEnsureAthenaTable(cfg);
+    }
+
     this.post({ type: "settingsSaved" });
+  }
+
+  /**
+   * Auto-create (or verify) the Glue table backing Athena queries, and
+   * discover any Hive partitions S3Exporter has already written. Idempotent —
+   * safe to run every time settings are saved. Best-effort: surfaces failures
+   * as a non-fatal warning rather than blocking settings from saving, since
+   * the user may not have Glue/Athena permissions yet (or the bucket/table
+   * exist already via other tooling).
+   */
+  private async onEnsureAthenaTable(
+    cfg: ReturnType<typeof readConfig>,
+  ): Promise<void> {
+    const credentials = resolveCredentials(cfg.awsProfile);
+    try {
+      const exists = await tableExists({
+        region: cfg.region,
+        credentials,
+        database: cfg.athenaDatabase,
+        table: cfg.athenaTable,
+      });
+      if (exists) return;
+
+      this.post({
+        type: "status",
+        text: `Creating Glue table ${cfg.athenaDatabase}.${cfg.athenaTable}...`,
+      });
+      await ensureAthenaTable({
+        region: cfg.region,
+        credentials,
+        database: cfg.athenaDatabase,
+        table: cfg.athenaTable,
+        workgroup: cfg.athenaWorkgroup || undefined,
+        outputLocation: cfg.athenaOutputLocation || undefined,
+        s3Location: cfg.athenaS3Location,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.post({
+        type: "error",
+        message: `Saved settings, but couldn't auto-create the Athena table: ${msg}`,
+      });
+    }
   }
 
   private async onDownloadModel(): Promise<void> {
@@ -216,7 +275,9 @@ class ExplorerPanel {
         ? cfg.dynamodbTableName
         : cfg.destinationType === "aurora"
           ? cfg.auroraTable
-          : undefined;
+          : cfg.destinationType === "s3"
+            ? cfg.athenaTable
+            : undefined;
 
     this.post({ type: "status", text: "Generating query..." });
     let generated = await generateQuery({
@@ -282,6 +343,26 @@ class ExplorerPanel {
           });
           return;
         }
+        if (cfg.destinationType === "s3") {
+          if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
+          assertReadOnly(generated.query, "Trino/Presto SQL");
+          const table = await runAthenaQuery({
+            region: cfg.region,
+            credentials,
+            database: cfg.athenaDatabase,
+            workgroup: cfg.athenaWorkgroup || undefined,
+            outputLocation: cfg.athenaOutputLocation || undefined,
+            query: generated.query,
+          });
+          this.post({
+            type: "results",
+            ...table,
+            explanation: generated.explanation,
+            suggestedCharts: generated.suggestedCharts,
+            finalQuery: generated.query,
+          });
+          return;
+        }
         // CloudWatch Logs path
         const finalQuery = ensureLimit(generated.query);
         const endTimeMs = Date.now();
@@ -306,7 +387,10 @@ class ExplorerPanel {
         const msg = err instanceof Error ? err.message : String(err);
         if (
           (msg.includes("MalformedQueryException") ||
-            msg.includes("ValidationException")) &&
+            msg.includes("ValidationException") ||
+            msg.includes("Athena query failed") ||
+            msg.includes("INVALID_") ||
+            msg.includes("SYNTAX_ERROR")) &&
           attempt < 2
         ) {
           this.post({

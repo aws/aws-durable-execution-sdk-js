@@ -26,6 +26,7 @@ const DEST_OPTIONS: SelectProps.Option[] = [
   { value: "lambda-log-exporter", label: "CloudWatch Logs (Lambda function log group)" },
   { value: "dynamodb", label: "DynamoDB" },
   { value: "aurora", label: "Aurora PostgreSQL" },
+  { value: "s3", label: "S3 + Athena" },
   { value: "sqs", label: "Amazon SQS (live view)" },
 ];
 
@@ -51,6 +52,7 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
   const showLogGroup = dest === "cloudwatch-logs-exporter" || dest === "lambda-log-exporter";
   const showDdb = dest === "dynamodb";
   const showAurora = dest === "aurora";
+  const showAthena = dest === "s3";
   const showSqs = dest === "sqs";
 
   return (
@@ -109,6 +111,40 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     <FormField label="Table">
                       <Input value={form.auroraTable} onChange={({ detail }) => update("auroraTable", detail.value)} placeholder="workflow_insight" />
                     </FormField>
+                  </SpaceBetween>
+                )}
+
+                {showAthena && (
+                  <SpaceBetween size="s">
+                    <FormField label="Glue Database" description="Athena/Glue database that will contain the workflow insight table">
+                      <Input value={form.athenaDatabase} onChange={({ detail }) => update("athenaDatabase", detail.value)} placeholder="default" />
+                    </FormField>
+                    <FormField label="Glue Table">
+                      <Input value={form.athenaTable} onChange={({ detail }) => update("athenaTable", detail.value)} placeholder="workflow_insight" />
+                    </FormField>
+                    <FormField
+                      label="S3 Location"
+                      description="The S3Exporter's bucket + prefix, e.g. s3://my-insight-bucket/workflow-insight/. Used to auto-create the Glue table on Save."
+                    >
+                      <Input value={form.athenaS3Location} onChange={({ detail }) => update("athenaS3Location", detail.value)} placeholder="s3://my-insight-bucket/workflow-insight/" />
+                    </FormField>
+                    <FormField
+                      label="Athena Workgroup"
+                      description="Leave empty to use the 'primary' workgroup and specify a result output location below instead"
+                    >
+                      <Input value={form.athenaWorkgroup} onChange={({ detail }) => update("athenaWorkgroup", detail.value)} placeholder="my-workgroup" />
+                    </FormField>
+                    <FormField
+                      label="Query Result Location"
+                      description="Required unless the chosen workgroup has its own output location configured"
+                    >
+                      <Input value={form.athenaOutputLocation} onChange={({ detail }) => update("athenaOutputLocation", detail.value)} placeholder="s3://my-insight-bucket/athena-results/" />
+                    </FormField>
+                    <Box color="text-body-secondary" fontSize="body-s">
+                      On Save, the Explorer checks whether the Glue table exists and, if not,
+                      creates it (matching the S3Exporter's JSON + Hive date partitioning) and
+                      runs MSCK REPAIR TABLE to discover existing partitions.
+                    </Box>
                   </SpaceBetween>
                 )}
 
