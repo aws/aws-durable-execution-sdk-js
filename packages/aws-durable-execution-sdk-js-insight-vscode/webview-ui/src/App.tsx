@@ -8,7 +8,8 @@ import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
 import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
-import type { InboundMessage, Settings } from "./types";
+import { SqsLiveView, toTable as sqsToTable, MAX_DISPLAYED_MESSAGES } from "./SqsLiveView";
+import type { InboundMessage, Settings, SqsMessageRow } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 
 applyMode(Mode.Dark);
@@ -26,6 +27,8 @@ export function App() {
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [page, setPage] = useState<Page>("data");
   const [explanation, setExplanation] = useState("");
+  const [sqsMessages, setSqsMessages] = useState<SqsMessageRow[]>([]);
+  const [sqsListening, setSqsListening] = useState(false);
 
   const handleMessage = useCallback((event: MessageEvent<InboundMessage>) => {
     const msg = event.data;
@@ -56,6 +59,25 @@ export function App() {
       case "settingsSaved":
         setSettingsOpen(false);
         break;
+      case "sqsStatus":
+        setSqsListening(msg.listening);
+        break;
+      case "sqsMessages":
+        setSqsMessages((prev) => {
+          // De-dupe by messageId: in peek-only mode (sqsDeleteAfterRead=false)
+          // the same message can be re-delivered after its visibility timeout.
+          const seen = new Set(prev.map((m) => m.messageId));
+          const next = msg.messages.filter((m) => !seen.has(m.messageId));
+          if (next.length === 0) return prev;
+          // Cap at MAX_DISPLAYED_MESSAGES so a long-running listener session
+          // doesn't grow this state (and the seen-set rebuild above) without
+          // bound — only the most recent messages are ever shown anyway.
+          const combined = [...prev, ...next];
+          return combined.length > MAX_DISPLAYED_MESSAGES
+            ? combined.slice(-MAX_DISPLAYED_MESSAGES)
+            : combined;
+        });
+        break;
     }
   }, []);
 
@@ -74,7 +96,13 @@ export function App() {
   };
 
   const handleSave = (s: Settings) => {
-    postMessage({ type: "saveSettings", settings: s });
+    // The wire contract for saveSettings is all-string (matches every VS Code
+    // setting key it writes through 1:1); sqsDeleteAfterRead is the only
+    // boolean field in Settings, so serialize it here at the boundary.
+    const wire: Record<string, string> = Object.fromEntries(
+      Object.entries(s).map(([key, value]) => [key, String(value)]),
+    );
+    postMessage({ type: "saveSettings", settings: wire });
   };
 
   return (
@@ -86,7 +114,7 @@ export function App() {
             <Button iconName="settings" variant="icon" onClick={() => setSettingsOpen(true)} />
           }
           description={
-            settings.logGroupName || settings.dynamodbTableName || settings.auroraTable
+            settings.logGroupName || settings.dynamodbTableName || settings.auroraTable || settings.sqsQueueUrl
               ? `${settings.region} · ${settings.destinationType}`
               : "Click ⚙ to configure"
           }
@@ -94,37 +122,68 @@ export function App() {
           Workflow Insight Explorer
         </Header>
 
-        {page === "data" && (
+        {settings.destinationType === "sqs" ? (
           <>
-            <QueryPanel
-              onAsk={handleAsk}
-              loading={loading}
-              status={status}
-              error={error}
-            />
+            {page === "data" && (
+              <SqsLiveView
+                listening={sqsListening}
+                messages={sqsMessages}
+                error={error}
+                queueConfigured={!!settings.sqsQueueUrl}
+                onClear={() => setSqsMessages([])}
+                onVisualize={() => setPage("visualize")}
+              />
+            )}
 
-            {results && (
-              <SpaceBetween size="m">
-                <ResultsTable
-                  columns={results.columns}
-                  rows={results.rows}
-                  explanation={explanation}
+            {page === "visualize" &&
+              (() => {
+                const { columns, rows } = sqsToTable(
+                  sqsMessages.slice(-MAX_DISPLAYED_MESSAGES),
+                );
+                return (
+                  <VisualizePage
+                    columns={columns}
+                    rows={rows}
+                    onBack={() => setPage("data")}
+                  />
+                );
+              })()}
+          </>
+        ) : (
+          <>
+            {page === "data" && (
+              <>
+                <QueryPanel
+                  onAsk={handleAsk}
+                  loading={loading}
+                  status={status}
+                  error={error}
                 />
-                <Button variant="primary" onClick={() => setPage("visualize")}>
-                  Visualize →
-                </Button>
-              </SpaceBetween>
+
+                {results && (
+                  <SpaceBetween size="m">
+                    <ResultsTable
+                      columns={results.columns}
+                      rows={results.rows}
+                      explanation={explanation}
+                    />
+                    <Button variant="primary" onClick={() => setPage("visualize")}>
+                      Visualize →
+                    </Button>
+                  </SpaceBetween>
+                )}
+              </>
+            )}
+
+            {page === "visualize" && results && (
+              <VisualizePage
+                columns={results.columns}
+                rows={results.rows}
+                suggestedCharts={results.suggestedCharts}
+                onBack={() => setPage("data")}
+              />
             )}
           </>
-        )}
-
-        {page === "visualize" && results && (
-          <VisualizePage
-            columns={results.columns}
-            rows={results.rows}
-            suggestedCharts={results.suggestedCharts}
-            onBack={() => setPage("data")}
-          />
         )}
 
         <SettingsModal

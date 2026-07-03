@@ -76,6 +76,24 @@ Click the **⚙** button and fill in your settings. The form shows only the fiel
 | Aurora Database    | `postgres`                      |
 | Aurora Table       | `workflow_insight`              |
 
+#### Amazon SQS (live view)
+
+SQS has no query engine, so this destination doesn't use the "Ask" pipeline at
+all — it's a **live view** instead. Click **Start Listening** and messages
+appear as they arrive on the queue.
+
+| Field                            | Value                                                                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Region                           | `us-east-1`                                                                                                                                   |
+| Destination Type                 | Amazon SQS (live view)                                                                                                                        |
+| SQS Queue URL                    | Your queue's URL                                                                                                                              |
+| Delete messages after displaying | Off by default (peek-only — other consumers still get every message). Turn on only if this Explorer should be the sole consumer of the queue. |
+
+Peek-only mode (the default) uses SQS long-polling without deleting messages,
+so the same message can be redelivered after its visibility timeout — the
+Explorer de-duplicates by message ID when displaying, but this also means it
+is not a substitute for a real consumer if you need exactly-once processing.
+
 ### 3. Configure Bedrock
 
 Set the **Bedrock Model ID** to an inference profile you have access to:
@@ -110,18 +128,20 @@ Type a question and click **Ask**. Examples:
 
 All settings are under the `workflowInsight.*` namespace.
 
-| Setting             | Description                                   | Required     |
-| ------------------- | --------------------------------------------- | ------------ |
-| `region`            | AWS region                                    | Yes          |
-| `destinationType`   | Where your data lives (see above)             | Yes          |
-| `logGroupName`      | CloudWatch log group name(s), comma-separated | For CW Logs  |
-| `dynamodbTableName` | DynamoDB table name                           | For DynamoDB |
-| `auroraResourceArn` | Aurora cluster ARN                            | For Aurora   |
-| `auroraSecretArn`   | Secrets Manager secret ARN                    | For Aurora   |
-| `auroraDatabase`    | Database name                                 | For Aurora   |
-| `auroraTable`       | Table name                                    | For Aurora   |
-| `awsProfile`        | Named AWS profile (empty = default chain)     | No           |
-| `bedrockModelId`    | Bedrock model/inference profile for NL→query  | Yes          |
+| Setting              | Description                                                   | Required     |
+| -------------------- | ------------------------------------------------------------- | ------------ |
+| `region`             | AWS region                                                    | Yes          |
+| `destinationType`    | Where your data lives (see above)                             | Yes          |
+| `logGroupName`       | CloudWatch log group name(s), comma-separated                 | For CW Logs  |
+| `dynamodbTableName`  | DynamoDB table name                                           | For DynamoDB |
+| `auroraResourceArn`  | Aurora cluster ARN                                            | For Aurora   |
+| `auroraSecretArn`    | Secrets Manager secret ARN                                    | For Aurora   |
+| `auroraDatabase`     | Database name                                                 | For Aurora   |
+| `auroraTable`        | Table name                                                    | For Aurora   |
+| `sqsQueueUrl`        | SQS queue URL to listen to                                    | For SQS      |
+| `sqsDeleteAfterRead` | Delete messages after displaying (default `false`; peek-only) | No           |
+| `awsProfile`         | Named AWS profile (empty = default chain)                     | No           |
+| `bedrockModelId`     | Bedrock model/inference profile for NL→query                  | Yes          |
 
 ## Authentication
 
@@ -143,12 +163,13 @@ No credentials are stored by the extension.
 
 Depending on your destination:
 
-| Destination     | Permissions needed                                               |
-| --------------- | ---------------------------------------------------------------- |
-| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                        |
-| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`) |
-| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`     |
-| Bedrock (all)   | `bedrock:InvokeModel` on your model/inference profile            |
+| Destination     | Permissions needed                                                                 |
+| --------------- | ---------------------------------------------------------------------------------- |
+| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                          |
+| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                   |
+| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                       |
+| SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled) |
+| Bedrock (all)   | `bedrock:InvokeModel` on your model/inference profile                              |
 
 ## How Queries Are Generated
 

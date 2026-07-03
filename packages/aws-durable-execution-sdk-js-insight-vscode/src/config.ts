@@ -9,12 +9,15 @@ export interface InsightConfig {
     | "cloudwatch-logs-exporter"
     | "lambda-log-exporter"
     | "dynamodb"
-    | "aurora";
+    | "aurora"
+    | "sqs";
   dynamodbTableName: string;
   auroraResourceArn: string;
   auroraSecretArn: string;
   auroraDatabase: string;
   auroraTable: string;
+  sqsQueueUrl: string;
+  sqsDeleteAfterRead: boolean;
   llmProvider: "bedrock" | "copilot" | "local";
   awsProfile?: string;
   bedrockModelId: string;
@@ -41,7 +44,9 @@ export function readConfig(): InsightConfig {
         ? ("dynamodb" as const)
         : raw === "aurora"
           ? ("aurora" as const)
-          : ("cloudwatch-logs-exporter" as const);
+          : raw === "sqs"
+            ? ("sqs" as const)
+            : ("cloudwatch-logs-exporter" as const);
   const dynamodbTableName = (c.get<string>("dynamodbTableName") || "").trim();
   const auroraResourceArn = (c.get<string>("auroraResourceArn") || "").trim();
   const auroraSecretArn = (c.get<string>("auroraSecretArn") || "").trim();
@@ -49,6 +54,8 @@ export function readConfig(): InsightConfig {
     (c.get<string>("auroraDatabase") || "").trim() || "postgres";
   const auroraTable =
     (c.get<string>("auroraTable") || "").trim() || "workflow_insight";
+  const sqsQueueUrl = (c.get<string>("sqsQueueUrl") || "").trim();
+  const sqsDeleteAfterRead = c.get<boolean>("sqsDeleteAfterRead") ?? false;
   const llmProvider =
     (c.get<string>("llmProvider") || "").trim() === "copilot"
       ? ("copilot" as const)
@@ -69,6 +76,8 @@ export function readConfig(): InsightConfig {
     auroraSecretArn,
     auroraDatabase,
     auroraTable,
+    sqsQueueUrl,
+    sqsDeleteAfterRead,
     llmProvider,
     awsProfile,
     bedrockModelId,

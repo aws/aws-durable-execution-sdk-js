@@ -5,6 +5,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Button from "@cloudscape-design/components/button";
 import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
+import Checkbox from "@cloudscape-design/components/checkbox";
 import Select, { type SelectProps } from "@cloudscape-design/components/select";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
@@ -25,6 +26,7 @@ const DEST_OPTIONS: SelectProps.Option[] = [
   { value: "lambda-log-exporter", label: "CloudWatch Logs (Lambda function log group)" },
   { value: "dynamodb", label: "DynamoDB" },
   { value: "aurora", label: "Aurora PostgreSQL" },
+  { value: "sqs", label: "Amazon SQS (live view)" },
 ];
 
 export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave }: Props) {
@@ -35,7 +37,7 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
     setForm(settings);
   }, [settings, visible]);
 
-  const update = (field: keyof Settings, value: string) =>
+  const update = (field: keyof Settings, value: string | boolean) =>
     setForm((f) => ({ ...f, [field]: value }));
 
   const canSave = form.llmProvider !== "local" || modelDownloaded;
@@ -49,6 +51,7 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
   const showLogGroup = dest === "cloudwatch-logs-exporter" || dest === "lambda-log-exporter";
   const showDdb = dest === "dynamodb";
   const showAurora = dest === "aurora";
+  const showSqs = dest === "sqs";
 
   return (
     <Modal
@@ -106,6 +109,29 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     <FormField label="Table">
                       <Input value={form.auroraTable} onChange={({ detail }) => update("auroraTable", detail.value)} placeholder="workflow_insight" />
                     </FormField>
+                  </SpaceBetween>
+                )}
+
+                {showSqs && (
+                  <SpaceBetween size="s">
+                    <FormField label="SQS Queue URL">
+                      <Input
+                        value={form.sqsQueueUrl}
+                        onChange={({ detail }) => update("sqsQueueUrl", detail.value)}
+                        placeholder="https://sqs.us-east-1.amazonaws.com/123456789012/workflow-insight"
+                      />
+                    </FormField>
+                    <Checkbox
+                      checked={form.sqsDeleteAfterRead}
+                      onChange={({ detail }) => update("sqsDeleteAfterRead", detail.checked)}
+                    >
+                      Delete messages after displaying them
+                    </Checkbox>
+                    <Box color="text-body-secondary" fontSize="body-s">
+                      Off by default — the Explorer only observes the queue, so other
+                      consumers still receive every message. Enable only if this
+                      Explorer should be the sole consumer.
+                    </Box>
                   </SpaceBetween>
                 )}
               </SpaceBetween>
