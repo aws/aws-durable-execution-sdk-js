@@ -77,6 +77,12 @@ export async function runDynamoDBQuery(opts: {
  * the row-detail drill-down. Uses ExecuteStatement (PartiQL) with a direct
  * key-equality WHERE clause — a Query, not a Scan, so this is cheap even on
  * a large table.
+ *
+ * Uses ExecuteStatementCommand's `Parameters` (positional `?` placeholders)
+ * rather than string interpolation — `pk` round-trips through the webview
+ * (it's a value from a previous query's result row), so treat it as
+ * untrusted input even though it originated from our own query, the same
+ * way fetchAuroraRecord parameterizes execution_arn.
  */
 export async function fetchDynamoDBRecord(opts: {
   region: string;
@@ -89,10 +95,10 @@ export async function fetchDynamoDBRecord(opts: {
     credentials: opts.credentials,
   });
 
-  const escaped = opts.pk.replace(/'/g, "''");
   const result = await client.send(
     new ExecuteStatementCommand({
-      Statement: `SELECT * FROM "${opts.tableName}" WHERE pk = '${escaped}'`,
+      Statement: `SELECT * FROM "${opts.tableName}" WHERE pk = ?`,
+      Parameters: [{ S: opts.pk }],
     }),
   );
 

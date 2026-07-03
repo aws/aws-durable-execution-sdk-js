@@ -264,6 +264,13 @@ export async function ensureAthenaTable(opts: {
  * equality predicate lets Athena's engine short-circuit once it finds the
  * match, and LIMIT 1 keeps the result set trivially small — still an
  * ordinary query under the hood, just narrowly scoped.
+ *
+ * Unlike fetchAuroraRecord/fetchDynamoDBRecord, this can't use a
+ * parameterized statement — StartQueryExecutionCommand takes a single
+ * QueryString with no positional/named parameter support (that's an RDS
+ * Data API / PartiQL ExecuteStatement feature, not part of the Athena API).
+ * Manual quote-escaping is the correct mitigation here, same as any other
+ * raw-SQL API without parameter binding.
  */
 export async function fetchAthenaRecord(opts: {
   region: string;
