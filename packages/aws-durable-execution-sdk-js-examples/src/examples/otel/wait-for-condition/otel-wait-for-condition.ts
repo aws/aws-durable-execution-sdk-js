@@ -11,8 +11,6 @@ const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Wait for Condition",
-  durableConfig: null,
-  localOnly: true,
 };
 
 /**

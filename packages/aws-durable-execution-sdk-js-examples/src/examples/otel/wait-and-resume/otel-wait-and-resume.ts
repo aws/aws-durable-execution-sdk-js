@@ -9,8 +9,6 @@ const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Wait and Resume",
-  durableConfig: null,
-  localOnly: true,
 };
 
 /**

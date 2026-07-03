@@ -37,28 +37,70 @@ createTests({
       // All spans across all invocations: before-callback (op + attempt),
       // STEP (submitter op + attempt), CALLBACK, my-callback (CONTEXT), invocation,
       // my-callback (continuation), after-callback (op + attempt) = 10 spans
-      expect(spans.length).toBe(10);
+      expect(spans).toHaveLength(10);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;
       expect(traceId).toMatch(/^[0-9a-f]{32}$/);
       expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-      // Assert callback span exists (waitForCallback is wrapped in a child context,
-      // so the operation type is "CONTEXT" with the callback name)
-      const callbackSpan = spans.find(
+      // --- before-callback step ---
+      const beforeCallbackOp = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "before-callback" &&
+          s.attributes["durable.operation.type"] === "STEP" &&
+          s.attributes["durable.operation.attempt"] === undefined,
+      );
+      expect(beforeCallbackOp).toBeDefined();
+
+      const beforeCallbackAttempt = spans.find(
+        (s) =>
+          s.parentSpanId === beforeCallbackOp!.spanId &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(beforeCallbackAttempt).toBeDefined();
+
+      // --- my-callback context span (waitForCallback wraps in child context) ---
+      const callbackCtxSpan = spans.find(
         (s) =>
           s.attributes["durable.operation.name"] === "my-callback" &&
           s.attributes["durable.operation.type"] === "CONTEXT",
       );
+      expect(callbackCtxSpan).toBeDefined();
+
+      // --- CALLBACK span ---
+      const callbackSpan = spans.find(
+        (s) => s.attributes["durable.operation.type"] === "CALLBACK",
+      );
       expect(callbackSpan).toBeDefined();
 
-      // Continuation spans with links
+      // --- after-callback step ---
+      const afterCallbackOp = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "after-callback" &&
+          s.attributes["durable.operation.type"] === "STEP" &&
+          s.attributes["durable.operation.attempt"] === undefined,
+      );
+      expect(afterCallbackOp).toBeDefined();
+
+      const afterCallbackAttempt = spans.find(
+        (s) =>
+          s.parentSpanId === afterCallbackOp!.spanId &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(afterCallbackAttempt).toBeDefined();
+
+      // --- Invocation span ---
+      const invocationSpan = spans.find((s) => s.name === "invocation");
+      expect(invocationSpan).toBeDefined();
+
+      // --- Continuation spans with links ---
       const spansWithLinks = spans.filter((s) => s.links.length > 0);
       expect(spansWithLinks.length).toBeGreaterThanOrEqual(1);
       for (const span of spansWithLinks) {
         for (const link of span.links) {
           expect(link.spanId).toMatch(/^[0-9a-f]{16}$/);
+          expect(link.traceId).toMatch(/^[0-9a-f]{32}$/);
         }
       }
 

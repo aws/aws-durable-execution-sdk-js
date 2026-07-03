@@ -9,8 +9,6 @@ const { plugin, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Combined",
-  durableConfig: null,
-  localOnly: true,
 };
 
 export const handler = withDurableExecution(

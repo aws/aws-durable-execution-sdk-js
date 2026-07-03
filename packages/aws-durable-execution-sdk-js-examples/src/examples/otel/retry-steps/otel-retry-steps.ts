@@ -1,6 +1,7 @@
 import {
   DurableContext,
   withDurableExecution,
+  createRetryStrategy,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 import { createOtelTestSetup } from "../shared/otel-test-setup";
@@ -9,7 +10,6 @@ const { plugin, getSerializedSpans } = createOtelTestSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Retry Steps",
-  localOnly: true,
 };
 
 export const handler = withDurableExecution(
@@ -24,12 +24,11 @@ export const handler = withDurableExecution(
           throw new Error("always fails");
         },
         {
-          retryStrategy: (_error: Error, attemptsMade: number) => {
-            if (attemptsMade < 3) {
-              return { shouldRetry: true, delay: { seconds: 1 } };
-            }
-            return { shouldRetry: false };
-          },
+          retryStrategy: createRetryStrategy({
+            maxAttempts: 3,
+            initialDelay: { seconds: 1 },
+            backoffRate: 1,
+          }),
         },
       );
     } catch (error) {

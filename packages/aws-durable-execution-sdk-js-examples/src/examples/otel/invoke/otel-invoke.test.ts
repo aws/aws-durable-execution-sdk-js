@@ -14,14 +14,14 @@ createTests({
     it("should produce CHAINED_INVOKE spans with continuation links", async () => {
       if (runner instanceof LocalDurableTestRunner) {
         runner.registerDurableFunction(
-          functionNameMap.getFunctionName("otel-invoke-target"),
+          functionNameMap.getFunctionName("otel-basic-steps"),
           basicStepsHandler,
         );
       }
 
       const execution = await runner.run({
         payload: {
-          functionName: functionNameMap.getFunctionName("otel-invoke-target"),
+          functionName: functionNameMap.getFunctionName("otel-basic-steps"),
         },
       });
 
@@ -44,23 +44,64 @@ createTests({
       // Invocation 1: "before-invoke" (operation + attempt), "invoke-target" (CHAINED_INVOKE), "invocation"
       // Invocation 2: "after-invoke" (operation + attempt)
       // The invocation 2's "invocation" span is still open when getSerializedSpans() is called.
-      expect(spans.length).toBe(6);
+      expect(spans).toHaveLength(6);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;
       expect(traceId).toMatch(/^[0-9a-f]{32}$/);
       expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-      // The CHAINED_INVOKE continuation span is produced by the plugin but fires
-      // during replay processing before handler body code runs, so exporter.reset()
-      // clears it. Instead, verify that the "after-invoke" step (which runs after
-      // the invoke completes in a new invocation) has continuation links proving
-      // cross-invocation correlation works.
+      // --- before-invoke step ---
+      const beforeInvokeOp = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "before-invoke" &&
+          s.attributes["durable.operation.type"] === "STEP" &&
+          s.attributes["durable.operation.attempt"] === undefined,
+      );
+      expect(beforeInvokeOp).toBeDefined();
+
+      const beforeInvokeAttempt = spans.find(
+        (s) =>
+          s.parentSpanId === beforeInvokeOp!.spanId &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(beforeInvokeAttempt).toBeDefined();
+
+      // --- invoke-target (CHAINED_INVOKE) span ---
+      const invokeSpan = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "invoke-target" &&
+          s.attributes["durable.operation.type"] === "CHAINED_INVOKE",
+      );
+      expect(invokeSpan).toBeDefined();
+
+      // --- invocation span ---
+      const invocationSpan = spans.find((s) => s.name === "invocation");
+      expect(invocationSpan).toBeDefined();
+
+      // --- after-invoke step ---
+      const afterInvokeOp = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "after-invoke" &&
+          s.attributes["durable.operation.type"] === "STEP" &&
+          s.attributes["durable.operation.attempt"] === undefined,
+      );
+      expect(afterInvokeOp).toBeDefined();
+
+      const afterInvokeAttempt = spans.find(
+        (s) =>
+          s.parentSpanId === afterInvokeOp!.spanId &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(afterInvokeAttempt).toBeDefined();
+
+      // --- Continuation spans with links (cross-invocation correlation) ---
       const spansWithLinks = spans.filter((s) => s.links.length > 0);
       expect(spansWithLinks.length).toBeGreaterThanOrEqual(1);
       for (const span of spansWithLinks) {
         for (const link of span.links) {
           expect(link.spanId).toMatch(/^[0-9a-f]{16}$/);
+          expect(link.traceId).toMatch(/^[0-9a-f]{32}$/);
         }
       }
 

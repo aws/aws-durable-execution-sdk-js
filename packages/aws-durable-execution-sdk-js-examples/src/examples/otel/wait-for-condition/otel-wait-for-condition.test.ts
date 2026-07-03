@@ -24,20 +24,28 @@ createTests({
 
       const { spans } = result;
       // Single invocation, 1 poll: STEP (op + attempt) = 2 spans
-      expect(spans.length).toBe(2);
+      expect(spans).toHaveLength(2);
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;
       expect(traceId).toMatch(/^[0-9a-f]{32}$/);
       expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-      // Exactly 1 STEP span (single poll)
-      const stepSpans = spans.filter(
+      // Exactly 1 STEP operation span (single poll)
+      const stepOp = spans.find(
         (s) =>
           s.attributes["durable.operation.type"] === "STEP" &&
           s.attributes["durable.operation.attempt"] === undefined,
       );
-      expect(stepSpans).toHaveLength(1);
+      expect(stepOp).toBeDefined();
+
+      // Exactly 1 attempt span as child of the operation span
+      const attemptSpan = spans.find(
+        (s) =>
+          s.parentSpanId === stepOp!.spanId &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(attemptSpan).toBeDefined();
 
       assertEventSignatures(execution, "immediate");
     });
@@ -56,7 +64,7 @@ createTests({
 
       const { spans } = result;
       // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 2 invocations = 8 spans
-      expect(spans.length).toBe(8);
+      expect(spans).toHaveLength(8);
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;
@@ -64,12 +72,39 @@ createTests({
       expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
       // 3 STEP operation spans (one per poll)
-      const stepSpans = spans.filter(
+      const stepOps = spans.filter(
         (s) =>
           s.attributes["durable.operation.type"] === "STEP" &&
           s.attributes["durable.operation.attempt"] === undefined,
       );
-      expect(stepSpans).toHaveLength(3);
+      expect(stepOps).toHaveLength(3);
+
+      // Each STEP operation span should have an attempt child
+      for (const stepOp of stepOps) {
+        const attemptSpan = spans.find(
+          (s) =>
+            s.parentSpanId === stepOp.spanId &&
+            s.attributes["durable.operation.attempt"] !== undefined,
+        );
+        expect(attemptSpan).toBeDefined();
+      }
+
+      // Attempt numbers increment across polls (1, 2, 3)
+      const attemptSpans = spans
+        .filter((s) => s.attributes["durable.operation.attempt"] !== undefined)
+        .sort(
+          (a, b) =>
+            (a.attributes["durable.operation.attempt"] as number) -
+            (b.attributes["durable.operation.attempt"] as number),
+        );
+      expect(attemptSpans).toHaveLength(3);
+      expect(attemptSpans[0].attributes["durable.operation.attempt"]).toBe(1);
+      expect(attemptSpans[1].attributes["durable.operation.attempt"]).toBe(2);
+      expect(attemptSpans[2].attributes["durable.operation.attempt"]).toBe(3);
+
+      // 2 invocation spans (from resume after wait)
+      const invocationSpans = spans.filter((s) => s.name === "invocation");
+      expect(invocationSpans).toHaveLength(2);
 
       // Verify continuation spans with links exist (proves multi-invocation replay)
       const spansWithLinks = spans.filter((s) => s.links.length > 0);

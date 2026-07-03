@@ -14,8 +14,6 @@ provider.register();
 
 export const config: ExampleConfig = {
   name: "OTel Log Enrichment",
-  durableConfig: null,
-  localOnly: true,
 };
 
 /**

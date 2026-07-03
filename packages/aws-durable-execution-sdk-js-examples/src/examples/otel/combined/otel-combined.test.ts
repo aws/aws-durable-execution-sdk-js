@@ -22,27 +22,94 @@ createTests({
       expect(result.complete).toBe(true);
 
       const { spans } = result;
-      expect(spans.length).toBeGreaterThan(0);
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;
+      expect(traceId).toMatch(/^[0-9a-f]{32}$/);
       expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-      // Find child context span
+      // --- Sequential step span ---
+      const sequentialStepOp = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "sequential-step" &&
+          s.attributes["durable.operation.type"] === "STEP" &&
+          s.attributes["durable.operation.attempt"] === undefined,
+      );
+      expect(sequentialStepOp).toBeDefined();
+
+      const sequentialStepAttempt = spans.find(
+        (s) =>
+          s.parentSpanId === sequentialStepOp!.spanId &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      expect(sequentialStepAttempt).toBeDefined();
+
+      // --- Wait span ---
+      const waitSpan = spans.find(
+        (s) => s.attributes["durable.operation.name"] === "short-wait",
+      );
+      expect(waitSpan).toBeDefined();
+      expect(waitSpan!.attributes["durable.operation.type"]).toBe("WAIT");
+
+      // --- Child context span ---
       const childCtxSpan = spans.find(
         (s) =>
-          s.attributes["durable.operation.name"] === "child-ctx" ||
-          s.name === "child-ctx",
+          s.attributes["durable.operation.name"] === "child-ctx" &&
+          s.attributes["durable.operation.type"] === "CONTEXT",
       );
-      if (childCtxSpan) {
-        // Inner steps should be children of child context span
-        const innerSpans = spans.filter(
-          (s) => s.parentSpanId === childCtxSpan.spanId,
+      expect(childCtxSpan).toBeDefined();
+
+      // Inner steps should be children of child context span
+      const childStep1 = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "child-step-1" &&
+          s.parentSpanId === childCtxSpan!.spanId,
+      );
+      const childStep2 = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "child-step-2" &&
+          s.parentSpanId === childCtxSpan!.spanId,
+      );
+      expect(childStep1).toBeDefined();
+      expect(childStep2).toBeDefined();
+
+      // --- Map context span ---
+      const mapCtxSpan = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "map-items" &&
+          s.attributes["durable.operation.type"] === "CONTEXT",
+      );
+      expect(mapCtxSpan).toBeDefined();
+
+      // Map step spans (3 items)
+      for (let i = 0; i < 3; i++) {
+        const mapStepOp = spans.find(
+          (s) =>
+            s.attributes["durable.operation.name"] === `map-step-${i}` &&
+            s.attributes["durable.operation.type"] === "STEP",
         );
-        expect(innerSpans.length).toBeGreaterThanOrEqual(2);
+        expect(mapStepOp).toBeDefined();
       }
 
-      // Continuation spans (spans with links) exist for cross-invocation operations
+      // --- Parallel context span ---
+      const parallelCtxSpan = spans.find(
+        (s) =>
+          s.attributes["durable.operation.name"] === "parallel-ops" &&
+          s.attributes["durable.operation.type"] === "CONTEXT",
+      );
+      expect(parallelCtxSpan).toBeDefined();
+
+      // Parallel step spans
+      const parallelStep1 = spans.find(
+        (s) => s.attributes["durable.operation.name"] === "parallel-step-1",
+      );
+      const parallelStep2 = spans.find(
+        (s) => s.attributes["durable.operation.name"] === "parallel-step-2",
+      );
+      expect(parallelStep1).toBeDefined();
+      expect(parallelStep2).toBeDefined();
+
+      // --- Continuation spans (cross-invocation links) ---
       const spansWithLinks = spans.filter((s) => s.links.length > 0);
       expect(spansWithLinks.length).toBeGreaterThanOrEqual(1);
 
