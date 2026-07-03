@@ -53,15 +53,27 @@
             "cloudwatch-logs-exporter",
             "lambda-log-exporter",
             "dynamodb",
-            "aurora"
+            "aurora",
+            "sqs"
           ],
           "enumDescriptions": [
             "Dedicated log group via CloudWatchLogsExporter — records are raw JSON, fields queryable directly",
             "Function's own log group via LambdaLogExporter — records nested in Lambda JSON envelope (message field)",
             "DynamoDB table via DynamoDBExporter — records queryable via PartiQL",
-            "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations"
+            "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations",
+            "Amazon SQS via SQSExporter — live view that listens to the queue as records arrive (no query engine)"
           ],
           "description": "Where and how records are stored. Determines query engine and format."
+        },
+        "workflowInsight.sqsQueueUrl": {
+          "type": "string",
+          "default": "",
+          "description": "SQS queue URL to listen to (required when destinationType is 'sqs')."
+        },
+        "workflowInsight.sqsDeleteAfterRead": {
+          "type": "boolean",
+          "default": false,
+          "description": "Delete messages from the queue after displaying them in the live view. Off by default so the Explorer only observes — other consumers still receive every message. Enable only if this Explorer should be the sole consumer of the queue."
         },
         "workflowInsight.dynamodbTableName": {
           "type": "string",
@@ -128,6 +140,7 @@
     "@aws-sdk/client-cloudwatch-logs": "^3.658.0",
     "@aws-sdk/client-dynamodb": "^3.658.0",
     "@aws-sdk/client-rds-data": "^3.658.0",
+    "@aws-sdk/client-sqs": "^3.658.0",
     "@aws-sdk/credential-providers": "^3.658.0",
     "@aws-sdk/util-dynamodb": "^3.658.0",
     "node-llama-cpp": "^3.18.1"

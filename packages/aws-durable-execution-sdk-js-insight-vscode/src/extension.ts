@@ -4,6 +4,7 @@ import { generateQuery, isModelDownloaded, ensureModel } from "./llm";
 import { runLogsInsightsQuery } from "./logsInsights";
 import { runDynamoDBQuery } from "./dynamodb";
 import { runAuroraQuery } from "./aurora";
+import { listenToQueue, type SqsMessageRow } from "./sqs";
 import { ensureLimit } from "./schema";
 import { assertReadOnly } from "./queryValidator";
 
@@ -12,7 +13,9 @@ type InboundMessage =
   | { type: "generate"; question: string }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel" }
-  | { type: "exportChart"; format: "svg" | "png"; content: string };
+  | { type: "exportChart"; format: "svg" | "png"; content: string }
+  | { type: "startListening" }
+  | { type: "stopListening" };
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -27,6 +30,7 @@ export function deactivate(): void {}
 class ExplorerPanel {
   private static current: ExplorerPanel | undefined;
   private readonly disposables: vscode.Disposable[] = [];
+  private listenController: AbortController | undefined;
 
   static show(extensionUri: vscode.Uri): void {
     const column = vscode.window.activeTextEditor?.viewColumn;
@@ -73,6 +77,10 @@ class ExplorerPanel {
           return await this.onDownloadModel();
         case "exportChart":
           return await this.onExportChart(msg.format, msg.content);
+        case "startListening":
+          return this.onStartListening();
+        case "stopListening":
+          return this.onStopListening();
       }
     } catch (err) {
       this.post({
@@ -95,6 +103,8 @@ class ExplorerPanel {
         auroraSecretArn: cfg.auroraSecretArn,
         auroraDatabase: cfg.auroraDatabase,
         auroraTable: cfg.auroraTable,
+        sqsQueueUrl: cfg.sqsQueueUrl,
+        sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
         llmProvider: cfg.llmProvider,
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
@@ -108,11 +118,12 @@ class ExplorerPanel {
   ): Promise<void> {
     const config = vscode.workspace.getConfiguration("workflowInsight");
     for (const [key, value] of Object.entries(settings)) {
-      await config.update(
-        key,
-        value || undefined,
-        vscode.ConfigurationTarget.Global,
-      );
+      // sqsDeleteAfterRead is boolean-typed in the settings schema; the
+      // webview always sends strings, so coerce it before writing. `false` is
+      // a meaningful value here, so it must not be treated as "unset".
+      const coerced: string | boolean | undefined =
+        key === "sqsDeleteAfterRead" ? value === "true" : value || undefined;
+      await config.update(key, coerced, vscode.ConfigurationTarget.Global);
     }
     this.sendConfig();
     this.post({ type: "settingsSaved" });
@@ -150,6 +161,46 @@ class ExplorerPanel {
       await vscode.workspace.fs.writeFile(uri, Buffer.from(base64, "base64"));
     }
     vscode.window.showInformationMessage(`Chart saved to ${uri.fsPath}`);
+  }
+
+  private onStartListening(): void {
+    if (this.listenController) return; // already listening
+    const cfg = readConfig();
+    if (!cfg.sqsQueueUrl) {
+      this.post({
+        type: "error",
+        message: "No SQS queue configured. Set workflowInsight.sqsQueueUrl.",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    this.listenController = controller;
+    this.post({ type: "sqsStatus", listening: true });
+
+    void listenToQueue({
+      region: cfg.region,
+      credentials: resolveCredentials(cfg.awsProfile),
+      queueUrl: cfg.sqsQueueUrl,
+      deleteAfterRead: cfg.sqsDeleteAfterRead,
+      signal: controller.signal,
+      onMessages: (messages: SqsMessageRow[]) =>
+        this.post({ type: "sqsMessages", messages }),
+      onError: (error) => this.post({ type: "error", message: error.message }),
+    }).finally(() => {
+      // Only clear/notify if this call owns the current controller — a newer
+      // start/stop may have already replaced it.
+      if (this.listenController === controller) {
+        this.listenController = undefined;
+        this.post({ type: "sqsStatus", listening: false });
+      }
+    });
+  }
+
+  private onStopListening(): void {
+    this.listenController?.abort();
+    this.listenController = undefined;
+    this.post({ type: "sqsStatus", listening: false });
   }
 
   private async onGenerate(question: string): Promise<void> {
@@ -317,6 +368,8 @@ class ExplorerPanel {
 
   private dispose(): void {
     ExplorerPanel.current = undefined;
+    this.listenController?.abort();
+    this.listenController = undefined;
     this.panel.dispose();
     while (this.disposables.length) this.disposables.pop()?.dispose();
   }
