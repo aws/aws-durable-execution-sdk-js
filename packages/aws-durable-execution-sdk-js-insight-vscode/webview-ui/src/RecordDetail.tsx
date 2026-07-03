@@ -5,6 +5,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Tabs from "@cloudscape-design/components/tabs";
 import KeyValuePairs from "@cloudscape-design/components/key-value-pairs";
 import Table from "@cloudscape-design/components/table";
+import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import CodeView from "@cloudscape-design/code-view/code-view";
 import jsonHighlight from "@cloudscape-design/code-view/highlight/json";
 
@@ -56,6 +57,8 @@ function JsonView({ value }: { value: unknown }) {
 function OperationsTable({ operations }: { operations: OperationRecord[] }) {
   const [selected, setSelected] = useState<OperationRecord | null>(null);
 
+  const hasDetail = (o: OperationRecord) => o.result !== undefined || o.error !== undefined;
+
   // Operation `id` is unique per the SDK's OperationRecord contract, so it's a
   // safe trackBy key (unlike name, which can repeat across loop iterations).
   const columnDefs = [
@@ -72,9 +75,21 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
       header: "Attempt",
       cell: (o: OperationRecord) => (o.attempt != null ? String(o.attempt) : ""),
     },
+    {
+      id: "detail",
+      header: "Detail",
+      // Makes it visible at a glance which rows actually have something to
+      // click into, instead of some rows silently doing nothing on click —
+      // result is opt-in per operation (see content.operations.overrides),
+      // so it's expected and common for only some rows to have detail.
+      cell: (o: OperationRecord) =>
+        hasDetail(o) ? (
+          <StatusIndicator type="info">View</StatusIndicator>
+        ) : (
+          <Box color="text-body-secondary">Not captured</Box>
+        ),
+    },
   ];
-
-  const hasDetail = (o: OperationRecord) => o.result !== undefined || o.error !== undefined;
 
   const selectOperation = (o: OperationRecord | null) => setSelected(o && hasDetail(o) ? o : null);
 
@@ -86,6 +101,7 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
         trackBy="id"
         selectionType="single"
         selectedItems={selected ? [selected] : []}
+        isItemDisabled={(o) => !hasDetail(o)}
         onSelectionChange={({ detail }) => selectOperation(detail.selectedItems[0] ?? null)}
         variant="embedded"
         wrapLines
