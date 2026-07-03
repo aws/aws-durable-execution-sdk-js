@@ -83,14 +83,12 @@ export function toAttemptEndInfo(
   options?: {
     attempt?: number;
     error?: Error;
-    nextAttemptDelaySeconds?: number;
   },
 ): AttemptEndInfo {
   return {
     ...toAttemptInfo(operation, options?.attempt),
     outcome,
     error: options?.error,
-    nextAttemptDelaySeconds: options?.nextAttemptDelaySeconds,
   };
 }
 
