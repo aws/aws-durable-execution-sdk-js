@@ -321,6 +321,7 @@ Rules:
 - To inspect operations, UNNEST the array: CROSS JOIN UNNEST(operations) AS t(op), then reference op.name, op.type, op.status, op.durationMs, etc.
 - json_extract_scalar(col, '$.path') returns a scalar string; json_extract(col, '$.path') returns JSON — cast as needed, e.g. CAST(json_extract_scalar(...) AS double).
 - Every path segment passed to json_extract_scalar/json_extract on input or output MUST be lowercase (the SerDe lowercases JSON keys on read) — e.g. '$.claimtype' not '$.claimType'.
+- A field that lives inside input/output (e.g. claimType, decision, amount) is NEVER a bare column — it does not exist as a plain identifier anywhere in this table, including in GROUP BY, ORDER BY, and WHERE. Referencing it bare (e.g. "GROUP BY claimType" or "GROUP BY claim_type") fails with COLUMN_NOT_FOUND. Always wrap it in json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — and repeat that full expression everywhere it's used (SELECT, GROUP BY, ORDER BY, WHERE), not just an alias, since GROUP BY/ORDER BY must reference the actual computed expression.
 - Prefer filtering on the year/month/day partition columns when the question implies a time range, to avoid scanning the whole bucket (cost + speed).
 - String comparisons use single quotes: WHERE status = 'SUCCEEDED'
 - Always include LIMIT (default 100) unless aggregating (GROUP BY / COUNT / AVG etc).
@@ -336,6 +337,19 @@ A: SELECT AVG(durationMs) AS avg_duration_ms FROM TABLE_NAME WHERE status = 'SUC
 
 Q: count executions by status
 A: SELECT status, COUNT(*) AS ct FROM TABLE_NAME GROUP BY status ORDER BY ct DESC
+
+Q: count executions grouped by claimType in the input
+A: SELECT json_extract_scalar(input, '$.claimtype') AS claim_type, COUNT(*) AS ct FROM TABLE_NAME GROUP BY json_extract_scalar(input, '$.claimtype') ORDER BY ct DESC
+-- NOTE: claimType is a field INSIDE the input JSON, not a table column — it
+-- does not exist as a bare identifier. Never write "GROUP BY claimType" or
+-- "GROUP BY claim_type" directly; always wrap it in
+-- json_extract_scalar(input, '$.claimtype') (lowercased path), in BOTH the
+-- SELECT list and the GROUP BY clause (repeat the full expression, not an
+-- alias, since GROUP BY must match what was actually computed per row).
+-- The same applies to output fields and to ORDER BY/WHERE on such a field.
+
+Q: count executions grouped by the decision field in the output
+A: SELECT json_extract_scalar(output, '$.decision') AS decision, COUNT(*) AS ct FROM TABLE_NAME GROUP BY json_extract_scalar(output, '$.decision') ORDER BY ct DESC
 
 Q: executions longer than 5 seconds
 A: SELECT executionArn, functionName, durationMs FROM TABLE_NAME WHERE status = 'SUCCEEDED' AND durationMs > 5000 ORDER BY durationMs DESC LIMIT 50

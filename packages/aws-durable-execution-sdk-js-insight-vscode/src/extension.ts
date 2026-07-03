@@ -439,12 +439,15 @@ class ExplorerPanel {
             type: "status",
             text: "Query failed, asking Bedrock to fix...",
           });
+          const hint = msg.includes("COLUMN_NOT_FOUND")
+            ? "\n\nThis is likely because a field that lives inside input/output was referenced as a bare column instead of via json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — check every column reference (including in GROUP BY/ORDER BY) against the schema's actual top-level columns."
+            : "";
           generated = await generateQuery({
             provider: cfg.llmProvider,
             region: cfg.region,
             credentials,
             modelId: cfg.bedrockModelId,
-            question: `${q}\n\nThe previous query failed with this error: ${msg}\nPlease fix the query.`,
+            question: `${q}\n\nThe previous query failed with this error: ${msg}${hint}\nPlease fix the query.`,
             destinationType: cfg.destinationType,
             tableName,
           });
