@@ -1,10 +1,14 @@
-import { handler, resetExporter } from "./otel-child-context";
+import {
+  handler,
+  resetExporter,
+  getSerializedSpans,
+} from "./otel-child-context";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     beforeEach(() => {
       resetExporter();
     });
@@ -19,10 +23,10 @@ createTests({
       // Assert the execution produced the expected result
       expect(result.result).toBe("inner-1-result:inner-2-result");
 
-      const { spans } = result;
+      const spans = isCloud ? result.spans : getSerializedSpans();
       // All spans: child-ctx (CONTEXT), inner-step-1 (op + attempt),
-      // inner-step-2 (op + attempt) = 5 spans
-      expect(spans.length).toBe(5);
+      // inner-step-2 (op + attempt), invocation = 6 spans
+      expect(spans.length).toBe(6);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;

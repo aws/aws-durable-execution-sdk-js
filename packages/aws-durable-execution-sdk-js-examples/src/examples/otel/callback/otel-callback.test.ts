@@ -2,14 +2,14 @@ import {
   InvocationType,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
-import { handler, resetExporter } from "./otel-callback";
+import { handler, resetExporter, getSerializedSpans } from "./otel-callback";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     beforeEach(() => {
       resetExporter();
     });
@@ -33,11 +33,11 @@ createTests({
       expect(result.callbackResult).toBe("callback-value");
       expect(result.afterCallback).toBe("after-callback-value");
 
-      const { spans } = result;
+      const spans = isCloud ? result.spans : getSerializedSpans();
       // All spans across all invocations: before-callback (op + attempt),
       // STEP (submitter op + attempt), CALLBACK, my-callback (CONTEXT), invocation,
-      // my-callback (continuation), after-callback (op + attempt) = 10 spans
-      expect(spans).toHaveLength(10);
+      // my-callback (continuation), after-callback (op + attempt), invocation (2nd) = 11 spans
+      expect(spans).toHaveLength(11);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;

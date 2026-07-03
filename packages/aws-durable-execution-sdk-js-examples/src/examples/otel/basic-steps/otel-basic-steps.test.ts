@@ -1,11 +1,11 @@
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
-import { handler, resetExporter } from "./otel-basic-steps";
+import { handler, resetExporter, getSerializedSpans } from "./otel-basic-steps";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     beforeEach(() => {
       resetExporter();
     });
@@ -23,17 +23,15 @@ createTests({
       // Assert result contains expected combined value from 3 steps
       expect(result.result).toBe("step-1-result:step-2-result:step-3-result");
 
-      // The plugin produces 6 spans: 3 operation spans + 3 attempt spans
-      // (The invocation span is still active when getSerializedSpans() is called)
-      const { spans } = result;
-      expect(spans).toHaveLength(6);
+      const spans = isCloud ? result.spans : getSerializedSpans();
+      // The plugin produces 7 spans: 3 operation spans + 3 attempt spans + 1 invocation span
+      expect(spans).toHaveLength(7);
 
       // Assert all spans share the same traceId
       const traceId = spans[0].traceId;
       expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-      // Operation spans are those whose parentSpanId points to the invocation span
-      // (which is not in the exported batch). They have no `durable.operation.attempt` attribute.
+      // Operation spans are those with type STEP and no attempt attribute
       const opSpans = spans.filter(
         (s) =>
           s.attributes["durable.operation.type"] === "STEP" &&
@@ -47,6 +45,11 @@ createTests({
       expect(opSpans.every((s) => s.parentSpanId === invocationSpanId)).toBe(
         true,
       );
+
+      // The invocation span should now be present in the exported spans
+      const invocationSpan = spans.find((s) => s.name === "invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.spanId).toBe(invocationSpanId);
 
       // Assert operation spans have correct durable.operation.name
       expect(opSpans[0].attributes["durable.operation.name"]).toBe("step-1");

@@ -1,12 +1,12 @@
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
-import { handler, resetExporter } from "./otel-invoke";
+import { handler, resetExporter, getSerializedSpans } from "./otel-invoke";
 import { handler as basicStepsHandler } from "../basic-steps/otel-basic-steps";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
-  tests: (runner, { functionNameMap, assertEventSignatures }) => {
+  tests: (runner, { functionNameMap, assertEventSignatures, isCloud }) => {
     beforeEach(() => {
       resetExporter();
     });
@@ -38,13 +38,12 @@ createTests({
       );
       expect(result.afterInvoke).toBe("after-invoke-value");
 
-      const { spans } = result;
+      const spans = isCloud ? result.spans : getSerializedSpans();
       // With exporter reset at the test level (not inside the handler), we capture
       // all spans across all invocations:
       // Invocation 1: "before-invoke" (operation + attempt), "invoke-target" (CHAINED_INVOKE), "invocation"
-      // Invocation 2: "after-invoke" (operation + attempt)
-      // The invocation 2's "invocation" span is still open when getSerializedSpans() is called.
-      expect(spans).toHaveLength(6);
+      // Invocation 2: "invoke-target" (continuation), "after-invoke" (operation + attempt), "invocation"
+      expect(spans).toHaveLength(7);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;

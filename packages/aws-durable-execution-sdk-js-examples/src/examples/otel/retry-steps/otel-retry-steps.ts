@@ -12,6 +12,8 @@ export const config: ExampleConfig = {
   name: "OTel Retry Steps",
 };
 
+export { getSerializedSpans };
+
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
     // Step that always fails, exercising the retry mechanism until retries

@@ -8,6 +8,8 @@ import { createOtelTestSetup } from "../shared/otel-test-setup";
 const { plugin, exporter, provider, getSerializedSpans } =
   createOtelTestSetup();
 
+export { getSerializedSpans };
+
 // Register the provider so that context propagation (AsyncLocalStorage) is active.
 // This enables enrichLogContext to find the active span and inject traceId/spanId into logs.
 provider.register();

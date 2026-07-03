@@ -1,10 +1,10 @@
-import { handler } from "./otel-combined";
+import { handler, getSerializedSpans } from "./otel-combined";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     it("should produce comprehensive spans for all operation types", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as {
@@ -21,7 +21,7 @@ createTests({
       expect(result.mapItemCount).toBe(3);
       expect(result.complete).toBe(true);
 
-      const { spans } = result;
+      const spans = isCloud ? result.spans : getSerializedSpans();
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;

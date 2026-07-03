@@ -1,10 +1,14 @@
-import { handler, resetExporter } from "./otel-wait-and-resume";
+import {
+  handler,
+  resetExporter,
+  getSerializedSpans,
+} from "./otel-wait-and-resume";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     beforeEach(() => {
       resetExporter();
     });
@@ -21,10 +25,10 @@ createTests({
       expect(result.beforeWait).toBe("before-wait-value");
       expect(result.afterWait).toBe("after-wait-value");
 
-      const { spans } = result;
+      const spans = isCloud ? result.spans : getSerializedSpans();
       // All spans across both invocations: before-wait (op + attempt),
-      // short-wait, invocation, after-wait (op + attempt) = 6 spans
-      expect(spans).toHaveLength(6);
+      // short-wait, invocation, invocation (2nd), after-wait (op + attempt) = 7 spans
+      expect(spans).toHaveLength(7);
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;

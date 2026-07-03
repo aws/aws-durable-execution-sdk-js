@@ -1,10 +1,10 @@
-import { handler } from "./otel-retry-steps";
+import { handler, getSerializedSpans } from "./otel-retry-steps";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     it("should produce attempt spans with error status after exhausting retries", async () => {
       const execution = await runner.run();
       const result = execution.getResult() as {
@@ -17,12 +17,10 @@ createTests({
       expect(result.failed).toBe(true);
       expect(result.errorMessage).toBe("always fails");
 
-      const { spans } = result;
+      const spans = isCloud ? result.spans : getSerializedSpans();
 
-      // 3 attempts × (1 operation + 1 attempt) + 2 invocation spans = 8 spans
-      // Each retry triggers a new invocation; the last retry's invocation span
-      // is still active when getSerializedSpans() is called.
-      expect(spans).toHaveLength(8);
+      // 3 attempts × (1 operation + 1 attempt) + 3 invocation spans = 9 spans
+      expect(spans).toHaveLength(9);
 
       // All spans share the same traceId
       const traceId = spans[0].traceId;
@@ -76,7 +74,7 @@ createTests({
 
       // --- Invocation spans ---
       const invocationSpans = spans.filter((s) => s.name === "invocation");
-      expect(invocationSpans).toHaveLength(2);
+      expect(invocationSpans).toHaveLength(3);
 
       assertEventSignatures(execution);
     });

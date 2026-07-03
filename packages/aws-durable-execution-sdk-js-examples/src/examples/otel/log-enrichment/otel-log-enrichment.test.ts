@@ -1,4 +1,8 @@
-import { handler, resetExporter } from "./otel-log-enrichment";
+import {
+  handler,
+  resetExporter,
+  getSerializedSpans,
+} from "./otel-log-enrichment";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
@@ -32,10 +36,11 @@ createTests({
         expect(result.step1Result).toBe("step-1-done");
         expect(result.step2Result).toBe("step-2-done");
 
-        const { spans } = result;
+        const spans = isCloud ? result.spans : getSerializedSpans();
 
-        // Single invocation, 2 steps: log-step-1 (op + attempt) + log-step-2 (op + attempt) = 4 spans
-        expect(spans).toHaveLength(4);
+        // Single invocation, 2 steps: log-step-1 (op + attempt) +
+        // log-step-2 (op + attempt) + invocation = 5 spans
+        expect(spans).toHaveLength(5);
 
         // All spans share the same traceId
         const traceId = spans[0].traceId;

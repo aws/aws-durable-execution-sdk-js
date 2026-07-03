@@ -1,11 +1,15 @@
-import { handler, resetExporter } from "./otel-wait-for-condition";
+import {
+  handler,
+  resetExporter,
+  getSerializedSpans,
+} from "./otel-wait-for-condition";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 createTests({
   handler,
   localRunnerConfig: { skipTime: false },
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     beforeEach(() => {
       resetExporter();
     });
@@ -22,9 +26,9 @@ createTests({
       expect(result.finalState.counter).toBe(3);
       expect(result.mode).toBe("immediate");
 
-      const { spans } = result;
-      // Single invocation, 1 poll: STEP (op + attempt) = 2 spans
-      expect(spans).toHaveLength(2);
+      const spans = isCloud ? result.spans : getSerializedSpans();
+      // Single invocation, 1 poll: STEP (op + attempt) + invocation = 3 spans
+      expect(spans).toHaveLength(3);
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;
@@ -62,9 +66,9 @@ createTests({
       expect(result.finalState.counter).toBe(3);
       expect(result.mode).toBe("normal");
 
-      const { spans } = result;
-      // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 2 invocations = 8 spans
-      expect(spans).toHaveLength(8);
+      const spans = isCloud ? result.spans : getSerializedSpans();
+      // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 3 invocation spans = 9 spans
+      expect(spans).toHaveLength(9);
 
       // All spans share the same traceId (deterministic from execution ARN)
       const traceId = spans[0].traceId;
@@ -102,9 +106,9 @@ createTests({
       expect(attemptSpans[1].attributes["durable.operation.attempt"]).toBe(2);
       expect(attemptSpans[2].attributes["durable.operation.attempt"]).toBe(3);
 
-      // 2 invocation spans (from resume after wait)
+      // 3 invocation spans
       const invocationSpans = spans.filter((s) => s.name === "invocation");
-      expect(invocationSpans).toHaveLength(2);
+      expect(invocationSpans).toHaveLength(3);
 
       // Verify continuation spans with links exist (proves multi-invocation replay)
       const spansWithLinks = spans.filter((s) => s.links.length > 0);

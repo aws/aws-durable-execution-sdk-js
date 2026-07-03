@@ -11,6 +11,8 @@ export const config: ExampleConfig = {
   name: "OTel Combined",
 };
 
+export { getSerializedSpans };
+
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
     // 1. Sequential step

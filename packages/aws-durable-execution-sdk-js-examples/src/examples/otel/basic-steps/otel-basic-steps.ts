@@ -11,6 +11,8 @@ export const config: ExampleConfig = {
   name: "OTel Basic Steps",
 };
 
+export { getSerializedSpans };
+
 /**
  * Reset the span exporter. Call this before running the handler
  * to get a clean set of spans for the test.
