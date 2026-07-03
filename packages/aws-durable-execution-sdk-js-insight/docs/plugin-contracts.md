@@ -17,11 +17,40 @@ interface InsightExporter {
   flush?(): Promise<void>;
 
   /**
-   * Maximum record size in bytes before truncation.
-   * Each exporter can set its own limit based on destination constraints.
-   * Default: 256KB. Truncation removes operation results starting from oldest.
+   * Maximum serialized record size in bytes before truncation. Each exporter
+   * can set its own limit based on destination constraints.
+   *
+   * Truncation is best-effort and drops in this order until the record fits:
+   *   1. operation `result` fields, oldest operation first;
+   *   2. whole operations, oldest first;
+   *   3. last resort — execution `input`, then `output`.
+   * Identity/timeline fields are never dropped; prefer `content.input`/
+   * `content.output` transforms to bound `input`/`output` before it comes to
+   * that. When anything is dropped, `truncated: true` is set on the record, each
+   * operation whose result was dropped is itself marked `truncated: true`, and
+   * the `droppedOperations` count / `droppedInput` / `droppedOutput` flags are
+   * set as applicable.
+   *
+   * The size is measured against the shape the exporter emits (via its optional
+   * `render` — e.g. the `operationsByName` expansion), not the canonical record,
+   * so a trimmed record reflects what is actually serialized. This bounds the
+   * record body, not the destination wire envelope; defaults sit below the hard
+   * limits to leave headroom.
+   *
+   * First-party defaults: CloudWatch Logs / Lambda log / SQS / EventBridge
+   * 256KB, DynamoDB 400KB, Aurora / Redshift / Firehose / OTel 1MB, S3 5MB,
+   * OpenSearch 10MB. HTTP, File, and Timestream have no default (`undefined`
+   * disables truncation).
    */
   maxRecordSizeBytes?: number;
+
+  /**
+   * Optional: maps a record to the exact value this exporter serializes (e.g.
+   * the operationsByName expansion), so the size limiter measures the emitted
+   * shape. Defaults to the record unchanged; reuse it from `export` to avoid
+   * drift.
+   */
+  render?(record: WorkflowInsightRecord): unknown;
 }
 
 interface WorkflowInsightConfig {
@@ -356,6 +385,17 @@ interface WorkflowInsightRecord {
    * Each operation represents a step, wait, invoke, callback, or child context.
    */
   operations: OperationRecord[];
+
+  // --- Truncation markers (present only when the size limiter dropped data) ---
+
+  /** True when data was dropped to fit the exporter's maxRecordSizeBytes. */
+  truncated?: boolean;
+  /** Number of whole operations dropped. */
+  droppedOperations?: number;
+  /** True when execution input was dropped as a last resort. */
+  droppedInput?: boolean;
+  /** True when execution output was dropped as a last resort. */
+  droppedOutput?: boolean;
 }
 
 interface OperationRecord {
@@ -394,6 +434,9 @@ interface OperationRecord {
     name: string;
     message: string;
   };
+
+  /** True when the size limiter dropped this operation's result. */
+  truncated?: boolean;
 }
 ```
 

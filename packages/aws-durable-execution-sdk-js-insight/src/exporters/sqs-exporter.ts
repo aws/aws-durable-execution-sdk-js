@@ -29,6 +29,12 @@ export interface SQSExporterConfig {
    * `"both"`. Choose based on what your consumer expects.
    */
   operationsFormat?: OperationsFormat;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 256_000 (SQS's 256 KB message limit).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -49,22 +55,26 @@ export class SQSExporter implements InsightExporter {
   private readonly isFifo: boolean;
   private readonly operationsFormat: OperationsFormat;
   private readonly client: SQSClient;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: SQSExporterConfig) {
     this.queueUrl = config.queueUrl;
     this.messageGroupId = config.messageGroupId;
     this.isFifo = config.queueUrl.endsWith(".fifo");
     this.operationsFormat = config.operationsFormat ?? "array";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
     this.client = new SQSClient(config.region ? { region: config.region } : {});
+  }
+
+  render(record: WorkflowInsightRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     await this.client.send(
       new SendMessageCommand({
         QueueUrl: this.queueUrl,
-        MessageBody: JSON.stringify(
-          applyOperationsFormat(record, this.operationsFormat),
-        ),
+        MessageBody: JSON.stringify(this.render(record)),
         MessageGroupId: this.isFifo
           ? (this.messageGroupId ?? record.executionArn)
           : undefined,

@@ -94,9 +94,10 @@ The system is built on three pillars:
 │                                     ▼                                        │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │ 4. Truncation                                                        │    │
-│  │    - Check total record size against maxPayloadSize                  │    │
-│  │    - If over limit: truncate input → output → operation results      │    │
-│  │    - Set truncated=true if any field was cut                         │    │
+│  │    - Check total record size against maxRecordSizeBytes              │    │
+│  │    - If over: drop operation results (oldest first), then whole      │    │
+│  │      operations (oldest first), then input, then output             │    │
+│  │    - Set truncated=true (+ dropped* markers) if anything was cut     │    │
 │  └──────────────────────────────────┬──────────────────────────────────┘    │
 │                                     │                                        │
 │                                     ▼                                        │
@@ -466,9 +467,9 @@ interface ExecutionRecord {
   endTime?: string; // ISO 8601
   durationMs?: number;
 
-  // Payload (configurable)
-  input?: unknown; // Truncated if exceeds maxPayloadSize
-  output?: unknown; // Truncated if exceeds maxPayloadSize
+  // Payload (bound via content.input/output transforms; size-dropped only as a last resort)
+  input?: unknown;
+  output?: unknown;
   error?: { message: string; type: string; stack?: string };
 
   // Operations (configurable)
@@ -484,7 +485,7 @@ interface ExecutionRecord {
       endTime?: string;
       durationMs?: number;
       attempts: number;
-      result?: unknown; // Operation output/return value (truncated if exceeds limit)
+      result?: unknown; // Operation output/return value (dropped oldest-first when over size limit)
       error?: { message: string; type: string };
     }
   >;
@@ -509,17 +510,34 @@ The `schemaVersion` field enables forward-compatible evolution. New fields are a
 
 ### Size Limits & Truncation
 
-Each destination plugin enforces size limits appropriate for its destination:
+Each exporter sets a `maxRecordSizeBytes` appropriate for its destination. When a
+record's serialized JSON exceeds it, the plugin truncates a per-exporter copy
+(best-effort) by dropping, in order: (1) operation `result` fields oldest-first,
+(2) whole operations oldest-first, then — only as a last resort, once every
+operation is gone — (3) execution `input`, then `output`. Identity/timeline
+fields are never dropped; use `content.input`/`content.output` transforms to
+bound input/output before it comes to that (they run before truncation).
 
-| Destination     | Default Limit | Truncation Behavior                    |
-| --------------- | ------------- | -------------------------------------- |
-| CloudWatch Logs | 256 KB        | Truncate input/output, then operations |
-| DynamoDB        | 400 KB        | Truncate input/output, then operations |
-| Aurora          | 1 MB          | Truncate input/output                  |
-| S3              | 5 MB          | Truncate input/output                  |
-| Kinesis         | 1 MB          | Truncate input/output, then operations |
+The limiter measures the shape each exporter actually emits — exporters that
+reshape operations (the `operationsByName` expansion, or the `"both"` format)
+expose a `render` used both to size and to serialize, so the two can't drift.
+This bounds the serialized record body, not the destination wire envelope
+(DynamoDB type descriptors, CloudWatch Logs framing, gzip); defaults sit below
+the hard limits to absorb that overhead.
 
-When truncation occurs, `truncated: true` is set in the record so customers know data was cut.
+| Destination                                      | Default Limit        |
+| ------------------------------------------------ | -------------------- |
+| CloudWatch Logs / Lambda log / SQS / EventBridge | 256 KB               |
+| DynamoDB                                         | 400 KB               |
+| Aurora / Redshift / Firehose (Kinesis) / OTel    | 1 MB                 |
+| S3                                               | 5 MB                 |
+| OpenSearch                                       | 10 MB                |
+| HTTP / File / Timestream                         | none (no truncation) |
+
+When truncation occurs, `truncated: true` is set on the record; each operation
+whose result was dropped is itself marked `truncated: true`, and the
+`droppedOperations` count / `droppedInput` / `droppedOutput` flags are set when
+those drops happen — so customers know data was cut, not missing.
 
 ---
 

@@ -29,6 +29,12 @@ export interface OpenSearchExporterConfig {
 
   /** Password for basic auth. Required if auth is "basic". */
   password?: string;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 10_000_000 (a generous guard; OpenSearch accepts large documents).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -49,6 +55,7 @@ export class OpenSearchExporter implements InsightExporter {
   private readonly auth: "sigv4" | "basic";
   private readonly username?: string;
   private readonly password?: string;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: OpenSearchExporterConfig) {
     this.endpoint = config.endpoint.replace(/\/$/, "");
@@ -57,6 +64,7 @@ export class OpenSearchExporter implements InsightExporter {
     this.auth = config.auth ?? "sigv4";
     this.username = config.username;
     this.password = config.password;
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 10_000_000;
   }
 
   async export(record: WorkflowInsightRecord): Promise<void> {

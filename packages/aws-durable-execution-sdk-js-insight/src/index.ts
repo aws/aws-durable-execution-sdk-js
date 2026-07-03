@@ -17,6 +17,7 @@ import type {
   InsightExporter,
 } from "./types";
 import { withOperationsByName } from "./operations-index";
+import { truncateRecord } from "./truncation";
 
 export type {
   InsightExporter,
@@ -34,6 +35,8 @@ export {
   withOperationsByName,
   applyOperationsFormat,
 } from "./operations-index";
+
+export { truncateRecord } from "./truncation";
 
 export { S3Exporter } from "./exporters/s3-exporter";
 export type { S3ExporterConfig } from "./exporters/s3-exporter";
@@ -317,8 +320,17 @@ function buildOperationRecords(
  * @experimental This class is experimental and may change in future releases.
  */
 export class LambdaLogExporter implements InsightExporter {
+  /** CloudWatch Logs caps a single log event at 256 KB. */
+  readonly maxRecordSizeBytes: number;
+
+  constructor(config: { maxRecordSizeBytes?: number } = {}) {
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
+  }
+
+  render = withOperationsByName;
+
   async export(record: WorkflowInsightRecord): Promise<void> {
-    console.log(JSON.stringify(withOperationsByName(record)));
+    console.log(JSON.stringify(this.render(record)));
   }
 }
 
@@ -371,9 +383,19 @@ class ExportScheduler {
         const record = this.pending;
         this.pending = undefined;
         // allSettled so one failing/slow exporter never blocks or fails the others,
-        // and an export error never propagates into the execution.
+        // and an export error never propagates into the execution. Each exporter
+        // gets a copy truncated to its own maxRecordSizeBytes (no-op when unset),
+        // measured against the exact shape that exporter emits (its `render`).
         await Promise.allSettled(
-          this.exporters.map((exporter) => exporter.export(record)),
+          this.exporters.map((exporter) =>
+            exporter.export(
+              truncateRecord(
+                record,
+                exporter.maxRecordSizeBytes,
+                exporter.render?.bind(exporter),
+              ),
+            ),
+          ),
         );
       }
     } finally {

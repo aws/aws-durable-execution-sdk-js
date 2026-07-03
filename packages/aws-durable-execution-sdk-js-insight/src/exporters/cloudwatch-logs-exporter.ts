@@ -23,6 +23,12 @@ export interface CloudWatchLogsExporterConfig {
 
   /** AWS region. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 256_000 (CloudWatch Logs' 256 KB event limit).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -44,14 +50,18 @@ export class CloudWatchLogsExporter implements InsightExporter {
   private readonly logStreamPrefix: string;
   private readonly client: CloudWatchLogsClient;
   private readonly createdStreams = new Set<string>();
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: CloudWatchLogsExporterConfig) {
     this.logGroupName = config.logGroupName;
     this.logStreamPrefix = config.logStreamPrefix ?? "workflow-insight/";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
     this.client = new CloudWatchLogsClient(
       config.region ? { region: config.region } : {},
     );
   }
+
+  render = withOperationsByName;
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     const streamName = this.buildStreamName();
@@ -64,7 +74,7 @@ export class CloudWatchLogsExporter implements InsightExporter {
         logEvents: [
           {
             timestamp: Date.now(),
-            message: JSON.stringify(withOperationsByName(record)),
+            message: JSON.stringify(this.render(record)),
           },
         ],
       }),

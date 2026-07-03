@@ -23,6 +23,12 @@ export interface S3ExporterConfig {
 
   /** AWS region of the bucket. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 5_000_000 (S3 has no small per-object limit; a generous guard).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -39,11 +45,13 @@ export class S3Exporter implements InsightExporter {
   private readonly prefix: string;
   private readonly partitioning: "date" | "function-name" | "none";
   private readonly client: S3Client;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: S3ExporterConfig) {
     this.bucket = config.bucket;
     this.prefix = config.prefix ?? "workflow-insight/";
     this.partitioning = config.partitioning ?? "date";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 5_000_000;
     this.client = new S3Client(config.region ? { region: config.region } : {});
   }
 

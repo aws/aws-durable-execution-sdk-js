@@ -36,6 +36,12 @@ export interface AuroraExporterConfig {
 
   /** AWS region. If omitted, uses the SDK default. */
   region?: string;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 1_000_000 (Aurora Data API practical row/statement limit).
+   */
+  maxRecordSizeBytes?: number;
 }
 
 /**
@@ -56,6 +62,7 @@ export class AuroraExporter implements InsightExporter {
   private readonly table: string;
   private readonly engine: "postgresql" | "mysql";
   private readonly client: RDSDataClient;
+  readonly maxRecordSizeBytes: number;
 
   constructor(config: AuroraExporterConfig) {
     this.resourceArn = config.resourceArn;
@@ -63,6 +70,7 @@ export class AuroraExporter implements InsightExporter {
     this.database = config.database;
     this.table = sanitizeIdentifier(config.table ?? "workflow_insight");
     this.engine = config.engine;
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 1_000_000;
     this.client = new RDSDataClient(
       config.region ? { region: config.region } : {},
     );
