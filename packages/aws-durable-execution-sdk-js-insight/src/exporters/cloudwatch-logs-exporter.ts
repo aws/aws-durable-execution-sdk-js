@@ -61,9 +61,7 @@ export class CloudWatchLogsExporter implements InsightExporter {
     );
   }
 
-  render(record: WorkflowInsightRecord): unknown {
-    return withOperationsByName(record);
-  }
+  render = withOperationsByName;
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     const streamName = this.buildStreamName();

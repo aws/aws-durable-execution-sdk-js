@@ -327,9 +327,7 @@ export class LambdaLogExporter implements InsightExporter {
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
   }
 
-  render(record: WorkflowInsightRecord): unknown {
-    return withOperationsByName(record);
-  }
+  render = withOperationsByName;
 
   async export(record: WorkflowInsightRecord): Promise<void> {
     console.log(JSON.stringify(this.render(record)));
