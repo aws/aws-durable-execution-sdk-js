@@ -286,6 +286,17 @@ function buildOperationRecords(
 ): OperationRecord[] {
   const records: OperationRecord[] = [];
   for (const op of Object.values(operations)) {
+    // The SDK core tracks the invocation/execution itself as a pseudo-entry
+    // of type EXECUTION in its internal operations map (used for its own
+    // ancestor-completion bookkeeping). It's not an operation a customer
+    // created, its status is never transitioned past STARTED (that would
+    // require rewriting core SDK internals unrelated to this plugin), and
+    // the record already carries the execution's real status/startTime/
+    // endTime/durationMs at the top level — so surfacing it as an "operation"
+    // is redundant at best and misleadingly stuck-looking at worst. Exclude
+    // it here rather than leaving it for exporters/consumers to filter.
+    if (op.type === "EXECUTION") continue;
+
     // Unnamed operations are excluded by default (can't be targeted or keyed).
     if (!op.name) continue;
 

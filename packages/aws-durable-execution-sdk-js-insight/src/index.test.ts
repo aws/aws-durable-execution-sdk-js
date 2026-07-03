@@ -138,6 +138,41 @@ describe("content filtering", () => {
     expect(rec.operations.every((o) => o.error === undefined)).toBe(true);
   });
 
+  it("excludes the SDK's internal EXECUTION pseudo-operation", async () => {
+    // The SDK core tracks the invocation itself as a same-named entry of
+    // type EXECUTION in its internal operations map (for its own
+    // ancestor-completion bookkeeping) — it has a `name` (the execution
+    // name), so it isn't caught by the unnamed-operation filter, and its
+    // status is never transitioned past STARTED. It must be excluded
+    // explicitly, since the execution's real status/timing is already
+    // captured at the top level of the record.
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    await endAndDrain(
+      plugin,
+      endInfo({
+        status: "SUCCEEDED",
+        operations: {
+          exec: op({
+            id: "exec-1",
+            name: "exec-1",
+            type: "EXECUTION",
+            status: "STARTED",
+          }),
+          o1: op({ id: "o1", name: "validate", status: "SUCCEEDED" }),
+        },
+      }),
+    );
+
+    expect(exporter.records).toHaveLength(1);
+    const rec = exporter.records[0];
+    expect(rec.operations.map((o) => o.name)).toEqual(["validate"]);
+  });
+
   it("includes input/output as-is and omits results by default (no content config)", async () => {
     const exporter = new CapturingExporter();
     const plugin = workflowInsight({ exporters: [exporter] });
