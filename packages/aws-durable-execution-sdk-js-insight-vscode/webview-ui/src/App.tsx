@@ -8,7 +8,7 @@ import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
 import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
-import { SqsLiveView } from "./SqsLiveView";
+import { SqsLiveView, toTable as sqsToTable, MAX_DISPLAYED_MESSAGES } from "./SqsLiveView";
 import type { InboundMessage, Settings, SqsMessageRow } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 
@@ -116,13 +116,32 @@ export function App() {
         </Header>
 
         {settings.destinationType === "sqs" ? (
-          <SqsLiveView
-            listening={sqsListening}
-            messages={sqsMessages}
-            error={error}
-            queueConfigured={!!settings.sqsQueueUrl}
-            onClear={() => setSqsMessages([])}
-          />
+          <>
+            {page === "data" && (
+              <SqsLiveView
+                listening={sqsListening}
+                messages={sqsMessages}
+                error={error}
+                queueConfigured={!!settings.sqsQueueUrl}
+                onClear={() => setSqsMessages([])}
+                onVisualize={() => setPage("visualize")}
+              />
+            )}
+
+            {page === "visualize" &&
+              (() => {
+                const { columns, rows } = sqsToTable(
+                  sqsMessages.slice(-MAX_DISPLAYED_MESSAGES),
+                );
+                return (
+                  <VisualizePage
+                    columns={columns}
+                    rows={rows}
+                    onBack={() => setPage("data")}
+                  />
+                );
+              })()}
+          </>
         ) : (
           <>
             {page === "data" && (
