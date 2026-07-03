@@ -3,9 +3,9 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans, getXRayHeader } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Combined",
@@ -66,6 +66,7 @@ export const handler = withDurableExecution(
       mapItemCount: mapResults.getResults().length,
       complete: true,
       spans: getSerializedSpans(),
+      xRayHeader: getXRayHeader(),
     };
   },
   { plugins: [plugin] },

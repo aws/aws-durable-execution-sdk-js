@@ -1272,6 +1272,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelCallback:
@@ -1297,6 +1301,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelChildContext:
@@ -1322,6 +1330,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelCombined:
@@ -1347,6 +1359,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelInvoke:
@@ -1372,6 +1388,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelLogEnrichment:
@@ -1397,6 +1417,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelRetrySteps:
@@ -1422,6 +1446,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelWaitAndResume:
@@ -1447,6 +1475,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelWaitForCondition:
@@ -1472,6 +1504,10 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelXrayE2e:

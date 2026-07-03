@@ -5,23 +5,16 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans, resetExporter, getXRayHeader } =
+  createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Wait for Condition",
 };
 
-export { getSerializedSpans };
-
-/**
- * Reset the span exporter. Call this before running the handler
- * to get a clean set of spans for the test.
- */
-export function resetExporter(): void {
-  exporter.reset();
-}
+export { getSerializedSpans, resetExporter };
 
 interface WaitForConditionEvent {
   mode?: "immediate" | "normal" | "exhausted";
@@ -44,7 +37,12 @@ export const handler = withDurableExecution(
           initialState: { counter: 3 },
         },
       );
-      return { finalState, mode, spans: getSerializedSpans() };
+      return {
+        finalState,
+        mode,
+        spans: getSerializedSpans(),
+        xRayHeader: getXRayHeader(),
+      };
     }
 
     if (mode === "exhausted") {
@@ -65,7 +63,12 @@ export const handler = withDurableExecution(
           initialState: { counter: 0 },
         },
       );
-      return { finalState, mode, spans: getSerializedSpans() };
+      return {
+        finalState,
+        mode,
+        spans: getSerializedSpans(),
+        xRayHeader: getXRayHeader(),
+      };
     }
 
     // Normal mode: polls 3 times
@@ -84,7 +87,12 @@ export const handler = withDurableExecution(
       },
     );
 
-    return { finalState, mode, spans: getSerializedSpans() };
+    return {
+      finalState,
+      mode,
+      spans: getSerializedSpans(),
+      xRayHeader: getXRayHeader(),
+    };
   },
   { plugins: [plugin] },
 );

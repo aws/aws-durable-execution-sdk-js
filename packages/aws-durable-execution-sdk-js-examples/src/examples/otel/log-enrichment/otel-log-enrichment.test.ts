@@ -1,3 +1,4 @@
+import { XRayClient } from "@aws-sdk/client-xray";
 import {
   handler,
   resetExporter,
@@ -5,6 +6,12 @@ import {
 } from "./otel-log-enrichment";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import {
+  fetchXRayTrace,
+  assertSpanNames,
+  assertSpanAttributes,
+  extractTraceIdFromXRayHeader,
+} from "../../../utils/xray-trace-helper";
 
 createTests({
   handler,
@@ -31,58 +38,80 @@ createTests({
           step1Result: string;
           step2Result: string;
           spans: SerializedSpan[];
+          xRayHeader: string | undefined;
         };
 
         expect(result.step1Result).toBe("step-1-done");
         expect(result.step2Result).toBe("step-2-done");
 
-        const spans = isCloud ? result.spans : getSerializedSpans();
+        if (isCloud) {
+          // Cloud mode: assert spans via X-Ray
+          expect(result.xRayHeader).toBeDefined();
+          const traceId = extractTraceIdFromXRayHeader(result.xRayHeader!);
+          expect(traceId).toBeDefined();
 
-        // Single invocation, 2 steps: log-step-1 (op + attempt) +
-        // log-step-2 (op + attempt) + invocation = 5 spans
-        expect(spans).toHaveLength(5);
+          const xrayClient = new XRayClient({});
+          const trace = await fetchXRayTrace(xrayClient, traceId!, {
+            delayMs: 30000,
+          });
 
-        // All spans share the same traceId
-        const traceId = spans[0].traceId;
-        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+          assertSpanNames(trace, ["log-step-1", "log-step-2"]);
 
-        // Assert operation spans for each step
-        const logStep1Op = spans.find(
-          (s) =>
-            s.attributes["durable.operation.name"] === "log-step-1" &&
-            s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
-        );
-        expect(logStep1Op).toBeDefined();
+          // Assert span attributes
+          assertSpanAttributes(trace, "log-step-1", {
+            "durable.operation.type": "STEP",
+          });
+          assertSpanAttributes(trace, "log-step-2", {
+            "durable.operation.type": "STEP",
+          });
+        } else {
+          // Local mode: assert spans via InMemorySpanExporter
+          const spans = getSerializedSpans();
 
-        const logStep2Op = spans.find(
-          (s) =>
-            s.attributes["durable.operation.name"] === "log-step-2" &&
-            s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
-        );
-        expect(logStep2Op).toBeDefined();
+          // Single invocation, 2 steps: log-step-1 (op + attempt) +
+          // log-step-2 (op + attempt) + invocation = 5 spans
+          expect(spans).toHaveLength(5);
 
-        // Assert attempt spans are children of their respective operation spans
-        const logStep1Attempt = spans.find(
-          (s) =>
-            s.parentSpanId === logStep1Op!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
-        );
-        expect(logStep1Attempt).toBeDefined();
+          // All spans share the same traceId
+          const traceId = spans[0].traceId;
+          expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+          expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-        const logStep2Attempt = spans.find(
-          (s) =>
-            s.parentSpanId === logStep2Op!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
-        );
-        expect(logStep2Attempt).toBeDefined();
+          // Assert operation spans for each step
+          const logStep1Op = spans.find(
+            (s) =>
+              s.attributes["durable.operation.name"] === "log-step-1" &&
+              s.attributes["durable.operation.type"] === "STEP" &&
+              s.attributes["durable.operation.attempt"] === undefined,
+          );
+          expect(logStep1Op).toBeDefined();
 
-        // Both operation spans share the same parent (invocation span)
-        expect(logStep1Op!.parentSpanId).toBe(logStep2Op!.parentSpanId);
+          const logStep2Op = spans.find(
+            (s) =>
+              s.attributes["durable.operation.name"] === "log-step-2" &&
+              s.attributes["durable.operation.type"] === "STEP" &&
+              s.attributes["durable.operation.attempt"] === undefined,
+          );
+          expect(logStep2Op).toBeDefined();
 
-        if (!isCloud) {
+          // Assert attempt spans are children of their respective operation spans
+          const logStep1Attempt = spans.find(
+            (s) =>
+              s.parentSpanId === logStep1Op!.spanId &&
+              s.attributes["durable.operation.attempt"] === 1,
+          );
+          expect(logStep1Attempt).toBeDefined();
+
+          const logStep2Attempt = spans.find(
+            (s) =>
+              s.parentSpanId === logStep2Op!.spanId &&
+              s.attributes["durable.operation.attempt"] === 1,
+          );
+          expect(logStep2Attempt).toBeDefined();
+
+          // Both operation spans share the same parent (invocation span)
+          expect(logStep1Op!.parentSpanId).toBe(logStep2Op!.parentSpanId);
+
           // Parse JSON log lines and check for traceId/spanId
           const jsonLogs = logLines
             .filter((line) => line.trim().startsWith("{"))

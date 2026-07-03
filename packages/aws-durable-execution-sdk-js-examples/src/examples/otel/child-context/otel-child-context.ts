@@ -3,26 +3,19 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans, resetExporter, getXRayHeader } =
+  createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Child Context",
 };
 
-export { getSerializedSpans };
-
-/**
- * Reset the span exporter. Call this before running the handler
- * to get a clean set of spans for the test.
- */
-export function resetExporter(): void {
-  exporter.reset();
-}
+export { getSerializedSpans, resetExporter };
 
 export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
+  async (_event: any, context: DurableContext) => {
     const result = await context.runInChildContext(
       "child-ctx",
       async (childCtx: DurableContext) => {
@@ -38,7 +31,11 @@ export const handler = withDurableExecution(
       },
     );
 
-    return { result, spans: getSerializedSpans() };
+    return {
+      result,
+      spans: getSerializedSpans(),
+      xRayHeader: getXRayHeader(),
+    };
   },
   { plugins: [plugin] },
 );

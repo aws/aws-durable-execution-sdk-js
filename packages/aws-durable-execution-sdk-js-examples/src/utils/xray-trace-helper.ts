@@ -1,5 +1,41 @@
 import { XRayClient, BatchGetTracesCommand } from "@aws-sdk/client-xray";
 
+/**
+ * Parse the _X_AMZN_TRACE_ID header to extract the OTel trace ID,
+ * using the same logic as xRayContextExtractor.
+ *
+ * @param header - The raw _X_AMZN_TRACE_ID value, e.g.
+ *   "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1"
+ * @returns A 32-char lowercase hex trace ID, or undefined if the header is invalid
+ */
+export function extractTraceIdFromXRayHeader(
+  header: string,
+): string | undefined {
+  const fields = new Map<string, string>();
+  for (const part of header.split(";")) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx > 0) {
+      const key = part.slice(0, eqIdx).trim();
+      const value = part.slice(eqIdx + 1).trim();
+      fields.set(key, value);
+    }
+  }
+
+  const root = fields.get("Root");
+  if (!root) {
+    return undefined;
+  }
+
+  const rootValue = root.startsWith("1-") ? root.slice(2) : root;
+  const traceId = rootValue.replace(/-/g, "").toLowerCase();
+
+  if (!/^[0-9a-f]{32}$/.test(traceId)) {
+    return undefined;
+  }
+
+  return traceId;
+}
+
 export interface XRaySegment {
   id: string;
   name: string;

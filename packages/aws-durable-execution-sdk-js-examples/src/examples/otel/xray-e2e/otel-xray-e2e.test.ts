@@ -6,37 +6,9 @@ import {
   fetchXRayTrace,
   assertSpanNames,
   assertSpanHierarchy,
+  assertSpanAttributes,
+  extractTraceIdFromXRayHeader,
 } from "../../../utils/xray-trace-helper";
-
-/**
- * Parse the _X_AMZN_TRACE_ID header to extract the trace ID,
- * using the same logic as xRayContextExtractor.
- */
-function extractTraceIdFromXRayHeader(header: string): string | undefined {
-  const fields = new Map<string, string>();
-  for (const part of header.split(";")) {
-    const eqIdx = part.indexOf("=");
-    if (eqIdx > 0) {
-      const key = part.slice(0, eqIdx).trim();
-      const value = part.slice(eqIdx + 1).trim();
-      fields.set(key, value);
-    }
-  }
-
-  const root = fields.get("Root");
-  if (!root) {
-    return undefined;
-  }
-
-  const rootValue = root.startsWith("1-") ? root.slice(2) : root;
-  const traceId = rootValue.replace(/-/g, "").toLowerCase();
-
-  if (!/^[0-9a-f]{32}$/.test(traceId)) {
-    return undefined;
-  }
-
-  return traceId;
-}
 
 createTests({
   handler,
@@ -80,6 +52,20 @@ createTests({
         // Assert hierarchy: child-operations contains inner-step
         assertSpanHierarchy(trace, {
           "child-operations": ["inner-step"],
+        });
+
+        // Assert span attributes
+        assertSpanAttributes(trace, "fetch-data", {
+          "durable.operation.type": "STEP",
+        });
+        assertSpanAttributes(trace, "process-data", {
+          "durable.operation.type": "STEP",
+        });
+        assertSpanAttributes(trace, "child-operations", {
+          "durable.operation.type": "CONTEXT",
+        });
+        assertSpanAttributes(trace, "inner-step", {
+          "durable.operation.type": "STEP",
         });
       }
 

@@ -4,9 +4,9 @@ import {
   createRetryStrategy,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans, getXRayHeader } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Retry Steps",
@@ -42,6 +42,7 @@ export const handler = withDurableExecution(
       errorMessage:
         stepError instanceof Error ? stepError.message : String(stepError),
       spans: getSerializedSpans(),
+      xRayHeader: getXRayHeader(),
     };
   },
   { plugins: [plugin] },

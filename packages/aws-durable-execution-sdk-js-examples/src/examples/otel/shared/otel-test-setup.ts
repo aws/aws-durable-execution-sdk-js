@@ -94,3 +94,48 @@ export function createOtelTestSetup(): OtelTestSetup {
     reset,
   };
 }
+
+/**
+ * Detects whether the handler is running in an ADOT-instrumented cloud environment.
+ */
+export function isAdotEnvironment(): boolean {
+  return process.env.AWS_LAMBDA_EXEC_WRAPPER === "/opt/otel-instrument";
+}
+
+export interface DualModeOtelSetup {
+  plugin: OtelPlugin;
+  getSerializedSpans(): SerializedSpan[];
+  resetExporter(): void;
+  getXRayHeader(): string | undefined;
+}
+
+/**
+ * Creates a dual-mode OTel setup that works for both local and cloud testing.
+ *
+ * - In local mode: Uses InMemorySpanExporter so spans can be asserted directly.
+ * - In cloud mode (ADOT): Uses plain OtelPlugin (no custom provider) so ADOT
+ *   can export spans to X-Ray. Spans are retrieved via X-Ray in the test.
+ *
+ * @returns A DualModeOtelSetup object with the plugin and utility functions.
+ */
+export function createDualModeOtelSetup(): DualModeOtelSetup {
+  if (isAdotEnvironment()) {
+    // Cloud mode: plain OtelPlugin; ADOT handles trace export to X-Ray
+    const plugin = new OtelPlugin();
+    return {
+      plugin,
+      getSerializedSpans: () => [],
+      resetExporter: () => {},
+      getXRayHeader: () => process.env._X_AMZN_TRACE_ID,
+    };
+  }
+
+  // Local mode: InMemorySpanExporter for direct span assertions
+  const setup = createOtelTestSetup();
+  return {
+    plugin: setup.plugin,
+    getSerializedSpans: setup.getSerializedSpans,
+    resetExporter: setup.reset,
+    getXRayHeader: () => undefined,
+  };
+}
