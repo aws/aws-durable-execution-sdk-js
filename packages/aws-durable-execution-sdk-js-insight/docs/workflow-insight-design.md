@@ -532,7 +532,7 @@ the hard limits to absorb that overhead.
 | Aurora / Redshift / Firehose (Kinesis) / OTel    | 1 MB                 |
 | S3                                               | 5 MB                 |
 | OpenSearch                                       | 10 MB                |
-| HTTP / File / Timestream                         | none (no truncation) |
+| HTTP / File                                      | none (no truncation) |
 
 When truncation occurs, `truncated: true` is set on the record; each operation
 whose result was dropped is itself marked `truncated: true`, and the

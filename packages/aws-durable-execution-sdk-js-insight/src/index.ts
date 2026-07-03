@@ -68,9 +68,6 @@ export type { OpenSearchExporterConfig } from "./exporters/opensearch-exporter";
 export { SQSExporter } from "./exporters/sqs-exporter";
 export type { SQSExporterConfig } from "./exporters/sqs-exporter";
 
-export { TimestreamExporter } from "./exporters/timestream-exporter";
-export type { TimestreamExporterConfig } from "./exporters/timestream-exporter";
-
 export { HttpExporter } from "./exporters/http-exporter";
 export type { HttpExporterConfig } from "./exporters/http-exporter";
 

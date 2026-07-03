@@ -39,20 +39,13 @@
       "bufferSizeMB": 1
     },
     "sqs": {
-      "enabled": false,
+      "enabled": true,
       "queueName": "workflow-insight",
       "fifo": false
     },
     "eventbridge": {
       "enabled": false,
       "eventBusName": "default"
-    },
-    "timestream": {
-      "enabled": false,
-      "databaseName": "workflow-insight",
-      "tableName": "records",
-      "memoryRetentionHours": 24,
-      "magneticRetentionDays": 365
     }
   },
   "lambda": {
@@ -60,7 +53,7 @@
     "discoverDurableFunctions": false,
     "createExampleFunction": true,
     "autoInvoke": {
-      "enabled": false,
+      "enabled": true,
       "rateMinutes": 5
     }
   }

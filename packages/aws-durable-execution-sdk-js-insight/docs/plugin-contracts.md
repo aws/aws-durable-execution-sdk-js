@@ -39,7 +39,7 @@ interface InsightExporter {
    *
    * First-party defaults: CloudWatch Logs / Lambda log / SQS / EventBridge
    * 256KB, DynamoDB 400KB, Aurora / Redshift / Firehose / OTel 1MB, S3 5MB,
-   * OpenSearch 10MB. HTTP, File, and Timestream have no default (`undefined`
+   * OpenSearch 10MB. HTTP and File have no default (`undefined`
    * disables truncation).
    */
   maxRecordSizeBytes?: number;
