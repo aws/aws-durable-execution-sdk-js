@@ -738,7 +738,9 @@ class ExplorerPanel {
                 ? "satisfied"
                 : e.kind === "note"
                   ? "unsatisfied"
-                  : "ran",
+                  : e.kind === "script"
+                    ? "script"
+                    : "ran",
           detail: e.detail,
         });
         this.post({

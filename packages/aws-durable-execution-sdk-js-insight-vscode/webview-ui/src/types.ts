@@ -76,7 +76,13 @@ export type InboundMessage =
       iteration: number;
       query: string;
       rowCount?: number;
-      outcome: "satisfied" | "unsatisfied" | "error" | "analyzed" | "ran";
+      outcome:
+        | "satisfied"
+        | "unsatisfied"
+        | "error"
+        | "analyzed"
+        | "ran"
+        | "script";
       detail?: string;
     }
   | {
@@ -102,7 +108,13 @@ export interface AgentStep {
   iteration: number;
   query: string;
   rowCount?: number;
-  outcome: "satisfied" | "unsatisfied" | "error" | "analyzed" | "ran";
+  outcome:
+    | "satisfied"
+    | "unsatisfied"
+    | "error"
+    | "analyzed"
+    | "ran"
+    | "script";
   detail?: string;
 }
 

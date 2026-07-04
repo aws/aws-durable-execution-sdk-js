@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { buildSystemPrompt } from "./schema";
+import { runSandboxedJs } from "./sandbox";
 
 // ─── Multi-turn agent loop (advanced mode, Bedrock, SQL destinations) ─────────
 //
@@ -82,6 +83,32 @@ const FINISH_TOOL: Tool = {
   },
 };
 
+const RUN_JAVASCRIPT_TOOL: Tool = {
+  toolSpec: {
+    name: "run_javascript",
+    description:
+      "Transform or compute over the rows returned by your most recent run_query, using JavaScript, when it's awkward to express in the query language (reshaping, custom aggregation, deriving values). The code runs as a function body with `rows` (an array of row objects keyed by column name) and `columns` (array of names) in scope, and must `return` its result. It is sandboxed: no filesystem, network, or host access — pure computation over the provided rows only. Run a query first so there is data to operate on.",
+    inputSchema: {
+      json: {
+        type: "object",
+        properties: {
+          code: {
+            type: "string",
+            description:
+              "JavaScript function body. Has `rows` and `columns` in scope; must return the result (a value or array/object).",
+          },
+          purpose: {
+            type: "string",
+            description:
+              "Brief note on what this computes (shown to the user).",
+          },
+        },
+        required: ["code"],
+      },
+    },
+  },
+};
+
 /** Result of executing one of the agent's run_query calls. */
 export interface AgentQueryResult {
   columns: string[];
@@ -100,7 +127,7 @@ export type RunQueryFn = (
 
 /** A transcript event emitted as the agent works, for the webview. */
 export interface AgentStepEvent {
-  kind: "query" | "error" | "finish" | "note";
+  kind: "query" | "error" | "finish" | "note" | "script";
   query?: string;
   purpose?: string;
   rowCount?: number;
@@ -158,6 +185,8 @@ export async function runAgentLoop(
   ];
   const tried = new Set<string>();
   let lastGoodQuery: string | undefined;
+  // The most recent run_query result, so run_javascript can compute over it.
+  let lastResult: { columns: string[]; rows: string[][] } | undefined;
 
   for (let i = 0; i < opts.maxIterations; i++) {
     const response = await client.send(
@@ -165,7 +194,9 @@ export async function runAgentLoop(
         modelId: opts.modelId,
         system: [{ text: system }],
         messages,
-        toolConfig: { tools: [RUN_QUERY_TOOL, FINISH_TOOL] },
+        toolConfig: {
+          tools: [RUN_QUERY_TOOL, RUN_JAVASCRIPT_TOOL, FINISH_TOOL],
+        },
         inferenceConfig: { maxTokens: 1024, temperature: 0 },
       }),
     );
@@ -220,6 +251,60 @@ export async function runAgentLoop(
       };
     }
 
+    if (toolUse.name === "run_javascript") {
+      const jinp = (toolUse.input ?? {}) as {
+        code?: string;
+        purpose?: string;
+      };
+      const code = (jinp.code ?? "").trim();
+      const jsPurpose =
+        typeof jinp.purpose === "string" ? jinp.purpose : undefined;
+      let payload: unknown;
+      if (!code) {
+        payload = { error: "No code provided." };
+      } else if (!lastResult) {
+        payload = {
+          error: "No data yet — run a query with run_query first.",
+        };
+      } else {
+        const objectRows = lastResult.rows.map((r) => {
+          const obj: Record<string, string> = {};
+          lastResult!.columns.forEach((c, idx) => {
+            obj[c] = r[idx] ?? "";
+          });
+          return obj;
+        });
+        const sandbox = await runSandboxedJs(code, {
+          rows: objectRows,
+          columns: lastResult.columns,
+        });
+        payload = sandbox.ok
+          ? { result: sandbox.value }
+          : { error: sandbox.error };
+      }
+      opts.onStep({
+        kind: "script",
+        query: code,
+        purpose: jsPurpose,
+        detail:
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error: unknown }).error)
+            : jsPurpose,
+      });
+      messages.push({
+        role: "user",
+        content: [
+          {
+            toolResult: {
+              toolUseId: toolUse.toolUseId,
+              content: [{ text: JSON.stringify(payload) }],
+            },
+          },
+        ],
+      });
+      continue;
+    }
+
     // run_query
     const inp = (toolUse.input ?? {}) as {
       query?: string;
@@ -253,7 +338,10 @@ export async function runAgentLoop(
     } else {
       tried.add(norm);
       result = await opts.runQuery(query, lookbackHours);
-      if (!result.error) lastGoodQuery = query;
+      if (!result.error) {
+        lastGoodQuery = query;
+        lastResult = { columns: result.columns, rows: result.rows };
+      }
     }
 
     opts.onStep({

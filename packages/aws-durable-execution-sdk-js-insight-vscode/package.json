@@ -199,7 +199,9 @@
     "@aws-sdk/client-sqs": "^3.658.0",
     "@aws-sdk/credential-providers": "^3.658.0",
     "@aws-sdk/util-dynamodb": "^3.658.0",
-    "node-llama-cpp": "^3.18.1"
+    "@jitl/quickjs-singlefile-cjs-release-sync": "^0.32.0",
+    "node-llama-cpp": "^3.18.1",
+    "quickjs-emscripten-core": "^0.32.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

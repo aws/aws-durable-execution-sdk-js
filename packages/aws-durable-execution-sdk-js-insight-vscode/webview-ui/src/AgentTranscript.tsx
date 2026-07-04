@@ -22,6 +22,7 @@ const OUTCOME_STATUS: Record<
   error: { type: "error", label: "Query failed — retrying" },
   analyzed: { type: "success", label: "Post-processed the results" },
   ran: { type: "in-progress", label: "Ran a query" },
+  script: { type: "in-progress", label: "Ran a script" },
 };
 
 /**
