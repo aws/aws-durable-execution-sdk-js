@@ -29,6 +29,7 @@ export interface InsightConfig {
   bedrockModelId: string;
   agenticMode: "basic" | "advanced";
   agenticMaxIterations: number;
+  agenticMaxScannedMB: number;
 }
 
 const SECTION = "workflowInsight";
@@ -93,6 +94,11 @@ export function readConfig(): InsightConfig {
     typeof rawMaxIter === "number" && Number.isFinite(rawMaxIter)
       ? Math.min(20, Math.max(1, Math.floor(rawMaxIter)))
       : 8;
+  const rawMaxMB = c.get<number>("agenticMaxScannedMB");
+  const agenticMaxScannedMB =
+    typeof rawMaxMB === "number" && Number.isFinite(rawMaxMB) && rawMaxMB > 0
+      ? Math.floor(rawMaxMB)
+      : 2048;
 
   return {
     region,
@@ -115,6 +121,7 @@ export function readConfig(): InsightConfig {
     bedrockModelId,
     agenticMode,
     agenticMaxIterations,
+    agenticMaxScannedMB,
   };
 }
 

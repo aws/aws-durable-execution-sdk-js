@@ -8,6 +8,7 @@ import {
   ensureModel,
   type GeneratedQuery,
 } from "./llm";
+import { runAgentLoop, type AgentQueryResult } from "./agentLoop";
 import { runLogsInsightsQuery, fetchLogsInsightsRecord } from "./logsInsights";
 import { runDynamoDBQuery, fetchDynamoDBRecord } from "./dynamodb";
 import { runAuroraQuery, fetchAuroraRecord } from "./aurora";
@@ -58,6 +59,8 @@ interface QueryExecution {
   idColumn?: string;
   partitionColumns?: { year?: string; month?: string; day?: string };
   hiddenColumns?: string[];
+  /** Athena only: bytes scanned by this query (for the agentic cost guard). */
+  dataScannedBytes?: number;
 }
 
 /**
@@ -203,6 +206,7 @@ class ExplorerPanel {
         bedrockModelId: cfg.bedrockModelId,
         agenticMode: cfg.agenticMode,
         agenticMaxIterations: String(cfg.agenticMaxIterations),
+        agenticMaxScannedMB: String(cfg.agenticMaxScannedMB),
       },
       modelDownloaded: isModelDownloaded(),
     });
@@ -222,6 +226,9 @@ class ExplorerPanel {
       if (key === "sqsDeleteAfterRead") {
         coerced = value === "true";
       } else if (key === "agenticMaxIterations") {
+        const n = Number(value);
+        coerced = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+      } else if (key === "agenticMaxScannedMB") {
         const n = Number(value);
         coerced = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
       } else {
@@ -448,6 +455,20 @@ class ExplorerPanel {
     credentials: ReturnType<typeof resolveCredentials>,
     tableName: string | undefined,
   ): Promise<void> {
+    // The full multi-turn "explore then answer" agent loop (run_query/finish)
+    // needs Bedrock's Converse tool use and a self-contained query per turn.
+    // Use it for Bedrock + SQL destinations; Copilot/local and Logs Insights
+    // (which needs a separate time range) keep the generate→verify→refine
+    // loop below.
+    if (
+      cfg.llmProvider === "bedrock" &&
+      (cfg.destinationType === "dynamodb" ||
+        cfg.destinationType === "aurora" ||
+        cfg.destinationType === "s3")
+    ) {
+      return await this.onGenerateAgenticToolLoop(q, cfg, credentials);
+    }
+
     const MAX_ITERATIONS = cfg.agenticMaxIterations;
 
     this.post({ type: "status", text: "Generating query..." });
@@ -627,6 +648,139 @@ class ExplorerPanel {
           "The assistant couldn't produce a working query for this question within its iteration budget. Try rephrasing, or raise workflowInsight.agenticMaxIterations.",
       });
     }
+  }
+
+  /**
+   * Advanced mode, Bedrock + SQL destinations: the full "explore then answer"
+   * agent loop. The model uses run_query to discover the data's shape (e.g.
+   * which keys exist in input/output) and compute candidates — seeing real
+   * columns/rows each time — then calls finish with the query that answers the
+   * question. Exploration queries run WITHOUT drill-down injection (read-only,
+   * exactly as written); only the final query gets the normal drill-down
+   * treatment for presentation. A cumulative Athena scan budget bounds cost.
+   */
+  private async onGenerateAgenticToolLoop(
+    q: string,
+    cfg: ReturnType<typeof readConfig>,
+    credentials: ReturnType<typeof resolveCredentials>,
+  ): Promise<void> {
+    const tableName =
+      cfg.destinationType === "dynamodb"
+        ? cfg.dynamodbTableName
+        : cfg.destinationType === "aurora"
+          ? cfg.auroraTable
+          : cfg.athenaTable;
+
+    const maxScannedBytes = cfg.agenticMaxScannedMB * 1024 * 1024;
+    let scannedBytes = 0;
+    let iteration = 0;
+
+    // Each run_query the model issues: run it read-only, no drill-down
+    // injection, return a bounded sample. Enforce the cumulative Athena scan
+    // budget so an autonomous loop can't run up cost.
+    const runQuery = async (query: string): Promise<AgentQueryResult> => {
+      try {
+        const exec = await this.executeQuery(
+          cfg,
+          credentials,
+          {
+            query,
+            explanation: "",
+            timeRangeMs: 24 * 60 * 60 * 1000,
+          },
+          { injectDrillDown: false },
+        );
+        if (typeof exec.dataScannedBytes === "number") {
+          scannedBytes += exec.dataScannedBytes;
+        }
+        const overBudget = scannedBytes > maxScannedBytes;
+        return {
+          columns: exec.columns,
+          rows: exec.rows.slice(0, 20),
+          rowCount: exec.count ?? exec.rows.length,
+          stop: overBudget,
+          stopReason: overBudget
+            ? `Athena scan budget of ${cfg.agenticMaxScannedMB} MB reached; stopping.`
+            : undefined,
+        };
+      } catch (err) {
+        return {
+          columns: [],
+          rows: [],
+          rowCount: 0,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    };
+
+    this.post({ type: "status", text: "Working on your question..." });
+
+    const final = await runAgentLoop({
+      region: cfg.region,
+      credentials,
+      modelId: cfg.bedrockModelId,
+      question: q,
+      destinationType: cfg.destinationType,
+      tableName,
+      maxIterations: cfg.agenticMaxIterations,
+      runQuery,
+      onStep: (e) => {
+        iteration += 1;
+        this.post({
+          type: "agentStep",
+          iteration,
+          query: e.query ?? "",
+          rowCount: e.rowCount,
+          outcome:
+            e.kind === "error"
+              ? "error"
+              : e.kind === "finish"
+                ? "satisfied"
+                : e.kind === "note"
+                  ? "unsatisfied"
+                  : "ran",
+          detail: e.detail,
+        });
+        this.post({
+          type: "status",
+          text:
+            e.kind === "finish"
+              ? "Preparing the answer..."
+              : `Agent step ${iteration}: ${e.purpose ?? "running a query"}...`,
+        });
+      },
+    });
+
+    if (!final || !final.query) {
+      // No usable query. If the model produced a prose answer, still show it.
+      if (final?.answer) {
+        this.post({ type: "agentAnswer", text: final.answer });
+        return;
+      }
+      this.post({
+        type: "error",
+        message:
+          "The assistant couldn't arrive at a query that answers this question. Try rephrasing, or raise workflowInsight.agenticMaxIterations / agenticMaxScannedMB.",
+      });
+      return;
+    }
+
+    // Run the final query for presentation, with the normal drill-down
+    // decision (row-level results get the identifier/partition columns).
+    this.post({ type: "status", text: "Running the final query..." });
+    const exec = await this.executeQuery(
+      cfg,
+      credentials,
+      {
+        query: final.query,
+        explanation: final.explanation,
+        timeRangeMs: 24 * 60 * 60 * 1000,
+        suggestedCharts: final.suggestedCharts,
+      },
+      { injectDrillDown: final.rowLevel === true },
+    );
+    if (final.answer) this.post({ type: "agentAnswer", text: final.answer });
+    this.post({ type: "results", ...exec });
   }
 
   /**

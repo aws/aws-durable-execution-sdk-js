@@ -171,6 +171,12 @@
           "minimum": 1,
           "maximum": 20,
           "description": "Advanced mode only: the maximum number of run→verify→refine rounds the assistant will attempt for one question before stopping. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried."
+        },
+        "workflowInsight.agenticMaxScannedMB": {
+          "type": "number",
+          "default": 2048,
+          "minimum": 1,
+          "description": "Advanced mode only (Amazon Athena / S3 destination): cumulative Athena data-scanned budget in MB across all queries the assistant runs for one question. When exceeded, the agent stops exploring and returns its best result so far — guards against an autonomous multi-query loop running up Athena scan cost. Ignored for non-Athena destinations."
         }
       }
     }

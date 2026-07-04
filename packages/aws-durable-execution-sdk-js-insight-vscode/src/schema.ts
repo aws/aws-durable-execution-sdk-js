@@ -408,6 +408,29 @@ const AGENTIC_NOTE = [
   "result where a row is not one execution. When in doubt, leave it false.",
 ].join("\n");
 
+/**
+ * Closing instruction for the multi-turn agent tool-loop (advanced mode,
+ * Bedrock). Replaces the single-shot "call emit_query" instruction: the model
+ * drives, using run_query to explore/compute and finish to deliver the answer.
+ */
+const AGENT_INSTRUCTION = [
+  "You work iteratively with two tools — do NOT try to answer in one shot:",
+  "- run_query: run a read-only query to EXPLORE the data or compute a",
+  "  candidate answer. You get back the columns, the row count, and a sample",
+  "  of rows. Use this FIRST to discover anything you're unsure about —",
+  "  especially the actual keys inside the input/output JSON: enumerate them",
+  "  with map_keys(CAST(json_parse(input) AS MAP(VARCHAR, JSON))) before you",
+  "  reference specific fields. NEVER guess a field/key name; verify it exists",
+  "  first, then build the query that uses it.",
+  "- finish: call this once a query's results actually answer the question.",
+  "  Provide that query, a one-sentence explanation, suggestedCharts (2-4",
+  "  from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie,",
+  "  boxplot), and rowLevel (true only if each result row is a single",
+  "  execution the user is browsing). If answering needs interpreting the rows",
+  "  in prose rather than a table, also pass `answer` with that text.",
+  "Keep it to a few focused queries: explore what you need, then finish.",
+].join("\n");
+
 export function buildSystemPrompt(
   destinationType:
     | "cloudwatch-logs-exporter"
@@ -415,12 +438,26 @@ export function buildSystemPrompt(
     | "dynamodb"
     | "aurora"
     | "s3",
-  options?: { tableName?: string; agentic?: boolean },
+  options?: {
+    tableName?: string;
+    agentic?: boolean;
+    toolMode?: "emit" | "agent";
+  },
 ): string {
   // Advanced (agentic) mode only: tells the model it may defer awkward
   // computations to a post-processing step by returning raw data. Appended to
   // every destination's prompt; empty in basic mode, so basic is unchanged.
   const agenticNote = options?.agentic ? ["", AGENTIC_NOTE] : [];
+  // The closing instruction depends on how the model returns its work: the
+  // single-shot emit_query tool (default) or the multi-turn run_query/finish
+  // agent loop. Shared by every destination branch below.
+  const closing =
+    options?.toolMode === "agent"
+      ? [AGENT_INSTRUCTION]
+      : [
+          'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
+          ...agenticNote,
+        ];
   if (destinationType === "s3") {
     const table = options?.tableName || "workflow_insight";
     return [
@@ -433,8 +470,7 @@ export function buildSystemPrompt(
       "",
       FEWSHOTS_ATHENA.replace(/TABLE_NAME/g, table),
       "",
-      'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
-      ...agenticNote,
+      ...closing,
     ].join("\n");
   }
 
@@ -450,8 +486,7 @@ export function buildSystemPrompt(
       "",
       FEWSHOTS_AURORA.replace(/TABLE_NAME/g, table),
       "",
-      'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
-      ...agenticNote,
+      ...closing,
     ].join("\n");
   }
 
@@ -470,8 +505,7 @@ export function buildSystemPrompt(
       "",
       fewshots,
       "",
-      'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
-      ...agenticNote,
+      ...closing,
     ].join("\n");
   }
 
@@ -498,8 +532,7 @@ export function buildSystemPrompt(
     "",
     fewshots,
     "",
-    'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
-    ...agenticNote,
+    ...closing,
   ].join("\n");
 }
 

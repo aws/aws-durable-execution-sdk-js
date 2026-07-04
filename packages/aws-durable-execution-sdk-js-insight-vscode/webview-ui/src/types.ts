@@ -76,7 +76,7 @@ export type InboundMessage =
       iteration: number;
       query: string;
       rowCount?: number;
-      outcome: "satisfied" | "unsatisfied" | "error" | "analyzed";
+      outcome: "satisfied" | "unsatisfied" | "error" | "analyzed" | "ran";
       detail?: string;
     }
   | {
@@ -102,7 +102,7 @@ export interface AgentStep {
   iteration: number;
   query: string;
   rowCount?: number;
-  outcome: "satisfied" | "unsatisfied" | "error" | "analyzed";
+  outcome: "satisfied" | "unsatisfied" | "error" | "analyzed" | "ran";
   detail?: string;
 }
 
@@ -127,6 +127,7 @@ export interface Settings {
   bedrockModelId: string;
   agenticMode: string;
   agenticMaxIterations: string;
+  agenticMaxScannedMB: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -150,4 +151,5 @@ export const DEFAULT_SETTINGS: Settings = {
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
   agenticMode: "basic",
   agenticMaxIterations: "8",
+  agenticMaxScannedMB: "2048",
 };

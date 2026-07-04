@@ -224,6 +224,20 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                   </FormField>
                 )}
 
+                {form.agenticMode === "advanced" && form.destinationType === "s3" && (
+                  <FormField
+                    label="Athena Scan Budget (MB)"
+                    description="Cumulative Athena data-scanned budget across all queries the assistant runs for one question. It stops exploring once this is exceeded, to bound cost."
+                  >
+                    <Input
+                      type="number"
+                      value={form.agenticMaxScannedMB}
+                      onChange={({ detail }) => update("agenticMaxScannedMB", detail.value)}
+                      placeholder="2048"
+                    />
+                  </FormField>
+                )}
+
                 <FormField label="LLM Provider" description="Which model to use for converting questions to queries">
                   <Select
                     selectedOption={
