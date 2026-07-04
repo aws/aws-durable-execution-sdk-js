@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
 import { readConfig, resolveCredentials } from "./config";
 import {
   generateQuery,
@@ -1054,12 +1055,17 @@ class ExplorerPanel {
 
   private getHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
     const nonce = getNonce();
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, "media", "webview.js"),
-    );
-    const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(extensionUri, "media", "webview.css"),
-    );
+    // Cache-bust the webview assets: VS Code caches them by URI, so without a
+    // changing query param a rebuilt media/webview.js|css can be served stale
+    // even after relaunching. Keying on the bundle's mtime changes the URI
+    // whenever the build changes, forcing a reload.
+    const version = this.assetVersion(extensionUri);
+    const scriptUri = webview
+      .asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "webview.js"))
+      .with({ query: `v=${version}` });
+    const styleUri = webview
+      .asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "webview.css"))
+      .with({ query: `v=${version}` });
     const csp = [
       `default-src 'none'`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
@@ -1091,6 +1097,26 @@ class ExplorerPanel {
     this.listenController = undefined;
     this.panel.dispose();
     while (this.disposables.length) this.disposables.pop()?.dispose();
+  }
+
+  /**
+   * A version token for the webview assets, derived from media/webview.js's
+   * last-modified time, so the asset URLs change whenever the bundle is
+   * rebuilt (defeating VS Code's webview asset cache). Also logged on open so
+   * you can confirm which build is actually running.
+   */
+  private assetVersion(extensionUri: vscode.Uri): string {
+    try {
+      const p = vscode.Uri.joinPath(extensionUri, "media", "webview.js").fsPath;
+      const mtime = fs.statSync(p).mtimeMs;
+      const stamp = Math.floor(mtime);
+      console.log(
+        `[workflow-insight] webview bundle build stamp: ${new Date(mtime).toISOString()} (v=${stamp})`,
+      );
+      return String(stamp);
+    } catch {
+      return String(Date.now());
+    }
   }
 }
 
