@@ -143,6 +143,20 @@ async function paginateResults(
  * (year=YYYY/month=MM/day=DD/), and the canonical `operations` array (the
  * S3Exporter does not reshape into `operationsByName`).
  *
+ * Column names are written lowercase throughout (recordtype, executionarn,
+ * subtype, parentid, durationms, ...) to match the CDK-provisioned Glue
+ * table (stack.ts's InsightGlueTable) exactly, rather than the mixed-case
+ * WorkflowInsightRecord field names (recordType, executionArn, ...).
+ * Hive/Glue table and column identifiers are case-insensitive and get
+ * folded to lowercase regardless of how they're written in the DDL — so
+ * this was never functionally different from writing camelCase here, but
+ * keeping both DDL definitions written in the same (lowercase, effectively
+ * canonical) casing avoids the two drifting into visually different
+ * text that describes an identical schema, which is confusing to compare
+ * side by side. The openx JSON SerDe separately lowercases the *data*
+ * values' object keys when parsing input/output (a different, unrelated
+ * mechanism — see schema.ts's Athena dialect notes on that).
+ *
  * Uses partition projection (year/month/day as `integer` type, with a
  * `storage.location.template` reconstructing S3Exporter's exact key
  * pattern) instead of a plain `PARTITIONED BY` + Glue-catalog partition
@@ -184,19 +198,19 @@ export function buildCreateTableDdl(opts: {
   // itself supplies the path separators between segments.
   const locTemplate = `${loc}year=\${year}/month=\${month}/day=\${day}`;
   return `CREATE EXTERNAL TABLE IF NOT EXISTS \`${opts.database}\`.\`${opts.table}\` (
-  recordType string,
-  schemaVersion string,
-  emittedAt string,
-  executionArn string,
-  executionName string,
-  functionName string,
-  functionQualifier string,
+  recordtype string,
+  schemaversion string,
+  emittedat string,
+  executionarn string,
+  executionname string,
+  functionname string,
+  functionqualifier string,
   region string,
-  accountId string,
+  accountid string,
   status string,
-  startTime string,
-  endTime string,
-  durationMs bigint,
+  starttime string,
+  endtime string,
+  durationms bigint,
   input string,
   output string,
   error struct<name:string,message:string>,
@@ -204,21 +218,21 @@ export function buildCreateTableDdl(opts: {
     id:string,
     name:string,
     type:string,
-    subType:string,
-    parentId:string,
+    subtype:string,
+    parentid:string,
     status:string,
-    startTime:string,
-    endTime:string,
-    durationMs:bigint,
+    starttime:string,
+    endtime:string,
+    durationms:bigint,
     attempt:int,
     error:struct<name:string,message:string>,
     result:string,
     truncated:boolean
   >>,
   truncated boolean,
-  droppedOperations int,
-  droppedInput boolean,
-  droppedOutput boolean
+  droppedoperations int,
+  droppedinput boolean,
+  droppedoutput boolean
 )
 PARTITIONED BY (year string, month string, day string)
 ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'

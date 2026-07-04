@@ -325,7 +325,17 @@ export class InsightDestinationsStack extends cdk.Stack {
               },
               {
                 name: "operations",
-                type: "array<struct<id:string,name:string,type:string,subType:string,parentId:string,status:string,startTime:string,endTime:string,durationMs:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
+                // Written lowercase (subtype, parentid, durationms, ...)
+                // to match the same struct in
+                // aws-durable-execution-sdk-js-insight-vscode/src/athena.ts's
+                // buildCreateTableDdl exactly — Hive/Glue identifiers are
+                // case-insensitive and get folded to lowercase regardless of
+                // how they're written here, so this was never functionally
+                // different from the WorkflowInsightRecord's own camelCase
+                // field names, but keeping both DDL definitions in the same
+                // casing avoids them drifting into visually different text
+                // describing an identical schema.
+                type: "array<struct<id:string,name:string,type:string,subtype:string,parentid:string,status:string,starttime:string,endtime:string,durationms:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
               },
               { name: "truncated", type: "boolean" },
               { name: "droppedoperations", type: "int" },
