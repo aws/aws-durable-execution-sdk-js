@@ -323,6 +323,8 @@ Rules:
 - Every path segment passed to json_extract_scalar/json_extract on input or output MUST be lowercase (the SerDe lowercases JSON keys on read) — e.g. '$.claimtype' not '$.claimType'.
 - A field that lives inside input/output (e.g. claimType, decision, amount) is NEVER a bare column — it does not exist as a plain identifier anywhere in this table, including in GROUP BY, ORDER BY, and WHERE. Referencing it bare (e.g. "GROUP BY claimType" or "GROUP BY claim_type") fails with COLUMN_NOT_FOUND. Always wrap it in json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — and repeat that full expression everywhere it's used (SELECT, GROUP BY, ORDER BY, WHERE), not just an alias, since GROUP BY/ORDER BY must reference the actual computed expression.
 - Prefer filtering on the year/month/day partition columns when the question implies a time range, to avoid scanning the whole bucket (cost + speed).
+- There is NO json_keys function in Athena/Trino. To list/enumerate the top-level KEYS of an input or output JSON object, parse it to a map and take its keys: map_keys(CAST(json_parse(input) AS MAP(VARCHAR, JSON))). This returns an array<varchar>; UNNEST it to get one key per row. Enumerated keys come back lowercased (same SerDe behavior as values).
+- SELECT DISTINCT has a Trino constraint: every ORDER BY expression MUST also appear in the SELECT list (otherwise EXPRESSION_NOT_IN_DISTINCT). For a "distinct values" question, either drop the ORDER BY, or order by a column you're already selecting. To apply a row limit BEFORE de-duplicating (e.g. "distinct keys across the last 10 executions"), put the LIMIT/ORDER BY in a subquery and de-duplicate in the outer query.
 - String comparisons use single quotes: WHERE status = 'SUCCEEDED'
 - Always include LIMIT (default 100) unless aggregating (GROUP BY / COUNT / AVG etc).
 - Use double quotes only for identifiers that need escaping; prefer unquoted lowercase identifiers.
@@ -367,7 +369,17 @@ Q: average duration per operation name
 A: SELECT op.name, AVG(op.durationMs) AS avg_ms, COUNT(*) AS ct FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) WHERE op.durationMs IS NOT NULL GROUP BY op.name ORDER BY avg_ms DESC
 
 Q: executions where the output field "approvedAmount" was over 1000
-A: SELECT executionArn, CAST(json_extract_scalar(output, '$.approvedamount') AS double) AS approved_amount FROM TABLE_NAME WHERE CAST(json_extract_scalar(output, '$.approvedamount') AS double) > 1000 LIMIT 50`;
+A: SELECT executionArn, CAST(json_extract_scalar(output, '$.approvedamount') AS double) AS approved_amount FROM TABLE_NAME WHERE CAST(json_extract_scalar(output, '$.approvedamount') AS double) > 1000 LIMIT 50
+
+Q: list all the keys present in the execution input for the last 10 executions
+A: SELECT DISTINCT k FROM (SELECT input FROM TABLE_NAME ORDER BY emittedAt DESC LIMIT 10) t CROSS JOIN UNNEST(map_keys(CAST(json_parse(t.input) AS MAP(VARCHAR, JSON)))) AS u(k)
+-- NOTE: there is no json_keys function — parse the JSON string to a map and
+-- take map_keys, then UNNEST to one key per row. The inner subquery applies
+-- "last 10 executions" (ORDER BY + LIMIT) BEFORE de-duplicating, because
+-- SELECT DISTINCT can't ORDER BY a column that isn't in its select list.
+
+Q: what output fields do successful executions produce
+A: SELECT DISTINCT k FROM TABLE_NAME CROSS JOIN UNNEST(map_keys(CAST(json_parse(output) AS MAP(VARCHAR, JSON)))) AS u(k) WHERE status = 'SUCCEEDED'`;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
