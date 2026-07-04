@@ -1,4 +1,5 @@
 {
+  "_comment": "Config for the example/demo CDK stack (packages/aws-durable-execution-sdk-js-insight/cdk). destinations.*.enabled controls which example resources this stack provisions by default when deployed. cloudwatchLogs/dynamodb/aurora/s3/sqs are all enabled out of the box, so a fresh `cdk deploy` of this example provisions: a CloudWatch log group, a DynamoDB table, an Aurora Serverless v2 cluster (+ VPC), an S3 bucket + Glue database/table (added for S3+Athena support), and an SQS queue — all tagged for easy teardown (RemovalPolicy.DESTROY, autoDeleteObjects on the S3 bucket) but still real billable resources while deployed. redshift/opensearch/firehose/eventbridge stay opt-in (enabled: false) since they're heavier/less commonly needed for the example. Set any destination's enabled to false before deploying if you don't want that resource provisioned.",
   "destinations": {
     "cloudwatchLogs": {
       "enabled": true,
