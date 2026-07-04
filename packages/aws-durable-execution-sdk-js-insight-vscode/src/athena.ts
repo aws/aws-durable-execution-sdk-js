@@ -183,18 +183,21 @@ async function paginateResults(
  * is ever queried past PROJECTION_YEAR_END, raise it and either recreate
  * the table or ALTER TABLE SET TBLPROPERTIES with the new range.
  *
- * These constants are exported specifically so
- * aws-durable-execution-sdk-js-insight/cdk/stack.test.ts (a different
- * package) can import them directly and assert its own hardcoded
- * projection.year.range matches — a real cross-package npm dependency
- * isn't warranted just for two constants (this package is a dev-only,
- * unpublished VS Code extension; the CDK package has no other reason to
- * depend on it), so a relative-path source import in test code is the
- * practical way to keep these two definitions of the same value from
- * silently drifting apart, short of that.
+ * Note: the example CDK stack (aws-durable-execution-sdk-js-insight/cdk)
+ * hardcodes its own "2024,2030" projection.year.range for its own example
+ * bucket. That's an independent copy of this value, not enforced equal to
+ * this one — the two DDLs create tables over *different* buckets (this one
+ * runs when a customer points the extension at their own arbitrary bucket;
+ * the CDK one provisions the example deployment's bucket), so there's no
+ * correctness requirement that they match, and either can reasonably be
+ * tuned without the other. If you do want to keep them consistent, update
+ * both by hand; there is deliberately no shared constant across the two
+ * packages (this dev-only, unpublished VS Code extension and the CDK
+ * example stack have no other dependency between them, and a cross-package
+ * dependency in either direction isn't warranted just for one integer).
  */
-export const PROJECTION_YEAR_START = 2024;
-export const PROJECTION_YEAR_END = 2030;
+const PROJECTION_YEAR_START = 2024;
+const PROJECTION_YEAR_END = 2030;
 
 export function buildCreateTableDdl(opts: {
   database: string;

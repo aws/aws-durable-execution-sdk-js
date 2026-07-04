@@ -3,23 +3,22 @@ import { Template, Match } from "aws-cdk-lib/assertions";
 import { InsightDestinationsStack } from "./stack";
 
 /**
- * Mirrors aws-durable-execution-sdk-js-insight-vscode/src/athena.ts's
- * PROJECTION_YEAR_START/PROJECTION_YEAR_END exactly (this stack's Glue
- * table's projection.year.range TBLPROPERTIES is meant to match that
- * package's buildCreateTableDdl, used when a customer points the VS Code
- * extension at their own bucket instead of this example's).
+ * The projection.year.range this stack's Glue table is expected to
+ * synthesize. Kept as named constants (rather than an inline literal in the
+ * assertion) so an accidental edit to the range in stack.ts fails this test
+ * with a clear expected-vs-actual diff.
  *
- * A real cross-package import was tried and reverted: it requires this
- * package's tsconfig `rootDir` to widen beyond its own directory (a
- * relative import reaches into a sibling package's `src/`), which changes
- * this package's own `dist` build output layout — too invasive a build
- * config change to make just to single-source two constants between an
- * unpublished, otherwise-unrelated dev tool and this CDK stack. If you
- * change the range in athena.ts, update PROJECTION_YEAR_START/END here
- * too — the assertion below will fail loudly if you forget one side.
+ * This is the *example stack's own* expected range — it is NOT tied to the
+ * VS Code extension's athena.ts, which hardcodes its own 2024–2030 for the
+ * separate case of a customer pointing the extension at their own bucket.
+ * The two are independent copies over different buckets and are not required
+ * to match (see the note in athena.ts); this test does not, and is not meant
+ * to, detect drift between the two packages — only accidental changes to
+ * this stack's range. They happen to share a value today; if you
+ * intentionally change this stack's range, update these constants to match.
  */
-const PROJECTION_YEAR_START = 2024;
-const PROJECTION_YEAR_END = 2030;
+const EXPECTED_PROJECTION_YEAR_START = 2024;
+const EXPECTED_PROJECTION_YEAR_END = 2030;
 
 /**
  * Basic smoke test: ensures the stack synthesizes without errors.
@@ -93,19 +92,15 @@ describe("InsightDestinationsStack", () => {
     });
   });
 
-  it("keeps the Glue table's projection.year.range in sync with athena.ts's PROJECTION_YEAR_START/END", () => {
-    // Guards against the two hardcoded definitions of this range (this
-    // stack's inline TBLPROPERTIES, and the VS Code extension's
-    // buildCreateTableDdl for customers using their own bucket) silently
-    // drifting apart — see the PROJECTION_YEAR_START/END comment above for
-    // why this can't just be a single shared constant across the two
-    // packages. PROJECTION_YEAR_START/END here are a manually-kept mirror
-    // of athena.ts's exported constants of the same name; this test will
-    // fail if either side is updated without the other.
+  it("synthesizes the expected projection.year.range on the Glue table", () => {
+    // Regression guard for this stack's own partition-projection range: if
+    // someone edits the range in stack.ts, this fails with a clear diff.
+    // Not a cross-package check against athena.ts — see the constants'
+    // comment above for why those are independent copies.
     template.hasResourceProperties("AWS::Glue::Table", {
       TableInput: Match.objectLike({
         Parameters: Match.objectLike({
-          "projection.year.range": `${PROJECTION_YEAR_START},${PROJECTION_YEAR_END}`,
+          "projection.year.range": `${EXPECTED_PROJECTION_YEAR_START},${EXPECTED_PROJECTION_YEAR_END}`,
         }),
       }),
     });
