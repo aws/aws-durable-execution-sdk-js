@@ -145,6 +145,12 @@ export interface AgentFinal {
   lookbackHours?: number;
 }
 
+/** A prior conversation turn (summarized), for multi-turn continuity. */
+export interface ConversationTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
 interface AgentLoopOptions {
   region: string;
   credentials: AwsCredentialIdentityProvider;
@@ -155,6 +161,13 @@ interface AgentLoopOptions {
   runQuery: RunQueryFn;
   onStep: (event: AgentStepEvent) => void;
   maxIterations: number;
+  /**
+   * Earlier turns in the same conversation (user questions + the assistant's
+   * answers), seeded before the new question so the model has context. The
+   * within-question tool calls are NOT included here — only the summarized
+   * turns — which keeps context small and the message sequence valid.
+   */
+  priorTurns?: ConversationTurn[];
 }
 
 /**
@@ -181,6 +194,10 @@ export async function runAgentLoop(
     toolMode: "agent",
   });
   const messages: Message[] = [
+    ...(opts.priorTurns ?? []).map((t) => ({
+      role: t.role,
+      content: [{ text: t.text }],
+    })),
     { role: "user", content: [{ text: opts.question }] },
   ];
   const tried = new Set<string>();

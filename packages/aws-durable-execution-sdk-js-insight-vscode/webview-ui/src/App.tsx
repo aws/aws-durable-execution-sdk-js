@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { applyMode, Mode } from "@cloudscape-design/global-styles";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Header from "@cloudscape-design/components/header";
 import Button from "@cloudscape-design/components/button";
-import Alert from "@cloudscape-design/components/alert";
+import Box from "@cloudscape-design/components/box";
+import Container from "@cloudscape-design/components/container";
 import { postMessage } from "./vscode";
 import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
@@ -41,7 +42,10 @@ export function App() {
   const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
-  const [agentAnswer, setAgentAnswer] = useState("");
+  const [chat, setChat] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
+  // Whether the current turn already produced a prose answer, so a following
+  // "results" message doesn't add a duplicate/placeholder assistant bubble.
+  const answeredRef = useRef(false);
 
   const handleMessage = useCallback((event: MessageEvent<InboundMessage>) => {
     const msg = event.data;
@@ -63,6 +67,15 @@ export function App() {
         setExplanation(msg.explanation ?? "");
         setStatus("");
         setLoading(false);
+        // If this turn produced no prose answer, add a placeholder assistant
+        // bubble so the conversation still shows a reply for it.
+        if (!answeredRef.current) {
+          setChat((prev) => [
+            ...prev,
+            { role: "assistant", text: "Here are the results (see the table below)." },
+          ]);
+          answeredRef.current = true;
+        }
         // A fresh result set invalidates any detail view left over from the
         // previous one (different rows, possibly a different idColumn).
         setDetailFields(null);
@@ -85,7 +98,15 @@ export function App() {
         ]);
         break;
       case "agentAnswer":
-        setAgentAnswer(msg.text);
+        setChat((prev) => [...prev, { role: "assistant", text: msg.text }]);
+        answeredRef.current = true;
+        break;
+      case "sessionCleared":
+        setChat([]);
+        setResults(null);
+        setAgentSteps([]);
+        setExplanation("");
+        setDetailFields(null);
         break;
       case "error":
         setError(msg.message);
@@ -129,9 +150,22 @@ export function App() {
     setError("");
     setResults(null);
     setAgentSteps([]);
-    setAgentAnswer("");
     setPage("data");
+    // Keep the chat history (this is a conversation); append the new question.
+    setChat((prev) => [...prev, { role: "user", text: question }]);
+    answeredRef.current = false;
     postMessage({ type: "generate", question });
+  };
+
+  const handleNewSession = () => {
+    setChat([]);
+    setResults(null);
+    setAgentSteps([]);
+    setExplanation("");
+    setDetailFields(null);
+    setError("");
+    answeredRef.current = false;
+    postMessage({ type: "newSession" });
   };
 
   const handleSave = (s: Settings) => {
@@ -150,7 +184,16 @@ export function App() {
         <Header
           variant="h1"
           actions={
-            <Button iconName="settings" variant="icon" onClick={() => setSettingsOpen(true)} />
+            <SpaceBetween direction="horizontal" size="xs">
+              {settings.agenticMode === "advanced" &&
+                settings.destinationType !== "sqs" &&
+                chat.length > 0 && (
+                  <Button iconName="add-plus" onClick={handleNewSession}>
+                    New session
+                  </Button>
+                )}
+              <Button iconName="settings" variant="icon" onClick={() => setSettingsOpen(true)} />
+            </SpaceBetween>
           }
           description={
             settings.logGroupName || settings.dynamodbTableName || settings.auroraTable || settings.sqsQueueUrl
@@ -201,10 +244,27 @@ export function App() {
 
                 <AgentTranscript steps={agentSteps} running={loading} />
 
-                {agentAnswer && (
-                  <Alert type="success" header="Answer">
-                    <div style={{ whiteSpace: "pre-wrap" }}>{agentAnswer}</div>
-                  </Alert>
+                {settings.agenticMode === "advanced" && chat.length > 0 && (
+                  <Container header={<Header variant="h3">Conversation</Header>}>
+                    <SpaceBetween size="s">
+                      {chat.map((turn, i) => (
+                        <Box key={i}>
+                          <Box
+                            fontWeight="bold"
+                            color={
+                              turn.role === "user"
+                                ? "text-status-info"
+                                : "text-status-success"
+                            }
+                            fontSize="body-s"
+                          >
+                            {turn.role === "user" ? "You" : "Assistant"}
+                          </Box>
+                          <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
+                        </Box>
+                      ))}
+                    </SpaceBetween>
+                  </Container>
                 )}
 
                 {results && (

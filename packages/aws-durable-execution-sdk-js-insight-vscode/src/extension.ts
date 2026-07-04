@@ -8,7 +8,11 @@ import {
   ensureModel,
   type GeneratedQuery,
 } from "./llm";
-import { runAgentLoop, type AgentQueryResult } from "./agentLoop";
+import {
+  runAgentLoop,
+  type AgentQueryResult,
+  type ConversationTurn,
+} from "./agentLoop";
 import { runLogsInsightsQuery, fetchLogsInsightsRecord } from "./logsInsights";
 import { runDynamoDBQuery, fetchDynamoDBRecord } from "./dynamodb";
 import { runAuroraQuery, fetchAuroraRecord } from "./aurora";
@@ -30,6 +34,7 @@ import {
 type InboundMessage =
   | { type: "ready" }
   | { type: "generate"; question: string }
+  | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel" }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
@@ -114,6 +119,9 @@ class ExplorerPanel {
   private static current: ExplorerPanel | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private listenController: AbortController | undefined;
+  // Summarized advanced-mode conversation (user questions + assistant answers),
+  // so follow-up questions continue the session. Cleared on "newSession".
+  private conversation: ConversationTurn[] = [];
 
   static show(extensionUri: vscode.Uri): void {
     const column = vscode.window.activeTextEditor?.viewColumn;
@@ -154,6 +162,10 @@ class ExplorerPanel {
           return this.sendConfig();
         case "generate":
           return await this.onGenerate(msg.question);
+        case "newSession":
+          this.conversation = [];
+          this.post({ type: "sessionCleared" });
+          return;
         case "saveSettings":
           return await this.onSaveSettings(msg.settings);
         case "downloadModel":
@@ -723,6 +735,7 @@ class ExplorerPanel {
       destinationType: cfg.destinationType,
       tableName,
       maxIterations: cfg.agenticMaxIterations,
+      priorTurns: this.conversation,
       runQuery,
       onStep: (e) => {
         iteration += 1;
@@ -754,9 +767,11 @@ class ExplorerPanel {
     });
 
     if (!final || !final.query) {
-      // No usable query. If the model produced a prose answer, still show it.
+      // No usable query. If the model produced a prose answer, still show it
+      // and record the turn so the conversation continues.
       if (final?.answer) {
         this.post({ type: "agentAnswer", text: final.answer });
+        this.recordTurn(q, final.answer);
         return;
       }
       this.post({
@@ -783,6 +798,28 @@ class ExplorerPanel {
     );
     if (final.answer) this.post({ type: "agentAnswer", text: final.answer });
     this.post({ type: "results", ...exec });
+    // Record the turn (prefer the prose answer; fall back to the explanation)
+    // so follow-up questions have this exchange as context.
+    this.recordTurn(
+      q,
+      final.answer ||
+        final.explanation ||
+        `Returned ${exec.count ?? exec.rows.length} row(s) for: ${final.query}`,
+    );
+  }
+
+  /**
+   * Append a completed exchange to the advanced-mode conversation history, so
+   * the next question continues the session. Trims the history to a bounded
+   * number of recent turns to keep prompt size (and cost) in check.
+   */
+  private recordTurn(question: string, answer: string): void {
+    this.conversation.push({ role: "user", text: question });
+    this.conversation.push({ role: "assistant", text: answer });
+    const MAX_TURNS = 12; // 6 user+assistant pairs
+    if (this.conversation.length > MAX_TURNS) {
+      this.conversation = this.conversation.slice(-MAX_TURNS);
+    }
   }
 
   /**

@@ -2,6 +2,7 @@
 export type OutboundMessage =
   | { type: "ready" }
   | { type: "generate"; question: string }
+  | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel" }
   | { type: "startListening" }
@@ -95,6 +96,7 @@ export type InboundMessage =
       text: string;
     }
   | { type: "error"; message: string }
+  | { type: "sessionCleared" }
   | { type: "settingsSaved" }
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
