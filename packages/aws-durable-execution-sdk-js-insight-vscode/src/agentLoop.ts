@@ -30,6 +30,11 @@ const RUN_QUERY_TOOL: Tool = {
             description:
               "Brief note on what you're trying to learn or compute with this query (shown to the user).",
           },
+          lookbackHours: {
+            type: "number",
+            description:
+              "Log-based sources only: how many hours back to search (default 24). Ignored for table/SQL sources.",
+          },
         },
         required: ["query"],
       },
@@ -65,6 +70,11 @@ const FINISH_TOOL: Tool = {
             description:
               "True only if each result row is a single execution the user is browsing (enables per-row drill-down). False for aggregations/DISTINCT/derived results.",
           },
+          lookbackHours: {
+            type: "number",
+            description:
+              "Log-based sources only: the time window (hours back) the final query should run over (default 24). Ignored for table/SQL sources.",
+          },
         },
         required: ["query", "explanation"],
       },
@@ -83,7 +93,10 @@ export interface AgentQueryResult {
   stopReason?: string;
 }
 
-export type RunQueryFn = (query: string) => Promise<AgentQueryResult>;
+export type RunQueryFn = (
+  query: string,
+  lookbackHours?: number,
+) => Promise<AgentQueryResult>;
 
 /** A transcript event emitted as the agent works, for the webview. */
 export interface AgentStepEvent {
@@ -101,6 +114,8 @@ export interface AgentFinal {
   answer?: string;
   suggestedCharts?: string[];
   rowLevel?: boolean;
+  /** Log-based sources only: the time window (hours) for the final query. */
+  lookbackHours?: number;
 }
 
 interface AgentLoopOptions {
@@ -180,6 +195,7 @@ export async function runAgentLoop(
         answer?: string;
         suggestedCharts?: string[];
         rowLevel?: boolean;
+        lookbackHours?: number;
       };
       opts.onStep({
         kind: "finish",
@@ -197,13 +213,25 @@ export async function runAgentLoop(
           ? inp.suggestedCharts
           : undefined,
         rowLevel: inp.rowLevel === true,
+        lookbackHours:
+          typeof inp.lookbackHours === "number" && inp.lookbackHours > 0
+            ? inp.lookbackHours
+            : undefined,
       };
     }
 
     // run_query
-    const inp = (toolUse.input ?? {}) as { query?: string; purpose?: string };
+    const inp = (toolUse.input ?? {}) as {
+      query?: string;
+      purpose?: string;
+      lookbackHours?: number;
+    };
     const query = (inp.query ?? "").trim();
     const purpose = typeof inp.purpose === "string" ? inp.purpose : undefined;
+    const lookbackHours =
+      typeof inp.lookbackHours === "number" && inp.lookbackHours > 0
+        ? inp.lookbackHours
+        : undefined;
     const norm = query.replace(/\s+/g, " ").toLowerCase();
 
     let result: AgentQueryResult;
@@ -224,7 +252,7 @@ export async function runAgentLoop(
       };
     } else {
       tried.add(norm);
-      result = await opts.runQuery(query);
+      result = await opts.runQuery(query, lookbackHours);
       if (!result.error) lastGoodQuery = query;
     }
 

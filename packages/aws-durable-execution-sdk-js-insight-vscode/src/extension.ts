@@ -456,16 +456,10 @@ class ExplorerPanel {
     tableName: string | undefined,
   ): Promise<void> {
     // The full multi-turn "explore then answer" agent loop (run_query/finish)
-    // needs Bedrock's Converse tool use and a self-contained query per turn.
-    // Use it for Bedrock + SQL destinations; Copilot/local and Logs Insights
-    // (which needs a separate time range) keep the generate→verify→refine
-    // loop below.
-    if (
-      cfg.llmProvider === "bedrock" &&
-      (cfg.destinationType === "dynamodb" ||
-        cfg.destinationType === "aurora" ||
-        cfg.destinationType === "s3")
-    ) {
+    // needs Bedrock's Converse tool use. Use it for every queryable
+    // destination under Bedrock (SQS isn't queryable and never reaches here).
+    // Copilot/local keep the generate→verify→refine loop below.
+    if (cfg.llmProvider === "bedrock" && cfg.destinationType !== "sqs") {
       return await this.onGenerateAgenticToolLoop(q, cfg, credentials);
     }
 
@@ -669,16 +663,22 @@ class ExplorerPanel {
         ? cfg.dynamodbTableName
         : cfg.destinationType === "aurora"
           ? cfg.auroraTable
-          : cfg.athenaTable;
+          : cfg.destinationType === "s3"
+            ? cfg.athenaTable
+            : undefined;
 
     const maxScannedBytes = cfg.agenticMaxScannedMB * 1024 * 1024;
     let scannedBytes = 0;
     let iteration = 0;
 
     // Each run_query the model issues: run it read-only, no drill-down
-    // injection, return a bounded sample. Enforce the cumulative Athena scan
-    // budget so an autonomous loop can't run up cost.
-    const runQuery = async (query: string): Promise<AgentQueryResult> => {
+    // injection, return a bounded sample. lookbackHours (log-based sources
+    // only) sets the search window. Enforce the cumulative Athena scan budget
+    // so an autonomous loop can't run up cost.
+    const runQuery = async (
+      query: string,
+      lookbackHours?: number,
+    ): Promise<AgentQueryResult> => {
       try {
         const exec = await this.executeQuery(
           cfg,
@@ -686,7 +686,7 @@ class ExplorerPanel {
           {
             query,
             explanation: "",
-            timeRangeMs: 24 * 60 * 60 * 1000,
+            timeRangeMs: (lookbackHours ?? 24) * 60 * 60 * 1000,
           },
           { injectDrillDown: false },
         );
@@ -774,7 +774,7 @@ class ExplorerPanel {
       {
         query: final.query,
         explanation: final.explanation,
-        timeRangeMs: 24 * 60 * 60 * 1000,
+        timeRangeMs: (final.lookbackHours ?? 24) * 60 * 60 * 1000,
         suggestedCharts: final.suggestedCharts,
       },
       { injectDrillDown: final.rowLevel === true },
