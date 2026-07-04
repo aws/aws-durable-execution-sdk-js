@@ -368,8 +368,19 @@ export async function fetchAthenaRecord(opts: {
   if (result.rows.length === 0) return undefined;
   const row = result.rows[0];
   const record: Record<string, string> = {};
+  // Always include every column's value, even an empty string — unlike
+  // fetchDynamoDBRecord/fetchAuroraRecord (which distinguish a real NULL
+  // from an empty string and only drop the former), runAthenaQuery's
+  // paginateResults already normalizes a missing VarCharValue to "" (see
+  // that function), so there is no separate null/undefined signal left to
+  // check for here by the time rows reach this function — "" from Athena
+  // could mean either NULL or a genuinely empty string, and since there's
+  // no way to tell them apart at this point, don't drop it either way. The
+  // previous `if (row[i])` check was wrong regardless: it treated a
+  // legitimately empty string as absent and silently omitted that field
+  // from the detail view.
   result.columns.forEach((col, i) => {
-    if (row[i]) record[col] = row[i];
+    record[col] = row[i] ?? "";
   });
   return record;
 }
