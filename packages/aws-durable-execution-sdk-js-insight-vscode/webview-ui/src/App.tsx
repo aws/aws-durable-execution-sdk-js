@@ -5,6 +5,7 @@ import Header from "@cloudscape-design/components/header";
 import Button from "@cloudscape-design/components/button";
 import Box from "@cloudscape-design/components/box";
 import Container from "@cloudscape-design/components/container";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
 import { postMessage } from "./vscode";
 import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
@@ -18,6 +19,31 @@ import { DEFAULT_SETTINGS } from "./types";
 applyMode(Mode.Dark);
 
 type Page = "data" | "visualize";
+
+interface ResultsPayload {
+  columns: string[];
+  rows: string[][];
+  suggestedCharts?: string[];
+  idColumn?: string;
+  partitionColumns?: { year?: string; month?: string; day?: string };
+  hiddenColumns?: string[];
+  explanation?: string;
+}
+
+/**
+ * A single conversation turn. Assistant turns carry the result table and agent
+ * steps that were produced *for that turn*, so the conversation keeps a full
+ * history — each answer shows its own table, and a follow-up question adds a
+ * new turn with its own table below.
+ */
+type ChatTurn =
+  | { role: "user"; text: string }
+  | {
+      role: "assistant";
+      text: string;
+      results?: ResultsPayload;
+      steps?: AgentStep[];
+    };
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -42,10 +68,14 @@ export function App() {
   const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
-  const [chat, setChat] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
+  const [chat, setChat] = useState<ChatTurn[]>([]);
   // Whether the current turn already produced a prose answer, so a following
   // "results" message doesn't add a duplicate/placeholder assistant bubble.
   const answeredRef = useRef(false);
+  // Steps accumulated for the in-flight turn, so they can be attached to the
+  // assistant turn when it completes (state alone would be stale in the
+  // message handler's [] closure).
+  const stepsRef = useRef<AgentStep[]>([]);
 
   const handleMessage = useCallback((event: MessageEvent<InboundMessage>) => {
     const msg = event.data;
@@ -62,40 +92,75 @@ export function App() {
         setDownloadPercent(msg.percent);
         if (msg.done) setModelDownloaded(true);
         break;
-      case "results":
-        setResults({ columns: msg.columns, rows: msg.rows, suggestedCharts: msg.suggestedCharts, idColumn: msg.idColumn, partitionColumns: msg.partitionColumns, hiddenColumns: msg.hiddenColumns });
+      case "results": {
+        const payload: ResultsPayload = {
+          columns: msg.columns,
+          rows: msg.rows,
+          suggestedCharts: msg.suggestedCharts,
+          idColumn: msg.idColumn,
+          partitionColumns: msg.partitionColumns,
+          hiddenColumns: msg.hiddenColumns,
+          explanation: msg.explanation ?? "",
+        };
+        // Top-level results still drive basic mode and the Visualize page.
+        setResults(payload);
         setExplanation(msg.explanation ?? "");
         setStatus("");
         setLoading(false);
-        // If this turn produced no prose answer, add a placeholder assistant
-        // bubble so the conversation still shows a reply for it.
-        if (!answeredRef.current) {
-          setChat((prev) => [
+        // Advanced mode: attach this table (and the steps that produced it) to
+        // the turn it belongs to, so the conversation keeps every result.
+        const turnSteps = stepsRef.current;
+        setChat((prev) => {
+          if (answeredRef.current) {
+            // A prose answer already created the assistant turn this turn —
+            // attach the table/steps to it (the most recent assistant turn).
+            const copy = [...prev];
+            for (let i = copy.length - 1; i >= 0; i--) {
+              const t = copy[i];
+              if (t.role === "assistant") {
+                copy[i] = { ...t, results: payload, steps: turnSteps };
+                break;
+              }
+            }
+            return copy;
+          }
+          // No prose answer arrived: still record the turn so its table is kept.
+          return [
             ...prev,
-            { role: "assistant", text: "Here are the results (see the table below)." },
-          ]);
-          answeredRef.current = true;
-        }
+            {
+              role: "assistant",
+              text: "Here are the results.",
+              results: payload,
+              steps: turnSteps,
+            },
+          ];
+        });
+        answeredRef.current = true;
+        // Steps now live on the turn; clear the live transcript + buffer.
+        stepsRef.current = [];
+        setAgentSteps([]);
         // A fresh result set invalidates any detail view left over from the
         // previous one (different rows, possibly a different idColumn).
         setDetailFields(null);
         setDetailLoading(false);
         break;
+      }
       case "detailResult":
         setDetailFields(msg.fields);
         setDetailLoading(false);
         break;
       case "agentStep":
-        setAgentSteps((prev) => [
-          ...prev,
-          {
+        {
+          const step = {
             iteration: msg.iteration,
             query: msg.query,
             rowCount: msg.rowCount,
             outcome: msg.outcome,
             detail: msg.detail,
-          },
-        ]);
+          };
+          stepsRef.current = [...stepsRef.current, step];
+          setAgentSteps((prev) => [...prev, step]);
+        }
         break;
       case "agentAnswer":
         setChat((prev) => [...prev, { role: "assistant", text: msg.text }]);
@@ -150,6 +215,7 @@ export function App() {
     setError("");
     setResults(null);
     setAgentSteps([]);
+    stepsRef.current = [];
     setPage("data");
     // Keep the chat history (this is a conversation); append the new question.
     setChat((prev) => [...prev, { role: "user", text: question }]);
@@ -161,6 +227,7 @@ export function App() {
     setChat([]);
     setResults(null);
     setAgentSteps([]);
+    stepsRef.current = [];
     setExplanation("");
     setDetailFields(null);
     setError("");
@@ -233,42 +300,14 @@ export function App() {
           </>
         ) : (
           <>
-            {page === "data" && (
+            {page === "data" && settings.agenticMode !== "advanced" && (
               <>
-                {/* Basic mode keeps the composer at the top (single-shot Q→A). */}
-                {settings.agenticMode !== "advanced" && (
-                  <QueryPanel
-                    onAsk={handleAsk}
-                    loading={loading}
-                    status={status}
-                    error={error}
-                  />
-                )}
-
-                {/* Advanced mode is a conversation: the history flows from the
-                    top down to the composer anchored at the bottom. */}
-                {settings.agenticMode === "advanced" && chat.length > 0 && (
-                  <Container header={<Header variant="h3">Conversation</Header>}>
-                    <SpaceBetween size="s">
-                      {chat.map((turn, i) => (
-                        <Box key={i}>
-                          <Box
-                            fontWeight="bold"
-                            color={
-                              turn.role === "user"
-                                ? "text-status-info"
-                                : "text-status-success"
-                            }
-                            fontSize="body-s"
-                          >
-                            {turn.role === "user" ? "You" : "Assistant"}
-                          </Box>
-                          <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
-                        </Box>
-                      ))}
-                    </SpaceBetween>
-                  </Container>
-                )}
+                <QueryPanel
+                  onAsk={handleAsk}
+                  loading={loading}
+                  status={status}
+                  error={error}
+                />
 
                 <AgentTranscript steps={agentSteps} running={loading} />
 
@@ -291,17 +330,92 @@ export function App() {
                     </Button>
                   </SpaceBetween>
                 )}
+              </>
+            )}
 
-                {/* Advanced mode: composer anchored at the bottom, chat-style,
-                    so asking a follow-up continues the conversation above. */}
-                {settings.agenticMode === "advanced" && (
-                  <QueryPanel
-                    onAsk={handleAsk}
-                    loading={loading}
-                    status={status}
-                    error={error}
-                  />
+            {page === "data" && settings.agenticMode === "advanced" && (
+              <>
+                {chat.length > 0 && (
+                  <Container header={<Header variant="h3">Conversation</Header>}>
+                    <SpaceBetween size="l">
+                      {chat.map((turn, i) =>
+                        turn.role === "user" ? (
+                          <Box key={i}>
+                            <Box
+                              fontWeight="bold"
+                              color="text-status-info"
+                              fontSize="body-s"
+                            >
+                              You
+                            </Box>
+                            <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
+                          </Box>
+                        ) : (
+                          <Box key={i}>
+                            <Box
+                              fontWeight="bold"
+                              color="text-status-success"
+                              fontSize="body-s"
+                            >
+                              Assistant
+                            </Box>
+                            <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
+                            {turn.steps && turn.steps.length > 0 && (
+                              <Box padding={{ top: "xs" }}>
+                                <ExpandableSection
+                                  headerText="Agent steps"
+                                  variant="footer"
+                                >
+                                  <AgentTranscript steps={turn.steps} running={false} />
+                                </ExpandableSection>
+                              </Box>
+                            )}
+                            {turn.results && (
+                              <Box padding={{ top: "xs" }}>
+                                <SpaceBetween size="s">
+                                  <ResultsTable
+                                    columns={turn.results.columns}
+                                    rows={turn.results.rows}
+                                    explanation={turn.results.explanation}
+                                    idColumn={turn.results.idColumn}
+                                    partitionColumns={turn.results.partitionColumns}
+                                    hiddenColumns={turn.results.hiddenColumns}
+                                    detailFields={detailFields}
+                                    detailLoading={detailLoading}
+                                    onDetailFetchStart={() => setDetailLoading(true)}
+                                    onDetailDismiss={() => setDetailFields(null)}
+                                  />
+                                  <Button
+                                    onClick={() => {
+                                      setResults(turn.results!);
+                                      setExplanation(turn.results!.explanation ?? "");
+                                      setPage("visualize");
+                                    }}
+                                  >
+                                    Visualize →
+                                  </Button>
+                                </SpaceBetween>
+                              </Box>
+                            )}
+                          </Box>
+                        ),
+                      )}
+                    </SpaceBetween>
+                  </Container>
                 )}
+
+                {/* Live progress for the in-flight turn; it folds into the turn
+                    above once the turn completes (steps move onto the turn). */}
+                {loading && <AgentTranscript steps={agentSteps} running={loading} />}
+
+                {/* Composer anchored at the bottom, chat-style, so a follow-up
+                    continues the conversation above. */}
+                <QueryPanel
+                  onAsk={handleAsk}
+                  loading={loading}
+                  status={status}
+                  error={error}
+                />
               </>
             )}
 
