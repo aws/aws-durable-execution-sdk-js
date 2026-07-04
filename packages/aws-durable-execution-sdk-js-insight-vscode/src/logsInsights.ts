@@ -131,7 +131,10 @@ export async function fetchLogsInsightsRecord(opts: {
   executionArn: string;
   lookbackMs?: number;
 }): Promise<Record<string, string> | undefined> {
-  const escaped = opts.executionArn.replace(/"/g, '\\"');
+  // Escape for embedding in a double-quoted Logs Insights string literal.
+  // See escapeQuotedString for why the order (backslashes before quotes)
+  // matters — CodeQL flags the naive quote-only escape as incomplete.
+  const escaped = escapeQuotedString(opts.executionArn);
   const endTimeMs = Date.now();
   const startTimeMs = endTimeMs - (opts.lookbackMs ?? 7 * 24 * 60 * 60 * 1000);
 
@@ -194,6 +197,22 @@ function tryParseRecord(raw: string): Record<string, string> | undefined {
   }
 }
 
-function escapeRegex(s: string): string {
+/**
+ * Escape a string for safe embedding inside a double-quoted CloudWatch Logs
+ * Insights string literal (e.g. `filter field = "<here>"`).
+ *
+ * Order is critical: backslashes are escaped FIRST, then double quotes. If
+ * quotes were escaped first, the backslash added in front of each quote
+ * would then be doubled by the backslash pass, corrupting the output; and
+ * escaping only quotes (the naive approach CodeQL flags as "incomplete
+ * string escaping") leaves any backslash already in the input unescaped —
+ * a trailing `\` would escape the closing quote and let the value break out
+ * of the string literal.
+ */
+export function escapeQuotedString(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
