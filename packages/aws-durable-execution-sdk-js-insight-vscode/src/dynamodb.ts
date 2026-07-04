@@ -71,3 +71,44 @@ export async function runDynamoDBQuery(opts: {
 
   return { columns, rows, count: items.length };
 }
+
+/**
+ * Fetch a single full record by its partition key (pk = executionArn), for
+ * the row-detail drill-down. Uses ExecuteStatement (PartiQL) with a direct
+ * key-equality WHERE clause — a Query, not a Scan, so this is cheap even on
+ * a large table.
+ *
+ * Uses ExecuteStatementCommand's `Parameters` (positional `?` placeholders)
+ * rather than string interpolation — `pk` round-trips through the webview
+ * (it's a value from a previous query's result row), so treat it as
+ * untrusted input even though it originated from our own query, the same
+ * way fetchAuroraRecord parameterizes execution_arn.
+ */
+export async function fetchDynamoDBRecord(opts: {
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  tableName: string;
+  pk: string;
+}): Promise<Record<string, string> | undefined> {
+  const client = new DynamoDBClient({
+    region: opts.region,
+    credentials: opts.credentials,
+  });
+
+  const result = await client.send(
+    new ExecuteStatementCommand({
+      Statement: `SELECT * FROM "${opts.tableName}" WHERE pk = ?`,
+      Parameters: [{ S: opts.pk }],
+    }),
+  );
+
+  const item = result.Items?.[0];
+  if (!item) return undefined;
+  const unmarshalled = unmarshall(item);
+  const record: Record<string, string> = {};
+  for (const [key, val] of Object.entries(unmarshalled)) {
+    if (val == null) continue;
+    record[key] = typeof val === "object" ? JSON.stringify(val) : String(val);
+  }
+  return record;
+}

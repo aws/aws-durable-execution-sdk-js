@@ -20,7 +20,14 @@ export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [results, setResults] = useState<{ columns: string[]; rows: string[][]; suggestedCharts?: string[] } | null>(null);
+  const [results, setResults] = useState<{
+    columns: string[];
+    rows: string[][];
+    suggestedCharts?: string[];
+    idColumn?: string;
+    partitionColumns?: { year?: string; month?: string; day?: string };
+    hiddenColumns?: string[];
+  } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(false);
@@ -29,6 +36,8 @@ export function App() {
   const [explanation, setExplanation] = useState("");
   const [sqsMessages, setSqsMessages] = useState<SqsMessageRow[]>([]);
   const [sqsListening, setSqsListening] = useState(false);
+  const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const handleMessage = useCallback((event: MessageEvent<InboundMessage>) => {
     const msg = event.data;
@@ -46,15 +55,24 @@ export function App() {
         if (msg.done) setModelDownloaded(true);
         break;
       case "results":
-        setResults({ columns: msg.columns, rows: msg.rows, suggestedCharts: msg.suggestedCharts });
+        setResults({ columns: msg.columns, rows: msg.rows, suggestedCharts: msg.suggestedCharts, idColumn: msg.idColumn, partitionColumns: msg.partitionColumns, hiddenColumns: msg.hiddenColumns });
         setExplanation(msg.explanation ?? "");
         setStatus("");
         setLoading(false);
+        // A fresh result set invalidates any detail view left over from the
+        // previous one (different rows, possibly a different idColumn).
+        setDetailFields(null);
+        setDetailLoading(false);
+        break;
+      case "detailResult":
+        setDetailFields(msg.fields);
+        setDetailLoading(false);
         break;
       case "error":
         setError(msg.message);
         setStatus("");
         setLoading(false);
+        setDetailLoading(false);
         break;
       case "settingsSaved":
         setSettingsOpen(false);
@@ -166,6 +184,13 @@ export function App() {
                       columns={results.columns}
                       rows={results.rows}
                       explanation={explanation}
+                      idColumn={results.idColumn}
+                      partitionColumns={results.partitionColumns}
+                      hiddenColumns={results.hiddenColumns}
+                      detailFields={detailFields}
+                      detailLoading={detailLoading}
+                      onDetailFetchStart={() => setDetailLoading(true)}
+                      onDetailDismiss={() => setDetailFields(null)}
                     />
                     <Button variant="primary" onClick={() => setPage("visualize")}>
                       Visualize →

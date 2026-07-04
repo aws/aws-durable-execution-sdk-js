@@ -54,6 +54,7 @@
             "lambda-log-exporter",
             "dynamodb",
             "aurora",
+            "s3",
             "sqs"
           ],
           "enumDescriptions": [
@@ -61,6 +62,7 @@
             "Function's own log group via LambdaLogExporter — records nested in Lambda JSON envelope (message field)",
             "DynamoDB table via DynamoDBExporter — records queryable via PartiQL",
             "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations",
+            "S3 via S3Exporter — queried through Amazon Athena (Trino/Presto SQL) over a Glue table",
             "Amazon SQS via SQSExporter — live view that listens to the queue as records arrive (no query engine)"
           ],
           "description": "Where and how records are stored. Determines query engine and format."
@@ -100,6 +102,31 @@
           "default": "workflow_insight",
           "description": "Aurora table name containing insight records."
         },
+        "workflowInsight.athenaDatabase": {
+          "type": "string",
+          "default": "",
+          "description": "Glue/Athena database containing the workflow insight table (required when destinationType is 's3')."
+        },
+        "workflowInsight.athenaTable": {
+          "type": "string",
+          "default": "workflow_insight",
+          "description": "Glue table name for records written by S3Exporter."
+        },
+        "workflowInsight.athenaWorkgroup": {
+          "type": "string",
+          "default": "",
+          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead."
+        },
+        "workflowInsight.athenaOutputLocation": {
+          "type": "string",
+          "default": "",
+          "description": "S3 location for Athena query results, e.g. s3://my-bucket/athena-results/. Required unless the chosen workgroup has its own output location configured."
+        },
+        "workflowInsight.athenaS3Location": {
+          "type": "string",
+          "default": "",
+          "description": "S3 location the S3Exporter writes records to, e.g. s3://my-bucket/workflow-insight/. Used to auto-create the Glue table (JSON SerDe, Hive year=/month=/day= partitioning) if it doesn't already exist."
+        },
         "workflowInsight.awsProfile": {
           "type": "string",
           "default": "",
@@ -133,12 +160,15 @@
     "build": "cd webview-ui && npm run build && cd .. && node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
+    "test": "jest",
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {
+    "@aws-sdk/client-athena": "^3.658.0",
     "@aws-sdk/client-bedrock-runtime": "^3.658.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.658.0",
     "@aws-sdk/client-dynamodb": "^3.658.0",
+    "@aws-sdk/client-glue": "^3.658.0",
     "@aws-sdk/client-rds-data": "^3.658.0",
     "@aws-sdk/client-sqs": "^3.658.0",
     "@aws-sdk/credential-providers": "^3.658.0",
@@ -146,9 +176,30 @@
     "node-llama-cpp": "^3.18.1"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
     "esbuild": "^0.24.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
     "typescript": "~5.8.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/src/**/*.test.ts"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/webview-ui"
+    ],
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.test.json"
+        }
+      ]
+    }
   }
 }

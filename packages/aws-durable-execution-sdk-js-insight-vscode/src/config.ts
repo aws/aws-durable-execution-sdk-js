@@ -10,7 +10,8 @@ export interface InsightConfig {
     | "lambda-log-exporter"
     | "dynamodb"
     | "aurora"
-    | "sqs";
+    | "sqs"
+    | "s3";
   dynamodbTableName: string;
   auroraResourceArn: string;
   auroraSecretArn: string;
@@ -18,6 +19,11 @@ export interface InsightConfig {
   auroraTable: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
+  athenaDatabase: string;
+  athenaTable: string;
+  athenaWorkgroup: string;
+  athenaOutputLocation: string;
+  athenaS3Location: string;
   llmProvider: "bedrock" | "copilot" | "local";
   awsProfile?: string;
   bedrockModelId: string;
@@ -46,7 +52,9 @@ export function readConfig(): InsightConfig {
           ? ("aurora" as const)
           : raw === "sqs"
             ? ("sqs" as const)
-            : ("cloudwatch-logs-exporter" as const);
+            : raw === "s3"
+              ? ("s3" as const)
+              : ("cloudwatch-logs-exporter" as const);
   const dynamodbTableName = (c.get<string>("dynamodbTableName") || "").trim();
   const auroraResourceArn = (c.get<string>("auroraResourceArn") || "").trim();
   const auroraSecretArn = (c.get<string>("auroraSecretArn") || "").trim();
@@ -56,6 +64,14 @@ export function readConfig(): InsightConfig {
     (c.get<string>("auroraTable") || "").trim() || "workflow_insight";
   const sqsQueueUrl = (c.get<string>("sqsQueueUrl") || "").trim();
   const sqsDeleteAfterRead = c.get<boolean>("sqsDeleteAfterRead") ?? false;
+  const athenaDatabase = (c.get<string>("athenaDatabase") || "").trim();
+  const athenaTable =
+    (c.get<string>("athenaTable") || "").trim() || "workflow_insight";
+  const athenaWorkgroup = (c.get<string>("athenaWorkgroup") || "").trim();
+  const athenaOutputLocation = (
+    c.get<string>("athenaOutputLocation") || ""
+  ).trim();
+  const athenaS3Location = (c.get<string>("athenaS3Location") || "").trim();
   const llmProvider =
     (c.get<string>("llmProvider") || "").trim() === "copilot"
       ? ("copilot" as const)
@@ -78,6 +94,11 @@ export function readConfig(): InsightConfig {
     auroraTable,
     sqsQueueUrl,
     sqsDeleteAfterRead,
+    athenaDatabase,
+    athenaTable,
+    athenaWorkgroup,
+    athenaOutputLocation,
+    athenaS3Location,
     llmProvider,
     awsProfile,
     bedrockModelId,
