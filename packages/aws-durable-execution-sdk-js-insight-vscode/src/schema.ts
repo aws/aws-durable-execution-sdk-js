@@ -383,6 +383,24 @@ A: SELECT DISTINCT k FROM TABLE_NAME CROSS JOIN UNNEST(map_keys(CAST(json_parse(
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/**
+ * Extra guidance appended to the system prompt in advanced (agentic) mode
+ * only. Gives the model an escape hatch: rather than forcing an awkward
+ * answer into one query, it can fetch the raw relevant data and defer the
+ * final derivation to a post-processing step.
+ */
+const AGENTIC_NOTE = [
+  "You are in agentic mode with a follow-up post-processing step available.",
+  "If a question is genuinely awkward to express in this query language (for",
+  "example enumerating or deriving something across nested/JSON values that",
+  "the engine can't easily compute), you may instead return a query that just",
+  "fetches the raw relevant column(s) for the relevant rows and set",
+  "postProcess=true, with postProcessGoal describing what to extract. A",
+  "follow-up step will read those rows and produce the final answer. Prefer a",
+  "normal, complete query whenever the query language CAN express the answer",
+  "directly — only use postProcess when it genuinely can't.",
+].join("\n");
+
 export function buildSystemPrompt(
   destinationType:
     | "cloudwatch-logs-exporter"
@@ -390,8 +408,12 @@ export function buildSystemPrompt(
     | "dynamodb"
     | "aurora"
     | "s3",
-  options?: { tableName?: string },
+  options?: { tableName?: string; agentic?: boolean },
 ): string {
+  // Advanced (agentic) mode only: tells the model it may defer awkward
+  // computations to a post-processing step by returning raw data. Appended to
+  // every destination's prompt; empty in basic mode, so basic is unchanged.
+  const agenticNote = options?.agentic ? ["", AGENTIC_NOTE] : [];
   if (destinationType === "s3") {
     const table = options?.tableName || "workflow_insight";
     return [
@@ -405,6 +427,7 @@ export function buildSystemPrompt(
       FEWSHOTS_ATHENA.replace(/TABLE_NAME/g, table),
       "",
       'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
+      ...agenticNote,
     ].join("\n");
   }
 
@@ -421,6 +444,7 @@ export function buildSystemPrompt(
       FEWSHOTS_AURORA.replace(/TABLE_NAME/g, table),
       "",
       'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
+      ...agenticNote,
     ].join("\n");
   }
 
@@ -440,6 +464,7 @@ export function buildSystemPrompt(
       fewshots,
       "",
       'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
+      ...agenticNote,
     ].join("\n");
   }
 
@@ -467,6 +492,7 @@ export function buildSystemPrompt(
     fewshots,
     "",
     'Call the "emit_query" tool with the query, a one-sentence explanation, and suggestedCharts (2-4 chart types from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot).',
+    ...agenticNote,
   ].join("\n");
 }
 

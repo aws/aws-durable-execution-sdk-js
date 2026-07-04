@@ -20,6 +20,7 @@ const OUTCOME_STATUS: Record<
   satisfied: { type: "success", label: "Answers the question" },
   unsatisfied: { type: "warning", label: "Didn't fully answer — refining" },
   error: { type: "error", label: "Query failed — retrying" },
+  analyzed: { type: "success", label: "Post-processed the results" },
 };
 
 /**

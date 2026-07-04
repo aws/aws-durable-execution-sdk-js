@@ -10,6 +10,7 @@ import { buildSystemPrompt } from "./schema";
 import {
   parseVerdict,
   buildVerifyInstruction,
+  buildAnalysisPrompt,
   type ResultVerdict,
 } from "./verdict";
 
@@ -18,6 +19,14 @@ export interface GeneratedQuery {
   explanation: string;
   timeRangeMs: number;
   suggestedCharts?: string[];
+  /**
+   * Advanced (agentic) mode only: the model set this when it chose to return
+   * raw rows for a follow-up post-processing step to interpret, rather than
+   * expressing the whole answer in the query language. Ignored in basic mode.
+   */
+  postProcess?: boolean;
+  /** What the post-processing step should extract from the raw rows. */
+  postProcessGoal?: string;
 }
 
 const DEFAULT_TIME_RANGE_MS = 86_400_000;
@@ -45,6 +54,16 @@ const EMIT_QUERY_TOOL: Tool = {
             items: { type: "string" },
             description:
               "List of chart types suitable for visualizing this query's results. Values: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot. Pick 2-4 most appropriate based on the data shape (e.g., aggregation with GROUP BY → bar/pie; time series → line/area; two numeric columns → scatter; distribution → histogram/boxplot).",
+          },
+          postProcess: {
+            type: "boolean",
+            description:
+              "Set true ONLY when the question can't be answered cleanly in the query language and is better served by returning the raw relevant column(s) for the relevant rows and letting a follow-up step read them to produce the answer. When true, `query` should just fetch that raw data (e.g. SELECT input FROM t ORDER BY ... LIMIT n). Leave false/omitted for normal queries that already produce the answer.",
+          },
+          postProcessGoal: {
+            type: "string",
+            description:
+              "When postProcess is true: a short description of what to extract or compute from the returned rows (e.g. 'the distinct set of top-level keys across all input JSON objects').",
           },
         },
         required: ["query", "explanation"],
@@ -186,6 +205,82 @@ export async function verifyResult(
   }
 }
 
+// ─── Result post-processing / analysis (agentic "advanced" mode) ─────────────
+
+interface AnalyzeOptions {
+  provider: LlmProvider;
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  modelId: string;
+  question: string;
+  goal?: string;
+  columns: string[];
+  rows: string[][];
+}
+
+/**
+ * Answer the user's question directly from the rows a query returned, instead
+ * of expressing everything in the query language (advanced mode's
+ * post-processing step — used when generateQuery set postProcess=true, e.g.
+ * "list the distinct keys across these JSON inputs"). Returns the answer text,
+ * or "" on any failure so the caller can just fall back to showing the table.
+ * Only a bounded sample of rows is sent (see buildAnalysisPrompt).
+ */
+export async function analyzeResults(opts: AnalyzeOptions): Promise<string> {
+  const prompt = buildAnalysisPrompt({
+    question: opts.question,
+    goal: opts.goal,
+    columns: opts.columns,
+    rows: opts.rows,
+  });
+  try {
+    if (opts.provider === "bedrock") {
+      const client = new BedrockRuntimeClient({
+        region: opts.region,
+        credentials: opts.credentials,
+      });
+      const response = await client.send(
+        new ConverseCommand({
+          modelId: opts.modelId,
+          messages: [{ role: "user", content: [{ text: prompt }] }],
+          inferenceConfig: { maxTokens: 1024, temperature: 0 },
+        }),
+      );
+      const blocks: ContentBlock[] = response.output?.message?.content ?? [];
+      return blocks
+        .map((b) => ("text" in b && b.text ? b.text : ""))
+        .join("")
+        .trim();
+    }
+
+    if (opts.provider === "copilot") {
+      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+      if (models.length === 0) return "";
+      const response = await models[0].sendRequest(
+        [vscode.LanguageModelChatMessage.User(prompt)],
+        {},
+        new vscode.CancellationTokenSource().token,
+      );
+      let text = "";
+      for await (const chunk of response.text) text += chunk;
+      return text.trim();
+    }
+
+    // local
+    const { model } = await getLocalModel();
+    const { LlamaChatSession } = await import("node-llama-cpp");
+    const context = await model.createContext();
+    const session = new LlamaChatSession({
+      contextSequence: context.getSequence(),
+    });
+    const text = await session.prompt(prompt);
+    await context.dispose();
+    return text.trim();
+  } catch {
+    return "";
+  }
+}
+
 interface GenerateOptions {
   provider: LlmProvider;
   region: string;
@@ -195,6 +290,12 @@ interface GenerateOptions {
   destinationType: string;
   tableName?: string;
   onStatus?: (text: string) => void;
+  /**
+   * Advanced (agentic) mode: when true, the system prompt tells the model it
+   * may return raw data + set postProcess=true for a follow-up analysis step.
+   * Basic mode leaves this false, so its prompt/behavior are unchanged.
+   */
+  agentic?: boolean;
 }
 
 /**
@@ -224,6 +325,7 @@ async function generateViaBedrock(
   });
   const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
     tableName: opts.tableName,
+    agentic: opts.agentic,
   });
 
   const response = await client.send(
@@ -247,6 +349,8 @@ async function generateViaBedrock(
         explanation?: string;
         timeRangeMs?: number;
         suggestedCharts?: string[];
+        postProcess?: boolean;
+        postProcessGoal?: string;
       }
     | undefined;
 
@@ -261,6 +365,11 @@ async function generateViaBedrock(
     explanation: (input.explanation ?? "").trim(),
     timeRangeMs: input.timeRangeMs ?? DEFAULT_TIME_RANGE_MS,
     suggestedCharts: input.suggestedCharts,
+    postProcess: input.postProcess === true,
+    postProcessGoal:
+      typeof input.postProcessGoal === "string"
+        ? input.postProcessGoal.trim()
+        : undefined,
   };
 }
 
@@ -286,6 +395,7 @@ async function generateViaCopilot(
   const model = models[0];
   const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
     tableName: opts.tableName,
+    agentic: opts.agentic,
   });
 
   const messages = [
@@ -411,6 +521,7 @@ async function generateViaLocal(
 
   const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
     tableName: opts.tableName,
+    agentic: opts.agentic,
   });
 
   const prompt = `${systemPrompt}\n\nRespond with ONLY a JSON object: {"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\nFor suggestedCharts pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nOmit timeRangeMs if not mentioned (default 24h).\n\nUser question: ${opts.question}`;

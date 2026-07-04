@@ -76,8 +76,17 @@ export type InboundMessage =
       iteration: number;
       query: string;
       rowCount?: number;
-      outcome: "satisfied" | "unsatisfied" | "error";
+      outcome: "satisfied" | "unsatisfied" | "error" | "analyzed";
       detail?: string;
+    }
+  | {
+      /**
+       * Advanced mode: the final natural-language answer synthesized by the
+       * post-processing (analyze) step from a query's raw rows. Shown above
+       * the results table. Basic mode never emits this.
+       */
+      type: "agentAnswer";
+      text: string;
     }
   | { type: "error"; message: string }
   | { type: "settingsSaved" }
@@ -93,7 +102,7 @@ export interface AgentStep {
   iteration: number;
   query: string;
   rowCount?: number;
-  outcome: "satisfied" | "unsatisfied" | "error";
+  outcome: "satisfied" | "unsatisfied" | "error" | "analyzed";
   detail?: string;
 }
 

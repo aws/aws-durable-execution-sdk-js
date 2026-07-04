@@ -3,6 +3,7 @@ import { applyMode, Mode } from "@cloudscape-design/global-styles";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Header from "@cloudscape-design/components/header";
 import Button from "@cloudscape-design/components/button";
+import Alert from "@cloudscape-design/components/alert";
 import { postMessage } from "./vscode";
 import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
@@ -40,6 +41,7 @@ export function App() {
   const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [agentAnswer, setAgentAnswer] = useState("");
 
   const handleMessage = useCallback((event: MessageEvent<InboundMessage>) => {
     const msg = event.data;
@@ -81,6 +83,9 @@ export function App() {
             detail: msg.detail,
           },
         ]);
+        break;
+      case "agentAnswer":
+        setAgentAnswer(msg.text);
         break;
       case "error":
         setError(msg.message);
@@ -124,6 +129,7 @@ export function App() {
     setError("");
     setResults(null);
     setAgentSteps([]);
+    setAgentAnswer("");
     setPage("data");
     postMessage({ type: "generate", question });
   };
@@ -194,6 +200,12 @@ export function App() {
                 />
 
                 <AgentTranscript steps={agentSteps} running={loading} />
+
+                {agentAnswer && (
+                  <Alert type="success" header="Answer">
+                    <div style={{ whiteSpace: "pre-wrap" }}>{agentAnswer}</div>
+                  </Alert>
+                )}
 
                 {results && (
                   <SpaceBetween size="m">

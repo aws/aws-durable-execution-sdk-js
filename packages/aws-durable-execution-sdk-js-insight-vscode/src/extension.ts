@@ -3,6 +3,7 @@ import { readConfig, resolveCredentials } from "./config";
 import {
   generateQuery,
   verifyResult,
+  analyzeResults,
   isModelDownloaded,
   ensureModel,
   type GeneratedQuery,
@@ -438,6 +439,7 @@ class ExplorerPanel {
       question: q,
       destinationType: cfg.destinationType,
       tableName,
+      agentic: true,
     });
 
     let lastExec: QueryExecution | undefined;
@@ -473,6 +475,7 @@ class ExplorerPanel {
             question: `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
             destinationType: cfg.destinationType,
             tableName,
+            agentic: true,
           });
           continue;
         }
@@ -480,6 +483,40 @@ class ExplorerPanel {
       }
 
       lastExec = exec;
+
+      // If the model chose to fetch raw data for a post-processing step (it
+      // set postProcess=true because the answer was awkward to express in the
+      // query language), answer the question from those rows via an LLM
+      // analysis step instead of the verify/refine loop.
+      if (generated.postProcess) {
+        this.post({
+          type: "status",
+          text: `Agentic step ${iter}/${MAX_ITERATIONS}: analyzing results...`,
+        });
+        const answer = await analyzeResults({
+          provider: cfg.llmProvider,
+          region: cfg.region,
+          credentials,
+          modelId: cfg.bedrockModelId,
+          question: q,
+          goal: generated.postProcessGoal,
+          columns: exec.columns,
+          rows: exec.rows,
+        });
+        this.post({
+          type: "agentStep",
+          iteration: iter,
+          query: exec.finalQuery,
+          rowCount: exec.count ?? exec.rows.length,
+          outcome: "analyzed",
+          detail:
+            generated.postProcessGoal ??
+            "Post-processed the returned rows to answer the question.",
+        });
+        if (answer) this.post({ type: "agentAnswer", text: answer });
+        this.post({ type: "results", ...exec });
+        return;
+      }
 
       // Judge whether the results answer the question.
       this.post({
@@ -529,6 +566,7 @@ class ExplorerPanel {
         question: `${q}\n\nA previous attempt ran this query:\n${exec.finalQuery}\n\nIt returned ${rowCount} row(s), but that did not adequately answer the question because: ${verdict.reason}${suggestion}\nPlease produce an improved query.`,
         destinationType: cfg.destinationType,
         tableName,
+        agentic: true,
       });
     }
 

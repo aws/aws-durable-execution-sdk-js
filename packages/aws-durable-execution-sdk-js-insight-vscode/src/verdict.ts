@@ -88,3 +88,51 @@ export function buildVerifyInstruction(opts: {
     "shape, or filter. If not satisfied, suggest a concrete query change.",
   ].join("\n");
 }
+
+/**
+ * Build the instruction for the post-processing / "analyze" step (advanced
+ * mode): answer the question directly from the rows a query returned, rather
+ * than expressing everything in the query language. Bounded in both rows and
+ * per-cell length so a large result can't blow the model's context window.
+ */
+export function buildAnalysisPrompt(opts: {
+  question: string;
+  goal?: string;
+  columns: string[];
+  rows: string[][];
+  maxRows?: number;
+  maxCellChars?: number;
+}): string {
+  const maxRows = opts.maxRows ?? 50;
+  const maxCellChars = opts.maxCellChars ?? 500;
+  const shown = opts.rows.slice(0, maxRows);
+  const truncatedRows = opts.rows.length > maxRows;
+  const body = shown
+    .map((r) =>
+      opts.columns
+        .map((c, i) => {
+          let v = r[i] ?? "";
+          if (v.length > maxCellChars) {
+            v = `${v.slice(0, maxCellChars)}…(truncated)`;
+          }
+          return `${c}=${v}`;
+        })
+        .join(" | "),
+    )
+    .join("\n");
+  const lines: string[] = [
+    "Answer the user's question using ONLY the data in the rows below. Do not",
+    "invent values that are not present. Be concise and direct; if the answer",
+    "is a list, output a plain list with no surrounding prose.",
+    "",
+    `Question: ${opts.question}`,
+  ];
+  if (opts.goal) lines.push(`What to extract: ${opts.goal}`);
+  lines.push(
+    "",
+    `Columns: ${opts.columns.join(", ") || "(none)"}`,
+    `Rows (${shown.length}${truncatedRows ? ` of ${opts.rows.length}, truncated` : ""}):`,
+    body || "(no rows)",
+  );
+  return lines.join("\n");
+}
