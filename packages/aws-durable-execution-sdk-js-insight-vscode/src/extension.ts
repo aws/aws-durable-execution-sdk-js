@@ -452,7 +452,14 @@ class ExplorerPanel {
 
       let exec: QueryExecution;
       try {
-        exec = await this.executeQuery(cfg, credentials, generated);
+        // Only inject drill-down/partition columns when the model marked the
+        // result row-level (and it isn't a post-process raw fetch). Otherwise
+        // run the query exactly as written — injecting into an aggregate/
+        // DISTINCT/UNNEST/derived query corrupts it (columns not in scope).
+        exec = await this.executeQuery(cfg, credentials, generated, {
+          injectDrillDown:
+            generated.rowLevel === true && !generated.postProcess,
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         this.post({
@@ -587,16 +594,25 @@ class ExplorerPanel {
     cfg: ReturnType<typeof readConfig>,
     credentials: ReturnType<typeof resolveCredentials>,
     generated: GeneratedQuery,
+    opts?: { injectDrillDown?: boolean },
   ): Promise<QueryExecution> {
+    // Whether to inject the drill-down identifier (and Athena partition)
+    // columns into the query. Basic mode always does (default true). Advanced
+    // mode passes false unless the model flagged the result as row-level, so
+    // an analytical query (DISTINCT/UNNEST/aggregate/derived) runs exactly as
+    // written instead of being corrupted by columns that aren't in its scope.
+    const inject = opts?.injectDrillDown ?? true;
     if (cfg.destinationType === "dynamodb") {
       if (!cfg.dynamodbTableName)
         throw new Error("No DynamoDB table configured.");
       assertReadOnly(generated.query, "PartiQL");
-      const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
-        generated.query,
-        "pk",
-        "sql",
-      );
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "pk", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
       const table = await runDynamoDBQuery({
         region: cfg.region,
         credentials,
@@ -616,11 +632,13 @@ class ExplorerPanel {
       if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
         throw new Error("Aurora not configured.");
       assertReadOnly(generated.query, "PostgreSQL");
-      const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
-        generated.query,
-        "execution_arn",
-        "sql",
-      );
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "execution_arn", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
       const table = await runAuroraQuery({
         region: cfg.region,
         credentials,
@@ -647,12 +665,17 @@ class ExplorerPanel {
       // casing). Also carry the year/month/day partition columns through so
       // the row-detail fetch can prune to one partition instead of scanning
       // the whole table (see fetchAthenaRecord's doc comment).
-      const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
-        generated.query,
-        "executionarn",
-        "sql",
-        ["year", "month", "day"],
-      );
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "executionarn", "sql", [
+            "year",
+            "month",
+            "day",
+          ])
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
       const table = await runAthenaQuery({
         region: cfg.region,
         credentials,
@@ -681,7 +704,13 @@ class ExplorerPanel {
       query: finalQuery,
       idColumn,
       injectedColumns,
-    } = ensureIdentifierColumn(limited, "executionArn", "logs-insights");
+    } = inject
+      ? ensureIdentifierColumn(limited, "executionArn", "logs-insights")
+      : {
+          query: limited,
+          idColumn: undefined,
+          injectedColumns: [] as string[],
+        };
     const endTimeMs = Date.now();
     const startTimeMs = endTimeMs - generated.timeRangeMs;
     const table = await runLogsInsightsQuery({

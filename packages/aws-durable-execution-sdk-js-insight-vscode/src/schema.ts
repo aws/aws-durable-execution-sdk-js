@@ -399,6 +399,13 @@ const AGENTIC_NOTE = [
   "follow-up step will read those rows and produce the final answer. Prefer a",
   "normal, complete query whenever the query language CAN express the answer",
   "directly — only use postProcess when it genuinely can't.",
+  "",
+  "Also set rowLevel=true when each result row corresponds to a single",
+  "execution and the user is browsing individual executions (e.g. 'show the",
+  "last 20 failed executions'), so a per-row detail drill-down is offered.",
+  "Leave rowLevel false for aggregations, DISTINCT or derived projections,",
+  "key/field enumeration, UNNEST-based results, or postProcess queries — any",
+  "result where a row is not one execution. When in doubt, leave it false.",
 ].join("\n");
 
 export function buildSystemPrompt(

@@ -27,6 +27,16 @@ export interface GeneratedQuery {
   postProcess?: boolean;
   /** What the post-processing step should extract from the raw rows. */
   postProcessGoal?: string;
+  /**
+   * Advanced (agentic) mode only: the model set this when each result row
+   * corresponds to a single execution and browsing individual executions is
+   * the point — so a per-row drill-down (and the identifier/partition columns
+   * that enable it) is appropriate. Left false for aggregations, DISTINCT/
+   * derived projections, key enumeration, and post-processing, where forcing
+   * an execution-identifier column onto the result is meaningless or would
+   * corrupt the query. Ignored in basic mode (which always injects).
+   */
+  rowLevel?: boolean;
 }
 
 const DEFAULT_TIME_RANGE_MS = 86_400_000;
@@ -64,6 +74,11 @@ const EMIT_QUERY_TOOL: Tool = {
             type: "string",
             description:
               "When postProcess is true: a short description of what to extract or compute from the returned rows (e.g. 'the distinct set of top-level keys across all input JSON objects').",
+          },
+          rowLevel: {
+            type: "boolean",
+            description:
+              "Set true ONLY when each result row corresponds to a single execution and the user is browsing individual executions (e.g. 'show the last 20 failed executions'), so a per-row detail drill-down is useful. Set false/omit for aggregations (GROUP BY/COUNT/etc.), DISTINCT or derived projections, key/field enumeration, UNNEST-based results, or postProcess queries — anything where a result row is not one execution.",
           },
         },
         required: ["query", "explanation"],
@@ -351,6 +366,7 @@ async function generateViaBedrock(
         suggestedCharts?: string[];
         postProcess?: boolean;
         postProcessGoal?: string;
+        rowLevel?: boolean;
       }
     | undefined;
 
@@ -370,6 +386,7 @@ async function generateViaBedrock(
       typeof input.postProcessGoal === "string"
         ? input.postProcessGoal.trim()
         : undefined,
+    rowLevel: input.rowLevel === true,
   };
 }
 
