@@ -142,7 +142,36 @@ async function paginateResults(
  * (JSON SerDe, not NDJSON), Hive-style date partitioning
  * (year=YYYY/month=MM/day=DD/), and the canonical `operations` array (the
  * S3Exporter does not reshape into `operationsByName`).
+ *
+ * Uses partition projection (year/month/day as `integer` type, with a
+ * `storage.location.template` reconstructing S3Exporter's exact key
+ * pattern) instead of a plain `PARTITIONED BY` + Glue-catalog partition
+ * list. With projection, Athena computes valid partition values and their
+ * S3 locations mathematically from these table properties at query time —
+ * it never calls Glue's GetPartitions, so there's no partition-count
+ * metadata lookup to slow down as more days accumulate, and critically, no
+ * MSCK REPAIR TABLE (or manual ADD PARTITION) is needed at all: a query for
+ * today's data works the moment S3Exporter writes today's first object,
+ * with no discovery step first. See
+ * https://docs.aws.amazon.com/athena/latest/ug/partition-projection.html
+ *
+ * Trade-off: the `year` range needs a fixed upper bound (integer projection
+ * requires a bounded range, unlike a real date type — which Athena's docs
+ * note doesn't support separate year/month/day partition columns, only a
+ * single combined date column). A wider range means more query-planning
+ * work for any query that doesn't filter on year/month/day (Athena has to
+ * reason about every year × month × day combination in range as a
+ * candidate partition) — verified empirically: a `GROUP BY year, month,
+ * day` with no date filter took ~30s of query planning time against a
+ * 2024–2100 range (76 years × 12 × 31 ≈ 28k candidate partitions), most of
+ * it before any data was scanned. Kept deliberately narrow (5 years out)
+ * rather than a large round number, to bound that cost; if data is ever
+ * queried past PROJECTION_YEAR_END, raise it and either recreate the table
+ * or ALTER TABLE SET TBLPROPERTIES with the new range.
  */
+const PROJECTION_YEAR_START = 2024;
+const PROJECTION_YEAR_END = 2030;
+
 export function buildCreateTableDdl(opts: {
   database: string;
   table: string;
@@ -151,6 +180,9 @@ export function buildCreateTableDdl(opts: {
   const loc = opts.s3Location.endsWith("/")
     ? opts.s3Location
     : `${opts.s3Location}/`;
+  // Trailing slash trimmed from loc for the template, since the template
+  // itself supplies the path separators between segments.
+  const locTemplate = `${loc}year=\${year}/month=\${month}/day=\${day}`;
   return `CREATE EXTERNAL TABLE IF NOT EXISTS \`${opts.database}\`.\`${opts.table}\` (
   recordType string,
   schemaVersion string,
@@ -192,7 +224,19 @@ PARTITIONED BY (year string, month string, day string)
 ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
 WITH SERDEPROPERTIES ('ignore.malformed.json' = 'true')
 LOCATION '${loc}'
-TBLPROPERTIES ('has_encrypted_data'='false');`;
+TBLPROPERTIES (
+  'has_encrypted_data'='false',
+  'projection.enabled'='true',
+  'projection.year.type'='integer',
+  'projection.year.range'='${PROJECTION_YEAR_START},${PROJECTION_YEAR_END}',
+  'projection.month.type'='integer',
+  'projection.month.range'='1,12',
+  'projection.month.digits'='2',
+  'projection.day.type'='integer',
+  'projection.day.range'='1,31',
+  'projection.day.digits'='2',
+  'storage.location.template'='${locTemplate}'
+);`;
 }
 
 /** Check whether the Glue table already exists (used to prompt for auto-create). */
@@ -221,8 +265,17 @@ export async function tableExists(opts: {
 
 /**
  * Create the Glue table (via Athena DDL, which registers it in the Glue
- * Catalog) and discover existing Hive partitions with MSCK REPAIR TABLE.
- * Idempotent — safe to call every time settings are saved.
+ * Catalog). Idempotent — safe to call every time settings are saved.
+ *
+ * No MSCK REPAIR TABLE / partition discovery step: buildCreateTableDdl uses
+ * partition projection, so Athena computes valid year/month/day partitions
+ * (and their S3 locations) from the table properties instead of listing
+ * them from the Glue Catalog. Today's partition is queryable the moment
+ * S3Exporter writes today's first record — there's nothing to "discover"
+ * after the table exists, and running MSCK REPAIR TABLE against a
+ * projection-enabled table is a documented no-op (verified: it does not
+ * error, it just has no effect — projected partitions aren't tracked in
+ * the Glue Catalog for it to add).
  */
 export async function ensureAthenaTable(opts: {
   region: string;
@@ -245,15 +298,6 @@ export async function ensureAthenaTable(opts: {
     workgroup: opts.workgroup,
     outputLocation: opts.outputLocation,
     query: ddl,
-  });
-  // Discover the year=/month=/day= partitions already written by S3Exporter.
-  await runAthenaQuery({
-    region: opts.region,
-    credentials: opts.credentials,
-    database: opts.database,
-    workgroup: opts.workgroup,
-    outputLocation: opts.outputLocation,
-    query: `MSCK REPAIR TABLE \`${opts.database}\`.\`${opts.table}\`;`,
   });
 }
 

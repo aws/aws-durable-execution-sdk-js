@@ -94,9 +94,13 @@ Athena.
 | Query Result Location | S3 path for Athena's query output, e.g. `s3://my-bucket/athena-results/`            |
 
 On **Save**, the Explorer checks whether the Glue table already exists. If not, it
-auto-creates it with `CREATE EXTERNAL TABLE` (matching `S3Exporter`'s JSON layout
-and Hive date partitioning) and runs `MSCK REPAIR TABLE` to discover any partitions
-already written — no manual DDL or Glue crawler required.
+auto-creates it with `CREATE EXTERNAL TABLE`, using
+[partition projection](https://docs.aws.amazon.com/athena/latest/ug/partition-projection.html)
+so Athena computes valid year/month/day partitions (and their S3 locations)
+directly from the table properties instead of listing them from the Glue
+Catalog — today's data is queryable the moment `S3Exporter` writes it, with no
+`MSCK REPAIR TABLE` or crawler run, and no re-discovery step needed as more days
+accumulate.
 
 Because the canonical `operations` array (not `operationsByName`) is what
 `S3Exporter` writes, per-operation questions are answered with `UNNEST` rather than

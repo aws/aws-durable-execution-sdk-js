@@ -264,7 +264,31 @@ export class InsightDestinationsStack extends cdk.Stack {
         tableInput: {
           name: config.destinations.s3.glueTableName,
           tableType: "EXTERNAL_TABLE",
-          parameters: { has_encrypted_data: "false" },
+          // Partition projection (see the matching properties in
+          // aws-durable-execution-sdk-js-insight-vscode/src/athena.ts's
+          // buildCreateTableDdl, which customers use for their own buckets)
+          // — Athena computes valid year/month/day partitions and their S3
+          // locations from these properties instead of calling Glue's
+          // GetPartitions, so today's partition is queryable the moment
+          // S3Exporter writes today's first record, with no MSCK REPAIR
+          // TABLE / partition-discovery step needed (and none possible —
+          // Athena disallows ADD PARTITION/MSCK REPAIR on a
+          // projection-enabled table).
+          parameters: {
+            has_encrypted_data: "false",
+            "projection.enabled": "true",
+            "projection.year.type": "integer",
+            "projection.year.range": "2024,2030",
+            "projection.month.type": "integer",
+            "projection.month.range": "1,12",
+            "projection.month.digits": "2",
+            "projection.day.type": "integer",
+            "projection.day.range": "1,31",
+            "projection.day.digits": "2",
+            "storage.location.template": `${insightBucket.s3UrlForObject(
+              "workflow-insight/",
+            )}year=\${year}/month=\${month}/day=\${day}`,
+          },
           partitionKeys: [
             { name: "year", type: "string" },
             { name: "month", type: "string" },
