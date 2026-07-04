@@ -767,11 +767,12 @@ class ExplorerPanel {
     });
 
     if (!final || !final.query) {
-      // No usable query. If the model produced a prose answer, still show it
-      // and record the turn so the conversation continues.
-      if (final?.answer) {
-        this.post({ type: "agentAnswer", text: final.answer });
-        this.recordTurn(q, final.answer);
+      // No usable query. If the model produced any prose, still show it and
+      // record the turn so the conversation continues.
+      const proseOnly = final?.answer || final?.explanation;
+      if (proseOnly) {
+        this.post({ type: "agentAnswer", text: proseOnly });
+        this.recordTurn(q, proseOnly);
         return;
       }
       this.post({
@@ -796,14 +797,15 @@ class ExplorerPanel {
       },
       { injectDrillDown: final.rowLevel === true },
     );
-    if (final.answer) this.post({ type: "agentAnswer", text: final.answer });
+    // The prose reply is the answer; fall back to the explanation so the
+    // conversation never shows a bare "here are the results" placeholder.
+    const prose = final.answer || final.explanation;
+    if (prose) this.post({ type: "agentAnswer", text: prose });
     this.post({ type: "results", ...exec });
-    // Record the turn (prefer the prose answer; fall back to the explanation)
-    // so follow-up questions have this exchange as context.
+    // Record the turn so follow-up questions have this exchange as context.
     this.recordTurn(
       q,
-      final.answer ||
-        final.explanation ||
+      prose ||
         `Returned ${exec.count ?? exec.rows.length} row(s) for: ${final.query}`,
     );
   }
