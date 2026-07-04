@@ -47,23 +47,25 @@ const FINISH_TOOL: Tool = {
   toolSpec: {
     name: "finish",
     description:
-      "Call once you have a query whose results answer the user's question.",
+      "Call to deliver your reply to the user. The reply is the natural-language `answer`; a `query` is optional supporting data.",
     inputSchema: {
       json: {
         type: "object",
         properties: {
-          query: {
-            type: "string",
-            description: "The final query whose results answer the question.",
-          },
-          explanation: {
-            type: "string",
-            description: "One sentence explaining what the final query does.",
-          },
           answer: {
             type: "string",
             description:
-              "Optional plain-language answer derived from the rows, for questions the table alone doesn't answer.",
+              "REQUIRED. The natural-language reply to the user, standing on its own — describe/list the fields or structure, name the relevant columns, or state the numbers. Do NOT rely on a table to convey the answer; the table (if any) only supports this text.",
+          },
+          query: {
+            type: "string",
+            description:
+              "Optional. A query whose result table supports the answer. Omit it for questions that are fully answered by `answer` alone (e.g. 'which field holds the amount?').",
+          },
+          explanation: {
+            type: "string",
+            description:
+              "Optional one sentence explaining what the query does.",
           },
           suggestedCharts: { type: "array", items: { type: "string" } },
           rowLevel: {
@@ -77,7 +79,7 @@ const FINISH_TOOL: Tool = {
               "Log-based sources only: the time window (hours back) the final query should run over (default 24). Ignored for table/SQL sources.",
           },
         },
-        required: ["query", "explanation"],
+        required: ["answer"],
       },
     },
   },
