@@ -235,15 +235,18 @@ export function App() {
           <>
             {page === "data" && (
               <>
-                <QueryPanel
-                  onAsk={handleAsk}
-                  loading={loading}
-                  status={status}
-                  error={error}
-                />
+                {/* Basic mode keeps the composer at the top (single-shot Q→A). */}
+                {settings.agenticMode !== "advanced" && (
+                  <QueryPanel
+                    onAsk={handleAsk}
+                    loading={loading}
+                    status={status}
+                    error={error}
+                  />
+                )}
 
-                <AgentTranscript steps={agentSteps} running={loading} />
-
+                {/* Advanced mode is a conversation: the history flows from the
+                    top down to the composer anchored at the bottom. */}
                 {settings.agenticMode === "advanced" && chat.length > 0 && (
                   <Container header={<Header variant="h3">Conversation</Header>}>
                     <SpaceBetween size="s">
@@ -267,6 +270,8 @@ export function App() {
                   </Container>
                 )}
 
+                <AgentTranscript steps={agentSteps} running={loading} />
+
                 {results && (
                   <SpaceBetween size="m">
                     <ResultsTable
@@ -285,6 +290,17 @@ export function App() {
                       Visualize →
                     </Button>
                   </SpaceBetween>
+                )}
+
+                {/* Advanced mode: composer anchored at the bottom, chat-style,
+                    so asking a follow-up continues the conversation above. */}
+                {settings.agenticMode === "advanced" && (
+                  <QueryPanel
+                    onAsk={handleAsk}
+                    loading={loading}
+                    status={status}
+                    error={error}
+                  />
                 )}
               </>
             )}
