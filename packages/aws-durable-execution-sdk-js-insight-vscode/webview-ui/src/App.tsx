@@ -8,8 +8,9 @@ import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
 import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
+import { AgentTranscript } from "./AgentTranscript";
 import { SqsLiveView, toTable as sqsToTable, MAX_DISPLAYED_MESSAGES } from "./SqsLiveView";
-import type { InboundMessage, Settings, SqsMessageRow } from "./types";
+import type { InboundMessage, Settings, SqsMessageRow, AgentStep } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 
 applyMode(Mode.Dark);
@@ -38,6 +39,7 @@ export function App() {
   const [sqsListening, setSqsListening] = useState(false);
   const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
 
   const handleMessage = useCallback((event: MessageEvent<InboundMessage>) => {
     const msg = event.data;
@@ -67,6 +69,18 @@ export function App() {
       case "detailResult":
         setDetailFields(msg.fields);
         setDetailLoading(false);
+        break;
+      case "agentStep":
+        setAgentSteps((prev) => [
+          ...prev,
+          {
+            iteration: msg.iteration,
+            query: msg.query,
+            rowCount: msg.rowCount,
+            outcome: msg.outcome,
+            detail: msg.detail,
+          },
+        ]);
         break;
       case "error":
         setError(msg.message);
@@ -109,6 +123,7 @@ export function App() {
     setLoading(true);
     setError("");
     setResults(null);
+    setAgentSteps([]);
     setPage("data");
     postMessage({ type: "generate", question });
   };
@@ -177,6 +192,8 @@ export function App() {
                   status={status}
                   error={error}
                 />
+
+                <AgentTranscript steps={agentSteps} running={loading} />
 
                 {results && (
                   <SpaceBetween size="m">

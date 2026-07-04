@@ -7,6 +7,11 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { buildSystemPrompt } from "./schema";
+import {
+  parseVerdict,
+  buildVerifyInstruction,
+  type ResultVerdict,
+} from "./verdict";
 
 export interface GeneratedQuery {
   query: string;
@@ -49,6 +54,137 @@ const EMIT_QUERY_TOOL: Tool = {
 };
 
 export type LlmProvider = "bedrock" | "copilot" | "local";
+
+// ─── Result verification (agentic / "advanced" mode) ─────────────────────────
+
+const JUDGE_TOOL: Tool = {
+  toolSpec: {
+    name: "judge_result",
+    description:
+      "Decide whether the query results answer the user's question, and if not, suggest how to fix the query.",
+    inputSchema: {
+      json: {
+        type: "object",
+        properties: {
+          satisfied: {
+            type: "boolean",
+            description:
+              "true if the results genuinely answer the question. An empty result set can still be a correct answer (e.g. 'no failures today') — only mark unsatisfied if the query looks like it targets the wrong field/shape/filter.",
+          },
+          reason: {
+            type: "string",
+            description: "One sentence explaining the verdict.",
+          },
+          suggestion: {
+            type: "string",
+            description:
+              "If not satisfied, a concrete change to the query that would better answer the question.",
+          },
+        },
+        required: ["satisfied", "reason"],
+      },
+    },
+  },
+};
+
+interface VerifyOptions {
+  provider: LlmProvider;
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  modelId: string;
+  question: string;
+  query: string;
+  columns: string[];
+  rowCount: number;
+  sampleRows: string[][];
+}
+
+/**
+ * Ask the model whether a query's results answer the user's question.
+ * Advanced-mode only. Any failure resolves to "satisfied" so verification can
+ * never block a legitimate result from being shown.
+ */
+export async function verifyResult(
+  opts: VerifyOptions,
+): Promise<ResultVerdict> {
+  const instruction = buildVerifyInstruction(opts);
+  try {
+    if (opts.provider === "bedrock") {
+      const client = new BedrockRuntimeClient({
+        region: opts.region,
+        credentials: opts.credentials,
+      });
+      const response = await client.send(
+        new ConverseCommand({
+          modelId: opts.modelId,
+          messages: [{ role: "user", content: [{ text: instruction }] }],
+          toolConfig: {
+            tools: [JUDGE_TOOL],
+            toolChoice: { tool: { name: "judge_result" } },
+          },
+          inferenceConfig: { maxTokens: 512, temperature: 0 },
+        }),
+      );
+      const blocks: ContentBlock[] = response.output?.message?.content ?? [];
+      const toolUse = blocks.find((b) => "toolUse" in b && b.toolUse)?.toolUse;
+      const input = toolUse?.input as
+        | { satisfied?: unknown; reason?: unknown; suggestion?: unknown }
+        | undefined;
+      if (input && typeof input.satisfied === "boolean") {
+        return {
+          satisfied: input.satisfied,
+          reason:
+            typeof input.reason === "string" && input.reason.trim()
+              ? input.reason.trim()
+              : "No reason provided.",
+          suggestion:
+            typeof input.suggestion === "string" && input.suggestion.trim()
+              ? input.suggestion.trim()
+              : undefined,
+        };
+      }
+      return { satisfied: true, reason: "No verdict returned; accepting." };
+    }
+
+    if (opts.provider === "copilot") {
+      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+      if (models.length === 0) {
+        return { satisfied: true, reason: "No judge model available." };
+      }
+      const response = await models[0].sendRequest(
+        [
+          vscode.LanguageModelChatMessage.User(
+            `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+          ),
+        ],
+        {},
+        new vscode.CancellationTokenSource().token,
+      );
+      let text = "";
+      for await (const chunk of response.text) text += chunk;
+      return parseVerdict(text);
+    }
+
+    // local
+    const { model } = await getLocalModel();
+    const { LlamaChatSession } = await import("node-llama-cpp");
+    const context = await model.createContext();
+    const session = new LlamaChatSession({
+      contextSequence: context.getSequence(),
+    });
+    const text = await session.prompt(
+      `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+    );
+    await context.dispose();
+    return parseVerdict(text);
+  } catch {
+    // Never let a judge failure hide results or wedge the loop.
+    return {
+      satisfied: true,
+      reason: "Verification failed; accepting the results as-is.",
+    };
+  }
+}
 
 interface GenerateOptions {
   provider: LlmProvider;

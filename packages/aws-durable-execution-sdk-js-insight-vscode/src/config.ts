@@ -27,6 +27,7 @@ export interface InsightConfig {
   llmProvider: "bedrock" | "copilot" | "local";
   awsProfile?: string;
   bedrockModelId: string;
+  agenticMode: "basic" | "advanced";
 }
 
 const SECTION = "workflowInsight";
@@ -82,6 +83,10 @@ export function readConfig(): InsightConfig {
   const bedrockModelId =
     (c.get<string>("bedrockModelId") || "").trim() ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
+  const agenticMode =
+    (c.get<string>("agenticMode") || "").trim() === "advanced"
+      ? ("advanced" as const)
+      : ("basic" as const);
 
   return {
     region,
@@ -102,6 +107,7 @@ export function readConfig(): InsightConfig {
     llmProvider,
     awsProfile,
     bedrockModelId,
+    agenticMode,
   };
 }
 

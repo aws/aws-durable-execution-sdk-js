@@ -151,6 +151,19 @@
           "type": "string",
           "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
           "description": "Amazon Bedrock model id (or inference profile id) used to convert English to a Logs Insights query."
+        },
+        "workflowInsight.agenticMode": {
+          "type": "string",
+          "default": "basic",
+          "enum": [
+            "basic",
+            "advanced"
+          ],
+          "enumDescriptions": [
+            "Basic — generate one query, run it, and retry only if the query itself errors. Fastest and cheapest.",
+            "Advanced (agentic) — after a query runs, the model judges whether the results actually answer your question and refines the query if not, iterating a few times. Slower and uses more model/query calls (billable), best for exploratory questions. Bedrock recommended."
+          ],
+          "description": "How autonomously the assistant works to answer a question. 'advanced' adds a result-verification loop on top of 'basic'."
         }
       }
     }

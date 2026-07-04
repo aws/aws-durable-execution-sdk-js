@@ -66,11 +66,36 @@ export type InboundMessage =
       hiddenColumns?: string[];
     }
   | { type: "detailResult"; fields: Record<string, string> }
+  | {
+      /**
+       * Advanced (agentic) mode only: one completed iteration of the
+       * run→verify→refine loop, streamed so the webview can show the
+       * assistant's progress. Basic mode never emits these.
+       */
+      type: "agentStep";
+      iteration: number;
+      query: string;
+      rowCount?: number;
+      outcome: "satisfied" | "unsatisfied" | "error";
+      detail?: string;
+    }
   | { type: "error"; message: string }
   | { type: "settingsSaved" }
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
   | { type: "sqsMessages"; messages: SqsMessageRow[] };
+
+/**
+ * One completed iteration of the advanced (agentic) run→verify→refine loop,
+ * accumulated by the webview to render a progress transcript.
+ */
+export interface AgentStep {
+  iteration: number;
+  query: string;
+  rowCount?: number;
+  outcome: "satisfied" | "unsatisfied" | "error";
+  detail?: string;
+}
 
 export interface Settings {
   region: string;
@@ -91,6 +116,7 @@ export interface Settings {
   llmProvider: string;
   awsProfile: string;
   bedrockModelId: string;
+  agenticMode: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -112,4 +138,5 @@ export const DEFAULT_SETTINGS: Settings = {
   llmProvider: "bedrock",
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+  agenticMode: "basic",
 };

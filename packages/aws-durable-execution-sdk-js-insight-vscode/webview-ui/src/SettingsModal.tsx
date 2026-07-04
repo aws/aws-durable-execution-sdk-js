@@ -192,6 +192,24 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
             label: "LLM",
             content: (
               <SpaceBetween size="m">
+                <FormField
+                  label="Agentic Mode"
+                  description="Basic runs one query (retrying only on query errors). Advanced adds a loop where the model checks whether the results answer your question and refines the query if not — slower and uses more model/query calls, best for exploratory questions."
+                >
+                  <Select
+                    selectedOption={
+                      form.agenticMode === "advanced"
+                        ? { value: "advanced", label: "Advanced (agentic — verify & refine)" }
+                        : { value: "basic", label: "Basic (single query + error retry)" }
+                    }
+                    options={[
+                      { value: "basic", label: "Basic (single query + error retry)" },
+                      { value: "advanced", label: "Advanced (agentic — verify & refine)" },
+                    ]}
+                    onChange={({ detail }) => update("agenticMode", detail.selectedOption.value ?? "basic")}
+                  />
+                </FormField>
+
                 <FormField label="LLM Provider" description="Which model to use for converting questions to queries">
                   <Select
                     selectedOption={

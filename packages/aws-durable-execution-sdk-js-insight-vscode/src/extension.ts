@@ -1,6 +1,12 @@
 import * as vscode from "vscode";
 import { readConfig, resolveCredentials } from "./config";
-import { generateQuery, isModelDownloaded, ensureModel } from "./llm";
+import {
+  generateQuery,
+  verifyResult,
+  isModelDownloaded,
+  ensureModel,
+  type GeneratedQuery,
+} from "./llm";
 import { runLogsInsightsQuery, fetchLogsInsightsRecord } from "./logsInsights";
 import { runDynamoDBQuery, fetchDynamoDBRecord } from "./dynamodb";
 import { runAuroraQuery, fetchAuroraRecord } from "./aurora";
@@ -35,6 +41,50 @@ type InboundMessage =
       month?: string;
       day?: string;
     };
+
+/**
+ * Normalized results payload: the body of a "results" message minus its
+ * `type`. Produced by ExplorerPanel.executeQuery and shared by both basic and
+ * advanced (agentic) generation paths.
+ */
+interface QueryExecution {
+  columns: string[];
+  rows: string[][];
+  count?: number;
+  explanation?: string;
+  suggestedCharts?: string[];
+  finalQuery: string;
+  idColumn?: string;
+  partitionColumns?: { year?: string; month?: string; day?: string };
+  hiddenColumns?: string[];
+}
+
+/**
+ * Whether a query-execution error is worth asking the model to fix (a
+ * malformed/invalid query) versus a hard failure (missing config, no
+ * permissions) that a retry can't help. Kept identical to the condition the
+ * basic path has always used, so both modes retry on exactly the same errors.
+ */
+function isRetryableQueryError(msg: string): boolean {
+  return (
+    msg.includes("MalformedQueryException") ||
+    msg.includes("ValidationException") ||
+    msg.includes("Athena query failed") ||
+    msg.includes("INVALID_") ||
+    msg.includes("SYNTAX_ERROR")
+  );
+}
+
+/**
+ * Extra guidance appended to a fix-it prompt when the failure is a
+ * COLUMN_NOT_FOUND (the classic "referenced an input/output JSON field as a
+ * bare column" mistake). Empty for any other error.
+ */
+function columnNotFoundHint(msg: string): string {
+  return msg.includes("COLUMN_NOT_FOUND")
+    ? "\n\nThis is likely because a field that lives inside input/output was referenced as a bare column instead of via json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — check every column reference (including in GROUP BY/ORDER BY) against the schema's actual top-level columns."
+    : "";
+}
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -140,6 +190,7 @@ class ExplorerPanel {
         llmProvider: cfg.llmProvider,
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
+        agenticMode: cfg.agenticMode,
       },
       modelDownloaded: isModelDownloaded(),
     });
@@ -305,6 +356,13 @@ class ExplorerPanel {
             ? cfg.athenaTable
             : undefined;
 
+    // "advanced" (agentic) mode adds a result-verification/refine loop on top
+    // of the basic flow. Basic mode is unchanged — same single generation,
+    // same run, same error-only retry.
+    if (cfg.agenticMode === "advanced") {
+      return await this.onGenerateAgentic(q, cfg, credentials, tableName);
+    }
+
     this.post({ type: "status", text: "Generating query..." });
     let generated = await generateQuery({
       provider: cfg.llmProvider,
@@ -329,152 +387,22 @@ class ExplorerPanel {
         text: attempt === 0 ? "Running query..." : `Retrying (${attempt}/2)...`,
       });
       try {
-        if (cfg.destinationType === "dynamodb") {
-          if (!cfg.dynamodbTableName)
-            throw new Error("No DynamoDB table configured.");
-          assertReadOnly(generated.query, "PartiQL");
-          const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
-            generated.query,
-            "pk",
-            "sql",
-          );
-          const table = await runDynamoDBQuery({
-            region: cfg.region,
-            credentials,
-            tableName: cfg.dynamodbTableName,
-            statement: query,
-          });
-          this.post({
-            type: "results",
-            ...table,
-            explanation: generated.explanation,
-            suggestedCharts: generated.suggestedCharts,
-            finalQuery: query,
-            idColumn: resolveActualColumnCasing(idColumn, table.columns),
-            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-          });
-          return;
-        }
-        if (cfg.destinationType === "aurora") {
-          if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
-            throw new Error("Aurora not configured.");
-          assertReadOnly(generated.query, "PostgreSQL");
-          const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
-            generated.query,
-            "execution_arn",
-            "sql",
-          );
-          const table = await runAuroraQuery({
-            region: cfg.region,
-            credentials,
-            resourceArn: cfg.auroraResourceArn,
-            secretArn: cfg.auroraSecretArn,
-            database: cfg.auroraDatabase,
-            sql: query,
-          });
-          this.post({
-            type: "results",
-            ...table,
-            explanation: generated.explanation,
-            suggestedCharts: generated.suggestedCharts,
-            finalQuery: query,
-            idColumn: resolveActualColumnCasing(idColumn, table.columns),
-            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-          });
-          return;
-        }
-        if (cfg.destinationType === "s3") {
-          if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
-          assertReadOnly(generated.query, "Trino/Presto SQL");
-          // The openx JSON SerDe lowercases all keys, so the identifier
-          // column the LLM's SQL would reference is "executionarn", not
-          // "executionArn" — match that here too (see schema.ts's Athena
-          // dialect notes on key casing). Also carry the year/month/day
-          // partition columns through so the row-detail fetch can prune to
-          // one partition instead of scanning the whole table (see
-          // fetchAthenaRecord's doc comment).
-          const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
-            generated.query,
-            "executionarn",
-            "sql",
-            ["year", "month", "day"],
-          );
-          const table = await runAthenaQuery({
-            region: cfg.region,
-            credentials,
-            database: cfg.athenaDatabase,
-            workgroup: cfg.athenaWorkgroup || undefined,
-            outputLocation: cfg.athenaOutputLocation || undefined,
-            query,
-          });
-          this.post({
-            type: "results",
-            ...table,
-            explanation: generated.explanation,
-            suggestedCharts: generated.suggestedCharts,
-            finalQuery: query,
-            idColumn: resolveActualColumnCasing(idColumn, table.columns),
-            partitionColumns: {
-              year: resolveActualColumnCasing("year", table.columns),
-              month: resolveActualColumnCasing("month", table.columns),
-              day: resolveActualColumnCasing("day", table.columns),
-            },
-            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-          });
-          return;
-        }
-        // CloudWatch Logs path
-        {
-          const limited = ensureLimit(generated.query);
-          const {
-            query: finalQuery,
-            idColumn,
-            injectedColumns,
-          } = ensureIdentifierColumn(limited, "executionArn", "logs-insights");
-          const endTimeMs = Date.now();
-          const startTimeMs = endTimeMs - generated.timeRangeMs;
-          const table = await runLogsInsightsQuery({
-            region: cfg.region,
-            credentials,
-            logGroupNames: cfg.logGroupNames,
-            queryString: finalQuery,
-            startTimeMs,
-            endTimeMs,
-          });
-          this.post({
-            type: "results",
-            ...table,
-            explanation: generated.explanation,
-            suggestedCharts: generated.suggestedCharts,
-            finalQuery,
-            idColumn: resolveActualColumnCasing(idColumn, table.columns),
-            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-          });
-          return;
-        }
+        const exec = await this.executeQuery(cfg, credentials, generated);
+        this.post({ type: "results", ...exec });
+        return;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (
-          (msg.includes("MalformedQueryException") ||
-            msg.includes("ValidationException") ||
-            msg.includes("Athena query failed") ||
-            msg.includes("INVALID_") ||
-            msg.includes("SYNTAX_ERROR")) &&
-          attempt < 2
-        ) {
+        if (isRetryableQueryError(msg) && attempt < 2) {
           this.post({
             type: "status",
             text: "Query failed, asking Bedrock to fix...",
           });
-          const hint = msg.includes("COLUMN_NOT_FOUND")
-            ? "\n\nThis is likely because a field that lives inside input/output was referenced as a bare column instead of via json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — check every column reference (including in GROUP BY/ORDER BY) against the schema's actual top-level columns."
-            : "";
           generated = await generateQuery({
             provider: cfg.llmProvider,
             region: cfg.region,
             credentials,
             modelId: cfg.bedrockModelId,
-            question: `${q}\n\nThe previous query failed with this error: ${msg}${hint}\nPlease fix the query.`,
+            question: `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
             destinationType: cfg.destinationType,
             tableName,
           });
@@ -483,6 +411,257 @@ class ExplorerPanel {
         throw err;
       }
     }
+  }
+
+  /**
+   * Advanced ("agentic") generation: run the query, then ask the model whether
+   * the results actually answer the question; if not, refine the query and try
+   * again, up to a small cap. Emits "agentStep" transcript messages so the
+   * webview can show the loop's progress. Read-only enforcement, identifier
+   * injection, and partition pruning are identical to basic mode (both go
+   * through executeQuery). Only reached when agenticMode === "advanced".
+   */
+  private async onGenerateAgentic(
+    q: string,
+    cfg: ReturnType<typeof readConfig>,
+    credentials: ReturnType<typeof resolveCredentials>,
+    tableName: string | undefined,
+  ): Promise<void> {
+    const MAX_ITERATIONS = 4;
+
+    this.post({ type: "status", text: "Generating query..." });
+    let generated = await generateQuery({
+      provider: cfg.llmProvider,
+      region: cfg.region,
+      credentials,
+      modelId: cfg.bedrockModelId,
+      question: q,
+      destinationType: cfg.destinationType,
+      tableName,
+    });
+
+    let lastExec: QueryExecution | undefined;
+
+    for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+      this.post({
+        type: "status",
+        text: `Agentic step ${iter}/${MAX_ITERATIONS}: running query...`,
+      });
+
+      let exec: QueryExecution;
+      try {
+        exec = await this.executeQuery(cfg, credentials, generated);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.post({
+          type: "agentStep",
+          iteration: iter,
+          query: generated.query,
+          outcome: "error",
+          detail: msg,
+        });
+        if (isRetryableQueryError(msg) && iter < MAX_ITERATIONS) {
+          this.post({
+            type: "status",
+            text: "Query failed, asking the model to fix it...",
+          });
+          generated = await generateQuery({
+            provider: cfg.llmProvider,
+            region: cfg.region,
+            credentials,
+            modelId: cfg.bedrockModelId,
+            question: `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
+            destinationType: cfg.destinationType,
+            tableName,
+          });
+          continue;
+        }
+        throw err;
+      }
+
+      lastExec = exec;
+
+      // Judge whether the results answer the question.
+      this.post({
+        type: "status",
+        text: `Agentic step ${iter}/${MAX_ITERATIONS}: checking results...`,
+      });
+      const rowCount = exec.count ?? exec.rows.length;
+      const verdict = await verifyResult({
+        provider: cfg.llmProvider,
+        region: cfg.region,
+        credentials,
+        modelId: cfg.bedrockModelId,
+        question: q,
+        query: exec.finalQuery,
+        columns: exec.columns,
+        rowCount,
+        sampleRows: exec.rows.slice(0, 5),
+      });
+
+      this.post({
+        type: "agentStep",
+        iteration: iter,
+        query: exec.finalQuery,
+        rowCount,
+        outcome: verdict.satisfied ? "satisfied" : "unsatisfied",
+        detail: verdict.reason,
+      });
+
+      if (verdict.satisfied || iter === MAX_ITERATIONS) {
+        this.post({ type: "results", ...exec });
+        return;
+      }
+
+      // Refine and try again.
+      this.post({
+        type: "status",
+        text: `Refining query (step ${iter + 1}/${MAX_ITERATIONS})...`,
+      });
+      const suggestion = verdict.suggestion
+        ? `\nSuggested fix: ${verdict.suggestion}`
+        : "";
+      generated = await generateQuery({
+        provider: cfg.llmProvider,
+        region: cfg.region,
+        credentials,
+        modelId: cfg.bedrockModelId,
+        question: `${q}\n\nA previous attempt ran this query:\n${exec.finalQuery}\n\nIt returned ${rowCount} row(s), but that did not adequately answer the question because: ${verdict.reason}${suggestion}\nPlease produce an improved query.`,
+        destinationType: cfg.destinationType,
+        tableName,
+      });
+    }
+
+    // Safety net: loop only exits via the returns above, but if that ever
+    // changes, don't silently drop a result we already have.
+    if (lastExec) this.post({ type: "results", ...lastExec });
+  }
+
+  /**
+   * Run a single generated query against the configured destination and return
+   * the normalized results payload (the body of a "results" message, minus the
+   * type). Shared by basic and advanced modes so there is exactly one place
+   * that enforces read-only access, injects the identifier/partition columns,
+   * and runs the per-destination query engine. Throws on execution errors
+   * (the caller decides whether to retry).
+   */
+  private async executeQuery(
+    cfg: ReturnType<typeof readConfig>,
+    credentials: ReturnType<typeof resolveCredentials>,
+    generated: GeneratedQuery,
+  ): Promise<QueryExecution> {
+    if (cfg.destinationType === "dynamodb") {
+      if (!cfg.dynamodbTableName)
+        throw new Error("No DynamoDB table configured.");
+      assertReadOnly(generated.query, "PartiQL");
+      const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
+        generated.query,
+        "pk",
+        "sql",
+      );
+      const table = await runDynamoDBQuery({
+        region: cfg.region,
+        credentials,
+        tableName: cfg.dynamodbTableName,
+        statement: query,
+      });
+      return {
+        ...table,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    if (cfg.destinationType === "aurora") {
+      if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
+        throw new Error("Aurora not configured.");
+      assertReadOnly(generated.query, "PostgreSQL");
+      const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
+        generated.query,
+        "execution_arn",
+        "sql",
+      );
+      const table = await runAuroraQuery({
+        region: cfg.region,
+        credentials,
+        resourceArn: cfg.auroraResourceArn,
+        secretArn: cfg.auroraSecretArn,
+        database: cfg.auroraDatabase,
+        sql: query,
+      });
+      return {
+        ...table,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    if (cfg.destinationType === "s3") {
+      if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
+      assertReadOnly(generated.query, "Trino/Presto SQL");
+      // The openx JSON SerDe lowercases all keys, so the identifier column
+      // the LLM's SQL would reference is "executionarn", not "executionArn" —
+      // match that here too (see schema.ts's Athena dialect notes on key
+      // casing). Also carry the year/month/day partition columns through so
+      // the row-detail fetch can prune to one partition instead of scanning
+      // the whole table (see fetchAthenaRecord's doc comment).
+      const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
+        generated.query,
+        "executionarn",
+        "sql",
+        ["year", "month", "day"],
+      );
+      const table = await runAthenaQuery({
+        region: cfg.region,
+        credentials,
+        database: cfg.athenaDatabase,
+        workgroup: cfg.athenaWorkgroup || undefined,
+        outputLocation: cfg.athenaOutputLocation || undefined,
+        query,
+      });
+      return {
+        ...table,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        partitionColumns: {
+          year: resolveActualColumnCasing("year", table.columns),
+          month: resolveActualColumnCasing("month", table.columns),
+          day: resolveActualColumnCasing("day", table.columns),
+        },
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    // CloudWatch Logs path
+    const limited = ensureLimit(generated.query);
+    const {
+      query: finalQuery,
+      idColumn,
+      injectedColumns,
+    } = ensureIdentifierColumn(limited, "executionArn", "logs-insights");
+    const endTimeMs = Date.now();
+    const startTimeMs = endTimeMs - generated.timeRangeMs;
+    const table = await runLogsInsightsQuery({
+      region: cfg.region,
+      credentials,
+      logGroupNames: cfg.logGroupNames,
+      queryString: finalQuery,
+      startTimeMs,
+      endTimeMs,
+    });
+    return {
+      ...table,
+      explanation: generated.explanation,
+      suggestedCharts: generated.suggestedCharts,
+      finalQuery,
+      idColumn: resolveActualColumnCasing(idColumn, table.columns),
+      hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+    };
   }
 
   /**
