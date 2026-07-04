@@ -178,10 +178,10 @@ async function paginateResults(
  * candidate partition) — verified empirically: a `GROUP BY year, month,
  * day` with no date filter took ~30s of query planning time against a
  * 2024–2100 range (76 years × 12 × 31 ≈ 28k candidate partitions), most of
- * it before any data was scanned. Kept deliberately narrow (5 years out)
- * rather than a large round number, to bound that cost; if data is ever
- * queried past PROJECTION_YEAR_END, raise it and either recreate the table
- * or ALTER TABLE SET TBLPROPERTIES with the new range.
+ * it before any data was scanned. Kept deliberately narrow (a 7-year span,
+ * 2024–2030) rather than a large round number, to bound that cost; if data
+ * is ever queried past PROJECTION_YEAR_END, raise it and either recreate
+ * the table or ALTER TABLE SET TBLPROPERTIES with the new range.
  *
  * These constants are exported specifically so
  * aws-durable-execution-sdk-js-insight/cdk/stack.test.ts (a different
