@@ -182,9 +182,19 @@ async function paginateResults(
  * rather than a large round number, to bound that cost; if data is ever
  * queried past PROJECTION_YEAR_END, raise it and either recreate the table
  * or ALTER TABLE SET TBLPROPERTIES with the new range.
+ *
+ * These constants are exported specifically so
+ * aws-durable-execution-sdk-js-insight/cdk/stack.test.ts (a different
+ * package) can import them directly and assert its own hardcoded
+ * projection.year.range matches — a real cross-package npm dependency
+ * isn't warranted just for two constants (this package is a dev-only,
+ * unpublished VS Code extension; the CDK package has no other reason to
+ * depend on it), so a relative-path source import in test code is the
+ * practical way to keep these two definitions of the same value from
+ * silently drifting apart, short of that.
  */
-const PROJECTION_YEAR_START = 2024;
-const PROJECTION_YEAR_END = 2030;
+export const PROJECTION_YEAR_START = 2024;
+export const PROJECTION_YEAR_END = 2030;
 
 export function buildCreateTableDdl(opts: {
   database: string;
