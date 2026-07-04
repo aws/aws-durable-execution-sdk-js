@@ -42,6 +42,20 @@ interface Props {
    * athena.ts's fetchAthenaRecord).
    */
   partitionColumns?: { year?: string; month?: string; day?: string };
+  /**
+   * Columns to keep in `columns`/`rows` (so the fetch-on-click logic below
+   * can still read their values off each row) but exclude from the rendered
+   * table. Used for idColumn/partitionColumns.* when the query didn't
+   * explicitly ask for them: the S3+Athena destination injects year/month/
+   * day purely so the detail fetch can prune partitions (see
+   * queryShape.ts's extraColumns), and those weren't part of what the user
+   * asked their question about — showing them as extra table columns is
+   * noise, not signal. idColumn is included here too when it wasn't already
+   * part of the query's own SELECT list, for the same reason (DynamoDB/
+   * Aurora inject only idColumn, so this is usually a 1-element array for
+   * those, vs. up to 4 for S3+Athena's idColumn + 3 partition columns).
+   */
+  hiddenColumns?: string[];
   /** Full record fetched for the currently open detail view, or null while none is open. Only meaningful when `idColumn` is set. */
   detailFields?: Record<string, string> | null;
   /** True while a "fetchDetail" request is in flight. */
@@ -61,6 +75,7 @@ export function ResultsTable({
   primaryColumns,
   idColumn,
   partitionColumns,
+  hiddenColumns,
   detailFields,
   detailLoading,
   onDetailDismiss,
@@ -78,12 +93,18 @@ export function ResultsTable({
     );
   }
 
-  const displayColumns = primaryColumns
-    ? primaryColumns.filter((c) => columns.includes(c))
-    : columns;
+  const displayColumns = (
+    primaryColumns ? primaryColumns.filter((c) => columns.includes(c)) : columns
+  ).filter((c) => !hiddenColumns?.includes(c));
   // Two independent ways a row can have "more to show": primaryColumns (the
   // extra fields are already in this row, just hidden from the table) or
   // idColumn (the extra fields need to be fetched — nothing to show yet).
+  // hiddenColumns alone (with no primaryColumns) still needs to trigger
+  // hasInMemoryDetail's "there's more to show" treatment for the SQS case —
+  // but hiddenColumns is only ever passed for the fetchable-detail (Ask
+  // flow) case in practice, so hasFetchableDetail already covers it; the
+  // length comparison below still holds even with hiddenColumns applied,
+  // since it only ever shrinks displayColumns further.
   const hasInMemoryDetail = primaryColumns != null && displayColumns.length < columns.length;
   const hasFetchableDetail = idColumn != null && columns.includes(idColumn);
   const hasDetail = hasInMemoryDetail || hasFetchableDetail;

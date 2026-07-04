@@ -53,6 +53,17 @@ export type InboundMessage =
        * set (e.g. an aggregate query, or a non-S3 destination).
        */
       partitionColumns?: { year?: string; month?: string; day?: string };
+      /**
+       * Columns the extension host injected purely so the row-detail fetch
+       * has something to key/prune on (idColumn itself, plus S3+Athena's
+       * year/month/day partition columns) — not because the user's question
+       * asked for them. The UI hides these from the rendered table (they'd
+       * otherwise show up as extra columns the user never asked to see) while
+       * still keeping their values available on each row for the fetch.
+       * Never includes a column the query already had for its own reasons —
+       * only ones the host had to add.
+       */
+      hiddenColumns?: string[];
     }
   | { type: "detailResult"; fields: Record<string, string> }
   | { type: "error"; message: string }

@@ -61,6 +61,19 @@ export interface IdentifierInjectionResult {
    * every partition on every row click.
    */
   extraColumns?: string[];
+  /**
+   * Which columns (idColumn and/or entries from extraColumns) were actually
+   * newly added to the query's SELECT/fields list, as opposed to already
+   * being present because the user's own question happened to ask for them.
+   * A UI can use this to hide only the columns it injected purely for
+   * fetch/pruning purposes (noise the user never asked to see) while still
+   * showing a column the user's question genuinely selected, even if it
+   * happens to share a name with idColumn/extraColumns. Always a subset of
+   * [idColumn, ...extraColumns].filter(Boolean); empty when nothing needed
+   * adding (everything requested was already in the query) or when
+   * injection was skipped entirely (aggregate/set-operator query).
+   */
+  injectedColumns?: string[];
 }
 
 /**
@@ -99,14 +112,24 @@ export function ensureIdentifierColumn(
     // default, so everything is already present — nothing to inject.
     const fieldsMatch = trimmed.match(/\|\s*fields\s+([^|]+)/i);
     if (!fieldsMatch) {
-      return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
+      return {
+        query: trimmed,
+        idColumn,
+        extraColumns: [...extraColumns],
+        injectedColumns: [],
+      };
     }
     const present = fieldsMatch[1].split(",").map((f) => f.trim());
     const toAdd = [idColumn, ...extraColumns].filter(
       (c) => !present.includes(c),
     );
     if (toAdd.length === 0) {
-      return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
+      return {
+        query: trimmed,
+        idColumn,
+        extraColumns: [...extraColumns],
+        injectedColumns: [],
+      };
     }
     // Trim trailing whitespace from the matched field list before appending,
     // so injection doesn't leave "fieldA, fieldB idColumn" (missing comma) or
@@ -119,7 +142,12 @@ export function ensureIdentifierColumn(
       fieldsMatch[0],
       `${trimmedFieldsMatch}, ${toAdd.join(", ")}${trailingWhitespace}`,
     );
-    return { query: injected, idColumn, extraColumns: [...extraColumns] };
+    return {
+      query: injected,
+      idColumn,
+      extraColumns: [...extraColumns],
+      injectedColumns: toAdd,
+    };
   }
 
   // SQL dialects (PartiQL, PostgreSQL, Trino/Presto): only handle a single
@@ -141,7 +169,12 @@ export function ensureIdentifierColumn(
     /\*\s*,|\bselect\s+\*/i.test(columnList)
   ) {
     // SELECT * already includes every column, including the identifier.
-    return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
+    return {
+      query: trimmed,
+      idColumn,
+      extraColumns: [...extraColumns],
+      injectedColumns: [],
+    };
   }
 
   const columns = splitTopLevel(columnList);
@@ -149,11 +182,21 @@ export function ensureIdentifierColumn(
     (c) => !columns.some((existing) => referencesColumn(existing, c)),
   );
   if (toAdd.length === 0) {
-    return { query: trimmed, idColumn, extraColumns: [...extraColumns] };
+    return {
+      query: trimmed,
+      idColumn,
+      extraColumns: [...extraColumns],
+      injectedColumns: [],
+    };
   }
 
   const injected = `${prefix}${columnList}, ${toAdd.join(", ")}${fromKeyword}${rest}`;
-  return { query: injected, idColumn, extraColumns: [...extraColumns] };
+  return {
+    query: injected,
+    idColumn,
+    extraColumns: [...extraColumns],
+    injectedColumns: toAdd,
+  };
 }
 
 /**
@@ -322,4 +365,21 @@ export function resolveActualColumnCasing(
   if (!idColumn) return undefined;
   const idLower = idColumn.toLowerCase();
   return columns.find((c) => c.toLowerCase() === idLower);
+}
+
+/**
+ * Array counterpart of `resolveActualColumnCasing`, for reporting which
+ * injected columns (see `IdentifierInjectionResult.injectedColumns`) to
+ * hide from a rendered results table. Resolves each requested column to its
+ * actual casing in `columns` (dropping any that genuinely aren't present),
+ * the same case-insensitive-match reasoning as the singular version.
+ */
+export function resolveActualColumns(
+  requested: string[] | undefined,
+  columns: string[],
+): string[] {
+  if (!requested || requested.length === 0) return [];
+  return requested
+    .map((c) => resolveActualColumnCasing(c, columns))
+    .filter((c): c is string => c != null);
 }

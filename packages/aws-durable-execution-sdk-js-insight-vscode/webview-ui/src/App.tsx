@@ -26,6 +26,7 @@ export function App() {
     suggestedCharts?: string[];
     idColumn?: string;
     partitionColumns?: { year?: string; month?: string; day?: string };
+    hiddenColumns?: string[];
   } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,7 +55,7 @@ export function App() {
         if (msg.done) setModelDownloaded(true);
         break;
       case "results":
-        setResults({ columns: msg.columns, rows: msg.rows, suggestedCharts: msg.suggestedCharts, idColumn: msg.idColumn, partitionColumns: msg.partitionColumns });
+        setResults({ columns: msg.columns, rows: msg.rows, suggestedCharts: msg.suggestedCharts, idColumn: msg.idColumn, partitionColumns: msg.partitionColumns, hiddenColumns: msg.hiddenColumns });
         setExplanation(msg.explanation ?? "");
         setStatus("");
         setLoading(false);
@@ -185,6 +186,7 @@ export function App() {
                       explanation={explanation}
                       idColumn={results.idColumn}
                       partitionColumns={results.partitionColumns}
+                      hiddenColumns={results.hiddenColumns}
                       detailFields={detailFields}
                       detailLoading={detailLoading}
                       onDetailFetchStart={() => setDetailLoading(true)}

@@ -16,6 +16,7 @@ import { assertReadOnly } from "./queryValidator";
 import {
   ensureIdentifierColumn,
   resolveActualColumnCasing,
+  resolveActualColumns,
 } from "./queryShape";
 
 type InboundMessage =
@@ -332,7 +333,7 @@ class ExplorerPanel {
           if (!cfg.dynamodbTableName)
             throw new Error("No DynamoDB table configured.");
           assertReadOnly(generated.query, "PartiQL");
-          const { query, idColumn } = ensureIdentifierColumn(
+          const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
             generated.query,
             "pk",
             "sql",
@@ -350,6 +351,7 @@ class ExplorerPanel {
             suggestedCharts: generated.suggestedCharts,
             finalQuery: query,
             idColumn: resolveActualColumnCasing(idColumn, table.columns),
+            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
           });
           return;
         }
@@ -357,7 +359,7 @@ class ExplorerPanel {
           if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
             throw new Error("Aurora not configured.");
           assertReadOnly(generated.query, "PostgreSQL");
-          const { query, idColumn } = ensureIdentifierColumn(
+          const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
             generated.query,
             "execution_arn",
             "sql",
@@ -377,6 +379,7 @@ class ExplorerPanel {
             suggestedCharts: generated.suggestedCharts,
             finalQuery: query,
             idColumn: resolveActualColumnCasing(idColumn, table.columns),
+            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
           });
           return;
         }
@@ -390,7 +393,7 @@ class ExplorerPanel {
           // partition columns through so the row-detail fetch can prune to
           // one partition instead of scanning the whole table (see
           // fetchAthenaRecord's doc comment).
-          const { query, idColumn } = ensureIdentifierColumn(
+          const { query, idColumn, injectedColumns } = ensureIdentifierColumn(
             generated.query,
             "executionarn",
             "sql",
@@ -416,17 +419,18 @@ class ExplorerPanel {
               month: resolveActualColumnCasing("month", table.columns),
               day: resolveActualColumnCasing("day", table.columns),
             },
+            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
           });
           return;
         }
         // CloudWatch Logs path
         {
           const limited = ensureLimit(generated.query);
-          const { query: finalQuery, idColumn } = ensureIdentifierColumn(
-            limited,
-            "executionArn",
-            "logs-insights",
-          );
+          const {
+            query: finalQuery,
+            idColumn,
+            injectedColumns,
+          } = ensureIdentifierColumn(limited, "executionArn", "logs-insights");
           const endTimeMs = Date.now();
           const startTimeMs = endTimeMs - generated.timeRangeMs;
           const table = await runLogsInsightsQuery({
@@ -444,6 +448,7 @@ class ExplorerPanel {
             suggestedCharts: generated.suggestedCharts,
             finalQuery,
             idColumn: resolveActualColumnCasing(idColumn, table.columns),
+            hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
           });
           return;
         }
