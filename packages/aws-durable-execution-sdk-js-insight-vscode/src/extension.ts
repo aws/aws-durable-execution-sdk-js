@@ -619,6 +619,20 @@ class ExplorerPanel {
       });
 
       if (verdict.satisfied || iter === MAX_ITERATIONS) {
+        // Produce a conversational prose answer (works on every provider) so
+        // the reply isn't just a table — parity with the Bedrock tool loop.
+        this.post({ type: "status", text: "Writing the answer..." });
+        const answer = await analyzeResults({
+          provider: cfg.llmProvider,
+          region: cfg.region,
+          credentials,
+          modelId: cfg.bedrockModelId,
+          question: q,
+          columns: exec.columns,
+          rows: exec.rows,
+        });
+        const prose = answer || verdict.reason;
+        if (prose) this.post({ type: "agentAnswer", text: prose });
         this.post({ type: "results", ...exec });
         return;
       }
