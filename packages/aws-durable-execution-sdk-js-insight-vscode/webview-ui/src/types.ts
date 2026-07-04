@@ -126,6 +126,7 @@ export interface Settings {
   awsProfile: string;
   bedrockModelId: string;
   agenticMode: string;
+  agenticMaxIterations: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -148,4 +149,5 @@ export const DEFAULT_SETTINGS: Settings = {
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
   agenticMode: "basic",
+  agenticMaxIterations: "8",
 };

@@ -28,6 +28,7 @@ export interface InsightConfig {
   awsProfile?: string;
   bedrockModelId: string;
   agenticMode: "basic" | "advanced";
+  agenticMaxIterations: number;
 }
 
 const SECTION = "workflowInsight";
@@ -87,6 +88,11 @@ export function readConfig(): InsightConfig {
     (c.get<string>("agenticMode") || "").trim() === "advanced"
       ? ("advanced" as const)
       : ("basic" as const);
+  const rawMaxIter = c.get<number>("agenticMaxIterations");
+  const agenticMaxIterations =
+    typeof rawMaxIter === "number" && Number.isFinite(rawMaxIter)
+      ? Math.min(20, Math.max(1, Math.floor(rawMaxIter)))
+      : 8;
 
   return {
     region,
@@ -108,6 +114,7 @@ export function readConfig(): InsightConfig {
     awsProfile,
     bedrockModelId,
     agenticMode,
+    agenticMaxIterations,
   };
 }
 

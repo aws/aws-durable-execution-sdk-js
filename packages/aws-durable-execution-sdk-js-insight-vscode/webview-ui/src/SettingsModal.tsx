@@ -210,6 +210,20 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                   />
                 </FormField>
 
+                {form.agenticMode === "advanced" && (
+                  <FormField
+                    label="Max Iterations"
+                    description="Most run→verify→refine rounds for one question (1–20). Higher digs harder on tough questions but costs more model/query calls. The loop also stops early if it repeats a query."
+                  >
+                    <Input
+                      type="number"
+                      value={form.agenticMaxIterations}
+                      onChange={({ detail }) => update("agenticMaxIterations", detail.value)}
+                      placeholder="8"
+                    />
+                  </FormField>
+                )}
+
                 <FormField label="LLM Provider" description="Which model to use for converting questions to queries">
                   <Select
                     selectedOption={

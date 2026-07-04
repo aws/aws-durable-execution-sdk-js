@@ -164,6 +164,13 @@
             "Advanced (agentic) — after a query runs, the model judges whether the results actually answer your question and refines the query if not, iterating a few times. Slower and uses more model/query calls (billable), best for exploratory questions. Bedrock recommended."
           ],
           "description": "How autonomously the assistant works to answer a question. 'advanced' adds a result-verification loop on top of 'basic'."
+        },
+        "workflowInsight.agenticMaxIterations": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Advanced mode only: the maximum number of run→verify→refine rounds the assistant will attempt for one question before stopping. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried."
         }
       }
     }

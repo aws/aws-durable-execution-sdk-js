@@ -87,6 +87,16 @@ function columnNotFoundHint(msg: string): string {
     : "";
 }
 
+/**
+ * Normalize a query for the agentic loop's "already tried this" check: trim,
+ * collapse runs of whitespace, and lowercase, so trivially-different but
+ * effectively-identical regenerations (reindented, recased) are recognized as
+ * repeats and stop the loop instead of wasting an iteration.
+ */
+function normalizeQuery(query: string): string {
+  return query.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("workflowInsight.openExplorer", () => {
@@ -192,6 +202,7 @@ class ExplorerPanel {
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
         agenticMode: cfg.agenticMode,
+        agenticMaxIterations: String(cfg.agenticMaxIterations),
       },
       modelDownloaded: isModelDownloaded(),
     });
@@ -205,8 +216,17 @@ class ExplorerPanel {
       // sqsDeleteAfterRead is boolean-typed in the settings schema; the
       // webview always sends strings, so coerce it before writing. `false` is
       // a meaningful value here, so it must not be treated as "unset".
-      const coerced: string | boolean | undefined =
-        key === "sqsDeleteAfterRead" ? value === "true" : value || undefined;
+      // agenticMaxIterations is number-typed — coerce likewise (invalid/empty
+      // falls back to undefined so the schema default applies).
+      let coerced: string | boolean | number | undefined;
+      if (key === "sqsDeleteAfterRead") {
+        coerced = value === "true";
+      } else if (key === "agenticMaxIterations") {
+        const n = Number(value);
+        coerced = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+      } else {
+        coerced = value || undefined;
+      }
       await config.update(key, coerced, vscode.ConfigurationTarget.Global);
     }
     this.sendConfig();
@@ -428,7 +448,7 @@ class ExplorerPanel {
     credentials: ReturnType<typeof resolveCredentials>,
     tableName: string | undefined,
   ): Promise<void> {
-    const MAX_ITERATIONS = 4;
+    const MAX_ITERATIONS = cfg.agenticMaxIterations;
 
     this.post({ type: "status", text: "Generating query..." });
     let generated = await generateQuery({
@@ -443,8 +463,26 @@ class ExplorerPanel {
     });
 
     let lastExec: QueryExecution | undefined;
+    // Queries already attempted (normalized), so a loop that starts repeating
+    // itself stops early instead of burning the whole iteration budget on the
+    // same failing/unhelpful query — the higher the cap, the more this matters.
+    const tried = new Set<string>();
 
     for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+      const norm = normalizeQuery(generated.query);
+      if (tried.has(norm)) {
+        this.post({
+          type: "agentStep",
+          iteration: iter,
+          query: generated.query,
+          outcome: "error",
+          detail:
+            "Stopped: the model repeated a query it had already tried, so more attempts won't help.",
+        });
+        break;
+      }
+      tried.add(norm);
+
       this.post({
         type: "status",
         text: `Agentic step ${iter}/${MAX_ITERATIONS}: running query...`,
@@ -577,9 +615,18 @@ class ExplorerPanel {
       });
     }
 
-    // Safety net: loop only exits via the returns above, but if that ever
-    // changes, don't silently drop a result we already have.
-    if (lastExec) this.post({ type: "results", ...lastExec });
+    // The loop returns as soon as it has an answer; reaching here means it
+    // stopped early (repeated query) or exhausted its iterations. Show the
+    // best result we got, or surface a clear error if we never got one.
+    if (lastExec) {
+      this.post({ type: "results", ...lastExec });
+    } else {
+      this.post({
+        type: "error",
+        message:
+          "The assistant couldn't produce a working query for this question within its iteration budget. Try rephrasing, or raise workflowInsight.agenticMaxIterations.",
+      });
+    }
   }
 
   /**
