@@ -141,7 +141,7 @@ export async function verifyResult(
             tools: [JUDGE_TOOL],
             toolChoice: { tool: { name: "judge_result" } },
           },
-          inferenceConfig: { maxTokens: 512, temperature: 0 },
+          inferenceConfig: { maxTokens: 4096, temperature: 0 },
         }),
       );
       const blocks: ContentBlock[] = response.output?.message?.content ?? [];
@@ -243,7 +243,7 @@ export async function analyzeResults(opts: AnalyzeOptions): Promise<string> {
         new ConverseCommand({
           modelId: opts.modelId,
           messages: [{ role: "user", content: [{ text: prompt }] }],
-          inferenceConfig: { maxTokens: 1024, temperature: 0 },
+          inferenceConfig: { maxTokens: 4096, temperature: 0 },
         }),
       );
       const blocks: ContentBlock[] = response.output?.message?.content ?? [];
@@ -338,7 +338,7 @@ async function generateViaBedrock(
         tools: [EMIT_QUERY_TOOL],
         toolChoice: { tool: { name: "emit_query" } },
       },
-      inferenceConfig: { maxTokens: 1024, temperature: 0 },
+      inferenceConfig: { maxTokens: 4096, temperature: 0 },
     }),
   );
 
