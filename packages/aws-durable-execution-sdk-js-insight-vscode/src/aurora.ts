@@ -8,6 +8,35 @@ export interface AuroraQueryResult {
   columns: string[];
   rows: string[][];
   count: number;
+  /** Per-column numeric-type flag (aligned with `columns`) — see AthenaQueryResult.numericColumns. */
+  numericColumns: boolean[];
+}
+
+// PostgreSQL numeric type names as returned by the RDS Data API's
+// columnMetadata.typeName (int2/int4/int8, float4/float8, numeric, etc.).
+// Matched exactly so "interval" and other int*-prefixed non-numeric types
+// don't slip in; anything unmatched simply stays a string.
+const NUMERIC_PG_TYPES = new Set([
+  "int2",
+  "int4",
+  "int8",
+  "float4",
+  "float8",
+  "numeric",
+  "decimal",
+  "money",
+  "serial",
+  "serial2",
+  "serial4",
+  "serial8",
+  "smallserial",
+  "bigserial",
+  "oid",
+]);
+function isNumericPgType(typeName?: string): boolean {
+  return (
+    typeName != null && NUMERIC_PG_TYPES.has(typeName.trim().toLowerCase())
+  );
 }
 
 /**
@@ -39,6 +68,9 @@ export async function runAuroraQuery(opts: {
   const columns = (result.columnMetadata ?? []).map(
     (col) => col.label || col.name || "?",
   );
+  const numericColumns = (result.columnMetadata ?? []).map((col) =>
+    isNumericPgType(col.typeName),
+  );
   const records = result.records ?? [];
 
   const rows = records.map((row) =>
@@ -52,7 +84,7 @@ export async function runAuroraQuery(opts: {
     }),
   );
 
-  return { columns, rows, count: rows.length };
+  return { columns, rows, count: rows.length, numericColumns };
 }
 
 /**

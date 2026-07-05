@@ -1,8 +1,5 @@
 import { useState } from "react";
-import Container from "@cloudscape-design/components/container";
-import Header from "@cloudscape-design/components/header";
 import SpaceBetween from "@cloudscape-design/components/space-between";
-import FormField from "@cloudscape-design/components/form-field";
 import Textarea from "@cloudscape-design/components/textarea";
 import Button from "@cloudscape-design/components/button";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
@@ -15,38 +12,54 @@ interface Props {
   error: string;
 }
 
+/**
+ * Inline chat composer that sits at the bottom of the conversation: a text
+ * box + Send button. Enter submits; Shift+Enter inserts a newline. Clears
+ * itself after sending.
+ */
 export function QueryPanel({ onAsk, loading, status, error }: Props) {
   const [question, setQuestion] = useState("");
 
+  const submit = () => {
+    const q = question.trim();
+    if (!q || loading) return;
+    onAsk(q);
+    setQuestion("");
+  };
+
+  const onKeyDown = (e: {
+    detail: { key: string; shiftKey: boolean };
+    preventDefault: () => void;
+  }) => {
+    if (e.detail.key === "Enter" && !e.detail.shiftKey) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
   return (
-    <Container header={<Header variant="h2">Ask</Header>}>
-      <SpaceBetween size="m">
-        <FormField
-          label="Question"
-          description="Ask in plain English. Time range is inferred from your question (defaults to last 24 hours)."
-        >
+    <SpaceBetween size="xs">
+      {error && <Alert type="error">{error}</Alert>}
+      <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+        <div style={{ flex: 1 }}>
           <Textarea
             value={question}
             onChange={({ detail }) => setQuestion(detail.value)}
-            placeholder="e.g. show me failed executions from the last hour"
+            onKeyDown={onKeyDown}
+            placeholder="Ask a question…  (Enter to send, Shift+Enter for a new line)"
             rows={2}
           />
-        </FormField>
-
-        <SpaceBetween direction="horizontal" size="s">
-          <Button
-            variant="primary"
-            loading={loading}
-            onClick={() => onAsk(question)}
-            disabled={!question.trim()}
-          >
-            Ask
-          </Button>
-          {status && <StatusIndicator type="loading">{status}</StatusIndicator>}
-        </SpaceBetween>
-
-        {error && <Alert type="error">{error}</Alert>}
-      </SpaceBetween>
-    </Container>
+        </div>
+        <Button
+          variant="primary"
+          loading={loading}
+          onClick={submit}
+          disabled={!question.trim()}
+        >
+          Send
+        </Button>
+      </div>
+      {status && <StatusIndicator type="loading">{status}</StatusIndicator>}
+    </SpaceBetween>
   );
 }

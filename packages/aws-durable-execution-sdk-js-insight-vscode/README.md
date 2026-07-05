@@ -106,6 +106,14 @@ Because the canonical `operations` array (not `operationsByName`) is what
 `S3Exporter` writes, per-operation questions are answered with `UNNEST` rather than
 a map lookup (see the query dialect the model is given).
 
+> **⚠️ Athena cost:** the assistant works agentically and may issue several
+> model-authored queries per question (bounded by `workflowInsight.agenticMaxIterations`,
+> default 8). That cap limits the _number_ of queries, not the data scanned per
+> query — Athena bills per byte scanned. To bound per-query scan cost, set a
+> [per-query data-usage limit](https://docs.aws.amazon.com/athena/latest/ug/workgroups-setting-control-limits-cloudwatch.html)
+> (`bytes_scanned_cutoff_per_query`) on your Athena **workgroup**. This is the
+> only per-query scan-cost guard once the query runs.
+
 #### Amazon SQS (live view)
 
 SQS has no query engine, so this destination doesn't use the "Ask" pipeline at

@@ -2,8 +2,9 @@
 export type OutboundMessage =
   | { type: "ready" }
   | { type: "generate"; question: string }
+  | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
-  | { type: "downloadModel" }
+  | { type: "downloadModel"; localModel?: string }
   | { type: "startListening" }
   | { type: "stopListening" }
   | {
@@ -32,6 +33,13 @@ export type InboundMessage =
       columns: string[];
       rows: string[][];
       count: number;
+      /**
+       * True if the extension host capped this result at its row ceiling
+       * (MAX_SQL_ROWS). More rows matched than are shown, so `count`/`rows`
+       * are a bounded prefix — the UI says so and the model is told not to
+       * treat it as the complete result.
+       */
+      truncated?: boolean;
       explanation?: string;
       finalQuery?: string;
       suggestedCharts?: string[];
@@ -66,11 +74,57 @@ export type InboundMessage =
       hiddenColumns?: string[];
     }
   | { type: "detailResult"; fields: Record<string, string> }
+  | {
+      /**
+       * One completed iteration of the run→verify→refine loop, streamed so
+       * the webview can show the assistant's progress.
+       */
+      type: "agentStep";
+      iteration: number;
+      query: string;
+      rowCount?: number;
+      outcome:
+        | "satisfied"
+        | "unsatisfied"
+        | "error"
+        | "analyzed"
+        | "ran"
+        | "script";
+      detail?: string;
+    }
+  | {
+      /**
+       * The final natural-language answer for a turn (from the tool loop's
+       * finish, or the verify/refine path's analyze step). Shown above the
+       * results table.
+       */
+      type: "agentAnswer";
+      text: string;
+    }
   | { type: "error"; message: string }
+  | { type: "sessionCleared" }
   | { type: "settingsSaved" }
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
   | { type: "sqsMessages"; messages: SqsMessageRow[] };
+
+/**
+ * One completed iteration of the advanced (agentic) run→verify→refine loop,
+ * accumulated by the webview to render a progress transcript.
+ */
+export interface AgentStep {
+  iteration: number;
+  query: string;
+  rowCount?: number;
+  outcome:
+    | "satisfied"
+    | "unsatisfied"
+    | "error"
+    | "analyzed"
+    | "ran"
+    | "script";
+  detail?: string;
+}
 
 export interface Settings {
   region: string;
@@ -91,6 +145,8 @@ export interface Settings {
   llmProvider: string;
   awsProfile: string;
   bedrockModelId: string;
+  localModel: string;
+  agenticMaxIterations: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -112,4 +168,6 @@ export const DEFAULT_SETTINGS: Settings = {
   llmProvider: "bedrock",
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+  localModel: "llama-3-groq-8b-tool-use",
+  agenticMaxIterations: "8",
 };

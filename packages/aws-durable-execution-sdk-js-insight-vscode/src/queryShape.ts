@@ -164,6 +164,13 @@ export function ensureIdentifierColumn(
   if (!outer) return { query: trimmed };
   const { prefix, columnList, fromKeyword, rest } = outer;
 
+  // SELECT DISTINCT: appending an identifier (especially a unique one like
+  // executionArn) changes the DISTINCT semantics — the result would no longer
+  // be distinct over the columns the user asked for (every row becomes
+  // unique). Skip injection (no drill-down) rather than corrupt the query,
+  // same as for aggregates/set-operators.
+  if (/^distinct\b/i.test(columnList)) return { query: trimmed };
+
   if (
     /^\s*\*\s*$/.test(columnList) ||
     /\*\s*,|\bselect\s+\*/i.test(columnList)

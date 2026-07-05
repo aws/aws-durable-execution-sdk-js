@@ -13,7 +13,24 @@ export interface AthenaQueryResult {
   columns: string[];
   rows: string[][];
   count: number;
-  dataScannedBytes?: number;
+  /**
+   * Per-column flag (aligned with `columns`) for whether Athena declared the
+   * column a numeric type. Athena returns every value as a string, so this
+   * lets consumers (e.g. the run_javascript sandbox) coerce numeric columns
+   * back to numbers for arithmetic without guessing from the value text.
+   */
+  numericColumns: boolean[];
+  /** True if pagination stopped at the row cap (result has more rows than returned). */
+  truncated: boolean;
+}
+
+// Athena/Trino numeric column types (ColumnInfo.Type). Everything else
+// (varchar, char, string, timestamp, date, boolean, array, map, row, json,
+// varbinary) is left as a string.
+const NUMERIC_ATHENA_TYPE =
+  /^(tinyint|smallint|integer|int|bigint|real|double|float|decimal|numeric)\b/i;
+function isNumericAthenaType(type?: string): boolean {
+  return type != null && NUMERIC_ATHENA_TYPE.test(type.trim());
 }
 
 const POLL_INTERVAL_MS = 1000;
@@ -35,6 +52,15 @@ export async function runAthenaQuery(opts: {
   outputLocation?: string;
   query: string;
   timeoutMs?: number;
+  /**
+   * Hard cap on rows collected from the result set. Athena's GetQueryResults
+   * pages through the ENTIRE result, so without a cap a query that omits LIMIT
+   * (or whose LIMIT the model dropped) pulls every matching row into the
+   * extension-host process and then serializes it to the webview. When the cap
+   * is hit, pagination stops early and `truncated` is set. Omitted for the
+   * single-row fetch and DDL callers, whose result size is already bounded.
+   */
+  maxRows?: number;
 }): Promise<AthenaQueryResult> {
   if (!opts.database) {
     throw new Error(
@@ -69,14 +95,12 @@ export async function runAthenaQuery(opts: {
   }
 
   const deadline = Date.now() + (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  let dataScannedBytes: number | undefined;
 
   for (;;) {
     const { QueryExecution } = await client.send(
       new GetQueryExecutionCommand({ QueryExecutionId }),
     );
     const state = QueryExecution?.Status?.State;
-    dataScannedBytes = QueryExecution?.Statistics?.DataScannedInBytes;
 
     if (state === "SUCCEEDED") break;
     if (state === "FAILED" || state === "CANCELLED") {
@@ -90,19 +114,26 @@ export async function runAthenaQuery(opts: {
     await delay(POLL_INTERVAL_MS);
   }
 
-  return paginateResults(client, QueryExecutionId, dataScannedBytes);
+  return paginateResults(client, QueryExecutionId, opts.maxRows);
 }
 
-/** Page through GetQueryResults and normalize into columns/rows. */
+/**
+ * Page through GetQueryResults and normalize into columns/rows. Stops early
+ * once `maxRows` rows have been collected (if provided), leaving `truncated`
+ * true — this bounds host memory: Athena would otherwise page through the
+ * whole result set.
+ */
 async function paginateResults(
   client: AthenaClient,
   queryExecutionId: string,
-  dataScannedBytes: number | undefined,
+  maxRows?: number,
 ): Promise<AthenaQueryResult> {
   let columns: string[] | undefined;
+  let numericColumns: boolean[] = [];
   const rows: string[][] = [];
   let nextToken: string | undefined;
   let isFirstPage = true;
+  let truncated = false;
 
   do {
     const result = await client.send(
@@ -113,19 +144,24 @@ async function paginateResults(
     );
 
     if (!columns) {
-      columns = (result.ResultSet?.ResultSetMetadata?.ColumnInfo ?? []).map(
-        (c: ColumnInfo) => c.Name ?? "?",
-      );
+      const info = result.ResultSet?.ResultSetMetadata?.ColumnInfo ?? [];
+      columns = info.map((c: ColumnInfo) => c.Name ?? "?");
+      numericColumns = info.map((c: ColumnInfo) => isNumericAthenaType(c.Type));
     }
 
     const resultRows: Row[] = result.ResultSet?.Rows ?? [];
     // Athena includes the header row as the first row of the first page only.
     const dataRows = isFirstPage ? resultRows.slice(1) : resultRows;
     for (const row of dataRows) {
+      if (maxRows != null && rows.length >= maxRows) {
+        // Cap reached: stop collecting and stop paging (below).
+        truncated = true;
+        break;
+      }
       rows.push((row.Data ?? []).map((d) => d.VarCharValue ?? ""));
     }
 
-    nextToken = result.NextToken;
+    nextToken = truncated ? undefined : result.NextToken;
     isFirstPage = false;
   } while (nextToken);
 
@@ -133,7 +169,8 @@ async function paginateResults(
     columns: columns ?? [],
     rows,
     count: rows.length,
-    dataScannedBytes,
+    numericColumns,
+    truncated,
   };
 }
 

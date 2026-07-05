@@ -115,7 +115,7 @@
         "workflowInsight.athenaWorkgroup": {
           "type": "string",
           "default": "",
-          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead."
+          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead. Recommended: configure the workgroup's per-query data-scanned limit (bytes_scanned_cutoff_per_query) — the assistant runs multiple autonomous queries per question (up to workflowInsight.agenticMaxIterations), and this is the only per-query Athena scan-cost guard."
         },
         "workflowInsight.athenaOutputLocation": {
           "type": "string",
@@ -143,7 +143,7 @@
           "enumDescriptions": [
             "Amazon Bedrock (Converse API) — requires AWS credentials and model access",
             "GitHub Copilot (VS Code Language Model API) — requires Copilot subscription",
-            "Local LLM (Qwen2.5-Coder-3B) — runs offline, downloads model on first use (~2.2 GB)"
+            "Local LLM — runs offline, downloads the model on first use. Model is configurable via workflowInsight.localModel (default: Llama-3-Groq-8B Tool-Use, ~4.9 GB)."
           ],
           "description": "Which LLM to use for converting questions to queries."
         },
@@ -151,6 +151,28 @@
           "type": "string",
           "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
           "description": "Amazon Bedrock model id (or inference profile id) used to convert English to a Logs Insights query."
+        },
+        "workflowInsight.localModel": {
+          "type": "string",
+          "default": "llama-3-groq-8b-tool-use",
+          "enum": [
+            "llama-3-groq-8b-tool-use",
+            "phi-3.5-mini",
+            "qwen2.5-coder-3b"
+          ],
+          "enumDescriptions": [
+            "Llama-3-Groq-8B Tool-Use — best tool-calling accuracy (~89% on the Berkeley Function-Calling Leaderboard), ~4.9 GB download, needs ~6 GB RAM. Recommended default.",
+            "Phi-3.5-mini — smaller with strong quality-per-GB, ~2.4 GB download. Good when memory is tight.",
+            "Qwen2.5-Coder-3B — smallest footprint, ~2.2 GB. Fastest/lightest, weakest at multi-step tool use."
+          ],
+          "description": "Which local model to download and run when LLM Provider is 'local'. Only used for the local provider; ignored for Bedrock/Copilot."
+        },
+        "workflowInsight.agenticMaxIterations": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "The maximum number of queries the assistant will run for one question before stopping — one per verify/refine round, or per agent-loop query with parallel tool calls counted individually. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost."
         }
       }
     }
@@ -173,7 +195,9 @@
     "@aws-sdk/client-sqs": "^3.658.0",
     "@aws-sdk/credential-providers": "^3.658.0",
     "@aws-sdk/util-dynamodb": "^3.658.0",
-    "node-llama-cpp": "^3.18.1"
+    "@jitl/quickjs-singlefile-cjs-release-sync": "^0.32.0",
+    "node-llama-cpp": "^3.18.1",
+    "quickjs-emscripten-core": "^0.32.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
