@@ -61,6 +61,8 @@ interface QueryExecution {
   columns: string[];
   rows: string[][];
   count?: number;
+  /** True if the result was capped at MAX_SQL_ROWS (more rows exist than returned). */
+  truncated?: boolean;
   explanation?: string;
   suggestedCharts?: string[];
   finalQuery: string;
@@ -89,6 +91,21 @@ function queryDialect(destinationType: string): "sql" | "logs-insights" {
  * fall back to a SQL aggregate.
  */
 const JS_ROW_CAP = 5000;
+
+/**
+ * Hard ceiling on rows loaded from a SQL destination (Athena/Aurora/DynamoDB)
+ * for one query, independent of the model-supplied LIMIT. The model is told to
+ * add LIMIT 100, but nothing forces it to, and Athena's result pagination
+ * otherwise pulls EVERY matching row into the extension-host process and then
+ * serializes it to the webview — a large table with a LIMIT-less query would
+ * blow up host memory. This is the SQL analogue of ensureLimit on the logs
+ * path: a safety net well above normal result sizes (and above JS_ROW_CAP, so
+ * run_javascript's fuller set isn't further clipped by it). When hit, the
+ * result is marked truncated so the model/UI don't treat it as complete. It
+ * bounds host memory only; per-query scan cost is a separate concern (see the
+ * Athena bytes_scanned_cutoff_per_query guidance).
+ */
+const MAX_SQL_ROWS = 10000;
 
 /**
  * Whether a query-execution error is worth asking the model to fix (a
@@ -738,6 +755,7 @@ class ExplorerPanel {
           rows: exec.rows.slice(0, 20),
           allRows: exec.rows.slice(0, JS_ROW_CAP),
           rowCount: exec.count ?? exec.rows.length,
+          truncated: exec.truncated,
         };
       } catch (err) {
         return {
@@ -919,6 +937,23 @@ class ExplorerPanel {
       queryCache?.set(key, res);
       return res;
     };
+    // Enforce the host row ceiling uniformly. Athena's runner already stops
+    // paging at MAX_SQL_ROWS (and sets truncated); Aurora/DynamoDB return a
+    // single API response (bounded by the service's ~1 MB reply), but slice
+    // them too so the guarantee holds for every SQL destination.
+    const capRows = <
+      T extends { columns: string[]; rows: string[][]; truncated?: boolean },
+    >(
+      table: T,
+    ): { rows: string[][]; count: number; truncated: boolean } => {
+      const overCap = table.rows.length > MAX_SQL_ROWS;
+      const rows = overCap ? table.rows.slice(0, MAX_SQL_ROWS) : table.rows;
+      return {
+        rows,
+        count: rows.length,
+        truncated: !!table.truncated || overCap,
+      };
+    };
     if (cfg.destinationType === "dynamodb") {
       if (!cfg.dynamodbTableName)
         throw new Error("No DynamoDB table configured.");
@@ -938,8 +973,10 @@ class ExplorerPanel {
           statement: query,
         }),
       );
+      const capped = capRows(table);
       return {
         ...table,
+        ...capped,
         explanation: generated.explanation,
         suggestedCharts: generated.suggestedCharts,
         finalQuery: query,
@@ -968,8 +1005,10 @@ class ExplorerPanel {
           sql: query,
         }),
       );
+      const capped = capRows(table);
       return {
         ...table,
+        ...capped,
         explanation: generated.explanation,
         suggestedCharts: generated.suggestedCharts,
         finalQuery: query,
@@ -1005,10 +1044,13 @@ class ExplorerPanel {
           workgroup: cfg.athenaWorkgroup || undefined,
           outputLocation: cfg.athenaOutputLocation || undefined,
           query,
+          maxRows: MAX_SQL_ROWS,
         }),
       );
+      const capped = capRows(table);
       return {
         ...table,
+        ...capped,
         explanation: generated.explanation,
         suggestedCharts: generated.suggestedCharts,
         finalQuery: query,

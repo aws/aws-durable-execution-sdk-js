@@ -13,6 +13,8 @@ export interface AthenaQueryResult {
   columns: string[];
   rows: string[][];
   count: number;
+  /** True if pagination stopped at the row cap (result has more rows than returned). */
+  truncated: boolean;
 }
 
 const POLL_INTERVAL_MS = 1000;
@@ -34,6 +36,15 @@ export async function runAthenaQuery(opts: {
   outputLocation?: string;
   query: string;
   timeoutMs?: number;
+  /**
+   * Hard cap on rows collected from the result set. Athena's GetQueryResults
+   * pages through the ENTIRE result, so without a cap a query that omits LIMIT
+   * (or whose LIMIT the model dropped) pulls every matching row into the
+   * extension-host process and then serializes it to the webview. When the cap
+   * is hit, pagination stops early and `truncated` is set. Omitted for the
+   * single-row fetch and DDL callers, whose result size is already bounded.
+   */
+  maxRows?: number;
 }): Promise<AthenaQueryResult> {
   if (!opts.database) {
     throw new Error(
@@ -87,18 +98,25 @@ export async function runAthenaQuery(opts: {
     await delay(POLL_INTERVAL_MS);
   }
 
-  return paginateResults(client, QueryExecutionId);
+  return paginateResults(client, QueryExecutionId, opts.maxRows);
 }
 
-/** Page through GetQueryResults and normalize into columns/rows. */
+/**
+ * Page through GetQueryResults and normalize into columns/rows. Stops early
+ * once `maxRows` rows have been collected (if provided), leaving `truncated`
+ * true — this bounds host memory: Athena would otherwise page through the
+ * whole result set.
+ */
 async function paginateResults(
   client: AthenaClient,
   queryExecutionId: string,
+  maxRows?: number,
 ): Promise<AthenaQueryResult> {
   let columns: string[] | undefined;
   const rows: string[][] = [];
   let nextToken: string | undefined;
   let isFirstPage = true;
+  let truncated = false;
 
   do {
     const result = await client.send(
@@ -118,10 +136,15 @@ async function paginateResults(
     // Athena includes the header row as the first row of the first page only.
     const dataRows = isFirstPage ? resultRows.slice(1) : resultRows;
     for (const row of dataRows) {
+      if (maxRows != null && rows.length >= maxRows) {
+        // Cap reached: stop collecting and stop paging (below).
+        truncated = true;
+        break;
+      }
       rows.push((row.Data ?? []).map((d) => d.VarCharValue ?? ""));
     }
 
-    nextToken = result.NextToken;
+    nextToken = truncated ? undefined : result.NextToken;
     isFirstPage = false;
   } while (nextToken);
 
@@ -129,6 +152,7 @@ async function paginateResults(
     columns: columns ?? [],
     rows,
     count: rows.length,
+    truncated,
   };
 }
 

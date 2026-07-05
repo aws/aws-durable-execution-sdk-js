@@ -33,6 +33,13 @@ export type InboundMessage =
       columns: string[];
       rows: string[][];
       count: number;
+      /**
+       * True if the extension host capped this result at its row ceiling
+       * (MAX_SQL_ROWS). More rows matched than are shown, so `count`/`rows`
+       * are a bounded prefix — the UI says so and the model is told not to
+       * treat it as the complete result.
+       */
+      truncated?: boolean;
       explanation?: string;
       finalQuery?: string;
       suggestedCharts?: string[];

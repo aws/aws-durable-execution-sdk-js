@@ -28,6 +28,7 @@ interface ResultsPayload {
   partitionColumns?: { year?: string; month?: string; day?: string };
   hiddenColumns?: string[];
   explanation?: string;
+  truncated?: boolean;
 }
 
 /**
@@ -100,6 +101,7 @@ export function App() {
           partitionColumns: msg.partitionColumns,
           hiddenColumns: msg.hiddenColumns,
           explanation: msg.explanation ?? "",
+          truncated: msg.truncated,
         };
         // Top-level results still drive the Visualize page.
         setResults(payload);
@@ -345,6 +347,18 @@ export function App() {
                             {turn.results && (
                               <Box padding={{ top: "xs" }}>
                                 <SpaceBetween size="s">
+                                  {turn.results.truncated && (
+                                    <Box
+                                      color="text-status-warning"
+                                      fontSize="body-s"
+                                    >
+                                      Showing the first{" "}
+                                      {turn.results.rows.length.toLocaleString()}{" "}
+                                      rows — the result was truncated at the row
+                                      cap. Add a LIMIT or aggregate (COUNT/GROUP
+                                      BY) in the query for the full set.
+                                    </Box>
+                                  )}
                                   <ResultsTable
                                     columns={turn.results.columns}
                                     rows={turn.results.rows}

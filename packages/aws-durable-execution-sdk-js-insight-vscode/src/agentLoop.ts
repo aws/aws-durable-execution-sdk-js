@@ -124,6 +124,11 @@ export interface AgentQueryResult {
    */
   allRows?: string[][];
   rowCount: number;
+  /**
+   * True if the result was capped at the host row limit — `rowCount` is then a
+   * floor (the real result has more rows), not the exact total.
+   */
+  truncated?: boolean;
   error?: string;
 }
 
@@ -294,6 +299,11 @@ export async function runAgentLoop(
           columns: result.columns,
           rowCount: result.rowCount,
           sampleRows: result.rows,
+          ...(result.truncated
+            ? {
+                note: `Only the first ${result.rowCount} rows were loaded (host row cap); the full result has more. Treat rowCount as a floor, not the exact total — for a real count or aggregate over the whole result, use COUNT()/GROUP BY in the query rather than counting these rows.`,
+              }
+            : {}),
         };
   };
 
