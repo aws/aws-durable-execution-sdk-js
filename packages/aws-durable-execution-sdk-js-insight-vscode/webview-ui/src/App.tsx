@@ -163,12 +163,21 @@ export function App() {
       case "agentAnswer":
         setChat((prev) => [...prev, { role: "assistant", text: msg.text }]);
         answeredRef.current = true;
+        // Answer-only follow-ups (finish with just an answer, no query) post
+        // agentAnswer and nothing else — clear loading/status here so the
+        // composer re-enables. Harmless in the with-query path since the
+        // following "results" also clears them.
+        setLoading(false);
+        setStatus("");
         break;
       case "sessionCleared":
         setChat([]);
         setResults(null);
         setAgentSteps([]);
         setDetailFields(null);
+        // Belt-and-suspenders: never leave the composer disabled after a reset.
+        setLoading(false);
+        setStatus("");
         break;
       case "error":
         setError(msg.message);
@@ -227,6 +236,8 @@ export function App() {
     stepsRef.current = [];
     setDetailFields(null);
     setError("");
+    setLoading(false);
+    setStatus("");
     answeredRef.current = false;
     postMessage({ type: "newSession" });
   };
@@ -343,7 +354,13 @@ export function App() {
                                     hiddenColumns={turn.results.hiddenColumns}
                                     detailFields={detailFields}
                                     detailLoading={detailLoading}
-                                    onDetailFetchStart={() => setDetailLoading(true)}
+                                    onDetailFetchStart={() => {
+                                      // Clear the previous turn's record so the
+                                      // shared modal shows a spinner, not stale
+                                      // data, until this fetch resolves.
+                                      setDetailFields(null);
+                                      setDetailLoading(true);
+                                    }}
                                     onDetailDismiss={() => setDetailFields(null)}
                                     pageSize={5}
                                   />

@@ -449,7 +449,7 @@ class ExplorerPanel {
       region: cfg.region,
       credentials,
       modelId: cfg.bedrockModelId,
-      question: q,
+      question: this.withConversationContext(q),
       destinationType: cfg.destinationType,
       tableName,
       agentic: true,
@@ -558,6 +558,7 @@ class ExplorerPanel {
         });
         if (answer) this.post({ type: "agentAnswer", text: answer });
         this.post({ type: "results", ...exec });
+        this.recordTurn(q, answer || "Post-processed the results to answer.");
         return;
       }
 
@@ -591,19 +592,28 @@ class ExplorerPanel {
       if (verdict.satisfied || iter === MAX_ITERATIONS) {
         // Produce a conversational prose answer (works on every provider) so
         // the reply isn't just a table — parity with the Bedrock tool loop.
-        this.post({ type: "status", text: "Writing the answer..." });
-        const answer = await analyzeResults({
-          provider: cfg.llmProvider,
-          region: cfg.region,
-          credentials,
-          modelId: cfg.bedrockModelId,
-          question: q,
-          columns: exec.columns,
-          rows: exec.rows,
-        });
+        // analyzeResults is a second model call, so skip it for empty results:
+        // the verdict reason already explains an empty set well (e.g. "no
+        // failed executions") and it isn't worth the extra round-trip.
+        let answer = "";
+        if (rowCount > 0) {
+          this.post({ type: "status", text: "Writing the answer..." });
+          answer = await analyzeResults({
+            provider: cfg.llmProvider,
+            region: cfg.region,
+            credentials,
+            modelId: cfg.bedrockModelId,
+            question: q,
+            columns: exec.columns,
+            rows: exec.rows,
+          });
+        }
         const prose = answer || verdict.reason;
         if (prose) this.post({ type: "agentAnswer", text: prose });
         this.post({ type: "results", ...exec });
+        // Record the turn so follow-ups have conversation context (threaded
+        // back in via withConversationContext on the next question).
+        this.recordTurn(q, prose || `Returned ${rowCount} row(s).`);
         return;
       }
 
@@ -795,6 +805,22 @@ class ExplorerPanel {
    * the next question continues the session. Trims the history to a bounded
    * number of recent turns to keep prompt size (and cost) in check.
    */
+  /**
+   * Prefix a question with a compact transcript of the current conversation,
+   * so the single-shot verify/refine path (Copilot/local) gets the same
+   * follow-up context the Bedrock tool loop gets via priorTurns. Without it, a
+   * follow-up like "now only the failed ones" would generate cold, with no
+   * idea what "those" referred to. Returns the question unchanged when there's
+   * no history yet.
+   */
+  private withConversationContext(question: string): string {
+    if (this.conversation.length === 0) return question;
+    const history = this.conversation
+      .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.text}`)
+      .join("\n");
+    return `Earlier in this conversation:\n${history}\n\nCurrent question: ${question}`;
+  }
+
   private recordTurn(question: string, answer: string): void {
     this.conversation.push({ role: "user", text: question });
     this.conversation.push({ role: "assistant", text: answer });
